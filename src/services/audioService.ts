@@ -1,0 +1,163 @@
+/**
+ * Audio Extraction Service
+ * 
+ * This service handles the extraction of audio from YouTube videos.
+ * It interacts with the backend API to extract audio and prepare it
+ * for chord and beat analysis.
+ */
+
+/**
+ * Extracts audio from a YouTube video and returns it as an ArrayBuffer
+ * @param videoId The YouTube video ID
+ * @returns Promise that resolves to an ArrayBuffer containing the audio data
+ */
+export async function extractAudio(videoId: string): Promise<ArrayBuffer> {
+  try {
+    console.log(`Extracting audio for video ID: ${videoId}`);
+    
+    // Add timeout control and retry logic
+    const controller = new AbortController();
+    // Increase timeout to 3 minutes (180 seconds)
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
+    
+    try {
+      console.log('Making API request to extract audio...');
+      const response = await fetch('/api/extract-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoId }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+  
+      if (!response.ok) {
+        let errorMessage = 'Failed to extract audio';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          
+          // Handle YouTube API restrictions specifically
+          if (errorMessage.includes('Could not download audio from YouTube') || 
+              errorMessage.includes('Could not extract functions') || 
+              errorMessage.includes('No audio formats found') ||
+              errorMessage.includes('TypeError') ||
+              errorMessage.includes('Load failed')) {
+            errorMessage = 'YouTube is currently blocking audio extraction for this video. This is a common issue as YouTube frequently updates their systems to prevent downloading. Please try a different video or try again later.';
+          }
+        } catch (jsonError) {
+          // If response isn't JSON, use status text
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+        
+        console.error('Server error response:', response.status, response.statusText);
+        throw new Error(errorMessage);
+      }
+  
+      const audioData = await response.arrayBuffer();
+      
+      if (!audioData || audioData.byteLength === 0) {
+        throw new Error('Received empty audio data from server');
+      }
+      
+      console.log('Audio data received successfully, size:', audioData.byteLength, 'bytes');
+      return audioData;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Audio extraction timed out. Please try again.');
+      }
+      
+      // Handle TypeError specifically
+      if (fetchError instanceof TypeError || 
+          (fetchError.message && fetchError.message.includes('TypeError'))) {
+        throw new Error('YouTube API has changed and is blocking audio extraction. Please try a different video.');
+      }
+      
+      // Handle CORS errors
+      if (fetchError.message && fetchError.message.includes('NetworkError')) {
+        throw new Error('Network error - YouTube may be blocking access. Try again later.');
+      }
+      
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('Audio extraction error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Converts an ArrayBuffer to a Web Audio AudioBuffer for processing
+ * @param audioContext The Web Audio API AudioContext
+ * @param arrayBuffer The audio data as an ArrayBuffer
+ * @returns Promise that resolves to an AudioBuffer
+ */
+export async function createAudioBufferFromArrayBuffer(
+  audioContext: AudioContext,
+  arrayBuffer: ArrayBuffer
+): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    audioContext.decodeAudioData(
+      arrayBuffer,
+      (buffer) => resolve(buffer),
+      (error) => reject(new Error(`Error decoding audio data: ${error}`))
+    );
+  });
+}
+
+/**
+ * Plays audio from an AudioBuffer through an AudioContext
+ * @param audioContext The Web Audio API AudioContext
+ * @param audioBuffer The audio data as an AudioBuffer
+ * @returns An object containing the audio source node and start/stop methods
+ */
+export function playAudioBuffer(
+  audioContext: AudioContext, 
+  audioBuffer: AudioBuffer
+) {
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  
+  return {
+    source,
+    start: (startTime = 0) => {
+      source.start(startTime);
+    },
+    stop: () => {
+      try {
+        source.stop();
+      } catch (e) {
+        // Ignore errors if already stopped
+      }
+    }
+  };
+}
+
+/**
+ * Complete audio extraction and processing for a YouTube video
+ * @param videoId The YouTube video ID
+ * @returns Promise that resolves to an AudioBuffer
+ */
+export async function processAudio(videoId: string): Promise<AudioBuffer> {
+  try {
+    // Extract audio from YouTube video
+    const arrayBuffer = await extractAudio(videoId);
+    
+    // Create Web Audio context
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Convert to AudioBuffer
+    const audioBuffer = await createAudioBufferFromArrayBuffer(audioContext, arrayBuffer);
+    
+    return audioBuffer;
+  } catch (error) {
+    console.error('Audio processing error:', error);
+    throw error;
+  }
+} 

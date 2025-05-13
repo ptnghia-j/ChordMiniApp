@@ -1,0 +1,18 @@
+<svg width="600" height="600" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="600" height="600" fill="transparent" />
+  
+  <!-- Waveform -->
+  <g transform="translate(50, 300)" stroke="#4f46e5" stroke-width="10" fill="none" stroke-linecap="round">
+    <!-- Left channels -->
+    <path d="M0,0 Q25,-120 50,0 Q75,120 100,0 Q125,-180 150,0 Q175,100 200,0" />
+    <path d="M200,0 Q225,-80 250,0 Q275,60 300,0" />
+    
+    <!-- Right channels -->
+    <path d="M300,0 Q325,-60 350,0 Q375,140 400,0 Q425,-150 450,0 Q475,80 500,0" />
+  </g>
+  
+  <!-- Play button -->
+  <circle cx="300" cy="300" r="50" fill="#4f46e5" opacity="0.2" />
+  <polygon points="285,275 325,300 285,325" fill="#4f46e5" />
+</svg> 
