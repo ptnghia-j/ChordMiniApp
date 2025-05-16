@@ -141,3 +141,33 @@ ENV/
 
 # Temporary audio files
 /temp/
+/tmp/
+*.tmp
+
+# Cached audio files
+/public/audio/
+
+# Python virtual environments
+.venv/
+python_backend/venv/
+**/venv/
+
+# Large binary files
+*.jar
+*.pack
+*.pack.gz
+
+# Pretrained models
+**/pretrained_models/
+
+# API keys and sensitive information
+**/api-keys*.txt
+**/keys*.txt
+**/secrets*.txt
+**/credentials*.txt
+**/config/secrets*.json
+**/config/keys*.json
+**/config/credentials*.json
+**/config/api-keys*.json
+**/config/api-keys*.yaml
+**/config/api-keys*.yml

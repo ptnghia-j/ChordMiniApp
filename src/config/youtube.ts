@@ -1,8 +1,7 @@
 // YouTube API Configuration
 
-// In a real app, this would be stored securely and not directly in the code
-// Consider using environment variables (e.g., .env.local in Next.js)
-export const YOUTUBE_API_KEY = 'AIzaSyA8YKwYqtGBYkDvAZuAnL9-DMUOZjCQxVs'; // Replace with your actual API key
+// Get the API key from environment variables
+export const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || ''; // API key now loaded from env var
 
 // YouTube API endpoints
 export const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
@@ -38,6 +37,10 @@ export const extractVideoId = (url: string): string | null => {
 // Search YouTube videos with provided query
 export const searchYouTubeVideos = async (query: string) => {
   try {
+    if (!YOUTUBE_API_KEY) {
+      throw new Error('YouTube API key is missing. Please set NEXT_PUBLIC_YOUTUBE_API_KEY in your environment variables.');
+    }
+    
     const params = new URLSearchParams({
       ...DEFAULT_SEARCH_PARAMS,
       q: query,

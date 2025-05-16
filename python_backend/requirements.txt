@@ -1,0 +1,13 @@
+flask==2.3.2
+flask-cors==4.0.0
+librosa==0.10.1
+numpy==1.24.3
+scipy>=1.11.0
+soundfile==0.12.1
+torch==2.0.1
+requests==2.31.0
+Pillow==10.0.0
+werkzeug==2.3.4
+gunicorn==21.2.0
+madmom>=0.16.1
+spleeter>=2.4.0

@@ -1,0 +1,23 @@
+/* Dropdown menu positioning */
+.dropdown-menu {
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Ensure the dropdown is not cut off by container boundaries */
+.dropdown-menu {
+  position: absolute;
+  width: 100%;
+}
+
+/* Add a container class to ensure proper positioning context */
+.model-selector-container {
+  position: relative;
+  z-index: 40;
+}
+
+/* Ensure dropdown appears above other elements */
+.dropdown-menu {
+  z-index: 50;
+}

@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SearchResults from '@/components/SearchResults';
+import CacheManager from '@/components/CacheManager';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -49,12 +50,12 @@ export default function Home() {
 
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     if (!searchQuery.trim()) {
       setSearchError('Please enter a search query or YouTube URL');
       return;
     }
-    
+
     // First check if it's a direct YouTube URL or video ID
     const videoId = extractVideoId(searchQuery);
     if (videoId) {
@@ -62,12 +63,12 @@ export default function Home() {
       router.push(`/analyze/${videoId}`);
       return;
     }
-    
+
     // If it's not a URL, proceed with search
     setIsSearching(true);
     setSearchError(null);
     setSearchResults([]);
-    
+
     try {
       const response = await fetch('/api/search-youtube', {
         method: 'POST',
@@ -76,22 +77,24 @@ export default function Home() {
         },
         body: JSON.stringify({ query: searchQuery }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to search YouTube');
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.results) {
         setSearchResults(data.results);
       } else {
         throw new Error('Invalid response format');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error searching YouTube:', error);
-      setSearchError(error.message || 'Failed to search for videos');
+      setSearchError(
+        error instanceof Error ? error.message : 'Failed to search for videos'
+      );
     } finally {
       setIsSearching(false);
     }
@@ -105,7 +108,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="bg-primary-700 text-white p-4 shadow-md">
         <div className="container mx-auto">
-          <h1 className="text-2xl font-heading font-bold">Chord Recognition App</h1>
+          <h1 className="text-2xl font-heading font-bold">Chord Mini</h1>
         </div>
       </header>
 
@@ -114,18 +117,18 @@ export default function Home() {
           <h2 className="text-3xl font-heading font-bold text-gray-800 mb-6 text-center">
             Analyze Music to Detect Chords
           </h2>
-          
+
           <p className="text-lg text-gray-600 mb-8 text-center">
             Upload a local audio file or analyze a YouTube video to detect the chords and beats.
           </p>
-          
+
           <div className="grid md:grid-cols-2 gap-8">
             {/* YouTube Analysis Option */}
             <div className="bg-white rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow">
               <h3 className="text-xl font-heading font-bold text-gray-800 mb-4">
                 Analyze YouTube Video
               </h3>
-              
+
               <div className="space-y-6">
                 {/* Unified Search/URL Input */}
                 <div>
@@ -145,7 +148,7 @@ export default function Home() {
                       />
                       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
                     </div>
-                    
+
                     <button
                       type="submit"
                       disabled={isSearching}
@@ -157,7 +160,7 @@ export default function Home() {
                   {searchError && <p className="text-red-500 text-sm mt-2">{searchError}</p>}
                 </div>
               </div>
-              
+
               <div className="mt-4 text-sm text-gray-500">
                 <p className="font-medium">You can:</p>
                 <ul className="list-disc list-inside mt-1">
@@ -167,28 +170,28 @@ export default function Home() {
                 </ul>
               </div>
             </div>
-            
+
             {/* Local Audio Analysis Option */}
             <div className="bg-white rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow">
               <h3 className="text-xl font-heading font-bold text-gray-800 mb-4">
                 Analyze Local Audio File
               </h3>
-              
+
               <p className="text-gray-600 mb-6">
                 Upload an audio file from your device for chord analysis.
               </p>
-              
+
               <div className="flex flex-col items-center justify-center space-y-4">
-                <img 
-                  src="/audio-waveform.svg" 
-                  alt="Audio waveform" 
+                <img
+                  src="/audio-waveform.svg"
+                  alt="Audio waveform"
                   className="w-32 h-32 opacity-80"
                   onError={(e) => {
                     // If SVG fails to load, replace with text
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                 />
-                
+
                 <Link
                   href="/analyze"
                   className="w-full bg-primary-600 text-white font-medium py-2 px-4 rounded-md hover:bg-primary-700 transition-colors text-center"
@@ -196,7 +199,7 @@ export default function Home() {
                   Upload Audio File
                 </Link>
               </div>
-              
+
               <div className="mt-4 text-sm text-gray-500">
                 <p>Supported formats: MP3, WAV, M4A, FLAC</p>
                 <p className="mt-1">For best results, use high-quality audio with minimal background noise.</p>
@@ -215,31 +218,39 @@ export default function Home() {
               />
             </div>
           )}
-          
-          <div className="mt-12 bg-blue-50 rounded-lg p-6">
-            <h3 className="text-xl font-heading font-bold text-blue-800 mb-3">
-              About This App
-            </h3>
-            
-            <p className="text-blue-700 mb-4">
-              This application uses audio processing and machine learning to detect musical chords and beats in audio files or YouTube videos.
-            </p>
-            
-            <div className="grid md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-white p-3 rounded-md shadow-sm">
-                <h4 className="font-bold text-gray-800 mb-1">Chord Detection</h4>
-                <p className="text-gray-600">Identifies major, minor, and 7th chords in the audio using spectral analysis.</p>
+
+          {/* Cache Manager */}
+          <div className="mt-12">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-blue-50 rounded-lg p-6">
+                <h3 className="text-xl font-heading font-bold text-blue-800 mb-3">
+                  About This App
+                </h3>
+
+                <p className="text-blue-700 mb-4">
+                  This application uses audio processing and machine learning to detect musical chords and beats in audio files or YouTube videos.
+                </p>
+
+                <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white p-3 rounded-md shadow-sm">
+                    <h4 className="font-bold text-gray-800 mb-1">Chord Detection</h4>
+                    <p className="text-gray-600">Identifies major, minor, and 7th chords in the audio using spectral analysis.</p>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-md shadow-sm">
+                    <h4 className="font-bold text-gray-800 mb-1">Beat Tracking</h4>
+                    <p className="text-gray-600">Detects rhythmic patterns and beat timings for synchronized chord display.</p>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-md shadow-sm">
+                    <h4 className="font-bold text-gray-800 mb-1">Local Processing</h4>
+                    <p className="text-gray-600">All audio processing happens in your browser - no files are uploaded to servers.</p>
+                  </div>
+                </div>
               </div>
-              
-              <div className="bg-white p-3 rounded-md shadow-sm">
-                <h4 className="font-bold text-gray-800 mb-1">Beat Tracking</h4>
-                <p className="text-gray-600">Detects rhythmic patterns and beat timings for synchronized chord display.</p>
-              </div>
-              
-              <div className="bg-white p-3 rounded-md shadow-sm">
-                <h4 className="font-bold text-gray-800 mb-1">Local Processing</h4>
-                <p className="text-gray-600">All audio processing happens in your browser - no files are uploaded to servers.</p>
-              </div>
+
+              {/* Cache Manager Component */}
+              <CacheManager />
             </div>
           </div>
         </div>
