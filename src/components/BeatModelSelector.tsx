@@ -19,7 +19,7 @@ interface ModelOption {
   available: boolean;
 }
 
-const BeatModelSelector = ({ onChange, defaultValue = 'auto', className = '' }: BeatModelSelectorProps) => {
+const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', className = '' }: BeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
   const [loading, setLoading] = useState(true);

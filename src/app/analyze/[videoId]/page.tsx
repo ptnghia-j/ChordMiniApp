@@ -7,6 +7,9 @@ import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionS
 import { BeatInfo } from '@/services/beatDetectionService';
 import ChordGrid from '@/components/ChordGrid';
 import BeatModelSelector from '@/components/BeatModelSelector';
+import ChordModelSelector from '@/components/ChordModelSelector';
+import ProcessingStatus from '@/components/ProcessingStatus';
+import { useProcessing } from '@/contexts/ProcessingContext';
 import dynamic from 'next/dynamic';
 
 // Import types from beatDetectionService
@@ -19,14 +22,25 @@ const ReactPlayer = dynamic(() => import('react-player/youtube'), { ssr: false }
 export default function YouTubeVideoAnalyzePage() {
   const params = useParams();
   const videoId = params.videoId as string;
+  const {
+    setStage,
+    setProgress,
+    setStatusMessage,
+    startProcessing,
+    completeProcessing,
+    failProcessing
+  } = useProcessing();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
-  // Define beat detector types
+  // Define detector types
   type BeatDetectorType = 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
-  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('auto');
+  type ChordDetectorType = 'chord-cnn-lstm';
+  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('beat-transformer-light');
+  const [chordDetector, setChordDetector] = useState<ChordDetectorType>('chord-cnn-lstm');
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
 
@@ -53,6 +67,7 @@ export default function YouTubeVideoAnalyzePage() {
     beats_with_positions?: BeatPosition[];
     synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
     beatModel?: string;
+    chordModel?: string;
   } | null>(null);
 
   // Current state for playback
@@ -146,6 +161,11 @@ export default function YouTubeVideoAnalyzePage() {
     // Set lock to prevent duplicate extractions
     extractionLockRef.current = true;
 
+    // Update processing state (without starting the timer)
+    setStage('downloading');
+    setProgress(0);
+    setStatusMessage('Downloading YouTube video...');
+
     setAudioProcessingState(prev => ({
       ...prev,
       isExtracting: true,
@@ -164,13 +184,19 @@ export default function YouTubeVideoAnalyzePage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error + (errorData.details ? `: ${errorData.details}` : ''));
+        const errorMessage = errorData.error + (errorData.details ? `: ${errorData.details}` : '');
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
 
       // Check if extraction was successful
       if (data.success && data.audioUrl) {
+        // Update processing state
+        setStage('extracting');
+        setProgress(50);
+        setStatusMessage('Extracting audio...');
+
         setAudioProcessingState(prev => ({
           ...prev,
           isExtracting: false,
@@ -193,16 +219,23 @@ export default function YouTubeVideoAnalyzePage() {
           youtubeEmbedUrl: data.youtubeEmbedUrl || null,
           fromCache: data.fromCache || false
         });
+
+        // Update progress to 100% for extraction phase
+        setProgress(100);
       } else {
         throw new Error(data.error || 'Failed to extract audio from YouTube');
       }
     } catch (error) {
       console.error('Error extracting audio:', error);
 
+      // Update processing state
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while extracting audio';
+      failProcessing(errorMessage);
+
       setAudioProcessingState(prev => ({
         ...prev,
         isExtracting: false,
-        error: error instanceof Error ? error.message : 'An error occurred while extracting audio'
+        error: errorMessage
       }));
     } finally {
       // Release the lock when done, whether successful or not
@@ -215,6 +248,12 @@ export default function YouTubeVideoAnalyzePage() {
     if (!audioProcessingState.isExtracted || !audioProcessingState.audioUrl) {
       return;
     }
+
+    // Start the timer and update processing state
+    startProcessing(); // This resets and starts the timer
+    setStage('beat-detection');
+    setProgress(0);
+    setStatusMessage('Detecting beats...');
 
     setAudioProcessingState(prev => ({
       ...prev,
@@ -238,9 +277,15 @@ export default function YouTubeVideoAnalyzePage() {
         audioBuffer,
       }));
 
-      // Start chord and beat analysis with selected model
-      console.log(`Starting chord and beat analysis with detector: ${beatDetector}...`);
-      const results = await analyzeAudio(audioBuffer, beatDetector);
+      // Start chord and beat analysis with selected models
+      console.log(`Starting analysis with beat detector: ${beatDetector}, chord detector: ${chordDetector}...`);
+
+      // Update processing state for chord recognition
+      setStage('chord-recognition');
+      setProgress(50);
+      setStatusMessage('Recognizing chords...');
+
+      const results = await analyzeAudio(audioBuffer, beatDetector, chordDetector);
 
       // Store results
       setAnalysisResults(results);
@@ -250,6 +295,9 @@ export default function YouTubeVideoAnalyzePage() {
         isAnalyzing: false,
         isAnalyzed: true
       }));
+
+      // Update processing state to complete
+      completeProcessing();
 
       console.log('Analysis complete!', results);
     } catch (error) {
@@ -262,6 +310,9 @@ export default function YouTubeVideoAnalyzePage() {
       } else if (typeof error === 'string') {
         errorMessage = error;
       }
+
+      // Update processing state
+      failProcessing(errorMessage);
 
       setAudioProcessingState(prev => ({
         ...prev,
@@ -527,31 +578,10 @@ export default function YouTubeVideoAnalyzePage() {
               className="hidden"
             />
 
-            {/* Audio extraction and processing status */}
+            {/* Processing Status */}
             <div className="mb-6 space-y-4">
-              {audioProcessingState.isExtracting && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-blue-400 flex items-center">
-                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {audioProcessingState.fromCache ? 'Loading cached audio...' : 'Extracting audio from YouTube...'}
-                  </p>
-                </div>
-              )}
-
-              {audioProcessingState.isAnalyzing && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-blue-600 flex items-center">
-                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Analyzing chords and beats... this may take a moment
-                  </p>
-                </div>
-              )}
+              {/* New ProcessingStatus component */}
+              <ProcessingStatus className="mb-4" />
 
               {audioProcessingState.error && (
                 <div className="bg-red-50 p-4 rounded-lg">
@@ -597,7 +627,14 @@ export default function YouTubeVideoAnalyzePage() {
                       <div className="w-full sm:w-64 relative z-40">
                         <BeatModelSelector
                           onChange={setBeatDetector}
-                          defaultValue="auto"
+                          defaultValue="beat-transformer-light"
+                        />
+                      </div>
+
+                      <div className="w-full sm:w-64 relative z-30">
+                        <ChordModelSelector
+                          selectedModel={chordDetector}
+                          onModelChange={setChordDetector}
                         />
                       </div>
 
@@ -644,6 +681,9 @@ export default function YouTubeVideoAnalyzePage() {
                   </div>
                   <div className="space-y-1">
                     <p>
+                      <span className="font-medium">Chord detector:</span> {analysisResults.chordModel || 'Unknown'}
+                    </p>
+                    <p>
                       <span className="font-medium">Total chords:</span> {analysisResults.chords.length}
                     </p>
                     {analysisResults.downbeats && (
@@ -670,9 +710,9 @@ export default function YouTubeVideoAnalyzePage() {
               </div>
 
               {/* Beats visualization */}
-              <div className="p-4 rounded-lg bg-white border border-gray-200">
+              <div className="p-4 rounded-lg bg-white border border-gray-300">
                 <h3 className="font-medium text-lg mb-2 text-gray-800">Beat Timeline</h3>
-                <div className="relative h-16 bg-gray-100 border border-gray-200 rounded-md overflow-hidden">
+                <div className="relative h-16 bg-gray-100 border border-gray-300 rounded-md overflow-hidden">
                   {/* Beat markers */}
                   {analysisResults.beats.map((beat, index) => {
                     // Get beat number from beat info if available
@@ -714,11 +754,11 @@ export default function YouTubeVideoAnalyzePage() {
                     <div
                       key={`downbeat-measure-${index}`}
                       className={`absolute bottom-0 w-1 h-14 transform -translate-x-1/2 ${
-                        index === currentDownbeatIndex ? 'bg-red-600' : 'bg-red-500'
+                        index === currentDownbeatIndex ? 'bg-red-800' : 'bg-red-700'
                       }`}
                       style={{ left: `${(downbeat.time / duration) * 100}%` }}
                     >
-                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-700">
+                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-800">
                         {downbeat.measureNum}
                       </div>
                     </div>
@@ -729,11 +769,11 @@ export default function YouTubeVideoAnalyzePage() {
                     <div
                       key={`downbeat-${index}`}
                       className={`absolute bottom-0 w-1 h-14 transform -translate-x-1/2 ${
-                        index === currentDownbeatIndex ? 'bg-red-600' : 'bg-red-500'
+                        index === currentDownbeatIndex ? 'bg-red-800' : 'bg-red-700'
                       }`}
                       style={{ left: `${(beatTime / duration) * 100}%` }}
                     >
-                      <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-700">
+                      <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-800">
                         {index + 1}
                       </div>
                     </div>
@@ -765,74 +805,6 @@ export default function YouTubeVideoAnalyzePage() {
                     <span>Current beat</span>
                   </div>
                 </div>
-              </div>
-
-              {/* Chord by beat display */}
-              <div className="p-4 rounded-lg bg-white border border-gray-200">
-                <h3 className="font-medium text-lg mb-3 text-gray-800">Chords by Beat</h3>
-                <div className="grid grid-cols-8 gap-1 text-center">
-                  {analysisResults.synchronizedChords.slice(0, 32).map((item, index) => {
-                    const beatNum = item.beatNum || (index % 4) + 1;
-                    const isFirstBeat = beatNum === 1;
-
-                    // Apply color based on chord type
-                    let bgColor = 'bg-gray-50';
-                    let ringColor = 'ring-blue-500';
-                    let textColor = 'text-gray-800';
-
-                    if (item.chord !== 'N/C') {
-                      if (item.chord.includes('m') && !item.chord.includes('maj')) {
-                        // Minor chords
-                        bgColor = index === currentBeatIndex ? 'bg-blue-100' : isFirstBeat ? 'bg-blue-50' : 'bg-gray-50';
-                        textColor = 'text-blue-800';
-                      } else if (item.chord.includes('7')) {
-                        // Seventh chords
-                        bgColor = index === currentBeatIndex ? 'bg-purple-100' : isFirstBeat ? 'bg-purple-50' : 'bg-gray-50';
-                        textColor = 'text-purple-800';
-                        ringColor = 'ring-purple-500';
-                      } else if (item.chord.includes('sus')) {
-                        // Suspended chords
-                        bgColor = index === currentBeatIndex ? 'bg-yellow-100' : isFirstBeat ? 'bg-yellow-50' : 'bg-gray-50';
-                        textColor = 'text-yellow-800';
-                        ringColor = 'ring-yellow-500';
-                      } else if (item.chord.includes('dim') || item.chord.includes('aug')) {
-                        // Diminished/Augmented chords
-                        bgColor = index === currentBeatIndex ? 'bg-red-100' : isFirstBeat ? 'bg-red-50' : 'bg-gray-50';
-                        textColor = 'text-red-800';
-                        ringColor = 'ring-red-500';
-                      } else {
-                        // Major chords
-                        bgColor = index === currentBeatIndex ? 'bg-green-100' : isFirstBeat ? 'bg-green-50' : 'bg-gray-50';
-                        textColor = 'text-green-800';
-                        ringColor = 'ring-green-500';
-                      }
-                    }
-
-                    return (
-                      <div
-                        key={`chord-beat-${index}`}
-                        className={`p-2 rounded-md border ${bgColor} ${
-                          index === currentBeatIndex ? `ring-2 ${ringColor}` : ''
-                        }`}
-                      >
-                        <div className="text-xs text-gray-600 font-medium">
-                          Beat {beatNum}
-                        </div>
-                        <div className={`font-medium ${textColor}`}>
-                          {item.chord}
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {formatTime(analysisResults.beats[item.beatIndex]?.time || 0)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {analysisResults.synchronizedChords.length > 32 && (
-                  <div className="mt-2 text-center text-gray-600">
-                    <span className="text-sm">Showing first 32 beats of {analysisResults.synchronizedChords.length} total</span>
-                  </div>
-                )}
               </div>
 
               {/* Beat statistics */}

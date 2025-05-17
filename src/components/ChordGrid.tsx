@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { formatChordWithMusicalSymbols, getResponsiveChordFontSize, getChordLabelStyles } from '@/utils/chordFormatting';
 
 interface ChordGridProps {
   chords: string[]; // Array of chord labels (e.g., 'C', 'Am')
@@ -15,13 +16,52 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   beatsPerMeasure = 4,
   measuresPerRow = 4
 }) => {
+  // Reference to the grid container for measuring cell size
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [cellSize, setCellSize] = useState<number>(0);
+
+  // Set up resize observer to track cell size changes
+  useEffect(() => {
+    if (!gridContainerRef.current) return;
+
+    const updateCellSize = () => {
+      if (gridContainerRef.current) {
+        const cells = gridContainerRef.current.querySelectorAll('.chord-cell');
+        if (cells.length > 0) {
+          const firstCell = cells[0] as HTMLElement;
+          const width = firstCell.offsetWidth;
+          setCellSize(width);
+        }
+      }
+    };
+
+    // Initial size calculation
+    updateCellSize();
+
+    // Set up resize observer
+    const resizeObserver = new ResizeObserver(() => {
+      updateCellSize();
+    });
+
+    resizeObserver.observe(gridContainerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [chords.length]); // Re-run when chord data changes
   // Helper to determine if this beat should show a chord label
   const shouldShowChordLabel = (index: number): boolean => {
     // Always show the first chord
     if (index === 0) return true;
 
     // Show chord if it's different from the previous chord
-    return chords[index] !== chords[index - 1];
+    // Make sure we're not comparing undefined values
+    if (index < chords.length && index - 1 < chords.length) {
+      return chords[index] !== chords[index - 1];
+    }
+
+    // Default to showing the chord if we can't determine
+    return true;
   };
 
   // Helper to determine if this beat is the first beat of a measure
@@ -37,32 +77,14 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   // Helper to determine chord type and apply appropriate styling
   const getChordStyle = (chord: string, isCurrentBeat: boolean, showLabel: boolean, isFirstInMeasure: boolean) => {
     // Base classes for all cells - fully detached with complete border
-    let baseClasses = "flex flex-col items-center justify-center aspect-square transition-all duration-200 border border-gray-200 rounded-sm overflow-hidden";
+    // Using border-gray-300 instead of border-gray-200 for 1.5x darker borders
+    let baseClasses = "flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 rounded-sm overflow-hidden";
 
     // All cells have white background by default
     let classes = `${baseClasses} bg-white`;
 
-    // Apply text color based on chord type for better readability
-    let textColor = "text-gray-900";
-
-    if (chord !== 'N/C') {
-      if (chord.includes('m') && !chord.includes('maj')) {
-        // Minor chords
-        textColor = "text-blue-800";
-      } else if (chord.includes('7')) {
-        // Seventh chords
-        textColor = "text-purple-800";
-      } else if (chord.includes('sus')) {
-        // Suspended chords
-        textColor = "text-yellow-800";
-      } else if (chord.includes('dim') || chord.includes('aug')) {
-        // Diminished/Augmented chords
-        textColor = "text-red-800";
-      } else {
-        // Major chords
-        textColor = "text-green-800";
-      }
-    }
+    // Use a single text color for all chord types (minimalist approach)
+    let textColor = "text-gray-800";
 
     // Highlight current beat with distinct background
     if (isCurrentBeat) {
@@ -82,6 +104,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     );
   }
 
+  // Debug information
+  console.log(`ChordGrid rendering with ${chords.length} chords and ${beats.length} beats`);
+  console.log('First 5 chords:', chords.slice(0, 5));
+  console.log('Unique chords:', [...new Set(chords)].length);
+
   // Group chords by measure for better visualization
   const groupedByMeasure = [];
   for (let i = 0; i < chords.length; i += beatsPerMeasure) {
@@ -98,23 +125,23 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   }
 
   return (
-    <div className="chord-grid-container mx-auto px-1 sm:px-2 md:px-4" style={{ maxWidth: "95%" }}>
+    <div className="chord-grid-container mx-auto px-1 sm:px-2" style={{ maxWidth: "98%" }}>
       {/* Render rows of measures */}
       <div className="space-y-2">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
             {/* Grid of measures with spacing */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1 md:gap-2">
               {row.map((measure, measureIdx) => (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="relative border-l border-gray-300"
+                  className="relative border-l border-gray-600"
                   style={{
                     paddingLeft: '4px'
                   }}
                 >
                   {/* Chord cells for this measure */}
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="grid grid-cols-4 gap-1 auto-rows-fr">
                     {measure.chords.map((chord, beatIdx) => {
                       const globalIndex = (rowIdx * measuresPerRow + measureIdx) * beatsPerMeasure + beatIdx;
                       const isCurrentBeat = globalIndex === currentBeatIndex;
@@ -125,13 +152,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                         <div
                           id={`chord-${globalIndex}`}
                           key={`chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure)} w-full h-full min-h-[2.5rem]`}
+                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure)} w-full h-full min-h-[3.75rem]`}
                         >
                           {/* Only show chord name if it's a new chord */}
                           {showChordLabel ? (
-                            <div className="text-xs sm:text-sm md:text-base lg:text-lg font-bold p-1 text-center">{chord}</div>
+                            <div
+                              className={getResponsiveChordFontSize(chord)}
+                              style={getChordLabelStyles(chord)}
+                              dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
+                            />
                           ) : (
-                            <div className="text-xs sm:text-sm md:text-base lg:text-lg font-bold opacity-0 p-1">·</div>
+                            <div className="text-sm md:text-base font-bold opacity-0" style={getChordLabelStyles('')}>·</div>
                           )}
                         </div>
                       );

@@ -36,30 +36,30 @@ export interface AnalysisResult {
   beats_with_positions?: BeatPosition[]; // Beat numbers within measures
   synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
   beatModel?: string;    // Which model was used for beat detection
+  chordModel?: string;   // Which model was used for chord detection
 }
 
 /**
  * Process audio file and perform chord and beat analysis
  * @param audioBuffer The audio buffer to analyze
  * @param beatDetector Optional detector to use ('auto', 'librosa', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param chordDetector Optional chord detector to use ('chord-cnn-lstm')
  * @returns Promise with analysis results (chords and beats)
  */
 export async function analyzeAudio(
   audioBuffer: AudioBuffer,
-  beatDetector: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto'
+  beatDetector: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
+  chordDetector: 'chord-cnn-lstm' = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
   try {
     console.log('Starting audio analysis...');
 
-    // Extract chord information using the AudioBuffer
-    const chordResults = await recognizeChords(audioBuffer);
-    console.log(`Detected ${chordResults.length} chords`);
-
-    // Convert AudioBuffer to File/Blob for beat detection API
+    // Convert AudioBuffer to File/Blob for API calls
     const audioBlob = await audioBufferToWav(audioBuffer);
     const audioFile = new File([audioBlob], "audio.wav", { type: "audio/wav" });
 
     // Detect beats using the Python API with specified detector
+    console.log(`Detecting beats using ${beatDetector} model...`);
     const beatResults = await detectBeatsFromFile(audioFile, beatDetector);
     console.log(`Detected ${beatResults.beats.length} beats, BPM: ${beatResults.bpm}`);
 
@@ -74,6 +74,11 @@ export async function analyzeAudio(
     // Use the detailed beat info with strength values
     const beats = beatResults.beat_info;
 
+    // Recognize chords using the Chord-CNN-LSTM model
+    console.log(`Recognizing chords using ${chordDetector} model...`);
+    const chordResults = await recognizeChords(audioFile, chordDetector);
+    console.log(`Detected ${chordResults.length} chords`);
+
     // Create synchronized chords (chords aligned with beats)
     const synchronizedChords = alignChordsToBeats(chordResults, beats, beatResults.beats_with_positions);
 
@@ -84,7 +89,8 @@ export async function analyzeAudio(
       downbeats_with_measures: beatResults.downbeats_with_measures,
       beats_with_positions: beatResults.beats_with_positions,
       synchronizedChords,
-      beatModel: beatResults.model
+      beatModel: beatResults.model,
+      chordModel: chordDetector
     };
   } catch (error) {
     console.error('Error in audio analysis:', error);
@@ -93,51 +99,79 @@ export async function analyzeAudio(
 }
 
 /**
- * Detect chords in audio buffer
- * This is a mock implementation for testing
+ * Detect chords in audio file using the Chord-CNN-LSTM model
+ * @param audioFile The audio file to analyze
+ * @param model The chord detection model to use ('chord-cnn-lstm')
+ * @returns Promise with chord detection results
  */
-async function recognizeChords(audioBuffer: AudioBuffer): Promise<ChordDetectionResult[]> {
-  // This is a mock implementation that generates random chord data
-  // In a real implementation, this would use a machine learning model or algorithm
+async function recognizeChords(
+  audioFile: File,
+  model: 'chord-cnn-lstm' = 'chord-cnn-lstm'
+): Promise<ChordDetectionResult[]> {
+  try {
+    console.log(`Recognizing chords with ${model} model...`);
 
-  const duration = audioBuffer.duration;
+    // Create form data for the API request
+    const formData = new FormData();
+    formData.append('file', audioFile);
 
-  // For testing, generate a chord every 2 seconds
-  const chordDuration = 2.0;
-  const numChords = Math.floor(duration / chordDuration);
-
-  // Chord options (simplified)
-  const chords = ['C', 'G', 'Am', 'F', 'Dm', 'Em', 'D', 'A', 'Bm', 'E'];
-
-  const results: ChordDetectionResult[] = [];
-
-  for (let i = 0; i < numChords; i++) {
-    const start = i * chordDuration;
-    const end = (i + 1) * chordDuration;
-
-    // Randomly select a chord
-    const chordIndex = Math.floor(Math.random() * chords.length);
-
-    results.push({
-      chord: chords[chordIndex],
-      start,
-      end,
-      confidence: 0.7 + 0.3 * Math.random() // Random confidence between 0.7 and 1.0
+    // Call the Python backend API
+    const response = await fetch('/api/recognize-chords', {
+      method: 'POST',
+      body: formData,
     });
-  }
 
-  return results;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Chord recognition failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(`Chord recognition failed: ${data.error || 'Unknown error'}`);
+    }
+
+    console.log(`Received ${data.chords.length} chords from the API`);
+    console.log('First 5 chords from API:', data.chords.slice(0, 5));
+
+    // Convert the API response to ChordDetectionResult format
+    const chords: ChordDetectionResult[] = data.chords.map((chord: any) => ({
+      start: chord.start,
+      end: chord.end,
+      chord: chord.chord,
+      confidence: chord.confidence || 0.9
+    }));
+
+    // Sort chords by start time
+    chords.sort((a, b) => a.start - b.start);
+
+    console.log('Processed and sorted chords:', chords.slice(0, 5));
+
+    return chords;
+  } catch (error) {
+    console.error('Error in chord recognition:', error);
+    throw new Error('Failed to recognize chords: ' + (error instanceof Error ? error.message : String(error)));
+  }
 }
 
 /**
  * Align chords to beat positions
+ *
+ * This function maps chords to beats by finding the closest beat to each chord's start time,
+ * and then ensuring each beat has a chord assigned to it.
  */
 function alignChordsToBeats(
   chords: ChordDetectionResult[],
   beats: BeatInfo[],
   beatsWithPositions?: BeatPosition[]
 ): {chord: string, beatIndex: number, beatNum?: number}[] {
+  // Initialize results array with one entry per beat
   const results: {chord: string, beatIndex: number, beatNum?: number}[] = [];
+
+  console.log(`Aligning ${chords.length} chords to ${beats.length} beats`);
+  console.log('First 3 chords:', chords.slice(0, 3));
+  console.log('First 3 beats:', beats.slice(0, 3));
 
   // Create a map of beat times to beat numbers (if available)
   const beatNumMap = new Map<number, number>();
@@ -147,28 +181,75 @@ function alignChordsToBeats(
     });
   }
 
-  // For each beat, find the chord that contains it
-  beats.forEach((beat, beatIndex) => {
-    const chord = chords.find(c => beat.time >= c.start && beat.time < c.end);
+  // Create a map to track which chord should be assigned to each beat
+  const beatToChordMap = new Map<number, string>();
 
+  // First pass: For each chord, find the closest beat to its start time
+  chords.forEach(chord => {
+    // Skip "N" chords (no chord)
+    if (chord.chord === "N") return;
+
+    // Find the closest beat to the chord's start time
+    let closestBeatIndex = -1;
+    let minDistance = Number.MAX_VALUE;
+
+    beats.forEach((beat, index) => {
+      // Calculate distance between chord start and beat time
+      const distance = Math.abs(chord.start - beat.time);
+
+      // If this beat is closer than the current closest beat, update
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestBeatIndex = index;
+      }
+    });
+
+    // If we found a closest beat, assign this chord to it
+    if (closestBeatIndex !== -1) {
+      // Format chord name
+      const chordName = chord.chord === "N" ? "N/C" : chord.chord;
+
+      // Store in our map - if there's a conflict, higher confidence wins
+      const existingChord = beatToChordMap.get(closestBeatIndex);
+      if (!existingChord || chord.confidence > 0.5) {
+        beatToChordMap.set(closestBeatIndex, chordName);
+      }
+    }
+  });
+
+  // Second pass: Fill in the results array for each beat
+  beats.forEach((beat, beatIndex) => {
     // Get the beat number from the map or from the beat itself
     const beatNum = beatNumMap.get(beat.time) || beat.beatNum;
 
-    if (chord) {
-      results.push({
-        chord: chord.chord,
-        beatIndex,
-        beatNum
-      });
-    } else {
-      // If no chord found, use "N/C" (No Chord)
-      results.push({
-        chord: 'N/C',
-        beatIndex,
-        beatNum
-      });
-    }
+    // Get the chord assigned to this beat, or "N/C" if none
+    const chord = beatToChordMap.get(beatIndex) || 'N/C';
+
+    // Add to results
+    results.push({
+      chord,
+      beatIndex,
+      beatNum
+    });
   });
+
+  // Third pass: Fill in any gaps with the previous chord
+  // This ensures chord continuity between explicit chord changes
+  let lastChord = 'N/C';
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].chord !== 'N/C') {
+      lastChord = results[i].chord;
+    } else if (lastChord !== 'N/C') {
+      results[i].chord = lastChord;
+    }
+  }
+
+  console.log(`Generated ${results.length} synchronized chords`);
+  console.log('First 5 synchronized chords:', results.slice(0, 5));
+
+  // Count unique chords
+  const uniqueChords = new Set(results.map(r => r.chord).filter(c => c !== 'N/C')).size;
+  console.log(`Number of unique chords: ${uniqueChords}`);
 
   return results;
 }

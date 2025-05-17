@@ -1,14 +1,23 @@
+/* Custom dropdown styling for model selectors */
+
 /* Dropdown menu positioning */
 .dropdown-menu {
   max-height: 300px;
   overflow-y: auto;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* Ensure the dropdown is not cut off by container boundaries */
-.dropdown-menu {
   position: absolute;
   width: 100%;
+  z-index: 50;
+  background-color: white;
+  border-radius: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+/* Dropdown menu positioning for top alignment */
+.dropdown-menu.top {
+  bottom: 100%;
+  margin-bottom: 0.25rem;
+  margin-top: 0;
 }
 
 /* Add a container class to ensure proper positioning context */
@@ -17,7 +26,47 @@
   z-index: 40;
 }
 
-/* Ensure dropdown appears above other elements */
-.dropdown-menu {
-  z-index: 50;
+/* Dropdown button styling */
+.dropdown-button {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background-color: white;
+  border: 1px solid #1e40af; /* dark blue border */
+  border-radius: 0.375rem;
+  text-align: left;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropdown-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2);
+}
+
+.dropdown-button:hover {
+  background-color: #f9fafb;
+}
+
+.dropdown-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dropdown item styling */
+.dropdown-item {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.dropdown-item:hover {
+  background-color: #e0f2fe;
+}
+
+.dropdown-item.selected {
+  background-color: #dbeafe;
+  font-weight: 600;
 }

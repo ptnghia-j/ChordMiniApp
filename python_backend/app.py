@@ -17,9 +17,12 @@ monkey_patch_beat_track()
 # Now it's safe to import librosa
 import librosa
 
-# Add the Beat-Transformer directory to the Python path
+# Add the model directories to the Python path
 BEAT_TRANSFORMER_DIR = Path(__file__).parent / "models" / "Beat-Transformer"
+CHORD_CNN_LSTM_DIR = Path(__file__).parent / "models" / "Chord-CNN-LSTM"
+AUDIO_DIR = Path(__file__).parent.parent / "public" / "audio"
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
+sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
 # Import the run_beat_tracking function from the demo script
 try:
@@ -139,12 +142,37 @@ except Exception as e:
     USE_BEAT_TRANSFORMER = False
     USE_BEAT_TRANSFORMER_LIGHT = False
 
+# Check if Chord-CNN-LSTM model is available
+try:
+    # Add the Chord-CNN-LSTM directory to the Python path
+    sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+
+    # Change the working directory temporarily to load the model
+    original_dir = os.getcwd()
+    os.chdir(str(CHORD_CNN_LSTM_DIR))
+
+    try:
+        # Import the real chord recognition module
+        from chord_recognition import chord_recognition
+        print("Successfully imported real chord_recognition module")
+        USE_CHORD_CNN_LSTM = True
+    finally:
+        # Change back to the original directory
+        os.chdir(original_dir)
+except ImportError as e:
+    print(f"Error importing chord_recognition module: {e}")
+    USE_CHORD_CNN_LSTM = False
+except Exception as e:
+    print(f"Error with chord_recognition module: {e}")
+    USE_CHORD_CNN_LSTM = False
+
 @app.route('/')
 def index():
     return jsonify({
         "status": "healthy",
-        "message": "Beat detection API is running",
-        "model": "Beat-Transformer" if USE_BEAT_TRANSFORMER else "librosa"
+        "message": "Audio analysis API is running",
+        "beat_model": "Beat-Transformer" if USE_BEAT_TRANSFORMER else "librosa",
+        "chord_model": "Chord-CNN-LSTM" if USE_CHORD_CNN_LSTM else "None"
     })
 
 @app.route('/api/detect-beats', methods=['POST'])
@@ -282,19 +310,19 @@ def detect_beats():
             # Auto selection based on availability and file size
             file_size_mb = file_size / (1024 * 1024)
 
-            if file_size_mb > 50 and USE_BEAT_TRANSFORMER_LIGHT:
-                # For larger files, prefer the lightweight model
+            # Prefer beat-transformer-light for all file sizes if available
+            if USE_BEAT_TRANSFORMER_LIGHT:
                 use_beat_transformer_light = True
                 print(f"Auto-selected Beat-Transformer Light (file size: {file_size_mb:.1f}MB)")
-            elif USE_BEAT_TRANSFORMER:
+            # For smaller files, use full beat-transformer if available
+            elif file_size_mb <= 50 and USE_BEAT_TRANSFORMER:
                 use_beat_transformer = True
-                print("Auto-selected Beat-Transformer")
-            elif USE_BEAT_TRANSFORMER_LIGHT:
-                use_beat_transformer_light = True
-                print("Auto-selected Beat-Transformer Light")
+                print(f"Auto-selected Beat-Transformer (file size: {file_size_mb:.1f}MB)")
+            # Fall back to madmom if available
             elif madmom_available:
                 use_madmom = True
                 print("Auto-selected madmom")
+            # Last resort is librosa
             else:
                 use_librosa = True
                 print("Auto-selected librosa")
@@ -1226,6 +1254,165 @@ def detect_beats():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/recognize-chords', methods=['POST'])
+def recognize_chords():
+    """
+    Recognize chords in an audio file using the Chord-CNN-LSTM model
+
+    Parameters:
+    - file: The audio file to analyze (multipart/form-data)
+    - audio_path: Alternative to file, path to an existing audio file on the server
+    - chord_dict: Optional chord dictionary to use ('full', 'ismir2017', 'submission', 'extended')
+
+    Returns:
+    - JSON with chord recognition results
+    """
+    import os
+    import tempfile
+    import traceback
+
+    # Check for JSON data
+    if request.is_json:
+        data = request.get_json()
+        audio_url = data.get('audioUrl')
+        chord_dict = data.get('chordDict', 'submission')
+
+        # Convert relative URL to absolute file path
+        if audio_url and audio_url.startswith('/audio/'):
+            file_name = audio_url.split('/')[-1]
+            file_path = os.path.join(AUDIO_DIR, file_name)
+        else:
+            return jsonify({"error": "Invalid audioUrl format"}), 400
+    # Check for form data
+    elif 'file' in request.files or 'audio_path' in request.form:
+        # Get the chord dictionary from form data
+        chord_dict = request.form.get('chord_dict', 'submission')
+
+        # Process either uploaded file or process an existing file
+        if 'file' in request.files:
+            file = request.files['file']
+
+            # Create a temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            file.save(temp_file.name)
+            file_path = temp_file.name
+        else:
+            # Use the provided file path
+            file_path = request.form.get('audio_path')
+    else:
+        return jsonify({"error": "No file or path provided"}), 400
+
+    try:
+        # Check if Chord-CNN-LSTM is available
+        if not USE_CHORD_CNN_LSTM:
+            return jsonify({
+                "error": "Chord-CNN-LSTM model is not available. Please check the server logs for details."
+            }), 500
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"File not found: {file_path}"}), 404
+
+        # Create a temporary file for the lab output
+        temp_lab_file = tempfile.NamedTemporaryFile(delete=False, suffix='.lab')
+        lab_path = temp_lab_file.name
+        temp_lab_file.close()
+
+        print(f"Running chord recognition on {file_path} with chord_dict={chord_dict}")
+
+        # Run chord recognition
+        try:
+            # Change the working directory temporarily to run the model
+            original_dir = os.getcwd()
+            os.chdir(str(CHORD_CNN_LSTM_DIR))
+
+            try:
+                # Use the real chord recognition module
+                from chord_recognition import chord_recognition
+                print(f"Running real chord recognition on {file_path} with chord_dict={chord_dict}")
+                success = chord_recognition(file_path, lab_path, chord_dict)
+                if not success:
+                    return jsonify({
+                        "error": "Chord recognition failed. See server logs for details."
+                    }), 500
+            finally:
+                # Change back to the original directory
+                os.chdir(original_dir)
+        except Exception as e:
+            print(f"Error in chord_recognition: {e}")
+            traceback.print_exc()
+            return jsonify({
+                "error": f"Chord recognition failed: {str(e)}"
+            }), 500
+
+        # Parse the lab file
+        chord_data = []
+        try:
+            with open(lab_path, 'r') as f:
+                for line in f:
+                    # Print the raw line for debugging
+                    print(f"Lab file line: '{line.strip()}'")
+
+                    # Try to split by tabs first, then by spaces if that doesn't work
+                    parts = line.strip().split('\t')
+                    if len(parts) < 3:
+                        parts = line.strip().split()
+
+                    # Print the parts for debugging
+                    print(f"Parsed line parts: {parts}")
+
+                    if len(parts) >= 3:
+                        start_time = float(parts[0])
+                        end_time = float(parts[1])
+                        chord_label = parts[2]
+
+                        # Add to chord data
+                        chord_data.append({
+                            "start": start_time,
+                            "end": end_time,
+                            "chord": chord_label,
+                            "confidence": 0.9  # Default confidence value
+                        })
+
+            # Print the parsed chord data for debugging
+            print(f"Parsed {len(chord_data)} chords from lab file")
+            if chord_data:
+                print(f"First chord: {chord_data[0]}")
+                print(f"Last chord: {chord_data[-1]}")
+        except Exception as e:
+            print(f"Error parsing lab file: {e}")
+            traceback.print_exc()
+            return jsonify({
+                "error": f"Failed to parse chord data: {str(e)}"
+            }), 500
+
+        # Clean up temporary files
+        try:
+            if 'file' in request.files:
+                os.unlink(file_path)
+            os.unlink(lab_path)
+        except Exception as e:
+            print(f"Warning: Failed to clean up temporary files: {e}")
+
+        # Prepare response
+        response_data = {
+            "success": True,
+            "chords": chord_data,
+            "total_chords": len(chord_data),
+            "model": "chord-cnn-lstm",
+            "chord_dict": chord_dict
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error in recognize_chords: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/api/model-info', methods=['GET'])
 def model_info():
     """Return information about the available beat detection models"""
@@ -1246,11 +1433,11 @@ def model_info():
         available_models.append("madmom")
     available_models.append("librosa")  # Always available as last resort
 
-    # Determine default model
-    if USE_BEAT_TRANSFORMER:
-        default_model = "beat-transformer"
-    elif USE_BEAT_TRANSFORMER_LIGHT:
+    # Set beat-transformer-light as the default model if available
+    if USE_BEAT_TRANSFORMER_LIGHT:
         default_model = "beat-transformer-light"
+    elif USE_BEAT_TRANSFORMER:
+        default_model = "beat-transformer"
     elif madmom_available:
         default_model = "madmom"
     else:
@@ -1288,13 +1475,21 @@ def model_info():
         except Exception as e:
             print(f"Error getting Spleeter info: {e}")
 
+    # Add chord model information
+    chord_models = []
+    if USE_CHORD_CNN_LSTM:
+        chord_models.append("chord-cnn-lstm")
+
     return jsonify({
         "success": True,
-        "default_model": default_model,
-        "available_models": available_models,
+        "default_beat_model": default_model,
+        "available_beat_models": available_models,
         "beat_transformer_available": USE_BEAT_TRANSFORMER,
         "beat_transformer_light_available": USE_BEAT_TRANSFORMER_LIGHT,
         "madmom_available": madmom_available,
+        "chord_cnn_lstm_available": USE_CHORD_CNN_LSTM,
+        "default_chord_model": "chord-cnn-lstm" if USE_CHORD_CNN_LSTM else "none",
+        "available_chord_models": chord_models,
         "spleeter_info": spleeter_info,
         "file_size_limits": {
             "upload_limit_mb": 50,
@@ -1303,7 +1498,7 @@ def model_info():
             "beat_transformer_light_limit_mb": 150,  # Light version can handle larger files
             "force_parameter_available": True
         },
-        "model_info": {
+        "beat_model_info": {
             "beat-transformer": {
                 "name": "Beat-Transformer (Full)",
                 "description": "High-precision ML model with 5-channel audio separation",
@@ -1329,6 +1524,14 @@ def model_info():
                 "description": "Fast signal processing with basic beat detection",
                 "performance": "Basic accuracy, fastest processing",
                 "uses_spleeter": False
+            }
+        },
+        "chord_model_info": {
+            "chord-cnn-lstm": {
+                "name": "Chord-CNN-LSTM",
+                "description": "Deep learning model for chord recognition using CNN and LSTM layers",
+                "performance": "High accuracy, medium processing speed",
+                "available_chord_dicts": ["full", "ismir2017", "submission", "extended"]
             }
         }
     })
