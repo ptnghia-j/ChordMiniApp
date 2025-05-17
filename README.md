@@ -56,7 +56,70 @@ This project is currently in the planning and initial development phase. See the
 
 ## Getting Started
 
-*Coming soon*
+### Prerequisites
+
+- Node.js 16+ and npm
+- Python 3.8+ with pip
+- FFmpeg installed on your system
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ptnghia-j/ChordMiniApp.git
+   cd ChordMiniApp
+   ```
+
+2. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. Edit `.env.local` and add your API keys:
+   - Get a Firebase project configuration from the [Firebase Console](https://console.firebase.google.com/)
+   - Get a YouTube API key from the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+
+5. Set up the Python backend:
+   ```bash
+   cd python_backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+6. Start the development servers:
+   ```bash
+   # In one terminal (frontend)
+   npm run dev
+
+   # In another terminal (backend)
+   cd python_backend
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python app.py
+   ```
+
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Firebase Setup
+
+1. Create a Firebase project at [firebase.google.com](https://firebase.google.com/)
+2. Enable Firestore Database
+3. Set up security rules for Firestore
+4. Add a web app to your Firebase project
+5. Copy the configuration to your `.env.local` file
+
+### Security Notes
+
+- **NEVER commit your `.env.local` file to version control**
+- **NEVER hardcode API keys in your source code**
+- The project includes a pre-commit hook to help prevent accidental commits of sensitive information
+- If you accidentally expose API keys, immediately rotate them in the respective service dashboards
+- For production, consider using more restrictive Firebase security rules
 
 ## License
 

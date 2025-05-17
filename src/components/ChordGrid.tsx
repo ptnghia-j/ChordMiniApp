@@ -135,7 +135,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
               {row.map((measure, measureIdx) => (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="relative border-l border-gray-600"
+                  className="relative border-l-[3px] border-gray-600"
                   style={{
                     paddingLeft: '4px'
                   }}

@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Development rules - allow all access
+    // WARNING: Only use these rules during development!
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Production rules - uncomment and customize these for production
+    /*
+    // Transcriptions collection - public read, authenticated write
+    match /transcriptions/{transcriptionId} {
+      // Anyone can read transcriptions
+      allow read: if true;
+      
+      // Only authenticated users can create/update transcriptions
+      allow write: if request.auth != null;
+      
+      // Validate transcription data structure
+      allow create: if request.auth != null
+                    && request.resource.data.videoId is string
+                    && request.resource.data.beatModel is string
+                    && request.resource.data.chordModel is string;
+    }
+    
+    // User-specific data - only accessible by the user
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    */
+  }
+}

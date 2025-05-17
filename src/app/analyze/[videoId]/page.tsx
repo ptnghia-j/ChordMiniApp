@@ -9,7 +9,9 @@ import ChordGrid from '@/components/ChordGrid';
 import BeatModelSelector from '@/components/BeatModelSelector';
 import ChordModelSelector from '@/components/ChordModelSelector';
 import ProcessingStatus from '@/components/ProcessingStatus';
+import ExtractionNotification from '@/components/ExtractionNotification';
 import { useProcessing } from '@/contexts/ProcessingContext';
+import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import dynamic from 'next/dynamic';
 
 // Import types from beatDetectionService
@@ -23,6 +25,7 @@ export default function YouTubeVideoAnalyzePage() {
   const params = useParams();
   const videoId = params.videoId as string;
   const {
+    stage,
     setStage,
     setProgress,
     setStatusMessage,
@@ -56,6 +59,7 @@ export default function YouTubeVideoAnalyzePage() {
     videoUrl: null as string | null,
     youtubeEmbedUrl: null as string | null,
     fromCache: false,
+    fromFirestoreCache: false, // Flag to indicate if results are from Firestore cache
   });
 
   // Analysis results state
@@ -85,6 +89,7 @@ export default function YouTubeVideoAnalyzePage() {
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
   const [preferredAudioSource, setPreferredAudioSource] = useState<'youtube' | 'extracted'>('extracted');
+  const [showExtractionNotification, setShowExtractionNotification] = useState(false);
 
   // Extract audio from YouTube on component mount
   useEffect(() => {
@@ -207,6 +212,9 @@ export default function YouTubeVideoAnalyzePage() {
           fromCache: data.fromCache || false,
         }));
 
+        // Show extraction notification banner
+        setShowExtractionNotification(true);
+
         // Load audio into audio element
         if (audioRef.current) {
           audioRef.current.src = data.audioUrl;
@@ -253,7 +261,7 @@ export default function YouTubeVideoAnalyzePage() {
     startProcessing(); // This resets and starts the timer
     setStage('beat-detection');
     setProgress(0);
-    setStatusMessage('Detecting beats...');
+    setStatusMessage('Checking for cached transcription...');
 
     setAudioProcessingState(prev => ({
       ...prev,
@@ -261,31 +269,103 @@ export default function YouTubeVideoAnalyzePage() {
       error: null,
     }));
 
+    // Hide extraction notification when analysis begins
+    setShowExtractionNotification(false);
+
     try {
-      // Fetch the audio as ArrayBuffer
-      const audioResponse = await fetch(audioProcessingState.audioUrl);
-      const arrayBuffer = await audioResponse.arrayBuffer();
+      // Check if we have a cached transcription in Firestore
+      const videoId = params.videoId as string;
+      const cachedTranscription = await getTranscription(videoId, beatDetector, chordDetector);
 
-      // Create AudioContext and decode audio
-      // Use a type assertion to handle browser compatibility
-      const audioContext = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      let results;
 
-      setAudioProcessingState(prev => ({
-        ...prev,
-        audioBuffer,
-      }));
+      if (cachedTranscription) {
+        // Use cached transcription from Firestore
+        console.log('Using cached transcription from Firestore');
+        setStage('complete');
+        setProgress(100);
+        setStatusMessage('Loading cached transcription...');
 
-      // Start chord and beat analysis with selected models
-      console.log(`Starting analysis with beat detector: ${beatDetector}, chord detector: ${chordDetector}...`);
+        // Short delay to show loading state
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Update processing state for chord recognition
-      setStage('chord-recognition');
-      setProgress(50);
-      setStatusMessage('Recognizing chords...');
+        results = {
+          beats: cachedTranscription.beats,
+          chords: cachedTranscription.chords,
+          downbeats: cachedTranscription.downbeats,
+          downbeats_with_measures: cachedTranscription.downbeats_with_measures,
+          synchronizedChords: cachedTranscription.synchronizedChords,
+          beatModel: cachedTranscription.beatModel,
+          chordModel: cachedTranscription.chordModel
+        };
 
-      const results = await analyzeAudio(audioBuffer, beatDetector, chordDetector);
+        // Set duration if available
+        if (cachedTranscription.audioDuration) {
+          setDuration(cachedTranscription.audioDuration);
+        }
+
+        // Update audio processing state to indicate cache usage
+        setAudioProcessingState(prev => ({
+          ...prev,
+          fromFirestoreCache: true
+        }));
+      } else {
+        // No cached transcription, proceed with normal analysis
+        console.log('No cached transcription found, performing analysis');
+
+        // Fetch the audio as ArrayBuffer
+        const audioResponse = await fetch(audioProcessingState.audioUrl);
+        const arrayBuffer = await audioResponse.arrayBuffer();
+
+        // Create AudioContext and decode audio
+        // Use a type assertion to handle browser compatibility
+        const audioContext = new (window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        setAudioProcessingState(prev => ({
+          ...prev,
+          audioBuffer,
+        }));
+
+        // Start chord and beat analysis with selected models
+        console.log(`Starting analysis with beat detector: ${beatDetector}, chord detector: ${chordDetector}...`);
+
+        // Update processing state for chord recognition
+        setStage('chord-recognition');
+        setProgress(50);
+        setStatusMessage('Recognizing chords...');
+
+        const startTime = performance.now();
+        results = await analyzeAudio(audioBuffer, beatDetector, chordDetector);
+        const endTime = performance.now();
+        const totalProcessingTime = (endTime - startTime) / 1000; // Convert to seconds
+
+        // Save the transcription to Firestore
+        try {
+          const saveResult = await saveTranscription({
+            videoId,
+            beatModel: beatDetector,
+            chordModel: chordDetector,
+            beats: results.beats,
+            chords: results.chords,
+            downbeats: results.downbeats,
+            downbeats_with_measures: results.downbeats_with_measures,
+            synchronizedChords: results.synchronizedChords,
+            audioDuration: duration,
+            totalProcessingTime
+          });
+
+          if (saveResult) {
+            console.log('Successfully saved transcription to Firestore');
+          } else {
+            console.warn('Failed to save transcription to Firestore, but continuing with analysis');
+          }
+        } catch (saveError) {
+          // Log the error but continue with the analysis
+          console.error('Error saving to Firestore, but continuing with analysis:', saveError);
+        }
+      }
 
       // Store results
       setAnalysisResults(results);
@@ -522,8 +602,17 @@ export default function YouTubeVideoAnalyzePage() {
   }, [preferredAudioSource, youtubePlayer]);
 
   return (
-    <div className="container mx-auto px-1 sm:px-2 md:px-3 py-8 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+    <>
+      {/* Extraction Notification Banner */}
+      <ExtractionNotification
+        isVisible={showExtractionNotification}
+        fromCache={audioProcessingState.fromCache}
+        onDismiss={() => setShowExtractionNotification(false)}
+        onRefresh={() => extractAudioFromYouTube(true)}
+      />
+
+      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-8 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <Link
@@ -578,13 +667,11 @@ export default function YouTubeVideoAnalyzePage() {
               className="hidden"
             />
 
-            {/* Processing Status */}
-            <div className="mb-6 space-y-4">
-              {/* New ProcessingStatus component */}
-              <ProcessingStatus className="mb-4" />
-
+            {/* Processing Status and Model Selection in a single row */}
+            <div className="mb-6">
+              {/* Error message */}
               {audioProcessingState.error && (
-                <div className="bg-red-50 p-4 rounded-lg">
+                <div className="bg-red-50 p-4 rounded-lg mb-4">
                   <p className="text-red-700">{audioProcessingState.error}</p>
                   <button
                     onClick={() => extractAudioFromYouTube()}
@@ -595,108 +682,65 @@ export default function YouTubeVideoAnalyzePage() {
                 </div>
               )}
 
-              {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-gray-50 overflow-visible">
-                    <h3 className="font-medium text-gray-900 mb-2">
-                      {audioProcessingState.fromCache
-                        ? 'Audio Loaded from Cache!'
-                        : 'Audio Extracted Successfully!'}
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {audioProcessingState.fromCache
-                        ? 'Using cached audio file. You can now analyze the audio to detect beats and chords.'
-                        : 'Now you can analyze the audio to detect beats and chords. This process may take a few moments.'}
-                    </p>
-                    {audioProcessingState.fromCache && (
-                      <div className="mb-4 flex items-center text-sm text-green-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                        </svg>
-                        <button
-                          onClick={() => extractAudioFromYouTube(true)}
-                          className="underline hover:text-green-800"
-                        >
-                          Refresh from YouTube
-                        </button>
-                      </div>
-                    )}
+              {/* Combined processing status and model selection */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Processing Status component - expands to full width when complete */}
+                <div className={`${stage === 'complete' ? 'w-full' : (stage === 'beat-detection' || stage === 'chord-recognition') ? 'lg:w-1/3' : 'hidden'}`}>
+                  <ProcessingStatus
+                    className="h-full"
+                    analysisResults={analysisResults}
+                    audioDuration={duration}
+                    fromCache={audioProcessingState.fromCache}
+                    fromFirestoreCache={audioProcessingState.fromFirestoreCache}
+                  />
+                </div>
 
-                    {/* Increased min-height and added overflow-visible to ensure dropdown is not cut off */}
-                    <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 sm:items-start min-h-[350px] relative overflow-visible">
-                      <div className="w-full sm:w-64 relative z-40">
-                        <BeatModelSelector
-                          onChange={setBeatDetector}
-                          defaultValue="beat-transformer-light"
-                        />
+                {/* Model Selection - hidden when complete */}
+                {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && stage !== 'complete' && (
+                  <div className={`${(stage === 'beat-detection' || stage === 'chord-recognition') ? 'lg:w-2/3' : 'w-full'} p-4 rounded-lg bg-gray-50 overflow-visible`}>
+                    <div className="flex flex-col h-full">
+                      <div className="mb-2">
+                        <h3 className="font-medium text-gray-900">
+                          Select Models for Analysis
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Choose beat and chord detection models to analyze the audio.
+                        </p>
                       </div>
 
-                      <div className="w-full sm:w-64 relative z-30">
-                        <ChordModelSelector
-                          selectedModel={chordDetector}
-                          onModelChange={setChordDetector}
-                        />
-                      </div>
+                      <div className="flex flex-col md:flex-row gap-4 items-start overflow-visible">
+                        <div className="w-full md:w-1/3 relative z-40">
+                          <BeatModelSelector
+                            onChange={setBeatDetector}
+                            defaultValue="beat-transformer-light"
+                          />
+                        </div>
 
-                      <button
-                        onClick={processAudio}
-                        className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                      >
-                        Start Audio Analysis
-                      </button>
+                        <div className="w-full md:w-1/3 relative z-30">
+                          <ChordModelSelector
+                            selectedModel={chordDetector}
+                            onModelChange={setChordDetector}
+                          />
+                        </div>
+
+                        <div className="w-full md:w-1/3 flex items-center justify-center mt-4 md:mt-0">
+                          <button
+                            onClick={processAudio}
+                            className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                          >
+                            Start Audio Analysis
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Analysis results */}
             {analysisResults && audioProcessingState.isAnalyzed && (
             <div className="mt-6 space-y-6">
-              <div className="p-4 rounded-lg bg-white border-2 border-blue-600">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-medium text-gray-800 text-lg">
-                    Audio Analysis Complete!
-                  </h3>
-                  {audioProcessingState.fromCache && (
-                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                      </svg>
-                      Cached Audio
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
-                  <div className="space-y-1">
-                    <p>
-                      <span className="font-medium">Beat detector:</span> {analysisResults.beatModel || 'Unknown'}
-                    </p>
-                    <p>
-                      <span className="font-medium">Total beats:</span> {analysisResults.beats.length}
-                    </p>
-                    <p>
-                      <span className="font-medium">Estimated BPM:</span> {analysisResults.beats.length > 0 ? Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) : 'N/A'}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p>
-                      <span className="font-medium">Chord detector:</span> {analysisResults.chordModel || 'Unknown'}
-                    </p>
-                    <p>
-                      <span className="font-medium">Total chords:</span> {analysisResults.chords.length}
-                    </p>
-                    {analysisResults.downbeats && (
-                      <p>
-                        <span className="font-medium">Downbeats detected:</span> {analysisResults.downbeats.length}
-                      </p>
-                    )}
-                    <p>
-                      <span className="font-medium">Audio duration:</span> {formatTime(duration)}
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               {/* Rest of the analysis UI... */}
               <div className="p-4 rounded-lg bg-white border border-gray-200">
@@ -735,7 +779,7 @@ export default function YouTubeVideoAnalyzePage() {
                         }`}
                         style={{
                           left: `${(beat.time / duration) * 100}%`,
-                          width: isFirstBeat ? '1px' : '0.5px',
+                          width: isFirstBeat ? '0.5px' : '0.25px',
                           height: index === currentBeatIndex ? '14px' : isFirstBeat ? '10px' : '8px'
                         }}
                       >
@@ -749,7 +793,7 @@ export default function YouTubeVideoAnalyzePage() {
                     );
                   })}
 
-                  {/* Downbeat markers (if available) */}
+                  {/* Downbeat markers (if available) - 3x thicker */}
                   {(analysisResults.downbeats_with_measures || []).map((downbeat, index) => (
                     <div
                       key={`downbeat-measure-${index}`}
@@ -764,7 +808,7 @@ export default function YouTubeVideoAnalyzePage() {
                     </div>
                   ))}
 
-                  {/* Fallback to original downbeats if downbeats_with_measures is not available */}
+                  {/* Fallback to original downbeats if downbeats_with_measures is not available - 3x thicker */}
                   {!analysisResults.downbeats_with_measures && (analysisResults.downbeats || []).map((beatTime, index) => (
                     <div
                       key={`downbeat-${index}`}
@@ -781,7 +825,7 @@ export default function YouTubeVideoAnalyzePage() {
 
                   {/* Playhead */}
                   <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-red-600 z-10"
+                    className="absolute top-0 bottom-0 w-px bg-red-600 z-10"
                     style={{ left: `${(currentTime / duration) * 100}%` }}
                   ></div>
                 </div>
@@ -807,55 +851,7 @@ export default function YouTubeVideoAnalyzePage() {
                 </div>
               </div>
 
-              {/* Beat statistics */}
-              <div className="p-4 rounded-lg bg-white border border-gray-200">
-                <h3 className="font-medium text-lg mb-3 text-gray-800">
-                  Beat Analysis Details
-                </h3>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 shadow-sm">
-                    <p className="text-sm text-gray-600 font-medium">
-                      Beat Detection Model
-                    </p>
-                    <p className="font-semibold text-xl text-blue-800">
-                      {analysisResults.beatModel || 'Unknown'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-purple-50 border border-purple-100 shadow-sm">
-                    <p className="text-sm text-gray-600 font-medium">
-                      Beats Per Minute (BPM)
-                    </p>
-                    <p className="font-semibold text-xl text-purple-800">
-                      {Math.round(analysisResults.beats.length > 0
-                        ? 60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)
-                        : 0)}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-green-50 border border-green-100 shadow-sm">
-                    <p className="text-sm text-gray-600 font-medium">
-                      Total Beats
-                    </p>
-                    <p className="font-semibold text-xl text-green-800">
-                      {analysisResults.beats.length}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 shadow-sm">
-                    <p className="text-sm text-gray-600 font-medium">
-                      Total Measures
-                    </p>
-                    <p className="font-semibold text-xl text-amber-800">
-                      {analysisResults.downbeats_with_measures
-                        ? analysisResults.downbeats_with_measures.length
-                        : analysisResults.downbeats
-                          ? analysisResults.downbeats.length
-                          : Math.ceil(analysisResults.beats.length / 4)}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {/* Beat statistics section removed as requested */}
             </div>
           )}
           </div>
@@ -953,5 +949,6 @@ export default function YouTubeVideoAnalyzePage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -3,15 +3,42 @@
 import React from 'react';
 import ProgressBar from './ProgressBar';
 import { useProcessing, ProcessingStage } from '../contexts/ProcessingContext';
+import { ChordDetectionResult } from '@/services/chordRecognitionService';
+import { BeatInfo } from '@/services/beatDetectionService';
 
 interface ProcessingStatusProps {
   className?: string;
+  analysisResults?: {
+    chords: ChordDetectionResult[];
+    beats: BeatInfo[];
+    downbeats?: number[];
+    synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
+    beatModel?: string;
+    chordModel?: string;
+  } | null;
+  audioDuration?: number;
+  fromCache?: boolean;
+  fromFirestoreCache?: boolean;
 }
 
-const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ className = '' }) => {
+const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
+  className = '',
+  analysisResults = null,
+  audioDuration = 0,
+  fromCache = false,
+  fromFirestoreCache = false
+}) => {
   const { stage, progress, statusMessage, getFormattedElapsedTime } = useProcessing();
 
-  if (stage === 'idle') {
+  // Format time helper function (mm:ss)
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Hide during idle, downloading, and extracting stages
+  if (stage === 'idle' || stage === 'downloading' || stage === 'extracting') {
     return null;
   }
 
@@ -84,11 +111,69 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ className = '' }) =
       )}
 
       {stage === 'complete' && (
-        <div className="mt-2 text-green-600 text-sm flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-          Beat and chord analysis completed in {getFormattedElapsedTime()}
+        <div className="mt-2">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start">
+            <div className="text-green-600 text-sm flex items-center mb-2 md:mb-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Beat and chord analysis completed in {getFormattedElapsedTime()}
+            </div>
+
+            {analysisResults && (
+              <div className="md:ml-4 md:flex-grow">
+                <div className="flex justify-between items-center mb-1">
+                  <h4 className="text-xs font-medium text-gray-700">Analysis Results</h4>
+                  <div className="flex space-x-1">
+                    {fromCache && (
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Audio Cache
+                      </span>
+                    )}
+                    {fromFirestoreCache && (
+                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                        </svg>
+                        DB Cache
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5 text-xs text-gray-700">
+                  <p className="flex items-baseline">
+                    <span className="font-medium mr-1 whitespace-nowrap">Beat model:</span>
+                    <span className="truncate">{analysisResults.beatModel || 'Unknown'}</span>
+                  </p>
+                  <p>
+                    <span className="font-medium mr-1">Beats:</span> {analysisResults.beats.length}
+                  </p>
+                  <p>
+                    <span className="font-medium mr-1">BPM:</span> {analysisResults.beats.length > 0 ? Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) : 'N/A'}
+                  </p>
+                  <p className="flex items-baseline">
+                    <span className="font-medium mr-1 whitespace-nowrap">Chord model:</span>
+                    <span className="truncate">{analysisResults.chordModel || 'Unknown'}</span>
+                  </p>
+                  <p>
+                    <span className="font-medium mr-1">Chords:</span> {analysisResults.chords.length}
+                  </p>
+                  {analysisResults.downbeats && (
+                    <p>
+                      <span className="font-medium mr-1">Downbeats:</span> {analysisResults.downbeats.length}
+                    </p>
+                  )}
+                  <p className="md:col-span-3">
+                    <span className="font-medium mr-1">Duration:</span> {formatTime(audioDuration)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
