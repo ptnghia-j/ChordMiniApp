@@ -16,7 +16,7 @@ This document tracks the implementation progress of the chord recognition system
 | ID | Task Description | Priority | Status | Assignee | Start Date | Due Date | Effort | Dependencies | Acceptance Criteria | Sprint |
 |---|---|---|---|---|---|---|---|---|---|---|
 | T001 | Initialize Next.js Project | High | Completed |  |  |  | < 1 hour | None | Successfully initialized Next.js project with TypeScript and Tailwind CSS. | 1 |
-| T002 | Set Up Firebase Integration | High | To Do |  |  |  | 7 hours | None | Created Firebase project and successfully connected the application to Firebase (Firestore, Authentication, and Storage). | 1 |
+| T002 | Set Up Firebase Integration | High | Completed |  |  |  | 7 hours | None | Created Firebase project and successfully connected the application to Firebase (Firestore, Authentication, and Storage). | 1 |
 | T003 | YouTube API Integration | High | Completed |  |  |  | 5 hours | None | Successfully implemented YouTube API integration for searching videos and retrieving video metadata. | 2 |
 | T004 | Audio Extraction Service | High | Completed |  |  |  | 5 hours | T003 | Successfully implemented audio extraction from YouTube videos. | 2 |
 | T005 | Chord Recognition Integration | High | Completed |  |  |  | 7 hours | T004 | Successfully integrated chord recognition using a machine learning model. | 3 |
@@ -30,10 +30,12 @@ This document tracks the implementation progress of the chord recognition system
 | T013 | UI/UX Improvements | Medium | In Progress |  |  |  | 21 hours | T008-T011 | Refined user interface and added animations and transitions. | 7 |
 | T014 | Error Handling and Edge Cases | Medium | In Progress |  |  |  | 5 hours | T001-T011 | Implemented comprehensive error handling and addressed edge cases. | 7 |
 | T015 | Testing and Quality Assurance | High | To Do |  |  |  | 14 hours | T001-T014 | Conducted unit and integration tests and performed user testing. | 8 |
+| T016 | Lyrics Transcription with Lead Sheet Layout | Medium | To Do |  |  |  | 21 hours | T005, T007 | Implemented lyrics transcription with synchronized chord display in lead sheet format. | 9 |
 
 ## Implementation Progress Notes
 
 - **T001**: ✅ Next.js project successfully initialized with TypeScript and Tailwind CSS. Project structure established with routing and proper configuration.
+- **T002**: ✅ Firebase integration completed with Firestore database setup for caching transcription results. Implemented services for storing and retrieving transcription data, with proper error handling and fallback mechanisms.
 - **T003**: ✅ YouTube API integration completed with search functionality, video metadata retrieval, and URL parsing. API endpoints implemented for searching YouTube and retrieving video data.
 - **T004**: ✅ Audio extraction service fully implemented with server-side API route for processing YouTube videos. Added caching system to store processed audio for reuse, significantly improving performance and reducing processing time. The audio extraction now happens automatically when a video is loaded.
 - **T005**: ✅ Chord recognition service implemented and integrated with the frontend. The service analyzes audio files and identifies chord progressions, with visualization and synchronization with playback.
@@ -80,7 +82,15 @@ This document tracks the implementation progress of the chord recognition system
    - Conduct user testing and gather feedback
    - Address bugs and issues identified during testing
 
-3. **Additional Features**
+3. **Lyrics Transcription with Lead Sheet Layout (T016)**
+   - Integrate with Music.ai API for lyrics transcription
+   - Synchronize lyrics with chord progressions
+   - Implement lead sheet style display with chords above lyrics
+   - Create dynamic UI with color transitions for played lyrics
+   - Add font size and display preference options
+   - Implement smooth animations for transitions
+
+4. **Additional Features**
    - Implement transpose functionality for chord progressions
    - Add export options for chord sheets (PDF, image)
    - Implement more advanced audio analysis features
