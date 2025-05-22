@@ -59,9 +59,6 @@
 | FR024 | Backend | Store user data (optional) in a database. | Low | Not Started | The backend can store and retrieve user data from the database. | FR012 |
 | FR025 | ML Model | Develop a chord recognition model that takes audio segments as input and outputs chord labels (e.g., C, Am, G7). | High | Not Started | The chord recognition model achieves a specified accuracy on a test dataset. | FR018 |
 | FR026 | ML Model | Develop a beat detection model that takes an audio signal as input and outputs beat timestamps. | High | Not Started | The beat detection model achieves a specified accuracy on a test dataset. | FR018 |
-| FR027 | Frontend | Implement lyrics transcription with lead sheet layout. | Medium | Not Started | The application displays synchronized lyrics with chords positioned above the corresponding words, with dynamic styling as the song plays. | FR006, FR007 |
-| FR028 | Backend | Integrate with Music.ai API for lyrics transcription. | Medium | Not Started | The backend can retrieve time-synchronized lyrics from the Music.ai API. | FR017 |
-| FR029 | Backend | Synchronize lyrics with chord progressions. | Medium | Not Started | The backend can accurately align lyrics with chord changes. | FR021, FR028 |
 
 ## 2. Task Breakdown and Implementation Plan
 

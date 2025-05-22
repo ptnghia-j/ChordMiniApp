@@ -14,3 +14,40 @@
 .animate-progress-indeterminate {
   animation: progress-indeterminate 1.5s infinite linear;
 }
+
+/* Toggle Switch Styles */
+.toggle-checkbox {
+  transition: all 0.3s;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+.toggle-checkbox:checked {
+  right: 0;
+  border-color: #3b82f6;
+}
+
+.toggle-label {
+  transition: background-color 0.3s;
+}
+
+/* Lyrics Styles */
+.lyrics-container {
+  font-family: 'Roboto Mono', monospace;
+  line-height: 2.5;
+}
+
+.chord {
+  color: #e53e3e;
+  font-weight: 600;
+  font-size: 0.85em;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.current-line {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  padding-left: 0.75rem;
+  transition: all 0.3s ease;
+}

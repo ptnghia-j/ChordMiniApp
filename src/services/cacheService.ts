@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
 
 // Define the cache directory
 const CACHE_DIR = path.join(process.cwd(), 'cache');
@@ -38,7 +39,15 @@ export async function initCache() {
 export async function getCacheIndex(): Promise<CacheEntry[]> {
   try {
     const data = await fs.readFile(CACHE_INDEX_PATH, 'utf-8');
-    return JSON.parse(data);
+    const cacheIndex = JSON.parse(data);
+
+    // Convert any YouTube URLs to privacy-enhanced mode
+    return cacheIndex.map(entry => {
+      if (entry.youtubeEmbedUrl && entry.youtubeEmbedUrl.includes('youtube.com')) {
+        entry.youtubeEmbedUrl = convertToPrivacyEnhancedUrl(entry.youtubeEmbedUrl);
+      }
+      return entry;
+    });
   } catch (error) {
     console.error('Failed to read cache index:', error);
     return [];
@@ -83,6 +92,11 @@ export async function addToCache(entry: CacheEntry): Promise<void> {
     } catch (error) {
       console.error(`Failed to get file size for ${entry.audioUrl}:`, error);
     }
+  }
+
+  // Ensure YouTube embed URL uses privacy-enhanced mode
+  if (entry.youtubeEmbedUrl && entry.youtubeEmbedUrl.includes('youtube.com')) {
+    entry.youtubeEmbedUrl = convertToPrivacyEnhancedUrl(entry.youtubeEmbedUrl);
   }
 
   // Add new entry

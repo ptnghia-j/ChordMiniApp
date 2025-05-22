@@ -7,11 +7,15 @@
  */
 
 /**
- * Extracts audio from a YouTube video and returns it as an ArrayBuffer
+ * Extracts audio from a YouTube video and returns the audio URL and data
  * @param videoId The YouTube video ID
- * @returns Promise that resolves to an ArrayBuffer containing the audio data
+ * @returns Promise that resolves to an object containing the audio URL and data
  */
-export async function extractAudio(videoId: string): Promise<ArrayBuffer> {
+export async function extractAudio(videoId: string): Promise<{
+  audioUrl: string;
+  audioData: ArrayBuffer;
+  fromFirebase?: boolean;
+}> {
   try {
     console.log(`Extracting audio for video ID: ${videoId}`);
 
@@ -57,14 +61,108 @@ export async function extractAudio(videoId: string): Promise<ArrayBuffer> {
         throw new Error(errorMessage);
       }
 
-      const audioData = await response.arrayBuffer();
+      const responseData = await response.json();
+
+      if (!responseData.audioUrl) {
+        throw new Error('No audio URL returned from server');
+      }
+
+      // Check if the audio is from Firebase Storage
+      const fromFirebase = responseData.fromFirebase === true;
+      const audioUrl = responseData.audioUrl;
+
+      console.log(`Audio URL: ${audioUrl}, from Firebase: ${fromFirebase}`);
+
+      // Fetch the audio data from the URL
+      let audioResponse;
+      let audioData;
+
+      try {
+        // If the URL is from Firebase, try to fetch from the local cache first
+        if (fromFirebase) {
+          // Extract the filename from the URL
+          const urlParts = audioUrl.split('/');
+          const filename = urlParts[urlParts.length - 1];
+
+          // Try to find the file in the local cache
+          const localAudioUrl = `/audio/${filename}`;
+          console.log(`Trying local audio URL first: ${localAudioUrl}`);
+
+          try {
+            audioResponse = await fetch(localAudioUrl);
+
+            if (audioResponse.ok) {
+              console.log('Successfully fetched audio from local cache');
+              audioData = await audioResponse.arrayBuffer();
+
+              // Check if it's a placeholder file (very small size)
+              if (audioData.byteLength < 100) {
+                console.log('Found placeholder file, need to download the real audio');
+                throw new Error('Placeholder file detected');
+              }
+            } else {
+              throw new Error(`Failed to fetch audio data from local cache: ${localAudioUrl}`);
+            }
+          } catch (localError) {
+            console.log('Local audio file not available or is a placeholder, fetching from original URL');
+
+            // Try the original URL
+            audioResponse = await fetch(audioUrl);
+
+            if (!audioResponse.ok) {
+              console.error(`Failed to fetch audio data from ${audioUrl}, status: ${audioResponse.status}`);
+              throw new Error(`Failed to fetch audio data from ${audioUrl}`);
+            }
+
+            audioData = await audioResponse.arrayBuffer();
+
+            // Save the audio data to the local cache
+            try {
+              const saveResponse = await fetch('/api/save-audio', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  videoId,
+                  filename,
+                  // We can't send the ArrayBuffer directly, so we'll need to implement a different approach
+                  // This is just a placeholder for now
+                  placeholder: false
+                }),
+              });
+
+              if (saveResponse.ok) {
+                console.log('Successfully saved audio to local cache');
+              } else {
+                console.error('Failed to save audio to local cache');
+              }
+            } catch (saveError) {
+              console.error('Error saving audio to local cache:', saveError);
+            }
+          }
+        } else {
+          // For non-Firebase URLs, just fetch directly
+          audioResponse = await fetch(audioUrl);
+
+          if (!audioResponse.ok) {
+            console.error(`Failed to fetch audio data from ${audioUrl}, status: ${audioResponse.status}`);
+            throw new Error(`Failed to fetch audio data from ${audioUrl}`);
+          }
+
+          audioData = await audioResponse.arrayBuffer();
+        }
+      } catch (error) {
+        console.error('Error fetching audio data:', error);
+        throw new Error(`Failed to fetch audio data: ${error.message}`);
+      }
 
       if (!audioData || audioData.byteLength === 0) {
-        throw new Error('Received empty audio data from server');
+        throw new Error('Received empty audio data');
       }
 
       console.log('Audio data received successfully, size:', audioData.byteLength, 'bytes');
-      return audioData;
+      return { audioUrl, audioData, fromFirebase };
     } catch (fetchError: unknown) {
       clearTimeout(timeoutId);
 
@@ -147,12 +245,16 @@ export function playAudioBuffer(
 /**
  * Complete audio extraction and processing for a YouTube video
  * @param videoId The YouTube video ID
- * @returns Promise that resolves to an AudioBuffer
+ * @returns Promise that resolves to an object containing the AudioBuffer and metadata
  */
-export async function processAudio(videoId: string): Promise<AudioBuffer> {
+export async function processAudio(videoId: string): Promise<{
+  audioBuffer: AudioBuffer;
+  audioUrl: string;
+  fromFirebase?: boolean;
+}> {
   try {
     // Extract audio from YouTube video
-    const arrayBuffer = await extractAudio(videoId);
+    const { audioData, audioUrl, fromFirebase } = await extractAudio(videoId);
 
     // Create Web Audio context
     // Define a type for the window with webkitAudioContext
@@ -168,9 +270,9 @@ export async function processAudio(videoId: string): Promise<AudioBuffer> {
     const audioContext = new AudioContextClass();
 
     // Convert to AudioBuffer
-    const audioBuffer = await createAudioBufferFromArrayBuffer(audioContext, arrayBuffer);
+    const audioBuffer = await createAudioBufferFromArrayBuffer(audioContext, audioData);
 
-    return audioBuffer;
+    return { audioBuffer, audioUrl, fromFirebase };
   } catch (error) {
     console.error('Audio processing error:', error);
     throw error;

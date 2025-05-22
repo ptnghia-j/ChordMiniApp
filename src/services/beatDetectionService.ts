@@ -37,6 +37,7 @@ export interface BeatDetectionResult {
   duration: number;           // Duration of the audio in seconds
   model?: string;             // Which model was used (librosa or Beat-Transformer)
   error?: string;             // Optional error message
+  time_signature?: number;    // Time signature (beats per measure, e.g., 4 for 4/4, 3 for 3/4)
 }
 
 // Interface for model info response

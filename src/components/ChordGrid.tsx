@@ -7,6 +7,7 @@ interface ChordGridProps {
   currentBeatIndex?: number; // Current beat index for highlighting, optional
   beatsPerMeasure?: number; // Number of beats per measure, defaults to 4
   measuresPerRow?: number; // Number of measures to display per row, defaults to 4
+  timeSignature?: number; // Time signature (beats per measure), defaults to 4
 }
 
 const ChordGrid: React.FC<ChordGridProps> = ({
@@ -14,8 +15,14 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   beats,
   currentBeatIndex = -1,
   beatsPerMeasure = 4,
-  measuresPerRow = 4
+  measuresPerRow = 4,
+  timeSignature = 4
 }) => {
+  // Use the provided time signature to override beatsPerMeasure if available
+  const actualBeatsPerMeasure = timeSignature || beatsPerMeasure;
+
+  // Debug log for time signature
+  console.log(`ChordGrid using time signature: ${timeSignature || 4}/4 (actualBeatsPerMeasure: ${actualBeatsPerMeasure})`);
   // Reference to the grid container for measuring cell size
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(0);
@@ -66,12 +73,12 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
   // Helper to determine if this beat is the first beat of a measure
   const isFirstBeatOfMeasure = (index: number): boolean => {
-    return index % beatsPerMeasure === 0;
+    return index % actualBeatsPerMeasure === 0;
   };
 
   // Helper to get measure number (1-based)
   const getMeasureNumber = (index: number): number => {
-    return Math.floor(index / beatsPerMeasure) + 1;
+    return Math.floor(index / actualBeatsPerMeasure) + 1;
   };
 
   // Helper to determine chord type and apply appropriate styling
@@ -111,9 +118,9 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
   // Group chords by measure for better visualization
   const groupedByMeasure = [];
-  for (let i = 0; i < chords.length; i += beatsPerMeasure) {
-    const measureChords = chords.slice(i, i + beatsPerMeasure);
-    const measureBeats = beats.slice(i, i + beatsPerMeasure);
+  for (let i = 0; i < chords.length; i += actualBeatsPerMeasure) {
+    const measureChords = chords.slice(i, i + actualBeatsPerMeasure);
+    const measureBeats = beats.slice(i, i + actualBeatsPerMeasure);
     groupedByMeasure.push({ measureNumber: getMeasureNumber(i), chords: measureChords, beats: measureBeats });
   }
 

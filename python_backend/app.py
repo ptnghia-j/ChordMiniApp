@@ -21,6 +21,7 @@ import librosa
 BEAT_TRANSFORMER_DIR = Path(__file__).parent / "models" / "Beat-Transformer"
 CHORD_CNN_LSTM_DIR = Path(__file__).parent / "models" / "Chord-CNN-LSTM"
 AUDIO_DIR = Path(__file__).parent.parent / "public" / "audio"
+print(f"Audio directory path: {AUDIO_DIR}")
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
 sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
@@ -230,6 +231,25 @@ def detect_beats():
         else:
             # Use the provided file path
             file_path = request.form.get('audio_path')
+
+            # Check if the path is a relative path from the public/audio directory
+            if file_path.startswith('/audio/'):
+                # Convert to absolute path
+                relative_path = file_path[7:]  # Remove '/audio/' prefix
+                file_path = os.path.join(AUDIO_DIR, relative_path)
+                print(f"Converted relative path {request.form.get('audio_path')} to absolute path: {file_path}")
+                print(f"AUDIO_DIR: {AUDIO_DIR}")
+                print(f"Relative path: {relative_path}")
+                print(f"File exists check: {os.path.exists(file_path)}")
+
+                # List files in the audio directory for debugging
+                print("Files in audio directory:")
+                try:
+                    for file in os.listdir(AUDIO_DIR):
+                        print(f"  - {file}")
+                except Exception as e:
+                    print(f"Error listing files: {e}")
+
             if not os.path.exists(file_path):
                 return jsonify({"error": f"File not found: {file_path}"}), 404
 
@@ -1230,6 +1250,28 @@ def detect_beats():
                 else:
                     bpm = 120.0
 
+                # Determine time signature by analyzing beats between downbeats
+                time_signature = 4  # Default to 4/4
+                time_signatures = []  # Store time signatures for each measure
+
+                if len(downbeat_times) >= 2:
+                    for i in range(len(downbeat_times) - 1):
+                        curr_downbeat = downbeat_times[i]
+                        next_downbeat = downbeat_times[i + 1]
+
+                        # Count beats in this measure
+                        beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
+
+                        # Only consider reasonable time signatures
+                        if 2 <= beats_in_measure <= 12:
+                            time_signatures.append(beats_in_measure)
+
+                    # Use the most common time signature if we have enough data
+                    if time_signatures:
+                        from collections import Counter
+                        time_signature = Counter(time_signatures).most_common(1)[0][0]
+                        print(f"Detected time signature: {time_signature}/4")
+
                 duration = librosa.get_duration(y=y, sr=sr)
 
             # If using a temp file, clean it up
@@ -1247,7 +1289,8 @@ def detect_beats():
                 "total_beats": len(beat_times),
                 "total_downbeats": len(downbeat_times) if 'downbeat_times' in locals() else 0,
                 "duration": float(duration),
-                "model": "madmom"
+                "model": "madmom",
+                "time_signature": int(time_signature)  # Include the detected time signature
             })
 
     except Exception as e:
@@ -1299,6 +1342,24 @@ def recognize_chords():
         else:
             # Use the provided file path
             file_path = request.form.get('audio_path')
+
+            # Check if the path is a relative path from the public/audio directory
+            if file_path.startswith('/audio/'):
+                # Convert to absolute path
+                relative_path = file_path[7:]  # Remove '/audio/' prefix
+                file_path = os.path.join(AUDIO_DIR, relative_path)
+                print(f"Converted relative path {request.form.get('audio_path')} to absolute path: {file_path}")
+                print(f"AUDIO_DIR: {AUDIO_DIR}")
+                print(f"Relative path: {relative_path}")
+                print(f"File exists check: {os.path.exists(file_path)}")
+
+                # List files in the audio directory for debugging
+                print("Files in audio directory:")
+                try:
+                    for file in os.listdir(AUDIO_DIR):
+                        print(f"  - {file}")
+                except Exception as e:
+                    print(f"Error listing files: {e}")
     else:
         return jsonify({"error": "No file or path provided"}), 400
 

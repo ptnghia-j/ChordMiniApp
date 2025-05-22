@@ -20,23 +20,23 @@ class BeatTransformerDetectorLight:
     def __init__(self, checkpoint_path=None):
         """Initialize the lightweight Beat Transformer detector with a checkpoint file"""
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        
+
         # Default to fold 4 if no checkpoint specified
         if checkpoint_path is None:
             checkpoint_path = str(BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt")
-        
+
         # Initialize model with modified parameters for single-channel input
         self.model = Demixed_DilatedTransformerModel(
             attn_len=5, instr=1, ntoken=2,  # Changed instr from 5 to 1 for single-channel
             dmodel=256, nhead=8, d_hid=1024,
             nlayers=9, norm_first=True
         )
-        
+
         # Load checkpoint
         try:
             # Load the state dict
             state_dict = torch.load(checkpoint_path, map_location=self.device)['state_dict']
-            
+
             # Modify the state dict to work with single-channel input
             modified_state_dict = {}
             for key, value in state_dict.items():
@@ -50,7 +50,7 @@ class BeatTransformerDetectorLight:
                 else:
                     # Keep all other parameters as is
                     modified_state_dict[key] = value
-            
+
             # Load the modified state dict
             self.model.load_state_dict(modified_state_dict, strict=False)
             self.model.to(self.device)
@@ -59,47 +59,48 @@ class BeatTransformerDetectorLight:
         except Exception as e:
             print(f"Error loading checkpoint {checkpoint_path}: {e}")
             raise
-        
+
         # Initialize DBN processors
         self.beat_tracker = DBNBeatTrackingProcessor(
             min_bpm=55.0, max_bpm=215.0, fps=44100/1024,
             transition_lambda=100, observation_lambda=6,
             num_tempi=None, threshold=0.2
         )
-        
+
+        # Support a wider range of time signatures (2/4, 3/4, 4/4, 5/4, 6/8, 7/8, etc.)
         self.downbeat_tracker = DBNDownBeatTrackingProcessor(
-            beats_per_bar=[3, 4], min_bpm=55.0,
+            beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
             max_bpm=215.0, fps=44100/1024,
             transition_lambda=100, observation_lambda=6,
             num_tempi=None, threshold=0.2
         )
-    
+
     def create_single_channel_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
         """Create a single-channel mel spectrogram from audio file"""
         # Import the lightweight spectrogram function
         from Beat_Transformer.demix_spectrogram_light import demix_audio_to_spectrogram_light
-        
+
         # Create a temporary file for the spectrogram
         with tempfile.NamedTemporaryFile(suffix='.npy', delete=False) as temp_file:
             temp_path = temp_file.name
-        
+
         # Generate the lightweight spectrogram
         demix_audio_to_spectrogram_light(audio_file, temp_path, sr, n_fft, n_mels, fmin, fmax)
-        
+
         # Load the spectrogram
         spectrogram = np.load(temp_path)
-        
+
         # Clean up the temporary file
         os.unlink(temp_path)
-        
+
         return spectrogram
-    
+
     def detect_beats(self, audio_file):
         """Detect beats and downbeats from an audio file using lightweight Beat Transformer
-        
+
         Args:
             audio_file (str): Path to audio file
-            
+
         Returns:
             dict: Dictionary containing beat and downbeat information
         """
@@ -107,39 +108,39 @@ class BeatTransformerDetectorLight:
             # Load the audio to get duration and sr
             audio, sr = librosa.load(audio_file, sr=None)
             duration = librosa.get_duration(y=audio, sr=sr)
-            
+
             # Step 1: Create single-channel spectrogram
             print(f"Creating single-channel spectrogram for: {audio_file}")
             single_channel_spec = self.create_single_channel_spectrogram(audio_file)
-            
+
             # Step 2: Prepare input for the model
             model_input = torch.from_numpy(single_channel_spec).unsqueeze(0).float().to(self.device)
-            
+
             # Step 3: Run inference
             print("Running lightweight Beat Transformer inference")
             with torch.no_grad():
                 activation, _ = self.model(model_input)
                 beat_activation = torch.sigmoid(activation[0, :, 0]).detach().cpu().numpy()
                 downbeat_activation = torch.sigmoid(activation[0, :, 1]).detach().cpu().numpy()
-            
+
             # Step 4: Process with DBN
             print("Post-processing with DBN")
             dbn_beat_times = self.beat_tracker(beat_activation)
-            
+
             # Combined activation for downbeat tracking
             combined_act = np.concatenate((
                 np.maximum(beat_activation - downbeat_activation, np.zeros_like(beat_activation))[:, np.newaxis],
                 downbeat_activation[:, np.newaxis]
             ), axis=-1)
-            
+
             dbn_downbeat_results = self.downbeat_tracker(combined_act)
             dbn_downbeat_times = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
-            
+
             # Step 5: Process beats - determine their strength based on activation
             # For each beat time, find nearest frame in the beat activation
             frame_rate = 44100/1024  # This is the rate used in the model
             beat_info = []
-            
+
             for beat_time in dbn_beat_times:
                 frame_idx = int(beat_time * frame_rate)
                 if frame_idx < len(beat_activation):
@@ -155,7 +156,7 @@ class BeatTransformerDetectorLight:
                         "time": float(beat_time),
                         "strength": 0.5  # Default strength
                     })
-            
+
             # Calculate BPM from beat times
             if len(dbn_beat_times) > 1:
                 # Calculate intervals between beats
@@ -166,7 +167,31 @@ class BeatTransformerDetectorLight:
                 bpm = 60.0 / median_interval if median_interval > 0 else 120.0
             else:
                 bpm = 120.0  # Default BPM if not enough beats
-            
+
+            # Determine time signature by analyzing beats between downbeats
+            time_signature = 4  # Default to 4/4
+            time_signatures = []  # Store time signatures for each measure
+
+            if len(dbn_downbeat_times) >= 2:
+                for i in range(len(dbn_downbeat_times) - 1):
+                    curr_downbeat = dbn_downbeat_times[i]
+                    next_downbeat = dbn_downbeat_times[i + 1]
+
+                    # Count beats in this measure
+                    beats_in_measure = sum(1 for b in dbn_beat_times if curr_downbeat <= b < next_downbeat)
+
+                    # Only consider reasonable time signatures
+                    if 2 <= beats_in_measure <= 12:
+                        time_signatures.append(beats_in_measure)
+
+                # Use the most common time signature if we have enough data
+                if time_signatures:
+                    from collections import Counter
+                    time_signature = Counter(time_signatures).most_common(1)[0][0]
+                    print(f"Detected time signature: {time_signature}/4")
+                    print(f"Time signatures found in measures: {time_signatures}")
+                    print(f"Most common time signature: {time_signature}/4")
+
             return {
                 "success": True,
                 "beats": dbn_beat_times.tolist(),
@@ -176,9 +201,10 @@ class BeatTransformerDetectorLight:
                 "total_beats": len(dbn_beat_times),
                 "total_downbeats": len(dbn_downbeat_times),
                 "duration": float(duration),
-                "model": "beat-transformer-light"
+                "model": "beat-transformer-light",
+                "time_signature": int(time_signature)  # Include the detected time signature
             }
-            
+
         except Exception as e:
             import traceback
             traceback.print_exc()

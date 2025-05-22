@@ -69,7 +69,16 @@ export default function Home() {
     setSearchError(null);
     setSearchResults([]);
 
+    // Set a timeout to show a loading message if search takes too long
+    const searchTimeout = setTimeout(() => {
+      if (isSearching) {
+        console.log('Search is taking longer than expected...');
+      }
+    }, 2000);
+
     try {
+      const startTime = performance.now();
+
       const response = await fetch('/api/search-youtube', {
         method: 'POST',
         headers: {
@@ -84,6 +93,10 @@ export default function Home() {
       }
 
       const data = await response.json();
+      const endTime = performance.now();
+      const searchTime = Math.round(endTime - startTime);
+
+      console.log(`Search completed in ${searchTime}ms${data.fromCache ? ' (from cache)' : ''}`);
 
       if (data.success && data.results) {
         setSearchResults(data.results);
@@ -96,6 +109,7 @@ export default function Home() {
         error instanceof Error ? error.message : 'Failed to search for videos'
       );
     } finally {
+      clearTimeout(searchTimeout);
       setIsSearching(false);
     }
   };
@@ -189,12 +203,15 @@ export default function Home() {
                       <button
                         type="submit"
                         disabled={isSearching}
-                        className="w-full md:w-3/4 bg-primary-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors duration-200 disabled:opacity-50"
+                        className="w-full md:w-2/4 bg-primary-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors duration-200 disabled:opacity-50"
                       >
                         {isSearching ? "Searching..." : "Search or Analyze URL"}
                       </button>
 
                       <div className="relative group w-full md:w-1/4 mt-4 md:mt-0">
+                        <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
+                          Upload audio files (MP3, WAV, FLAC) up to 20MB
+                        </div>
                         <Link
                           href="/analyze"
                           className="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-center block"
@@ -202,8 +219,33 @@ export default function Home() {
                         >
                           Upload Audio
                         </Link>
-                        <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm rounded p-2 max-w-xs z-10">
-                          Upload audio files (MP3, WAV, FLAC) up to 20MB
+                      </div>
+
+                      <div className="flex flex-col md:flex-row md:space-x-2 w-full md:w-1/4 mt-4 md:mt-0">
+                        <div className="relative group w-full mb-2 md:mb-0 md:w-1/2">
+                          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
+                            Display synchronized lyrics with YouTube playback
+                          </div>
+                          <Link
+                            href="/lyrics/KoM13RvBHrk"
+                            className="bg-green-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 text-center block"
+                            aria-label="Transcribe lyrics"
+                          >
+                            Lyrics
+                          </Link>
+                        </div>
+
+                        <div className="relative group w-full md:w-1/2">
+                          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
+                            Lyrics transcription demo with our specific audio file
+                          </div>
+                          <Link
+                            href="/lyrics-demo"
+                            className="bg-purple-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-200 text-center block"
+                            aria-label="Lyrics Demo"
+                          >
+                            Demo
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -232,6 +274,7 @@ export default function Home() {
                 isLoading={isSearching}
                 error={searchError}
                 onVideoSelect={handleVideoSelect}
+                fromCache={searchResults.length > 0}
               />
             </div>
           )}
@@ -274,33 +317,21 @@ export default function Home() {
 
           {/* Minimized Cache Management Component */}
           <div className="relative group mt-2 md:mt-0">
+            <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute z-20 bg-gray-800 text-white text-sm rounded p-2 max-w-xs bottom-full right-0 mb-4 pointer-events-none">
+              <p className="font-medium mb-1">Cache Management</p>
+              <p className="text-xs mb-2">Caching helps reduce loading times and YouTube API usage.</p>
+            </div>
             <button
               className="rounded-full bg-blue-100 p-1 cursor-help focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Cache management"
               onClick={() => {
-                // This will be handled by the tooltip/modal
+                window.open('/cache-management', '_blank');
               }}
             >
               <svg className="w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-[300ms] absolute z-10 bg-gray-800 text-white text-sm rounded p-2 max-w-xs bottom-full right-0 mb-2">
-              <p className="font-medium mb-1">Cache Management</p>
-              <p className="text-xs mb-2">Caching helps reduce loading times and YouTube API usage.</p>
-              <div className="flex space-x-2 justify-end">
-                <a
-                  href="/cache-management"
-                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.open('/cache-management', '_blank');
-                  }}
-                >
-                  Manage Cache
-                </a>
-              </div>
-            </div>
           </div>
         </div>
       </footer>

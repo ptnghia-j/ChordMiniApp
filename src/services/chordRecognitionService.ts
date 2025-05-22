@@ -37,6 +37,10 @@ export interface AnalysisResult {
   synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
   beatModel?: string;    // Which model was used for beat detection
   chordModel?: string;   // Which model was used for chord detection
+  beatDetectionResult?: {
+    time_signature?: number; // Time signature (beats per measure)
+    bpm?: number;           // Beats per minute
+  };
 }
 
 /**
@@ -62,6 +66,7 @@ export async function analyzeAudio(
     console.log(`Detecting beats using ${beatDetector} model...`);
     const beatResults = await detectBeatsFromFile(audioFile, beatDetector);
     console.log(`Detected ${beatResults.beats.length} beats, BPM: ${beatResults.bpm}`);
+    console.log(`Detected time signature: ${beatResults.time_signature || 4}/4`);
 
     if (beatResults.downbeats && beatResults.downbeats.length > 0) {
       console.log(`Detected ${beatResults.downbeats.length} downbeats using ${beatResults.model || 'unknown'} model`);
@@ -90,7 +95,11 @@ export async function analyzeAudio(
       beats_with_positions: beatResults.beats_with_positions,
       synchronizedChords,
       beatModel: beatResults.model,
-      chordModel: chordDetector
+      chordModel: chordDetector,
+      beatDetectionResult: {
+        time_signature: beatResults.time_signature || 4, // Use detected time signature or default to 4/4
+        bpm: beatResults.bpm
+      }
     };
   } catch (error) {
     console.error('Error in audio analysis:', error);

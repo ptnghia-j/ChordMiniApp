@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
+import ClientErrorBoundary from '../components/ClientErrorBoundary';
 
 // Initialize the Inter font
 const inter = Inter({ subsets: ['latin'] });

@@ -15,6 +15,10 @@ interface ProcessingStatusProps {
     synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
     beatModel?: string;
     chordModel?: string;
+    beatDetectionResult?: {
+      time_signature?: number;
+      bpm?: number;
+    };
   } | null;
   audioDuration?: number;
   fromCache?: boolean;
@@ -153,7 +157,10 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                     <span className="font-medium mr-1">Beats:</span> {analysisResults.beats.length}
                   </p>
                   <p>
-                    <span className="font-medium mr-1">BPM:</span> {analysisResults.beats.length > 0 ? Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) : 'N/A'}
+                    <span className="font-medium mr-1">BPM:</span> {analysisResults.beatDetectionResult?.bpm || (analysisResults.beats.length > 0 ? Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) : 'N/A')}
+                  </p>
+                  <p>
+                    <span className="font-medium mr-1">Time Sig:</span> {analysisResults.beatDetectionResult?.time_signature ? `${analysisResults.beatDetectionResult.time_signature}/4` : '4/4'}
                   </p>
                   <p className="flex items-baseline">
                     <span className="font-medium mr-1 whitespace-nowrap">Chord model:</span>
