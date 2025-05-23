@@ -1033,10 +1033,10 @@ export default function YouTubeVideoAnalyzePage() {
         onRefresh={() => extractAudioFromYouTube(true)}
       />
 
-      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300" style={{ maxWidth: "98%" }}>
+        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden transition-colors duration-300">
         {/* Navigation Bar - Sticky */}
-        <div className="sticky top-0 bg-white text-gray-800 p-3 border-b border-gray-200 block shadow-md z-50">
+        <div className="sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 p-3 border-b border-gray-200 dark:border-gray-700 block shadow-md z-50 transition-colors duration-300">
           <div className="container mx-auto flex justify-between items-center">
             <div className="flex items-center">
               <Image
@@ -1046,17 +1046,17 @@ export default function YouTubeVideoAnalyzePage() {
                 height={48}
                 className="mr-2"
               />
-              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
+              <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">Chord Mini</h1>
             </div>
             <nav>
               <ul className="flex space-x-6">
                 <li>
-                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  <Link href="/" className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium">
                     Home
                   </Link>
                 </li>
                 <li>
-                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  <Link href="/features" className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium">
                     Features
                   </Link>
                 </li>
@@ -1206,9 +1206,9 @@ export default function YouTubeVideoAnalyzePage() {
             <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-3 rounded-lg bg-white border border-gray-200 mb-2 mt-0">
+              <div className="p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-2 mt-0 transition-colors duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-2">
-                  <h3 className="font-medium text-lg mb-2 md:mb-0 text-gray-800">Analysis Results</h3>
+                  <h3 className="font-medium text-lg mb-2 md:mb-0 text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
                   <div className="flex flex-col w-full md:w-auto">
                     <button
                       onClick={transcribeLyrics}
@@ -1231,8 +1231,8 @@ export default function YouTubeVideoAnalyzePage() {
                       onClick={() => setActiveTab('beatChordMap')}
                       className={`py-2 px-4 text-sm font-medium ${
                         activeTab === 'beatChordMap'
-                          ? 'border-b-2 border-blue-600 text-blue-600'
-                          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                       }`}
                     >
                       Beat & Chord Map
@@ -1242,10 +1242,10 @@ export default function YouTubeVideoAnalyzePage() {
                       disabled={!showLyrics}
                       className={`py-2 px-4 text-sm font-medium ${
                         activeTab === 'lyricsChords'
-                          ? 'border-b-2 border-blue-600 text-blue-600'
+                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
                           : !showLyrics
                             ? 'text-gray-400 cursor-not-allowed'
-                            : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                       }`}
                     >
                       Lyrics & Chords
@@ -1321,7 +1321,7 @@ export default function YouTubeVideoAnalyzePage() {
                           </div>
                         )
                       ) : (
-                        <div className="p-4 bg-blue-100 text-blue-700 rounded-md">
+                        <div className="p-4 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md transition-colors duration-300">
                           <p className="font-medium">Lyrics Not Transcribed</p>
                           <p>Click the "Transcribe Lyrics" button to analyze the audio for lyrics.</p>
                         </div>
@@ -1375,7 +1375,7 @@ export default function YouTubeVideoAnalyzePage() {
                       );
                     })
                   ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                    <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">
                       No beat data available
                     </div>
                   )}
@@ -1423,11 +1423,11 @@ export default function YouTubeVideoAnalyzePage() {
 
                 {/* Beat type legend */}
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-700">
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
                     <div className="w-3 h-3 bg-blue-500"></div>
                     <span>First beat (1)</span>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
                     <div className="w-3 h-3 bg-gray-500"></div>
                     <span>Regular beats {analysisResults?.beatDetectionResult?.time_signature === 3 ? '(2,3)' :
                       analysisResults?.beatDetectionResult?.time_signature === 5 ? '(2,3,4,5)' :
@@ -1435,11 +1435,11 @@ export default function YouTubeVideoAnalyzePage() {
                       analysisResults?.beatDetectionResult?.time_signature === 7 ? '(2,3,4,5,6,7)' :
                       '(2,3,4)'}</span>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
                     <div className="w-3 h-3 bg-red-500"></div>
                     <span>Measure start (downbeat)</span>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
                     <div className="w-3 h-3 bg-blue-600"></div>
                     <span>Current beat</span>
                   </div>
@@ -1452,7 +1452,7 @@ export default function YouTubeVideoAnalyzePage() {
           </div>
 
           {/* Playback controls - now in the main content area */}
-          <div className="w-full p-3 bg-gray-50 rounded-lg mb-3">
+          <div className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3 transition-colors duration-300">
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={playPause}
