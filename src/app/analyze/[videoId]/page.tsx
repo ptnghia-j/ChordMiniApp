@@ -1258,7 +1258,7 @@ export default function YouTubeVideoAnalyzePage() {
                   {/* Beat & Chord Map Tab */}
                   {activeTab === 'beatChordMap' && (
                     <div>
-                      <h4 className="font-medium text-md mb-3 text-gray-700">Chord Progression</h4>
+                      <h4 className="font-medium text-md mb-3 text-gray-700 dark:text-gray-300 transition-colors duration-300">Chord Progression</h4>
                       <ChordGrid
                         chords={chordGridData.chords}
                         beats={chordGridData.beats}

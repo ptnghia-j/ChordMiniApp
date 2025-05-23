@@ -12,12 +12,12 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const { theme } = useTheme();
-  
+
   // Use the appropriate logo based on the current theme
   const logoSrc = theme === 'dark' ? '/chordMiniLogo_dark.png' : '/chordMiniLogo.png';
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 p-3 shadow-md block z-50 transition-colors duration-300 ${className}`}>
+    <div className={`sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 p-3 shadow-md block z-50 transition-colors duration-300 ${className}`}>
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center">
           <Image
@@ -33,16 +33,16 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
           <nav>
             <ul className="flex space-x-6">
               <li>
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium"
                 >
                   Home
                 </Link>
               </li>
               <li>
-                <Link 
-                  href="/features" 
+                <Link
+                  href="/features"
                   className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium"
                 >
                   Features

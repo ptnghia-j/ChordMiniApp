@@ -25,6 +25,28 @@
   .dark .current-line {
     @apply bg-blue-900 bg-opacity-20 border-blue-500;
   }
+
+  /* Navigation bar in dark mode */
+  .dark .nav-bar {
+    @apply bg-black;
+  }
+
+  /* Analysis page in dark mode */
+  .dark .analysis-container {
+    @apply bg-gray-900;
+  }
+
+  .dark .model-selector {
+    @apply bg-gray-800 text-gray-200 border-gray-700;
+  }
+
+  .dark .chord-grid-cell {
+    @apply bg-gray-800 border-gray-600 text-gray-200;
+  }
+
+  .dark .chord-grid-cell-current {
+    @apply bg-blue-900 ring-blue-400;
+  }
 }
 
 @keyframes progress-indeterminate {

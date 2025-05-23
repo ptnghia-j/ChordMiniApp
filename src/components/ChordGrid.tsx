@@ -98,17 +98,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const getChordStyle = (chord: string, isCurrentBeat: boolean, showLabel: boolean, isFirstInMeasure: boolean) => {
     // Base classes for all cells - fully detached with complete border
     // Using border-gray-300 instead of border-gray-200 for 1.5x darker borders
-    let baseClasses = "flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 rounded-sm overflow-hidden";
+    let baseClasses = "flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden";
 
     // All cells have white background by default
-    let classes = `${baseClasses} bg-white`;
+    let classes = `${baseClasses} bg-white dark:bg-gray-800`;
 
     // Use a single text color for all chord types (minimalist approach)
-    let textColor = "text-gray-800";
+    let textColor = "text-gray-800 dark:text-gray-200";
 
     // Highlight current beat with distinct background
     if (isCurrentBeat) {
-      classes = `${baseClasses} bg-blue-100 ring-2 ring-blue-500 shadow-md`;
+      classes = `${baseClasses} bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500 dark:ring-blue-400 shadow-md`;
     }
 
     return `${classes} ${textColor}`;
@@ -117,7 +117,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   if (chords.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-700 text-center p-4 bg-gray-50 rounded-lg border border-gray-200 w-full">
+        <p className="text-gray-700 dark:text-gray-300 text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300">
           No chord data available for this song yet.
         </p>
       </div>
@@ -156,7 +156,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
               {row.map((measure, measureIdx) => (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="relative border-l-[3px] border-gray-600"
+                  className="relative border-l-[3px] border-gray-600 dark:border-gray-400 transition-colors duration-300"
                   style={{
                     paddingLeft: '4px'
                   }}

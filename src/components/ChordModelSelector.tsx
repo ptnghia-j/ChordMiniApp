@@ -113,8 +113,8 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
     <div className={`model-selector-container ${className}`}>
       <div className="mb-2">
         <div className="flex items-center">
-          <h3 className="text-sm font-medium text-gray-700">Chord Recognition Model</h3>
-          <div className="ml-1 text-gray-400 relative group">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-300">Chord Recognition Model</h3>
+          <div className="ml-1 text-gray-400 dark:text-gray-500 relative group transition-colors duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 cursor-help">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
             </svg>
@@ -132,17 +132,17 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading || disabled}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-blue-800 rounded-lg shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-blue-800 dark:border-blue-600 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 dark:hover:border-blue-500 transition-colors duration-300"
         >
           <div className="flex items-center">
             {/* Model icon */}
-            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 text-blue-600">
+            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13 7H7v6h6V7z" />
                 <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
               </svg>
             </span>
-            <span className="font-medium">{selectedModelOption.name}</span>
+            <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
             {loading && (
               <div className="ml-2">
                 <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -157,33 +157,33 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
         {/* Dropdown menu */}
         {isOpen && (
           <div
-            className={`absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg dropdown-menu ${
+            className={`absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dropdown-menu transition-colors duration-300 ${
               dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
             }`}
           >
-            <ul className="py-1 max-h-[240px] overflow-auto">
+            <ul className="py-1 max-h-[240px] overflow-auto text-gray-800 dark:text-gray-200 transition-colors duration-300">
               {availableModels.map((model) => (
                 <li
                   key={model}
-                  className={`px-4 py-2.5 hover:bg-gray-100 cursor-pointer ${selectedModel === model ? 'bg-gray-50' : ''}`}
+                  className={`px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-300 ${selectedModel === model ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
                   onClick={() => handleModelChange(model as 'chord-cnn-lstm')}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-start">
                       {/* Model icon */}
-                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full ${selectedModel === model ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                           <path d="M13 7H7v6h6V7z" />
                           <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
                         </svg>
                       </span>
                       <div>
-                        <p className="font-medium">{modelInfo[model]?.name || model}</p>
-                        <p className="text-sm text-gray-500">{modelInfo[model]?.description || 'Deep learning model for chord recognition'}</p>
+                        <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{modelInfo[model]?.name || model}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">{modelInfo[model]?.description || 'Deep learning model for chord recognition'}</p>
                       </div>
                     </div>
                     {selectedModel === model && (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 dark:text-blue-400 transition-colors duration-300" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -202,8 +202,8 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
       </div>
 
       {/* Note about future models */}
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
-        <p className="font-medium mb-1">Coming Soon:</p>
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200 transition-colors duration-300">
+        <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">Coming Soon:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>BTC model - capable of detecting 170 chord labels</li>
           <li>2E1D model - lighter model for 170 chord labels</li>
@@ -212,16 +212,16 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
 
       {/* Error message */}
       {error && (
-        <div className="mt-2 text-sm text-red-500">
+        <div className="mt-2 text-sm text-red-500 dark:text-red-400 transition-colors duration-300">
           Error: {error}
         </div>
       )}
 
       {/* Description of selected model */}
-      <div className="mt-2 text-sm text-gray-500">
+      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
         {selectedModelOption.description}
         {selectedModelOption.performance && (
-          <span className="block mt-1">Performance: {selectedModelOption.performance}</span>
+          <span className="block mt-1 text-gray-500 dark:text-gray-400 transition-colors duration-300">Performance: {selectedModelOption.performance}</span>
         )}
       </div>
     </div>
