@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionService';
 import { BeatInfo } from '@/services/beatDetectionService';
 import ChordGrid from '@/components/ChordGrid';
@@ -225,20 +226,38 @@ export default function LocalAudioAnalyzePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <header className="bg-primary-700 text-white p-4 shadow-md">
-        <div className="container mx-auto">
-          <h1 className="text-2xl font-bold">Chord Analysis - Local Audio</h1>
+      {/* Navigation Bar - Sticky */}
+      <div className="sticky top-0 bg-white text-gray-800 p-3 shadow-md block z-50">
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center">
+            <Image
+              src="/chordMiniLogo.png"
+              alt="ChordMini Logo"
+              width={48}
+              height={48}
+              className="mr-2"
+            />
+            <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
+          </div>
+          <nav>
+            <ul className="flex space-x-6">
+              <li>
+                <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  Features
+                </Link>
+              </li>
+            </ul>
+          </nav>
         </div>
-      </header>
+      </div>
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
-        {/* Back button */}
-        <Link href="/" className="inline-flex items-center text-primary-600 mb-4 hover:text-primary-700 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Back
-        </Link>
+        <h2 className="text-2xl font-bold text-gray-800 my-4">Upload Audio File</h2>
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left side - Chord Grid (80% width) */}

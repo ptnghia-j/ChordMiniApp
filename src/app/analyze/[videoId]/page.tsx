@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionService';
 import { BeatInfo, BeatPosition, DownbeatInfo } from '@/services/beatDetectionService';
@@ -1034,19 +1035,34 @@ export default function YouTubeVideoAnalyzePage() {
 
       <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        {/* Header */}
-        <div className="p-3 border-b border-gray-200 flex justify-between items-center">
-          <Link
-            href="/"
-            className="text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Search
-          </Link>
-
-          {/* Control buttons removed from here - moved to ChordGrid component */}
+        {/* Navigation Bar - Sticky */}
+        <div className="sticky top-0 bg-white text-gray-800 p-3 border-b border-gray-200 block shadow-md z-50">
+          <div className="container mx-auto flex justify-between items-center">
+            <div className="flex items-center">
+              <Image
+                src="/chordMiniLogo.png"
+                alt="ChordMini Logo"
+                width={48}
+                height={48}
+                className="mr-2"
+              />
+              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
+            </div>
+            <nav>
+              <ul className="flex space-x-6">
+                <li>
+                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Features
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </div>
         </div>
 
         {/* Main content area - now full width with no padding */}
@@ -1255,32 +1271,7 @@ export default function YouTubeVideoAnalyzePage() {
                         preferredAudioSource={preferredAudioSource}
                       />
 
-                      {/* Floating control buttons - fixed to viewport */}
-                      <div className="fixed top-4 right-4 z-50 flex space-x-2 p-2 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-md">
-                        <button
-                          onClick={toggleFollowMode}
-                          className={`px-3 py-1 text-xs rounded-full shadow-md ${
-                            isFollowModeEnabled
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                          title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
-                        >
-                          {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
-                        </button>
-
-                        <button
-                          onClick={toggleAudioSource}
-                          className={`px-3 py-1 text-xs rounded-full shadow-md ${
-                            preferredAudioSource === 'extracted'
-                              ? 'bg-green-600 text-white'
-                              : 'bg-purple-600 text-white'
-                          }`}
-                          title="Switch audio source"
-                        >
-                          {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
-                        </button>
-                      </div>
+                      {/* Control buttons moved to the component level */}
 
                       {/* Collapsible Analysis Summary */}
                       <AnalysisSummary
@@ -1508,9 +1499,36 @@ export default function YouTubeVideoAnalyzePage() {
               }`}
               style={{
                 maxWidth: isVideoMinimized ? '250px' : '500px',
-                pointerEvents: 'auto'
+                pointerEvents: 'auto',
+                zIndex: 55 // Ensure this is below the control buttons (z-60) but above other content
               }}
             >
+              {/* Floating control buttons - fixed to top of the YouTube player */}
+              <div className="absolute -top-10 right-0 z-60 flex space-x-2 p-2 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-md">
+                <button
+                  onClick={toggleFollowMode}
+                  className={`px-3 py-1 text-xs rounded-full shadow-md ${
+                    isFollowModeEnabled
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
+                >
+                  {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
+                </button>
+
+                <button
+                  onClick={toggleAudioSource}
+                  className={`px-3 py-1 text-xs rounded-full shadow-md ${
+                    preferredAudioSource === 'extracted'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-purple-600 text-white'
+                  }`}
+                  title="Switch audio source"
+                >
+                  {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
+                </button>
+              </div>
               <div className="relative">
                 {/* Minimize/Maximize button */}
                 <button

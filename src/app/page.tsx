@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useEffect, useRef } from 'react';
+import { useState, FormEvent, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -24,45 +24,10 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [showStickyHeader, setShowStickyHeader] = useState(false);
   const titleRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Set up intersection observer to detect when title is out of view
-  useEffect(() => {
-    // Add a small debounce to prevent rapid state changes
-    let timeout: NodeJS.Timeout;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // Clear any existing timeout
-        clearTimeout(timeout);
-
-        // Add a small delay before updating state to prevent rapid changes
-        timeout = setTimeout(() => {
-          setShowStickyHeader(!entry.isIntersecting);
-        }, 50);
-      },
-      {
-        // Start showing header when title is 100% out of view
-        threshold: 0,
-        rootMargin: '-5px 0px 0px 0px' // Smaller offset to reduce transition triggering area
-      }
-    );
-
-    const currentTitleRef = titleRef.current;
-
-    if (currentTitleRef) {
-      observer.observe(currentTitleRef);
-    }
-
-    return () => {
-      clearTimeout(timeout);
-      if (currentTitleRef) {
-        observer.unobserve(currentTitleRef);
-      }
-    };
-  }, []);
+  // No longer need intersection observer since we have a permanent sticky header
 
   const extractVideoId = (url: string): string | null => {
     // Regular expressions to match different YouTube URL formats
@@ -166,74 +131,33 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Navigation wrapper with padding to prevent margin collapse */}
-      <div className="sticky-nav-wrapper pt-[1px] bg-white">
-        {/* Sticky header - only visible when main title is out of view */}
-        <header
-          className={`fixed top-0 left-0 right-0 bg-white text-gray-800 p-3 shadow-md z-50 transition-transform duration-200 will-change-transform ${
-            showStickyHeader ? 'translate-y-0' : '-translate-y-full'
-          }`}
-          style={{
-            transform: showStickyHeader ? 'translateY(0)' : 'translateY(-100%)',
-            backfaceVisibility: 'hidden'
-          }}
-        >
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="flex items-center">
-              <Image
-                src="/chordMiniLogo.png"
-                alt="ChordMini Logo"
-                width={32}
-                height={32}
-                className="mr-2"
-              />
-              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
-            </div>
-            <nav>
-              <ul className="flex space-x-6">
-                <li>
-                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                    Home
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                    Features
-                  </Link>
-                </li>
-              </ul>
-            </nav>
+      {/* Single sticky navigation bar */}
+      <div className="sticky top-0 bg-white text-gray-800 p-3 shadow-md block z-50">
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center">
+            <Image
+              src="/chordMiniLogo.png"
+              alt="ChordMini Logo"
+              width={48}
+              height={48}
+              className="mr-2"
+            />
+            <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
           </div>
-        </header>
-
-        {/* Top navigation bar (always visible) - with display:block to prevent margin collapse */}
-        <div className="bg-white text-gray-800 p-3 shadow-md block">
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="flex items-center">
-              <Image
-                src="/chordMiniLogo.png"
-                alt="ChordMini Logo"
-                width={32}
-                height={32}
-                className="mr-2"
-              />
-              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
-            </div>
-            <nav>
-              <ul className="flex space-x-6">
-                <li>
-                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                    Home
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                    Features
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-          </div>
+          <nav>
+            <ul className="flex space-x-6">
+              <li>
+                <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                  Features
+                </Link>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
 
