@@ -17,9 +17,7 @@ import {
 import {
   enhanceLyricsWithCharacterTiming,
   EnhancedLyricsData,
-  EnhancedLyricLine,
-  getActiveCharacterIndex,
-  getCharacterProgress
+  EnhancedLyricLine
 } from '@/utils/lyricsTimingUtils';
 
 /**
@@ -31,26 +29,7 @@ const containsChineseCharacters = (text: string): boolean => {
   return chineseRegex.test(text);
 };
 
-/**
- * Utility function to add spacing between Chinese characters for better chord alignment
- * This is only used for chord positioning calculation, not for display
- */
-const addSpacingToChineseText = (text: string): string => {
-  if (!containsChineseCharacters(text)) {
-    return text;
-  }
 
-  // Add a small space between each Chinese character
-  // but preserve existing spaces and non-Chinese characters
-  return text.split('').map((char, i) => {
-    // Check if the character is Chinese
-    if (containsChineseCharacters(char)) {
-      // Add a space after each Chinese character except the last one
-      return i < text.length - 1 ? char + ' ' : char;
-    }
-    return char;
-  }).join('');
-};
 
 // Define types for the component props and data structure
 interface ChordMarker {
@@ -103,7 +82,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   onFontSizeChange,
   darkMode = false,
   chords = []
-}): React.ReactNode => {
+}) => {
   // State to track the currently active line
   const [activeLine, setActiveLine] = useState<number>(-1);
 

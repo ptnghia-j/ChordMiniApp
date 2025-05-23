@@ -337,24 +337,24 @@ export default function Home() {
                 About This App
               </h3>
 
-              <p className="text-gray-700 mb-3 text-sm">
+              <p className="text-gray-700 mb-3 text-base">
                 This application uses audio processing and machine learning to detect musical chords and beats in audio files or YouTube videos.
               </p>
 
               <div className="grid md:grid-cols-3 gap-2 text-sm">
                 <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
                   <h4 className="font-medium text-gray-800 mb-0.5">Chord Detection</h4>
-                  <p className="text-gray-600 text-xs">Identifies major, minor, and 7th chords in the audio with customizable models for different music genres.</p>
+                  <p className="text-gray-600 text-sm">Identifies major, minor, and 7th chords in the audio with customizable models for different music genres.</p>
                 </div>
 
                 <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
                   <h4 className="font-medium text-gray-800 mb-0.5">Beat Tracking</h4>
-                  <p className="text-gray-600 text-xs">Detects rhythmic patterns and beat timings with selectable models for optimal accuracy.</p>
+                  <p className="text-gray-600 text-sm">Detects rhythmic patterns and beat timings with selectable models for optimal accuracy.</p>
                 </div>
 
                 <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
                   <h4 className="font-medium text-gray-800 mb-0.5">Smart Caching</h4>
-                  <p className="text-gray-600 text-xs">Firebase-powered caching system for faster analysis of previously processed videos.</p>
+                  <p className="text-gray-600 text-sm">Firebase-powered caching system for faster analysis of previously processed videos.</p>
                 </div>
               </div>
 
@@ -362,14 +362,14 @@ export default function Home() {
                 <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200 flex items-start">
                   <div className="flex-grow">
                     <h4 className="font-medium text-gray-800 mb-0.5">Lyrics Transcription</h4>
-                    <p className="text-gray-600 text-xs">Synchronized lyrics with chord annotations positioned above words for professional lead sheet layout.</p>
+                    <p className="text-gray-600 text-sm">Synchronized lyrics with chord annotations positioned above words for professional lead sheet layout.</p>
                   </div>
                 </div>
 
                 <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200 flex items-start">
                   <div className="flex-grow">
                     <h4 className="font-medium text-gray-800 mb-0.5">Lyrics Translation</h4>
-                    <p className="text-gray-600 text-xs">
+                    <p className="text-gray-600 text-sm">
                       Powered by Gemini AI for accurate translations of non-English lyrics.
                       <span className="inline-block ml-1">
                         <svg width="16" height="16" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block">
