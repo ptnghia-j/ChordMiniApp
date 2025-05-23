@@ -2,8 +2,6 @@
 
 ChordMini is a comprehensive web application for analyzing music from YouTube videos, providing chord recognition, beat detection, lyrics transcription, and translation features.
 
-![ChordMini Logo](public/chordMiniLogo.png)
-
 ## Introduction
 
 ChordMini helps musicians, music students, and enthusiasts analyze songs by automatically detecting chords, beats, and providing synchronized lyrics with chord annotations. The application integrates with YouTube, allowing users to search for songs or paste video URLs for instant analysis.
