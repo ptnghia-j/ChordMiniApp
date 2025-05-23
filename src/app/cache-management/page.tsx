@@ -23,13 +23,13 @@ export default function CacheManagementPage() {
   // Format bytes to human-readable format
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    
+
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   };
 
@@ -44,7 +44,7 @@ export default function CacheManagementPage() {
     try {
       const response = await fetch('/api/cache');
       const data = await response.json();
-      
+
       if (data.success) {
         setCacheStatus(data);
       } else {
@@ -60,7 +60,7 @@ export default function CacheManagementPage() {
   // Clear cache
   const clearCache = async () => {
     if (!confirm('Are you sure you want to clear the entire cache?')) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch('/api/cache', {
@@ -70,9 +70,9 @@ export default function CacheManagementPage() {
         },
         body: JSON.stringify({ action: 'clear' }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         setMessage({ text: data.message, type: 'success' });
         fetchCacheStatus();
@@ -97,9 +97,9 @@ export default function CacheManagementPage() {
         },
         body: JSON.stringify({ action: 'clean', maxAge: 7 }), // Clean entries older than 7 days
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         setMessage({ text: data.message, type: 'success' });
         fetchCacheStatus();
@@ -122,7 +122,7 @@ export default function CacheManagementPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="bg-primary-700 text-white p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-heading font-bold">Cache Management</h1>
+          <h1 className="text-2xl font-bold">Cache Management</h1>
           <Link href="/" className="text-white hover:text-blue-100 transition-colors">
             Back to Home
           </Link>
@@ -151,7 +151,7 @@ export default function CacheManagementPage() {
                 </button>
               </div>
             </div>
-            
+
             {message && (
               <div className={`p-3 mb-4 rounded text-sm ${
                 message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -159,7 +159,7 @@ export default function CacheManagementPage() {
                 {message.text}
               </div>
             )}
-            
+
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -181,7 +181,7 @@ export default function CacheManagementPage() {
                         <p className="text-2xl font-medium text-blue-800">{formatBytes(cacheStatus.totalSize)}</p>
                       </div>
                     </div>
-                    
+
                     <div className="mt-6">
                       <h3 className="text-lg font-medium text-gray-800 mb-3">Cache Entries</h3>
                       <div className="overflow-x-auto">

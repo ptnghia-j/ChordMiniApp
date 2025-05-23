@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { formatChordWithMusicalSymbols, getResponsiveChordFontSize, getChordLabelStyles } from '@/utils/chordFormatting';
+import {
+  formatChordWithMusicalSymbols,
+  getResponsiveChordFontSize,
+  getChordLabelStyles,
+  getChordContainerStyles
+} from '@/utils/chordFormatting';
 
 interface ChordGridProps {
   chords: string[]; // Array of chord labels (e.g., 'C', 'Am')
@@ -8,6 +13,10 @@ interface ChordGridProps {
   beatsPerMeasure?: number; // Number of beats per measure, defaults to 4
   measuresPerRow?: number; // Number of measures to display per row, defaults to 4
   timeSignature?: number; // Time signature (beats per measure), defaults to 4
+  onToggleFollowMode?: () => void; // Function to toggle auto-scroll mode
+  isFollowModeEnabled?: boolean; // Whether auto-scroll is enabled
+  onToggleAudioSource?: () => void; // Function to toggle audio source
+  preferredAudioSource?: 'extracted' | 'youtube'; // Current audio source
 }
 
 const ChordGrid: React.FC<ChordGridProps> = ({
@@ -16,7 +25,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   currentBeatIndex = -1,
   beatsPerMeasure = 4,
   measuresPerRow = 4,
-  timeSignature = 4
+  timeSignature = 4,
+  onToggleFollowMode,
+  isFollowModeEnabled = false,
+  onToggleAudioSource,
+  preferredAudioSource = 'extracted'
 }) => {
   // Use the provided time signature to override beatsPerMeasure if available
   const actualBeatsPerMeasure = timeSignature || beatsPerMeasure;
@@ -132,7 +145,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   }
 
   return (
-    <div className="chord-grid-container mx-auto px-1 sm:px-2" style={{ maxWidth: "98%" }}>
+    <div className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
+
       {/* Render rows of measures */}
       <div className="space-y-2">
         {rows.map((row, rowIdx) => (
@@ -162,15 +176,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                           className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure)} w-full h-full min-h-[3.75rem]`}
                         >
                           {/* Only show chord name if it's a new chord */}
-                          {showChordLabel ? (
-                            <div
-                              className={getResponsiveChordFontSize(chord)}
-                              style={getChordLabelStyles(chord)}
-                              dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
-                            />
-                          ) : (
-                            <div className="text-sm md:text-base font-bold opacity-0" style={getChordLabelStyles('')}>·</div>
-                          )}
+                          <div style={getChordContainerStyles()}>
+                            {showChordLabel ? (
+                              <div
+                                className={getResponsiveChordFontSize(chord)}
+                                style={getChordLabelStyles(chord)}
+                                dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
+                              />
+                            ) : (
+                              <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

@@ -127,7 +127,12 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
               )}
             </button>
 
-            <div className="flex-1 mx-2">
+            {/* YouTube-style progress bar with blue color */}
+            <div className="flex-1 mx-2 relative h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
+                style={{ width: `${(currentTime / (duration || 100)) * 100}%` }}
+              ></div>
               <input
                 type="range"
                 min={0}
@@ -135,7 +140,7 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeek}
-                className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
               />
             </div>
 
@@ -160,7 +165,12 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
               )}
             </button>
 
-            <div className="flex-1 mx-2">
+            {/* YouTube-style volume slider with blue color */}
+            <div className="flex-1 mx-2 relative h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
+                style={{ width: `${volume * 100}%` }}
+              ></div>
               <input
                 type="range"
                 min={0}
@@ -168,7 +178,7 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
                 step={0.01}
                 value={volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
                 disabled={muted}
               />
             </div>

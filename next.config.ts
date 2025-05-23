@@ -2,15 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  api: {
-    // Increase the body parser size limit to handle large requests
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-    // Increase the response limit for large audio files
-    responseLimit: false,
-    // Set a large value for externalResolver to prevent timeouts
-    externalResolver: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+        pathname: '**',
+      },
+    ],
   },
   // Increase the serverless function timeout
   serverRuntimeConfig: {
@@ -19,12 +18,12 @@ const nextConfig: NextConfig = {
   },
   // Ensure we can handle large files in API routes
   experimental: {
-    serverComponentsExternalPackages: ['fluent-ffmpeg', 'ffmpeg-static', 'https', 'http', 'url', 'stream', 'crypto'],
     serverActions: {
       bodySizeLimit: '10mb',
     },
     largePageDataBytes: 128 * 1000 * 1000, // 128MB
   },
+  serverExternalPackages: ['fluent-ffmpeg', 'ffmpeg-static', 'https', 'http', 'url', 'stream', 'crypto'],
   webpack: (config) => {
     // Add polyfills for node modules
     config.resolve.fallback = {

@@ -1,19 +1,20 @@
 /**
  * Utility functions for formatting chord names with proper musical notation
+ * Following industry-standard conventions used in professional music notation software
  */
 
 /**
- * Formats chord names with proper musical notation and simplified chord suffixes
+ * Formats chord names with proper musical notation and standardized chord suffixes
  *
  * @param chordName The chord name to format (e.g., "C#:min", "Bb:maj", "C#:maj/3")
- * @returns Formatted chord name with proper musical symbols and simplified notation
+ * @returns Formatted chord name with proper musical symbols and professional notation
  */
 export function formatChordWithMusicalSymbols(chordName: string): string {
   if (!chordName) return chordName;
 
   // Handle special cases
   if (chordName === 'N' || chordName === 'N/C' || chordName === 'X') {
-    return chordName;
+    return chordName === 'N/C' ? 'N.C.' : chordName; // Use standard "No Chord" notation
   }
 
   // Split chord into root and quality parts
@@ -53,39 +54,58 @@ export function formatChordWithMusicalSymbols(chordName: string): string {
     bassNote = bassNote.replace(/b(?![a-zA-Z]{2,})/g, '♭');
   }
 
-  // Simplify chord quality notation
+  // Apply professional chord quality notation
   if (quality === 'maj') {
-    // Major chords don't need a suffix
+    // Major chords don't need a suffix in standard notation
     quality = '';
   } else if (quality === 'min') {
-    // Use 'm' instead of 'min' for minor chords
+    // Use 'm' instead of 'min' for minor chords (industry standard)
     quality = 'm';
   } else if (quality.includes('sus')) {
-    // Make suspension superscript
+    // Format suspension with proper superscript
     quality = quality.replace(/sus(\d)/, 'sus<sup>$1</sup>');
   } else if (quality.includes('dim')) {
-    // Keep diminished as is, but could use ° symbol if preferred
-    quality = quality.replace('dim', 'dim');
+    // Use standard diminished symbol (°) for better readability
+    quality = quality.replace('dim', '<span style="position:relative;top:-1px">°</span>');
   } else if (quality.includes('aug')) {
-    // Keep augmented as is, but could use + symbol if preferred
-    quality = quality.replace('aug', 'aug');
+    // Use standard augmented symbol (+) for better readability
+    quality = quality.replace('aug', '<span style="position:relative">+</span>');
   } else if (quality.includes('7') || quality.includes('9') || quality.includes('11') || quality.includes('13')) {
-    // Make extensions superscript
+    // Handle extensions with proper formatting
+
     // First handle complex cases with both quality and extension
     if (quality.startsWith('min')) {
       quality = 'm' + quality.substring(3);
     } else if (quality.startsWith('maj')) {
-      quality = 'maj' + quality.substring(3);
+      // Use triangle (Δ) for major 7th chords - industry standard
+      if (quality === 'maj7') {
+        quality = '<span style="position:relative;top:-1px">Δ</span><sup>7</sup>';
+      } else {
+        quality = 'maj' + quality.substring(3).replace(/(\d+)/g, '<sup>$1</sup>');
+      }
+    } else {
+      // Make numeric extensions superscript
+      quality = quality.replace(/(\d+)/g, '<sup>$1</sup>');
     }
-
-    // Make numeric extensions superscript
-    quality = quality.replace(/(\d+)/g, '<sup>$1</sup>');
   }
 
-  // Combine root, quality, and bass note
+  // Handle altered notes (add, b5, #9, etc.)
+  if (quality.includes('add')) {
+    quality = quality.replace(/add(\d+)/g, 'add<sup>$1</sup>');
+  }
+
+  if (quality.includes('b5') || quality.includes('b9') || quality.includes('b13')) {
+    quality = quality.replace(/b(\d+)/g, '<sup>♭$1</sup>');
+  }
+
+  if (quality.includes('#5') || quality.includes('#9') || quality.includes('#11')) {
+    quality = quality.replace(/#(\d+)/g, '<sup>♯$1</sup>');
+  }
+
+  // Combine root, quality, and bass note with proper spacing
   let formattedChord = quality ? `${root}${quality}` : root;
   if (bassNote) {
-    formattedChord += `/${bassNote}`;
+    formattedChord += `<span style="margin:0 0.1em">/</span>${bassNote}`;
   }
 
   return formattedChord;
@@ -205,47 +225,61 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
 }
 
 /**
- * Calculates an appropriate font size based on the chord name length and container size
+ * Provides consistent font size and styling for chord labels
+ * Uses a standardized approach rather than responsive sizing to ensure consistency
  *
  * @param chordName The chord name to display
- * @returns CSS class for the appropriate font size
+ * @returns CSS class for the chord label
  */
 export function getResponsiveChordFontSize(chordName: string): string {
-  // Base size classes - consistent for all chord labels
-  const baseClasses = "font-medium text-left text-gray-800";
-
-  // Use a consistent font size for most chords
-  // The base size is medium (md:text-base) which works well for most chord names
-  let sizeClass = "text-sm md:text-base";
-
-  // Only reduce size for exceptionally long chord names (e.g., complex chords with extensions and inversions)
-  if (chordName && chordName.length > 8) {
-    sizeClass = "text-xs md:text-sm";
-  }
-
-  // Add truncation for extremely long chord names
-  // This ensures text doesn't overflow and maintains consistent appearance
-  const truncateClass = chordName && chordName.length > 12 ? "truncate max-w-full" : "";
-
-  return `${baseClasses} ${sizeClass} ${truncateClass}`;
+  // Use consistent base classes for all chord labels
+  // This ensures uniform appearance across the application
+  return "font-medium text-gray-800 text-base whitespace-normal";
 }
 
 /**
- * Generates inline styles for chord labels to ensure consistent appearance
+ * Generates professional inline styles for chord labels
+ * Based on industry-standard music notation software
  *
  * @param chordName The chord name to display
- * @returns Object with CSS styles
+ * @returns Object with CSS styles for professional chord display
  */
 export function getChordLabelStyles(chordName: string): React.CSSProperties {
   return {
     padding: '0.25rem 0.5rem',
-    lineHeight: '1.2',
+    lineHeight: '1.3',
     width: '100%',
     display: 'flex',
-    justifyContent: 'flex-start', // Left-align the text
+    justifyContent: 'center', // Center-align for better readability
     alignItems: 'center',
-    minHeight: '1.5rem',
-    // Apply a minimum width to ensure consistent cell sizing
-    minWidth: '2rem'
+    minHeight: '1.75rem',
+    minWidth: '2.5rem',
+    fontFamily: 'var(--font-roboto-mono), "Roboto Mono", monospace, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto', // Use monospace for better chord alignment
+    letterSpacing: '0.01em', // Slight letter spacing for better readability
+    overflow: 'visible', // Prevent truncation
+    textOverflow: 'clip', // Don't use ellipsis
+    hyphens: 'none', // Prevent hyphenation
+    wordBreak: 'keep-all', // Prevent breaking within chord names
+    // Add a subtle shadow for better visibility
+    textShadow: '0 0 1px rgba(0,0,0,0.05)'
+  };
+}
+
+/**
+ * Generates container styles for chord labels in the chord grid
+ * Ensures consistent sizing and prevents layout shifts
+ *
+ * @returns Object with CSS styles for the chord container
+ */
+export function getChordContainerStyles(): React.CSSProperties {
+  return {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    overflow: 'visible', // Allow content to overflow for complex chord names
+    padding: '0.25rem'
   };
 }

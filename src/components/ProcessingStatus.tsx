@@ -154,10 +154,17 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                     <span className="truncate">{analysisResults.beatModel || 'Unknown'}</span>
                   </p>
                   <p>
-                    <span className="font-medium mr-1">Beats:</span> {analysisResults.beats.length}
+                    <span className="font-medium mr-1">Beats:</span> {analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length : 0}
                   </p>
                   <p>
-                    <span className="font-medium mr-1">BPM:</span> {analysisResults.beatDetectionResult?.bpm || (analysisResults.beats.length > 0 ? Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) : 'N/A')}
+                    <span className="font-medium mr-1">BPM:</span> {
+                      analysisResults.beatDetectionResult?.bpm ||
+                      (analysisResults.beats && analysisResults.beats.length > 1 &&
+                       analysisResults.beats[0] &&
+                       analysisResults.beats[analysisResults.beats.length - 1] ?
+                        Math.round(60 / ((analysisResults.beats[analysisResults.beats.length - 1].time - analysisResults.beats[0].time) / analysisResults.beats.length)) :
+                        'N/A')
+                    }
                   </p>
                   <p>
                     <span className="font-medium mr-1">Time Sig:</span> {analysisResults.beatDetectionResult?.time_signature ? `${analysisResults.beatDetectionResult.time_signature}/4` : '4/4'}
@@ -167,9 +174,9 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                     <span className="truncate">{analysisResults.chordModel || 'Unknown'}</span>
                   </p>
                   <p>
-                    <span className="font-medium mr-1">Chords:</span> {analysisResults.chords.length}
+                    <span className="font-medium mr-1">Chords:</span> {analysisResults.chords && analysisResults.chords.length ? analysisResults.chords.length : 0}
                   </p>
-                  {analysisResults.downbeats && (
+                  {analysisResults.downbeats && analysisResults.downbeats.length && (
                     <p>
                       <span className="font-medium mr-1">Downbeats:</span> {analysisResults.downbeats.length}
                     </p>

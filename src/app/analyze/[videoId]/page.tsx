@@ -8,7 +8,8 @@ import { BeatInfo, BeatPosition, DownbeatInfo } from '@/services/beatDetectionSe
 import ChordGrid from '@/components/ChordGrid';
 import BeatModelSelector from '@/components/BeatModelSelector';
 import ChordModelSelector from '@/components/ChordModelSelector';
-import ProcessingStatus from '@/components/ProcessingStatus';
+import ProcessingStatusBanner from '@/components/ProcessingStatusBanner';
+import AnalysisSummary from '@/components/AnalysisSummary';
 import ExtractionNotification from '@/components/ExtractionNotification';
 import DownloadingIndicator from '@/components/DownloadingIndicator';
 import LeadSheetDisplay from '@/components/LeadSheetDisplay';
@@ -79,7 +80,12 @@ export default function YouTubeVideoAnalyzePage() {
       time_signature?: number;
       bpm?: number;
     };
-  } | null>(null);
+  } | null>({
+    // Initialize with empty arrays to prevent "undefined is not an object" errors
+    chords: [],
+    beats: [],
+    synchronizedChords: []
+  });
 
   // Current state for playback
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
@@ -719,7 +725,7 @@ export default function YouTubeVideoAnalyzePage() {
               // If not available, create it with default values
               results.beatDetectionResult = {
                 time_signature: 4, // Default to 4/4 time signature
-                bpm: results.beats.length > 1 ?
+                bpm: results.beats && results.beats.length > 1 && results.beats[0] && results.beats[results.beats.length - 1] ?
                   Math.round(60 / ((results.beats[results.beats.length - 1].time - results.beats[0].time) / results.beats.length)) :
                   120 // Default BPM
               };
@@ -892,22 +898,25 @@ export default function YouTubeVideoAnalyzePage() {
         setCurrentTime(time);
 
         // Find the current beat based on time
-        const currentBeat = analysisResults.beats.findIndex(
-          (beat, index) => time >= beat.time &&
-          (index === analysisResults.beats.length - 1 || time < analysisResults.beats[index + 1].time)
-        );
+        if (analysisResults.beats && analysisResults.beats.findIndex) {
+          const currentBeat = analysisResults.beats.findIndex(
+            (beat, index) => time >= beat.time &&
+            (index === (analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length - 1 : 0) ||
+             (analysisResults.beats && index + 1 < analysisResults.beats.length && time < analysisResults.beats[index + 1].time))
+          );
 
-        if (currentBeat !== -1) {
-          setCurrentBeatIndex(currentBeat);
+          if (currentBeat !== -1) {
+            setCurrentBeatIndex(currentBeat);
+          }
         }
 
         // Find current downbeat if available
         const downbeats = analysisResults.downbeats || [];
-        if (downbeats.length > 0) {
+        if (downbeats && downbeats.length > 0 && downbeats.findIndex) {
           const currentDownbeat = downbeats.findIndex(
             (beatTime, index) => time >= beatTime &&
-            (index === downbeats.length - 1 ||
-             (index < downbeats.length - 1 && time < downbeats[index + 1]))
+            (index === (downbeats && downbeats.length ? downbeats.length - 1 : 0) ||
+             (downbeats && index + 1 < downbeats.length && time < downbeats[index + 1]))
           );
 
           if (currentDownbeat !== -1) {
@@ -963,7 +972,9 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Get the chord grid data
   const getChordGridData = () => {
-    if (!analysisResults) {
+    if (!analysisResults ||
+        !analysisResults.synchronizedChords ||
+        !analysisResults.synchronizedChords.map) {
       return { chords: [], beats: [] };
     }
 
@@ -1007,7 +1018,7 @@ export default function YouTubeVideoAnalyzePage() {
   }, [preferredAudioSource, youtubePlayer]);
 
   return (
-    <>
+    <div>
       {/* Downloading Indicator - shown during initial download */}
       <DownloadingIndicator
         isVisible={audioProcessingState.isDownloading && !audioProcessingState.fromCache}
@@ -1021,10 +1032,10 @@ export default function YouTubeVideoAnalyzePage() {
         onRefresh={() => extractAudioFromYouTube(true)}
       />
 
-      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-8 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
+      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white" style={{ maxWidth: "98%" }}>
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+        <div className="p-3 border-b border-gray-200 flex justify-between items-center">
           <Link
             href="/"
             className="text-gray-500 hover:text-gray-700 transition-colors"
@@ -1035,38 +1046,13 @@ export default function YouTubeVideoAnalyzePage() {
             Back to Search
           </Link>
 
-          {/* Control buttons */}
-          <div className="flex space-x-2">
-            <button
-              onClick={toggleFollowMode}
-              className={`px-3 py-1 text-xs rounded-full ${
-                isFollowModeEnabled
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-              title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
-            >
-              {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
-            </button>
-
-            <button
-              onClick={toggleAudioSource}
-              className={`px-3 py-1 text-xs rounded-full ${
-                preferredAudioSource === 'extracted'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-purple-600 text-white'
-              }`}
-              title="Switch audio source"
-            >
-              {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
-            </button>
-          </div>
+          {/* Control buttons removed from here - moved to ChordGrid component */}
         </div>
 
-        {/* Main content area - now full width */}
+        {/* Main content area - now full width with no padding */}
         <div className="flex flex-col">
           {/* Content area: Chord and beat visualization */}
-          <div className="w-full p-6 overflow-visible">
+          <div className="w-full p-0 overflow-visible">
             {/* Hidden audio player (functional but not visible) */}
             <audio
               ref={audioRef}
@@ -1078,10 +1064,10 @@ export default function YouTubeVideoAnalyzePage() {
             />
 
             {/* Processing Status and Model Selection in a single row */}
-            <div className="mb-6">
+            <div className="mb-2">
               {/* Error message */}
               {audioProcessingState.error && (
-                <div className="bg-red-50 p-4 rounded-lg mb-4">
+                <div className="bg-red-50 p-3 rounded-lg mb-2">
                   <div className="flex items-start">
                     <div className="flex-shrink-0 mt-0.5">
                       <svg className="h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -1094,12 +1080,12 @@ export default function YouTubeVideoAnalyzePage() {
 
                       {/* Show suggestion if available */}
                       {audioProcessingState.suggestion && (
-                        <p className="text-red-700 mt-2 italic">{audioProcessingState.suggestion}</p>
+                        <p className="text-red-700 mt-1 italic">{audioProcessingState.suggestion}</p>
                       )}
 
-                      <div className="mt-3">
+                      <div className="mt-2">
                         <h4 className="text-sm font-medium text-red-800">Troubleshooting:</h4>
-                        <ul className="list-disc list-inside text-sm text-red-700 mt-1 space-y-1">
+                        <ul className="list-disc list-inside text-sm text-red-700 mt-1 space-y-0.5">
                           {audioProcessingState.error.includes('YouTube Short') ? (
                             <>
                               <li className="font-medium">This appears to be a YouTube Short which cannot be processed</li>
@@ -1117,7 +1103,7 @@ export default function YouTubeVideoAnalyzePage() {
                         </ul>
                       </div>
 
-                      <div className="flex flex-wrap gap-3 mt-3">
+                      <div className="flex flex-wrap gap-2 mt-2">
                         <button
                           onClick={() => extractAudioFromYouTube()}
                           className="inline-flex items-center px-3 py-1.5 border border-red-600 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -1148,31 +1134,26 @@ export default function YouTubeVideoAnalyzePage() {
                 </div>
               )}
 
-              {/* Combined processing status and model selection */}
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Processing Status component - expands to full width when complete */}
-                <div className={`${stage === 'complete' ? 'w-full' : (stage === 'beat-detection' || stage === 'chord-recognition') ? 'lg:w-1/3' : 'hidden'}`}>
-                  <ProcessingStatus
-                    className="h-full"
-                    analysisResults={analysisResults}
-                    audioDuration={duration}
-                    fromCache={audioProcessingState.fromCache}
-                    fromFirestoreCache={audioProcessingState.fromFirestoreCache}
-                  />
-                </div>
+              {/* Processing Status Banner - shown at the top of the page */}
+              <ProcessingStatusBanner
+                analysisResults={analysisResults}
+                audioDuration={duration}
+                fromCache={audioProcessingState.fromCache}
+                fromFirestoreCache={audioProcessingState.fromFirestoreCache}
+              />
 
-                {/* Model Selection - hidden when complete */}
-                {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && stage !== 'complete' && (
-                  <div className={`${(stage === 'beat-detection' || stage === 'chord-recognition') ? 'lg:w-2/3' : 'w-full'} p-4 rounded-lg bg-gray-50 overflow-visible`}>
-                    <div className="flex flex-col h-full">
-                      <div className="mb-2">
-                        <h3 className="font-medium text-gray-900">
-                          Select Models for Analysis
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Choose beat and chord detection models to analyze the audio.
-                        </p>
-                      </div>
+              {/* Model Selection - hidden when complete */}
+              {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && stage !== 'complete' && (
+                <div className="w-full p-4 rounded-lg bg-gray-50 overflow-visible">
+                  <div className="flex flex-col h-full">
+                    <div className="mb-2">
+                      <h3 className="font-medium text-gray-900">
+                        Select Models for Analysis
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Choose beat and chord detection models to analyze the audio.
+                      </p>
+                    </div>
 
                       <div className="flex flex-col md:flex-row gap-4 items-start overflow-visible">
                         <div className="w-full md:w-1/3 relative z-40">
@@ -1206,17 +1187,17 @@ export default function YouTubeVideoAnalyzePage() {
 
             {/* Analysis results */}
             {analysisResults && audioProcessingState.isAnalyzed && (
-            <div className="mt-6 space-y-6">
+            <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-4 rounded-lg bg-white border border-gray-200 mb-6">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-                  <h3 className="font-medium text-lg mb-3 md:mb-0 text-gray-800">Analysis Results</h3>
+              <div className="p-3 rounded-lg bg-white border border-gray-200 mb-2 mt-0">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-2">
+                  <h3 className="font-medium text-lg mb-2 md:mb-0 text-gray-800">Analysis Results</h3>
                   <div className="flex flex-col w-full md:w-auto">
                     <button
                       onClick={transcribeLyrics}
                       disabled={isTranscribingLyrics || !audioProcessingState.audioUrl}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 w-full"
+                      className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 w-full"
                     >
                       {isTranscribingLyrics ? "Transcribing Lyrics..." : showLyrics ? "Refresh Lyrics" : "Transcribe Lyrics"}
                     </button>
@@ -1268,6 +1249,43 @@ export default function YouTubeVideoAnalyzePage() {
                         currentBeatIndex={currentBeatIndex}
                         measuresPerRow={4}
                         timeSignature={analysisResults?.beatDetectionResult?.time_signature}
+                        onToggleFollowMode={toggleFollowMode}
+                        isFollowModeEnabled={isFollowModeEnabled}
+                        onToggleAudioSource={toggleAudioSource}
+                        preferredAudioSource={preferredAudioSource}
+                      />
+
+                      {/* Floating control buttons - fixed to viewport */}
+                      <div className="fixed top-4 right-4 z-50 flex space-x-2 p-2 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-md">
+                        <button
+                          onClick={toggleFollowMode}
+                          className={`px-3 py-1 text-xs rounded-full shadow-md ${
+                            isFollowModeEnabled
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                          title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
+                        >
+                          {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
+                        </button>
+
+                        <button
+                          onClick={toggleAudioSource}
+                          className={`px-3 py-1 text-xs rounded-full shadow-md ${
+                            preferredAudioSource === 'extracted'
+                              ? 'bg-green-600 text-white'
+                              : 'bg-purple-600 text-white'
+                          }`}
+                          title="Switch audio source"
+                        >
+                          {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
+                        </button>
+                      </div>
+
+                      {/* Collapsible Analysis Summary */}
+                      <AnalysisSummary
+                        analysisResults={analysisResults}
+                        audioDuration={duration}
                       />
                     </div>
                   )}
@@ -1278,25 +1296,7 @@ export default function YouTubeVideoAnalyzePage() {
                       {showLyrics ? (
                         lyrics ? (
                           <div>
-                            {/* Font size controls */}
-                            <div className="flex justify-end mb-3">
-                              <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={() => setFontSize(Math.max(12, fontSize - 2))}
-                                  className="p-1 rounded bg-gray-200 hover:bg-gray-300"
-                                  aria-label="Decrease font size"
-                                >
-                                  <span className="text-sm">A-</span>
-                                </button>
-                                <button
-                                  onClick={() => setFontSize(Math.min(24, fontSize + 2))}
-                                  className="p-1 rounded bg-gray-200 hover:bg-gray-300"
-                                  aria-label="Increase font size"
-                                >
-                                  <span className="text-sm">A+</span>
-                                </button>
-                              </div>
-                            </div>
+                            {/* Font size controls removed as they're redundant with the slider in LeadSheetDisplay */}
 
                             {/* Check for error in lyrics */}
                             {lyrics.error ? (
@@ -1346,45 +1346,53 @@ export default function YouTubeVideoAnalyzePage() {
                 <h3 className="font-medium text-lg mb-2 text-gray-800">Beat Timeline</h3>
                 <div className="relative h-16 bg-gray-100 border border-gray-300 rounded-md overflow-hidden">
                   {/* Beat markers */}
-                  {analysisResults.beats.map((beat, index) => {
-                    // Get beat number from beat info if available
-                    // Use the detected time signature or default to 4
-                    const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
-                    const beatNum = beat.beatNum ||
-                                   analysisResults.synchronizedChords[index]?.beatNum ||
-                                   (index % timeSignature) + 1;
+                  {analysisResults && analysisResults.beats && analysisResults.beats.map ? (
+                    analysisResults.beats.map((beat, index) => {
+                      // Get beat number from beat info if available
+                      // Use the detected time signature or default to 4
+                      const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+                      const beatNum = beat.beatNum ||
+                                    (analysisResults.synchronizedChords && analysisResults.synchronizedChords[index]?.beatNum) ||
+                                    (index % timeSignature) + 1;
 
-                    // Make first beat of measure more prominent
-                    const isFirstBeat = beatNum === 1;
+                      // Make first beat of measure more prominent
+                      const isFirstBeat = beatNum === 1;
 
-                    return (
-                      <div
-                        key={`beat-${index}`}
-                        className={`absolute bottom-0 transform -translate-x-1/2 ${
-                          index === currentBeatIndex
-                            ? 'bg-blue-600'
-                            : isFirstBeat
-                              ? 'bg-blue-500'
-                              : 'bg-gray-500'
-                        }`}
-                        style={{
-                          left: `${(beat.time / duration) * 100}%`,
-                          width: isFirstBeat ? '0.5px' : '0.25px',
-                          height: index === currentBeatIndex ? '14px' : isFirstBeat ? '10px' : '8px'
-                        }}
-                      >
-                        {/* Show beat number above */}
-                        <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 text-[0.6rem] ${
-                          isFirstBeat ? 'text-blue-700 font-medium' : 'text-gray-600'
-                        }`}>
-                          {beatNum}
+                      return (
+                        <div
+                          key={`beat-${index}`}
+                          className={`absolute bottom-0 transform -translate-x-1/2 ${
+                            index === currentBeatIndex
+                              ? 'bg-blue-600'
+                              : isFirstBeat
+                                ? 'bg-blue-500'
+                                : 'bg-gray-500'
+                          }`}
+                          style={{
+                            left: `${(beat.time / duration) * 100}%`,
+                            width: isFirstBeat ? '0.5px' : '0.25px',
+                            height: index === currentBeatIndex ? '14px' : isFirstBeat ? '10px' : '8px'
+                          }}
+                        >
+                          {/* Show beat number above */}
+                          <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 text-[0.6rem] ${
+                            isFirstBeat ? 'text-blue-700 font-medium' : 'text-gray-600'
+                          }`}>
+                            {beatNum}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                      No beat data available
+                    </div>
+                  )}
 
                   {/* Downbeat markers (if available) - 3x thicker */}
-                  {(analysisResults.downbeats_with_measures || []).map((downbeat, index) => (
+                  {analysisResults && analysisResults.downbeats_with_measures &&
+                   analysisResults.downbeats_with_measures.map &&
+                   analysisResults.downbeats_with_measures.map((downbeat, index) => (
                     <div
                       key={`downbeat-measure-${index}`}
                       className={`absolute bottom-0 w-1 h-14 transform -translate-x-1/2 ${
@@ -1399,7 +1407,9 @@ export default function YouTubeVideoAnalyzePage() {
                   ))}
 
                   {/* Fallback to original downbeats if downbeats_with_measures is not available - 3x thicker */}
-                  {!analysisResults.downbeats_with_measures && (analysisResults.downbeats || []).map((beatTime, index) => (
+                  {analysisResults && !analysisResults.downbeats_with_measures &&
+                   analysisResults.downbeats && analysisResults.downbeats.map &&
+                   analysisResults.downbeats.map((beatTime, index) => (
                     <div
                       key={`downbeat-${index}`}
                       className={`absolute bottom-0 w-1 h-14 transform -translate-x-1/2 ${
@@ -1451,7 +1461,7 @@ export default function YouTubeVideoAnalyzePage() {
           </div>
 
           {/* Playback controls - now in the main content area */}
-          <div className="w-full p-4 bg-gray-50 rounded-lg mb-6">
+          <div className="w-full p-3 bg-gray-50 rounded-lg mb-3">
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={playPause}
@@ -1543,6 +1553,5 @@ export default function YouTubeVideoAnalyzePage() {
         </div>
       </div>
     </div>
-    </>
   );
 }

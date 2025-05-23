@@ -49,9 +49,8 @@ module.exports = {
         },
       },
       fontFamily: {
-        heading: ["var(--font-montserrat)", "sans-serif"],
-        body: ["var(--font-roboto)", "sans-serif"],
-        sans: ["var(--font-inter)", "sans-serif"],
+        sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        mono: ["var(--font-roboto-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"],
       },
       boxShadow: {
         'card': '0 2px 10px rgba(0, 0, 0, 0.08)',

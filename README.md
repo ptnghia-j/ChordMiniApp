@@ -1,66 +1,109 @@
-# Chord Recognition System
+# ChordMini - Music Analysis Application
 
-A web application for recognizing and displaying chord progressions from YouTube videos, similar to Chordify.
+ChordMini is a comprehensive web application for analyzing music from YouTube videos, providing chord recognition, beat detection, lyrics transcription, and translation features.
 
-## Project Overview
+![ChordMini Logo](public/chordMiniLogo.png)
 
-This application allows users to:
-- Search for songs via YouTube integration
-- Extract audio from YouTube videos
-- Process the audio to identify chords and beats
-- Display chord progressions synchronized with audio playback
+## Introduction
+
+ChordMini helps musicians, music students, and enthusiasts analyze songs by automatically detecting chords, beats, and providing synchronized lyrics with chord annotations. The application integrates with YouTube, allowing users to search for songs or paste video URLs for instant analysis.
+
+## Core Features
+
+### YouTube Integration
+- Fast search functionality (results in under 2 seconds)
+- Direct URL and video ID input support
+- Embedded YouTube player with synchronized analysis
+- Recent videos history for quick access
+
+### Beat Detection
+- Multiple selectable beat detection models:
+  - Beat-transformer (light) - default model
+  - Madmom - alternative library
+- Accurate BPM detection
+- Time signature recognition
+- Visual beat grid with measure indicators
+
+### Chord Recognition
+- Advanced chord detection with over 300 chord types
+- Customizable models for different music genres
+- Real-time visualization of chord progressions
+- Simplified chord notation for better readability
+
+### Lyrics Transcription
+- Synchronized lyrics with chord annotations
+- Professional lead sheet layout with chords positioned above words
+- Karaoke-style highlighting with letter-by-letter animation
+- Adjustable font size and auto-scrolling
+
+### Lyrics Translation
+- Powered by Gemini AI for accurate translations
+- Support for multiple languages
+- Intelligent language detection
+- Translations displayed below original lyrics
+
+### Smart Caching System
+- Firebase-powered remote caching
+- Faster loading of previously analyzed videos
+- Cached translations and transcriptions
+- Reduced processing time for repeat analyses
+
+### Responsive UI Design
+- Clean, modern interface with blue accent colors
+- Adaptive layout for different screen sizes
+- Tabbed interface for switching between analysis views
+- Compact design with minimal whitespace
+
+## Visual Demonstrations
+
+### Home Page
+![ChordMini Home Page](demo_page3.png)
+The ChordMini home page provides a clean, intuitive interface for users to search for songs, paste YouTube URLs, or upload audio files. Recent videos are displayed for quick access to previously analyzed content.
+
+### Beat & Chord Map Visualization
+![Beat & Chord Analysis Demo](demo_page1.png)
+The Beat & Chord Map visualization displays detected chords aligned with beat markers in a grid layout. Chords are shown only when they change, making it easy to follow the progression while the song plays.
+
+### Lyrics Transcription & Translation
+![Lyrics Transcription Demo](demo_page2.png)
+The Lyrics Transcription feature displays synchronized lyrics with chord annotations positioned directly above the words where chord changes occur. The current line is highlighted with a karaoke-style animation, and translations can be toggled on/off.
+
+### Model Selection Interface
+![Model Selection Interface](demo_page4.png)
+ChordMini offers customizable model selection for both beat detection and chord recognition. Users can choose different models optimized for various music genres and complexity levels to improve analysis accuracy.
 
 ## Tech Stack
 
 ### Frontend
 - **Next.js** with TypeScript - React framework with SSR capabilities
 - **Tailwind CSS** - Utility-first CSS framework
-- **React Query** - Data fetching, caching, and state management
-- **Zustand** - Lightweight state management
+- **React Query** - Data fetching and state management
 - **React Player** - YouTube video integration
-- **Framer Motion** - Animation library
-- **Chart.js** - Visualization for chord progressions and beats
+- **Framer Motion** - Animation for lyrics and chord transitions
 
-### Backend
-- **Next.js API Routes** - API gateway and basic functionality
-- **Python with Flask** - Audio processing and ML model inference
-  - **Librosa** - Audio feature extraction
-  - **PyTorch/TensorFlow** - ML model inference
-  - **FFmpeg** - Audio extraction and processing
+### Backend & APIs
+- **Next.js API Routes** - API gateway and server-side functionality
+- **YouTube Data API** - Video search and metadata
+- **Music.ai API** - Lyrics transcription service
+- **Gemini API** - AI-powered lyrics translation
 
-### Database & Authentication
-- **Firebase**
-  - Firestore - NoSQL database
-  - Firebase Authentication - User management
-  - Firebase Storage - Audio file storage
+### Machine Learning Models
+- **Chord-CNN-LSTM** - Advanced chord recognition (301 chord labels)
+- **Beat-transformer** - Beat detection with time signature recognition
+- **Madmom** - Alternative beat detection library
 
-### Deployment
-- **Vercel** - Frontend and Next.js API routes
-- **Railway/Heroku** - Python backend
-- **Firebase** - Database, authentication, and storage (managed by Google)
-
-## Key Features
-
-- YouTube search and video playback
-- Audio extraction and processing
-- Chord recognition using machine learning
-- Beat detection using machine learning
-- Synchronized chord and beat display
-- Playback controls (play, pause, seek, speed adjustment)
-- Chord transposition
-- Downloadable chord sheets
-
-## Development Status
-
-This project is currently in the planning and initial development phase. See the [tasks.md](./tasks.md) file for the current implementation status and [chord-recognition-prd.md](./chord-recognition-prd.md) for detailed requirements.
+### Database & Storage
+- **Firebase Firestore** - NoSQL database for caching and user data
+- **Firebase Storage** - Audio file storage
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 16+ and npm
-- Python 3.8+ with pip
-- FFmpeg installed on your system
+- Node.js 18+ and npm
+- Python 3.8+ with pip (for local model development)
+- Firebase account
+- API keys for YouTube Data API, Music.ai, and Google Generative AI (Gemini)
 
 ### Installation
 
@@ -70,7 +113,7 @@ This project is currently in the planning and initial development phase. See the
    cd ChordMiniApp
    ```
 
-2. Install frontend dependencies:
+2. Install dependencies:
    ```bash
    npm install
    ```
@@ -81,46 +124,54 @@ This project is currently in the planning and initial development phase. See the
    ```
 
 4. Edit `.env.local` and add your API keys:
-   - Get a Firebase project configuration from the [Firebase Console](https://console.firebase.google.com/)
-   - Get a YouTube API key from the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Firebase configuration
+   - YouTube Data API key
+   - Music.ai API key
+   - Gemini API key
 
-5. Set up the Python backend:
+5. Start the development server:
    ```bash
-   cd python_backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-6. Start the development servers:
-   ```bash
-   # In one terminal (frontend)
    npm run dev
-
-   # In another terminal (backend)
-   cd python_backend
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   python app.py
    ```
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser
+6. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ### Firebase Setup
 
 1. Create a Firebase project at [firebase.google.com](https://firebase.google.com/)
-2. Enable Firestore Database
-3. Set up security rules for Firestore
+2. Enable Firebase Firestore Database
+3. Set up appropriate security rules
 4. Add a web app to your Firebase project
 5. Copy the configuration to your `.env.local` file
+6. Create the following collections in Firestore:
+   - `cached-videos` - For storing processed video data
+   - `cached-lyrics` - For storing transcribed lyrics
+   - `cached-translations` - For storing translated lyrics
 
-### Security Notes
+### API Keys Setup
+
+1. **YouTube Data API**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a project and enable the YouTube Data API v3
+   - Create an API key and add it to your `.env.local` file
+
+2. **Music.ai API**:
+   - Sign up at [Music.ai](https://music.ai/)
+   - Obtain an API key for lyrics transcription
+   - Add it to your `.env.local` file
+
+3. **Gemini API**:
+   - Go to [Google AI Studio](https://makersuite.google.com/)
+   - Get an API key for the Gemini model
+   - Add it to your `.env.local` file
+
+## Security Notes
 
 - **NEVER commit your `.env.local` file to version control**
 - **NEVER hardcode API keys in your source code**
-- The project includes a pre-commit hook to help prevent accidental commits of sensitive information
 - If you accidentally expose API keys, immediately rotate them in the respective service dashboards
-- For production, consider using more restrictive Firebase security rules
+- For production, use appropriate Firebase security rules
 
 ## License
 
-*TBD*
+MIT License

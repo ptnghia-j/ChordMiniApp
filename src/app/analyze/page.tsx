@@ -227,7 +227,7 @@ export default function LocalAudioAnalyzePage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="bg-primary-700 text-white p-4 shadow-md">
         <div className="container mx-auto">
-          <h1 className="text-2xl font-heading font-bold">Chord Analysis - Local Audio</h1>
+          <h1 className="text-2xl font-bold">Chord Analysis - Local Audio</h1>
         </div>
       </header>
 
@@ -320,7 +320,7 @@ export default function LocalAudioAnalyzePage() {
               {/* Analysis Statistics (if available) */}
               {analysisResults && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-lg font-heading font-medium mb-3 text-gray-800">Analysis Summary</h3>
+                  <h3 className="text-lg font-medium mb-3 text-gray-800">Analysis Summary</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-blue-50 p-3 rounded-lg border-2 border-blue-700">
                       <p className="text-sm text-gray-600 font-medium">Total Chords</p>

@@ -1,0 +1,48 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionService';
+import { BeatInfo, BeatPosition, DownbeatInfo } from '@/services/beatDetectionService';
+import ChordGrid from '@/components/ChordGrid';
+import BeatModelSelector from '@/components/BeatModelSelector';
+import ChordModelSelector from '@/components/ChordModelSelector';
+import ProcessingStatusBanner from '@/components/ProcessingStatusBanner';
+import AnalysisSummary from '@/components/AnalysisSummary';
+import ExtractionNotification from '@/components/ExtractionNotification';
+import DownloadingIndicator from '@/components/DownloadingIndicator';
+import LeadSheetDisplay from '@/components/LeadSheetDisplay';
+import TabbedInterface from '@/components/TabbedInterface';
+import { useProcessing } from '@/contexts/ProcessingContext';
+import { getTranscription, saveTranscription } from '@/services/firestoreService';
+import dynamic from 'next/dynamic';
+import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
+//import type { ReactPlayerProps } from 'react-player';
+
+// Dynamically import ReactPlayer to avoid SSR issues
+const ReactPlayer = dynamic(() => import('react-player/youtube'), { ssr: false });
+
+export default function YouTubeVideoAnalyzePage() {
+  // Component state and logic here...
+  
+  // This is the part with the syntax error
+  return (
+    <div>
+      {/* Downloading Indicator - shown during initial download */}
+      <DownloadingIndicator
+        isVisible={audioProcessingState.isDownloading && !audioProcessingState.fromCache}
+      />
+
+      {/* Extraction Notification Banner - shown after download completes */}
+      <ExtractionNotification
+        isVisible={showExtractionNotification}
+        fromCache={audioProcessingState.fromCache}
+        onDismiss={() => setShowExtractionNotification(false)}
+        onRefresh={() => extractAudioFromYouTube(true)}
+      />
+
+      {/* Rest of the component JSX */}
+    </div>
+  );
+}

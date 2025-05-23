@@ -39,6 +39,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           </div>
           <p className="text-center text-gray-700 font-medium mt-3">Searching YouTube...</p>
           <p className="text-center text-gray-500 text-sm mt-1">Results will appear in a moment</p>
+          <p className="text-center text-gray-400 text-xs mt-2">First search may take up to 15 seconds</p>
         </div>
       </div>
     );
@@ -77,7 +78,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   return (
     <div className="p-6 bg-white rounded-xl shadow-card mt-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-heading font-semibold text-gray-800">Search Results</h3>
+        <h3 className="text-xl font-semibold text-gray-800">Search Results</h3>
         {fromCache && (
           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
             From Cache

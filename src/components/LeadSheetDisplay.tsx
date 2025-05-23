@@ -8,6 +8,48 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import axios from 'axios';
+import {
+  formatChordWithMusicalSymbols,
+  getResponsiveChordFontSize,
+  getChordLabelStyles
+} from '@/utils/chordFormatting';
+import {
+  enhanceLyricsWithCharacterTiming,
+  EnhancedLyricsData,
+  EnhancedLyricLine,
+  getActiveCharacterIndex,
+  getCharacterProgress
+} from '@/utils/lyricsTimingUtils';
+
+/**
+ * Utility function to detect if text contains Chinese characters
+ */
+const containsChineseCharacters = (text: string): boolean => {
+  // Unicode ranges for Chinese characters
+  const chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff\ufe30-\ufe4f\uf900-\ufaff\u2f800-\u2fa1f]/;
+  return chineseRegex.test(text);
+};
+
+/**
+ * Utility function to add spacing between Chinese characters for better chord alignment
+ */
+const addSpacingToChineseText = (text: string): string => {
+  if (!containsChineseCharacters(text)) {
+    return text;
+  }
+
+  // Add a small space between each Chinese character
+  // but preserve existing spaces and non-Chinese characters
+  return text.split('').map((char, i) => {
+    // Check if the character is Chinese
+    if (containsChineseCharacters(char)) {
+      // Add a space after each Chinese character except the last one
+      return i < text.length - 1 ? char + ' ' : char;
+    }
+    return char;
+  }).join('');
+};
 
 // Define types for the component props and data structure
 interface ChordMarker {
@@ -26,6 +68,14 @@ interface LyricLine {
 interface SynchronizedLyrics {
   lines: LyricLine[];
   error?: string; // Optional error message when lyrics synchronization fails
+}
+
+interface TranslatedLyrics {
+  originalLyrics: string;
+  translatedLyrics: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  detectedLanguage?: string;
 }
 
 interface ChordData {
@@ -52,12 +102,33 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   onFontSizeChange,
   darkMode = false,
   chords = []
-}) => {
+}): React.ReactNode => {
   // State to track the currently active line
   const [activeLine, setActiveLine] = useState<number>(-1);
 
-  // State to store processed lyrics with chords
-  const [processedLyrics, setProcessedLyrics] = useState<SynchronizedLyrics>(lyrics);
+  // State to store processed lyrics with chords and character-level timing
+  const [processedLyrics, setProcessedLyrics] = useState<EnhancedLyricsData>(
+    enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics)
+  );
+
+  // State for translations
+  const [translatedLyrics, setTranslatedLyrics] = useState<{[language: string]: TranslatedLyrics}>({});
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState<boolean>(false);
+
+  // Available languages for translation
+  const availableLanguages = [
+    { code: 'English', name: 'English' },
+    { code: 'Spanish', name: 'Spanish' },
+    { code: 'French', name: 'French' },
+    { code: 'German', name: 'German' },
+    { code: 'Japanese', name: 'Japanese' },
+    { code: 'Chinese', name: 'Chinese' },
+    { code: 'Korean', name: 'Korean' },
+    { code: 'Russian', name: 'Russian' }
+  ];
 
   // Ref for the container element (used for auto-scrolling)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -73,13 +144,13 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   // Process lyrics and integrate chord data when either changes
   useEffect(() => {
     if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
-      setProcessedLyrics(lyrics);
+      setProcessedLyrics(enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics));
       return;
     }
 
     // If no chord data is provided, use the lyrics as is
     if (!chords || chords.length === 0) {
-      setProcessedLyrics(lyrics);
+      setProcessedLyrics(enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics));
       return;
     }
 
@@ -115,7 +186,8 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
       newLyrics.lines[lineIndex].chords = chordMarkers;
     });
 
-    setProcessedLyrics(newLyrics);
+    // Enhance the lyrics with character-level timing
+    setProcessedLyrics(enhanceLyricsWithCharacterTiming(newLyrics));
   }, [lyrics, chords]);
 
   // Debug log the lyrics prop
@@ -132,14 +204,79 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
     }
   }, [lyrics, chords]);
 
+  // Function to translate lyrics to a specific language
+  const translateLyrics = async (targetLanguage: string) => {
+    if (!processedLyrics || !processedLyrics.lines || processedLyrics.lines.length === 0) {
+      setTranslationError('No lyrics available to translate');
+      return;
+    }
+
+    try {
+      setIsTranslating(true);
+      setTranslationError(null);
+
+      // Combine all lyrics lines into a single string
+      const lyricsText = processedLyrics.lines.map(line => line.text).join('\n');
+
+      // Get video ID from URL if available
+      const videoId = typeof window !== 'undefined' ?
+        new URLSearchParams(window.location.search).get('v') ||
+        window.location.pathname.split('/').pop() :
+        '';
+
+      // Call the translation API with the target language
+      const response = await axios.post('/api/translate-lyrics', {
+        lyrics: lyricsText,
+        targetLanguage,
+        videoId
+      });
+
+      // Update the translations state with the new translation
+      setTranslatedLyrics(prev => ({
+        ...prev,
+        [targetLanguage]: response.data
+      }));
+
+      // Add the language to selected languages if not already selected
+      setSelectedLanguages(prev =>
+        prev.includes(targetLanguage) ? prev : [...prev, targetLanguage]
+      );
+
+    } catch (error) {
+      console.error('Translation error:', error);
+      setTranslationError(
+        error instanceof Error ? error.message : 'Failed to translate lyrics'
+      );
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   // Debug log processed lyrics
   useEffect(() => {
     if (processedLyrics && processedLyrics.lines) {
       console.log(`LeadSheetDisplay has ${processedLyrics.lines.length} processed lines with chords`);
+
       // Log a sample of lines with chords
       const sampleLine = processedLyrics.lines.find(line => line.chords && line.chords.length > 0);
       if (sampleLine) {
         console.log('Sample line with chords:', sampleLine);
+      }
+
+      // Log character timing information
+      const sampleLineWithCharTimings = processedLyrics.lines.find(line =>
+        line.characterTimings && line.characterTimings.length > 0
+      );
+
+      if (sampleLineWithCharTimings && sampleLineWithCharTimings.characterTimings) {
+        console.log('Character-level timing enabled. Sample line:', {
+          text: sampleLineWithCharTimings.text,
+          startTime: sampleLineWithCharTimings.startTime,
+          endTime: sampleLineWithCharTimings.endTime,
+          characterCount: sampleLineWithCharTimings.characterTimings.length,
+          firstChar: sampleLineWithCharTimings.characterTimings[0],
+          lastChar: sampleLineWithCharTimings.characterTimings[sampleLineWithCharTimings.characterTimings.length - 1]
+        });
       }
     }
   }, [processedLyrics]);
@@ -153,14 +290,13 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   // Add padding elements to ensure first and last lines can be centered
   useEffect(() => {
     if (containerRef.current) {
-      // Reduced top padding to position starting lyrics closer to the top
-      // Still keeping enough padding to allow proper centering of active lines
-      containerRef.current.style.paddingTop = '20vh';
-      containerRef.current.style.paddingBottom = '40vh';
+      // Minimal top padding to show first lyrics immediately
+      containerRef.current.style.paddingTop = '10px';
+      containerRef.current.style.paddingBottom = '20vh';
 
       // Add scroll margin to ensure active lines are positioned properly
-      document.documentElement.style.scrollPaddingTop = '30vh';
-      document.documentElement.style.scrollPaddingBottom = '30vh';
+      document.documentElement.style.scrollPaddingTop = '20px';
+      document.documentElement.style.scrollPaddingBottom = '20vh';
 
       // Add a class to the container for better visibility
       containerRef.current.classList.add('lyrics-scroll-container');
@@ -226,22 +362,23 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         const lineHeight = lineElement.clientHeight;
         const lineBottom = lineTop + lineHeight;
 
-        // Calculate the ideal position - center the line in the container
-        // This ensures the active line is in the middle of the analysis results box
-        const idealScrollTop = lineTop - (containerHeight / 2) + (lineHeight / 2);
+        // Calculate the ideal position - position the line at 1/3 from the bottom of the container
+        // This ensures the active line is positioned for better readability with more context above
+        const oneThirdFromBottom = containerHeight * (2/3); // Position at 1/3 from bottom (2/3 from top)
+        const idealScrollTop = lineTop - oneThirdFromBottom + (lineHeight / 2);
 
-        // Calculate buffer space in terms of lines (we want at least 2-3 lines visible above and below)
+        // Calculate buffer space in terms of lines (we want at least 2-3 lines visible above)
         // Estimate average line height based on current line
-        const avgLineHeight = lineHeight + 10; // Add 10px for margin
+        const avgLineHeight = lineHeight + 8; // Add 8px for margin (reduced from 10px)
         const linesVisible = Math.floor(containerHeight / avgLineHeight);
-        const bufferLines = Math.max(2, Math.floor(linesVisible / 3)); // At least 2 lines, or 1/3 of visible lines
+        const bufferLines = Math.max(2, Math.floor(linesVisible / 4)); // At least 2 lines, or 1/4 of visible lines
 
         // Convert buffer lines to pixels
         const bufferSize = bufferLines * avgLineHeight;
 
-        // Check if the line is already properly centered in the container
-        const targetPosition = containerScrollTop + (containerHeight / 2); // Center of visible area
-        const isCentered =
+        // Check if the line is already properly positioned in the container
+        const targetPosition = containerScrollTop + oneThirdFromBottom; // 1/3 from bottom of visible area
+        const isCorrectlyPositioned =
           Math.abs(targetPosition - (lineTop + lineHeight / 2)) < (avgLineHeight / 2);
 
         const isLineVisible =
@@ -249,7 +386,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
           lineBottom <= containerBottom - bufferSize;
 
         // Determine if we should scroll based on timing and visibility
-        const shouldScroll = !isCentered || !isLineVisible;
+        const shouldScroll = !isCorrectlyPositioned || !isLineVisible;
 
         // Add a delay to prevent scrolling too early in the line
         // Only scroll when a new line becomes active or if we're near the end of the current line
@@ -260,7 +397,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         const minTimeBetweenScrolls = 800; // Minimum 0.8 seconds between scrolls
 
         // Log for debugging
-        console.log(`Line ${newActiveLine}: progress=${lineProgressRef.current.toFixed(2)}, isPositioned=${isCentered}, isVisible=${isLineVisible}, targetPos=${Math.round(targetPosition)}, linePos=${Math.round(lineTop + lineHeight / 2)}`);
+        console.log(`Line ${newActiveLine}: progress=${lineProgressRef.current.toFixed(2)}, isPositioned=${isCorrectlyPositioned}, isVisible=${isLineVisible}, targetPos=${Math.round(targetPosition)}, linePos=${Math.round(lineTop + lineHeight / 2)}`);
 
         if ((isNewLine || (shouldScroll && isNearEndOfLine)) &&
             timeSinceLastScroll > minTimeBetweenScrolls) {
@@ -336,7 +473,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   /**
    * Render a single line with chords above the text
    */
-  const renderLine = (line: LyricLine, index: number) => {
+  const renderLine = (line: EnhancedLyricLine, index: number) => {
     const isActive = index === activeLine;
     const isPast = index < activeLine && activeLine !== -1;
 
@@ -366,84 +503,190 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
     });
 
     // Create word segments with their associated chords
-    const wordSegments: { text: string; chords: string[] }[] = [];
+    const wordSegments: { text: string; chords: string[]; isChineseChar?: boolean }[] = [];
 
-    // Split the line into words and spaces
-    let lastIndex = 0;
-    words.forEach((word, wordIndex) => {
-      // Add any space before this word
-      if (word.start > lastIndex) {
+    // Check if this line contains Chinese characters
+    const hasChineseChars = containsChineseCharacters(line.text);
+
+    // For Chinese text, we need special handling for character spacing
+    if (hasChineseChars) {
+      // For Chinese text, treat each character as a separate word for better chord alignment
+      for (let i = 0; i < line.text.length; i++) {
+        const char = line.text[i];
+
+        // Skip spaces
+        if (char === ' ') {
+          wordSegments.push({
+            text: ' ',
+            chords: []
+          });
+          continue;
+        }
+
+        // Find chords that align with this character position
+        const charChords: string[] = [];
+        sortedChords.forEach(chord => {
+          if (chord.position === i) {
+            charChords.push(chord.chord);
+          }
+        });
+
+        // Add the character as a segment
         wordSegments.push({
-          text: line.text.substring(lastIndex, word.start),
+          text: char,
+          chords: charChords,
+          isChineseChar: containsChineseCharacters(char)
+        });
+
+        // Add a small space after each Chinese character (except the last one)
+        if (containsChineseCharacters(char) && i < line.text.length - 1) {
+          wordSegments.push({
+            text: ' ',
+            chords: []
+          });
+        }
+      }
+    } else {
+      // For non-Chinese text, use the original word-based approach
+      // Split the line into words and spaces
+      let lastIndex = 0;
+      words.forEach((word, wordIndex) => {
+        // Add any space before this word
+        if (word.start > lastIndex) {
+          wordSegments.push({
+            text: line.text.substring(lastIndex, word.start),
+            chords: []
+          });
+        }
+
+        // Add the word with its chords
+        wordSegments.push({
+          text: line.text.substring(word.start, word.end + 1),
+          chords: chordsByWord[wordIndex] || []
+        });
+
+        lastIndex = word.end + 1;
+      });
+    }
+
+    // For non-Chinese text, add any remaining text after the last word
+    if (!hasChineseChars) {
+      let lastIndex = 0;
+      if (words.length > 0) {
+        const lastWord = words[words.length - 1];
+        lastIndex = lastWord.end + 1;
+      }
+
+      if (lastIndex < line.text.length) {
+        wordSegments.push({
+          text: line.text.substring(lastIndex),
           chords: []
         });
       }
-
-      // Add the word with its chords
-      wordSegments.push({
-        text: line.text.substring(word.start, word.end + 1),
-        chords: chordsByWord[wordIndex] || []
-      });
-
-      lastIndex = word.end + 1;
-    });
-
-    // Add any remaining text after the last word
-    if (lastIndex < line.text.length) {
-      wordSegments.push({
-        text: line.text.substring(lastIndex),
-        chords: []
-      });
     }
+
+    // Get translated texts for this line in all selected languages
+    const translatedTexts = selectedLanguages.map(language => ({
+      language,
+      text: translatedLyrics[language] ? getTranslatedLineText(line.text, language) : ''
+    })).filter(item => item.text);
 
     return (
       <div
         id={`line-${index}`}
         key={index}
-        className={`mb-10 ${isActive ? 'active bg-blue-100 p-4 rounded-lg -mx-2 border-l-4 border-blue-500 shadow-md' : ''} ${isPast ? 'past' : ''}`}
+        className={`mb-4 ${isActive ? 'active bg-blue-50 p-2 rounded-lg -mx-1 border-l-3 border-blue-400' : ''} ${isPast ? 'past' : ''}`}
         style={isActive ? {
-          transform: 'scale(1.02)',
+          transform: 'scale(1.01)',
           transition: 'all 0.3s ease-in-out'
         } : {}}
       >
         <div className="flex flex-wrap">
           {wordSegments.map((segment, i) => (
-            <div key={i} className="relative inline-flex flex-col justify-end mr-1">
+            <div
+              key={i}
+              className="relative inline-flex flex-col justify-end"
+              style={{
+                alignItems: 'flex-start',
+                marginRight: segment.isChineseChar ? '0' : '1px',
+                letterSpacing: segment.isChineseChar ? '0.05em' : 'normal'
+              }}
+            >
               {segment.chords.length > 0 && (
                 <div
-                  className="font-bold mb-1 text-center px-2 py-1 rounded-md"
+                  className={getResponsiveChordFontSize(segment.chords[0])}
                   style={{
-                    fontSize: `${fontSize * 0.85}px`,
+                    ...getChordLabelStyles(segment.chords[0]),
+                    marginBottom: '2px',
+                    minHeight: 'auto',
+                    fontSize: `${fontSize * 0.9}px`,
                     color: textColors.chord,
-                    minWidth: '100%',
-                    backgroundColor: 'rgba(219, 234, 254, 0.5)', // Light blue background (more visible)
-                    border: '1px solid rgba(59, 130, 246, 0.3)', // Light blue border (more visible)
-                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)', // Subtle shadow for depth
-                    transform: 'translateY(-2px)' // Slight upward shift for better positioning
+                    fontWeight: 600,
+                    display: 'inline-block',
+                    position: 'relative',
+                    width: 'auto'
                   }}
                 >
-                  {segment.chords.join(' ')}
+                  {segment.chords.map(chord =>
+                    <span
+                      key={chord}
+                      className="inline-block mx-0.5"
+                      dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
+                    ></span>
+                  ).reduce((prev, curr, i) =>
+                    i === 0 ? [curr] : [...prev, <span key={`space-${i}`}> </span>, curr], [] as React.ReactNode[]
+                  )}
+                  {/* Add a darker underline bar that's limited to the chord width */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '-2px',
+                      left: '0',
+                      right: '0',
+                      height: '2px',
+                      backgroundColor: '#94a3b8', // Darker gray for better visibility
+                      borderRadius: '1px'
+                    }}
+                  ></div>
                 </div>
               )}
 
               {/* Render text with character-by-character animation for active lines */}
               <div
                 style={{ fontSize: `${fontSize}px` }}
-                className={segment.chords.length > 0 ? "border-t border-gray-200 pt-1 font-medium" : ""}
+                className={segment.chords.length > 0 ? "pt-1 font-medium" : ""}
               >
                 {isActive ? (
                   // For active lines, render each character with its own animation
                   <span>
-                    {/* Calculate the overall line progress */}
+                    {/* Calculate the overall line progress with character-level timing */}
                     {(() => {
                       // Calculate overall line progress (0 to 1)
                       const lineProgress = Math.max(0, Math.min(1,
                         (currentTime - line.startTime) / (line.endTime - line.startTime)
                       ));
 
-                      // Calculate the character position where the color change should happen
+                      // Use character-level timing if available
+                      let colorChangePosition = 0;
                       const totalLineLength = line.text.length;
-                      const colorChangePosition = Math.floor(lineProgress * totalLineLength);
+
+                      if (line.characterTimings && line.characterTimings.length > 0) {
+                        // Find the active character based on current time
+                        const activeCharIndex = line.characterTimings.findIndex(
+                          charTiming => currentTime >= charTiming.startTime && currentTime <= charTiming.endTime
+                        );
+
+                        // If we found an active character, use it as the color change position
+                        if (activeCharIndex >= 0) {
+                          colorChangePosition = activeCharIndex;
+                        } else {
+                          // Otherwise, fall back to the traditional calculation
+                          colorChangePosition = Math.floor(lineProgress * totalLineLength);
+                        }
+                      } else {
+                        // Fall back to the traditional calculation if character timings aren't available
+                        colorChangePosition = Math.floor(lineProgress * totalLineLength);
+                      }
 
                       // Calculate the absolute position of this segment in the line
                       // Use indexOf with a start position to handle repeated segments correctly
@@ -517,7 +760,25 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                               // Apply gradient effect only to the character at the transition point
                               if (absoluteCharPos === colorChangePosition) {
                                 // Calculate fractional progress within this character
-                                const fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
+                                let fractionalProgress = 0;
+
+                                // Use character-level timing if available
+                                if (line.characterTimings && line.characterTimings.length > absoluteCharPos) {
+                                  const charTiming = line.characterTimings[absoluteCharPos];
+                                  const charDuration = charTiming.endTime - charTiming.startTime;
+
+                                  if (charDuration > 0) {
+                                    // Calculate progress within this specific character
+                                    fractionalProgress = (currentTime - charTiming.startTime) / charDuration;
+                                    fractionalProgress = Math.max(0, Math.min(1, fractionalProgress));
+                                  } else {
+                                    // Fallback if character has no duration
+                                    fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
+                                  }
+                                } else {
+                                  // Fallback to traditional calculation
+                                  fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
+                                }
 
                                 // Interpolate between colors
                                 const r1 = parseInt(textColors.unplayed.slice(1, 3), 16);
@@ -582,8 +843,52 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
             </div>
           ))}
         </div>
+
+        {/* Display translated texts for each selected language */}
+        {translatedTexts.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-200">
+            {translatedTexts.map((translation, i) => (
+              <div key={i} className="mb-1">
+                <div
+                  className="text-gray-600 italic mt-0.5"
+                  style={{ fontSize: `${fontSize * 0.85}px` }}
+                >
+                  {translation.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
+  };
+
+  /**
+   * Get the translated text for a specific line in a specific language
+   */
+  const getTranslatedLineText = (originalText: string, language: string): string => {
+    if (!translatedLyrics[language] || !translatedLyrics[language].translatedLyrics) {
+      return '';
+    }
+
+    // Get all original lines from the current processed lyrics
+    const originalLines = processedLyrics.lines.map((line) => line.text);
+
+    // Find the index of this line in the original text
+    const originalLineIndex = originalLines.indexOf(originalText);
+    if (originalLineIndex === -1) {
+      return '';
+    }
+
+    // Split the translated text into lines
+    const translatedLines = translatedLyrics[language].translatedLyrics.split('\n');
+
+    // Return the corresponding translated line if it exists
+    if (originalLineIndex < translatedLines.length) {
+      return translatedLines[originalLineIndex];
+    }
+
+    return '';
   };
 
   // If no lyrics are available, show a message
@@ -670,20 +975,92 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
   return (
     <div className="lead-sheet-container">
-      {/* Font size controls */}
-      <div className="controls mb-4 flex items-center justify-between">
-        <div className="flex items-center">
-          <label htmlFor="font-size" className="mr-2">Font Size:</label>
-          <input
-            id="font-size"
-            type="range"
-            min="12"
-            max="24"
-            value={fontSize}
-            onChange={(e) => onFontSizeChange(parseInt(e.target.value))}
-            className="mr-2"
-          />
-          <span>{fontSize}px</span>
+      {/* Controls in a single line */}
+      <div className="controls mb-3 flex items-center justify-between bg-gray-50 p-2 rounded-md">
+        <div className="flex items-center space-x-3">
+          {/* Font size control - YouTube-style slider with blue theme */}
+          <div className="flex items-center">
+            <span className="text-sm mr-2">Font:</span>
+            <div className="w-24 relative h-2 bg-gray-200 rounded-full overflow-hidden mr-1">
+              <div
+                className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
+                style={{ width: `${((fontSize - 12) / 12) * 100}%` }}
+              ></div>
+              <input
+                id="font-size"
+                type="range"
+                min="12"
+                max="24"
+                value={fontSize}
+                onChange={(e) => onFontSizeChange(parseInt(e.target.value))}
+                className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+              />
+            </div>
+            <span className="text-sm">{fontSize}px</span>
+          </div>
+
+          {/* Translation dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
+              disabled={isTranslating || !processedLyrics?.lines?.length}
+              className={`px-3 py-1 rounded text-sm font-medium flex items-center ${
+                isTranslating
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {isTranslating ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Translating...
+                </span>
+              ) : (
+                <>
+                  Translate Lyrics
+                  <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </>
+              )}
+            </button>
+
+            {/* Language selection dropdown */}
+            {isLanguageMenuOpen && !isTranslating && (
+              <div className="absolute z-10 mt-1 w-48 bg-white rounded-md shadow-lg py-1 text-sm">
+                {availableLanguages.map((lang) => (
+                  <div
+                    key={lang.code}
+                    className="px-4 py-2 hover:bg-gray-100 flex items-center cursor-pointer"
+                    onClick={() => {
+                      // Toggle language selection
+                      if (selectedLanguages.includes(lang.code)) {
+                        setSelectedLanguages(prev => prev.filter(l => l !== lang.code));
+                      } else if (translatedLyrics[lang.code]) {
+                        // If we already have a translation, just add it to selected
+                        setSelectedLanguages(prev => [...prev, lang.code]);
+                      } else {
+                        // Otherwise translate it first
+                        translateLyrics(lang.code);
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <span>{lang.name}</span>
+                      {selectedLanguages.includes(lang.code) && (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Display chord count if available */}
@@ -694,21 +1071,29 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         )}
       </div>
 
-      {/* Lyrics container with auto-scroll - using full viewport height */}
+      {/* Translation error message */}
+      {translationError && (
+        <div className="mb-4 p-2 bg-red-100 text-red-700 rounded-md text-sm">
+          <p className="font-medium">Translation Error</p>
+          <p>{translationError}</p>
+        </div>
+      )}
+
+      {/* Lyrics container with auto-scroll - using more vertical space */}
       <div
         ref={containerRef}
-        className="lyrics-container overflow-y-auto p-6 rounded-lg shadow-md"
+        className="lyrics-container overflow-y-auto p-3 rounded-lg shadow-sm"
         style={{
           backgroundColor: textColors.background,
-          lineHeight: '1.6',
+          lineHeight: '1.4',
           scrollBehavior: 'smooth',
-          height: 'calc(40vh - 30px)', // Reduced height to fit better in the analysis box
-          maxHeight: '350px', // Reduced maximum height
-          scrollPaddingTop: '30px', // Reduced top padding to show lyrics closer to the top
-          scrollPaddingBottom: '60px', // Keep bottom padding for centering when scrolling
+          height: 'calc(65vh - 20px)', // Significantly increased height for more content
+          maxHeight: '600px', // Increased maximum height
+          scrollPaddingTop: '15px', // Reduced top padding to show lyrics closer to the top
+          scrollPaddingBottom: '30px', // Reduced bottom padding
           position: 'relative', // Ensure proper positioning
           margin: '0 auto', // Center the container horizontally
-          paddingTop: '10px' // Minimal padding at the top of the visible container
+          paddingTop: '3px' // Minimal padding at the top of the visible container
         }}
       >
         {processedLyrics.lines.map((line, index) => renderLine(line, index))}

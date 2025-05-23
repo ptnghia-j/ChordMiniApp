@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import SearchResults from '@/components/SearchResults';
+import RecentVideos from '@/components/RecentVideos';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -23,7 +24,45 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [showStickyHeader, setShowStickyHeader] = useState(false);
+  const titleRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Set up intersection observer to detect when title is out of view
+  useEffect(() => {
+    // Add a small debounce to prevent rapid state changes
+    let timeout: NodeJS.Timeout;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Clear any existing timeout
+        clearTimeout(timeout);
+
+        // Add a small delay before updating state to prevent rapid changes
+        timeout = setTimeout(() => {
+          setShowStickyHeader(!entry.isIntersecting);
+        }, 50);
+      },
+      {
+        // Start showing header when title is 100% out of view
+        threshold: 0,
+        rootMargin: '-5px 0px 0px 0px' // Smaller offset to reduce transition triggering area
+      }
+    );
+
+    const currentTitleRef = titleRef.current;
+
+    if (currentTitleRef) {
+      observer.observe(currentTitleRef);
+    }
+
+    return () => {
+      clearTimeout(timeout);
+      if (currentTitleRef) {
+        observer.unobserve(currentTitleRef);
+      }
+    };
+  }, []);
 
   const extractVideoId = (url: string): string | null => {
     // Regular expressions to match different YouTube URL formats
@@ -72,7 +111,7 @@ export default function Home() {
     // Set a timeout to show a loading message if search takes too long
     const searchTimeout = setTimeout(() => {
       if (isSearching) {
-        console.log('Search is taking longer than expected...');
+        console.log('Search is taking longer than expected... First searches may take up to 15 seconds.');
       }
     }, 2000);
 
@@ -105,9 +144,16 @@ export default function Home() {
       }
     } catch (error: unknown) {
       console.error('Error searching YouTube:', error);
-      setSearchError(
-        error instanceof Error ? error.message : 'Failed to search for videos'
-      );
+
+      // Check if it's a timeout error
+      const errorMessage = error instanceof Error ? error.message : 'Failed to search for videos';
+      if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        setSearchError(
+          'Search timed out. Please try again. First searches may take longer to complete.'
+        );
+      } else {
+        setSearchError(errorMessage);
+      }
     } finally {
       clearTimeout(searchTimeout);
       setIsSearching(false);
@@ -120,14 +166,79 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <header className="bg-primary-700 text-white p-4 shadow-md">
-        <div className="container mx-auto">
-          <h1 className="text-2xl font-heading font-bold">Chord Mini</h1>
-        </div>
-      </header>
+      {/* Navigation wrapper with padding to prevent margin collapse */}
+      <div className="sticky-nav-wrapper pt-[1px] bg-white">
+        {/* Sticky header - only visible when main title is out of view */}
+        <header
+          className={`fixed top-0 left-0 right-0 bg-white text-gray-800 p-3 shadow-md z-50 transition-transform duration-200 will-change-transform ${
+            showStickyHeader ? 'translate-y-0' : '-translate-y-full'
+          }`}
+          style={{
+            transform: showStickyHeader ? 'translateY(0)' : 'translateY(-100%)',
+            backfaceVisibility: 'hidden'
+          }}
+        >
+          <div className="container mx-auto flex justify-between items-center">
+            <div className="flex items-center">
+              <Image
+                src="/chordMiniLogo.png"
+                alt="ChordMini Logo"
+                width={32}
+                height={32}
+                className="mr-2"
+              />
+              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
+            </div>
+            <nav>
+              <ul className="flex space-x-6">
+                <li>
+                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Features
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </header>
 
-      {/* Main content with hero image background */}
-      <main className="flex-grow relative">
+        {/* Top navigation bar (always visible) - with display:block to prevent margin collapse */}
+        <div className="bg-white text-gray-800 p-3 shadow-md block">
+          <div className="container mx-auto flex justify-between items-center">
+            <div className="flex items-center">
+              <Image
+                src="/chordMiniLogo.png"
+                alt="ChordMini Logo"
+                width={32}
+                height={32}
+                className="mr-2"
+              />
+              <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
+            </div>
+            <nav>
+              <ul className="flex space-x-6">
+                <li>
+                  <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
+                    Features
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content with hero image background - added border-top to prevent margin collapse */}
+      <main className="flex-grow relative border-t border-transparent">
         {/* Hero Image Background */}
         <div className="absolute inset-0 z-0">
           <div className="relative w-full h-full">
@@ -165,24 +276,24 @@ export default function Home() {
         </svg>
 
         {/* Content Container */}
-        <div className="relative z-10 container mx-auto p-4">
-          {/* App Title and Description */}
-          <div className="py-16 md:py-20 flex flex-col items-center justify-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-2 font-heading">ChordMini</h2>
-            <p className="text-xl md:text-2xl text-gray-700 font-light mb-8">Chord recognition and analysis application</p>
+        <div className="relative z-10 container mx-auto p-3">
+          {/* App Title and Description - Added padding-top to prevent margin collapse */}
+          <div ref={titleRef} className="pt-4 pb-4 md:py-5 flex flex-col items-center justify-center">
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-0.5">ChordMini</h2>
+            <p className="text-xl md:text-2xl text-gray-700 font-light mb-2">Chord recognition and analysis application</p>
           </div>
 
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {/* YouTube Analysis Option - Full Width */}
-            <div className="bg-white rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow w-full">
-              <h3 className="text-xl font-heading font-bold text-gray-800 mb-4 text-center">
+            <div className="bg-white rounded-lg shadow-card p-4 hover:shadow-lg transition-shadow w-full">
+              <h3 className="text-lg font-bold text-gray-800 mb-2 text-center">
                 Analyze Music
               </h3>
 
-              <div className="space-y-6 max-w-2xl mx-auto">
+              <div className="space-y-3 max-w-3xl mx-auto">
                 {/* Unified Search/URL Input */}
                 <div>
-                  <form onSubmit={handleSearch} className="space-y-4">
+                  <form onSubmit={handleSearch} className="space-y-2">
                     <div>
                       <input
                         id="youtube-search"
@@ -199,54 +310,26 @@ export default function Home() {
                       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
                     </div>
 
-                    <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                       <button
                         type="submit"
                         disabled={isSearching}
-                        className="w-full md:w-2/4 bg-primary-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors duration-200 disabled:opacity-50"
+                        className="w-full md:w-auto bg-primary-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-primary-700 transition-colors duration-200 disabled:opacity-50 flex-grow md:flex-grow-0"
                       >
                         {isSearching ? "Searching..." : "Search or Analyze URL"}
                       </button>
 
-                      <div className="relative group w-full md:w-1/4 mt-4 md:mt-0">
-                        <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
+                      <div className="relative group w-full md:w-auto">
+                        <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-600 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-2">
                           Upload audio files (MP3, WAV, FLAC) up to 20MB
                         </div>
                         <Link
                           href="/analyze"
-                          className="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-center block"
+                          className="bg-blue-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-center block"
                           aria-label="Upload audio file"
                         >
                           Upload Audio
                         </Link>
-                      </div>
-
-                      <div className="flex flex-col md:flex-row md:space-x-2 w-full md:w-1/4 mt-4 md:mt-0">
-                        <div className="relative group w-full mb-2 md:mb-0 md:w-1/2">
-                          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
-                            Display synchronized lyrics with YouTube playback
-                          </div>
-                          <Link
-                            href="/lyrics/KoM13RvBHrk"
-                            className="bg-green-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 text-center block"
-                            aria-label="Transcribe lyrics"
-                          >
-                            Lyrics
-                          </Link>
-                        </div>
-
-                        <div className="relative group w-full md:w-1/2">
-                          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-500 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-3">
-                            Lyrics transcription demo with our specific audio file
-                          </div>
-                          <Link
-                            href="/lyrics-demo"
-                            className="bg-purple-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-200 text-center block"
-                            aria-label="Lyrics Demo"
-                          >
-                            Demo
-                          </Link>
-                        </div>
                       </div>
                     </div>
                   </form>
@@ -254,9 +337,9 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-4 text-sm text-gray-500 max-w-2xl mx-auto">
+              <div className="mt-2 text-xs text-gray-500 max-w-3xl mx-auto">
                 <p className="font-medium">You can:</p>
-                <ul className="list-disc list-inside mt-1">
+                <ul className="list-disc list-inside mt-0.5 space-y-0.5">
                   <li>Search for songs by title, artist, etc.</li>
                   <li>Paste YouTube URLs directly (e.g., https://youtu.be/dQw4w9WgXcQ)</li>
                   <li>Enter a YouTube video ID (e.g., dQw4w9WgXcQ)</li>
@@ -268,7 +351,7 @@ export default function Home() {
 
           {/* Search Results */}
           {(searchResults.length > 0 || isSearching) && (
-            <div className="max-w-3xl mx-auto mt-6">
+            <div className="max-w-4xl mx-auto mt-3">
               <SearchResults
                 results={searchResults}
                 isLoading={isSearching}
@@ -279,31 +362,98 @@ export default function Home() {
             </div>
           )}
 
-          {/* Information Container */}
-          <div className="max-w-3xl mx-auto mt-12">
-            <div className="bg-white border border-gray-200 rounded-lg p-6 w-full">
-              <h3 className="text-xl font-medium text-gray-800 mb-4">
+          {/* Demo Images - Only show when not displaying search results */}
+          {!searchResults.length && !isSearching && (
+            <div className="max-w-4xl mx-auto mt-4">
+              <h3 className="text-lg font-medium text-gray-800 mb-3 text-center">
+                See ChordMini in Action
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <Image
+                    src="/demo1.png"
+                    alt="ChordMini Beat and Chord Analysis Demo"
+                    width={800}
+                    height={450}
+                    className="w-full h-auto"
+                  />
+                  <div className="p-3">
+                    <h4 className="font-medium text-gray-800">Beat & Chord Analysis</h4>
+                    <p className="text-sm text-gray-600">Visualize chord progressions and beat patterns in real-time</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <Image
+                    src="/demo2.png"
+                    alt="ChordMini Lyrics Transcription Demo"
+                    width={800}
+                    height={450}
+                    className="w-full h-auto"
+                  />
+                  <div className="p-3">
+                    <h4 className="font-medium text-gray-800">Lyrics & Chord Transcription</h4>
+                    <p className="text-sm text-gray-600">Follow along with synchronized lyrics and chord annotations</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recent Videos - Only show when not displaying search results */}
+          {!searchResults.length && !isSearching && (
+            <div className="max-w-4xl mx-auto mt-3">
+              <RecentVideos />
+            </div>
+          )}
+
+          {/* Information Container - Further reduced top margin */}
+          <div className="max-w-4xl mx-auto mt-3">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
+              <h3 className="text-xl font-medium text-gray-800 mb-2">
                 About This App
               </h3>
 
-              <p className="text-gray-700 mb-6">
+              <p className="text-gray-700 mb-3 text-sm">
                 This application uses audio processing and machine learning to detect musical chords and beats in audio files or YouTube videos.
               </p>
 
-              <div className="grid md:grid-cols-3 gap-6 text-sm">
-                <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
-                  <h4 className="font-medium text-gray-800 mb-2">Chord Detection</h4>
-                  <p className="text-gray-600">Identifies major, minor, and 7th chords in the audio using spectral analysis.</p>
+              <div className="grid md:grid-cols-3 gap-2 text-sm">
+                <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
+                  <h4 className="font-medium text-gray-800 mb-0.5">Chord Detection</h4>
+                  <p className="text-gray-600 text-xs">Identifies major, minor, and 7th chords in the audio with customizable models for different music genres.</p>
                 </div>
 
-                <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
-                  <h4 className="font-medium text-gray-800 mb-2">Beat Tracking</h4>
-                  <p className="text-gray-600">Detects rhythmic patterns and beat timings for synchronized chord display.</p>
+                <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
+                  <h4 className="font-medium text-gray-800 mb-0.5">Beat Tracking</h4>
+                  <p className="text-gray-600 text-xs">Detects rhythmic patterns and beat timings with selectable models for optimal accuracy.</p>
                 </div>
 
-                <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
-                  <h4 className="font-medium text-gray-800 mb-2">Local Processing</h4>
-                  <p className="text-gray-600">All audio processing happens in your browser - no files are uploaded to servers.</p>
+                <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200">
+                  <h4 className="font-medium text-gray-800 mb-0.5">Smart Caching</h4>
+                  <p className="text-gray-600 text-xs">Firebase-powered caching system for faster analysis of previously processed videos.</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-2 text-sm mt-2">
+                <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200 flex items-start">
+                  <div className="flex-grow">
+                    <h4 className="font-medium text-gray-800 mb-0.5">Lyrics Transcription</h4>
+                    <p className="text-gray-600 text-xs">Synchronized lyrics with chord annotations positioned above words for professional lead sheet layout.</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2 rounded-md shadow-sm border border-gray-200 flex items-start">
+                  <div className="flex-grow">
+                    <h4 className="font-medium text-gray-800 mb-0.5">Lyrics Translation</h4>
+                    <p className="text-gray-600 text-xs">
+                      Powered by Gemini AI for accurate translations of non-English lyrics.
+                      <span className="inline-block ml-1">
+                        <svg width="16" height="16" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block">
+                          <path d="M95.5 15.5L26.5 176.5H165.5L95.5 15.5Z" fill="#8e44ef" />
+                        </svg>
+                      </span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

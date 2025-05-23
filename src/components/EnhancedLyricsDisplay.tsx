@@ -38,12 +38,14 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
       const container = containerRef.current;
       const element = currentLineRef.current;
 
-      // Calculate the scroll position to center the current line
+      // Calculate the scroll position to position the line at 1/3 from the bottom
       const containerHeight = container.clientHeight;
       const elementTop = element.offsetTop;
       const elementHeight = element.clientHeight;
 
-      const scrollTo = elementTop - (containerHeight / 2) + (elementHeight / 2);
+      // Position at 1/3 from bottom (2/3 from top)
+      const oneThirdFromBottom = containerHeight * (2/3);
+      const scrollTo = elementTop - oneThirdFromBottom + (elementHeight / 2);
 
       // Smooth scroll to the position
       container.scrollTo({
@@ -152,7 +154,7 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
 
       <div
         ref={containerRef}
-        className="h-[400px] overflow-y-auto pr-2 space-y-6 lyrics-container"
+        className="h-[450px] overflow-y-auto pr-2 space-y-4 lyrics-container"
       >
         {lyrics.lines.map((line, lineIndex) => {
           try {
@@ -167,7 +169,7 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
                 key={lineIndex}
                 ref={line === currentLine ? currentLineRef : undefined}
                 className={`relative py-2 px-1 rounded transition-colors duration-300 cursor-pointer hover:bg-gray-100 ${
-                  line === currentLine ? 'current-line' : ''
+                  line === currentLine ? 'bg-blue-50 border-l-3 border-blue-400 rounded-lg' : ''
                 }`}
                 onClick={() => onLineClick && onLineClick(line)}
               >
@@ -189,8 +191,8 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
                           {wordChords.map((chord, chordIndex) => (
                             <span
                               key={chordIndex}
-                              className="chord absolute -top-6"
-                              style={{ left: '50%' }}
+                              className="absolute -top-6 font-medium text-blue-700"
+                              style={{ left: '50%', transform: 'translateX(-50%)' }}
                             >
                               {chord.chord}
                             </span>

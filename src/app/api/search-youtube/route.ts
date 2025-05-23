@@ -92,7 +92,7 @@ function parseYtDlpOutput(stdout: string): YouTubeSearchResult[] {
 // Optimized search function that uses the most efficient approach
 async function searchYouTube(
   sanitizedQuery: string,
-  timeoutMs: number = 8000
+  timeoutMs: number = 15000 // Increased from 8000ms to 15000ms (15 seconds)
 ): Promise<{ success: boolean; results: YouTubeSearchResult[]; error?: any; fromCache?: boolean }> {
   try {
     // Check cache first
@@ -167,6 +167,7 @@ async function searchYouTube(
     try {
       // Try with --dump-json instead of --dump-single-json
       const fallbackCommand = `yt-dlp "ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
+      // Use the same timeout for the fallback command
       const { stdout: fallbackStdout } = await execPromise(fallbackCommand, timeoutMs);
 
       if (fallbackStdout) {
@@ -220,7 +221,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Set a timeout for the entire search operation
-    const searchTimeoutMs = 10000; // 10 seconds max
+    const searchTimeoutMs = 20000; // 20 seconds max (increased from 10 seconds)
 
     // Create a timeout promise
     const timeoutPromise = new Promise<{ success: false, results: [], error: any }>((resolve) => {
@@ -234,7 +235,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Perform the search with our optimized function
-    const searchPromise = searchYouTube(sanitizedQuery, 8000);
+    const searchPromise = searchYouTube(sanitizedQuery, 15000); // Increased from 8000ms to 15000ms (15 seconds)
 
     // Race the search promise and the timeout
     const { success, results, error: searchError, fromCache } = await Promise.race([
@@ -243,10 +244,16 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (!success || results.length === 0) {
+      // Check if it's a timeout error
+      const errorDetails = searchError ? (searchError.stderr || searchError.message || String(searchError)) : 'No results found';
+      const isTimeout = errorDetails.includes('timeout') || errorDetails.includes('timed out');
+
       return NextResponse.json(
         {
-          error: 'Failed to search YouTube',
-          details: searchError ? (searchError.stderr || searchError.message || String(searchError)) : 'No results found'
+          error: isTimeout
+            ? 'Search timed out. Please try again. First searches may take longer to complete.'
+            : 'Failed to search YouTube',
+          details: errorDetails
         },
         { status: 500 }
       );
@@ -261,10 +268,16 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error searching YouTube:', error);
 
+    // Check if it's a timeout error
+    const errorDetails = error.stderr || error.message || String(error);
+    const isTimeout = errorDetails.includes('timeout') || errorDetails.includes('timed out');
+
     return NextResponse.json(
       {
-        error: 'Failed to search YouTube',
-        details: error.stderr || error.message || String(error)
+        error: isTimeout
+          ? 'Search timed out. Please try again. First searches may take longer to complete.'
+          : 'Failed to search YouTube',
+        details: errorDetails
       },
       { status: 500 }
     );

@@ -31,6 +31,7 @@ This document tracks the implementation progress of the chord recognition system
 | T014 | Error Handling and Edge Cases | Medium | In Progress |  |  |  | 5 hours | T001-T011 | Implemented comprehensive error handling and addressed edge cases. | 7 |
 | T015 | Testing and Quality Assurance | High | To Do |  |  |  | 14 hours | T001-T014 | Conducted unit and integration tests and performed user testing. | 8 |
 | T016 | Lyrics Transcription with Lead Sheet Layout | Medium | To Do |  |  |  | 21 hours | T005, T007 | Implemented lyrics transcription with synchronized chord display in lead sheet format. | 9 |
+| T017 | Lyrics Translation for Non-English Songs | Medium | To Do |  |  |  | 14 hours | T016 | Implemented lyrics translation feature using Gemini API with language detection and caching. | 10 |
 
 ## Implementation Progress Notes
 
@@ -90,7 +91,17 @@ This document tracks the implementation progress of the chord recognition system
    - Add font size and display preference options
    - Implement smooth animations for transitions
 
-4. **Additional Features**
+4. **Lyrics Translation for Non-English Songs (T017)**
+   - Implement "Translate Lyrics" button in the UI
+   - Integrate with Gemini API for lyrics translation
+   - Create backend endpoint for handling translation requests
+   - Implement language detection or dropdown for source language selection
+   - Display translated lyrics below original lyrics in the lead sheet
+   - Add loading state during translation process
+   - Implement caching in Firestore to avoid redundant API calls
+   - Add error handling for API failures
+
+5. **Additional Features**
    - Implement transpose functionality for chord progressions
    - Add export options for chord sheets (PDF, image)
    - Implement more advanced audio analysis features

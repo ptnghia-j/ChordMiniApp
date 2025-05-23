@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import musicAiService from '@/services/musicAiService';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { firebaseApp } from '@/services/firebaseService';
+import { firebaseApp, saveLyricsToFirestore } from '@/services/firebaseService';
 
 /**
  * API route to transcribe lyrics from an audio file
@@ -114,12 +114,7 @@ export async function POST(request: NextRequest) {
         if (matchingFile) {
           finalAudioPath = `/audio/${matchingFile}`;
         } else {
-          // If we're testing with our specific file, use that
-          if (videoId === 'KoM13RvBHrk') {
-            finalAudioPath = '/audio/KoM13RvBHrk_1747853615886.mp3';
-          } else {
-            return NextResponse.json({ error: 'Audio file not found' }, { status: 404 });
-          }
+          return NextResponse.json({ error: 'Audio file not found' }, { status: 404 });
         }
       } catch (error) {
         console.error('Error reading audio directory:', error);
@@ -144,13 +139,14 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Cache the results in Firestore
+    // Cache the results in Firestore (non-critical operation)
     try {
-      await setDoc(lyricsDocRef, lyricsData);
+      // Use our helper function from firebaseService
+      await saveLyricsToFirestore(videoId, lyricsData);
       console.log(`Cached lyrics for video ID: ${videoId}`);
     } catch (cacheError) {
       console.error('Error caching lyrics:', cacheError);
-      // Continue even if caching fails
+      // Continue even if caching fails - this is non-critical
     }
 
     // Return the transcription results

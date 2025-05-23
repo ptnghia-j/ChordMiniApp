@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
@@ -59,5 +59,33 @@ if (hasRequiredConfig) {
   console.warn('- NEXT_PUBLIC_FIREBASE_PROJECT_ID');
   console.warn('- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
 }
+
+// Collection names
+export const TRANSLATIONS_COLLECTION = 'translations';
+
+// Initialize translations collection if it doesn't exist
+export const initTranslationsCollection = async () => {
+  if (!db) {
+    console.warn('Firebase not initialized, skipping translations collection initialization');
+    return;
+  }
+
+  try {
+    const translationsRef = collection(db, TRANSLATIONS_COLLECTION);
+    const testDocRef = doc(translationsRef, 'init');
+    const testDocSnap = await getDoc(testDocRef);
+
+    if (!testDocSnap.exists()) {
+      // Create an initial document to ensure the collection exists
+      await setDoc(testDocRef, {
+        createdAt: new Date().toISOString(),
+        note: 'Initial document to create translations collection'
+      });
+      console.log('Translations collection initialized');
+    }
+  } catch (error) {
+    console.error('Error initializing translations collection:', error);
+  }
+};
 
 export { db, storage };

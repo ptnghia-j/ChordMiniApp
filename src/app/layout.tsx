@@ -1,11 +1,16 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
+import FirebaseInitializer from '../components/FirebaseInitializer';
 
-// Initialize the Inter font
-const inter = Inter({ subsets: ['latin'] });
+// Initialize only the monospace font for chord labels
+const robotoMono = Roboto_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto-mono'
+});
 
 // Define metadata for the application
 export const metadata: Metadata = {
@@ -20,9 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={robotoMono.variable}>
+      <body className="font-sans">
         <ProcessingProvider>
+          <FirebaseInitializer />
           {children}
         </ProcessingProvider>
       </body>
