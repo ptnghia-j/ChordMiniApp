@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import Navigation from '@/components/Navigation';
 import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionService';
 import { BeatInfo } from '@/services/beatDetectionService';
 import ChordGrid from '@/components/ChordGrid';
@@ -225,36 +226,9 @@ export default function LocalAudioAnalyzePage() {
   const chordGridData = getChordGridData();
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Navigation Bar - Sticky */}
-      <div className="sticky top-0 bg-white text-gray-800 p-3 shadow-md block z-50">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center">
-            <Image
-              src="/chordMiniLogo.png"
-              alt="ChordMini Logo"
-              width={48}
-              height={48}
-              className="mr-2"
-            />
-            <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
-          </div>
-          <nav>
-            <ul className="flex space-x-6">
-              <li>
-                <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Features
-                </Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* Use the Navigation component */}
+      <Navigation />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
         <h2 className="text-2xl font-bold text-gray-800 my-4">Upload Audio File</h2>

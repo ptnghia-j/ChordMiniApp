@@ -27,7 +27,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="p-6 bg-white rounded-xl shadow-card mt-4">
+      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-4 transition-colors duration-300">
         <div className="flex flex-col items-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -37,9 +37,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               </svg>
             </div>
           </div>
-          <p className="text-center text-gray-700 font-medium mt-3">Searching YouTube...</p>
-          <p className="text-center text-gray-500 text-sm mt-1">Results will appear in a moment</p>
-          <p className="text-center text-gray-400 text-xs mt-2">First search may take up to 15 seconds</p>
+          <p className="text-center text-gray-700 dark:text-gray-300 font-medium mt-3 transition-colors duration-300">Searching YouTube...</p>
+          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-1 transition-colors duration-300">Results will appear in a moment</p>
+          <p className="text-center text-gray-400 dark:text-gray-500 text-xs mt-2 transition-colors duration-300">First search may take up to 15 seconds</p>
         </div>
       </div>
     );
@@ -47,7 +47,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
   if (error) {
     return (
-      <div className="p-6 bg-white rounded-xl shadow-card mt-4">
+      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-4 transition-colors duration-300">
         <p className="text-red-500">Error: {error}</p>
       </div>
     );
@@ -76,9 +76,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   };
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-card mt-6">
+    <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-6 transition-colors duration-300">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-800">Search Results</h3>
+        <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 transition-colors duration-300">Search Results</h3>
         {fromCache && (
           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
             From Cache
@@ -89,7 +89,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
         {results.map((result) => (
           <div
             key={result.id}
-            className="flex cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors border border-gray-100 hover:border-gray-200"
+            className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600"
             onClick={() => onVideoSelect(result.id)}
           >
             <div className="flex-shrink-0 w-36 h-20 relative overflow-hidden rounded-md">
@@ -107,9 +107,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               )}
             </div>
             <div className="ml-4 flex-1">
-              <h4 className="font-medium line-clamp-2 text-gray-800">{result.title}</h4>
-              <p className="text-sm text-gray-600 mt-1">{result.channel}</p>
-              <div className="flex items-center mt-1 text-xs text-gray-500">
+              <h4 className="font-medium line-clamp-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">{result.title}</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 transition-colors duration-300">{result.channel}</p>
+              <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-500 transition-colors duration-300">
                 {result.upload_date && <span>{formatDate(result.upload_date)}</span>}
                 {result.upload_date && result.view_count && <span className="mx-2">•</span>}
                 {result.view_count && <span>{formatViews(result.view_count)}</span>}

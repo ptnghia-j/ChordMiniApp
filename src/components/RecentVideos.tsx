@@ -76,14 +76,14 @@ export default function RecentVideos() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-card p-4">
-        <h3 className="text-lg font-medium text-gray-800 mb-2">Recent Videos</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-4 transition-colors duration-300">
+        <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {[...Array(6)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 rounded-md mb-1"></div>
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-1"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-md mb-1 transition-colors duration-300"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-1 transition-colors duration-300"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 transition-colors duration-300"></div>
             </div>
           ))}
         </div>
@@ -96,8 +96,8 @@ export default function RecentVideos() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-card p-4">
-      <h3 className="text-lg font-medium text-gray-800 mb-2">Recent Videos</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-4 transition-colors duration-300">
+      <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
         {videos.map((video) => (
@@ -106,7 +106,7 @@ export default function RecentVideos() {
             key={video.videoId}
             className="block group hover:opacity-90 transition-opacity"
           >
-            <div className="relative aspect-video bg-gray-100 rounded-md overflow-hidden mb-1 shadow-sm">
+            <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden mb-1 shadow-sm transition-colors duration-300">
               <Image
                 src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
                 alt={video.title || 'Video thumbnail'}
@@ -120,10 +120,10 @@ export default function RecentVideos() {
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
             </div>
-            <h4 className="text-sm font-medium text-gray-800 line-clamp-1 group-hover:text-blue-600 transition-colors">
+            <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
               {video.title}
             </h4>
-            <p className="text-xs text-gray-500">{formatDate(video.processedAt)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">{formatDate(video.processedAt)}</p>
           </Link>
         ))}
       </div>
