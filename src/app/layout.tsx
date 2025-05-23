@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
 import FirebaseInitializer from '../components/FirebaseInitializer';
 
@@ -28,8 +29,10 @@ export default function RootLayout({
     <html lang="en" className={robotoMono.variable}>
       <body className="font-sans">
         <ProcessingProvider>
-          <FirebaseInitializer />
-          {children}
+          <ThemeProvider>
+            <FirebaseInitializer />
+            {children}
+          </ThemeProvider>
         </ProcessingProvider>
       </body>
     </html>

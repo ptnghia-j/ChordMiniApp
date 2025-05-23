@@ -2,43 +2,17 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import Navigation from '@/components/Navigation';
 
 export default function FeaturesPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Top navigation bar */}
-      <div className="bg-white text-gray-800 p-3 shadow-md">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center">
-            <Image
-              src="/chordMiniLogo.png"
-              alt="ChordMini Logo"
-              width={32}
-              height={32}
-              className="mr-2"
-            />
-            <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
-          </div>
-          <nav>
-            <ul className="flex space-x-6">
-              <li>
-                <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Features
-                </Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* Use the Navigation component */}
+      <Navigation />
 
-      <main className="flex-grow container mx-auto p-6">
+      <main className="flex-grow container mx-auto p-6 text-gray-800 dark:text-gray-100 transition-colors duration-300">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6">Features</h1>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-6 transition-colors duration-300">Features</h1>
 
           <div className="space-y-8">
             {/* Feature 1 */}
@@ -135,7 +109,7 @@ export default function FeaturesPage() {
           <div className="mt-8 text-center">
             <Link
               href="/"
-              className="inline-block bg-primary-600 text-white font-medium py-3 px-8 rounded-lg hover:bg-primary-700 transition-colors duration-200"
+              className="inline-block bg-primary-600 dark:bg-primary-700 text-white font-medium py-3 px-8 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-800 transition-colors duration-200"
             >
               Try It Now
             </Link>
@@ -143,7 +117,7 @@ export default function FeaturesPage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 text-white p-4 mt-auto">
+      <footer className="bg-gray-800 dark:bg-gray-950 text-white p-4 mt-auto transition-colors duration-300">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <p className="text-sm">&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
         </div>
