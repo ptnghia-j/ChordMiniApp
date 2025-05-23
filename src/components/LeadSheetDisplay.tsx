@@ -33,6 +33,7 @@ const containsChineseCharacters = (text: string): boolean => {
 
 /**
  * Utility function to add spacing between Chinese characters for better chord alignment
+ * This is only used for chord positioning calculation, not for display
  */
 const addSpacingToChineseText = (text: string): string => {
   if (!containsChineseCharacters(text)) {
@@ -172,13 +173,37 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         // Calculate the relative position of the chord within the line
         const relativePosition = (chord.time - line.startTime) / (line.endTime - line.startTime);
 
+        // Split the line text into words
+        const words = line.text.split(' ');
+        const totalChars = line.text.length;
+
         // Map to character position in the text
-        const position = Math.floor(relativePosition * line.text.length);
+        const charPosition = Math.floor(relativePosition * totalChars);
+
+        // Find which word this position falls into
+        let currentPos = 0;
+        let wordIndex = 0;
+
+        for (let i = 0; i < words.length; i++) {
+          const wordLength = words[i].length;
+          if (charPosition >= currentPos && charPosition < currentPos + wordLength) {
+            wordIndex = i;
+            break;
+          }
+          // Add 1 for the space between words
+          currentPos += wordLength + 1;
+        }
+
+        // Calculate the position at the start of the word
+        let wordStartPos = 0;
+        for (let i = 0; i < wordIndex; i++) {
+          wordStartPos += words[i].length + 1; // Add 1 for space
+        }
 
         return {
           time: chord.time,
           chord: chord.chord,
-          position: position
+          position: wordStartPos // Position at the start of the word
         };
       });
 
@@ -510,42 +535,38 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
     // For Chinese text, we need special handling for character spacing
     if (hasChineseChars) {
-      // For Chinese text, treat each character as a separate word for better chord alignment
-      for (let i = 0; i < line.text.length; i++) {
-        const char = line.text[i];
+      // For Chinese text, group characters into words based on spaces
+      const chineseWords = line.text.split(' ').filter(word => word.length > 0);
 
-        // Skip spaces
-        if (char === ' ') {
-          wordSegments.push({
-            text: ' ',
-            chords: []
-          });
-          continue;
-        }
+      // Process each word
+      chineseWords.forEach((word, wordIndex) => {
+        // Find chords that align with this word
+        const wordChords: string[] = [];
+        const wordStartPos = line.text.indexOf(word);
+        const wordEndPos = wordStartPos + word.length - 1;
 
-        // Find chords that align with this character position
-        const charChords: string[] = [];
+        // Find chords that belong to this word
         sortedChords.forEach(chord => {
-          if (chord.position === i) {
-            charChords.push(chord.chord);
+          if (chord.position >= wordStartPos && chord.position <= wordEndPos) {
+            wordChords.push(chord.chord);
           }
         });
 
-        // Add the character as a segment
+        // Add the word as a segment with its chords
         wordSegments.push({
-          text: char,
-          chords: charChords,
-          isChineseChar: containsChineseCharacters(char)
+          text: word,
+          chords: wordChords,
+          isChineseChar: containsChineseCharacters(word)
         });
 
-        // Add a small space after each Chinese character (except the last one)
-        if (containsChineseCharacters(char) && i < line.text.length - 1) {
+        // Add space after word (except for the last word)
+        if (wordIndex < chineseWords.length - 1) {
           wordSegments.push({
             text: ' ',
             chords: []
           });
         }
-      }
+      });
     } else {
       // For non-Chinese text, use the original word-based approach
       // Split the line into words and spaces
@@ -608,8 +629,9 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
               className="relative inline-flex flex-col justify-end"
               style={{
                 alignItems: 'flex-start',
-                marginRight: segment.isChineseChar ? '0' : '1px',
-                letterSpacing: segment.isChineseChar ? '0.05em' : 'normal'
+                marginRight: segment.text === ' ' ? '0' : '0px', // No extra margin for spaces
+                letterSpacing: 'normal', // Use normal letter spacing for all text
+                whiteSpace: 'pre-wrap' // Preserve whitespace
               }}
             >
               {segment.chords.length > 0 && (
@@ -617,14 +639,15 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                   className={getResponsiveChordFontSize(segment.chords[0])}
                   style={{
                     ...getChordLabelStyles(segment.chords[0]),
-                    marginBottom: '2px',
+                    marginBottom: '0px', // Reduced from 2px to 0px
                     minHeight: 'auto',
                     fontSize: `${fontSize * 0.9}px`,
                     color: textColors.chord,
                     fontWeight: 600,
                     display: 'inline-block',
                     position: 'relative',
-                    width: 'auto'
+                    width: 'auto',
+                    paddingBottom: '1px' // Added minimal padding
                   }}
                 >
                   {segment.chords.map(chord =>
@@ -640,10 +663,10 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '-2px',
+                      bottom: '-1px', // Moved up from -2px to -1px
                       left: '0',
                       right: '0',
-                      height: '2px',
+                      height: '1px', // Reduced from 2px to 1px
                       backgroundColor: '#94a3b8', // Darker gray for better visibility
                       borderRadius: '1px'
                     }}
@@ -653,8 +676,13 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
               {/* Render text with character-by-character animation for active lines */}
               <div
-                style={{ fontSize: `${fontSize}px` }}
-                className={segment.chords.length > 0 ? "pt-1 font-medium" : ""}
+                style={{
+                  fontSize: `${fontSize}px`,
+                  paddingTop: segment.chords.length > 0 ? '2px' : '0',
+                  display: 'inline-block',
+                  whiteSpace: 'pre' // Preserve whitespace exactly as is
+                }}
+                className={segment.chords.length > 0 ? "font-medium" : ""}
               >
                 {isActive ? (
                   // For active lines, render each character with its own animation
@@ -721,18 +749,28 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                         const segmentWords: { start: number; end: number; text: string }[] = [];
                         let wordStart = 0;
 
-                        // Simple word boundary detection (split by spaces)
-                        for (let i = 0; i < segment.text.length; i++) {
-                          if (segment.text[i] === ' ' || i === segment.text.length - 1) {
-                            const end = i === segment.text.length - 1 ? i : i - 1;
-                            if (end >= wordStart) {
-                              segmentWords.push({
-                                start: wordStart,
-                                end: end,
-                                text: segment.text.substring(wordStart, end + 1)
-                              });
+                        // For most segments, the entire segment is a single word
+                        // This simplifies the logic and ensures proper word-level coloring
+                        if (segment.text.trim().length > 0 && !segment.text.includes(' ')) {
+                          segmentWords.push({
+                            start: 0,
+                            end: segment.text.length - 1,
+                            text: segment.text
+                          });
+                        } else {
+                          // For segments with spaces, use the original logic
+                          for (let i = 0; i < segment.text.length; i++) {
+                            if (segment.text[i] === ' ' || i === segment.text.length - 1) {
+                              const end = i === segment.text.length - 1 ? i : i - 1;
+                              if (end >= wordStart) {
+                                segmentWords.push({
+                                  start: wordStart,
+                                  end: end,
+                                  text: segment.text.substring(wordStart, end + 1)
+                                });
+                              }
+                              wordStart = i + 1;
                             }
-                            wordStart = i + 1;
                           }
                         }
 
