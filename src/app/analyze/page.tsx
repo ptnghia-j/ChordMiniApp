@@ -212,14 +212,16 @@ export default function LocalAudioAnalyzePage() {
       // Return mock data if analysis not complete
       return {
         chords: ['C', 'G', 'Am', 'F', 'C', 'G', 'C', 'C', 'F', 'G', 'Em', 'Am'],
-        beats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        beats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        beatNumbers: [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]
       };
     }
 
     // Return actual analysis data
     return {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
-      beats: analysisResults.synchronizedChords.map(item => item.beatIndex)
+      beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum || 1)
     };
   };
 
@@ -306,6 +308,7 @@ export default function LocalAudioAnalyzePage() {
               <ChordGrid
                 chords={chordGridData.chords}
                 beats={chordGridData.beats}
+                beatNumbers={chordGridData.beatNumbers}
                 currentBeatIndex={currentBeatIndex}
                 measuresPerRow={4}
               />

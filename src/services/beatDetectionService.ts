@@ -220,6 +220,15 @@ export async function detectBeatsFromFile(
 
     try {
       const data = await response.json();
+
+      // Debug: Log the raw API response
+      console.log('=== BACKEND API RESPONSE DEBUG ===');
+      console.log('Raw API response data:', data);
+      console.log('data.time_signature:', data.time_signature);
+      console.log('data.bpm:', data.bpm);
+      console.log('data.model:', data.model);
+      console.log('=== END BACKEND API RESPONSE DEBUG ===');
+
       return data;
     } catch (parseError) {
       console.error('Error parsing response:', parseError);

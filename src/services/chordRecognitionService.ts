@@ -65,6 +65,15 @@ export async function analyzeAudio(
     // Detect beats using the Python API with specified detector
     console.log(`Detecting beats using ${beatDetector} model...`);
     const beatResults = await detectBeatsFromFile(audioFile, beatDetector);
+
+    // Debug: Log the raw beat detection results
+    console.log('=== BEAT DETECTION DEBUG ===');
+    console.log('Raw beatResults object:', beatResults);
+    console.log('beatResults.time_signature:', beatResults.time_signature);
+    console.log('beatResults.bpm:', beatResults.bpm);
+    console.log('beatResults.model:', beatResults.model);
+    console.log('=== END BEAT DETECTION DEBUG ===');
+
     console.log(`Detected ${beatResults.beats.length} beats, BPM: ${beatResults.bpm}`);
     console.log(`Detected time signature: ${beatResults.time_signature || 4}/4`);
 
@@ -185,9 +194,16 @@ function alignChordsToBeats(
   // Create a map of beat times to beat numbers (if available)
   const beatNumMap = new Map<number, number>();
   if (beatsWithPositions) {
+    console.log('=== BEAT POSITIONS DEBUG ===');
+    console.log(`beatsWithPositions length: ${beatsWithPositions.length}`);
+    console.log('First 20 beats with positions:', beatsWithPositions.slice(0, 20));
+
     beatsWithPositions.forEach(beat => {
       beatNumMap.set(beat.time, beat.beatNum);
     });
+
+    console.log(`beatNumMap size: ${beatNumMap.size}`);
+    console.log('=== END BEAT POSITIONS DEBUG ===');
   }
 
   // Create a map to track which chord should be assigned to each beat
@@ -229,10 +245,26 @@ function alignChordsToBeats(
   // Second pass: Fill in the results array for each beat
   beats.forEach((beat, beatIndex) => {
     // Get the beat number from the map or from the beat itself
-    const beatNum = beatNumMap.get(beat.time) || beat.beatNum;
+    // Try exact match first, then try with small tolerance for floating point precision
+    let beatNum = beatNumMap.get(beat.time) || beat.beatNum;
+
+    // If exact match failed, try with small tolerance (±0.01 seconds)
+    if (!beatNum && beatNumMap.size > 0) {
+      for (const [time, num] of beatNumMap.entries()) {
+        if (Math.abs(time - beat.time) < 0.01) {
+          beatNum = num;
+          break;
+        }
+      }
+    }
 
     // Get the chord assigned to this beat, or "N/C" if none
     const chord = beatToChordMap.get(beatIndex) || 'N/C';
+
+    // Debug: Log beat number mapping for first few beats
+    if (beatIndex < 10) {
+      console.log(`Beat ${beatIndex}: time=${beat.time.toFixed(3)}, beatNum=${beatNum}, chord=${chord}`);
+    }
 
     // Add to results
     results.push({
@@ -255,6 +287,12 @@ function alignChordsToBeats(
 
   console.log(`Generated ${results.length} synchronized chords`);
   console.log('First 5 synchronized chords:', results.slice(0, 5));
+
+  // Debug: Log beat number pattern from synchronized chords
+  console.log('=== SYNCHRONIZED CHORDS BEAT NUMBERS DEBUG ===');
+  const beatNumberPattern = results.slice(0, 20).map(r => r.beatNum || 'undefined');
+  console.log(`Beat number pattern from synchronizedChords: [${beatNumberPattern.join(', ')}]`);
+  console.log('=== END SYNCHRONIZED CHORDS DEBUG ===');
 
   // Count unique chords
   const uniqueChords = new Set(results.map(r => r.chord).filter(c => c !== 'N/C')).size;

@@ -26,6 +26,9 @@ export interface TranscriptionData {
   createdAt: Timestamp;
   audioDuration?: number;
   totalProcessingTime?: number;
+  // Add time signature and BPM fields
+  timeSignature?: number;
+  bpm?: number;
 }
 
 // Collection name

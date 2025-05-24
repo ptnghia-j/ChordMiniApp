@@ -94,6 +94,10 @@ export default function YouTubeVideoAnalyzePage() {
     synchronizedChords: []
   });
 
+  // Key signature state
+  const [keySignature, setKeySignature] = useState<string | null>(null);
+  const [isDetectingKey, setIsDetectingKey] = useState(false);
+
   // Current state for playback
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
   const [currentDownbeatIndex, setCurrentDownbeatIndex] = useState(-1);
@@ -213,8 +217,8 @@ export default function YouTubeVideoAnalyzePage() {
               beatModel: cachedTranscription.beatModel,
               chordModel: cachedTranscription.chordModel,
               beatDetectionResult: {
-                time_signature: cachedTranscription.timeSignature,
-                bpm: cachedTranscription.bpm
+                time_signature: cachedTranscription.timeSignature || 4, // Default to 4/4 if not cached
+                bpm: cachedTranscription.bpm || 120 // Default BPM if not cached
               }
             };
 
@@ -807,7 +811,12 @@ export default function YouTubeVideoAnalyzePage() {
           downbeats_with_measures: cachedTranscription.downbeats_with_measures,
           synchronizedChords: cachedTranscription.synchronizedChords,
           beatModel: cachedTranscription.beatModel,
-          chordModel: cachedTranscription.chordModel
+          chordModel: cachedTranscription.chordModel,
+          // Include beatDetectionResult from cache if available
+          beatDetectionResult: {
+            time_signature: cachedTranscription.timeSignature || 4, // Default to 4/4 if not cached
+            bpm: cachedTranscription.bpm || 120 // Default BPM if not cached
+          }
         };
 
         // Set duration if available
@@ -883,10 +892,17 @@ export default function YouTubeVideoAnalyzePage() {
                   Math.round(60 / ((results.beats[results.beats.length - 1].time - results.beats[0].time) / results.beats.length)) :
                   120 // Default BPM
               };
+            } else if (!results.beatDetectionResult.time_signature) {
+              // If beatDetectionResult exists but time_signature is missing, add default
+              results.beatDetectionResult.time_signature = 4;
             }
 
-            console.log('Analysis results:', results);
-            console.log('Time signature:', results.beatDetectionResult.time_signature || 4);
+            console.log('=== FRONTEND DEBUG: Analysis Results ===');
+            console.log('Full results object:', results);
+            console.log('beatDetectionResult:', results.beatDetectionResult);
+            console.log('Time signature from beatDetectionResult:', results.beatDetectionResult?.time_signature);
+            console.log('BPM from beatDetectionResult:', results.beatDetectionResult?.bpm);
+            console.log('=== END FRONTEND DEBUG ===');
 
             const endTime = performance.now();
             const totalProcessingTime = (endTime - startTime) / 1000; // Convert to seconds
@@ -903,7 +919,10 @@ export default function YouTubeVideoAnalyzePage() {
                 downbeats_with_measures: results.downbeats_with_measures,
                 synchronizedChords: results.synchronizedChords,
                 audioDuration: duration,
-                totalProcessingTime
+                totalProcessingTime,
+                // Include time signature and BPM in cache
+                timeSignature: results.beatDetectionResult?.time_signature,
+                bpm: results.beatDetectionResult?.bpm
               });
 
               if (saveResult) {
@@ -933,6 +952,14 @@ export default function YouTubeVideoAnalyzePage() {
         synchronizedChordsLength: results?.synchronizedChords?.length || 0,
         resultKeys: results ? Object.keys(results) : []
       });
+
+      // Debug: Log the final results before setting state
+      console.log('=== FINAL RESULTS BEFORE STATE UPDATE ===');
+      console.log('Final results object:', results);
+      console.log('Final beatDetectionResult:', results.beatDetectionResult);
+      console.log('Final time_signature:', results.beatDetectionResult?.time_signature);
+      console.log('=== END FINAL RESULTS DEBUG ===');
+
       setAnalysisResults(results);
 
       setAudioProcessingState(prev => ({
@@ -1136,13 +1163,22 @@ export default function YouTubeVideoAnalyzePage() {
     if (!analysisResults ||
         !analysisResults.synchronizedChords ||
         !analysisResults.synchronizedChords.map) {
-      return { chords: [], beats: [] };
+      return { chords: [], beats: [], beatNumbers: [] };
     }
 
-    return {
+    const gridData = {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
-      beats: analysisResults.synchronizedChords.map(item => item.beatIndex)
+      beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum || 1)
     };
+
+    // Debug: Log the beat numbers being passed to ChordGrid
+    console.log('=== CHORD GRID DATA DEBUG ===');
+    console.log(`Total synchronized chords: ${analysisResults.synchronizedChords.length}`);
+    console.log('First 20 beat numbers passed to ChordGrid:', gridData.beatNumbers.slice(0, 20));
+    console.log('=== END CHORD GRID DATA DEBUG ===');
+
+    return gridData;
   };
 
   const chordGridData = getChordGridData();
@@ -1424,6 +1460,7 @@ export default function YouTubeVideoAnalyzePage() {
                       <ChordGrid
                         chords={chordGridData.chords}
                         beats={chordGridData.beats}
+                        beatNumbers={chordGridData.beatNumbers}
                         currentBeatIndex={currentBeatIndex}
                         measuresPerRow={4}
                         timeSignature={analysisResults?.beatDetectionResult?.time_signature}
