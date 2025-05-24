@@ -16,6 +16,7 @@ import DownloadingIndicator from '@/components/DownloadingIndicator';
 import LeadSheetDisplay from '@/components/LeadSheetDisplay';
 import TabbedInterface from '@/components/TabbedInterface';
 import { useProcessing } from '@/contexts/ProcessingContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import dynamic from 'next/dynamic';
 import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
@@ -36,6 +37,7 @@ export default function YouTubeVideoAnalyzePage() {
     completeProcessing,
     failProcessing
   } = useProcessing();
+  const { theme } = useTheme();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -1122,25 +1124,25 @@ export default function YouTubeVideoAnalyzePage() {
                       <div className="flex flex-wrap gap-2 mt-2">
                         <button
                           onClick={() => extractAudioFromYouTube()}
-                          className="inline-flex items-center px-3 py-1.5 border border-red-600 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-red-600 dark:border-red-500 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300"
                         >
                           Try Again
                         </button>
                         <button
                           onClick={() => extractAudioFromYouTube(true)}
-                          className="inline-flex items-center px-3 py-1.5 border border-red-600 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-red-600 dark:border-red-500 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300"
                         >
                           Force Re-download
                         </button>
                         <Link
                           href="/analyze"
-                          className="inline-flex items-center px-3 py-1.5 border border-blue-600 text-xs font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-blue-600 dark:border-blue-500 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-300"
                         >
                           Upload Audio File
                         </Link>
                         <Link
                           href="/"
-                          className="inline-flex items-center px-3 py-1.5 border border-gray-600 text-xs font-medium rounded-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-600 dark:border-gray-500 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-300"
                         >
                           Search Different Video
                         </Link>
@@ -1160,13 +1162,13 @@ export default function YouTubeVideoAnalyzePage() {
 
               {/* Model Selection - hidden when complete */}
               {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && stage !== 'complete' && (
-                <div className="w-full p-4 rounded-lg bg-gray-50 overflow-visible">
+                <div className="w-full p-4 rounded-lg bg-gray-50 dark:bg-gray-800 overflow-visible transition-colors duration-300">
                   <div className="flex flex-col h-full">
                     <div className="mb-2">
-                      <h3 className="font-medium text-gray-900">
+                      <h3 className="font-medium text-gray-900 dark:text-gray-100 transition-colors duration-300">
                         Select Models for Analysis
                       </h3>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">
                         Choose beat and chord detection models to analyze the audio.
                       </p>
                     </div>
@@ -1189,7 +1191,7 @@ export default function YouTubeVideoAnalyzePage() {
                         <div className="w-full md:w-1/3 flex items-center justify-center mt-4 md:mt-0">
                           <button
                             onClick={processAudio}
-                            className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                            className="w-full px-4 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors font-medium"
                           >
                             Start Audio Analysis
                           </button>
@@ -1291,7 +1293,7 @@ export default function YouTubeVideoAnalyzePage() {
 
                             {/* Check for error in lyrics */}
                             {lyrics.error ? (
-                              <div className="p-4 bg-red-100 text-red-700 rounded-md">
+                              <div className="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md transition-colors duration-300">
                                 <p className="font-medium">Lyrics Transcription Error</p>
                                 <p>{lyrics.error}</p>
                               </div>
@@ -1301,21 +1303,21 @@ export default function YouTubeVideoAnalyzePage() {
                                 currentTime={currentTime}
                                 fontSize={fontSize}
                                 onFontSizeChange={setFontSize}
-                                darkMode={false}
+                                darkMode={theme === 'dark'}
                                 chords={analysisResults?.chords?.map(chord => ({
                                   time: chord.start,
                                   chord: chord.chord
                                 }))}
                               />
                             ) : (
-                              <div className="p-4 bg-yellow-100 text-yellow-700 rounded-md">
+                              <div className="p-4 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-md transition-colors duration-300">
                                 <p className="font-medium">No Lyrics Detected</p>
                                 <p>This may be an instrumental track or the vocals are too quiet for accurate transcription.</p>
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="p-4 bg-yellow-100 text-yellow-700 rounded-md">
+                          <div className="p-4 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-md transition-colors duration-300">
                             <p className="font-medium">Lyrics Data Unavailable</p>
                             <p>The lyrics data could not be loaded. Please try again.</p>
                           </div>
@@ -1333,9 +1335,9 @@ export default function YouTubeVideoAnalyzePage() {
 
 
               {/* Beats visualization */}
-              <div className="p-4 rounded-lg bg-white border border-gray-300">
-                <h3 className="font-medium text-lg mb-2 text-gray-800">Beat Timeline</h3>
-                <div className="relative h-16 bg-gray-100 border border-gray-300 rounded-md overflow-hidden">
+              <div className="p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 transition-colors duration-300">
+                <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Timeline</h3>
+                <div className="relative h-16 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden transition-colors duration-300">
                   {/* Beat markers */}
                   {analysisResults && analysisResults.beats && analysisResults.beats.map ? (
                     analysisResults.beats.map((beat, index) => {
@@ -1367,7 +1369,7 @@ export default function YouTubeVideoAnalyzePage() {
                         >
                           {/* Show beat number above */}
                           <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 text-[0.6rem] ${
-                            isFirstBeat ? 'text-blue-700 font-medium' : 'text-gray-600'
+                            isFirstBeat ? 'text-blue-700 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-300'
                           }`}>
                             {beatNum}
                           </div>
@@ -1456,7 +1458,7 @@ export default function YouTubeVideoAnalyzePage() {
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={playPause}
-                className="bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-blue-700"
+                className="bg-blue-600 dark:bg-blue-700 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-300"
               >
                 {isPlaying ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1468,7 +1470,7 @@ export default function YouTubeVideoAnalyzePage() {
                   </svg>
                 )}
               </button>
-              <div className="text-gray-700">
+              <div className="text-gray-700 dark:text-gray-300 transition-colors duration-300">
                 {formatTime(currentTime)} / {formatTime(duration)}
               </div>
 
@@ -1481,7 +1483,7 @@ export default function YouTubeVideoAnalyzePage() {
                     className={`px-2 py-1 text-xs rounded ${
                       playbackRate === rate
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
                     }`}
                   >
                     {rate}x
@@ -1504,13 +1506,13 @@ export default function YouTubeVideoAnalyzePage() {
               }}
             >
               {/* Floating control buttons - fixed to top of the YouTube player */}
-              <div className="absolute -top-10 right-0 z-60 flex space-x-2 p-2 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-md">
+              <div className="absolute -top-10 right-0 z-60 flex space-x-2 p-2 bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300">
                 <button
                   onClick={toggleFollowMode}
                   className={`px-3 py-1 text-xs rounded-full shadow-md ${
                     isFollowModeEnabled
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
                   }`}
                   title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
                 >

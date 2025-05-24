@@ -616,7 +616,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
       <div
         id={`line-${index}`}
         key={index}
-        className={`mb-4 ${isActive ? 'active bg-blue-50 p-2 rounded-lg -mx-1 border-l-3 border-blue-400' : ''} ${isPast ? 'past' : ''}`}
+        className={`mb-4 ${isActive ? `active p-2 rounded-lg -mx-1 border-l-3 ${darkMode ? 'bg-blue-900 bg-opacity-20 border-blue-500' : 'bg-blue-50 border-blue-400'}` : ''} ${isPast ? 'past' : ''}`}
         style={isActive ? {
           transform: 'scale(1.01)',
           transition: 'all 0.3s ease-in-out'
@@ -667,7 +667,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                       left: '0',
                       right: '0',
                       height: '1px', // Reduced from 2px to 1px
-                      backgroundColor: '#94a3b8', // Darker gray for better visibility
+                      backgroundColor: darkMode ? '#64748b' : '#94a3b8', // Darker gray for better visibility
                       borderRadius: '1px'
                     }}
                   ></div>
@@ -884,11 +884,11 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
         {/* Display translated texts for each selected language */}
         {translatedTexts.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
+          <div className={`mt-2 pt-2 border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
             {translatedTexts.map((translation, i) => (
               <div key={i} className="mb-1">
                 <div
-                  className="text-gray-600 italic mt-0.5"
+                  className={`italic mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}
                   style={{ fontSize: `${fontSize * 0.85}px` }}
                 >
                   {translation.text}
@@ -1103,7 +1103,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
         {/* Display chord count if available */}
         {chords && chords.length > 0 && (
-          <div className="text-sm text-gray-600">
+          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             <span className="font-medium">{chords.length}</span> chords integrated
           </div>
         )}

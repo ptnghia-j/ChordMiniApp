@@ -234,7 +234,8 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
 export function getResponsiveChordFontSize(chordName: string): string {
   // Use consistent base classes for all chord labels
   // This ensures uniform appearance across the application
-  return "font-medium text-gray-800 text-base whitespace-normal";
+  // Updated to support dark mode
+  return "font-medium text-gray-800 dark:text-gray-200 text-base whitespace-normal transition-colors duration-300";
 }
 
 /**
