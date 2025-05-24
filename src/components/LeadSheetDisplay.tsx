@@ -8,7 +8,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import axios from 'axios';
 import {
   formatChordWithMusicalSymbols,
   getResponsiveChordFontSize,
@@ -17,9 +16,7 @@ import {
 import {
   enhanceLyricsWithCharacterTiming,
   EnhancedLyricsData,
-  EnhancedLyricLine,
-  getActiveCharacterIndex,
-  getCharacterProgress
+  EnhancedLyricLine
 } from '@/utils/lyricsTimingUtils';
 
 /**
@@ -31,26 +28,7 @@ const containsChineseCharacters = (text: string): boolean => {
   return chineseRegex.test(text);
 };
 
-/**
- * Utility function to add spacing between Chinese characters for better chord alignment
- * This is only used for chord positioning calculation, not for display
- */
-const addSpacingToChineseText = (text: string): string => {
-  if (!containsChineseCharacters(text)) {
-    return text;
-  }
 
-  // Add a small space between each Chinese character
-  // but preserve existing spaces and non-Chinese characters
-  return text.split('').map((char, i) => {
-    // Check if the character is Chinese
-    if (containsChineseCharacters(char)) {
-      // Add a space after each Chinese character except the last one
-      return i < text.length - 1 ? char + ' ' : char;
-    }
-    return char;
-  }).join('');
-};
 
 // Define types for the component props and data structure
 interface ChordMarker {
@@ -77,6 +55,9 @@ interface TranslatedLyrics {
   sourceLanguage: string;
   targetLanguage: string;
   detectedLanguage?: string;
+  fromCache?: boolean;
+  backgroundUpdateInProgress?: boolean;
+  timestamp?: number;
 }
 
 interface ChordData {
@@ -118,6 +99,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState<boolean>(false);
+  const [backgroundUpdatesInProgress, setBackgroundUpdatesInProgress] = useState<Set<string>>(new Set());
 
   // Available languages for translation
   const availableLanguages = [
@@ -229,7 +211,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
     }
   }, [lyrics, chords]);
 
-  // Function to translate lyrics to a specific language
+  // Function to translate lyrics to a specific language with cache-first approach
   const translateLyrics = async (targetLanguage: string) => {
     if (!processedLyrics || !processedLyrics.lines || processedLyrics.lines.length === 0) {
       setTranslationError('No lyrics available to translate');
@@ -249,23 +231,61 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         window.location.pathname.split('/').pop() :
         '';
 
-      // Call the translation API with the target language
-      const response = await axios.post('/api/translate-lyrics', {
-        lyrics: lyricsText,
-        targetLanguage,
-        videoId
-      });
+      // Import the translation service dynamically to avoid SSR issues
+      const { translateLyricsWithCache } = await import('@/services/translationService');
 
-      // Update the translations state with the new translation
+      // Call the cache-first translation service
+      const translationResponse = await translateLyricsWithCache(
+        {
+          lyrics: lyricsText,
+          targetLanguage,
+          videoId
+        },
+        // Background update callback
+        (updatedTranslation) => {
+          console.log('Received background translation update for', targetLanguage);
+
+          // Update the translations state with the fresh translation
+          setTranslatedLyrics(prev => ({
+            ...prev,
+            [targetLanguage]: updatedTranslation
+          }));
+
+          // Remove from background updates tracking
+          setBackgroundUpdatesInProgress(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(targetLanguage);
+            return newSet;
+          });
+        }
+      );
+
+      // Update the translations state with the initial translation (cached or fresh)
       setTranslatedLyrics(prev => ({
         ...prev,
-        [targetLanguage]: response.data
+        [targetLanguage]: translationResponse
       }));
 
       // Add the language to selected languages if not already selected
       setSelectedLanguages(prev =>
         prev.includes(targetLanguage) ? prev : [...prev, targetLanguage]
       );
+
+      // Log whether this was from cache and track background updates
+      if (translationResponse.fromCache) {
+        console.log(`Translation for ${targetLanguage} loaded from cache, fresh translation in progress`);
+
+        // Track that a background update is in progress for this language
+        if (translationResponse.backgroundUpdateInProgress) {
+          setBackgroundUpdatesInProgress(prev => {
+            const newSet = new Set(prev);
+            newSet.add(targetLanguage);
+            return newSet;
+          });
+        }
+      } else {
+        console.log(`Fresh translation for ${targetLanguage} completed`);
+      }
 
     } catch (error) {
       console.error('Translation error:', error);
@@ -445,7 +465,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         }
       }
     }
-  }, [currentTime, processedLyrics]);
+  }, [currentTime, processedLyrics, activeLine]);
 
   /**
    * Find word boundaries in a string
@@ -1088,11 +1108,20 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                   >
                     <div className="flex justify-between items-center w-full">
                       <span>{lang.name}</span>
-                      {selectedLanguages.includes(lang.code) && (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
+                      <div className="flex items-center space-x-1">
+                        {/* Show background update indicator */}
+                        {backgroundUpdatesInProgress.has(lang.code) && (
+                          <svg className="animate-spin h-3 w-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        )}
+                        {selectedLanguages.includes(lang.code) && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

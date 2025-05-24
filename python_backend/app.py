@@ -974,6 +974,41 @@ def detect_beats():
                 except Exception as e:
                     print(f"Warning: Failed to clean up temporary files: {e}")
 
+                # Determine time signature from beat positions by analyzing the pattern
+                time_signature = 4  # Default to 4/4
+                if beats_with_positions and len(beats_with_positions) >= 6:
+                    # Analyze the beat pattern to find the repeating cycle
+                    beat_numbers = [beat["beatNum"] for beat in beats_with_positions]
+
+                    # Find the repeating pattern by looking for cycles
+                    pattern_length = None
+                    for cycle_len in range(2, 13):  # Test cycle lengths from 2 to 12
+                        if len(beat_numbers) >= cycle_len * 2:  # Need at least 2 complete cycles
+                            # Check if the pattern repeats
+                            first_cycle = beat_numbers[:cycle_len]
+                            second_cycle = beat_numbers[cycle_len:cycle_len*2]
+
+                            if first_cycle == second_cycle:
+                                # Verify with a third cycle if available
+                                if len(beat_numbers) >= cycle_len * 3:
+                                    third_cycle = beat_numbers[cycle_len*2:cycle_len*3]
+                                    if first_cycle == third_cycle:
+                                        pattern_length = cycle_len
+                                        break
+                                else:
+                                    pattern_length = cycle_len
+                                    break
+
+                    if pattern_length and 2 <= pattern_length <= 12:
+                        time_signature = pattern_length
+                        print(f"Detected time signature from beat pattern: {time_signature}/4 (pattern: {beat_numbers[:pattern_length]})")
+                    else:
+                        # Fallback to max beat number method
+                        max_beat_num = max(beat_numbers) if beat_numbers else 4
+                        if 2 <= max_beat_num <= 12:
+                            time_signature = max_beat_num
+                            print(f"Detected time signature from max beat number: {time_signature}/4")
+
                 # Prepare response
                 response_data = {
                     "success": True,
@@ -986,7 +1021,8 @@ def detect_beats():
                     "total_beats": len(beat_times),
                     "total_downbeats": len(downbeat_times),
                     "duration": float(duration),
-                    "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer"
+                    "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer",
+                    "time_signature": int(time_signature)  # Include the detected time signature
                 }
 
                 # Add chunking information for long audio
@@ -1190,27 +1226,54 @@ def detect_beats():
                 else:
                     bpm = 120.0
 
-                # Determine time signature by analyzing beats between downbeats
+                # Determine time signature by analyzing beat pattern (same logic as Beat-Transformer)
                 time_signature = 4  # Default to 4/4
-                time_signatures = []  # Store time signatures for each measure
+                if beats_with_positions and len(beats_with_positions) >= 6:
+                    # Analyze the beat pattern to find the repeating cycle
+                    beat_numbers = [beat["beatNum"] for beat in beats_with_positions]
 
-                if len(downbeat_times) >= 2:
-                    for i in range(len(downbeat_times) - 1):
-                        curr_downbeat = downbeat_times[i]
-                        next_downbeat = downbeat_times[i + 1]
+                    # Find the repeating pattern by looking for cycles
+                    pattern_length = None
+                    for cycle_len in range(2, 13):  # Test cycle lengths from 2 to 12
+                        if len(beat_numbers) >= cycle_len * 2:  # Need at least 2 complete cycles
+                            # Check if the pattern repeats
+                            first_cycle = beat_numbers[:cycle_len]
+                            second_cycle = beat_numbers[cycle_len:cycle_len*2]
 
-                        # Count beats in this measure
-                        beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
+                            if first_cycle == second_cycle:
+                                # Verify with a third cycle if available
+                                if len(beat_numbers) >= cycle_len * 3:
+                                    third_cycle = beat_numbers[cycle_len*2:cycle_len*3]
+                                    if first_cycle == third_cycle:
+                                        pattern_length = cycle_len
+                                        break
+                                else:
+                                    pattern_length = cycle_len
+                                    break
 
-                        # Only consider reasonable time signatures
-                        if 2 <= beats_in_measure <= 12:
-                            time_signatures.append(beats_in_measure)
+                    if pattern_length and 2 <= pattern_length <= 12:
+                        time_signature = pattern_length
+                        print(f"Detected time signature from beat pattern: {time_signature}/4 (pattern: {beat_numbers[:pattern_length]})")
+                    else:
+                        # Fallback to analyzing beats between downbeats
+                        time_signatures = []  # Store time signatures for each measure
+                        if len(downbeat_times) >= 2:
+                            for i in range(len(downbeat_times) - 1):
+                                curr_downbeat = downbeat_times[i]
+                                next_downbeat = downbeat_times[i + 1]
 
-                    # Use the most common time signature if we have enough data
-                    if time_signatures:
-                        from collections import Counter
-                        time_signature = Counter(time_signatures).most_common(1)[0][0]
-                        print(f"Detected time signature: {time_signature}/4")
+                                # Count beats in this measure
+                                beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
+
+                                # Only consider reasonable time signatures
+                                if 2 <= beats_in_measure <= 12:
+                                    time_signatures.append(beats_in_measure)
+
+                            # Use the most common time signature if we have enough data
+                            if time_signatures:
+                                from collections import Counter
+                                time_signature = Counter(time_signatures).most_common(1)[0][0]
+                                print(f"Detected time signature from downbeat analysis: {time_signature}/4")
 
                 duration = librosa.get_duration(y=y, sr=sr)
 

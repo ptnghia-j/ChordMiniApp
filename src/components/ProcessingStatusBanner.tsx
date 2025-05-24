@@ -159,17 +159,17 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out">
-      <div className="max-w-screen-lg mx-auto px-2">
-        <div className={`flex items-center justify-between py-1 px-3 rounded-b-lg shadow-md ${color} border-x border-b`}>
-          <div className="flex items-center space-x-2">
+    <div className="fixed top-16 left-0 right-0 z-40 transition-transform duration-300 ease-in-out">
+      <div className="max-w-screen-lg mx-auto px-4">
+        <div className={`flex items-center justify-between py-3 px-4 rounded-b-lg shadow-md ${color} border-x border-b`}>
+          <div className="flex items-center space-x-3">
             {icon}
 
             <div>
-              <p className={`font-medium text-sm ${textColor}`}>
+              <p className={`font-medium text-base ${textColor}`}>
                 {title}
               </p>
-              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                 {stage === 'complete'
                   ? `Beat and chord analysis completed in ${getFormattedElapsedTime()}`
                   : statusMessage || `Processing ${title.toLowerCase()}...`}

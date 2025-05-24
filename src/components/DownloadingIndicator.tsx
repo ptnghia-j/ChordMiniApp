@@ -16,7 +16,7 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out translate-y-0">
+    <div className="fixed top-16 left-0 right-0 z-40 transition-transform duration-300 ease-in-out translate-y-0">
       <div className="max-w-screen-lg mx-auto px-4">
         <div className="flex items-center justify-between py-3 px-4 rounded-b-lg shadow-md bg-yellow-50 border-x border-b border-yellow-200">
           <div className="flex items-center space-x-3 w-full">

@@ -1,7 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+
   /* config options here */
+  // Completely disable all development indicators
+  devIndicators: false,
+  // Completely disable all development overlays and indicators
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  // Disable development overlay completely
+  reactStrictMode: true,
+  // Additional configuration to disable development features
+  productionBrowserSourceMaps: false,
   images: {
     remotePatterns: [
       {

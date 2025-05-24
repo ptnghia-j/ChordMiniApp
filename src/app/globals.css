@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide all development indicators and overlays */
+#__next-dev-overlay-error-toast,
+#__next-dev-overlay-error-toast *,
+.__next-dev-overlay-error-toast,
+.__next-dev-overlay-error-toast *,
+[data-nextjs-toast],
+[data-nextjs-toast] *,
+.__next-dev-overlay,
+.__next-dev-overlay *,
+#__next-dev-overlay,
+#__next-dev-overlay *,
+[data-nextjs-dialog-overlay],
+[data-nextjs-dialog-overlay] *,
+[data-nextjs-dialog],
+[data-nextjs-dialog] *,
+[data-nextjs-terminal],
+[data-nextjs-terminal] *,
+[data-nextjs-build-indicator],
+[data-nextjs-build-indicator] *,
+.__next-dev-build-indicator,
+.__next-dev-build-indicator *,
+#__next-dev-build-indicator,
+#__next-dev-build-indicator *,
+[class*="__next-dev"],
+[class*="__next-dev"] *,
+[id*="__next-dev"],
+[id*="__next-dev"] * {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  z-index: -1 !important;
+}
+
 /* Base font styles */
 @layer base {
   html {

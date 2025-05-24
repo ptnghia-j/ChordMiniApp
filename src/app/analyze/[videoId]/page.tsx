@@ -14,10 +14,14 @@ import AnalysisSummary from '@/components/AnalysisSummary';
 import ExtractionNotification from '@/components/ExtractionNotification';
 import DownloadingIndicator from '@/components/DownloadingIndicator';
 import LeadSheetDisplay from '@/components/LeadSheetDisplay';
-import TabbedInterface from '@/components/TabbedInterface';
+// import TabbedInterface from '@/components/TabbedInterface';
+import ChatbotButton from '@/components/ChatbotButton';
+import ChatbotInterface from '@/components/ChatbotInterface';
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
+import { SongContext } from '@/types/chatbotTypes';
+import { validateSongContext } from '@/services/chatbotService';
 import dynamic from 'next/dynamic';
 import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
 //import type { ReactPlayerProps } from 'react-player';
@@ -117,6 +121,10 @@ export default function YouTubeVideoAnalyzePage() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'beatChordMap' | 'lyricsChords'>('beatChordMap');
 
+  // Chatbot state
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [translatedLyrics] = useState<{[language: string]: any}>({});
+
   // Debug log for lyrics state changes
   useEffect(() => {
     console.log('Lyrics state changed:', {
@@ -128,6 +136,16 @@ export default function YouTubeVideoAnalyzePage() {
     });
   }, [lyrics, showLyrics, isTranscribingLyrics, lyricsError]);
 
+  // Debug log for analysis results changes
+  useEffect(() => {
+    console.log('Analysis results changed:', {
+      analysisResults: !!analysisResults,
+      synchronizedChordsLength: analysisResults?.synchronizedChords?.length || 0,
+      beatsLength: analysisResults?.beats?.length || 0,
+      chordsLength: analysisResults?.chords?.length || 0
+    });
+  }, [analysisResults]);
+
   // Extract audio from YouTube on component mount
   useEffect(() => {
     // Only run if not already extracting and no lock is set
@@ -136,6 +154,100 @@ export default function YouTubeVideoAnalyzePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId]); // Only re-run when videoId changes
+
+  // Auto-load cached lyrics on component mount
+  useEffect(() => {
+    const loadCachedLyrics = async () => {
+      if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
+        console.log('Attempting to load cached lyrics on mount...');
+        try {
+          const response = await fetch('/api/transcribe-lyrics', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              videoId: params.videoId,
+              audioUrl: null, // We don't have audio URL yet, but API should check cache first
+              forceRefresh: false
+            }),
+          });
+
+          const data = await response.json();
+          console.log('Auto-load lyrics response:', data);
+
+          if (response.ok && data.success && data.lyrics) {
+            if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
+              console.log(`Auto-loaded ${data.lyrics.lines.length} lines of cached lyrics`);
+              setLyrics(data.lyrics);
+              setShowLyrics(true);
+            }
+          }
+        } catch (error) {
+          console.log('No cached lyrics found or error loading:', error);
+        }
+      }
+    };
+
+    // Delay slightly to let the component mount fully
+    const timer = setTimeout(loadCachedLyrics, 1000);
+    return () => clearTimeout(timer);
+  }, [videoId, params.videoId]); // Re-run when videoId changes
+
+  // Auto-load cached analysis data on component mount
+  useEffect(() => {
+    const loadCachedAnalysis = async () => {
+      if (!analysisResults || analysisResults.synchronizedChords.length === 0) {
+        console.log('Attempting to load cached analysis data on mount...');
+        try {
+          const cachedTranscription = await getTranscription(videoId, beatDetector, chordDetector);
+
+          if (cachedTranscription) {
+            console.log('Found cached analysis data on mount');
+            const results = {
+              beats: cachedTranscription.beats,
+              chords: cachedTranscription.chords,
+              downbeats: cachedTranscription.downbeats,
+              downbeats_with_measures: cachedTranscription.downbeats_with_measures,
+              synchronizedChords: cachedTranscription.synchronizedChords,
+              beatModel: cachedTranscription.beatModel,
+              chordModel: cachedTranscription.chordModel,
+              beatDetectionResult: {
+                time_signature: cachedTranscription.timeSignature,
+                bpm: cachedTranscription.bpm
+              }
+            };
+
+            console.log('Auto-loading cached analysis results:', {
+              beatsLength: results.beats?.length || 0,
+              chordsLength: results.chords?.length || 0,
+              synchronizedChordsLength: results.synchronizedChords?.length || 0
+            });
+
+            setAnalysisResults(results);
+
+            // Set duration if available
+            if (cachedTranscription.audioDuration) {
+              setDuration(cachedTranscription.audioDuration);
+            }
+
+            // Update audio processing state to indicate cache usage
+            setAudioProcessingState(prev => ({
+              ...prev,
+              isAnalyzed: true,
+              fromFirestoreCache: true
+            }));
+          }
+        } catch (error) {
+          console.log('No cached analysis found or error loading:', error);
+        }
+      }
+    };
+
+    // Delay slightly to let the component mount fully
+    const timer = setTimeout(loadCachedAnalysis, 1500);
+    return () => clearTimeout(timer);
+  }, [videoId, beatDetector, chordDetector]); // Re-run when videoId or models change
 
   // Audio event handlers
   const handleLoadedMetadata = () => {
@@ -194,6 +306,45 @@ export default function YouTubeVideoAnalyzePage() {
         audioRef.current.muted = true;
       }
     }
+  };
+
+  // Function to build song context for chatbot
+  const buildSongContext = (): SongContext => {
+    return {
+      videoId,
+      title: `YouTube Video ${videoId}`, // You could fetch actual title from YouTube API
+      duration,
+
+      // Beat detection results
+      beats: analysisResults?.beats,
+      downbeats: analysisResults?.downbeats,
+      downbeats_with_measures: analysisResults?.downbeats_with_measures,
+      beats_with_positions: analysisResults?.beats_with_positions,
+      bpm: analysisResults?.beatDetectionResult?.bpm,
+      time_signature: analysisResults?.beatDetectionResult?.time_signature,
+      beatModel: analysisResults?.beatModel,
+
+      // Chord detection results
+      chords: analysisResults?.chords,
+      synchronizedChords: analysisResults?.synchronizedChords,
+      chordModel: analysisResults?.chordModel,
+
+      // Lyrics data
+      lyrics: lyrics,
+      translatedLyrics: translatedLyrics
+    };
+  };
+
+  // Function to handle chatbot toggle
+  const toggleChatbot = () => {
+    setIsChatbotOpen(!isChatbotOpen);
+  };
+
+  // Function to check if chatbot should be available
+  const isChatbotAvailable = () => {
+    // For now, always show the chatbot on analyze pages for testing
+    console.log('Chatbot always available for testing on analyze pages');
+    return true;
   };
 
   // Function to transcribe lyrics
@@ -775,6 +926,13 @@ export default function YouTubeVideoAnalyzePage() {
       }
 
       // Store results
+      console.log('Setting analysis results:', {
+        hasResults: !!results,
+        beatsLength: results?.beats?.length || 0,
+        chordsLength: results?.chords?.length || 0,
+        synchronizedChordsLength: results?.synchronizedChords?.length || 0,
+        resultKeys: results ? Object.keys(results) : []
+      });
       setAnalysisResults(results);
 
       setAudioProcessingState(prev => ({
@@ -1067,8 +1225,10 @@ export default function YouTubeVideoAnalyzePage() {
           </div>
         </div>
 
-        {/* Main content area - now full width with no padding */}
-        <div className="flex flex-col">
+        {/* Main content area - responsive width based on chatbot state */}
+        <div className={`flex flex-col transition-all duration-300 ${
+          isChatbotOpen ? 'mr-[420px]' : ''
+        }`}>
           {/* Content area: Chord and beat visualization */}
           <div className="w-full p-0 overflow-visible">
             {/* Hidden audio player (functional but not visible) */}
@@ -1308,6 +1468,7 @@ export default function YouTubeVideoAnalyzePage() {
                                   time: chord.start,
                                   chord: chord.chord
                                 }))}
+
                               />
                             ) : (
                               <div className="p-4 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-md transition-colors duration-300">
@@ -1496,7 +1657,11 @@ export default function YouTubeVideoAnalyzePage() {
           {/* Floating video player for all screens - fixed position */}
           {(audioProcessingState.youtubeEmbedUrl || audioProcessingState.videoUrl) && (
             <div
-              className={`fixed bottom-4 right-4 z-50 transition-all duration-300 shadow-xl ${
+              className={`fixed bottom-4 z-50 transition-all duration-300 shadow-xl ${
+                isChatbotOpen
+                  ? 'right-[420px]' // Move video further right when chatbot is open to avoid overlap
+                  : 'right-4'
+              } ${
                 isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'
               }`}
               style={{
@@ -1569,6 +1734,22 @@ export default function YouTubeVideoAnalyzePage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Chatbot Components */}
+          {isChatbotAvailable() && (
+            <>
+              <ChatbotButton
+                isOpen={isChatbotOpen}
+                onClick={toggleChatbot}
+                disabled={!isChatbotAvailable()}
+              />
+              <ChatbotInterface
+                isOpen={isChatbotOpen}
+                onClose={() => setIsChatbotOpen(false)}
+                songContext={buildSongContext()}
+              />
+            </>
           )}
         </div>
       </div>

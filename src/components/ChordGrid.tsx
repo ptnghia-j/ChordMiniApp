@@ -34,8 +34,41 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   // Use the provided time signature to override beatsPerMeasure if available
   const actualBeatsPerMeasure = timeSignature || beatsPerMeasure;
 
+  // Helper to get the appropriate CSS grid columns class based on time signature
+  const getGridColumnsClass = (beatsPerMeasure: number): string => {
+    switch (beatsPerMeasure) {
+      case 2:
+        return 'grid-cols-2';
+      case 3:
+        return 'grid-cols-3';
+      case 4:
+        return 'grid-cols-4';
+      case 5:
+        return 'grid-cols-5';
+      case 6:
+        return 'grid-cols-6';
+      case 7:
+        return 'grid-cols-7';
+      case 8:
+        return 'grid-cols-8';
+      case 9:
+        return 'grid-cols-9';
+      case 10:
+        return 'grid-cols-10';
+      case 11:
+        return 'grid-cols-11';
+      case 12:
+        return 'grid-cols-12';
+      default:
+        // For unusual time signatures, fall back to a flexible grid
+        console.warn(`Unusual time signature: ${beatsPerMeasure}/4, using flexible grid`);
+        return 'grid-cols-4'; // Default fallback
+    }
+  };
+
   // Debug log for time signature
   console.log(`ChordGrid using time signature: ${timeSignature || 4}/4 (actualBeatsPerMeasure: ${actualBeatsPerMeasure})`);
+  console.log(`Grid will use ${getGridColumnsClass(actualBeatsPerMeasure)} for ${actualBeatsPerMeasure} beats per measure`);
   // Reference to the grid container for measuring cell size
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(0);
@@ -94,6 +127,23 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return Math.floor(index / actualBeatsPerMeasure) + 1;
   };
 
+
+
+  // Helper to determine dynamic measures per row based on time signature
+  const getDynamicMeasuresPerRow = (timeSignature: number): number => {
+    // For complex time signatures, reduce measures per row to prevent cramping
+    if (timeSignature >= 7) {
+      return 2; // Very complex time signatures: only 2 measures per row
+    } else if (timeSignature >= 5) {
+      return 3; // Moderately complex: 3 measures per row
+    } else {
+      return 4; // Simple time signatures: 4 measures per row (default)
+    }
+  };
+
+  // Use dynamic measures per row instead of the fixed prop
+  const dynamicMeasuresPerRow = getDynamicMeasuresPerRow(actualBeatsPerMeasure);
+
   // Helper to determine chord type and apply appropriate styling
   const getChordStyle = (chord: string, isCurrentBeat: boolean, showLabel: boolean, isFirstInMeasure: boolean) => {
     // Base classes for all cells - fully detached with complete border
@@ -137,34 +187,47 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     groupedByMeasure.push({ measureNumber: getMeasureNumber(i), chords: measureChords, beats: measureBeats });
   }
 
-  // Group measures into rows - always use 4 for layout consistency
-  // The responsive grid will handle the actual display
+  // Group measures into rows using the dynamic measures per row
   const rows = [];
-  for (let i = 0; i < groupedByMeasure.length; i += 4) {
-    rows.push(groupedByMeasure.slice(i, i + 4));
+  for (let i = 0; i < groupedByMeasure.length; i += dynamicMeasuresPerRow) {
+    rows.push(groupedByMeasure.slice(i, i + dynamicMeasuresPerRow));
   }
 
   return (
     <div className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
+      {/* Time signature indicator */}
+      {timeSignature && timeSignature !== 4 && (
+        <div className="mb-3 flex items-center justify-center">
+          <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg px-3 py-1">
+            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+              Time Signature: {timeSignature}/4 ({actualBeatsPerMeasure} beats per measure)
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Render rows of measures */}
       <div className="space-y-2">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
-            {/* Grid of measures with spacing */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1 md:gap-2">
+            {/* Grid of measures with spacing - responsive based on time signature complexity */}
+            <div className={`grid gap-1 md:gap-2 ${
+              dynamicMeasuresPerRow === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+              dynamicMeasuresPerRow === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
+              'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+            }`}>
               {row.map((measure, measureIdx) => (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="relative border-l-[3px] border-gray-600 dark:border-gray-400 transition-colors duration-300"
+                  className="border-l-[3px] border-gray-600 dark:border-gray-400 transition-colors duration-300"
                   style={{
                     paddingLeft: '4px'
                   }}
                 >
-                  {/* Chord cells for this measure */}
-                  <div className="grid grid-cols-4 gap-1 auto-rows-fr">
+                  {/* Chord cells for this measure - dynamic grid based on time signature */}
+                  <div className={`grid gap-1 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
-                      const globalIndex = (rowIdx * measuresPerRow + measureIdx) * beatsPerMeasure + beatIdx;
+                      const globalIndex = (rowIdx * dynamicMeasuresPerRow + measureIdx) * actualBeatsPerMeasure + beatIdx;
                       const isCurrentBeat = globalIndex === currentBeatIndex;
                       const showChordLabel = shouldShowChordLabel(globalIndex);
                       const isFirstInMeasure = beatIdx === 0;
