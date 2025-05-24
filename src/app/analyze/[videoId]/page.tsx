@@ -1042,7 +1042,7 @@ export default function YouTubeVideoAnalyzePage() {
           <div className="container mx-auto flex justify-between items-center">
             <div className="flex items-center">
               <Image
-                src="/chordMiniLogo.png"
+                src={theme === 'dark' ? "/chordMiniLogo_dark.png" : "/chordMiniLogo.png"}
                 alt="ChordMini Logo"
                 width={48}
                 height={48}

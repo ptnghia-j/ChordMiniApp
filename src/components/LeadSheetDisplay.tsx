@@ -445,7 +445,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         }
       }
     }
-  }, [currentTime, processedLyrics, activeLine]);
+  }, [currentTime, processedLyrics]);
 
   /**
    * Find word boundaries in a string
@@ -1014,12 +1014,12 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
   return (
     <div className="lead-sheet-container">
       {/* Controls in a single line */}
-      <div className="controls mb-3 flex items-center justify-between bg-gray-50 p-2 rounded-md">
+      <div className={`controls mb-3 flex items-center justify-between p-2 rounded-md transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
         <div className="flex items-center space-x-3">
           {/* Font size control - YouTube-style slider with blue theme */}
           <div className="flex items-center">
-            <span className="text-sm mr-2">Font:</span>
-            <div className="w-24 relative h-2 bg-gray-200 rounded-full overflow-hidden mr-1">
+            <span className={`text-sm mr-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Font:</span>
+            <div className={`w-24 relative h-2 rounded-full overflow-hidden mr-1 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
               <div
                 className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
                 style={{ width: `${((fontSize - 12) / 12) * 100}%` }}
@@ -1034,7 +1034,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
                 className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
               />
             </div>
-            <span className="text-sm">{fontSize}px</span>
+            <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{fontSize}px</span>
           </div>
 
           {/* Translation dropdown */}
@@ -1044,8 +1044,8 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
               disabled={isTranslating || !processedLyrics?.lines?.length}
               className={`px-3 py-1 rounded text-sm font-medium flex items-center ${
                 isTranslating
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? `cursor-not-allowed ${darkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-300 text-gray-500'}`
+                  : `${darkMode ? 'bg-blue-700 hover:bg-blue-800' : 'bg-blue-600 hover:bg-blue-700'} text-white`
               }`}
             >
               {isTranslating ? (
