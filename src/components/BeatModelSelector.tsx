@@ -5,12 +5,12 @@ import { getModelInfo, ModelInfoResult } from '@/services/beatDetectionService';
 import '@/styles/dropdown.css';
 
 interface BeatModelSelectorProps {
-  onChange: (model: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light') => void;
-  defaultValue?: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+  onChange: (model: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light') => void;
+  defaultValue?: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
   className?: string;
 }
 
-type ModelType = 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+type ModelType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
 
 interface ModelOption {
   id: ModelType;
@@ -108,13 +108,6 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
       description: modelInfo?.model_info?.['madmom']?.description ||
                   'Neural network with good balance of accuracy and speed',
       available: modelInfo?.madmom_available || false
-    },
-    {
-      id: 'librosa',
-      name: modelInfo?.model_info?.['librosa']?.name || 'Librosa',
-      description: modelInfo?.model_info?.['librosa']?.description ||
-                  'Fast signal processing with basic beat detection',
-      available: true
     }
   ];
 

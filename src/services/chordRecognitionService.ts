@@ -46,13 +46,13 @@ export interface AnalysisResult {
 /**
  * Process audio file and perform chord and beat analysis
  * @param audioBuffer The audio buffer to analyze
- * @param beatDetector Optional detector to use ('auto', 'librosa', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param beatDetector Optional detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
  * @param chordDetector Optional chord detector to use ('chord-cnn-lstm')
  * @returns Promise with analysis results (chords and beats)
  */
 export async function analyzeAudio(
   audioBuffer: AudioBuffer,
-  beatDetector: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
+  beatDetector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
   chordDetector: 'chord-cnn-lstm' = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
   try {

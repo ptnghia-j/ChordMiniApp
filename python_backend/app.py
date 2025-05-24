@@ -260,12 +260,12 @@ def detect_beats():
             force_param = request.args.get('force', request.form.get('force', '')).lower()
             print(f"Force parameter (audio_path): {force_param}")
 
-            # Only reject if file is too large AND detector is not madmom/librosa AND force is not true
+            # Only reject if file is too large AND detector is not madmom AND force is not true
             if (file_size > 100 * 1024 * 1024 and
-                detector not in ['librosa', 'madmom'] and
+                detector not in ['madmom'] and
                 force_param != 'true'):
                 return jsonify({
-                    "error": "The file is too large (over 100MB). Please use a smaller file, specify detector='madmom' or 'librosa', or add 'force=true' to use Beat-Transformer anyway."
+                    "error": "The file is too large (over 100MB). Please use a smaller file, specify detector='madmom', or add 'force=true' to use Beat-Transformer anyway."
                 }), 413
 
         # Check if madmom is available
@@ -278,7 +278,6 @@ def detect_beats():
         # Determine which detector to use
         use_beat_transformer = False
         use_madmom = False
-        use_librosa = False
 
         print(f"Detector requested: {detector}, USE_BEAT_TRANSFORMER: {USE_BEAT_TRANSFORMER}, madmom_available: {madmom_available}")
 
@@ -299,8 +298,10 @@ def detect_beats():
                     use_madmom = True
                     print("Falling back to madmom")
                 else:
-                    use_librosa = True
-                    print("Falling back to librosa")
+                    return jsonify({
+                        "success": False,
+                        "error": "No beat detection models available"
+                    }), 500
         elif detector == 'beat-transformer-light':
             if USE_BEAT_TRANSFORMER_LIGHT:
                 use_beat_transformer_light = True
@@ -314,18 +315,19 @@ def detect_beats():
                     use_madmom = True
                     print("Falling back to madmom")
                 else:
-                    use_librosa = True
-                    print("Falling back to librosa")
+                    return jsonify({
+                        "success": False,
+                        "error": "No beat detection models available"
+                    }), 500
         elif detector == 'madmom':
             if madmom_available:
                 use_madmom = True
                 print("Will use madmom as requested")
             else:
-                print("Madmom requested but not available, falling back to librosa")
-                use_librosa = True
-        elif detector == 'librosa':
-            use_librosa = True
-            print("Will use librosa as requested")
+                return jsonify({
+                    "success": False,
+                    "error": "Madmom requested but not available"
+                }), 400
         elif detector == 'auto':
             # Auto selection based on availability and file size
             file_size_mb = file_size / (1024 * 1024)
@@ -342,10 +344,12 @@ def detect_beats():
             elif madmom_available:
                 use_madmom = True
                 print("Auto-selected madmom")
-            # Last resort is librosa
+            # No fallback available
             else:
-                use_librosa = True
-                print("Auto-selected librosa")
+                return jsonify({
+                    "success": False,
+                    "error": "No beat detection models available"
+                }), 500
         else:
             # Default fallback
             if USE_BEAT_TRANSFORMER:
@@ -358,8 +362,10 @@ def detect_beats():
                 use_madmom = True
                 print(f"Unknown detector '{detector}', falling back to madmom")
             else:
-                use_librosa = True
-                print(f"Unknown detector '{detector}', falling back to librosa")
+                return jsonify({
+                    "success": False,
+                    "error": f"Unknown detector '{detector}' and no fallback available"
+                }), 400
 
         # Always try to use Beat-Transformer if selected
         if use_beat_transformer:
@@ -1004,76 +1010,10 @@ def detect_beats():
 
                 use_beat_transformer = False
 
-        # Use librosa if explicitly requested
-        if use_librosa:
-            print(f"Using librosa for beat detection on: {file_path}")
-            # Load the audio file
-            y, sr = librosa.load(file_path, sr=None)
 
-            # Run beat detection using librosa
-            try:
-                # Make sure numpy is imported in this scope
-                import numpy as np
 
-                tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-                beat_times = librosa.frames_to_time(beats, sr=sr)
-
-                # Calculate beat strength
-                onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-                beat_strengths = onset_env[beats]
-
-                # Format for response
-                beat_info = []
-                for i, time in enumerate(beat_times):
-                    strength = float(beat_strengths[i] / np.max(beat_strengths)) if len(beat_strengths) > 0 else 0.5
-                    # Add fictional beat number based on position (1-based)
-                    beat_num = (i % 4) + 1
-                    beat_info.append({
-                        "time": float(time),
-                        "strength": float(strength),
-                        "beatNum": beat_num
-                    })
-
-                # Create fictional position data
-                beats_with_positions = []
-                for i, time in enumerate(beat_times):
-                    beats_with_positions.append({
-                        "time": float(time),
-                        "beatNum": (i % 4) + 1  # Simple 4/4 beat numbering
-                    })
-
-                # Create simple downbeats (every 4th beat)
-                downbeat_times = beat_times[::4]
-                downbeats_with_measures = [
-                    {"time": float(time), "measureNum": i + 1}
-                    for i, time in enumerate(downbeat_times)
-                ]
-
-                # If using a temp file, clean it up
-                if 'file' in request.files:
-                    os.unlink(file_path)
-
-                return jsonify({
-                    "success": True,
-                    "beats": beat_times.tolist(),
-                    "beat_info": beat_info,
-                    "beats_with_positions": beats_with_positions,
-                    "downbeats": downbeat_times.tolist(),
-                    "downbeats_with_measures": downbeats_with_measures,
-                    "bpm": float(tempo),
-                    "total_beats": len(beat_times),
-                    "total_downbeats": len(downbeat_times),
-                    "duration": float(librosa.get_duration(y=y, sr=sr)),
-                    "model": "librosa"
-                })
-            except Exception as e:
-                print(f"Error using librosa: {e}")
-                print(traceback.format_exc())
-                # Continue to madmom as fallback
-                use_madmom = True
-
-        # Use madmom if selected or as fallback
-        if use_madmom or (not use_beat_transformer and not use_librosa):
+        # Use madmom if selected
+        if use_madmom:
             print(f"Using madmom for beat detection on: {file_path}")
 
             try:
@@ -1293,6 +1233,12 @@ def detect_beats():
                 "time_signature": int(time_signature)  # Include the detected time signature
             })
 
+        # If no detector was used, return an error
+        return jsonify({
+            "success": False,
+            "error": "No beat detection model available or selected"
+        }), 500
+
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -1492,7 +1438,6 @@ def model_info():
         available_models.append("beat-transformer-light")
     if madmom_available:
         available_models.append("madmom")
-    available_models.append("librosa")  # Always available as last resort
 
     # Set beat-transformer-light as the default model if available
     if USE_BEAT_TRANSFORMER_LIGHT:
@@ -1502,7 +1447,7 @@ def model_info():
     elif madmom_available:
         default_model = "madmom"
     else:
-        default_model = "librosa"
+        default_model = "none"
 
     # Get Spleeter information
     spleeter_info = {
@@ -1578,12 +1523,6 @@ def model_info():
                 "name": "Madmom",
                 "description": "Neural network with good balance of accuracy and speed",
                 "performance": "Medium accuracy, medium speed",
-                "uses_spleeter": False
-            },
-            "librosa": {
-                "name": "Librosa",
-                "description": "Fast signal processing with basic beat detection",
-                "performance": "Basic accuracy, fastest processing",
                 "uses_spleeter": False
             }
         },

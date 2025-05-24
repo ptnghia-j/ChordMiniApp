@@ -44,7 +44,7 @@ export default function YouTubeVideoAnalyzePage() {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   // Define detector types
-  type BeatDetectorType = 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+  type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
   type ChordDetectorType = 'chord-cnn-lstm';
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('beat-transformer-light');
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>('chord-cnn-lstm');
