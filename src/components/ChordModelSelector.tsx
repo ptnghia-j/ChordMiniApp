@@ -132,11 +132,11 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading || disabled}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-blue-800 dark:border-blue-600 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 dark:hover:border-blue-500 transition-colors duration-300"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-blue-800 dark:border-blue-300 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 dark:hover:border-blue-200 transition-colors duration-300"
         >
           <div className="flex items-center">
             {/* Model icon */}
-            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors duration-300">
+            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800 transition-colors duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13 7H7v6h6V7z" />
                 <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
@@ -171,7 +171,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
                   <div className="flex justify-between items-center">
                     <div className="flex items-start">
                       {/* Model icon */}
-                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model ? 'bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                           <path d="M13 7H7v6h6V7z" />
                           <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
@@ -202,8 +202,8 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
       </div>
 
       {/* Note about future models */}
-      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200 transition-colors duration-300">
-        <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">Coming Soon:</p>
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-200 border border-blue-100 dark:border-blue-300 rounded-lg text-sm text-blue-800 dark:text-blue-900 transition-colors duration-300">
+        <p className="font-medium mb-1 text-blue-800 dark:text-blue-900 transition-colors duration-300">Coming Soon:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>BTC model - capable of detecting 170 chord labels</li>
           <li>2E1D model - lighter model for 170 chord labels</li>

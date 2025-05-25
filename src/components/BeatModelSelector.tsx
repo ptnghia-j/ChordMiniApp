@@ -143,7 +143,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
         >
           <div className="flex items-center">
             {/* Model icon based on type */}
-            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors duration-300">
+            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800 transition-colors duration-300">
               {selectedModelOption.id === 'auto' && (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
@@ -202,7 +202,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
                   <div className="flex justify-between items-center">
                     <div className="flex items-start">
                       {/* Model icon */}
-                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model.id ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model.id ? 'bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         {model.id === 'auto' && (
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />

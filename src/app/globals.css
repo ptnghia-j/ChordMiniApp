@@ -56,11 +56,11 @@
   }
 
   .dark .chord {
-    @apply text-blue-400;
+    @apply text-blue-300;
   }
 
   .dark .current-line {
-    @apply bg-blue-900 bg-opacity-20 border-blue-500;
+    @apply bg-blue-400 bg-opacity-20 border-blue-300;
   }
 
   /* Navigation bar in dark mode */
@@ -82,7 +82,7 @@
   }
 
   .dark .chord-grid-cell-current {
-    @apply bg-blue-900 ring-blue-400;
+    @apply bg-blue-900 ring-blue-400 text-white;
   }
 }
 
@@ -134,4 +134,65 @@
   border-left: 3px solid #60a5fa;
   padding-left: 0.75rem;
   transition: all 0.3s ease;
+}
+
+/* Markdown content styles for chatbot */
+.markdown-content {
+  line-height: 1.5;
+}
+
+.markdown-content p {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 0.5rem;
+  padding-left: 1rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-content li:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content code {
+  font-family: 'Courier New', monospace;
+  font-size: 0.875em;
+}
+
+.markdown-content pre {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content blockquote {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+  margin-top: 0;
 }

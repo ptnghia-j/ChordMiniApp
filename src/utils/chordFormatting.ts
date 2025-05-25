@@ -54,58 +54,69 @@ export function formatChordWithMusicalSymbols(chordName: string): string {
     bassNote = bassNote.replace(/b(?![a-zA-Z]{2,})/g, '♭');
   }
 
-  // Apply professional chord quality notation
+  // Apply professional chord quality notation with uniform font weight
+  // All parts of chord labels use regular font weight for cleaner appearance
+  let formattedRoot = `<span style="font-weight: 400;">${root}</span>`;
+
   if (quality === 'maj') {
     // Major chords don't need a suffix in standard notation
     quality = '';
   } else if (quality === 'min') {
     // Use 'm' instead of 'min' for minor chords (industry standard)
-    quality = 'm';
+    quality = '<span style="font-weight: 400;">m</span>';
   } else if (quality.includes('sus')) {
-    // Format suspension with proper superscript
-    quality = quality.replace(/sus(\d)/, 'sus<sup>$1</sup>');
+    // Format suspension with proper superscript - entire "sus" suffix should be in superscript
+    quality = quality.replace(/sus(\d)/, '<sup style="font-weight: 300; font-size: 0.75em;">sus$1</sup>');
+  } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
+    // Half-diminished 7th chords: use slashed circle (ø) with superscript 7
+    quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
   } else if (quality.includes('dim')) {
     // Use standard diminished symbol (°) for better readability
-    quality = quality.replace('dim', '<span style="position:relative;top:-1px">°</span>');
+    quality = quality.replace('dim', '<span style="font-weight: 400; position:relative;top:-1px">°</span>');
   } else if (quality.includes('aug')) {
     // Use standard augmented symbol (+) for better readability
-    quality = quality.replace('aug', '<span style="position:relative">+</span>');
+    quality = quality.replace('aug', '<span style="font-weight: 400; position:relative">+</span>');
   } else if (quality.includes('7') || quality.includes('9') || quality.includes('11') || quality.includes('13')) {
     // Handle extensions with proper formatting
 
     // First handle complex cases with both quality and extension
     if (quality.startsWith('min')) {
-      quality = 'm' + quality.substring(3);
+      quality = '<span style="font-weight: 400;">m</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
     } else if (quality.startsWith('maj')) {
       // Use triangle (Δ) for major 7th chords - industry standard
       if (quality === 'maj7') {
-        quality = '<span style="position:relative;top:-1px">Δ</span><sup>7</sup>';
+        quality = '<span style="font-weight: 400; position:relative;top:-1px">Δ</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
       } else {
-        quality = 'maj' + quality.substring(3).replace(/(\d+)/g, '<sup>$1</sup>');
+        quality = '<span style="font-weight: 400;">maj</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
       }
     } else {
-      // Make numeric extensions superscript
-      quality = quality.replace(/(\d+)/g, '<sup>$1</sup>');
+      // Make numeric extensions superscript with lighter weight
+      quality = '<span style="font-weight: 400;">' + quality.replace(/(\d+)/g, '</span><sup style="font-weight: 300; font-size: 0.75em;">$1</sup><span style="font-weight: 400;">') + '</span>';
+      // Clean up empty spans
+      quality = quality.replace(/<span style="font-weight: 400;"><\/span>/g, '');
     }
+  } else if (quality) {
+    // Wrap any other quality in lighter weight span
+    quality = `<span style="font-weight: 400;">${quality}</span>`;
   }
 
   // Handle altered notes (add, b5, #9, etc.)
   if (quality.includes('add')) {
-    quality = quality.replace(/add(\d+)/g, 'add<sup>$1</sup>');
+    quality = quality.replace(/add(\d+)/g, '<span style="font-weight: 400;">add</span><sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
   }
 
   if (quality.includes('b5') || quality.includes('b9') || quality.includes('b13')) {
-    quality = quality.replace(/b(\d+)/g, '<sup>♭$1</sup>');
+    quality = quality.replace(/b(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">♭$1</sup>');
   }
 
   if (quality.includes('#5') || quality.includes('#9') || quality.includes('#11')) {
-    quality = quality.replace(/#(\d+)/g, '<sup>♯$1</sup>');
+    quality = quality.replace(/#(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">♯$1</sup>');
   }
 
   // Combine root, quality, and bass note with proper spacing
-  let formattedChord = quality ? `${root}${quality}` : root;
+  let formattedChord = quality ? `${formattedRoot}${quality}` : formattedRoot;
   if (bassNote) {
-    formattedChord += `<span style="margin:0 0.1em">/</span>${bassNote}`;
+    formattedChord += `<span style="font-weight: 400; margin:0 0.1em">/</span><span style="font-weight: 400;">${bassNote}</span>`;
   }
 
   return formattedChord;
@@ -232,37 +243,37 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
  * @returns CSS class for the chord label
  */
 export function getResponsiveChordFontSize(chordName: string): string {
-  // Use consistent base classes for all chord labels
-  // This ensures uniform appearance across the application
-  // Updated to support dark mode
-  return "font-medium text-gray-800 dark:text-gray-200 text-base whitespace-normal transition-colors duration-300";
+  // Use uniform font weight for cleaner appearance, matching commercial products
+  // All chord parts use regular weight for consistent styling
+  return "font-normal text-gray-800 dark:text-gray-200 text-base whitespace-normal transition-colors duration-300";
 }
 
 /**
  * Generates professional inline styles for chord labels
- * Based on industry-standard music notation software
+ * Based on industry-standard music notation software like Chordify
  *
  * @param chordName The chord name to display
  * @returns Object with CSS styles for professional chord display
  */
 export function getChordLabelStyles(chordName: string): React.CSSProperties {
   return {
-    padding: '0.25rem 0.5rem',
-    lineHeight: '1.3',
+    padding: '0.125rem 0.125rem 0.125rem 0.0625rem', // Minimal left padding (1px), small right padding
+    lineHeight: '1.2', // Slightly tighter line height
     width: '100%',
     display: 'flex',
-    justifyContent: 'center', // Center-align for better readability
+    justifyContent: 'flex-start', // Left-align like commercial products
     alignItems: 'center',
-    minHeight: '1.75rem',
-    minWidth: '2.5rem',
-    fontFamily: 'var(--font-roboto-mono), "Roboto Mono", monospace, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto', // Use monospace for better chord alignment
-    letterSpacing: '0.01em', // Slight letter spacing for better readability
+    minHeight: '1.5rem', // Reduced min height
+    minWidth: '2rem', // Reduced min width
+    fontFamily: '"Helvetica Neue", "Arial", sans-serif', // Use cleaner, more modern font like Chordify
+    fontWeight: '400', // Slightly lighter base weight for better contrast with bold roots
+    letterSpacing: '0.005em', // Minimal letter spacing for cleaner look
+    fontSize: '0.95rem', // Slightly smaller for better proportion
     overflow: 'visible', // Prevent truncation
     textOverflow: 'clip', // Don't use ellipsis
     hyphens: 'none', // Prevent hyphenation
     wordBreak: 'keep-all', // Prevent breaking within chord names
-    // Add a subtle shadow for better visibility
-    textShadow: '0 0 1px rgba(0,0,0,0.05)'
+    // Remove text shadow for cleaner appearance like commercial apps
   };
 }
 
@@ -275,12 +286,12 @@ export function getChordLabelStyles(chordName: string): React.CSSProperties {
 export function getChordContainerStyles(): React.CSSProperties {
   return {
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Left-align container to match label alignment
     alignItems: 'center',
     width: '100%',
     height: '100%',
     position: 'relative',
     overflow: 'visible', // Allow content to overflow for complex chord names
-    padding: '0.25rem'
+    padding: '0.0625rem' // Minimal padding for very tight layout
   };
 }

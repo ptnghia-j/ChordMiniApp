@@ -311,6 +311,7 @@ export default function LocalAudioAnalyzePage() {
                 beatNumbers={chordGridData.beatNumbers}
                 currentBeatIndex={currentBeatIndex}
                 measuresPerRow={4}
+                timeSignature={analysisResults?.beatDetectionResult?.time_signature}
               />
 
               {/* Analysis Statistics (if available) */}
@@ -318,9 +319,9 @@ export default function LocalAudioAnalyzePage() {
                 <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   <h3 className="text-lg font-medium mb-3 text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Summary</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-                      <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Total Chords</p>
-                      <p className="text-xl font-semibold text-blue-800 dark:text-blue-300 transition-colors duration-300">{analysisResults.chords.length}</p>
+                    <div className="bg-blue-50 dark:bg-blue-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Chords</p>
+                      <p className="text-xl font-semibold text-blue-800 dark:text-blue-900 transition-colors duration-300">{analysisResults.chords.length}</p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
                       <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Total Beats</p>
@@ -443,11 +444,7 @@ export default function LocalAudioAnalyzePage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 dark:bg-gray-950 text-white p-4 mt-auto transition-colors duration-300">
-        <div className="container mx-auto text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
-        </div>
-      </footer>
+
     </div>
   );
 }

@@ -358,33 +358,30 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* Cache Management Component */}
+          <div className="flex justify-center mt-8">
+            <div className="relative group">
+              <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute z-20 bg-gray-800 dark:bg-gray-900 text-white text-sm rounded p-2 max-w-xs bottom-full left-1/2 transform -translate-x-1/2 mb-4 pointer-events-none">
+                <p className="font-medium mb-1">Cache Management</p>
+                <p className="text-xs mb-2">Caching helps reduce loading times and YouTube API usage.</p>
+              </div>
+              <button
+                className="rounded-full bg-blue-100 dark:bg-blue-200 p-2 cursor-help focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-300 hover:bg-blue-200 dark:hover:bg-blue-300"
+                aria-label="Cache management"
+                onClick={() => {
+                  window.open('/cache-management', '_blank');
+                }}
+              >
+                <svg className="w-6 h-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </main>
 
-      <footer className="bg-gray-800 dark:bg-gray-950 text-white p-4 mt-auto transition-colors duration-300">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm">&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
-
-          {/* Minimized Cache Management Component */}
-          <div className="relative group mt-2 md:mt-0">
-            <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute z-20 bg-gray-800 dark:bg-gray-900 text-white text-sm rounded p-2 max-w-xs bottom-full right-0 mb-4 pointer-events-none">
-              <p className="font-medium mb-1">Cache Management</p>
-              <p className="text-xs mb-2">Caching helps reduce loading times and YouTube API usage.</p>
-            </div>
-            <button
-              className="rounded-full bg-blue-100 dark:bg-blue-900 p-1 cursor-help focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-300"
-              aria-label="Cache management"
-              onClick={() => {
-                window.open('/cache-management', '_blank');
-              }}
-            >
-              <svg className="w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

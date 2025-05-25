@@ -174,7 +174,8 @@ export async function retrieveLyricsForChatbot(videoId: string): Promise<LyricsD
 
     const response = await axios.post('/api/transcribe-lyrics', {
       videoId,
-      forceRefresh: false // Use cached lyrics if available
+      forceRefresh: false, // Use cached lyrics if available
+      checkCacheOnly: true // Only check cache, don't auto-transcribe
     });
 
     if (response.data && response.data.lyrics) {

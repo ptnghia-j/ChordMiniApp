@@ -215,11 +215,7 @@ export default function CacheManagementPage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 text-white p-4 mt-auto">
-        <div className="container mx-auto text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
-        </div>
-      </footer>
+
     </div>
   );
 }

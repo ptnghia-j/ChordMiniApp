@@ -88,30 +88,30 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
 
       {/* Summary cards - always visible */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-        <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Total Chords</p>
-          <p className="text-xl font-semibold text-blue-800 dark:text-blue-300 transition-colors duration-300">
+        <div className="bg-blue-50 dark:bg-blue-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Chords</p>
+          <p className="text-xl font-semibold text-blue-800 dark:text-blue-900 transition-colors duration-300">
             {analysisResults.chords && analysisResults.chords.length ? analysisResults.chords.length : 0}
           </p>
         </div>
-        <div className="bg-green-50 dark:bg-green-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Total Beats</p>
-          <p className="text-xl font-semibold text-green-800 dark:text-green-300 transition-colors duration-300">
+        <div className="bg-green-50 dark:bg-green-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Beats</p>
+          <p className="text-xl font-semibold text-green-800 dark:text-green-900 transition-colors duration-300">
             {analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length : 0}
           </p>
         </div>
-        <div className="bg-purple-50 dark:bg-purple-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">BPM (Estimated)</p>
-          <p className="text-xl font-semibold text-purple-800 dark:text-purple-300 transition-colors duration-300">
+        <div className="bg-purple-50 dark:bg-purple-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">BPM (Estimated)</p>
+          <p className="text-xl font-semibold text-purple-800 dark:text-purple-900 transition-colors duration-300">
             {analysisResults.beatDetectionResult?.bpm ||
               (analysisResults.beats && analysisResults.beats.length > 1 && analysisResults.beats[0] && analysisResults.beats[1]
                 ? Math.round(60 / (analysisResults.beats[1].time - analysisResults.beats[0].time))
                 : 'N/A')}
           </p>
         </div>
-        <div className="bg-amber-50 dark:bg-amber-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Most Common Chord</p>
-          <p className="text-xl font-semibold text-amber-800 dark:text-amber-300 transition-colors duration-300">
+        <div className="bg-amber-50 dark:bg-amber-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Most Common Chord</p>
+          <p className="text-xl font-semibold text-amber-800 dark:text-amber-900 transition-colors duration-300">
             {(() => {
               try {
                 return getMostCommonChord();

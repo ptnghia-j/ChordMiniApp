@@ -14,6 +14,8 @@ import AnalysisSummary from '@/components/AnalysisSummary';
 import ExtractionNotification from '@/components/ExtractionNotification';
 import DownloadingIndicator from '@/components/DownloadingIndicator';
 import LeadSheetDisplay from '@/components/LeadSheetDisplay';
+import Navigation from '@/components/Navigation';
+import MetronomeControls from '@/components/MetronomeControls';
 // import TabbedInterface from '@/components/TabbedInterface';
 import ChatbotButton from '@/components/ChatbotButton';
 import ChatbotInterface from '@/components/ChatbotInterface';
@@ -22,6 +24,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import { SongContext } from '@/types/chatbotTypes';
 import { validateSongContext } from '@/services/chatbotService';
+import { useMetronomeSync } from '@/hooks/useMetronomeSync';
 import dynamic from 'next/dynamic';
 import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
 //import type { ReactPlayerProps } from 'react-player';
@@ -86,6 +89,7 @@ export default function YouTubeVideoAnalyzePage() {
     beatDetectionResult?: {
       time_signature?: number;
       bpm?: number;
+      beatShift?: number;
     };
   } | null>({
     // Initialize with empty arrays to prevent "undefined is not an object" errors
@@ -150,6 +154,54 @@ export default function YouTubeVideoAnalyzePage() {
     });
   }, [analysisResults]);
 
+  // Key detection effect
+  useEffect(() => {
+    if (analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey) {
+      setIsDetectingKey(true);
+
+      // Prepare chord data for key detection
+      const chordData = analysisResults.chords.map((chord, index) => ({
+        chord: chord.chord,
+        time: chord.time
+      }));
+
+      // Import and call key detection service
+      import('@/services/keyDetectionService').then(({ detectKey }) => {
+        detectKey(chordData)
+          .then(result => {
+            setKeySignature(result.primaryKey);
+
+            // Update the transcription cache with key signature
+            if (result.primaryKey && result.primaryKey !== 'Unknown') {
+              const updateTranscriptionWithKey = async () => {
+                try {
+                  const cachedTranscription = await getTranscription(videoId, beatDetector, chordDetector);
+                  if (cachedTranscription) {
+                    await saveTranscription({
+                      ...cachedTranscription,
+                      keySignature: result.primaryKey,
+                      keyModulation: result.modulation
+                    });
+                    console.log('Updated transcription cache with key signature:', result.primaryKey);
+                  }
+                } catch (error) {
+                  console.error('Failed to update transcription cache with key signature:', error);
+                }
+              };
+              updateTranscriptionWithKey();
+            }
+          })
+          .catch(error => {
+            console.error('Failed to detect key:', error);
+            setKeySignature(null);
+          })
+          .finally(() => {
+            setIsDetectingKey(false);
+          });
+      });
+    }
+  }, [analysisResults?.chords]); // Re-run when chord data changes
+
   // Extract audio from YouTube on component mount
   useEffect(() => {
     // Only run if not already extracting and no lock is set
@@ -159,11 +211,11 @@ export default function YouTubeVideoAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId]); // Only re-run when videoId changes
 
-  // Auto-load cached lyrics on component mount
+  // Check for cached lyrics on component mount (but don't auto-load)
   useEffect(() => {
-    const loadCachedLyrics = async () => {
+    const checkCachedLyrics = async () => {
       if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
-        console.log('Attempting to load cached lyrics on mount...');
+        console.log('Checking for cached lyrics on mount...');
         try {
           const response = await fetch('/api/transcribe-lyrics', {
             method: 'POST',
@@ -173,28 +225,29 @@ export default function YouTubeVideoAnalyzePage() {
             body: JSON.stringify({
               videoId: params.videoId,
               audioUrl: null, // We don't have audio URL yet, but API should check cache first
-              forceRefresh: false
+              forceRefresh: false,
+              checkCacheOnly: true // New flag to only check cache without processing
             }),
           });
 
           const data = await response.json();
-          console.log('Auto-load lyrics response:', data);
+          console.log('Cache check lyrics response:', data);
 
           if (response.ok && data.success && data.lyrics) {
             if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
-              console.log(`Auto-loaded ${data.lyrics.lines.length} lines of cached lyrics`);
-              setLyrics(data.lyrics);
-              setShowLyrics(true);
+              console.log(`Found ${data.lyrics.lines.length} lines of cached lyrics (not auto-loading)`);
+              // Don't auto-load, just log that cached lyrics are available
+              // User will need to click "Transcribe Lyrics" to load them
             }
           }
         } catch (error) {
-          console.log('No cached lyrics found or error loading:', error);
+          console.log('No cached lyrics found or error checking:', error);
         }
       }
     };
 
     // Delay slightly to let the component mount fully
-    const timer = setTimeout(loadCachedLyrics, 1000);
+    const timer = setTimeout(checkCachedLyrics, 1000);
     return () => clearTimeout(timer);
   }, [videoId, params.videoId]); // Re-run when videoId changes
 
@@ -208,6 +261,14 @@ export default function YouTubeVideoAnalyzePage() {
 
           if (cachedTranscription) {
             console.log('Found cached analysis data on mount');
+            console.log('=== CACHE LOADING DEBUG ===');
+            console.log('cachedTranscription.timeSignature:', cachedTranscription.timeSignature);
+            console.log('cachedTranscription.bpm:', cachedTranscription.bpm);
+            console.log('cachedTranscription.keySignature:', cachedTranscription.keySignature);
+            console.log('typeof timeSignature:', typeof cachedTranscription.timeSignature);
+            console.log('typeof bpm:', typeof cachedTranscription.bpm);
+            console.log('=== END CACHE LOADING DEBUG ===');
+
             const results = {
               beats: cachedTranscription.beats,
               chords: cachedTranscription.chords,
@@ -217,18 +278,27 @@ export default function YouTubeVideoAnalyzePage() {
               beatModel: cachedTranscription.beatModel,
               chordModel: cachedTranscription.chordModel,
               beatDetectionResult: {
-                time_signature: cachedTranscription.timeSignature || 4, // Default to 4/4 if not cached
-                bpm: cachedTranscription.bpm || 120 // Default BPM if not cached
+                time_signature: cachedTranscription.timeSignature, // Use actual detected time signature (no fallback)
+                bpm: cachedTranscription.bpm ?? 120, // Keep BPM fallback as it's less critical
+                beatShift: cachedTranscription.beatShift ?? 0 // Include beat shift from cache
               }
             };
 
             console.log('Auto-loading cached analysis results:', {
               beatsLength: results.beats?.length || 0,
               chordsLength: results.chords?.length || 0,
-              synchronizedChordsLength: results.synchronizedChords?.length || 0
+              synchronizedChordsLength: results.synchronizedChords?.length || 0,
+              timeSignature: results.beatDetectionResult?.time_signature,
+              bpm: results.beatDetectionResult?.bpm,
+              beatShift: results.beatDetectionResult?.beatShift
             });
 
             setAnalysisResults(results);
+
+            // Set key signature if available from cache
+            if (cachedTranscription.keySignature) {
+              setKeySignature(cachedTranscription.keySignature);
+            }
 
             // Set duration if available
             if (cachedTranscription.audioDuration) {
@@ -814,8 +884,9 @@ export default function YouTubeVideoAnalyzePage() {
           chordModel: cachedTranscription.chordModel,
           // Include beatDetectionResult from cache if available
           beatDetectionResult: {
-            time_signature: cachedTranscription.timeSignature || 4, // Default to 4/4 if not cached
-            bpm: cachedTranscription.bpm || 120 // Default BPM if not cached
+            time_signature: cachedTranscription.timeSignature, // Use actual detected time signature (no fallback)
+            bpm: cachedTranscription.bpm ?? 120, // Keep BPM fallback as it's less critical
+            beatShift: cachedTranscription.beatShift ?? 0 // Include beat shift from cache
           }
         };
 
@@ -885,23 +956,32 @@ export default function YouTubeVideoAnalyzePage() {
             // The beat detection is performed inside analyzeAudio, and the time signature
             // should be available in the results
             if (!results.beatDetectionResult) {
-              // If not available, create it with default values
+              // If not available, create it with calculated values (no hardcoded time signature)
+              const calculatedBpm = results.beats && results.beats.length > 1 && results.beats[0] && results.beats[results.beats.length - 1] ?
+                Math.round(60 / ((results.beats[results.beats.length - 1].time - results.beats[0].time) / results.beats.length)) :
+                120;
+
               results.beatDetectionResult = {
-                time_signature: 4, // Default to 4/4 time signature
-                bpm: results.beats && results.beats.length > 1 && results.beats[0] && results.beats[results.beats.length - 1] ?
-                  Math.round(60 / ((results.beats[results.beats.length - 1].time - results.beats[0].time) / results.beats.length)) :
-                  120 // Default BPM
+                time_signature: undefined, // Let the UI handle missing time signature gracefully
+                bpm: calculatedBpm
               };
-            } else if (!results.beatDetectionResult.time_signature) {
-              // If beatDetectionResult exists but time_signature is missing, add default
-              results.beatDetectionResult.time_signature = 4;
+
+              console.warn('Beat detection result missing - this should not happen with proper beat detection');
             }
+
+            // Log the detected time signature for debugging
+            console.log('Beat detection result:', {
+              time_signature: results.beatDetectionResult?.time_signature,
+              bpm: results.beatDetectionResult?.bpm,
+              beatShift: results.beatDetectionResult?.beatShift
+            });
 
             console.log('=== FRONTEND DEBUG: Analysis Results ===');
             console.log('Full results object:', results);
             console.log('beatDetectionResult:', results.beatDetectionResult);
             console.log('Time signature from beatDetectionResult:', results.beatDetectionResult?.time_signature);
             console.log('BPM from beatDetectionResult:', results.beatDetectionResult?.bpm);
+            console.log('Beat shift from beatDetectionResult:', results.beatDetectionResult?.beatShift);
             console.log('=== END FRONTEND DEBUG ===');
 
             const endTime = performance.now();
@@ -922,7 +1002,12 @@ export default function YouTubeVideoAnalyzePage() {
                 totalProcessingTime,
                 // Include time signature and BPM in cache
                 timeSignature: results.beatDetectionResult?.time_signature,
-                bpm: results.beatDetectionResult?.bpm
+                bpm: results.beatDetectionResult?.bpm,
+                // Include beat shift for synchronization
+                beatShift: results.beatDetectionResult?.beatShift,
+                // Include key signature if available
+                keySignature: keySignature,
+                keyModulation: null // Will be updated later by key detection
               });
 
               if (saveResult) {
@@ -1076,6 +1161,15 @@ export default function YouTubeVideoAnalyzePage() {
     }
   };
 
+  // Metronome synchronization hook
+  useMetronomeSync({
+    beats: analysisResults?.beats || [],
+    downbeats: analysisResults?.downbeats,
+    currentTime,
+    isPlaying,
+    beatShift: analysisResults?.beatDetectionResult?.beatShift || 0
+  });
+
   // Update current time and check for current beat
   useEffect(() => {
     if (!audioRef.current || !isPlaying || !analysisResults) return;
@@ -1094,7 +1188,16 @@ export default function YouTubeVideoAnalyzePage() {
           );
 
           if (currentBeat !== -1) {
-            setCurrentBeatIndex(currentBeat);
+            // Apply beat shift compensation to synchronize with shifted chord labels
+            const beatShift = analysisResults.beatDetectionResult?.beatShift || 0;
+            const adjustedBeatIndex = Math.max(0, Math.min(analysisResults.beats.length - 1, currentBeat + beatShift));
+
+            // Debug logging for beat shift synchronization
+            if (beatShift !== 0) {
+              console.log(`Beat shift synchronization: original=${currentBeat}, shift=${beatShift}, adjusted=${adjustedBeatIndex}`);
+            }
+
+            setCurrentBeatIndex(adjustedBeatIndex);
           }
         }
 
@@ -1158,6 +1261,81 @@ export default function YouTubeVideoAnalyzePage() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Function to detect key signature using Gemini
+  const detectKeySignature = async (chords: string[]) => {
+    if (!chords || chords.length === 0 || isDetectingKey) return;
+
+    setIsDetectingKey(true);
+    try {
+      // Get unique chords and their frequencies
+      const chordCounts: Record<string, number> = {};
+      chords.forEach(chord => {
+        if (chord && chord !== 'N/C') {
+          chordCounts[chord] = (chordCounts[chord] || 0) + 1;
+        }
+      });
+
+      const uniqueChords = Object.keys(chordCounts);
+      if (uniqueChords.length === 0) {
+        setKeySignature('Unknown');
+        return;
+      }
+
+      // Sort chords by frequency
+      const sortedChords = uniqueChords.sort((a, b) => chordCounts[b] - chordCounts[a]);
+      const topChords = sortedChords.slice(0, Math.min(10, sortedChords.length));
+
+      const prompt = `Analyze these chord progressions and determine the most likely key signature.
+
+Chords in order of frequency: ${topChords.join(', ')}
+
+Please respond with just the key signature in this format: "C major" or "A minor" or "F# major" etc.
+Consider:
+- The most frequent chords
+- Common chord progressions (I-V-vi-IV, ii-V-I, etc.)
+- Circle of fifths relationships
+- Major vs minor tonality
+
+Respond with only the key signature, nothing else.`;
+
+      const response = await fetch('/api/gemini-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: prompt,
+          conversationHistory: []
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const detectedKey = data.response?.trim();
+        if (detectedKey) {
+          setKeySignature(detectedKey);
+        } else {
+          setKeySignature('Unknown');
+        }
+      } else {
+        setKeySignature('Unknown');
+      }
+    } catch (error) {
+      console.error('Error detecting key signature:', error);
+      setKeySignature('Unknown');
+    } finally {
+      setIsDetectingKey(false);
+    }
+  };
+
+  // Effect to detect key signature when analysis results are available
+  useEffect(() => {
+    if (analysisResults?.synchronizedChords && analysisResults.synchronizedChords.length > 0 && !keySignature && !isDetectingKey) {
+      const chords = analysisResults.synchronizedChords.map(item => item.chord);
+      detectKeySignature(chords);
+    }
+  }, [analysisResults, keySignature, isDetectingKey]);
+
   // Get the chord grid data
   const getChordGridData = () => {
     if (!analysisResults ||
@@ -1215,7 +1393,10 @@ export default function YouTubeVideoAnalyzePage() {
   }, [preferredAudioSource, youtubePlayer]);
 
   return (
-    <div>
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* Use the Navigation component */}
+      <Navigation />
+
       {/* Downloading Indicator - shown during initial download */}
       <DownloadingIndicator
         isVisible={audioProcessingState.isDownloading && !audioProcessingState.fromCache}
@@ -1231,35 +1412,6 @@ export default function YouTubeVideoAnalyzePage() {
 
       <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300" style={{ maxWidth: "98%" }}>
         <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden transition-colors duration-300">
-        {/* Navigation Bar - Sticky */}
-        <div className="sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 p-3 border-b border-gray-200 dark:border-gray-700 block shadow-md z-50 transition-colors duration-300">
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="flex items-center">
-              <Image
-                src={theme === 'dark' ? "/chordMiniLogo_dark.png" : "/chordMiniLogo.png"}
-                alt="ChordMini Logo"
-                width={48}
-                height={48}
-                className="mr-2"
-              />
-              <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">Chord Mini</h1>
-            </div>
-            <nav>
-              <ul className="flex space-x-6">
-                <li>
-                  <Link href="/" className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium">
-                    Home
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features" className="text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200 transition-colors font-medium">
-                    Features
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-          </div>
-        </div>
 
         {/* Main content area - responsive width based on chatbot state */}
         <div className={`flex flex-col transition-all duration-300 ${
@@ -1456,7 +1608,46 @@ export default function YouTubeVideoAnalyzePage() {
                   {/* Beat & Chord Map Tab */}
                   {activeTab === 'beatChordMap' && (
                     <div>
-                      <h4 className="font-medium text-md mb-3 text-gray-700 dark:text-gray-300 transition-colors duration-300">Chord Progression</h4>
+                      {/* Header with title and signature indicators */}
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-md text-gray-700 dark:text-gray-300 transition-colors duration-300">Chord Progression</h4>
+                        <div className="flex items-center gap-3">
+                          {/* Time signature indicator */}
+                          {(() => {
+                            const timeSignature = analysisResults?.beatDetectionResult?.time_signature;
+                            console.log('=== TIME SIGNATURE TAG DEBUG ===');
+                            console.log('timeSignature value:', timeSignature);
+                            console.log('timeSignature type:', typeof timeSignature);
+                            console.log('timeSignature !== 4:', timeSignature !== 4);
+                            console.log('Should show tag:', timeSignature && timeSignature !== 4);
+                            console.log('=== END TIME SIGNATURE TAG DEBUG ===');
+
+                            return timeSignature && timeSignature !== 4 ? (
+                              <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
+                                <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
+                                  Time: {timeSignature}/4
+                                </span>
+                              </div>
+                            ) : null;
+                          })()}
+                          {/* Key signature indicator */}
+                          {keySignature && (
+                            <div className="bg-green-50 dark:bg-green-200 border border-green-200 dark:border-green-300 rounded-lg px-3 py-1">
+                              <span className="text-sm font-medium text-green-800 dark:text-green-900">
+                                Key: {keySignature}
+                              </span>
+                            </div>
+                          )}
+                          {/* Loading indicator for key detection */}
+                          {isDetectingKey && (
+                            <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1">
+                              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                                Detecting key...
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                       <ChordGrid
                         chords={chordGridData.chords}
                         beats={chordGridData.beats}
@@ -1468,6 +1659,7 @@ export default function YouTubeVideoAnalyzePage() {
                         isFollowModeEnabled={isFollowModeEnabled}
                         onToggleAudioSource={toggleAudioSource}
                         preferredAudioSource={preferredAudioSource}
+                        isChatbotOpen={isChatbotOpen}
                       />
 
                       {/* Control buttons moved to the component level */}
@@ -1521,9 +1713,9 @@ export default function YouTubeVideoAnalyzePage() {
                           </div>
                         )
                       ) : (
-                        <div className="p-4 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md transition-colors duration-300">
+                        <div className="p-4 bg-blue-100 dark:bg-blue-200 text-blue-700 dark:text-blue-900 rounded-md transition-colors duration-300">
                           <p className="font-medium">Lyrics Not Transcribed</p>
-                          <p>Click the "Transcribe Lyrics" button to analyze the audio for lyrics.</p>
+                          <p>Click the "Transcribe Lyrics" button above to analyze the audio for lyrics. Lyrics transcription is now manual to give you control over when to process vocals.</p>
                         </div>
                       )}
                     </div>
@@ -1732,6 +1924,11 @@ export default function YouTubeVideoAnalyzePage() {
                 >
                   {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
                 </button>
+
+                {/* Metronome controls - only show when analysis results are available */}
+                {analysisResults && (
+                  <MetronomeControls />
+                )}
               </div>
               <div className="relative">
                 {/* Minimize/Maximize button */}

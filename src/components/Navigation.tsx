@@ -17,8 +17,8 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const logoSrc = theme === 'dark' ? '/chordMiniLogo_dark.png' : '/chordMiniLogo.png';
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 p-3 shadow-md block z-50 transition-colors duration-300 ${className}`}>
-      <div className="container mx-auto flex justify-between items-center">
+    <div className={`sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 shadow-md block z-50 transition-colors duration-300 w-screen ${className}`}>
+      <div className="w-full px-4 flex justify-between items-center">
         <div className="flex items-center">
           <Image
             src={logoSrc}

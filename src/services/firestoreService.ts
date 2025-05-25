@@ -29,6 +29,11 @@ export interface TranscriptionData {
   // Add time signature and BPM fields
   timeSignature?: number;
   bpm?: number;
+  // Add beat shift field for synchronization
+  beatShift?: number;
+  // Add key signature field
+  keySignature?: string;
+  keyModulation?: string;
 }
 
 // Collection name
@@ -66,8 +71,15 @@ export async function getTranscription(
 
     // Check if the document exists
     if (docSnap.exists()) {
-      console.log('Found cached transcription in Firestore');
-      return docSnap.data() as TranscriptionData;
+      const data = docSnap.data() as TranscriptionData;
+      console.log('Found cached transcription in Firestore:', {
+        videoId: data.videoId,
+        timeSignature: data.timeSignature,
+        bpm: data.bpm,
+        hasTimeSignature: data.timeSignature !== undefined,
+        hasBpm: data.bpm !== undefined
+      });
+      return data;
     }
 
     console.log('No cached transcription found in Firestore');
@@ -103,7 +115,9 @@ export async function saveTranscription(
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
       beatsCount: transcriptionData.beats?.length,
-      chordsCount: transcriptionData.chords?.length
+      chordsCount: transcriptionData.chords?.length,
+      timeSignature: transcriptionData.timeSignature,
+      bpm: transcriptionData.bpm
     });
 
     // Create a unique document ID based on the parameters
@@ -143,6 +157,14 @@ export async function saveTranscription(
       })),
       audioDuration: transcriptionData.audioDuration || 0,
       totalProcessingTime: transcriptionData.totalProcessingTime || 0,
+      // Include time signature and BPM fields - these were missing!
+      timeSignature: transcriptionData.timeSignature,
+      bpm: transcriptionData.bpm,
+      // Include beat shift for synchronization
+      beatShift: transcriptionData.beatShift,
+      // Include key signature fields
+      keySignature: transcriptionData.keySignature,
+      keyModulation: transcriptionData.keyModulation,
       createdAt: serverTimestamp()
     };
 

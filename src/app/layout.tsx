@@ -5,6 +5,7 @@ import { ProcessingProvider } from '../contexts/ProcessingContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
 import FirebaseInitializer from '../components/FirebaseInitializer';
+import Footer from '../components/Footer';
 
 // Initialize only the monospace font for chord labels
 const robotoMono = Roboto_Mono({
@@ -27,11 +28,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={robotoMono.variable}>
-      <body className="font-sans">
+      <body className="font-sans min-h-screen flex flex-col">
         <ProcessingProvider>
           <ThemeProvider>
             <FirebaseInitializer />
-            {children}
+            <main className="flex-1">
+              {children}
+            </main>
+            <Footer />
           </ThemeProvider>
         </ProcessingProvider>
       </body>

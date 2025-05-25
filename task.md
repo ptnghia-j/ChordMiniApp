@@ -55,7 +55,15 @@ This document outlines the development roadmap for the Chord Recognition System,
 - **Restricted Access**: Available only on "Beat & Chord Map" and "Lyrics & Chords" pages
 - **Real-time Integration**: Seamless integration with existing analysis workflow
 
-### 5. User Interface
+### 5. Metronome Feature ⭐ **NEW FEATURE**
+- **Synchronized Clicks**: Audible click sounds precisely aligned with detected beats
+- **Distinct Sounds**: Higher pitch for downbeats, lower pitch for regular beats
+- **Web Audio API**: Low-latency audio generation for precise timing
+- **User Controls**: Toggle on/off, volume adjustment, and test buttons
+- **Beat Shift Integration**: Accounts for chord-beat alignment optimization
+- **Visual Feedback**: Clear status indicators and expandable settings panel
+
+### 6. User Interface
 - **Clean Design**: 2/3-1/3 layout with blue accent colors (#1e40af)
 - **Tabbed Interface**: "Beat & Chord Map" and "Lyrics & Chords" views
 - **Dark Mode**: Complete theme support with appropriate asset switching
@@ -94,7 +102,16 @@ This document outlines the development roadmap for the Chord Recognition System,
 - [x] Integration with analyze pages
 - [x] Error handling and loading states
 
-### Phase 5: Performance & Optimization 🔄 **IN PROGRESS**
+### Phase 5: Metronome Feature ✅ **COMPLETED**
+- [x] Web Audio API metronome service implementation
+- [x] Synchronized click generation with beat detection
+- [x] Distinct sounds for downbeats vs regular beats
+- [x] MetronomeControls component with toggle and volume
+- [x] useMetronomeSync hook for precise timing
+- [x] Integration with beat shift compensation
+- [x] Visual feedback and expandable settings
+
+### Phase 6: Performance & Optimization 🔄 **IN PROGRESS**
 - [ ] Caching optimization
 - [ ] Performance monitoring
 - [ ] Bundle size optimization

@@ -117,11 +117,7 @@ export default function FeaturesPage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 dark:bg-gray-950 text-white p-4 mt-auto transition-colors duration-300">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm">&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
-        </div>
-      </footer>
+
     </div>
   );
 }

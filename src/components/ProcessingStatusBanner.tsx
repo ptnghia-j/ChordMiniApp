@@ -93,8 +93,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'beat-detection':
         return {
           title: 'Detecting Beats',
-          color: theme === 'dark' ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200',
-          textColor: theme === 'dark' ? 'text-blue-300' : 'text-blue-700',
+          color: theme === 'dark' ? 'bg-blue-200 border-blue-300' : 'bg-blue-50 border-blue-200',
+          textColor: theme === 'dark' ? 'text-blue-900' : 'text-blue-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
               <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
@@ -105,8 +105,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'chord-recognition':
         return {
           title: 'Recognizing Chords',
-          color: theme === 'dark' ? 'bg-purple-900 border-purple-700' : 'bg-purple-50 border-purple-200',
-          textColor: theme === 'dark' ? 'text-purple-300' : 'text-purple-700',
+          color: theme === 'dark' ? 'bg-purple-200 border-purple-300' : 'bg-purple-50 border-purple-200',
+          textColor: theme === 'dark' ? 'text-purple-900' : 'text-purple-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
@@ -116,8 +116,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'complete':
         return {
           title: 'Processing Complete',
-          color: theme === 'dark' ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-200',
-          textColor: theme === 'dark' ? 'text-green-300' : 'text-green-700',
+          color: theme === 'dark' ? 'bg-green-200 border-green-300' : 'bg-green-50 border-green-200',
+          textColor: theme === 'dark' ? 'text-green-900' : 'text-green-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -127,8 +127,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'error':
         return {
           title: 'Error',
-          color: theme === 'dark' ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200',
-          textColor: theme === 'dark' ? 'text-red-300' : 'text-red-700',
+          color: theme === 'dark' ? 'bg-red-200 border-red-300' : 'bg-red-50 border-red-200',
+          textColor: theme === 'dark' ? 'text-red-900' : 'text-red-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
