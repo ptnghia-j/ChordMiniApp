@@ -791,14 +791,9 @@ def detect_beats():
                                     if measure_idx < len(downbeat_times):
                                         curr_downbeat = downbeat_times[measure_idx]
 
-                                        # Check if this beat IS the downbeat (within small tolerance)
-                                        if abs(beat_time - curr_downbeat) < 0.01:
-                                            beat_num = 1
-                                        else:
-                                            # Count beats from the current downbeat up to (but not including) this beat
-                                            # Exclude the downbeat itself from the count
-                                            beats_before = sum(1 for b in beat_times if curr_downbeat < b < beat_time)
-                                            beat_num = beats_before + 2  # +2 because downbeat is 1, and we want the next position
+                                        # Count beats from the current downbeat up to (but not including) this beat
+                                        beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
+                                        beat_num = beats_before + 1
 
                                         # Ensure beat numbers are within the model's detected time signature
                                         beat_num = ((beat_num - 1) % model_time_signature) + 1
@@ -968,9 +963,8 @@ def detect_beats():
 
                                     # Find position of this beat in the measure
                                     # Count beats from the current downbeat up to (but not including) this beat
-                                    # Exclude the downbeat itself from the count
-                                    beats_before = sum(1 for b in beat_times if curr_downbeat < b < beat_time)
-                                    beat_num = beats_before + 2  # +2 because downbeat is 1, and we want the next position
+                                    beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
+                                    beat_num = beats_before + 1
 
                                     # Ensure beat numbers are within the time signature
                                     beat_num = ((beat_num - 1) % time_signature) + 1
@@ -1212,9 +1206,8 @@ def detect_beats():
 
                             # Find position of this beat in the measure
                             # Count beats from the current downbeat up to (but not including) this beat
-                            # Exclude the downbeat itself from the count
-                            beats_before = sum(1 for b in beat_times if curr_downbeat < b < beat_time)
-                            beat_num = beats_before + 2  # +2 because downbeat is 1, and we want the next position
+                            beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
+                            beat_num = beats_before + 1
 
                             # Ensure beat numbers are within the time signature
                             beat_num = ((beat_num - 1) % time_signature) + 1

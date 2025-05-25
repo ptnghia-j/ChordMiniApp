@@ -95,7 +95,8 @@ export async function analyzeAudio(
     console.log(`Detected ${chordResults.length} chords`);
 
     // Create synchronized chords (chords aligned with beats)
-    const alignmentResult = alignChordsToBeats(chordResults, beats, beatResults.beats_with_positions);
+    const timeSignature = beatResults.time_signature || 4; // Use detected time signature or default to 4
+    const alignmentResult = alignChordsToBeats(chordResults, beats, beatResults.beats_with_positions, timeSignature);
 
     return {
       chords: chordResults,
@@ -178,18 +179,16 @@ async function recognizeChords(
 /**
  * Find the optimal beat grid shift by testing minimal offsets
  *
- * This function tests shifting the beat grid by -1, 0, +1 positions
- * and calculates alignment scores to find the best global offset.
+ * This function tests shifting the beat grid by 0 to (timeSignature-1) positions
+ * and calculates alignment scores to find the best global offset that maximizes
+ * chord alignment with downbeats and strong beats.
  */
 function findOptimalBeatShift(
   chords: ChordDetectionResult[],
   beats: BeatInfo[],
-  beatsWithPositions?: BeatPosition[]
+  beatsWithPositions?: BeatPosition[],
+  timeSignature: number = 4
 ): number {
-  const testShifts = [-1, 0, 1];
-  let bestShift = 0;
-  let bestScore = -Infinity;
-
   // Create beat number map for scoring
   const beatNumMap = new Map<number, number>();
   if (beatsWithPositions) {
@@ -198,10 +197,17 @@ function findOptimalBeatShift(
     });
   }
 
-  console.log('=== TESTING BEAT GRID SHIFTS ===');
+  // Test shifts from 0 to (timeSignature - 1) - this covers all possible beat positions
+  const testShifts = Array.from({ length: timeSignature }, (_, i) => i);
+  let bestShift = 0;
+  let bestScore = -Infinity;
+
+  console.log('=== TESTING COMPREHENSIVE BEAT GRID SHIFTS ===');
+  console.log(`Time signature: ${timeSignature}/4`);
+  console.log(`Total chords: ${chords.length}, Total beats: ${beats.length}`);
 
   for (const shift of testShifts) {
-    const scoreResult = calculateAlignmentScore(chords, beats, shift, beatNumMap);
+    const scoreResult = calculateAlignmentScore(chords, beats, shift, beatNumMap, timeSignature);
     console.log(`Shift ${shift}: score = ${scoreResult.totalScore.toFixed(3)} (downbeats: ${scoreResult.downbeatAlignments}, strong beats: ${scoreResult.strongBeatAlignments}, avg distance: ${scoreResult.avgDistance.toFixed(3)})`);
 
     if (scoreResult.totalScore > bestScore) {
@@ -211,7 +217,7 @@ function findOptimalBeatShift(
   }
 
   console.log(`Best shift: ${bestShift} with score ${bestScore.toFixed(3)}`);
-  console.log('=== END BEAT GRID SHIFT TESTING ===');
+  console.log('=== END COMPREHENSIVE BEAT GRID SHIFT TESTING ===');
 
   return bestShift;
 }
@@ -223,7 +229,8 @@ function calculateAlignmentScore(
   chords: ChordDetectionResult[],
   beats: BeatInfo[],
   shift: number,
-  beatNumMap: Map<number, number>
+  beatNumMap: Map<number, number>,
+  timeSignature: number = 4
 ): {totalScore: number, downbeatAlignments: number, strongBeatAlignments: number, avgDistance: number} {
   let downbeatAlignments = 0;
   let strongBeatAlignments = 0;
@@ -279,8 +286,21 @@ function calculateAlignmentScore(
         downbeatAlignments++;
       }
 
-      // Bonus for strong beats (1, 3, 5 in 6/4 time; 1, 3 in 4/4 time)
-      if (beatNum === 1 || beatNum === 3 || beatNum === 5) {
+      // Bonus for strong beats (time signature aware)
+      const isStrongBeat = (() => {
+        if (beatNum === 1) return true; // Downbeat is always strong
+
+        switch (timeSignature) {
+          case 2: return false; // Only beat 1 is strong in 2/4
+          case 3: return false; // Only beat 1 is strong in 3/4
+          case 4: return beatNum === 3; // Beats 1 and 3 are strong in 4/4
+          case 6: return beatNum === 4; // Beats 1 and 4 are strong in 6/4
+          case 8: return beatNum === 3 || beatNum === 5 || beatNum === 7; // Beats 1, 3, 5, 7 in 8/4
+          default: return beatNum % 2 === 1; // Odd beats for other time signatures
+        }
+      })();
+
+      if (isStrongBeat) {
         strongBeatAlignments++;
       }
     }
@@ -308,7 +328,8 @@ function calculateAlignmentScore(
 function alignChordsToBeats(
   chords: ChordDetectionResult[],
   beats: BeatInfo[],
-  beatsWithPositions?: BeatPosition[]
+  beatsWithPositions?: BeatPosition[],
+  timeSignature: number = 4
 ): {synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[], beatShift: number} {
   // Initialize results array with one entry per beat
   const results: {chord: string, beatIndex: number, beatNum?: number}[] = [];
@@ -318,34 +339,60 @@ function alignChordsToBeats(
   console.log('First 3 beats:', beats.slice(0, 3));
 
   // Step 1: Test multiple beat grid shifts to find optimal alignment
-  const bestShift = findOptimalBeatShift(chords, beats, beatsWithPositions);
+  const bestShift = findOptimalBeatShift(chords, beats, beatsWithPositions, timeSignature);
   console.log(`Optimal beat shift determined: ${bestShift} positions`);
 
-  // Step 2: Apply the optimal shift and create chord-to-beat mappings
-  const beatNumMap = new Map<number, number>();
-  if (beatsWithPositions) {
-    beatsWithPositions.forEach(bp => {
-      beatNumMap.set(bp.time, bp.beatNum);
-    });
+  // Step 2: Create padded beat grid based on optimal shift
+  console.log(`Creating padded beat grid with ${bestShift} padding beats`);
+
+  // Create padding beats at the beginning
+  const paddingBeats: BeatInfo[] = [];
+  const paddingPositions: BeatPosition[] = [];
+
+  if (bestShift > 0 && beats.length > 0) {
+    const firstBeat = beats[0];
+    const avgBeatInterval = beats.length > 1 ? (beats[beats.length - 1].time - beats[0].time) / (beats.length - 1) : 0.5;
+
+    for (let i = 0; i < bestShift; i++) {
+      const paddingTime = firstBeat.time - (bestShift - i) * avgBeatInterval;
+      paddingBeats.push({
+        time: paddingTime,
+        strength: 0.3, // Lower strength for padding beats
+        beatNum: undefined
+      });
+
+      // Calculate beat number for padding beat
+      const paddingBeatNum = ((timeSignature - (bestShift - i - 1)) % timeSignature) || timeSignature;
+      paddingPositions.push({
+        time: paddingTime,
+        beatNum: paddingBeatNum
+      });
+    }
   }
 
-  // Helper function to apply shift with bounds checking
-  const getShiftedBeatIndex = (originalIndex: number): number => {
-    const shiftedIndex = originalIndex + bestShift;
-    return Math.max(0, Math.min(beats.length - 1, shiftedIndex));
-  };
+  // Combine padding beats with original beats
+  const extendedBeats = [...paddingBeats, ...beats];
+  const extendedPositions = [...paddingPositions, ...(beatsWithPositions || [])];
 
-  // Create a map to track which chord should be assigned to each beat
+  console.log(`Extended beat grid: ${paddingBeats.length} padding + ${beats.length} original = ${extendedBeats.length} total beats`);
+
+  // Create beat number map for the extended grid
+  const beatNumMap = new Map<number, number>();
+  extendedPositions.forEach(bp => {
+    beatNumMap.set(bp.time, bp.beatNum);
+  });
+
+  // Step 3: Map chords to the extended beat grid (no shifting needed - padding handles alignment)
   const beatToChordMap = new Map<number, string>();
 
-  // For each chord, find the closest beat and apply the optimal shift
+  // For each chord, find the closest beat in the extended grid
   chords.forEach(chord => {
     if (chord.chord === "N") return; // Skip "no chord" entries
 
     let closestBeatIndex = 0;
     let minDistance = Infinity;
 
-    beats.forEach((beat, index) => {
+    extendedBeats.forEach((beat, index) => {
       const distance = Math.abs(chord.start - beat.time);
       if (distance < minDistance) {
         minDistance = distance;
@@ -353,17 +400,15 @@ function alignChordsToBeats(
       }
     });
 
-    // Apply the optimal shift to the beat index
-    const shiftedBeatIndex = getShiftedBeatIndex(closestBeatIndex);
-    const shiftedBeat = beats[shiftedBeatIndex];
+    const closestBeat = extendedBeats[closestBeatIndex];
 
-    // Get beat number for the shifted beat (if available)
-    let beatNum = beatNumMap.get(shiftedBeat.time) || shiftedBeat.beatNum;
+    // Get beat number for the closest beat (if available)
+    let beatNum = beatNumMap.get(closestBeat.time) || closestBeat.beatNum;
 
     // Try with tolerance if exact match failed
     if (!beatNum && beatNumMap.size > 0) {
       for (const [time, num] of beatNumMap.entries()) {
-        if (Math.abs(time - shiftedBeat.time) < 0.01) {
+        if (Math.abs(time - closestBeat.time) < 0.01) {
           beatNum = num;
           break;
         }
@@ -374,17 +419,23 @@ function alignChordsToBeats(
 
     // Debug: Log chord alignment decisions for first few chords
     if (beatToChordMap.size < 10) {
-      console.log(`Chord alignment (shifted): ${chordName} (start: ${chord.start.toFixed(3)}s) -> Beat ${shiftedBeatIndex} (time: ${shiftedBeat.time.toFixed(3)}s, beatNum: ${beatNum}, shift: ${bestShift})`);
+      const isPadding = closestBeatIndex < paddingBeats.length;
+      console.log(`Chord alignment: ${chordName} (start: ${chord.start.toFixed(3)}s) -> Beat ${closestBeatIndex} (time: ${closestBeat.time.toFixed(3)}s, beatNum: ${beatNum}, padding: ${isPadding})`);
     }
 
     // Store the chord assignment
-    beatToChordMap.set(shiftedBeatIndex, chordName);
+    beatToChordMap.set(closestBeatIndex, chordName);
   });
 
-  // Second pass: Fill in the results array for each beat
-  beats.forEach((beat, beatIndex) => {
+  // Step 4: Generate results for the original beat grid (excluding padding)
+  // Map from extended beat indices to original beat indices
+  extendedBeats.forEach((beat, extendedIndex) => {
+    // Skip padding beats - only process original beats
+    if (extendedIndex < paddingBeats.length) return;
+
+    const originalBeatIndex = extendedIndex - paddingBeats.length;
+
     // Get the beat number from the map or from the beat itself
-    // Try exact match first, then try with small tolerance for floating point precision
     let beatNum = beatNumMap.get(beat.time) || beat.beatNum;
 
     // If exact match failed, try with small tolerance (±0.01 seconds)
@@ -397,18 +448,18 @@ function alignChordsToBeats(
       }
     }
 
-    // Get the chord assigned to this beat, or "N/C" if none
-    const chord = beatToChordMap.get(beatIndex) || 'N/C';
+    // Get the chord assigned to this beat in the extended grid, or "N/C" if none
+    const chord = beatToChordMap.get(extendedIndex) || 'N/C';
 
     // Debug: Log beat number mapping for first few beats
-    if (beatIndex < 10) {
-      console.log(`Beat ${beatIndex}: time=${beat.time.toFixed(3)}, beatNum=${beatNum}, chord=${chord}`);
+    if (originalBeatIndex < 10) {
+      console.log(`Original Beat ${originalBeatIndex} (extended ${extendedIndex}): time=${beat.time.toFixed(3)}, beatNum=${beatNum}, chord=${chord}`);
     }
 
-    // Add to results
+    // Add to results using original beat index
     results.push({
       chord,
-      beatIndex,
+      beatIndex: originalBeatIndex,
       beatNum
     });
   });
