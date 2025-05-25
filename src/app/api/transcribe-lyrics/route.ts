@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json();
-    const { videoId, audioPath, forceRefresh } = body;
+    const { videoId, audioPath, forceRefresh, checkCacheOnly } = body;
 
     if (!videoId) {
       return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
@@ -96,6 +96,16 @@ export async function POST(request: NextRequest) {
           processingError: error instanceof Error ? error.message : String(error)
         });
       }
+    }
+
+    // If checkCacheOnly is true and no cache was found, return early
+    if (checkCacheOnly) {
+      console.log(`Cache-only check for video ID: ${videoId} - no cached lyrics found`);
+      return NextResponse.json({
+        success: false,
+        message: 'No cached lyrics found',
+        cached: false
+      });
     }
 
     if (forceRefresh && lyricsDoc.exists()) {

@@ -34,7 +34,7 @@ const handleLargeFile = async (file: File) => {
         console.log(`Upload progress: ${percent}%`);
       }
     );
-    
+
     if (result.success) {
       // Process beat information
       console.log(`Detected ${result.total_beats} beats at ${result.bpm} BPM`);
@@ -59,9 +59,9 @@ import { detectBeatsFromPath } from '@/services/beatDetectionService';
 const handleVeryLargeFile = async () => {
   const result = await detectBeatsFromPath(
     '/path/to/your/file.mp3',
-    'librosa'  // Recommended for large files
+    'madmom'  // Recommended for large files
   );
-  
+
   if (result.success) {
     // Process beat information
     console.log(`Detected ${result.total_beats} beats at ${result.bpm} BPM`);
@@ -91,4 +91,4 @@ Or use our provided script:
 ./scripts/start_python_backend.sh
 ```
 
-This script will handle all necessary setup and start the Flask server with support for large files. 
+This script will handle all necessary setup and start the Flask server with support for large files.

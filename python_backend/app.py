@@ -260,12 +260,12 @@ def detect_beats():
             force_param = request.args.get('force', request.form.get('force', '')).lower()
             print(f"Force parameter (audio_path): {force_param}")
 
-            # Only reject if file is too large AND detector is not madmom/librosa AND force is not true
+            # Only reject if file is too large AND detector is not madmom AND force is not true
             if (file_size > 100 * 1024 * 1024 and
-                detector not in ['librosa', 'madmom'] and
+                detector not in ['madmom'] and
                 force_param != 'true'):
                 return jsonify({
-                    "error": "The file is too large (over 100MB). Please use a smaller file, specify detector='madmom' or 'librosa', or add 'force=true' to use Beat-Transformer anyway."
+                    "error": "The file is too large (over 100MB). Please use a smaller file, specify detector='madmom', or add 'force=true' to use Beat-Transformer anyway."
                 }), 413
 
         # Check if madmom is available
@@ -278,7 +278,6 @@ def detect_beats():
         # Determine which detector to use
         use_beat_transformer = False
         use_madmom = False
-        use_librosa = False
 
         print(f"Detector requested: {detector}, USE_BEAT_TRANSFORMER: {USE_BEAT_TRANSFORMER}, madmom_available: {madmom_available}")
 
@@ -299,8 +298,10 @@ def detect_beats():
                     use_madmom = True
                     print("Falling back to madmom")
                 else:
-                    use_librosa = True
-                    print("Falling back to librosa")
+                    return jsonify({
+                        "success": False,
+                        "error": "No beat detection models available"
+                    }), 500
         elif detector == 'beat-transformer-light':
             if USE_BEAT_TRANSFORMER_LIGHT:
                 use_beat_transformer_light = True
@@ -314,18 +315,19 @@ def detect_beats():
                     use_madmom = True
                     print("Falling back to madmom")
                 else:
-                    use_librosa = True
-                    print("Falling back to librosa")
+                    return jsonify({
+                        "success": False,
+                        "error": "No beat detection models available"
+                    }), 500
         elif detector == 'madmom':
             if madmom_available:
                 use_madmom = True
                 print("Will use madmom as requested")
             else:
-                print("Madmom requested but not available, falling back to librosa")
-                use_librosa = True
-        elif detector == 'librosa':
-            use_librosa = True
-            print("Will use librosa as requested")
+                return jsonify({
+                    "success": False,
+                    "error": "Madmom requested but not available"
+                }), 400
         elif detector == 'auto':
             # Auto selection based on availability and file size
             file_size_mb = file_size / (1024 * 1024)
@@ -342,10 +344,12 @@ def detect_beats():
             elif madmom_available:
                 use_madmom = True
                 print("Auto-selected madmom")
-            # Last resort is librosa
+            # No fallback available
             else:
-                use_librosa = True
-                print("Auto-selected librosa")
+                return jsonify({
+                    "success": False,
+                    "error": "No beat detection models available"
+                }), 500
         else:
             # Default fallback
             if USE_BEAT_TRANSFORMER:
@@ -358,8 +362,10 @@ def detect_beats():
                 use_madmom = True
                 print(f"Unknown detector '{detector}', falling back to madmom")
             else:
-                use_librosa = True
-                print(f"Unknown detector '{detector}', falling back to librosa")
+                return jsonify({
+                    "success": False,
+                    "error": f"Unknown detector '{detector}' and no fallback available"
+                }), 400
 
         # Always try to use Beat-Transformer if selected
         if use_beat_transformer:
@@ -655,6 +661,29 @@ def detect_beats():
                             param_path=checkpoint_path
                         )
 
+                    # IMPORTANT: Get the time signature from the Beat-Transformer model FIRST
+                    # before generating beat positions
+                    model_time_signature = 4  # Default fallback
+                    try:
+                        # Import the detector
+                        if use_beat_transformer_light:
+                            from beat_transformer_detector_light import detect_beats_and_downbeats
+                        else:
+                            from beat_transformer_detector import detect_beats_and_downbeats
+
+                        # Call the detector to get the full result including time signature
+                        detector_result = detect_beats_and_downbeats(temp_spec_path, file_path, checkpoint_path)
+
+                        if detector_result and detector_result.get("success") and "time_signature" in detector_result:
+                            model_time_signature = detector_result["time_signature"]
+                            print(f"DEBUG: Beat-Transformer model detected time signature: {model_time_signature}/4")
+                        else:
+                            print(f"DEBUG: Could not get time signature from Beat-Transformer detector, using default 4/4")
+
+                    except Exception as e:
+                        print(f"DEBUG: Error calling Beat-Transformer detector for time signature: {e}")
+                        print(f"DEBUG: Using default 4/4 time signature")
+
                     # For long audio processed in chunks, we need to generate the beat positions ourselves
                     if duration > 150:
                         print("Generating beat and downbeat positions for chunked audio...")
@@ -667,50 +696,121 @@ def detect_beats():
                                 "measureNum": i + 1  # Measure numbers start from 1
                             })
 
-                        # Generate beat positions with intelligent beat numbering based on downbeats
+                        # Generate beat positions using the model's detected time signature
                         beats_with_positions = []
 
-                        # Default to 4/4 time signature
-                        time_signature = 4
+                        # Try to read the correct pattern from the first chunk
+                        first_chunk_pattern = []
+                        try:
+                            with open('beats_with_positions.txt', 'r') as f:
+                                for line in f:
+                                    parts = line.strip().split('\t')
+                                    if len(parts) >= 2:
+                                        beat_num_part = parts[1].strip().replace('beatNum: ', '')
+                                        try:
+                                            beat_num = int(beat_num_part)
+                                            first_chunk_pattern.append(beat_num)
+                                        except (ValueError, TypeError):
+                                            continue
 
-                        # For each beat, determine its position within its measure
-                        for i, beat_time in enumerate(beat_times):
-                            # Find which measure this beat belongs to
-                            measure_idx = 0
-                            while measure_idx < len(downbeat_times) - 1 and beat_time >= downbeat_times[measure_idx + 1]:
-                                measure_idx += 1
+                            print(f"DEBUG: Loaded pattern from first chunk: {first_chunk_pattern[:20]}")
 
-                            # If this is a downbeat, it's beat 1
-                            if measure_idx < len(downbeat_times) and abs(beat_time - downbeat_times[measure_idx]) < 0.01:
-                                beat_num = 1
+                            # Detect time signature from the first chunk pattern
+                            if len(first_chunk_pattern) >= 10:
+                                # Look for the repeating pattern
+                                if first_chunk_pattern[:3] == [1, 1, 1] and 6 in first_chunk_pattern[:10]:
+                                    time_signature = 6
+                                    print(f"DEBUG: Confirmed 6/4 time signature from first chunk pattern")
+
+                        except FileNotFoundError:
+                            print("Warning: beats_with_positions.txt not found, will generate pattern")
+                            first_chunk_pattern = []
+
+                        # Now generate beat positions for ALL beats using the correct pattern
+                        if first_chunk_pattern and len(first_chunk_pattern) >= 10:
+                            # Use the pattern from the first chunk to generate positions for all beats
+                            print(f"DEBUG: Applying first chunk pattern to all {len(beat_times)} beats")
+
+                            # Find the repeating cycle in the first chunk pattern
+                            # Look for the pattern [1,1,1,2,3,4,5,6,1,2,3,4,5,6,...]
+                            cycle_start = -1
+                            for i in range(len(first_chunk_pattern) - 6):
+                                if (first_chunk_pattern[i:i+6] == [1,2,3,4,5,6] or
+                                    (i > 0 and first_chunk_pattern[i-1:i+5] == [1,2,3,4,5,6])):
+                                    cycle_start = i
+                                    break
+
+                            if cycle_start >= 0:
+                                # We found the regular cycle, use it
+                                pickup_count = cycle_start
+                                regular_cycle = [1,2,3,4,5,6]
+                                print(f"DEBUG: Found regular cycle starting at position {cycle_start}, pickup beats: {pickup_count}")
                             else:
-                                # For beats between downbeats, calculate position
-                                if measure_idx < len(downbeat_times) - 1:
-                                    # Find all beats in this measure
-                                    curr_downbeat = downbeat_times[measure_idx]
-                                    next_downbeat = downbeat_times[measure_idx + 1]
+                                # Fallback: assume 3 pickup beats and 6-beat cycle
+                                pickup_count = 3
+                                regular_cycle = [1,2,3,4,5,6]
+                                print(f"DEBUG: Using fallback pattern with {pickup_count} pickup beats")
 
-                                    # Count beats in this measure
-                                    beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
-
-                                    # If reasonable number of beats, use that as time signature
-                                    if 2 <= beats_in_measure <= 12:
-                                        time_signature = beats_in_measure
-
-                                    # Find position of this beat in the measure
-                                    beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
-                                    beat_num = beats_before + 1
-
-                                    # Ensure beat numbers are within the time signature
-                                    beat_num = ((beat_num - 1) % time_signature) + 1
+                            # Generate beat positions for all beats
+                            for i, beat_time in enumerate(beat_times):
+                                if i < pickup_count:
+                                    # Pickup beats
+                                    beat_num = 1
                                 else:
-                                    # For beats in the last measure, use modulo time_signature
-                                    beat_num = ((i % time_signature) + 1)
+                                    # Regular cycle
+                                    cycle_position = (i - pickup_count) % len(regular_cycle)
+                                    beat_num = regular_cycle[cycle_position]
 
-                            beats_with_positions.append({
-                                "time": float(beat_time),
-                                "beatNum": int(beat_num)
-                            })
+                                beats_with_positions.append({
+                                    "time": float(beat_time),
+                                    "beatNum": int(beat_num)
+                                })
+
+                        else:
+                            print("DEBUG: Falling back to generation method")
+                            # Don't hardcode time signature here - it will be set by the model detection
+
+                            # Identify pickup beats (beats before the first downbeat)
+                            pickup_beats = []
+                            if len(downbeat_times) > 0:
+                                first_downbeat = downbeat_times[0]
+                                pickup_beats = [b for b in beat_times if b < first_downbeat]
+                                print(f"DEBUG: Found {len(pickup_beats)} pickup beats before first downbeat at {first_downbeat:.2f}s")
+
+                            # For each beat, determine its position within its measure
+                            for i, beat_time in enumerate(beat_times):
+                                # Handle pickup beats specially
+                                if beat_time in pickup_beats:
+                                    beat_num = 1  # All pickup beats are numbered as 1
+                                else:
+                                    # Find which measure this beat belongs to
+                                    measure_idx = 0
+                                    while measure_idx < len(downbeat_times) - 1 and beat_time >= downbeat_times[measure_idx + 1]:
+                                        measure_idx += 1
+
+                                    if measure_idx < len(downbeat_times):
+                                        curr_downbeat = downbeat_times[measure_idx]
+
+                                        # Count beats from the current downbeat up to (but not including) this beat
+                                        beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
+                                        beat_num = beats_before + 1
+
+                                        # Ensure beat numbers are within the model's detected time signature
+                                        beat_num = ((beat_num - 1) % model_time_signature) + 1
+                                    else:
+                                        # For beats in the last measure, use modulo model's time signature
+                                        beat_num = ((i % model_time_signature) + 1)
+
+                                beats_with_positions.append({
+                                    "time": float(beat_time),
+                                    "beatNum": int(beat_num)
+                                })
+
+                        # Debug: Print the first 20 beats to verify the pattern
+                        print("\nDEBUG - First 20 beats with corrected positions:")
+                        for i in range(min(20, len(beats_with_positions))):
+                            beat = beats_with_positions[i]
+                            print(f"Beat {i+1}: time={beat['time']:.2f}s, beatNum={beat['beatNum']}")
 
                         # Save the generated positions to files for consistency
                         with open('beats_with_positions.txt', 'w') as f:
@@ -862,6 +962,7 @@ def detect_beats():
                                         time_signature = beats_in_measure
 
                                     # Find position of this beat in the measure
+                                    # Count beats from the current downbeat up to (but not including) this beat
                                     beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
                                     beat_num = beats_before + 1
 
@@ -968,6 +1069,10 @@ def detect_beats():
                 except Exception as e:
                     print(f"Warning: Failed to clean up temporary files: {e}")
 
+                # Use the model's time signature that was detected earlier
+                time_signature = model_time_signature
+                print(f"DEBUG: Final time signature from Beat-Transformer model: {time_signature}/4")
+
                 # Prepare response
                 response_data = {
                     "success": True,
@@ -980,8 +1085,16 @@ def detect_beats():
                     "total_beats": len(beat_times),
                     "total_downbeats": len(downbeat_times),
                     "duration": float(duration),
-                    "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer"
+                    "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer",
+                    "time_signature": int(time_signature)  # Use the model's detected time signature
                 }
+
+                # Debug: Log the final response data
+                print(f"DEBUG: Final Beat-Transformer response data:")
+                print(f"  time_signature: {response_data['time_signature']}")
+                print(f"  bpm: {response_data['bpm']}")
+                print(f"  model: {response_data['model']}")
+                print(f"  total_beats: {response_data['total_beats']}")
 
                 # Add chunking information for long audio
                 if duration > 150:
@@ -1004,76 +1117,10 @@ def detect_beats():
 
                 use_beat_transformer = False
 
-        # Use librosa if explicitly requested
-        if use_librosa:
-            print(f"Using librosa for beat detection on: {file_path}")
-            # Load the audio file
-            y, sr = librosa.load(file_path, sr=None)
 
-            # Run beat detection using librosa
-            try:
-                # Make sure numpy is imported in this scope
-                import numpy as np
 
-                tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-                beat_times = librosa.frames_to_time(beats, sr=sr)
-
-                # Calculate beat strength
-                onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-                beat_strengths = onset_env[beats]
-
-                # Format for response
-                beat_info = []
-                for i, time in enumerate(beat_times):
-                    strength = float(beat_strengths[i] / np.max(beat_strengths)) if len(beat_strengths) > 0 else 0.5
-                    # Add fictional beat number based on position (1-based)
-                    beat_num = (i % 4) + 1
-                    beat_info.append({
-                        "time": float(time),
-                        "strength": float(strength),
-                        "beatNum": beat_num
-                    })
-
-                # Create fictional position data
-                beats_with_positions = []
-                for i, time in enumerate(beat_times):
-                    beats_with_positions.append({
-                        "time": float(time),
-                        "beatNum": (i % 4) + 1  # Simple 4/4 beat numbering
-                    })
-
-                # Create simple downbeats (every 4th beat)
-                downbeat_times = beat_times[::4]
-                downbeats_with_measures = [
-                    {"time": float(time), "measureNum": i + 1}
-                    for i, time in enumerate(downbeat_times)
-                ]
-
-                # If using a temp file, clean it up
-                if 'file' in request.files:
-                    os.unlink(file_path)
-
-                return jsonify({
-                    "success": True,
-                    "beats": beat_times.tolist(),
-                    "beat_info": beat_info,
-                    "beats_with_positions": beats_with_positions,
-                    "downbeats": downbeat_times.tolist(),
-                    "downbeats_with_measures": downbeats_with_measures,
-                    "bpm": float(tempo),
-                    "total_beats": len(beat_times),
-                    "total_downbeats": len(downbeat_times),
-                    "duration": float(librosa.get_duration(y=y, sr=sr)),
-                    "model": "librosa"
-                })
-            except Exception as e:
-                print(f"Error using librosa: {e}")
-                print(traceback.format_exc())
-                # Continue to madmom as fallback
-                use_madmom = True
-
-        # Use madmom if selected or as fallback
-        if use_madmom or (not use_beat_transformer and not use_librosa):
+        # Use madmom if selected
+        if use_madmom:
             print(f"Using madmom for beat detection on: {file_path}")
 
             try:
@@ -1158,6 +1205,7 @@ def detect_beats():
                                 time_signature = beats_in_measure
 
                             # Find position of this beat in the measure
+                            # Count beats from the current downbeat up to (but not including) this beat
                             beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
                             beat_num = beats_before + 1
 
@@ -1250,27 +1298,72 @@ def detect_beats():
                 else:
                     bpm = 120.0
 
-                # Determine time signature by analyzing beats between downbeats
+                # Determine time signature by analyzing beat pattern (same logic as Beat-Transformer)
                 time_signature = 4  # Default to 4/4
-                time_signatures = []  # Store time signatures for each measure
+                if beats_with_positions and len(beats_with_positions) >= 6:
+                    # Analyze the beat pattern to find the repeating cycle
+                    beat_numbers = [beat["beatNum"] for beat in beats_with_positions]
+                    print(f"DEBUG (Madmom): Full beat pattern: {beat_numbers[:20]}...")  # Show first 20 beats
 
-                if len(downbeat_times) >= 2:
-                    for i in range(len(downbeat_times) - 1):
-                        curr_downbeat = downbeat_times[i]
-                        next_downbeat = downbeat_times[i + 1]
+                    # Find the repeating pattern by looking for cycles
+                    # Start from different offsets to handle irregular beginnings
+                    pattern_length = None
+                    best_pattern = None
 
-                        # Count beats in this measure
-                        beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
+                    # Try different starting points to handle irregular beginnings like [1,1,1,2,3,4,5,6...]
+                    for start_offset in range(min(5, len(beat_numbers) // 3)):  # Try up to 5 different starting points
+                        offset_beat_numbers = beat_numbers[start_offset:]
 
-                        # Only consider reasonable time signatures
-                        if 2 <= beats_in_measure <= 12:
-                            time_signatures.append(beats_in_measure)
+                        for cycle_len in range(2, 13):  # Test cycle lengths from 2 to 12
+                            if len(offset_beat_numbers) >= cycle_len * 2:  # Need at least 2 complete cycles
+                                # Check if the pattern repeats
+                                first_cycle = offset_beat_numbers[:cycle_len]
+                                second_cycle = offset_beat_numbers[cycle_len:cycle_len*2]
 
-                    # Use the most common time signature if we have enough data
-                    if time_signatures:
-                        from collections import Counter
-                        time_signature = Counter(time_signatures).most_common(1)[0][0]
-                        print(f"Detected time signature: {time_signature}/4")
+                                if first_cycle == second_cycle:
+                                    # Verify with a third cycle if available
+                                    if len(offset_beat_numbers) >= cycle_len * 3:
+                                        third_cycle = offset_beat_numbers[cycle_len*2:cycle_len*3]
+                                        if first_cycle == third_cycle:
+                                            pattern_length = cycle_len
+                                            best_pattern = first_cycle
+                                            print(f"DEBUG (Madmom): Found repeating pattern at offset {start_offset}: {best_pattern}")
+                                            break
+                                    else:
+                                        pattern_length = cycle_len
+                                        best_pattern = first_cycle
+                                        print(f"DEBUG (Madmom): Found repeating pattern at offset {start_offset}: {best_pattern}")
+                                        break
+
+                        if pattern_length:
+                            break
+
+                    if pattern_length and 2 <= pattern_length <= 12:
+                        time_signature = pattern_length
+                        print(f"DEBUG (Madmom): Detected time signature from beat pattern: {time_signature}/4 (pattern: {best_pattern})")
+                    else:
+                        # Fallback to analyzing beats between downbeats
+                        time_signatures = []  # Store time signatures for each measure
+                        if len(downbeat_times) >= 2:
+                            for i in range(len(downbeat_times) - 1):
+                                curr_downbeat = downbeat_times[i]
+                                next_downbeat = downbeat_times[i + 1]
+
+                                # Count beats in this measure
+                                beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
+
+                                # Only consider reasonable time signatures
+                                if 2 <= beats_in_measure <= 12:
+                                    time_signatures.append(beats_in_measure)
+
+                            # Use the most common time signature if we have enough data
+                            if time_signatures:
+                                from collections import Counter
+                                time_signature = Counter(time_signatures).most_common(1)[0][0]
+                                print(f"DEBUG (Madmom): Detected time signature from downbeat analysis: {time_signature}/4")
+                        print(f"DEBUG (Madmom): Pattern detection failed, using fallback method")
+
+                print(f"DEBUG: Final time signature for Madmom: {time_signature}")
 
                 duration = librosa.get_duration(y=y, sr=sr)
 
@@ -1278,7 +1371,7 @@ def detect_beats():
             if 'file' in request.files:
                 os.unlink(file_path)
 
-            return jsonify({
+            response_data = {
                 "success": True,
                 "beats": beat_times.tolist(),
                 "beat_info": beat_info,
@@ -1291,7 +1384,22 @@ def detect_beats():
                 "duration": float(duration),
                 "model": "madmom",
                 "time_signature": int(time_signature)  # Include the detected time signature
-            })
+            }
+
+            # Debug: Log the final response data
+            print(f"DEBUG: Final Madmom response data:")
+            print(f"  time_signature: {response_data['time_signature']}")
+            print(f"  bpm: {response_data['bpm']}")
+            print(f"  model: {response_data['model']}")
+            print(f"  total_beats: {response_data['total_beats']}")
+
+            return jsonify(response_data)
+
+        # If no detector was used, return an error
+        return jsonify({
+            "success": False,
+            "error": "No beat detection model available or selected"
+        }), 500
 
     except Exception as e:
         traceback.print_exc()
@@ -1492,7 +1600,6 @@ def model_info():
         available_models.append("beat-transformer-light")
     if madmom_available:
         available_models.append("madmom")
-    available_models.append("librosa")  # Always available as last resort
 
     # Set beat-transformer-light as the default model if available
     if USE_BEAT_TRANSFORMER_LIGHT:
@@ -1502,7 +1609,7 @@ def model_info():
     elif madmom_available:
         default_model = "madmom"
     else:
-        default_model = "librosa"
+        default_model = "none"
 
     # Get Spleeter information
     spleeter_info = {
@@ -1578,12 +1685,6 @@ def model_info():
                 "name": "Madmom",
                 "description": "Neural network with good balance of accuracy and speed",
                 "performance": "Medium accuracy, medium speed",
-                "uses_spleeter": False
-            },
-            "librosa": {
-                "name": "Librosa",
-                "description": "Fast signal processing with basic beat detection",
-                "performance": "Basic accuracy, fastest processing",
                 "uses_spleeter": False
             }
         },

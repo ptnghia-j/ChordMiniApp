@@ -43,8 +43,8 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
   if (!isShowing) return null;
 
   return (
-    <div 
-      className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out ${
+    <div
+      className={`fixed top-16 left-0 right-0 z-40 transition-transform duration-300 ease-in-out ${
         isVisible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
@@ -62,19 +62,19 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             )}
-            
+
             <div>
               <p className="font-medium text-sm">
                 {fromCache ? 'Audio Loaded from Cache' : 'Audio Extracted Successfully'}
               </p>
               <p className="text-xs text-gray-600">
-                {fromCache 
-                  ? 'Using cached audio file. Select models to begin analysis.' 
+                {fromCache
+                  ? 'Using cached audio file. Select models to begin analysis.'
                   : 'Audio extraction complete. Select models to begin analysis.'}
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {fromCache && (
               <button
@@ -87,7 +87,7 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
                 Refresh
               </button>
             )}
-            
+
             <button
               onClick={onDismiss}
               className="text-gray-500 hover:text-gray-700"

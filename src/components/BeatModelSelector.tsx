@@ -5,12 +5,12 @@ import { getModelInfo, ModelInfoResult } from '@/services/beatDetectionService';
 import '@/styles/dropdown.css';
 
 interface BeatModelSelectorProps {
-  onChange: (model: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light') => void;
-  defaultValue?: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+  onChange: (model: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light') => void;
+  defaultValue?: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
   className?: string;
 }
 
-type ModelType = 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+type ModelType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
 
 interface ModelOption {
   id: ModelType;
@@ -108,13 +108,6 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
       description: modelInfo?.model_info?.['madmom']?.description ||
                   'Neural network with good balance of accuracy and speed',
       available: modelInfo?.madmom_available || false
-    },
-    {
-      id: 'librosa',
-      name: modelInfo?.model_info?.['librosa']?.name || 'Librosa',
-      description: modelInfo?.model_info?.['librosa']?.description ||
-                  'Fast signal processing with basic beat detection',
-      available: true
     }
   ];
 
@@ -128,8 +121,8 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
     <div className={`model-selector-container ${className}`}>
       <div className="mb-2">
         <div className="flex items-center">
-          <h3 className="text-sm font-medium text-gray-700">Beat Detection Models</h3>
-          <div className="ml-1 text-gray-400 relative group">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-300">Beat Detection Models</h3>
+          <div className="ml-1 text-gray-400 dark:text-gray-500 relative group transition-colors duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 cursor-help">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
             </svg>
@@ -146,11 +139,11 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-300"
         >
           <div className="flex items-center">
             {/* Model icon based on type */}
-            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 text-blue-600">
+            <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800 transition-colors duration-300">
               {selectedModelOption.id === 'auto' && (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
@@ -178,7 +171,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
                 </svg>
               )}
             </span>
-            <span className="font-medium">{selectedModelOption.name}</span>
+            <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
             {loading && (
               <div className="ml-2">
                 <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -193,23 +186,23 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
         {/* Dropdown menu */}
         {isOpen && (
           <div
-            className={`absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg dropdown-menu ${
+            className={`absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dropdown-menu transition-colors duration-300 ${
               dropdownPosition === 'top'
                 ? 'bottom-full mb-1'
                 : 'top-full mt-1'
             }`}
           >
-            <ul className="py-1 max-h-[240px] overflow-auto">
+            <ul className="py-1 max-h-[240px] overflow-auto text-gray-800 dark:text-gray-200 transition-colors duration-300">
               {availableModels.map((model) => (
                 <li
                   key={model.id}
-                  className={`px-4 py-2.5 hover:bg-gray-100 cursor-pointer ${selectedModel === model.id ? 'bg-gray-50' : ''}`}
+                  className={`px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-300 ${selectedModel === model.id ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
                   onClick={() => handleModelChange(model.id)}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-start">
                       {/* Model icon */}
-                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full ${selectedModel === model.id ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model.id ? 'bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         {model.id === 'auto' && (
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
@@ -238,12 +231,12 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
                         )}
                       </span>
                       <div>
-                        <p className="font-medium">{model.name}</p>
-                        <p className="text-sm text-gray-500">{model.description}</p>
+                        <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{model.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">{model.description}</p>
                       </div>
                     </div>
                     {selectedModel === model.id && (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 dark:text-blue-400 transition-colors duration-300" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -256,7 +249,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
       </div>
 
       {/* Description of selected model */}
-      <div className="mt-2 text-sm text-gray-500">
+      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
         {selectedModelOption.description}
       </div>
     </div>

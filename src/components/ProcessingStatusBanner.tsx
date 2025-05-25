@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useProcessing, ProcessingStage } from '../contexts/ProcessingContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { ChordDetectionResult } from '@/services/chordRecognitionService';
 import { BeatInfo } from '@/services/beatDetectionService';
 
@@ -30,6 +31,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
   fromFirestoreCache = false
 }) => {
   const { stage, progress, statusMessage, getFormattedElapsedTime } = useProcessing();
+  const { theme } = useTheme();
   const [isVisible, setIsVisible] = useState(true);
   const [dismissCountdown, setDismissCountdown] = useState(10);
   const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -91,8 +93,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'beat-detection':
         return {
           title: 'Detecting Beats',
-          color: 'bg-blue-50 border-blue-200',
-          textColor: 'text-blue-700',
+          color: theme === 'dark' ? 'bg-blue-200 border-blue-300' : 'bg-blue-50 border-blue-200',
+          textColor: theme === 'dark' ? 'text-blue-900' : 'text-blue-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
               <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
@@ -103,8 +105,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'chord-recognition':
         return {
           title: 'Recognizing Chords',
-          color: 'bg-purple-50 border-purple-200',
-          textColor: 'text-purple-700',
+          color: theme === 'dark' ? 'bg-purple-200 border-purple-300' : 'bg-purple-50 border-purple-200',
+          textColor: theme === 'dark' ? 'text-purple-900' : 'text-purple-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
@@ -114,8 +116,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'complete':
         return {
           title: 'Processing Complete',
-          color: 'bg-green-50 border-green-200',
-          textColor: 'text-green-700',
+          color: theme === 'dark' ? 'bg-green-200 border-green-300' : 'bg-green-50 border-green-200',
+          textColor: theme === 'dark' ? 'text-green-900' : 'text-green-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -125,8 +127,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'error':
         return {
           title: 'Error',
-          color: 'bg-red-50 border-red-200',
-          textColor: 'text-red-700',
+          color: theme === 'dark' ? 'bg-red-200 border-red-300' : 'bg-red-50 border-red-200',
+          textColor: theme === 'dark' ? 'text-red-900' : 'text-red-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -136,8 +138,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       default:
         return {
           title: 'Processing',
-          color: 'bg-gray-50 border-gray-200',
-          textColor: 'text-gray-700',
+          color: theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-gray-50 border-gray-200',
+          textColor: theme === 'dark' ? 'text-gray-300' : 'text-gray-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -157,17 +159,17 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out">
-      <div className="max-w-screen-lg mx-auto px-2">
-        <div className={`flex items-center justify-between py-1 px-3 rounded-b-lg shadow-md ${color} border-x border-b`}>
-          <div className="flex items-center space-x-2">
+    <div className="fixed top-16 left-0 right-0 z-40 transition-transform duration-300 ease-in-out">
+      <div className="max-w-screen-lg mx-auto px-4">
+        <div className={`flex items-center justify-between py-3 px-4 rounded-b-lg shadow-md ${color} border-x border-b`}>
+          <div className="flex items-center space-x-3">
             {icon}
 
             <div>
-              <p className={`font-medium text-sm ${textColor}`}>
+              <p className={`font-medium text-base ${textColor}`}>
                 {title}
               </p>
-              <p className="text-xs text-gray-600">
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                 {stage === 'complete'
                   ? `Beat and chord analysis completed in ${getFormattedElapsedTime()}`
                   : statusMessage || `Processing ${title.toLowerCase()}...`}
@@ -179,7 +181,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
             {stage === 'complete' && (
               <div className="flex space-x-1">
                 {fromCache && (
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full flex items-center">
+                  <span className={`text-xs px-2 py-0.5 rounded-full flex items-center ${theme === 'dark' ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-800'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                     </svg>
@@ -187,7 +189,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
                   </span>
                 )}
                 {fromFirestoreCache && (
-                  <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full flex items-center">
+                  <span className={`text-xs px-2 py-0.5 rounded-full flex items-center ${theme === 'dark' ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
                     </svg>
@@ -196,10 +198,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
                 )}
 
                 {/* Auto-dismiss countdown indicator */}
-                <div className="relative text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full flex items-center overflow-hidden">
+                <div className={`relative text-xs px-2 py-0.5 rounded-full flex items-center overflow-hidden ${theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
                   {/* Progress bar background */}
                   <div
-                    className="absolute inset-0 bg-blue-100 transition-all duration-1000 ease-linear"
+                    className={`absolute inset-0 transition-all duration-1000 ease-linear ${theme === 'dark' ? 'bg-blue-800' : 'bg-blue-100'}`}
                     style={{
                       width: `${(dismissCountdown / 10) * 100}%`,
                       opacity: 0.5
@@ -219,7 +221,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
 
             <button
               onClick={() => setIsVisible(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className={`${theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
               aria-label="Dismiss notification"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

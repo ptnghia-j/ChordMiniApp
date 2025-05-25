@@ -79,10 +79,10 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
     console.error('Error getting model info:', error);
     return {
       success: false,
-      default_model: 'librosa',
-      available_models: ['librosa'],
+      default_model: 'madmom',
+      available_models: ['madmom'],
       beat_transformer_available: false,
-      madmom_available: false,
+      madmom_available: true,
       error: error instanceof Error ? error.message : 'Unknown error getting model info'
     };
   }
@@ -92,13 +92,13 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
  * Detects beats in an audio file using the Python backend API
  *
  * @param audioFile - The audio file to analyze (File object)
- * @param detector - Which beat detector to use ('auto', 'librosa', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param detector - Which beat detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
  * @param onProgress - Optional callback for upload progress
  * @returns Promise with beat detection results
  */
 export async function detectBeatsFromFile(
   audioFile: File,
-  detector: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
+  detector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
   onProgress?: (percent: number) => void
 ): Promise<BeatDetectionResult> {
   try {
@@ -158,12 +158,12 @@ export async function detectBeatsFromFile(
             if (xhr.status === 413) {
               if (detector === 'beat-transformer') {
                 // If Beat-Transformer was requested but still got 413, the file is extremely large
-                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light, madmom, or librosa detector.'));
+                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light or madmom detector.'));
               } else if (detector === 'beat-transformer-light') {
                 // If Beat-Transformer Light was requested but still got 413, the file is extremely large
-                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use madmom/librosa detector, or use the audio path method.'));
+                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use madmom detector, or use the audio path method.'));
               } else {
-                reject(new Error('The audio file is too large to process. Try a smaller file, use madmom/librosa detector, or try again with beat-transformer-light and force=true.'));
+                reject(new Error('The audio file is too large to process. Try a smaller file, use madmom detector, or try again with beat-transformer-light and force=true.'));
               }
             } else {
               try {
@@ -200,12 +200,12 @@ export async function detectBeatsFromFile(
       if (response.status === 413) {
         if (detector === 'beat-transformer') {
           // If Beat-Transformer was requested but still got 413, the file is extremely large
-          throw new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light, madmom, or librosa detector.');
+          throw new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light or madmom detector.');
         } else if (detector === 'beat-transformer-light') {
           // If Beat-Transformer Light was requested but still got 413, the file is extremely large
-          throw new Error('The audio file is too large even with force=true. Try a smaller file, use madmom/librosa detector, or use the audio path method.');
+          throw new Error('The audio file is too large even with force=true. Try a smaller file, use madmom detector, or use the audio path method.');
         } else {
-          throw new Error('The audio file is too large to process. Try a smaller file, use madmom/librosa detector, or try again with beat-transformer-light and force=true.');
+          throw new Error('The audio file is too large to process. Try a smaller file, use madmom detector, or try again with beat-transformer-light and force=true.');
         }
       }
 
@@ -220,6 +220,15 @@ export async function detectBeatsFromFile(
 
     try {
       const data = await response.json();
+
+      // Debug: Log the raw API response
+      console.log('=== BACKEND API RESPONSE DEBUG ===');
+      console.log('Raw API response data:', data);
+      console.log('data.time_signature:', data.time_signature);
+      console.log('data.bpm:', data.bpm);
+      console.log('data.model:', data.model);
+      console.log('=== END BACKEND API RESPONSE DEBUG ===');
+
       return data;
     } catch (parseError) {
       console.error('Error parsing response:', parseError);
@@ -243,12 +252,12 @@ export async function detectBeatsFromFile(
  * Detects beats in an audio file already on the server
  *
  * @param audioPath - Path to the audio file on the server
- * @param detector - Which beat detector to use ('auto', 'librosa', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param detector - Which beat detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
  * @returns Promise with beat detection results
  */
 export async function detectBeatsFromPath(
   audioPath: string,
-  detector: 'auto' | 'librosa' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto'
+  detector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto'
 ): Promise<BeatDetectionResult> {
   try {
     const formData = new FormData();

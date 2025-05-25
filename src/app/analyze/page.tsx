@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import Navigation from '@/components/Navigation';
 import { analyzeAudio, ChordDetectionResult } from '@/services/chordRecognitionService';
 import { BeatInfo } from '@/services/beatDetectionService';
 import ChordGrid from '@/components/ChordGrid';
@@ -211,50 +212,25 @@ export default function LocalAudioAnalyzePage() {
       // Return mock data if analysis not complete
       return {
         chords: ['C', 'G', 'Am', 'F', 'C', 'G', 'C', 'C', 'F', 'G', 'Em', 'Am'],
-        beats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        beats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        beatNumbers: [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]
       };
     }
 
     // Return actual analysis data
     return {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
-      beats: analysisResults.synchronizedChords.map(item => item.beatIndex)
+      beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum || 1)
     };
   };
 
   const chordGridData = getChordGridData();
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Navigation Bar - Sticky */}
-      <div className="sticky top-0 bg-white text-gray-800 p-3 shadow-md block z-50">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center">
-            <Image
-              src="/chordMiniLogo.png"
-              alt="ChordMini Logo"
-              width={48}
-              height={48}
-              className="mr-2"
-            />
-            <h1 className="text-xl font-bold text-primary-700">Chord Mini</h1>
-          </div>
-          <nav>
-            <ul className="flex space-x-6">
-              <li>
-                <Link href="/" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/features" className="text-primary-700 hover:text-primary-800 transition-colors font-medium">
-                  Features
-                </Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* Use the Navigation component */}
+      <Navigation />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
         <h2 className="text-2xl font-bold text-gray-800 my-4">Upload Audio File</h2>
@@ -262,9 +238,9 @@ export default function LocalAudioAnalyzePage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left side - Chord Grid (80% width) */}
           <div className="lg:w-4/5">
-            <div className="bg-white p-6 rounded-lg shadow-card h-full">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-card h-full transition-colors duration-300">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-2xl font-heading font-bold text-gray-800">Chord Grid</h2>
+                <h2 className="text-2xl font-heading font-bold text-gray-800 dark:text-gray-100 transition-colors duration-300">Chord Grid</h2>
 
                 {/* File upload and Processing button */}
                 <div className="flex flex-col md:flex-row gap-2 items-center">
@@ -332,34 +308,36 @@ export default function LocalAudioAnalyzePage() {
               <ChordGrid
                 chords={chordGridData.chords}
                 beats={chordGridData.beats}
+                beatNumbers={chordGridData.beatNumbers}
                 currentBeatIndex={currentBeatIndex}
                 measuresPerRow={4}
+                timeSignature={analysisResults?.beatDetectionResult?.time_signature}
               />
 
               {/* Analysis Statistics (if available) */}
               {analysisResults && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-lg font-medium mb-3 text-gray-800">Analysis Summary</h3>
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                  <h3 className="text-lg font-medium mb-3 text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Summary</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 p-3 rounded-lg border-2 border-blue-700">
-                      <p className="text-sm text-gray-600 font-medium">Total Chords</p>
-                      <p className="text-xl font-semibold text-blue-800">{analysisResults.chords.length}</p>
+                    <div className="bg-blue-50 dark:bg-blue-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Chords</p>
+                      <p className="text-xl font-semibold text-blue-800 dark:text-blue-900 transition-colors duration-300">{analysisResults.chords.length}</p>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg border-2 border-blue-700">
-                      <p className="text-sm text-gray-600 font-medium">Total Beats</p>
-                      <p className="text-xl font-semibold text-green-800">{analysisResults.beats.length}</p>
+                    <div className="bg-green-50 dark:bg-green-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Total Beats</p>
+                      <p className="text-xl font-semibold text-green-800 dark:text-green-300 transition-colors duration-300">{analysisResults.beats.length}</p>
                     </div>
-                    <div className="bg-purple-50 p-3 rounded-lg border-2 border-blue-700">
-                      <p className="text-sm text-gray-600 font-medium">BPM (Estimated)</p>
-                      <p className="text-xl font-semibold text-purple-800">
+                    <div className="bg-purple-50 dark:bg-purple-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">BPM (Estimated)</p>
+                      <p className="text-xl font-semibold text-purple-800 dark:text-purple-300 transition-colors duration-300">
                         {analysisResults.beats.length > 1
                           ? Math.round(60 / (analysisResults.beats[1].time - analysisResults.beats[0].time))
                           : 'N/A'}
                       </p>
                     </div>
-                    <div className="bg-amber-50 p-3 rounded-lg border-2 border-blue-700">
-                      <p className="text-sm text-gray-600 font-medium">Most Common Chord</p>
-                      <p className="text-xl font-semibold text-amber-800">
+                    <div className="bg-amber-50 dark:bg-amber-900 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 font-medium transition-colors duration-300">Most Common Chord</p>
+                      <p className="text-xl font-semibold text-amber-800 dark:text-amber-300 transition-colors duration-300">
                         {(() => {
                           const counts: Record<string, number> = {};
                           analysisResults.synchronizedChords.forEach(item => {
@@ -407,9 +385,9 @@ export default function LocalAudioAnalyzePage() {
 
                 {/* Current Chord Display */}
                 {analysisResults && currentBeatIndex >= 0 && currentBeatIndex < analysisResults.synchronizedChords.length && (
-                  <div className="text-center bg-primary-50 py-2 px-4 rounded-lg">
-                    <span className="text-xs text-gray-500">Current Chord</span>
-                    <div className="text-2xl font-bold text-primary-700">
+                  <div className="text-center bg-primary-50 dark:bg-primary-900 py-2 px-4 rounded-lg transition-colors duration-300">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">Current Chord</span>
+                    <div className="text-2xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">
                       {analysisResults.synchronizedChords[currentBeatIndex].chord}
                     </div>
                   </div>
@@ -449,16 +427,16 @@ export default function LocalAudioAnalyzePage() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-white p-4 rounded-lg shadow-card">
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Instructions</h3>
-              <ol className="text-sm text-gray-600 space-y-2 list-decimal pl-4">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card transition-colors duration-300">
+              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">Instructions</h3>
+              <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal pl-4 transition-colors duration-300">
                 <li>Upload an audio file (MP3, WAV, etc.)</li>
                 <li>Click &quot;Analyze Audio&quot; to process</li>
                 <li>Wait for chord detection to complete</li>
                 <li>Use playback controls to listen and see chords</li>
               </ol>
 
-              <div className="mt-4 text-xs text-gray-500">
+              <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">
                 <p>Note: Audio processing happens locally in your browser.</p>
               </div>
             </div>
@@ -466,11 +444,7 @@ export default function LocalAudioAnalyzePage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 text-white p-4 mt-auto">
-        <div className="container mx-auto text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} Chord Recognition App. All rights reserved.</p>
-        </div>
-      </footer>
+
     </div>
   );
 }
