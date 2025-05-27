@@ -1016,7 +1016,7 @@ def detect_beats():
 
                     else:
                         # For shorter audio, read from the generated files as before
-                        # Read the beat positions from the generated file
+                        # Read the beat positions from the generated file (including source field for padded beats)
                         beats_with_positions = []
                         try:
                             with open('beats_with_positions.txt', 'r') as f:
@@ -1025,13 +1025,25 @@ def detect_beats():
                                     if len(parts) >= 2:
                                         time_part = parts[0].strip().replace('time: ', '')
                                         beat_num_part = parts[1].strip().replace('beatNum: ', '')
+
+                                        # Check for source field (PADDED marker)
+                                        source = 'detected'  # Default
+                                        if '(PADDED)' in beat_num_part:
+                                            source = 'padded'
+                                            beat_num_part = beat_num_part.replace(' (PADDED)', '')
+
                                         try:
                                             time = float(time_part)
                                             beat_num = int(beat_num_part)
-                                            beats_with_positions.append({
+                                            beat_data = {
                                                 "time": time,
                                                 "beatNum": beat_num
-                                            })
+                                            }
+                                            # Include source field if it's a padded beat
+                                            if source == 'padded':
+                                                beat_data["source"] = source
+
+                                            beats_with_positions.append(beat_data)
                                         except (ValueError, TypeError):
                                             print(f"Warning: Could not parse line: {line}")
                         except FileNotFoundError:
