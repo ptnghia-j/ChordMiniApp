@@ -221,31 +221,32 @@ export default function LocalAudioAnalyzePage() {
     return {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
       beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
-      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum || 1)
+      // FIX 1: Remove fallback logic that overrides backend beat numbers
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum)
     };
   };
 
   const chordGridData = getChordGridData();
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
-        <h2 className="text-2xl font-bold text-gray-800 my-4">Upload Audio File</h2>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-white my-4 transition-colors duration-300">Upload Audio File</h2>
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left side - Chord Grid (80% width) */}
           <div className="lg:w-4/5">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-card h-full transition-colors duration-300">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-card h-full transition-colors duration-300 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-2xl font-heading font-bold text-gray-800 dark:text-gray-100 transition-colors duration-300">Chord Grid</h2>
+                <h2 className="text-2xl font-heading font-bold text-gray-800 dark:text-white transition-colors duration-300">Chord Grid</h2>
 
                 {/* File upload and Processing button */}
                 <div className="flex flex-col md:flex-row gap-2 items-center">
                   <div className="relative inline-block">
-                    <label className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md cursor-pointer transition-colors">
+                    <label className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md cursor-pointer transition-colors">
                       {audioFile ? audioFile.name : 'Choose Audio File'}
                       <input
                         type="file"
@@ -273,14 +274,14 @@ export default function LocalAudioAnalyzePage() {
               {/* Audio Analysis Status Indicator */}
               <div className="flex items-center justify-end text-sm mb-4">
                 {audioProcessingState.isExtracting && (
-                  <div className="flex items-center text-gray-600">
+                  <div className="flex items-center text-gray-600 dark:text-gray-300">
                     <div className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full mr-2"></div>
                     <span>Extracting audio...</span>
                   </div>
                 )}
 
                 {audioProcessingState.isAnalyzing && (
-                  <div className="flex items-center text-gray-600">
+                  <div className="flex items-center text-gray-600 dark:text-gray-300">
                     <div className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full mr-2"></div>
                     <span>Analyzing chords & beats...</span>
                   </div>
@@ -316,8 +317,8 @@ export default function LocalAudioAnalyzePage() {
 
               {/* Analysis Statistics (if available) */}
               {analysisResults && (
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <h3 className="text-lg font-medium mb-3 text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Summary</h3>
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600 transition-colors duration-300">
+                  <h3 className="text-lg font-medium mb-3 text-gray-800 dark:text-white transition-colors duration-300">Analysis Summary</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-blue-50 dark:bg-blue-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
                       <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Chords</p>
@@ -358,7 +359,7 @@ export default function LocalAudioAnalyzePage() {
           {/* Right side - Audio player section (20% width) */}
           <div className="lg:w-1/5">
             {/* Audio Player */}
-            <div className="bg-white p-4 rounded-lg shadow-card mb-6">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card mb-6 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
               <audio ref={audioRef} className="w-full mb-4" controls={false} />
 
               <div className="flex flex-col space-y-2">
@@ -376,7 +377,7 @@ export default function LocalAudioAnalyzePage() {
                 </button>
 
                 {/* Playback Position */}
-                <div className="text-gray-700 font-medium text-center text-sm">
+                <div className="text-gray-700 dark:text-gray-300 font-medium text-center text-sm transition-colors duration-300">
                   {Math.floor(currentTime / 60)}:
                   {String(Math.floor(currentTime % 60)).padStart(2, '0')} /
                   {Math.floor(duration / 60)}:
@@ -395,7 +396,7 @@ export default function LocalAudioAnalyzePage() {
 
                 {/* Playback Speed */}
                 <div className="flex flex-col items-center">
-                  <span className="text-gray-600 text-sm mb-1">Speed:</span>
+                  <span className="text-gray-600 dark:text-gray-300 text-sm mb-1 transition-colors duration-300">Speed:</span>
                   <div className="flex flex-wrap justify-center gap-1">
                     {playbackRates.map(rate => (
                       <button
@@ -404,10 +405,10 @@ export default function LocalAudioAnalyzePage() {
                         disabled={!audioFile}
                         className={`px-2 py-1 text-xs rounded-full transition-colors ${
                           !audioFile
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                             : playbackRate === rate
                               ? 'bg-primary-600 text-white font-medium shadow-button'
-                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                              : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
                         }`}
                       >
                         {rate}x
@@ -418,7 +419,7 @@ export default function LocalAudioAnalyzePage() {
               </div>
 
               {/* Progress Bar */}
-              <div className="mt-3 bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="mt-3 bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden transition-colors duration-300">
                 <div
                   className="bg-primary-600 h-full transition-all duration-100 ease-out"
                   style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
@@ -427,16 +428,16 @@ export default function LocalAudioAnalyzePage() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card transition-colors duration-300">
-              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">Instructions</h3>
-              <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal pl-4 transition-colors duration-300">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-medium text-gray-700 dark:text-white mb-2 transition-colors duration-300">Instructions</h3>
+              <ol className="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal pl-4 transition-colors duration-300">
                 <li>Upload an audio file (MP3, WAV, etc.)</li>
                 <li>Click &quot;Analyze Audio&quot; to process</li>
                 <li>Wait for chord detection to complete</li>
                 <li>Use playback controls to listen and see chords</li>
               </ol>
 
-              <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">
+              <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 transition-colors duration-300">
                 <p>Note: Audio processing happens locally in your browser.</p>
               </div>
             </div>

@@ -221,12 +221,37 @@ export async function detectBeatsFromFile(
     try {
       const data = await response.json();
 
-      // Debug: Log the raw API response
+      // Enhanced debug: Log the raw API response with beat positions analysis
       console.log('=== BACKEND API RESPONSE DEBUG ===');
       console.log('Raw API response data:', data);
       console.log('data.time_signature:', data.time_signature);
+      console.log('data.time_signature type:', typeof data.time_signature);
+      console.log('data.time_signature === undefined:', data.time_signature === undefined);
+      console.log('data.time_signature === null:', data.time_signature === null);
       console.log('data.bpm:', data.bpm);
       console.log('data.model:', data.model);
+
+      // FIX 3: Add comprehensive debug logging for beat positions
+      if (data.beats_with_positions && Array.isArray(data.beats_with_positions)) {
+        console.log(`Backend provided ${data.beats_with_positions.length} beat positions`);
+        console.log('First 15 backend beat positions:');
+        data.beats_with_positions.slice(0, 15).forEach((bp, idx) => {
+          console.log(`  Backend Beat ${idx}: time=${bp.time?.toFixed(3)}s, beatNum=${bp.beatNum}`);
+        });
+
+        // Analyze beat number pattern from backend
+        const backendBeatPattern = data.beats_with_positions.slice(0, 20).map(bp => bp.beatNum);
+        console.log(`Backend beat number pattern: [${backendBeatPattern.join(', ')}]`);
+
+        // Check for pickup beats in backend data
+        const firstBeatNum = data.beats_with_positions[0]?.beatNum;
+        if (firstBeatNum && firstBeatNum !== 1) {
+          console.log(`🎵 Backend detected pickup beat: first beat has beatNum=${firstBeatNum}`);
+        }
+      } else {
+        console.warn('⚠️  No beats_with_positions in backend response');
+      }
+
       console.log('=== END BACKEND API RESPONSE DEBUG ===');
 
       return data;

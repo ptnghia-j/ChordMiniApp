@@ -133,12 +133,12 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
       {/* Main content with hero image background - added border-top to prevent margin collapse */}
-      <main className="flex-grow relative border-t border-transparent dark:border-gray-800">
+      <main className="flex-grow relative border-t border-transparent dark:border-gray-700">
         {/* Hero Image Background */}
         <div className="absolute inset-0 z-0">
           <div className="relative w-full h-full">
@@ -185,7 +185,7 @@ export default function Home() {
 
           <div className="max-w-4xl mx-auto">
             {/* YouTube Analysis Option - Full Width */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-4 hover:shadow-lg transition-shadow w-full">
+            <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
               <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
                 Analyze Music
               </h3>
@@ -205,7 +205,7 @@ export default function Home() {
                           setSearchError(null);
                         }}
                         placeholder="Search for a song or paste YouTube URL..."
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                       />
                       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
                     </div>
@@ -269,7 +269,7 @@ export default function Home() {
                 See ChordMini in Action
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-colors duration-300">
+                <div className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
                   <Image
                     src={theme === 'dark' ? "/demo1_dark.png" : "/demo1.png"}
                     alt="ChordMini Beat and Chord Analysis Demo"
@@ -279,10 +279,10 @@ export default function Home() {
                   />
                   <div className="p-3">
                     <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat & Chord Analysis</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
                   </div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-colors duration-300">
+                <div className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
                   <Image
                     src={theme === 'dark' ? "/demo2_dark.png" : "/demo2.png"}
                     alt="ChordMini Lyrics Transcription Demo"
@@ -292,7 +292,7 @@ export default function Home() {
                   />
                   <div className="p-3">
                     <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Lyrics & Chord Transcription</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">Follow along with synchronized lyrics and chord annotations</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">Follow along with synchronized lyrics and chord annotations</p>
                   </div>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function Home() {
 
           {/* Information Container - Further reduced top margin */}
           <div className="max-w-4xl mx-auto mt-3">
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 w-full transition-colors duration-300">
+            <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 w-full transition-colors duration-300">
               <h3 className="text-xl font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">
                 About This App
               </h3>
@@ -318,40 +318,78 @@ export default function Home() {
               </p>
 
               <div className="grid md:grid-cols-3 gap-2 text-sm">
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">Chord Detection</h4>
-                  <p className="text-gray-600 dark:text-gray-400 text-xs transition-colors duration-300">Identifies major, minor, and 7th chords in the audio with customizable models for different music genres.</p>
+                <div className="bg-gray-50 dark:bg-gray-600 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 transition-colors duration-300">
+                  <div className="flex items-center mb-1">
+                    {/* Neural Network/AI Icon for Chord Detection */}
+                    <svg className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="6" cy="6" r="2" fill="currentColor"/>
+                      <circle cx="18" cy="6" r="2" fill="currentColor"/>
+                      <circle cx="6" cy="18" r="2" fill="currentColor"/>
+                      <circle cx="18" cy="18" r="2" fill="currentColor"/>
+                      <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                      <path d="M8 6l4 6m0 0l4-6m-4 6l-4 6m4-6l4 6" strokeWidth="1.5"/>
+                    </svg>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Chord Detection</h4>
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Identifies major, minor, and 7th chords in the audio with customizable models for different music genres.</p>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">Beat Tracking</h4>
-                  <p className="text-gray-600 dark:text-gray-400 text-xs transition-colors duration-300">Detects rhythmic patterns and beat timings with selectable models for optimal accuracy.</p>
+                <div className="bg-gray-50 dark:bg-gray-600 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 transition-colors duration-300">
+                  <div className="flex items-center mb-1">
+                    {/* Beat/Rhythm Icon for Beat Tracking */}
+                    <svg className="w-4 h-4 mr-2 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Tracking</h4>
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Detects rhythmic patterns and beat timings with selectable models for optimal accuracy.</p>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">Smart Caching</h4>
-                  <p className="text-gray-600 dark:text-gray-400 text-xs transition-colors duration-300">Firebase-powered caching system for faster analysis of previously processed videos.</p>
+                <div className="bg-gray-50 dark:bg-gray-600 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 transition-colors duration-300">
+                  <div className="flex items-center mb-1">
+                    {/* YouTube Icon for Smart Caching */}
+                    <svg className="w-4 h-4 mr-2 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Smart Caching</h4>
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Firebase-powered caching system for faster analysis of previously processed videos.</p>
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-2 text-sm mt-2">
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 flex items-start transition-colors duration-300">
+                <div className="bg-gray-50 dark:bg-gray-600 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 flex items-start transition-colors duration-300">
                   <div className="flex-grow">
-                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">Lyrics Transcription</h4>
-                    <p className="text-gray-600 dark:text-gray-400 text-xs transition-colors duration-300">Synchronized lyrics with chord annotations positioned above words for professional lead sheet layout.</p>
+                    <div className="flex items-center mb-1">
+                      {/* Music.AI Logo for Lyrics Transcription */}
+                      <Image
+                        src="/musicAI.png"
+                        alt="Music.AI"
+                        width={16}
+                        height={16}
+                        className="mr-2"
+                      />
+                      <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Lyrics Transcription</h4>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Synchronized lyrics with chord annotations positioned above words for professional lead sheet layout.</p>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 flex items-start transition-colors duration-300">
+                <div className="bg-gray-50 dark:bg-gray-600 p-2 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 flex items-start transition-colors duration-300">
                   <div className="flex-grow">
-                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">Lyrics Translation</h4>
-                    <p className="text-gray-600 dark:text-gray-400 text-xs transition-colors duration-300">
+                    <div className="flex items-center mb-1">
+                      {/* Sparkles Icon for Lyrics Translation */}
+                      <Image
+                        src="/sparkles-outline.svg"
+                        alt="Gemini AI"
+                        width={16}
+                        height={16}
+                        className="mr-2"
+                      />
+                      <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Lyrics Translation</h4>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">
                       Powered by Gemini AI for accurate translations of non-English lyrics.
-                      <span className="inline-block ml-1">
-                        <svg width="16" height="16" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block">
-                          <path d="M95.5 15.5L26.5 176.5H165.5L95.5 15.5Z" fill="#8e44ef" />
-                        </svg>
-                      </span>
                     </p>
                   </div>
                 </div>

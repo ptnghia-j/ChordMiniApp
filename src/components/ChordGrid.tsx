@@ -92,6 +92,42 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const [keyResult, setKeyResult] = useState<KeyDetectionResult | null>(null);
   const [isDetectingKey, setIsDetectingKey] = useState(false);
 
+  // FIX 4: Dynamic font sizing system based on cell size
+  const getDynamicFontSize = (cellSize: number, chordLength: number = 1): string => {
+    if (cellSize === 0) return 'text-sm'; // Default fallback
+
+    // Base font size calculation: scale with cell size
+    // Smaller cells (mobile/complex time signatures) get smaller fonts
+    // Larger cells (desktop/simple time signatures) get larger fonts
+    let baseFontSize: number;
+
+    if (cellSize < 60) {
+      baseFontSize = 10; // Very small cells (mobile, complex time signatures)
+    } else if (cellSize < 80) {
+      baseFontSize = 12; // Small cells
+    } else if (cellSize < 100) {
+      baseFontSize = 14; // Medium cells
+    } else if (cellSize < 120) {
+      baseFontSize = 16; // Large cells
+    } else {
+      baseFontSize = 18; // Very large cells (wide screens)
+    }
+
+    // Adjust for chord complexity (longer chord names get slightly smaller fonts)
+    if (chordLength > 4) {
+      baseFontSize = Math.max(8, baseFontSize - 2);
+    } else if (chordLength > 2) {
+      baseFontSize = Math.max(8, baseFontSize - 1);
+    }
+
+    // Convert to Tailwind CSS classes
+    if (baseFontSize <= 10) return 'text-xs';
+    if (baseFontSize <= 12) return 'text-sm';
+    if (baseFontSize <= 14) return 'text-base';
+    if (baseFontSize <= 16) return 'text-lg';
+    return 'text-xl';
+  };
+
   // Set up resize observer to track cell size changes
   useEffect(() => {
     if (!gridContainerRef.current) return;
@@ -103,6 +139,9 @@ const ChordGrid: React.FC<ChordGridProps> = ({
           const firstCell = cells[0] as HTMLElement;
           const width = firstCell.offsetWidth;
           setCellSize(width);
+
+          // Debug: Log cell size changes for font sizing
+          console.log(`ChordGrid cell size updated: ${width}px, dynamic font class: ${getDynamicFontSize(width)}`);
         }
       }
     };
@@ -120,7 +159,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [chords.length]); // Re-run when chord data changes
+  }, [chords.length, actualBeatsPerMeasure]); // Re-run when chord data or time signature changes
 
   // Key detection effect
   useEffect(() => {
@@ -231,7 +270,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   if (chords.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-700 dark:text-gray-300 text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300">
+        <p className="text-gray-700 dark:text-gray-300 text-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300">
           No chord data available for this song yet.
         </p>
       </div>
@@ -241,14 +280,10 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   // Debug information
   console.log(`ChordGrid rendering with ${chords.length} chords and ${beats.length} beats`);
   console.log('First 5 chords:', chords.slice(0, 5));
+  console.log('First 5 beat numbers:', beatNumbers?.slice(0, 5));
   console.log('Unique chords:', [...new Set(chords)].length);
 
-  // Helper to create a padding cell (greyed out)
-  const createPaddingCell = () => ({
-    chord: '',
-    beat: -1,
-    isPadding: true
-  });
+  // Note: Padding cell creation is now handled inline in measure grouping
 
   // Group chords by measure based on beat numbers from backend
   const groupedByMeasure: Array<{
@@ -260,56 +295,37 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     paddingEnd: number;
   }> = [];
 
-  // Detect pickup beats by analyzing the beat number pattern from backend
-  // The backend correctly identifies pickup beats by finding the regular cycle
-  // We need to match the backend logic: find where the regular [1,2,3,4,5,6] pattern starts
+  // Use backend beat numbers directly - no pickup detection needed
+  // Backend already handles pickup beats and provides correct beat numbering
+
+  // PICKUP BEAT FIX: Detect pickup beats correctly from backend pattern
+  // Backend provides patterns like [2, 3, 1, 2, 3, ...] or [3, 1, 2, 3, ...] for pickup beats
   let pickupCount = 0;
-  if (beatNumbers && beatNumbers.length > 0 && beatNumbers.length === chords.length) {
-    // Look for the start of the regular cycle [1,2,3,4,5,6]
-    // The pickup beats are everything before this regular cycle starts
-    for (let i = 0; i < Math.min(actualBeatsPerMeasure * 2, beatNumbers.length - 5); i++) {
-      // Check if we have a regular cycle starting at position i
-      const slice = beatNumbers.slice(i, i + 6);
-      if (slice.length === 6 &&
-          slice[0] === 1 && slice[1] === 2 && slice[2] === 3 &&
-          slice[3] === 4 && slice[4] === 5 && slice[5] === 6) {
-        pickupCount = i;
-        console.log(`Detected ${pickupCount} pickup beats - regular cycle starts at position ${i}`);
-        console.log(`Beat pattern: [${beatNumbers.slice(0, Math.min(12, beatNumbers.length)).join(', ')}]`);
-        break;
-      }
-    }
+  if (beatNumbers && beatNumbers.length > 0) {
+    const firstBeatNum = beatNumbers[0];
 
-    // Fallback: if no regular cycle found, use the old method but be more conservative
-    if (pickupCount === 0) {
-      // Count consecutive beats with beatNum = 1 at the beginning, but stop at first non-1
-      for (let i = 0; i < Math.min(actualBeatsPerMeasure, chords.length); i++) {
-        if (beatNumbers[i] === 1) {
-          pickupCount++;
-        } else {
-          break;
-        }
+    // If first beat is not 1, we have pickup beats
+    if (firstBeatNum !== 1) {
+      // CORRECTED CALCULATION: Count beats from first beat until beat 1
+      // For 3/4 time: if first beat is 2, pickup count = 2 (beats 2, 3)
+      // For 3/4 time: if first beat is 3, pickup count = 1 (beat 3)
+      let beatsUntilDownbeat = 0;
+      for (let i = 0; i < beatNumbers.length && beatNumbers[i] !== 1; i++) {
+        beatsUntilDownbeat++;
       }
-
-      // Only treat as pickup beats if followed by beatNum = 2 and we have reasonable count
-      if (pickupCount > 0 && pickupCount < chords.length &&
-          beatNumbers[pickupCount] === 2 && pickupCount < actualBeatsPerMeasure) {
-        console.log(`Detected ${pickupCount} pickup beats from fallback method`);
-      } else {
-        pickupCount = 0;
-      }
+      pickupCount = beatsUntilDownbeat;
+      console.log(`🎵 ChordGrid detected pickup beats: first beat = ${firstBeatNum}, pickup count = ${pickupCount} in ${actualBeatsPerMeasure}/4 time`);
+    } else {
+      console.log(`✅ ChordGrid: No pickup beats detected (starts with beat 1)`);
     }
   }
 
-  // Correct approach: handle pickup beats properly by adjusting the grouping
-  // Pickup beats should only affect the first measure, all subsequent measures should be complete
-
-  // Start processing from the pickup beats
+  // Group beats into measures using backend beat numbers
   let currentIndex = 0;
+  let measureNumber = 1;
 
-  // First measure: handle pickup beats if they exist
+  // Handle pickup beats if they exist
   if (pickupCount > 0) {
-    // First measure: padding + pickup beats
     const firstMeasure = {
       measureNumber: 1,
       chords: [] as string[],
@@ -330,15 +346,16 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     for (let p = 0; p < pickupCount && currentIndex < chords.length; p++) {
       firstMeasure.chords.push(chords[currentIndex]);
       firstMeasure.beats.push(beats[currentIndex]);
-      firstMeasure.beatNumbers.push(beatNumbers?.[currentIndex] || 1);
+      // FIX 2: Preserve backend beat numbers for pickup beats without fallback
+      firstMeasure.beatNumbers.push(beatNumbers?.[currentIndex]);
       currentIndex++;
     }
 
     groupedByMeasure.push(firstMeasure);
+    measureNumber = 2;
   }
 
-  // Process remaining beats into complete measures
-  let measureNumber = pickupCount > 0 ? 2 : 1;
+  // Process remaining beats into measures
   while (currentIndex < chords.length) {
     const measure = {
       measureNumber: measureNumber,
@@ -349,23 +366,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       paddingEnd: 0
     };
 
-    // Add beats to this measure (up to actualBeatsPerMeasure)
+    // Add beats to this measure using backend beat numbers
     for (let b = 0; b < actualBeatsPerMeasure && currentIndex < chords.length; b++) {
       measure.chords.push(chords[currentIndex]);
       measure.beats.push(beats[currentIndex]);
-      measure.beatNumbers.push(beatNumbers?.[currentIndex] || ((b % actualBeatsPerMeasure) + 1));
+      // FIX 2: Use backend beat number directly without fallback that creates [1,2,3,4] pattern
+      measure.beatNumbers.push(beatNumbers?.[currentIndex]);
       currentIndex++;
-    }
-
-    // Only add padding if this is the very last measure and it's incomplete
-    // (This should rarely happen with proper beat detection)
-    if (measure.chords.length < actualBeatsPerMeasure && currentIndex >= chords.length) {
-      while (measure.chords.length < actualBeatsPerMeasure) {
-        measure.chords.push('');
-        measure.beats.push(-1);
-        measure.beatNumbers.push(-1);
-        measure.paddingEnd++;
-      }
     }
 
     groupedByMeasure.push(measure);
@@ -376,20 +383,35 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
 
 
-  // Debug: Log measure structure
-  console.log('=== CHORD GRID MEASURE GROUPING DEBUG ===');
+  // FIX 3: Enhanced debug logging for ChordGrid with beat number validation
+  console.log('\n🎼 === CHORD GRID PROCESSING DEBUG ===');
   console.log(`Input data: ${chords.length} chords, ${beats.length} beats, ${beatNumbers?.length || 0} beatNumbers`);
-  console.log(`Time signature: ${actualBeatsPerMeasure}/4, pickup beats: ${pickupCount}`);
-  console.log('Beat numbers pattern:', beatNumbers?.slice(0, 20));
-  console.log('Grouped measures:', groupedByMeasure.map(m => ({
-    measureNum: m.measureNumber,
-    paddingStart: m.paddingStart,
-    paddingEnd: m.paddingEnd,
-    totalBeats: m.chords.length,
-    beatNumbers: m.beatNumbers,
-    chords: m.chords.map(c => c || 'PAD')
-  })));
-  console.log('=== END CHORD GRID DEBUG ===');
+  console.log(`Time signature: ${actualBeatsPerMeasure}/4, detected pickup beats: ${pickupCount}`);
+  console.log(`Current beat index for highlighting: ${currentBeatIndex}`);
+
+  // Validate input beat numbers
+  if (beatNumbers && beatNumbers.length > 0) {
+    const inputBeatPattern = beatNumbers.slice(0, 15);
+    console.log(`Input beat number pattern from props: [${inputBeatPattern.join(', ')}]`);
+
+    // Check for undefined values in input
+    const undefinedCount = beatNumbers.filter(num => num === undefined).length;
+    if (undefinedCount > 0) {
+      console.warn(`⚠️  ChordGrid received ${undefinedCount} undefined beat numbers in props!`);
+    }
+
+    // Check if pattern looks like backend pickup pattern (e.g., [3, 1, 2, 3...])
+    const firstBeatNum = beatNumbers[0];
+    if (firstBeatNum && firstBeatNum !== 1) {
+      console.log(`🎵 ChordGrid detected pickup pattern: first beat number is ${firstBeatNum}`);
+    }
+  } else {
+    console.warn('⚠️  ChordGrid received no beat numbers in props');
+  }
+
+  // Compact debug output
+  const beatPattern = beatNumbers?.slice(0, 12).join(', ') || 'N/A';
+  console.log(`ChordGrid: ${groupedByMeasure.length} measures, ${pickupCount} pickup beats, ${actualBeatsPerMeasure}/4 time, pattern: [${beatPattern}]`);
 
   // Group measures into rows using the dynamic measures per row
   const rows: Array<typeof groupedByMeasure> = [];
@@ -398,7 +420,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   }
 
   return (
-    <div className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
+    <div ref={gridContainerRef} className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
 
       {/* Render rows of measures */}
       <div className="space-y-2">
@@ -459,13 +481,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                         <div
                           id={isPadding ? `padding-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
                           key={isPadding ? `padding-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure, isPadding)} w-full h-full min-h-[3.75rem]`}
+                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure, isPadding)} w-full h-full min-h-[3.75rem] chord-cell`}
                         >
                           {/* Only show chord name if it's a new chord and not padding */}
                           <div style={getChordContainerStyles()}>
                             {!isPadding && showChordLabel && chord ? (
                               <div
-                                className={getResponsiveChordFontSize(chord)}
+                                className={`${getDynamicFontSize(cellSize, chord.length)} font-medium leading-tight`}
                                 style={getChordLabelStyles(chord)}
                                 dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
                               />

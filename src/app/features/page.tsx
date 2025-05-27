@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 import Navigation from '@/components/Navigation';
 
@@ -43,8 +44,8 @@ function CollapsibleFeature({ title, description, details, icon, isExpanded, onT
         {description}
       </p>
       {isExpanded && (
-        <div className="bg-blue-100 dark:bg-blue-800 p-4 rounded-lg transition-all duration-300 ease-in-out">
-          <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 space-y-2 transition-colors duration-300">
+        <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg transition-all duration-300 ease-in-out border border-blue-200 dark:border-blue-700">
+          <ul className="list-disc list-inside text-gray-700 dark:text-gray-200 space-y-2 transition-colors duration-300">
             {details.map((detail, index) => (
               <li key={index} dangerouslySetInnerHTML={{ __html: detail }} />
             ))}
@@ -73,7 +74,7 @@ export default function FeaturesPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -92,6 +93,16 @@ export default function FeaturesPage() {
                 'Real-time visualization of chord changes',
                 '<span class="font-medium">NEW:</span> Customizable models for different music genres'
               ]}
+              icon={
+                <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="6" cy="6" r="2" fill="currentColor"/>
+                  <circle cx="18" cy="6" r="2" fill="currentColor"/>
+                  <circle cx="6" cy="18" r="2" fill="currentColor"/>
+                  <circle cx="18" cy="18" r="2" fill="currentColor"/>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                  <path d="M8 6l4 6m0 0l4-6m-4 6l-4 6m4-6l4 6" strokeWidth="1.5"/>
+                </svg>
+              }
               isExpanded={expandedFeatures.chord}
               onToggle={() => toggleFeature('chord')}
             />
@@ -106,6 +117,11 @@ export default function FeaturesPage() {
                 'Visual beat grid with measure indicators',
                 '<span class="font-medium">NEW:</span> Selectable beat detection models for optimal accuracy'
               ]}
+              icon={
+                <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+              }
               isExpanded={expandedFeatures.beat}
               onToggle={() => toggleFeature('beat')}
             />
@@ -120,6 +136,11 @@ export default function FeaturesPage() {
                 'Auto-scrolling with customizable focus point',
                 'Adjustable font size for better readability'
               ]}
+              icon={
+                <svg className="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
               isExpanded={expandedFeatures.lyrics}
               onToggle={() => toggleFeature('lyrics')}
             />
@@ -135,9 +156,13 @@ export default function FeaturesPage() {
                 'Toggle translations on/off with language selection dropdown'
               ]}
               icon={
-                <svg width="32" height="32" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M95.5 15.5L26.5 176.5H165.5L95.5 15.5Z" fill="#8e44ef" />
-                </svg>
+                <Image
+                  src="/sparkles-outline.svg"
+                  alt="Gemini AI"
+                  width={32}
+                  height={32}
+                  className="text-purple-600 dark:text-purple-400"
+                />
               }
               isExpanded={expandedFeatures.translation}
               onToggle={() => toggleFeature('translation')}
@@ -153,6 +178,11 @@ export default function FeaturesPage() {
                 'Firebase-powered caching system for faster analysis of previously processed videos',
                 'Recent videos history for quick access to previously analyzed content'
               ]}
+              icon={
+                <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              }
               isExpanded={expandedFeatures.youtube}
               onToggle={() => toggleFeature('youtube')}
             />

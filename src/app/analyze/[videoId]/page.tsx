@@ -133,6 +133,9 @@ export default function YouTubeVideoAnalyzePage() {
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [translatedLyrics] = useState<{[language: string]: any}>({});
 
+  // Video title state
+  const [videoTitle, setVideoTitle] = useState<string>(`YouTube Video ${videoId}`);
+
   // Debug log for lyrics state changes
   useEffect(() => {
     console.log('Lyrics state changed:', {
@@ -201,6 +204,11 @@ export default function YouTubeVideoAnalyzePage() {
       });
     }
   }, [analysisResults?.chords]); // Re-run when chord data changes
+
+  // Fetch video title on component mount
+  useEffect(() => {
+    fetchVideoTitle();
+  }, [videoId]); // Re-run when videoId changes
 
   // Extract audio from YouTube on component mount
   useEffect(() => {
@@ -382,11 +390,37 @@ export default function YouTubeVideoAnalyzePage() {
     }
   };
 
+  // Function to fetch video title from YouTube API
+  const fetchVideoTitle = async () => {
+    try {
+      // Use yt-dlp to get video info including title
+      const response = await fetch('/api/extract-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoId,
+          getInfoOnly: true // Add this flag to only get video info without downloading
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.title) {
+        setVideoTitle(data.title);
+        console.log('Fetched video title:', data.title);
+      }
+    } catch (error) {
+      console.log('Could not fetch video title:', error);
+      // Keep the default title
+    }
+  };
+
   // Function to build song context for chatbot
   const buildSongContext = (): SongContext => {
     return {
       videoId,
-      title: `YouTube Video ${videoId}`, // You could fetch actual title from YouTube API
+      title: videoTitle, // Use the fetched video title
       duration,
 
       // Beat detection results
@@ -1161,13 +1195,12 @@ export default function YouTubeVideoAnalyzePage() {
     }
   };
 
-  // Metronome synchronization hook
+  // Metronome synchronization hook - direct alignment approach
   useMetronomeSync({
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
-    isPlaying,
-    beatShift: analysisResults?.beatDetectionResult?.beatShift || 0
+    isPlaying
   });
 
   // Update current time and check for current beat
@@ -1179,25 +1212,52 @@ export default function YouTubeVideoAnalyzePage() {
         const time = audioRef.current.currentTime;
         setCurrentTime(time);
 
-        // Find the current beat based on time
-        if (analysisResults.beats && analysisResults.beats.findIndex) {
-          const currentBeat = analysisResults.beats.findIndex(
-            (beat, index) => time >= beat.time &&
-            (index === (analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length - 1 : 0) ||
-             (analysisResults.beats && index + 1 < analysisResults.beats.length && time < analysisResults.beats[index + 1].time))
-          );
+        // Find the current beat based on synchronized chords array
+        // This ensures consistency between beat tracking and chord display
+        if (analysisResults.synchronizedChords && analysisResults.synchronizedChords.length > 0 && analysisResults.beats) {
+          let currentBeat = -1;
+
+          // Find the current beat by matching time against the beats array
+          // but use the synchronized chords index for consistency
+          for (let i = 0; i < analysisResults.synchronizedChords.length; i++) {
+            const syncChord = analysisResults.synchronizedChords[i];
+            const beatIndex = syncChord.beatIndex;
+
+            // Make sure we have a valid beat for this synchronized chord
+            if (beatIndex < analysisResults.beats.length) {
+              const beat = analysisResults.beats[beatIndex];
+              const nextBeatTime = beatIndex + 1 < analysisResults.beats.length
+                ? analysisResults.beats[beatIndex + 1].time
+                : beat.time + 0.5; // Estimate for last beat
+
+              if (time >= beat.time && time < nextBeatTime) {
+                currentBeat = i; // Use synchronized chord index, not beat index
+                break;
+              }
+            }
+          }
 
           if (currentBeat !== -1) {
-            // Apply beat shift compensation to synchronize with shifted chord labels
-            const beatShift = analysisResults.beatDetectionResult?.beatShift || 0;
-            const adjustedBeatIndex = Math.max(0, Math.min(analysisResults.beats.length - 1, currentBeat + beatShift));
+            setCurrentBeatIndex(currentBeat);
 
-            // Debug logging for beat shift synchronization
-            if (beatShift !== 0) {
-              console.log(`Beat shift synchronization: original=${currentBeat}, shift=${beatShift}, adjusted=${adjustedBeatIndex}`);
+            // Enhanced debug current beat tracking
+            if (currentBeat < 8) { // Log first 8 beats for better analysis
+              const syncChord = analysisResults.synchronizedChords[currentBeat];
+              const beat = analysisResults.beats[syncChord.beatIndex];
+              const isDownbeat = syncChord.beatNum === 1;
+              const timeDiff = time - beat.time;
+
+              console.log(`\n🎵 BEAT TRACKING ${currentBeat}:`);
+              console.log(`  Audio time: ${time.toFixed(3)}s`);
+              console.log(`  Sync index: ${currentBeat} -> Beat index: ${syncChord.beatIndex}`);
+              console.log(`  Beat time: ${beat.time.toFixed(3)}s (diff: ${timeDiff.toFixed(3)}s)`);
+              console.log(`  Beat number: ${syncChord.beatNum} ${isDownbeat ? '[DOWNBEAT]' : ''}`);
+              console.log(`  Current chord: "${syncChord.chord}"`);
+
+              if (!isDownbeat && syncChord.chord !== 'N/C') {
+                console.log(`  ⚠️  CHORD ON NON-DOWNBEAT: "${syncChord.chord}" appears on beat ${syncChord.beatNum}`);
+              }
             }
-
-            setCurrentBeatIndex(adjustedBeatIndex);
           }
         }
 
@@ -1347,14 +1407,27 @@ Respond with only the key signature, nothing else.`;
     const gridData = {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
       beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
-      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum || 1)
+      // FIX 1: Remove fallback logic that overrides backend beat numbers
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum)
     };
 
-    // Debug: Log the beat numbers being passed to ChordGrid
-    console.log('=== CHORD GRID DATA DEBUG ===');
+    // Enhanced debug: Log the beat numbers being passed to ChordGrid with validation
+    console.log('=== CHORD GRID DATA EXTRACTION DEBUG ===');
     console.log(`Total synchronized chords: ${analysisResults.synchronizedChords.length}`);
-    console.log('First 20 beat numbers passed to ChordGrid:', gridData.beatNumbers.slice(0, 20));
-    console.log('=== END CHORD GRID DATA DEBUG ===');
+    console.log('First 20 beat numbers from synchronizedChords:', gridData.beatNumbers.slice(0, 20));
+
+    // Check for undefined beat numbers that would indicate data corruption
+    const undefinedBeatNums = gridData.beatNumbers.filter(num => num === undefined).length;
+    if (undefinedBeatNums > 0) {
+      console.warn(`⚠️  Found ${undefinedBeatNums} undefined beat numbers in synchronized chords!`);
+      console.log('Sample synchronized chords with undefined beatNum:',
+        analysisResults.synchronizedChords.filter(item => item.beatNum === undefined).slice(0, 5));
+    }
+
+    // Verify beat pattern consistency
+    const beatPattern = gridData.beatNumbers.slice(0, 15);
+    console.log(`Beat pattern passed to ChordGrid: [${beatPattern.join(', ')}]`);
+    console.log('=== END CHORD GRID DATA EXTRACTION DEBUG ===');
 
     return gridData;
   };
@@ -1393,7 +1466,7 @@ Respond with only the key signature, nothing else.`;
   }, [preferredAudioSource, youtubePlayer]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -1410,8 +1483,8 @@ Respond with only the key signature, nothing else.`;
         onRefresh={() => extractAudioFromYouTube(true)}
       />
 
-      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300" style={{ maxWidth: "98%" }}>
-        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden transition-colors duration-300">
+      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300" style={{ maxWidth: "98%" }}>
+        <div className="bg-white dark:bg-gray-700 shadow-md rounded-lg overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
 
         {/* Main content area - responsive width based on chatbot state */}
         <div className={`flex flex-col transition-all duration-300 ${
@@ -1510,7 +1583,7 @@ Respond with only the key signature, nothing else.`;
 
               {/* Model Selection - hidden when complete */}
               {audioProcessingState.isExtracted && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && !audioProcessingState.error && stage !== 'complete' && (
-                <div className="w-full p-4 rounded-lg bg-gray-50 dark:bg-gray-800 overflow-visible transition-colors duration-300">
+                <div className="w-full p-4 rounded-lg bg-gray-50 dark:bg-gray-700 overflow-visible transition-colors duration-300 border border-gray-200 dark:border-gray-600">
                   <div className="flex flex-col h-full">
                     <div className="mb-2">
                       <h3 className="font-medium text-gray-900 dark:text-gray-100 transition-colors duration-300">
@@ -1556,9 +1629,14 @@ Respond with only the key signature, nothing else.`;
             <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-2 mt-0 transition-colors duration-300">
+              <div className="p-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 mb-2 mt-0 transition-colors duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-2">
-                  <h3 className="font-medium text-lg mb-2 md:mb-0 text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
+                  <div className="mb-2 md:mb-0">
+                    <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300 mt-1 truncate max-w-md">
+                      {videoTitle}
+                    </p>
+                  </div>
                   <div className="flex flex-col w-full md:w-auto">
                     <button
                       onClick={transcribeLyrics}
@@ -1619,10 +1697,14 @@ Respond with only the key signature, nothing else.`;
                             console.log('timeSignature value:', timeSignature);
                             console.log('timeSignature type:', typeof timeSignature);
                             console.log('timeSignature !== 4:', timeSignature !== 4);
-                            console.log('Should show tag:', timeSignature && timeSignature !== 4);
+                            console.log('timeSignature !== undefined:', timeSignature !== undefined);
+                            console.log('timeSignature !== null:', timeSignature !== null);
+                            console.log('Should show tag (old logic):', timeSignature && timeSignature !== 4);
+                            console.log('Should show tag (new logic):', timeSignature !== undefined && timeSignature !== null);
                             console.log('=== END TIME SIGNATURE TAG DEBUG ===');
 
-                            return timeSignature && timeSignature !== 4 ? (
+                            // Always show time signature if it's available (not just when it's not 4/4)
+                            return timeSignature !== undefined && timeSignature !== null ? (
                               <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
                                 <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
                                   Time: {timeSignature}/4
@@ -1640,7 +1722,7 @@ Respond with only the key signature, nothing else.`;
                           )}
                           {/* Loading indicator for key detection */}
                           {isDetectingKey && (
-                            <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1">
+                            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1">
                               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                                 Detecting key...
                               </span>
@@ -1725,7 +1807,7 @@ Respond with only the key signature, nothing else.`;
 
 
               {/* Beats visualization */}
-              <div className="p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 transition-colors duration-300">
+              <div className="p-4 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-colors duration-300">
                 <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Timeline</h3>
                 <div className="relative h-16 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden transition-colors duration-300">
                   {/* Beat markers */}
@@ -1844,7 +1926,7 @@ Respond with only the key signature, nothing else.`;
           </div>
 
           {/* Playback controls - now in the main content area */}
-          <div className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3 transition-colors duration-300">
+          <div className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-lg mb-3 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={playPause}
@@ -1910,7 +1992,12 @@ Respond with only the key signature, nothing else.`;
                   }`}
                   title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
                 >
-                  {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
+                  <span className={`${isChatbotOpen ? 'hidden sm:inline' : ''}`}>
+                    {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
+                  </span>
+                  <span className={`${isChatbotOpen ? 'inline sm:hidden' : 'hidden'}`}>
+                    {isFollowModeEnabled ? "Scroll: ON" : "Scroll: OFF"}
+                  </span>
                 </button>
 
                 <button
@@ -1922,12 +2009,17 @@ Respond with only the key signature, nothing else.`;
                   }`}
                   title="Switch audio source"
                 >
-                  {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
+                  <span className={`${isChatbotOpen ? 'hidden sm:inline' : ''}`}>
+                    {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
+                  </span>
+                  <span className={`${isChatbotOpen ? 'inline sm:hidden' : 'hidden'}`}>
+                    {preferredAudioSource === 'extracted' ? "Audio: Ext" : "Audio: YT"}
+                  </span>
                 </button>
 
                 {/* Metronome controls - only show when analysis results are available */}
                 {analysisResults && (
-                  <MetronomeControls />
+                  <MetronomeControls isChatbotOpen={isChatbotOpen} />
                 )}
               </div>
               <div className="relative">

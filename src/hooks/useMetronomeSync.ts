@@ -7,7 +7,6 @@ interface UseMetronomeSyncProps {
   downbeats?: number[];
   currentTime: number;
   isPlaying: boolean;
-  beatShift?: number;
 }
 
 /**
@@ -17,8 +16,7 @@ export const useMetronomeSync = ({
   beats,
   downbeats = [],
   currentTime,
-  isPlaying,
-  beatShift = 0
+  isPlaying
 }: UseMetronomeSyncProps) => {
   const lastScheduledBeatRef = useRef<number>(-1);
   const schedulingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,7 +28,7 @@ export const useMetronomeSync = ({
    */
   const isDownbeat = useCallback((beatTime: number): boolean => {
     if (!downbeats || downbeats.length === 0) return false;
-    
+
     // Check if this beat time is close to any downbeat time (within 50ms tolerance)
     return downbeats.some(downbeatTime => Math.abs(beatTime - downbeatTime) < 0.05);
   }, [downbeats]);
@@ -49,12 +47,7 @@ export const useMetronomeSync = ({
     // Find beats that need to be scheduled
     for (let i = lastScheduledBeatRef.current + 1; i < beats.length; i++) {
       const beat = beats[i];
-      let beatTime = beat.time;
-
-      // Apply beat shift compensation if needed
-      if (beatShift !== 0 && i + beatShift >= 0 && i + beatShift < beats.length) {
-        beatTime = beats[i + beatShift].time;
-      }
+      const beatTime = beat.time; // Use beat time directly - no shift compensation needed
 
       // Stop if we've gone beyond our look-ahead window
       if (beatTime > scheduleUntil) {
@@ -64,17 +57,19 @@ export const useMetronomeSync = ({
       // Only schedule if the beat is in the future (with small tolerance for timing precision)
       if (beatTime > now - 0.01) {
         const isDownbeatClick = isDownbeat(beatTime);
-        
+
         // Schedule the click
         metronomeService.scheduleClick(beatTime, isDownbeatClick);
-        
-        // Debug logging for metronome scheduling
-        console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'beat'} click at ${beatTime.toFixed(3)}s (current: ${now.toFixed(3)}s, shift: ${beatShift})`);
+
+        // Debug logging for metronome scheduling (reduced verbosity)
+        if (i < 5) { // Only log first few beats to reduce console spam
+          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'beat'} click at ${beatTime.toFixed(3)}s`);
+        }
       }
 
       lastScheduledBeatRef.current = i;
     }
-  }, [beats, currentTime, isPlaying, beatShift, isDownbeat]);
+  }, [beats, currentTime, isPlaying, isDownbeat]); // beatShift removed - not used in direct alignment
 
   /**
    * Reset scheduling when playback starts or seeks
@@ -91,7 +86,7 @@ export const useMetronomeSync = ({
 
     // Set last scheduled to one before current beat so we start scheduling from current beat
     lastScheduledBeatRef.current = Math.max(-1, currentBeatIndex - 1);
-    
+
     console.log(`Metronome: Reset scheduling from beat index ${lastScheduledBeatRef.current + 1} at time ${currentTime.toFixed(3)}s`);
   }, [beats, currentTime]);
 
@@ -104,7 +99,7 @@ export const useMetronomeSync = ({
     }
 
     resetScheduling();
-    
+
     schedulingIntervalRef.current = setInterval(() => {
       scheduleUpcomingClicks();
     }, scheduleInterval);
@@ -144,13 +139,7 @@ export const useMetronomeSync = ({
     }
   }, [currentTime, resetScheduling, isPlaying]);
 
-  // Effect to handle beat shift changes
-  useEffect(() => {
-    if (isPlaying && metronomeService.isMetronomeEnabled()) {
-      console.log(`Metronome: Beat shift changed to ${beatShift}, resetting scheduling`);
-      resetScheduling();
-    }
-  }, [beatShift, resetScheduling, isPlaying]);
+  // Note: Beat shift effects removed - direct alignment approach doesn't use shifting
 
   // Cleanup on unmount
   useEffect(() => {

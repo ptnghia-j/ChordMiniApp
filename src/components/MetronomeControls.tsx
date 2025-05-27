@@ -3,9 +3,10 @@ import { metronomeService } from '@/services/metronomeService';
 
 interface MetronomeControlsProps {
   className?: string;
+  isChatbotOpen?: boolean;
 }
 
-const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '' }) => {
+const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isChatbotOpen = false }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell'>('traditional');
@@ -79,7 +80,14 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '' })
             >
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
             </svg>
-            <span>{isEnabled ? "Metronome: ON" : "Metronome: OFF"}</span>
+            <span>
+              <span className={`${isChatbotOpen ? 'hidden sm:inline' : ''}`}>
+                {isEnabled ? "Metronome: ON" : "Metronome: OFF"}
+              </span>
+              <span className={`${isChatbotOpen ? 'inline sm:hidden' : 'hidden'}`}>
+                {isEnabled ? "Metro: ON" : "Metro: OFF"}
+              </span>
+            </span>
           </div>
         </button>
 
@@ -102,7 +110,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '' })
 
       {/* Expanded controls */}
       {isExpanded && (
-        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+        <div className="mt-2 p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
           {/* Sound style selector */}
           <div className="mb-3">
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">

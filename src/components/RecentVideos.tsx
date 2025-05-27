@@ -14,7 +14,7 @@ interface CachedVideo {
 }
 
 const AUDIO_FILES_COLLECTION = 'audioFiles';
-const MAX_VIDEOS = 6;
+const MAX_VIDEOS = 12; // Increased from 6 to show more cached videos
 
 export default function RecentVideos() {
   const [videos, setVideos] = useState<CachedVideo[]>([]);
@@ -76,14 +76,14 @@ export default function RecentVideos() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-4 transition-colors duration-300">
+      <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {[...Array(6)].map((_, index) => (
+          {[...Array(12)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-700 rounded-md mb-1 transition-colors duration-300"></div>
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-1 transition-colors duration-300"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 transition-colors duration-300"></div>
+              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-1 transition-colors duration-300"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
             </div>
           ))}
         </div>
@@ -96,7 +96,7 @@ export default function RecentVideos() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-4 transition-colors duration-300">
+    <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
       <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -106,7 +106,7 @@ export default function RecentVideos() {
             key={video.videoId}
             className="block group hover:opacity-90 transition-opacity"
           >
-            <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden mb-1 shadow-sm transition-colors duration-300">
+            <div className="relative aspect-video bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden mb-1 shadow-sm transition-colors duration-300">
               <Image
                 src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
                 alt={video.title || 'Video thumbnail'}

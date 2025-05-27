@@ -8,6 +8,114 @@ import traceback
 import sys
 from pathlib import Path
 
+def trim_silence_from_audio(audio_path, output_path=None, top_db=20, frame_length=2048, hop_length=512):
+    """
+    Trim silence from the beginning and end of an audio file.
+
+    Args:
+        audio_path: Path to the input audio file
+        output_path: Path to save the trimmed audio (optional, defaults to overwriting input)
+        top_db: The threshold (in decibels) below reference to consider as silence
+        frame_length: Length of the frames for analysis
+        hop_length: Number of samples between successive frames
+
+    Returns:
+        tuple: (trimmed_audio, sample_rate, trim_start_time, trim_end_time)
+    """
+    try:
+        # Load the audio file
+        y, sr = librosa.load(audio_path, sr=None)
+
+        # Trim silence from beginning and end
+        # top_db=20 means anything 20dB below the peak is considered silence
+        y_trimmed, index = librosa.effects.trim(y, top_db=top_db, frame_length=frame_length, hop_length=hop_length)
+
+        # Calculate the trim times
+        trim_start_samples = index[0]
+        trim_end_samples = index[1]
+        trim_start_time = trim_start_samples / sr
+        trim_end_time = trim_end_samples / sr
+
+        print(f"DEBUG: Audio trimming results:")
+        print(f"  - Original duration: {len(y) / sr:.3f}s")
+        print(f"  - Trimmed duration: {len(y_trimmed) / sr:.3f}s")
+        print(f"  - Trimmed from start: {trim_start_time:.3f}s")
+        print(f"  - Trimmed from end: {len(y) / sr - trim_end_time:.3f}s")
+
+        # Save the trimmed audio if output path is provided
+        if output_path:
+            import soundfile as sf
+            sf.write(output_path, y_trimmed, sr)
+            print(f"DEBUG: Saved trimmed audio to: {output_path}")
+
+        return y_trimmed, sr, trim_start_time, trim_end_time
+
+    except Exception as e:
+        print(f"ERROR: Failed to trim silence from audio: {e}")
+        # Return original audio if trimming fails
+        y, sr = librosa.load(audio_path, sr=None)
+        return y, sr, 0.0, len(y) / sr
+
+def detect_time_signature_from_pattern(pattern):
+    """
+    Detect time signature from a beat pattern.
+
+    Args:
+        pattern: List of beat numbers (e.g., [1, 2, 3, 1, 2, 3, ...] or [3, 1, 2, 3, 1, 2, 3, ...] for pickup beats)
+
+    Returns:
+        int: Detected time signature (beats per measure) or None if not detected
+    """
+    if len(pattern) < 6:
+        return None
+
+    # Try different cycle lengths from 2 to 12
+    for cycle_len in range(2, 13):
+        if len(pattern) >= cycle_len * 2:
+            # Try different starting offsets to handle irregular beginnings and pickup beats
+            for start_offset in range(min(5, len(pattern) - cycle_len * 2)):
+                offset_pattern = pattern[start_offset:]
+
+                if len(offset_pattern) >= cycle_len * 2:
+                    # Check if the pattern repeats
+                    first_cycle = offset_pattern[:cycle_len]
+                    second_cycle = offset_pattern[cycle_len:cycle_len*2]
+
+                    # Check if it's a valid beat pattern (starts with 1 and increments)
+                    if (first_cycle == second_cycle and
+                        first_cycle[0] == 1 and
+                        first_cycle == list(range(1, cycle_len + 1))):
+
+                        # Verify with a third cycle if available
+                        if len(offset_pattern) >= cycle_len * 3:
+                            third_cycle = offset_pattern[cycle_len*2:cycle_len*3]
+                            if first_cycle == third_cycle:
+                                print(f"DEBUG: Detected {cycle_len}/4 time signature from pattern at offset {start_offset}: {first_cycle}")
+                                return cycle_len
+                        else:
+                            print(f"DEBUG: Detected {cycle_len}/4 time signature from pattern at offset {start_offset}: {first_cycle}")
+                            return cycle_len
+
+    # Special case: Handle pickup beat patterns like [3, 1, 2, 3, 1, 2, 3, ...] for 3/4 time
+    # Look for patterns where the first beat is the final beat of a cycle, followed by a regular cycle
+    for cycle_len in range(2, 13):
+        if len(pattern) >= cycle_len + 2:  # Need at least one pickup + one full cycle
+            # Check if pattern starts with the final beat of the cycle, then continues with regular cycle
+            if pattern[0] == cycle_len:  # First beat is the final beat number
+                # Check if the rest follows the regular pattern [1, 2, 3, ..., cycle_len]
+                regular_pattern = pattern[1:cycle_len+1]
+                expected_pattern = list(range(1, cycle_len + 1))
+
+                if regular_pattern == expected_pattern:
+                    # Verify the pattern repeats
+                    if len(pattern) >= cycle_len * 2 + 1:
+                        next_cycle = pattern[cycle_len+1:cycle_len*2+1]
+                        if next_cycle == expected_pattern:
+                            print(f"DEBUG: Detected {cycle_len}/4 time signature from pickup pattern: pickup={pattern[0]}, cycle={expected_pattern}")
+                            return cycle_len
+
+    return None
+
 # Apply scipy patches before importing librosa
 from scipy_patch import apply_scipy_patches, patch_librosa_beat_tracker, monkey_patch_beat_track
 apply_scipy_patches()
@@ -665,14 +773,21 @@ def detect_beats():
                     # before generating beat positions
                     model_time_signature = 4  # Default fallback
                     try:
-                        # Import the detector
+                        # Import the detector with correct path
+                        import sys
+                        models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+                        if models_dir not in sys.path:
+                            sys.path.insert(0, models_dir)
+
                         if use_beat_transformer_light:
-                            from beat_transformer_detector_light import detect_beats_and_downbeats
+                            from beat_transformer_detector_light import BeatTransformerDetectorLight
+                            detector = BeatTransformerDetectorLight(checkpoint_path)
                         else:
-                            from beat_transformer_detector import detect_beats_and_downbeats
+                            from beat_transformer_detector import BeatTransformerDetector
+                            detector = BeatTransformerDetector(checkpoint_path)
 
                         # Call the detector to get the full result including time signature
-                        detector_result = detect_beats_and_downbeats(temp_spec_path, file_path, checkpoint_path)
+                        detector_result = detector.detect_beats(file_path)
 
                         if detector_result and detector_result.get("success") and "time_signature" in detector_result:
                             model_time_signature = detector_result["time_signature"]
@@ -717,10 +832,12 @@ def detect_beats():
 
                             # Detect time signature from the first chunk pattern
                             if len(first_chunk_pattern) >= 10:
-                                # Look for the repeating pattern
-                                if first_chunk_pattern[:3] == [1, 1, 1] and 6 in first_chunk_pattern[:10]:
-                                    time_signature = 6
-                                    print(f"DEBUG: Confirmed 6/4 time signature from first chunk pattern")
+                                # Analyze the pattern to detect time signature
+                                detected_time_sig = detect_time_signature_from_pattern(first_chunk_pattern)
+                                if detected_time_sig:
+                                    model_time_signature = detected_time_sig
+                                    print(f"DEBUG: Detected time signature from first chunk pattern: {model_time_signature}/4")
+                                    print(f"DEBUG: Overriding detector time signature with pattern-detected time signature")
 
                         except FileNotFoundError:
                             print("Warning: beats_with_positions.txt not found, will generate pattern")
@@ -731,40 +848,103 @@ def detect_beats():
                             # Use the pattern from the first chunk to generate positions for all beats
                             print(f"DEBUG: Applying first chunk pattern to all {len(beat_times)} beats")
 
-                            # Find the repeating cycle in the first chunk pattern
-                            # Look for the pattern [1,1,1,2,3,4,5,6,1,2,3,4,5,6,...]
-                            cycle_start = -1
-                            for i in range(len(first_chunk_pattern) - 6):
-                                if (first_chunk_pattern[i:i+6] == [1,2,3,4,5,6] or
-                                    (i > 0 and first_chunk_pattern[i-1:i+5] == [1,2,3,4,5,6])):
-                                    cycle_start = i
-                                    break
+                            # Detect the repeating cycle from the first chunk pattern
+                            detected_cycle = None
+                            pickup_count = 0
 
-                            if cycle_start >= 0:
-                                # We found the regular cycle, use it
-                                pickup_count = cycle_start
-                                regular_cycle = [1,2,3,4,5,6]
-                                print(f"DEBUG: Found regular cycle starting at position {cycle_start}, pickup beats: {pickup_count}")
+                            # Try to find the repeating pattern - FIXED to handle pickup beats
+                            for cycle_len in range(2, 13):  # Test cycle lengths from 2 to 12
+                                if len(first_chunk_pattern) >= cycle_len * 2:
+                                    # Look for the pattern starting at different offsets
+                                    for start_offset in range(min(5, len(first_chunk_pattern) - cycle_len * 2)):
+                                        pattern_slice = first_chunk_pattern[start_offset:]
+                                        first_cycle = pattern_slice[:cycle_len]
+                                        second_cycle = pattern_slice[cycle_len:cycle_len*2]
+
+                                        # PICKUP BEAT FIX: Check if it's a valid repeating beat pattern
+                                        # Allow patterns that don't start with 1 (pickup beats)
+                                        if first_cycle == second_cycle:
+                                            # Check if this is a valid beat sequence (consecutive numbers in any order)
+                                            sorted_cycle = sorted(first_cycle)
+                                            expected_sequence = list(range(1, cycle_len + 1))
+
+                                            if sorted_cycle == expected_sequence:
+                                                # This is a valid beat pattern, possibly with pickup beats
+                                                detected_cycle = expected_sequence  # Use the canonical [1,2,3] form
+                                                pickup_count = start_offset
+
+                                                # Calculate actual pickup beats based on where the pattern starts
+                                                first_beat_num = first_cycle[0]
+                                                if first_beat_num != 1:
+                                                    # Pattern starts with pickup beats
+                                                    actual_pickup_count = cycle_len - first_beat_num + 1
+                                                    pickup_count = actual_pickup_count
+                                                    print(f"DEBUG: Found {cycle_len}-beat cycle with pickup beats. First beat: {first_beat_num}, pickup count: {pickup_count}")
+                                                else:
+                                                    print(f"DEBUG: Found {cycle_len}-beat cycle starting at offset {start_offset}: {detected_cycle}")
+                                                break
+                                    if detected_cycle:
+                                        break
+
+                            if detected_cycle:
+                                # Use the detected cycle
+                                regular_cycle = detected_cycle
+                                print(f"DEBUG: Using detected cycle with {pickup_count} pickup beats: {regular_cycle}")
                             else:
-                                # Fallback: assume 3 pickup beats and 6-beat cycle
-                                pickup_count = 3
-                                regular_cycle = [1,2,3,4,5,6]
-                                print(f"DEBUG: Using fallback pattern with {pickup_count} pickup beats")
+                                # Fallback: use the model's detected time signature
+                                regular_cycle = list(range(1, model_time_signature + 1))
+                                pickup_count = 0
+                                print(f"DEBUG: Using fallback pattern based on time signature {model_time_signature}/4: {regular_cycle}")
 
-                            # Generate beat positions for all beats
+                            # Generate beat positions with proper pickup beat handling
+                            print(f"\n=== BEAT NUMBERING WITH PICKUP HANDLING (Beat-Transformer) ===")
+                            print(f"Processing {len(beat_times)} beats with {pickup_count} pickup beats")
+                            print(f"Time signature: {model_time_signature}/4")
+                            print(f"Regular cycle: {regular_cycle}")
+
+                            # Strategy: For pickup beats, assign them the FINAL beat numbers of the time signature
+                            # Then start regular measures from beat 1
                             for i, beat_time in enumerate(beat_times):
                                 if i < pickup_count:
-                                    # Pickup beats
-                                    beat_num = 1
+                                    # Pickup beats get the final beat numbers of the time signature
+                                    # For 3/4 time with 1 pickup: beat gets number 3
+                                    # For 4/4 time with 2 pickups: beats get numbers 3, 4
+                                    pickup_beat_number = model_time_signature - pickup_count + i + 1
+                                    beat_num = pickup_beat_number
                                 else:
-                                    # Regular cycle
-                                    cycle_position = (i - pickup_count) % len(regular_cycle)
-                                    beat_num = regular_cycle[cycle_position]
+                                    # Regular beats: start fresh cycle from beat 1 after pickup beats
+                                    regular_beat_index = i - pickup_count
+                                    cycle_position = regular_beat_index % model_time_signature
+                                    beat_num = cycle_position + 1  # Beat numbers are 1-indexed
 
                                 beats_with_positions.append({
                                     "time": float(beat_time),
                                     "beatNum": int(beat_num)
                                 })
+
+                            # Debug output with timestamps for first few beats
+                            print(f"First 10 beats with timestamps:")
+                            for i in range(min(10, len(beats_with_positions))):
+                                bp = beats_with_positions[i]
+                                beat_type = "PICKUP" if i < pickup_count else f"REGULAR-{i-pickup_count+1}"
+                                print(f"  Beat {i}: time={bp['time']:.3f}s, beatNum={bp['beatNum']} ({beat_type})")
+
+                            # Show beat pattern
+                            beat_pattern = [bp["beatNum"] for bp in beats_with_positions[:15]]
+                            print(f"Beat number pattern (first 15): {beat_pattern}")
+
+                            # Verify the pattern is correct
+                            if pickup_count > 0:
+                                expected_pickup = list(range(model_time_signature - pickup_count + 1, model_time_signature + 1))
+                                actual_pickup = beat_pattern[:pickup_count]
+                                print(f"Pickup verification: expected={expected_pickup}, actual={actual_pickup}")
+
+                                if len(beat_pattern) > pickup_count + model_time_signature:
+                                    first_measure = beat_pattern[pickup_count:pickup_count + model_time_signature]
+                                    expected_measure = list(range(1, model_time_signature + 1))
+                                    print(f"First full measure: expected={expected_measure}, actual={first_measure}")
+
+                            print(f"=== END BEAT NUMBERING ===\n")
 
                         else:
                             print("DEBUG: Falling back to generation method")
@@ -1064,14 +1244,21 @@ def detect_beats():
                 # Clean up temporary files
                 try:
                     os.unlink(temp_spec_path)
-                    if 'file' in request.files:
-                        os.unlink(file_path)
+                    # Clean up the trimmed audio file
+                    if 'original_file_path' in locals():
+                        os.unlink(file_path)  # This is the trimmed file
+                        print(f"Cleaned up trimmed audio file: {file_path}")
+                    # Clean up the original uploaded file if it exists
+                    if 'file' in request.files and 'original_file_path' in locals():
+                        os.unlink(original_file_path)
+                        print(f"Cleaned up original uploaded file: {original_file_path}")
                 except Exception as e:
                     print(f"Warning: Failed to clean up temporary files: {e}")
 
                 # Use the model's time signature that was detected earlier
                 time_signature = model_time_signature
                 print(f"DEBUG: Final time signature from Beat-Transformer model: {time_signature}/4")
+                print(f"DEBUG: model_time_signature source: {'pattern detection' if model_time_signature != 4 else 'detector or default'}")
 
                 # Prepare response
                 response_data = {

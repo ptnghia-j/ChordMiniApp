@@ -1,5 +1,5 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp, FirebaseApp } from "firebase/app";
+import { initializeApp, FirebaseApp, getApps } from "firebase/app";
 import { getFirestore, Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
@@ -37,13 +37,19 @@ const hasRequiredConfig =
 
 if (hasRequiredConfig) {
   try {
-    // Initialize Firebase
-    app = initializeApp(firebaseConfig);
+    // Check if Firebase app already exists
+    const existingApps = getApps();
+    if (existingApps.length > 0) {
+      app = existingApps[0];
+      console.log('Using existing Firebase app');
+    } else {
+      // Initialize Firebase
+      app = initializeApp(firebaseConfig);
+      console.log('Firebase initialized successfully');
+    }
+
     db = getFirestore(app);
     storage = getStorage(app);
-
-    // Log successful initialization
-    console.log('Firebase initialized successfully');
   } catch (error) {
     console.error('Error initializing Firebase:', error);
 

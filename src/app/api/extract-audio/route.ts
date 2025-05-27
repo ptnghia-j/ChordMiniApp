@@ -180,13 +180,39 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const data = await request.json();
-    const { videoId, forceRefresh = false } = data;
+    const { videoId, forceRefresh = false, getInfoOnly = false } = data;
 
     if (!videoId) {
       return NextResponse.json(
         { error: 'Missing videoId parameter' },
         { status: 400 }
       );
+    }
+
+    // If only video info is requested, use yt-dlp to get metadata without downloading
+    if (getInfoOnly) {
+      try {
+        const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const infoCommand = `yt-dlp --dump-single-json --no-warnings "${youtubeUrl}"`;
+
+        const { stdout } = await execPromise(infoCommand);
+        const videoInfo = JSON.parse(stdout);
+
+        return NextResponse.json({
+          success: true,
+          title: videoInfo.title || `YouTube Video ${videoId}`,
+          duration: videoInfo.duration || 0,
+          uploader: videoInfo.uploader || 'Unknown',
+          description: videoInfo.description || '',
+          videoId: videoId
+        });
+      } catch (error) {
+        console.error('Error getting video info:', error);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to get video information'
+        }, { status: 500 });
+      }
     }
 
     // Create a direct YouTube embed URL using privacy-enhanced mode to reduce tracking and CORS errors
