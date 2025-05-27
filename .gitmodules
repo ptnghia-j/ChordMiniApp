@@ -1,0 +1,6 @@
+[submodule "python_backend/models/Beat-Transformer"]
+	path = python_backend/models/Beat-Transformer
+	url = https://github.com/ptnghia-j/beat-transformer-model.git
+[submodule "python_backend/models/Chord-CNN-LSTM"]
+	path = python_backend/models/Chord-CNN-LSTM
+	url = https://github.com/ptnghia-j/chord-cnn-lstm-model.git
