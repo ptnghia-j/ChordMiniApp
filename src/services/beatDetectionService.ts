@@ -21,6 +21,7 @@ export interface DownbeatInfo {
 export interface BeatPosition {
   time: number;       // Beat time in seconds
   beatNum: number;    // Beat number within measure (1-based)
+  source?: 'detected' | 'padded'; // Source of the beat (for timing compensation)
 }
 
 // Interface for beat detection response

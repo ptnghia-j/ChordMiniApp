@@ -1401,20 +1401,23 @@ Respond with only the key signature, nothing else.`;
     if (!analysisResults ||
         !analysisResults.synchronizedChords ||
         !analysisResults.synchronizedChords.map) {
-      return { chords: [], beats: [], beatNumbers: [] };
+      return { chords: [], beats: [], beatNumbers: [], beatSources: [] };
     }
 
     const gridData = {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
       beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
       // FIX 1: Remove fallback logic that overrides backend beat numbers
-      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum)
+      beatNumbers: analysisResults.synchronizedChords.map(item => item.beatNum),
+      // Include beat sources for timing compensation display
+      beatSources: analysisResults.synchronizedChords.map(item => item.source || 'detected')
     };
 
-    // Enhanced debug: Log the beat numbers being passed to ChordGrid with validation
+    // Enhanced debug: Log the beat numbers and sources being passed to ChordGrid with validation
     console.log('=== CHORD GRID DATA EXTRACTION DEBUG ===');
     console.log(`Total synchronized chords: ${analysisResults.synchronizedChords.length}`);
     console.log('First 20 beat numbers from synchronizedChords:', gridData.beatNumbers.slice(0, 20));
+    console.log('First 20 beat sources from synchronizedChords:', gridData.beatSources.slice(0, 20));
 
     // Check for undefined beat numbers that would indicate data corruption
     const undefinedBeatNums = gridData.beatNumbers.filter(num => num === undefined).length;
@@ -1422,6 +1425,12 @@ Respond with only the key signature, nothing else.`;
       console.warn(`⚠️  Found ${undefinedBeatNums} undefined beat numbers in synchronized chords!`);
       console.log('Sample synchronized chords with undefined beatNum:',
         analysisResults.synchronizedChords.filter(item => item.beatNum === undefined).slice(0, 5));
+    }
+
+    // Count padded beats for timing compensation
+    const paddedBeatsCount = gridData.beatSources.filter(source => source === 'padded').length;
+    if (paddedBeatsCount > 0) {
+      console.log(`🔧 Found ${paddedBeatsCount} padded beats for timing compensation`);
     }
 
     // Verify beat pattern consistency
@@ -1734,6 +1743,7 @@ Respond with only the key signature, nothing else.`;
                         chords={chordGridData.chords}
                         beats={chordGridData.beats}
                         beatNumbers={chordGridData.beatNumbers}
+                        beatSources={chordGridData.beatSources}
                         currentBeatIndex={currentBeatIndex}
                         measuresPerRow={4}
                         timeSignature={analysisResults?.beatDetectionResult?.time_signature}

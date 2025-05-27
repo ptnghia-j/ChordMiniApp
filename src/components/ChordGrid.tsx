@@ -11,6 +11,7 @@ interface ChordGridProps {
   chords: string[]; // Array of chord labels (e.g., 'C', 'Am')
   beats: number[]; // Array of corresponding beat indices or timestamps
   beatNumbers?: number[]; // Array of beat numbers within measures (1-based)
+  beatSources?: ('detected' | 'padded')[]; // Array indicating source of each beat (for timing compensation)
   currentBeatIndex?: number; // Current beat index for highlighting, optional
   beatsPerMeasure?: number; // Number of beats per measure, defaults to 4
   measuresPerRow?: number; // Number of measures to display per row, defaults to 4
@@ -26,6 +27,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   chords,
   beats,
   beatNumbers,
+  beatSources,
   currentBeatIndex = -1,
   beatsPerMeasure,
   measuresPerRow = 4,
@@ -281,7 +283,14 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   console.log(`ChordGrid rendering with ${chords.length} chords and ${beats.length} beats`);
   console.log('First 5 chords:', chords.slice(0, 5));
   console.log('First 5 beat numbers:', beatNumbers?.slice(0, 5));
+  console.log('First 5 beat sources:', beatSources?.slice(0, 5));
   console.log('Unique chords:', [...new Set(chords)].length);
+
+  // Count padded beats from backend
+  const paddedBeatsCount = beatSources?.filter(source => source === 'padded').length || 0;
+  if (paddedBeatsCount > 0) {
+    console.log(`🔧 ChordGrid: Found ${paddedBeatsCount} padded beats for timing compensation`);
+  }
 
   // Note: Padding cell creation is now handled inline in measure grouping
 
@@ -291,87 +300,42 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     chords: string[];
     beats: number[];
     beatNumbers: number[];
+    beatSources: ('detected' | 'padded')[];
     paddingStart: number;
     paddingEnd: number;
   }> = [];
 
-  // Use backend beat numbers directly - no pickup detection needed
-  // Backend already handles pickup beats and provides correct beat numbering
+  // Use backend beat sources to identify padded beats (timing compensation)
+  // No need for pickup detection - backend provides complete beat information including padded beats
 
-  // PICKUP BEAT FIX: Detect pickup beats correctly from backend pattern
-  // Backend provides patterns like [2, 3, 1, 2, 3, ...] or [3, 1, 2, 3, ...] for pickup beats
-  let pickupCount = 0;
-  if (beatNumbers && beatNumbers.length > 0) {
-    const firstBeatNum = beatNumbers[0];
-
-    // If first beat is not 1, we have pickup beats
-    if (firstBeatNum !== 1) {
-      // CORRECTED CALCULATION: Count beats from first beat until beat 1
-      // For 3/4 time: if first beat is 2, pickup count = 2 (beats 2, 3)
-      // For 3/4 time: if first beat is 3, pickup count = 1 (beat 3)
-      let beatsUntilDownbeat = 0;
-      for (let i = 0; i < beatNumbers.length && beatNumbers[i] !== 1; i++) {
-        beatsUntilDownbeat++;
-      }
-      pickupCount = beatsUntilDownbeat;
-      console.log(`🎵 ChordGrid detected pickup beats: first beat = ${firstBeatNum}, pickup count = ${pickupCount} in ${actualBeatsPerMeasure}/4 time`);
-    } else {
-      console.log(`✅ ChordGrid: No pickup beats detected (starts with beat 1)`);
-    }
+  console.log(`🎵 ChordGrid: Processing ${chords.length} beats with timing compensation`);
+  if (paddedBeatsCount > 0) {
+    console.log(`  - ${paddedBeatsCount} padded beats for timing offset correction`);
+    console.log(`  - ${chords.length - paddedBeatsCount} detected beats from audio`);
   }
 
-  // Group beats into measures using backend beat numbers
+  // Group beats into measures using backend beat numbers and sources
   let currentIndex = 0;
   let measureNumber = 1;
 
-  // Handle pickup beats if they exist
-  if (pickupCount > 0) {
-    const firstMeasure = {
-      measureNumber: 1,
-      chords: [] as string[],
-      beats: [] as number[],
-      beatNumbers: [] as number[],
-      paddingStart: actualBeatsPerMeasure - pickupCount,
-      paddingEnd: 0
-    };
-
-    // Add padding cells at the start
-    for (let p = 0; p < actualBeatsPerMeasure - pickupCount; p++) {
-      firstMeasure.chords.push('');
-      firstMeasure.beats.push(-1);
-      firstMeasure.beatNumbers.push(-1);
-    }
-
-    // Add the pickup beats
-    for (let p = 0; p < pickupCount && currentIndex < chords.length; p++) {
-      firstMeasure.chords.push(chords[currentIndex]);
-      firstMeasure.beats.push(beats[currentIndex]);
-      // FIX 2: Preserve backend beat numbers for pickup beats without fallback
-      firstMeasure.beatNumbers.push(beatNumbers?.[currentIndex]);
-      currentIndex++;
-    }
-
-    groupedByMeasure.push(firstMeasure);
-    measureNumber = 2;
-  }
-
-  // Process remaining beats into measures
+  // Process all beats into measures (including padded beats)
   while (currentIndex < chords.length) {
     const measure = {
       measureNumber: measureNumber,
       chords: [] as string[],
       beats: [] as number[],
       beatNumbers: [] as number[],
+      beatSources: [] as ('detected' | 'padded')[],
       paddingStart: 0,
       paddingEnd: 0
     };
 
-    // Add beats to this measure using backend beat numbers
+    // Add beats to this measure using backend data
     for (let b = 0; b < actualBeatsPerMeasure && currentIndex < chords.length; b++) {
       measure.chords.push(chords[currentIndex]);
       measure.beats.push(beats[currentIndex]);
-      // FIX 2: Use backend beat number directly without fallback that creates [1,2,3,4] pattern
-      measure.beatNumbers.push(beatNumbers?.[currentIndex]);
+      measure.beatNumbers.push(beatNumbers?.[currentIndex] || ((b % actualBeatsPerMeasure) + 1));
+      measure.beatSources.push(beatSources?.[currentIndex] || 'detected');
       currentIndex++;
     }
 
@@ -450,47 +414,43 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                       // Count beats from all previous measures
                       for (let r = 0; r < rowIdx; r++) {
                         for (let m = 0; m < rows[r].length; m++) {
-                          // Count only non-padding beats
-                          const prevMeasure = rows[r][m];
-                          globalIndex += prevMeasure.chords.length - prevMeasure.paddingStart - prevMeasure.paddingEnd;
+                          globalIndex += rows[r][m].chords.length;
                         }
                       }
 
                       // Count beats from previous measures in current row
                       for (let m = 0; m < measureIdx; m++) {
-                        const prevMeasure = row[m];
-                        globalIndex += prevMeasure.chords.length - prevMeasure.paddingStart - prevMeasure.paddingEnd;
+                        globalIndex += row[m].chords.length;
                       }
 
-                      // Add beats from current measure (only if not padding)
-                      if (beatIdx >= measure.paddingStart && beatIdx < (measure.chords.length - measure.paddingEnd)) {
-                        globalIndex += beatIdx - measure.paddingStart;
-                      } else {
-                        globalIndex = -1; // Mark as padding
-                      }
+                      // Add current beat index
+                      globalIndex += beatIdx;
 
-                      // Determine if this is a padding cell
-                      const isPadding = beatIdx < measure.paddingStart || beatIdx >= (measure.chords.length - measure.paddingEnd);
+                      // Determine if this is a padded beat using backend source information
+                      const beatSource = measure.beatSources?.[beatIdx] || 'detected';
+                      const isPaddedBeat = beatSource === 'padded';
 
-                      // For padding cells, don't check current beat or show labels
-                      const isCurrentBeat = !isPadding && globalIndex === currentBeatIndex;
-                      const showChordLabel = !isPadding && shouldShowChordLabel(globalIndex);
-                      const isFirstInMeasure = beatIdx === measure.paddingStart; // First real beat after padding
+                      // For padded beats, show special styling but still allow highlighting
+                      const isCurrentBeat = globalIndex === currentBeatIndex;
+                      const showChordLabel = shouldShowChordLabel(globalIndex);
+                      const isFirstInMeasure = beatIdx === 0; // First beat of measure
 
                       return (
                         <div
-                          id={isPadding ? `padding-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
-                          key={isPadding ? `padding-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure, isPadding)} w-full h-full min-h-[3.75rem] chord-cell`}
+                          id={isPaddedBeat ? `padded-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
+                          key={isPaddedBeat ? `padded-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
+                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure, isPaddedBeat)} w-full h-full min-h-[3.75rem] chord-cell`}
                         >
-                          {/* Only show chord name if it's a new chord and not padding */}
+                          {/* Show chord name for all beats, but style padded beats differently */}
                           <div style={getChordContainerStyles()}>
-                            {!isPadding && showChordLabel && chord ? (
+                            {showChordLabel && chord ? (
                               <div
-                                className={`${getDynamicFontSize(cellSize, chord.length)} font-medium leading-tight`}
+                                className={`${getDynamicFontSize(cellSize, chord.length)} font-medium leading-tight ${isPaddedBeat ? 'opacity-60' : ''}`}
                                 style={getChordLabelStyles(chord)}
                                 dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
                               />
+                            ) : isPaddedBeat ? (
+                              <div className="text-xs text-gray-400 dark:text-gray-500 opacity-75">pad</div>
                             ) : (
                               <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
                             )}

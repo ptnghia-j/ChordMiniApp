@@ -211,7 +211,7 @@ function alignChordsToBeatsDirectly(
   beats: BeatInfo[],
   beatsWithPositions?: BeatPosition[],
   timeSignature: number = 4
-): {synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[], beatShift: number} {
+): {synchronizedChords: {chord: string, beatIndex: number, beatNum?: number, source?: 'detected' | 'padded'}[], beatShift: number} {
   console.log(`=== COMPREHENSIVE CHORD-BEAT ALIGNMENT DEBUG ===`);
   console.log(`Aligning ${chords.length} chords to ${beats.length} beats using direct timing`);
   console.log('Time signature:', timeSignature);
@@ -220,13 +220,22 @@ function alignChordsToBeatsDirectly(
   console.log('\n🔍 BACKEND BEAT POSITIONS ANALYSIS:');
   let hasPickupBeats = false;
   let pickupBeatCount = 0;
+  let paddedBeatsCount = 0;
 
   if (beatsWithPositions && beatsWithPositions.length > 0) {
     console.log(`Backend provided ${beatsWithPositions.length} beat positions`);
+
+    // Count padded beats
+    paddedBeatsCount = beatsWithPositions.filter(bp => bp.source === 'padded').length;
+    if (paddedBeatsCount > 0) {
+      console.log(`🔧 TIMING COMPENSATION: Found ${paddedBeatsCount} padded beats for timing offset correction`);
+    }
+
     console.log('First 15 backend beat positions:');
     for (let i = 0; i < Math.min(15, beatsWithPositions.length); i++) {
       const bp = beatsWithPositions[i];
-      console.log(`  Backend Beat ${i}: time=${bp.time.toFixed(3)}s, beatNum=${bp.beatNum}`);
+      const sourceMarker = bp.source === 'padded' ? ' (PADDED)' : '';
+      console.log(`  Backend Beat ${i}: time=${bp.time.toFixed(3)}s, beatNum=${bp.beatNum}${sourceMarker}`);
     }
 
     // Analyze beat number pattern
@@ -390,48 +399,51 @@ function alignChordsToBeatsDirectly(
   }
 
   // Step 2: Create synchronized chord array with chord sustaining
+  // Use beatsWithPositions if available (includes padded beats), otherwise fall back to beats array
+  const allBeats = beatsWithPositions && beatsWithPositions.length > 0 ? beatsWithPositions : beats.map((beat, idx) => ({
+    time: beat.time,
+    beatNum: beat.beatNum || ((idx % timeSignature) + 1)
+  }));
+
   console.log(`\n🔄 SYNCHRONIZED CHORD ARRAY CREATION:`);
+  console.log(`Using ${allBeats.length} beats (${paddedBeatsCount} padded, ${allBeats.length - paddedBeatsCount} detected)`);
+
   let currentChord = 'N/C'; // Default to no chord
 
-  for (let beatIndex = 0; beatIndex < beats.length; beatIndex++) {
-    const beat = beats[beatIndex];
-    const beatTime = beat.time;
+  for (let beatIndex = 0; beatIndex < allBeats.length; beatIndex++) {
+    const beatPosition = allBeats[beatIndex];
+    const beatTime = beatPosition.time;
+    const beatNum = beatPosition.beatNum;
+    const isPaddedBeat = beatPosition.source === 'padded';
 
-    // FIX 2: Preserve backend beat numbers - prioritize backend data over fallbacks
-    let beatNum: number;
-
-    // First priority: backend beats_with_positions data
-    if (beatNumMap.has(beatTime)) {
-      beatNum = beatNumMap.get(beatTime)!;
+    // Check if this beat has a new chord assignment (only for detected beats)
+    // Padded beats should sustain the current chord, not get new chord assignments
+    let hasNewChord = false;
+    if (!isPaddedBeat) {
+      // Find the corresponding beat index in the original beats array for chord mapping
+      const originalBeatIndex = beats.findIndex(beat => Math.abs(beat.time - beatTime) < 0.01);
+      if (originalBeatIndex >= 0) {
+        hasNewChord = beatToChordMap.has(originalBeatIndex);
+        if (hasNewChord) {
+          currentChord = beatToChordMap.get(originalBeatIndex)!;
+        }
+      }
     }
-    // Second priority: beat info from beat detection (if available)
-    else if (beat.beatNum && beat.beatNum > 0) {
-      beatNum = beat.beatNum;
-    }
-    // Last resort: calculate from index (should rarely be used)
-    else {
-      beatNum = ((beatIndex % timeSignature) + 1);
-      console.warn(`⚠️  Using fallback beat numbering for beat ${beatIndex} at time ${beatTime.toFixed(3)}s`);
-    }
-
-    // Check if this beat has a new chord assignment
-    const hasNewChord = beatToChordMap.has(beatIndex);
-    if (hasNewChord) {
-      currentChord = beatToChordMap.get(beatIndex)!;
-    }
-    // Otherwise sustain the previous chord
+    // Padded beats sustain the previous chord (no new chord assignment)
 
     synchronizedChords.push({
       chord: currentChord,
       beatIndex: beatIndex,
-      beatNum: beatNum // This now correctly preserves backend beat numbers
+      beatNum: beatNum,
+      source: beatPosition.source // Include source information for frontend
     });
 
     // Enhanced debug for first 12 beat assignments
     if (beatIndex < 12) {
       const isNewChord = hasNewChord ? ' (NEW CHORD)' : ' (sustained)';
       const isDownbeat = beatNum === 1 ? ' [DOWNBEAT]' : '';
-      console.log(`  SyncBeat ${beatIndex}: time=${beatTime.toFixed(3)}s, beatNum=${beatNum}${isDownbeat}, chord="${currentChord}"${isNewChord}`);
+      const sourceMarker = isPaddedBeat ? ' [PADDED]' : '';
+      console.log(`  SyncBeat ${beatIndex}: time=${beatTime.toFixed(3)}s, beatNum=${beatNum}${isDownbeat}${sourceMarker}, chord="${currentChord}"${isNewChord}`);
     }
   }
 
