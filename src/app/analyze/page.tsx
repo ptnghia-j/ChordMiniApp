@@ -309,9 +309,7 @@ export default function LocalAudioAnalyzePage() {
               <ChordGrid
                 chords={chordGridData.chords}
                 beats={chordGridData.beats}
-                beatNumbers={chordGridData.beatNumbers}
                 currentBeatIndex={currentBeatIndex}
-                measuresPerRow={4}
                 timeSignature={analysisResults?.beatDetectionResult?.time_signature}
               />
 

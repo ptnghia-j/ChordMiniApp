@@ -153,18 +153,19 @@ export async function saveTranscription(
       synchronizedChords: transcriptionData.synchronizedChords.map(sc => ({
         chord: sc.chord,
         beatIndex: sc.beatIndex,
-        beatNum: sc.beatNum || 0
+        beatNum: sc.beatNum || 0,
+        source: sc.source || 'detected' // Preserve source field for timing compensation
       })),
       audioDuration: transcriptionData.audioDuration || 0,
       totalProcessingTime: transcriptionData.totalProcessingTime || 0,
       // Include time signature and BPM fields - these were missing!
       timeSignature: transcriptionData.timeSignature,
       bpm: transcriptionData.bpm,
-      // Include beat shift for synchronization
-      beatShift: transcriptionData.beatShift,
-      // Include key signature fields
-      keySignature: transcriptionData.keySignature,
-      keyModulation: transcriptionData.keyModulation,
+      // Include beat shift for synchronization (handle undefined)
+      beatShift: transcriptionData.beatShift ?? 0,
+      // Include key signature fields (handle undefined)
+      keySignature: transcriptionData.keySignature ?? null,
+      keyModulation: transcriptionData.keyModulation ?? null,
       createdAt: serverTimestamp()
     };
 

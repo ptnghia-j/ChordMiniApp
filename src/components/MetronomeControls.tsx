@@ -4,9 +4,10 @@ import { metronomeService } from '@/services/metronomeService';
 interface MetronomeControlsProps {
   className?: string;
   isChatbotOpen?: boolean;
+  isVideoMinimized?: boolean;
 }
 
-const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isChatbotOpen = false }) => {
+const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isChatbotOpen = false, isVideoMinimized = false }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell'>('traditional');
@@ -63,7 +64,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
       <div className="flex items-center space-x-2">
         <button
           onClick={handleToggle}
-          className={`px-3 py-1 text-xs rounded-full shadow-md transition-colors duration-200 ${
+          className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap transition-colors duration-200 ${
             isEnabled
               ? 'bg-orange-600 text-white hover:bg-orange-700'
               : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
@@ -81,11 +82,11 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
             </svg>
             <span>
-              <span className={`${isChatbotOpen ? 'hidden sm:inline' : ''}`}>
+              <span className={`${isVideoMinimized ? 'hidden' : ''}`}>
                 {isEnabled ? "Metronome: ON" : "Metronome: OFF"}
               </span>
-              <span className={`${isChatbotOpen ? 'inline sm:hidden' : 'hidden'}`}>
-                {isEnabled ? "Metro: ON" : "Metro: OFF"}
+              <span className={`${isVideoMinimized ? 'inline' : 'hidden'}`}>
+                {isEnabled ? "Metro" : "Metro"}
               </span>
             </span>
           </div>

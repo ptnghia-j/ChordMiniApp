@@ -11,3 +11,4 @@ werkzeug==2.3.4
 gunicorn==21.2.0
 madmom>=0.16.1
 spleeter>=2.4.0
+lyricsgenius>=3.0.1

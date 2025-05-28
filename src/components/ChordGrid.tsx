@@ -1,53 +1,137 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   formatChordWithMusicalSymbols,
-  getResponsiveChordFontSize,
   getChordLabelStyles,
   getChordContainerStyles
 } from '@/utils/chordFormatting';
-import { detectKey, formatKeyInfo, type KeyDetectionResult, type ChordData } from '@/services/keyDetectionService';
+
 
 interface ChordGridProps {
   chords: string[]; // Array of chord labels (e.g., 'C', 'Am')
-  beats: number[]; // Array of corresponding beat indices or timestamps
-  beatNumbers?: number[]; // Array of beat numbers within measures (1-based)
-  beatSources?: ('detected' | 'padded')[]; // Array indicating source of each beat (for timing compensation)
+  beats: number[]; // Array of corresponding beat timestamps
   currentBeatIndex?: number; // Current beat index for highlighting, optional
-  beatsPerMeasure?: number; // Number of beats per measure, defaults to 4
-  measuresPerRow?: number; // Number of measures to display per row, defaults to 4
   timeSignature?: number; // Time signature (beats per measure), defaults to 4
-  onToggleFollowMode?: () => void; // Function to toggle auto-scroll mode
-  isFollowModeEnabled?: boolean; // Whether auto-scroll is enabled
-  onToggleAudioSource?: () => void; // Function to toggle audio source
-  preferredAudioSource?: 'extracted' | 'youtube'; // Current audio source
+  keySignature?: string; // Key signature (e.g., 'C Major')
+  isDetectingKey?: boolean; // Whether key detection is in progress
   isChatbotOpen?: boolean; // Whether the chatbot panel is open
+  isLyricsPanelOpen?: boolean; // Whether the lyrics panel is open
+  hasPickupBeats?: boolean; // Whether the grid includes pickup beats
+  pickupBeatsCount?: number; // Number of pickup beats
 }
 
 const ChordGrid: React.FC<ChordGridProps> = ({
   chords,
   beats,
-  beatNumbers,
-  beatSources,
   currentBeatIndex = -1,
-  beatsPerMeasure,
-  measuresPerRow = 4,
-  timeSignature,
-  onToggleFollowMode,
-  isFollowModeEnabled = false,
-  onToggleAudioSource,
-  preferredAudioSource = 'extracted',
-  isChatbotOpen = false
+  timeSignature = 4,
+  keySignature,
+  isDetectingKey = false,
+  isChatbotOpen = false,
+  isLyricsPanelOpen = false,
+  hasPickupBeats = false,
+  pickupBeatsCount = 0
 }) => {
-  // Use the provided time signature to override beatsPerMeasure if available
-  // If neither is provided, fall back to 4 as a last resort
-  const actualBeatsPerMeasure = timeSignature || beatsPerMeasure || 4;
+  // Use simple time signature - no complex beat source logic
+  const actualBeatsPerMeasure = timeSignature;
 
-  // Log the time signature being used for debugging
-  console.log('ChordGrid time signature:', {
-    timeSignature,
-    beatsPerMeasure,
-    actualBeatsPerMeasure
-  });
+  // Enhanced optimal beat shift calculation with comprehensive debugging
+  const calculateOptimalShift = (chords: string[], timeSignature: number): number => {
+    if (chords.length === 0) {
+      console.log('Beat shift calculation: No chords available, returning shift 0');
+      return 0;
+    }
+
+    console.log('\n=== BEAT SHIFT OPTIMIZATION DEBUG ===');
+    console.log(`Input: ${chords.length} chords, ${timeSignature}/4 time signature`);
+    console.log('First 12 chords:', chords.slice(0, 12));
+
+    let bestShift = 0;
+    let maxDownbeatChords = 0;
+    const shiftResults: Array<{shift: number, downbeatChords: number, downbeatPositions: number[], chordLabels: string[]}> = [];
+
+    // Test each possible shift value (0 to timeSignature-1)
+    for (let shift = 0; shift < timeSignature; shift++) {
+      let downbeatChordCount = 0;
+      const downbeatPositions: number[] = [];
+      const chordLabels: string[] = [];
+
+      // Count non-empty chord labels that fall on downbeats (first beat of measures)
+      for (let i = shift; i < chords.length; i += timeSignature) {
+        const chord = chords[i];
+        const isValidChord = chord && chord !== '' && chord !== 'N.C.' && chord !== 'N/C';
+
+        downbeatPositions.push(i);
+        chordLabels.push(chord || 'empty');
+
+        if (isValidChord) {
+          downbeatChordCount++;
+        }
+      }
+
+      shiftResults.push({
+        shift,
+        downbeatChords: downbeatChordCount,
+        downbeatPositions,
+        chordLabels
+      });
+
+      if (downbeatChordCount > maxDownbeatChords) {
+        maxDownbeatChords = downbeatChordCount;
+        bestShift = shift;
+      }
+
+      console.log(`Shift ${shift}: ${downbeatChordCount} valid chords on downbeats`);
+      console.log(`  Downbeat positions: [${downbeatPositions.slice(0, 6).join(', ')}${downbeatPositions.length > 6 ? '...' : ''}]`);
+      console.log(`  Chord labels: [${chordLabels.slice(0, 6).join(', ')}${chordLabels.length > 6 ? '...' : ''}]`);
+    }
+
+    console.log(`\n🎯 OPTIMAL SHIFT SELECTED: ${bestShift}`);
+    console.log(`📊 RESULTS SUMMARY:`);
+    shiftResults.forEach(result => {
+      const isSelected = result.shift === bestShift;
+      console.log(`  Shift ${result.shift}: ${result.downbeatChords} downbeat chords ${isSelected ? '← SELECTED' : ''}`);
+    });
+
+    // Show before/after comparison
+    const beforeDownbeats = shiftResults[0]; // Shift 0 (original)
+    const afterDownbeats = shiftResults[bestShift];
+    console.log(`\n📈 IMPROVEMENT: ${beforeDownbeats.downbeatChords} → ${afterDownbeats.downbeatChords} downbeat chords (+${afterDownbeats.downbeatChords - beforeDownbeats.downbeatChords})`);
+    console.log('=== END BEAT SHIFT OPTIMIZATION DEBUG ===\n');
+
+    return bestShift;
+  };
+
+  // Calculate and apply optimal shift automatically
+  const optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
+
+  // Apply visual shift to chord data (shift chord labels forward in the grid)
+  const shiftedChords = chords.length > 0 ? [
+    ...chords.slice(optimalShift),
+    ...chords.slice(0, optimalShift)
+  ] : chords;
+
+  // Enhanced debug logging with shift verification
+  console.log(`\n🎼 CHORD GRID LAYOUT DEBUG:`);
+  console.log(`📊 Grid Info: ${chords.length} chords, ${timeSignature}/4 time signature`);
+  console.log(`🔄 Applied Shift: ${optimalShift} beats for optimal downbeat alignment`);
+
+  // Verify the shift was applied correctly
+  if (optimalShift > 0 && chords.length > 0) {
+    console.log(`✅ SHIFT VERIFICATION:`);
+    console.log(`  Original first 6 chords: [${chords.slice(0, 6).join(', ')}]`);
+    console.log(`  Shifted first 6 chords:  [${shiftedChords.slice(0, 6).join(', ')}]`);
+    console.log(`  Expected shift pattern: Original[${optimalShift}:] + Original[0:${optimalShift}]`);
+
+    // Verify downbeat alignment in shifted data
+    const shiftedDownbeatChords = [];
+    for (let i = 0; i < shiftedChords.length; i += timeSignature) {
+      shiftedDownbeatChords.push(shiftedChords[i] || 'empty');
+    }
+    console.log(`  Shifted downbeat chords: [${shiftedDownbeatChords.slice(0, 6).join(', ')}${shiftedDownbeatChords.length > 6 ? '...' : ''}]`);
+  } else if (optimalShift === 0) {
+    console.log(`ℹ️  No shift applied (optimal shift = 0)`);
+  }
+  console.log(`🎼 END CHORD GRID LAYOUT DEBUG\n`);
 
   // Helper to get the appropriate CSS grid columns class based on time signature
   const getGridColumnsClass = (beatsPerMeasure: number): string => {
@@ -81,18 +165,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
   };
 
-  // Debug log for time signature
-  console.log(`ChordGrid using time signature: ${timeSignature || 4}/4 (actualBeatsPerMeasure: ${actualBeatsPerMeasure})`);
-  console.log(`Grid will use ${getGridColumnsClass(actualBeatsPerMeasure)} for ${actualBeatsPerMeasure} beats per measure`);
-  console.log(`timeSignature prop value:`, timeSignature);
-  console.log(`beatsPerMeasure prop value:`, beatsPerMeasure);
+  // Removed complex debug logging
   // Reference to the grid container for measuring cell size
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(0);
+  const [screenWidth, setScreenWidth] = useState<number>(1200); // Default for SSR
 
-  // Key detection state
-  const [keyResult, setKeyResult] = useState<KeyDetectionResult | null>(null);
-  const [isDetectingKey, setIsDetectingKey] = useState(false);
+
 
   // FIX 4: Dynamic font sizing system based on cell size
   const getDynamicFontSize = (cellSize: number, chordLength: number = 1): string => {
@@ -130,11 +209,20 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return 'text-xl';
   };
 
-  // Set up resize observer to track cell size changes
+  // Set up resize observer to track cell size changes and screen width
   useEffect(() => {
-    if (!gridContainerRef.current) return;
+    // Initialize screen width
+    if (typeof window !== 'undefined') {
+      setScreenWidth(window.innerWidth);
+    }
 
-    const updateCellSize = () => {
+    const updateSizes = () => {
+      // Update screen width
+      if (typeof window !== 'undefined') {
+        setScreenWidth(window.innerWidth);
+      }
+
+      // Update cell size
       if (gridContainerRef.current) {
         const cells = gridContainerRef.current.querySelectorAll('.chord-cell');
         if (cells.length > 0) {
@@ -149,44 +237,33 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     };
 
     // Initial size calculation
-    updateCellSize();
+    updateSizes();
 
-    // Set up resize observer
-    const resizeObserver = new ResizeObserver(() => {
-      updateCellSize();
-    });
+    // Set up window resize listener for screen width
+    const handleResize = () => {
+      updateSizes();
+    };
 
-    resizeObserver.observe(gridContainerRef.current);
+    window.addEventListener('resize', handleResize);
+
+    // Set up resize observer for cell size
+    let resizeObserver: ResizeObserver | null = null;
+    if (gridContainerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        updateSizes();
+      });
+      resizeObserver.observe(gridContainerRef.current);
+    }
 
     return () => {
-      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [chords.length, actualBeatsPerMeasure]); // Re-run when chord data or time signature changes
 
-  // Key detection effect
-  useEffect(() => {
-    if (chords.length > 0 && beats.length > 0 && !isDetectingKey) {
-      setIsDetectingKey(true);
 
-      // Prepare chord data for key detection
-      const chordData: ChordData[] = chords.map((chord, index) => ({
-        chord,
-        time: beats[index] || index
-      }));
-
-      detectKey(chordData)
-        .then(result => {
-          setKeyResult(result);
-        })
-        .catch(error => {
-          console.error('Failed to detect key:', error);
-          setKeyResult(null);
-        })
-        .finally(() => {
-          setIsDetectingKey(false);
-        });
-    }
-  }, [chords, beats]); // Re-run when chord or beat data changes
   // Helper to determine if this beat should show a chord label
   const shouldShowChordLabel = (index: number): boolean => {
     // Always show the first chord
@@ -202,68 +279,101 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return true;
   };
 
-  // Helper to determine if this beat is the first beat of a measure
-  const isFirstBeatOfMeasure = (index: number): boolean => {
-    return index % actualBeatsPerMeasure === 0;
-  };
-
-  // Helper to get measure number (1-based)
-  const getMeasureNumber = (index: number): number => {
-    return Math.floor(index / actualBeatsPerMeasure) + 1;
-  };
 
 
 
-  // Helper to determine dynamic measures per row based on time signature and chatbot state
-  const getDynamicMeasuresPerRow = (timeSignature: number, chatbotOpen: boolean): number => {
-    // Reduce measures per row when chatbot is open to prevent label truncation
-    if (chatbotOpen) {
-      if (timeSignature >= 7) {
-        return 1; // Very complex time signatures: only 1 measure per row when chatbot is open
-      } else if (timeSignature >= 5) {
-        return 2; // Moderately complex: 2 measures per row when chatbot is open
-      } else {
-        return 3; // Simple time signatures: 3 measures per row when chatbot is open
-      }
-    } else {
-      // Normal layout when chatbot is closed
-      if (timeSignature >= 7) {
-        return 2; // Very complex time signatures: only 2 measures per row
-      } else if (timeSignature >= 5) {
-        return 3; // Moderately complex: 3 measures per row
-      } else {
-        return 4; // Simple time signatures: 4 measures per row (default)
-      }
-    }
-  };
 
-  // Use dynamic measures per row instead of the fixed prop
-  const dynamicMeasuresPerRow = getDynamicMeasuresPerRow(actualBeatsPerMeasure, isChatbotOpen);
+  // Enhanced dynamic measures per row calculation with screen width awareness
+  const getDynamicMeasuresPerRow = (timeSignature: number, chatbotOpen: boolean, lyricsPanelOpen: boolean, currentScreenWidth: number): number => {
+    // Use the current screen width from state
 
-  // Helper to determine chord type and apply appropriate styling
-  const getChordStyle = (chord: string, isCurrentBeat: boolean, showLabel: boolean, isFirstInMeasure: boolean, isPadding: boolean = false) => {
-    // Base classes for all cells - fully detached with complete border
-    // Using border-gray-300 instead of border-gray-200 for 1.5x darker borders
-    let baseClasses = "flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden";
+    // Determine screen category
+    const isMobile = currentScreenWidth < 768;
+    const isTablet = currentScreenWidth >= 768 && currentScreenWidth < 1024;
+    const isDesktop = currentScreenWidth >= 1024 && currentScreenWidth < 1440;
+    const isLargeDesktop = currentScreenWidth >= 1440;
 
-    // Handle padding cells with more distinct greyed-out appearance
-    if (isPadding) {
-      let classes = `${baseClasses} bg-gray-200 dark:bg-gray-600 opacity-75`;
-      let textColor = "text-gray-500 dark:text-gray-400";
-      return `${classes} ${textColor}`;
+    // Check if any panel is open
+    const anyPanelOpen = chatbotOpen || lyricsPanelOpen;
+
+    // Base calculation targeting optimal cell count per screen size
+    let targetCellsPerRow: number;
+    let maxMeasuresPerRow: number;
+
+    if (isMobile) {
+      targetCellsPerRow = anyPanelOpen ? 4 : 6; // More conservative when panels are open
+      maxMeasuresPerRow = anyPanelOpen ? 1 : 2;
+    } else if (isTablet) {
+      targetCellsPerRow = anyPanelOpen ? 8 : 12; // Reduce when panels are open
+      maxMeasuresPerRow = anyPanelOpen ? 3 : 4;
+    } else if (isDesktop) {
+      targetCellsPerRow = anyPanelOpen ? 12 : 18; // Significant reduction when panels are open
+      maxMeasuresPerRow = anyPanelOpen ? 4 : 6;
+    } else { // Large desktop
+      targetCellsPerRow = anyPanelOpen ? 16 : 24; // Still reduce for large screens
+      maxMeasuresPerRow = anyPanelOpen ? 6 : 8;
     }
 
-    // All regular cells have white background by default
+    // Calculate base measures per row
+    let measuresPerRow = Math.max(1, Math.floor(targetCellsPerRow / timeSignature));
+
+    // Apply additional reduction if panels are open (more aggressive than before)
+    if (anyPanelOpen) {
+      measuresPerRow = Math.max(1, Math.floor(measuresPerRow * 0.8)); // Slightly less aggressive than before
+    }
+
+    // Apply time signature complexity limits
+    if (timeSignature >= 7) {
+      maxMeasuresPerRow = Math.min(maxMeasuresPerRow, anyPanelOpen ? 2 : 3); // Very complex: max 2-3 measures
+    } else if (timeSignature >= 5) {
+      maxMeasuresPerRow = Math.min(maxMeasuresPerRow, anyPanelOpen ? 3 : 4); // Moderate: max 3-4 measures
+    }
+
+    // Ensure we don't exceed screen-appropriate maximums
+    measuresPerRow = Math.min(measuresPerRow, maxMeasuresPerRow);
+
+    console.log(`Screen-aware layout: width=${currentScreenWidth}px, timeSignature=${timeSignature}, chatbot=${chatbotOpen}, lyrics=${lyricsPanelOpen}, anyPanel=${anyPanelOpen}, targetCells=${targetCellsPerRow}, calculatedMeasures=${measuresPerRow}, maxAllowed=${maxMeasuresPerRow}, totalCells=${measuresPerRow * timeSignature}`);
+
+    return measuresPerRow;
+  };
+
+  // Use dynamic measures per row with current screen width
+  const dynamicMeasuresPerRow = getDynamicMeasuresPerRow(actualBeatsPerMeasure, isChatbotOpen, isLyricsPanelOpen, screenWidth);
+
+  // Enhanced chord styling with pickup beat support
+  const getChordStyle = (chord: string, isCurrentBeat: boolean, beatIndex: number) => {
+    // Base classes for all cells
+    const baseClasses = "flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden";
+
+    // Determine cell type
+    const isEmpty = chord === '';
+    const isPickupBeat = hasPickupBeats && beatIndex < timeSignature && beatIndex >= (timeSignature - pickupBeatsCount);
+
+    // Default styling
     let classes = `${baseClasses} bg-white dark:bg-gray-800`;
-
-    // Use a single text color for all chord types (minimalist approach)
     let textColor = "text-gray-800 dark:text-gray-200";
 
-    // Highlight current beat with distinct background and better contrast
+    // Empty cell styling (greyed out)
+    if (isEmpty) {
+      classes = `${baseClasses} bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600`;
+      textColor = "text-gray-400 dark:text-gray-500";
+    }
+    // Pickup beat styling (slightly different background)
+    else if (isPickupBeat) {
+      classes = `${baseClasses} bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700`;
+      textColor = "text-blue-800 dark:text-blue-200";
+    }
+
+    // Highlight current beat (overrides other styling)
     if (isCurrentBeat) {
-      classes = `${baseClasses} bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500 dark:ring-blue-400 shadow-md`;
-      // Override text color for better contrast on highlighted background
-      textColor = "text-gray-800 dark:text-white";
+      if (isEmpty) {
+        // Don't highlight empty cells as strongly
+        classes = `${baseClasses} bg-gray-200 dark:bg-gray-600 ring-1 ring-gray-400 dark:ring-gray-500`;
+        textColor = "text-gray-600 dark:text-gray-400";
+      } else {
+        classes = `${baseClasses} bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500 dark:ring-blue-400 shadow-md`;
+        textColor = "text-gray-800 dark:text-white";
+      }
     }
 
     return `${classes} ${textColor}`;
@@ -279,64 +389,40 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     );
   }
 
-  // Debug information
-  console.log(`ChordGrid rendering with ${chords.length} chords and ${beats.length} beats`);
-  console.log('First 5 chords:', chords.slice(0, 5));
-  console.log('First 5 beat numbers:', beatNumbers?.slice(0, 5));
-  console.log('First 5 beat sources:', beatSources?.slice(0, 5));
-  console.log('Unique chords:', [...new Set(chords)].length);
-
-  // Count padded beats from backend
-  const paddedBeatsCount = beatSources?.filter(source => source === 'padded').length || 0;
-  if (paddedBeatsCount > 0) {
-    console.log(`🔧 ChordGrid: Found ${paddedBeatsCount} padded beats for timing compensation`);
-  }
-
-  // Note: Padding cell creation is now handled inline in measure grouping
-
-  // Group chords by measure based on beat numbers from backend
+  // Enhanced measure grouping with proper pickup beat handling using shifted chords
   const groupedByMeasure: Array<{
     measureNumber: number;
     chords: string[];
     beats: number[];
-    beatNumbers: number[];
-    beatSources: ('detected' | 'padded')[];
-    paddingStart: number;
-    paddingEnd: number;
+    isPickupMeasure?: boolean;
   }> = [];
 
-  // Use backend beat sources to identify padded beats (timing compensation)
-  // No need for pickup detection - backend provides complete beat information including padded beats
-
-  console.log(`🎵 ChordGrid: Processing ${chords.length} beats with timing compensation`);
-  if (paddedBeatsCount > 0) {
-    console.log(`  - ${paddedBeatsCount} padded beats for timing offset correction`);
-    console.log(`  - ${chords.length - paddedBeatsCount} detected beats from audio`);
-  }
-
-  // Group beats into measures using backend beat numbers and sources
+  // Proper measure grouping that respects musical measure boundaries
   let currentIndex = 0;
-  let measureNumber = 1;
+  let measureNumber = 0; // Start at 0 for pickup measure
 
-  // Process all beats into measures (including padded beats)
-  while (currentIndex < chords.length) {
+  while (currentIndex < shiftedChords.length) {
     const measure = {
       measureNumber: measureNumber,
       chords: [] as string[],
       beats: [] as number[],
-      beatNumbers: [] as number[],
-      beatSources: [] as ('detected' | 'padded')[],
-      paddingStart: 0,
-      paddingEnd: 0
+      isPickupMeasure: measureNumber === 0 && hasPickupBeats
     };
 
-    // Add beats to this measure using backend data
-    for (let b = 0; b < actualBeatsPerMeasure && currentIndex < chords.length; b++) {
-      measure.chords.push(chords[currentIndex]);
+    // For pickup measure, include all beats up to the time signature
+    // For regular measures, include exactly the time signature number of beats
+    const beatsInThisMeasure = actualBeatsPerMeasure;
+
+    for (let b = 0; b < beatsInThisMeasure && currentIndex < shiftedChords.length; b++) {
+      measure.chords.push(shiftedChords[currentIndex]);
       measure.beats.push(beats[currentIndex]);
-      measure.beatNumbers.push(beatNumbers?.[currentIndex] || ((b % actualBeatsPerMeasure) + 1));
-      measure.beatSources.push(beatSources?.[currentIndex] || 'detected');
       currentIndex++;
+    }
+
+    // Pad incomplete measures to maintain consistent grid layout
+    while (measure.chords.length < actualBeatsPerMeasure) {
+      measure.chords.push(''); // Empty cell for padding
+      measure.beats.push(-1); // Invalid beat index for padding
     }
 
     groupedByMeasure.push(measure);
@@ -344,38 +430,27 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   }
 
 
+  // Enhanced debug output for measure grouping with shift verification
+  console.log(`\n🎵 MEASURE GROUPING DEBUG:`);
+  console.log(`📊 Grid: ${groupedByMeasure.length} measures, ${actualBeatsPerMeasure}/4 time signature`);
+  console.log(`🔄 Applied shift: ${optimalShift} beats`);
 
+  // Show first few measures with their chord content
+  console.log('📋 First 3 measures structure:');
+  groupedByMeasure.slice(0, 3).forEach((m, i) => {
+    console.log(`  Measure ${i}: [${m.chords.join(', ')}] ${m.isPickupMeasure ? '(pickup)' : ''}`);
+  });
 
+  // Debug: Verify sequential beat progression using shifted chords
+  const allShiftedBeats = groupedByMeasure.flatMap(m => m.chords);
+  console.log(`🎼 Shifted chord sequence (first 12): [${allShiftedBeats.slice(0, 12).join(', ')}]`);
 
-  // FIX 3: Enhanced debug logging for ChordGrid with beat number validation
-  console.log('\n🎼 === CHORD GRID PROCESSING DEBUG ===');
-  console.log(`Input data: ${chords.length} chords, ${beats.length} beats, ${beatNumbers?.length || 0} beatNumbers`);
-  console.log(`Time signature: ${actualBeatsPerMeasure}/4, detected pickup beats: ${pickupCount}`);
-  console.log(`Current beat index for highlighting: ${currentBeatIndex}`);
-
-  // Validate input beat numbers
-  if (beatNumbers && beatNumbers.length > 0) {
-    const inputBeatPattern = beatNumbers.slice(0, 15);
-    console.log(`Input beat number pattern from props: [${inputBeatPattern.join(', ')}]`);
-
-    // Check for undefined values in input
-    const undefinedCount = beatNumbers.filter(num => num === undefined).length;
-    if (undefinedCount > 0) {
-      console.warn(`⚠️  ChordGrid received ${undefinedCount} undefined beat numbers in props!`);
-    }
-
-    // Check if pattern looks like backend pickup pattern (e.g., [3, 1, 2, 3...])
-    const firstBeatNum = beatNumbers[0];
-    if (firstBeatNum && firstBeatNum !== 1) {
-      console.log(`🎵 ChordGrid detected pickup pattern: first beat number is ${firstBeatNum}`);
-    }
-  } else {
-    console.warn('⚠️  ChordGrid received no beat numbers in props');
-  }
-
-  // Compact debug output
-  const beatPattern = beatNumbers?.slice(0, 12).join(', ') || 'N/A';
-  console.log(`ChordGrid: ${groupedByMeasure.length} measures, ${pickupCount} pickup beats, ${actualBeatsPerMeasure}/4 time, pattern: [${beatPattern}]`);
+  // Compare with original sequence for verification
+  console.log(`📊 Original chord sequence (first 12): [${chords.slice(0, 12).join(', ')}]`);
+  console.log(`✅ Shift verification: Original[${optimalShift}:] should match Shifted[0:]`);
+  console.log(`   Original[${optimalShift}:${optimalShift + 6}]: [${chords.slice(optimalShift, optimalShift + 6).join(', ')}]`);
+  console.log(`   Shifted[0:6]: [${allShiftedBeats.slice(0, 6).join(', ')}]`);
+  console.log(`🎵 END MEASURE GROUPING DEBUG\n`);
 
   // Group measures into rows using the dynamic measures per row
   const rows: Array<typeof groupedByMeasure> = [];
@@ -386,18 +461,78 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   return (
     <div ref={gridContainerRef} className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
 
+      {/* Header section with improved layout - title left, tags right */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+        {/* Left side - Title */}
+        <div className="flex items-center">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+            Chord Progression
+          </h3>
+        </div>
+
+        {/* Right side - Tags */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Time signature tag */}
+          <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
+            <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
+              Time: {timeSignature}/4
+            </span>
+          </div>
+
+          {/* Key signature tag */}
+          {keySignature && (
+            <div className="bg-green-50 dark:bg-green-200 border border-green-200 dark:border-green-300 rounded-lg px-3 py-1">
+              <span className="text-sm font-medium text-green-800 dark:text-green-900">
+                Key: {keySignature}
+              </span>
+            </div>
+          )}
+
+          {/* Key detection loading indicator */}
+          {isDetectingKey && (
+            <div className="bg-gray-50 dark:bg-gray-200 border border-gray-200 dark:border-gray-300 rounded-lg px-3 py-1">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-700">
+                Detecting key...
+              </span>
+            </div>
+          )}
+
+          {/* Pickup beats indicator */}
+          {hasPickupBeats && pickupBeatsCount > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
+                Pickup: {pickupBeatsCount} beat{pickupBeatsCount > 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+
+
+        </div>
+
+
+      </div>
+
       {/* Render rows of measures */}
       <div className="space-y-2">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
-            {/* Grid of measures with spacing - responsive based on time signature complexity */}
+            {/* Grid of measures with aggressive responsive layout to prevent fall-through */}
             <div className={`grid gap-1 md:gap-2 ${
+              // More aggressive responsive grid that reaches target measures per row faster
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
               dynamicMeasuresPerRow === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-              dynamicMeasuresPerRow === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
-              'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+              dynamicMeasuresPerRow === 3 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' :
+              dynamicMeasuresPerRow === 4 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4' :
+              dynamicMeasuresPerRow === 5 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+              dynamicMeasuresPerRow === 6 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6' :
+              dynamicMeasuresPerRow === 7 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7' :
+              dynamicMeasuresPerRow === 8 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8' :
+              dynamicMeasuresPerRow === 9 ? 'grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9' :
+              dynamicMeasuresPerRow === 10 ? 'grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10' :
+              'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' // Fallback
             }`}>
-              {row.map((measure, measureIdx) => (
+              {row.map((measure, measureIdx) => {
+                return (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
                   className="border-l-[3px] border-gray-600 dark:border-gray-400 transition-colors duration-300"
@@ -405,53 +540,53 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                     paddingLeft: '4px'
                   }}
                 >
-                  {/* Chord cells for this measure - dynamic grid based on time signature */}
+                  {/* Chord cells for this measure - consistent grid based on time signature */}
                   <div className={`grid gap-1 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
-                      // Calculate global index by counting all previous beats
+                      // Calculate global index with consistent measure layout
+                      // Each measure always has exactly actualBeatsPerMeasure cells
                       let globalIndex = 0;
 
-                      // Count beats from all previous measures
+                      // Count beats from all previous rows (each measure has actualBeatsPerMeasure beats)
                       for (let r = 0; r < rowIdx; r++) {
-                        for (let m = 0; m < rows[r].length; m++) {
-                          globalIndex += rows[r][m].chords.length;
-                        }
+                        globalIndex += rows[r].length * actualBeatsPerMeasure;
                       }
 
                       // Count beats from previous measures in current row
-                      for (let m = 0; m < measureIdx; m++) {
-                        globalIndex += row[m].chords.length;
-                      }
+                      globalIndex += measureIdx * actualBeatsPerMeasure;
 
-                      // Add current beat index
+                      // Add current beat index within this measure
                       globalIndex += beatIdx;
 
-                      // Determine if this is a padded beat using backend source information
-                      const beatSource = measure.beatSources?.[beatIdx] || 'detected';
-                      const isPaddedBeat = beatSource === 'padded';
+                      // CRITICAL FIX: Adjust currentBeatIndex to account for visual shift
+                      // The beat animation needs to be shifted to match the shifted chord positions
+                      const adjustedCurrentBeatIndex = currentBeatIndex !== undefined && currentBeatIndex >= 0
+                        ? (currentBeatIndex + optimalShift) % chords.length
+                        : -1;
 
-                      // For padded beats, show special styling but still allow highlighting
-                      const isCurrentBeat = globalIndex === currentBeatIndex;
+                      const isCurrentBeat = globalIndex === adjustedCurrentBeatIndex;
                       const showChordLabel = shouldShowChordLabel(globalIndex);
-                      const isFirstInMeasure = beatIdx === 0; // First beat of measure
+                      const isEmpty = chord === '';
 
                       return (
                         <div
-                          id={isPaddedBeat ? `padded-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
-                          key={isPaddedBeat ? `padded-${measure.measureNumber}-${beatIdx}` : `chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, showChordLabel, isFirstInMeasure, isPaddedBeat)} w-full h-full min-h-[3.75rem] chord-cell`}
+                          id={`chord-${globalIndex}`}
+                          key={`chord-${globalIndex}`}
+                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex)} w-full h-full min-h-[3.75rem] chord-cell`}
                         >
-                          {/* Show chord name for all beats, but style padded beats differently */}
+                          {/* Enhanced chord display with pickup beat support */}
                           <div style={getChordContainerStyles()}>
-                            {showChordLabel && chord ? (
+                            {!isEmpty && showChordLabel && chord ? (
                               <div
-                                className={`${getDynamicFontSize(cellSize, chord.length)} font-medium leading-tight ${isPaddedBeat ? 'opacity-60' : ''}`}
+                                className={`${getDynamicFontSize(cellSize, chord.length)} font-medium leading-tight`}
                                 style={getChordLabelStyles(chord)}
                                 dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord) }}
                               />
-                            ) : isPaddedBeat ? (
-                              <div className="text-xs text-gray-400 dark:text-gray-500 opacity-75">pad</div>
+                            ) : isEmpty ? (
+                              // Empty cell - no content
+                              <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
                             ) : (
+                              // Non-empty cell but no label to show
                               <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
                             )}
                           </div>
@@ -460,7 +595,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

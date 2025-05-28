@@ -8,6 +8,14 @@ import traceback
 import sys
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("Loaded environment variables from .env file")
+except ImportError:
+    print("python-dotenv not available, using system environment variables only")
+
 def trim_silence_from_audio(audio_path, output_path=None, top_db=20, frame_length=2048, hop_length=512):
     """
     Trim silence from the beginning and end of an audio file.
@@ -275,13 +283,23 @@ except Exception as e:
     print(f"Error with chord_recognition module: {e}")
     USE_CHORD_CNN_LSTM = False
 
+# Check if Genius API is available
+try:
+    import lyricsgenius
+    GENIUS_AVAILABLE = True
+    print("lyricsgenius library is available")
+except ImportError:
+    GENIUS_AVAILABLE = False
+    print("lyricsgenius library not available. Install with: pip install lyricsgenius")
+
 @app.route('/')
 def index():
     return jsonify({
         "status": "healthy",
         "message": "Audio analysis API is running",
         "beat_model": "Beat-Transformer" if USE_BEAT_TRANSFORMER else "librosa",
-        "chord_model": "Chord-CNN-LSTM" if USE_CHORD_CNN_LSTM else "None"
+        "chord_model": "Chord-CNN-LSTM" if USE_CHORD_CNN_LSTM else "None",
+        "genius_available": GENIUS_AVAILABLE
     })
 
 @app.route('/api/detect-beats', methods=['POST'])
@@ -671,16 +689,17 @@ def detect_beats():
                             )
 
                             # Debug: Print chunk results
-                            print(f"DEBUG - Chunk {chunk_count} results:")
+                            print(f"DEBUG - Chunk {chunk_count} results (relative to chunk start):")
                             print(f"  - Found {len(chunk_beat_times)} beats, time range: ", end="")
                             if len(chunk_beat_times) > 0:
-                                print(f"{chunk_beat_times[0]:.2f}s to {chunk_beat_times[-1]:.2f}s")
+                                print(f"{chunk_beat_times[0]:.3f}s to {chunk_beat_times[-1]:.3f}s")
+                                print(f"  - First 3 beats: {chunk_beat_times[:3]}")
                             else:
                                 print("N/A (no beats found)")
 
                             print(f"  - Found {len(chunk_downbeat_times)} downbeats, time range: ", end="")
                             if len(chunk_downbeat_times) > 0:
-                                print(f"{chunk_downbeat_times[0]:.2f}s to {chunk_downbeat_times[-1]:.2f}s")
+                                print(f"{chunk_downbeat_times[0]:.3f}s to {chunk_downbeat_times[-1]:.3f}s")
                             else:
                                 print("N/A (no downbeats found)")
 
@@ -691,25 +710,23 @@ def detect_beats():
                             # Debug: Print adjusted times
                             print(f"DEBUG - Chunk {chunk_count} adjusted to global timeline:")
                             if len(chunk_beat_times) > 0:
-                                print(f"  - Beats: {chunk_beat_times[0]:.2f}s to {chunk_beat_times[-1]:.2f}s")
+                                print(f"  - Beats: {chunk_beat_times[0]:.3f}s to {chunk_beat_times[-1]:.3f}s")
+                                print(f"  - First 3 global beats: {chunk_beat_times[:3]}")
                             if len(chunk_downbeat_times) > 0:
-                                print(f"  - Downbeats: {chunk_downbeat_times[0]:.2f}s to {chunk_downbeat_times[-1]:.2f}s")
+                                print(f"  - Downbeats: {chunk_downbeat_times[0]:.3f}s to {chunk_downbeat_times[-1]:.3f}s")
 
-                            # For all chunks except the first, remove beats in the overlap region
-                            # that are too close to beats from the previous chunk
-                            if start_time > 0 and len(all_beat_times) > 0:
-                                # Only keep beats that are at least 0.1s after the last beat of previous chunk
-                                min_time = all_beat_times[-1] + 0.1
-                                chunk_beat_times = chunk_beat_times[chunk_beat_times > min_time]
-
-                                # Only keep downbeats that are at least 0.5s after the last downbeat
-                                if len(all_downbeat_times) > 0:
-                                    min_downbeat_time = all_downbeat_times[-1] + 0.5
-                                    chunk_downbeat_times = chunk_downbeat_times[chunk_downbeat_times > min_downbeat_time]
+                            # Pure model output - no overlap filtering or beat adjustment
 
                             # Add to overall results
                             all_beat_times.extend(chunk_beat_times)
                             all_downbeat_times.extend(chunk_downbeat_times)
+
+                            # Debug: Show cumulative results
+                            print(f"DEBUG - Cumulative results after chunk {chunk_count}:")
+                            print(f"  - Total beats so far: {len(all_beat_times)}")
+                            if len(all_beat_times) > 0:
+                                print(f"  - First beat overall: {all_beat_times[0]:.3f}s")
+                                print(f"  - Last beat overall: {all_beat_times[-1]:.3f}s")
 
                             # Clean up temporary files
                             try:
@@ -769,316 +786,9 @@ def detect_beats():
                             param_path=checkpoint_path
                         )
 
-                    # IMPORTANT: Get the time signature from the Beat-Transformer model FIRST
-                    # before generating beat positions
-                    model_time_signature = 4  # Default fallback
-                    try:
-                        # Import the detector with correct path
-                        import sys
-                        models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
-                        if models_dir not in sys.path:
-                            sys.path.insert(0, models_dir)
+                    # Pure model outputs - no time signature detection or post-processing
 
-                        if use_beat_transformer_light:
-                            from beat_transformer_detector_light import BeatTransformerDetectorLight
-                            detector = BeatTransformerDetectorLight(checkpoint_path)
-                        else:
-                            from beat_transformer_detector import BeatTransformerDetector
-                            detector = BeatTransformerDetector(checkpoint_path)
-
-                        # Call the detector to get the full result including time signature
-                        detector_result = detector.detect_beats(file_path)
-
-                        if detector_result and detector_result.get("success") and "time_signature" in detector_result:
-                            model_time_signature = detector_result["time_signature"]
-                            print(f"DEBUG: Beat-Transformer model detected time signature: {model_time_signature}/4")
-                        else:
-                            print(f"DEBUG: Could not get time signature from Beat-Transformer detector, using default 4/4")
-
-                    except Exception as e:
-                        print(f"DEBUG: Error calling Beat-Transformer detector for time signature: {e}")
-                        print(f"DEBUG: Using default 4/4 time signature")
-
-                    # For long audio processed in chunks, we need to generate the beat positions ourselves
-                    if duration > 150:
-                        print("Generating beat and downbeat positions for chunked audio...")
-
-                        # Generate downbeat positions first
-                        downbeats_with_measures = []
-                        for i, downbeat_time in enumerate(downbeat_times):
-                            downbeats_with_measures.append({
-                                "time": float(downbeat_time),
-                                "measureNum": i + 1  # Measure numbers start from 1
-                            })
-
-                        # Generate beat positions using the model's detected time signature
-                        beats_with_positions = []
-
-                        # Try to read the correct pattern from the first chunk
-                        first_chunk_pattern = []
-                        try:
-                            with open('beats_with_positions.txt', 'r') as f:
-                                for line in f:
-                                    parts = line.strip().split('\t')
-                                    if len(parts) >= 2:
-                                        beat_num_part = parts[1].strip().replace('beatNum: ', '')
-                                        try:
-                                            beat_num = int(beat_num_part)
-                                            first_chunk_pattern.append(beat_num)
-                                        except (ValueError, TypeError):
-                                            continue
-
-                            print(f"DEBUG: Loaded pattern from first chunk: {first_chunk_pattern[:20]}")
-
-                            # Detect time signature from the first chunk pattern
-                            if len(first_chunk_pattern) >= 10:
-                                # Analyze the pattern to detect time signature
-                                detected_time_sig = detect_time_signature_from_pattern(first_chunk_pattern)
-                                if detected_time_sig:
-                                    model_time_signature = detected_time_sig
-                                    print(f"DEBUG: Detected time signature from first chunk pattern: {model_time_signature}/4")
-                                    print(f"DEBUG: Overriding detector time signature with pattern-detected time signature")
-
-                        except FileNotFoundError:
-                            print("Warning: beats_with_positions.txt not found, will generate pattern")
-                            first_chunk_pattern = []
-
-                        # Now generate beat positions for ALL beats using the correct pattern
-                        if first_chunk_pattern and len(first_chunk_pattern) >= 10:
-                            # Use the pattern from the first chunk to generate positions for all beats
-                            print(f"DEBUG: Applying first chunk pattern to all {len(beat_times)} beats")
-
-                            # Detect the repeating cycle from the first chunk pattern
-                            detected_cycle = None
-                            pickup_count = 0
-
-                            # Try to find the repeating pattern - FIXED to handle pickup beats
-                            for cycle_len in range(2, 13):  # Test cycle lengths from 2 to 12
-                                if len(first_chunk_pattern) >= cycle_len * 2:
-                                    # Look for the pattern starting at different offsets
-                                    for start_offset in range(min(5, len(first_chunk_pattern) - cycle_len * 2)):
-                                        pattern_slice = first_chunk_pattern[start_offset:]
-                                        first_cycle = pattern_slice[:cycle_len]
-                                        second_cycle = pattern_slice[cycle_len:cycle_len*2]
-
-                                        # PICKUP BEAT FIX: Check if it's a valid repeating beat pattern
-                                        # Allow patterns that don't start with 1 (pickup beats)
-                                        if first_cycle == second_cycle:
-                                            # Check if this is a valid beat sequence (consecutive numbers in any order)
-                                            sorted_cycle = sorted(first_cycle)
-                                            expected_sequence = list(range(1, cycle_len + 1))
-
-                                            if sorted_cycle == expected_sequence:
-                                                # This is a valid beat pattern, possibly with pickup beats
-                                                detected_cycle = expected_sequence  # Use the canonical [1,2,3] form
-                                                pickup_count = start_offset
-
-                                                # Calculate actual pickup beats based on where the pattern starts
-                                                first_beat_num = first_cycle[0]
-                                                if first_beat_num != 1:
-                                                    # Pattern starts with pickup beats
-                                                    actual_pickup_count = cycle_len - first_beat_num + 1
-                                                    pickup_count = actual_pickup_count
-                                                    print(f"DEBUG: Found {cycle_len}-beat cycle with pickup beats. First beat: {first_beat_num}, pickup count: {pickup_count}")
-                                                else:
-                                                    print(f"DEBUG: Found {cycle_len}-beat cycle starting at offset {start_offset}: {detected_cycle}")
-                                                break
-                                    if detected_cycle:
-                                        break
-
-                            if detected_cycle:
-                                # Use the detected cycle
-                                regular_cycle = detected_cycle
-                                print(f"DEBUG: Using detected cycle with {pickup_count} pickup beats: {regular_cycle}")
-                            else:
-                                # Fallback: use the model's detected time signature
-                                regular_cycle = list(range(1, model_time_signature + 1))
-                                pickup_count = 0
-                                print(f"DEBUG: Using fallback pattern based on time signature {model_time_signature}/4: {regular_cycle}")
-
-                            # Generate beat positions with proper pickup beat handling
-                            print(f"\n=== BEAT NUMBERING WITH PICKUP HANDLING (Beat-Transformer) ===")
-                            print(f"Processing {len(beat_times)} beats with {pickup_count} pickup beats")
-                            print(f"Time signature: {model_time_signature}/4")
-                            print(f"Regular cycle: {regular_cycle}")
-
-                            # Strategy: For pickup beats, assign them the FINAL beat numbers of the time signature
-                            # Then start regular measures from beat 1
-                            for i, beat_time in enumerate(beat_times):
-                                if i < pickup_count:
-                                    # Pickup beats get the final beat numbers of the time signature
-                                    # For 3/4 time with 1 pickup: beat gets number 3
-                                    # For 4/4 time with 2 pickups: beats get numbers 3, 4
-                                    pickup_beat_number = model_time_signature - pickup_count + i + 1
-                                    beat_num = pickup_beat_number
-                                else:
-                                    # Regular beats: start fresh cycle from beat 1 after pickup beats
-                                    regular_beat_index = i - pickup_count
-                                    cycle_position = regular_beat_index % model_time_signature
-                                    beat_num = cycle_position + 1  # Beat numbers are 1-indexed
-
-                                beats_with_positions.append({
-                                    "time": float(beat_time),
-                                    "beatNum": int(beat_num)
-                                })
-
-                            # Debug output with timestamps for first few beats
-                            print(f"First 10 beats with timestamps:")
-                            for i in range(min(10, len(beats_with_positions))):
-                                bp = beats_with_positions[i]
-                                beat_type = "PICKUP" if i < pickup_count else f"REGULAR-{i-pickup_count+1}"
-                                print(f"  Beat {i}: time={bp['time']:.3f}s, beatNum={bp['beatNum']} ({beat_type})")
-
-                            # Show beat pattern
-                            beat_pattern = [bp["beatNum"] for bp in beats_with_positions[:15]]
-                            print(f"Beat number pattern (first 15): {beat_pattern}")
-
-                            # Verify the pattern is correct
-                            if pickup_count > 0:
-                                expected_pickup = list(range(model_time_signature - pickup_count + 1, model_time_signature + 1))
-                                actual_pickup = beat_pattern[:pickup_count]
-                                print(f"Pickup verification: expected={expected_pickup}, actual={actual_pickup}")
-
-                                if len(beat_pattern) > pickup_count + model_time_signature:
-                                    first_measure = beat_pattern[pickup_count:pickup_count + model_time_signature]
-                                    expected_measure = list(range(1, model_time_signature + 1))
-                                    print(f"First full measure: expected={expected_measure}, actual={first_measure}")
-
-                            print(f"=== END BEAT NUMBERING ===\n")
-
-                        else:
-                            print("DEBUG: Falling back to generation method")
-                            # Don't hardcode time signature here - it will be set by the model detection
-
-                            # Identify pickup beats (beats before the first downbeat)
-                            pickup_beats = []
-                            if len(downbeat_times) > 0:
-                                first_downbeat = downbeat_times[0]
-                                pickup_beats = [b for b in beat_times if b < first_downbeat]
-                                print(f"DEBUG: Found {len(pickup_beats)} pickup beats before first downbeat at {first_downbeat:.2f}s")
-
-                            # For each beat, determine its position within its measure
-                            for i, beat_time in enumerate(beat_times):
-                                # Handle pickup beats specially
-                                if beat_time in pickup_beats:
-                                    beat_num = 1  # All pickup beats are numbered as 1
-                                else:
-                                    # Find which measure this beat belongs to
-                                    measure_idx = 0
-                                    while measure_idx < len(downbeat_times) - 1 and beat_time >= downbeat_times[measure_idx + 1]:
-                                        measure_idx += 1
-
-                                    if measure_idx < len(downbeat_times):
-                                        curr_downbeat = downbeat_times[measure_idx]
-
-                                        # Count beats from the current downbeat up to (but not including) this beat
-                                        beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
-                                        beat_num = beats_before + 1
-
-                                        # Ensure beat numbers are within the model's detected time signature
-                                        beat_num = ((beat_num - 1) % model_time_signature) + 1
-                                    else:
-                                        # For beats in the last measure, use modulo model's time signature
-                                        beat_num = ((i % model_time_signature) + 1)
-
-                                beats_with_positions.append({
-                                    "time": float(beat_time),
-                                    "beatNum": int(beat_num)
-                                })
-
-                        # Debug: Print the first 20 beats to verify the pattern
-                        print("\nDEBUG - First 20 beats with corrected positions:")
-                        for i in range(min(20, len(beats_with_positions))):
-                            beat = beats_with_positions[i]
-                            print(f"Beat {i+1}: time={beat['time']:.2f}s, beatNum={beat['beatNum']}")
-
-                        # Save the generated positions to files for consistency
-                        with open('beats_with_positions.txt', 'w') as f:
-                            for beat in beats_with_positions:
-                                f.write(f"time: {beat['time']:.2f} \t beatNum: {beat['beatNum']}\n")
-
-                        with open('downbeats_measures.txt', 'w') as f:
-                            for entry in downbeats_with_measures:
-                                f.write(f"time: {entry['time']:.2f} \t measureNum: {entry['measureNum']}\n")
-
-                        # Debug: Print the last 10 downbeats to verify we're getting data beyond 167s
-                        print("\nDEBUG - Last 10 downbeats:")
-                        for i in range(max(0, len(downbeats_with_measures) - 10), len(downbeats_with_measures)):
-                            print(f"Downbeat {i+1}: time={downbeats_with_measures[i]['time']:.2f}s, measure={downbeats_with_measures[i]['measureNum']}")
-
-                        # Debug: Print the last 10 beats
-                        print("\nDEBUG - Last 10 beats:")
-                        for i in range(max(0, len(beats_with_positions) - 10), len(beats_with_positions)):
-                            print(f"Beat {i+1}: time={beats_with_positions[i]['time']:.2f}s, beat={beats_with_positions[i]['beatNum']}")
-
-                        print(f"Generated {len(beats_with_positions)} beat positions")
-                        print(f"Generated {len(downbeats_with_measures)} downbeat positions")
-
-                    else:
-                        # For shorter audio, read from the generated files as before
-                        # Read the beat positions from the generated file (including source field for padded beats)
-                        beats_with_positions = []
-                        try:
-                            with open('beats_with_positions.txt', 'r') as f:
-                                for line in f:
-                                    parts = line.strip().split('\t')
-                                    if len(parts) >= 2:
-                                        time_part = parts[0].strip().replace('time: ', '')
-                                        beat_num_part = parts[1].strip().replace('beatNum: ', '')
-
-                                        # Check for source field (PADDED marker)
-                                        source = 'detected'  # Default
-                                        if '(PADDED)' in beat_num_part:
-                                            source = 'padded'
-                                            beat_num_part = beat_num_part.replace(' (PADDED)', '')
-
-                                        try:
-                                            time = float(time_part)
-                                            beat_num = int(beat_num_part)
-                                            beat_data = {
-                                                "time": time,
-                                                "beatNum": beat_num
-                                            }
-                                            # Include source field if it's a padded beat
-                                            if source == 'padded':
-                                                beat_data["source"] = source
-
-                                            beats_with_positions.append(beat_data)
-                                        except (ValueError, TypeError):
-                                            print(f"Warning: Could not parse line: {line}")
-                        except FileNotFoundError:
-                            print("Warning: beats_with_positions.txt not found")
-                            # Create simple beat positions if file not found
-                            beats_with_positions = [
-                                {"time": float(time), "beatNum": ((i % 4) + 1)}
-                                for i, time in enumerate(beat_times)
-                            ]
-
-                        # Read downbeat positions
-                        downbeats_with_measures = []
-                        try:
-                            with open('downbeats_measures.txt', 'r') as f:
-                                for line in f:
-                                    parts = line.strip().split('\t')
-                                    if len(parts) >= 2:
-                                        time_part = parts[0].strip().replace('time: ', '')
-                                        measure_part = parts[1].strip().replace('measureNum: ', '')
-                                        try:
-                                            time = float(time_part)
-                                            measure = int(measure_part)
-                                            downbeats_with_measures.append({
-                                                "time": time,
-                                                "measureNum": measure
-                                            })
-                                        except (ValueError, TypeError):
-                                            print(f"Warning: Could not parse line: {line}")
-                        except FileNotFoundError:
-                            print("Warning: downbeats_measures.txt not found")
-                            # Create simple downbeat positions if file not found
-                            downbeats_with_measures = [
-                                {"time": float(time), "measureNum": i + 1}
-                                for i, time in enumerate(downbeat_times)
-                            ]
+                    # Pure model outputs - no beat position generation
                 except Exception as e:
                     print(f"Error using run_beat_tracking: {e}")
                     print(traceback.format_exc())
@@ -1198,56 +908,13 @@ def detect_beats():
                             for i, time in enumerate(downbeat_times)
                         ]
 
-                # Create beat_info with strength based on beat number
-                beat_info = []
-                for beat in beats_with_positions:
-                    # Normalize beat strength based on position in measure (1 strongest, 4 weakest)
-                    beat_num = beat["beatNum"]
-                    # Make beat 1 the strongest, with decreasing strength for later beats
-                    strength = max(0.3, 1.0 - ((beat_num - 1) % 4) * 0.2)
-
-                    beat_info.append({
-                        "time": beat["time"],
-                        "strength": strength,
-                        "beatNum": beat_num
-                    })
-
-                # Calculate BPM from beat times
+                # Simple BPM calculation from raw beat times
                 if len(beat_times) > 1:
-                    # Calculate intervals between beats
                     intervals = np.diff(beat_times)
-
-                    # For long audio, calculate BPM in segments to detect changes
-                    if duration > 150:
-                        print("Calculating BPM for long audio...")
-
-                        # Use a sliding window to calculate local BPM
-                        window_size = 20  # beats
-                        if len(intervals) >= window_size:
-                            # Calculate BPM for each window
-                            window_bpms = []
-                            for i in range(0, len(intervals) - window_size + 1, window_size // 2):
-                                window = intervals[i:i+window_size]
-                                local_median = np.median(window)
-                                local_bpm = 60.0 / local_median if local_median > 0 else 120.0
-                                window_bpms.append(local_bpm)
-
-                            # Use median of all window BPMs
-                            bpm = np.median(window_bpms)
-                            print(f"Calculated BPM from {len(window_bpms)} windows: {bpm:.2f}")
-                        else:
-                            # Calculate median interval in seconds
-                            median_interval = np.median(intervals)
-                            # Convert to BPM
-                            bpm = 60.0 / median_interval if median_interval > 0 else 120.0
-                    else:
-                        # For shorter audio, use the standard approach
-                        # Calculate median interval in seconds
-                        median_interval = np.median(intervals)
-                        # Convert to BPM
-                        bpm = 60.0 / median_interval if median_interval > 0 else 120.0
+                    median_interval = np.median(intervals)
+                    bpm = 60.0 / median_interval if median_interval > 0 else 120.0
                 else:
-                    bpm = 120.0  # Default BPM if not enough beats
+                    bpm = 120.0
 
                 # Load audio to get duration
                 audio, sr = librosa.load(file_path, sr=None)
@@ -1267,39 +934,60 @@ def detect_beats():
                 except Exception as e:
                     print(f"Warning: Failed to clean up temporary files: {e}")
 
-                # Use the model's time signature that was detected earlier
-                time_signature = model_time_signature
-                print(f"DEBUG: Final time signature from Beat-Transformer model: {time_signature}/4")
-                print(f"DEBUG: model_time_signature source: {'pattern detection' if model_time_signature != 4 else 'detector or default'}")
+                # Get time signature from the Beat-Transformer model
+                time_signature = 4  # Default fallback
+                try:
+                    # Import the detector to get time signature
+                    import sys
+                    models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+                    if models_dir not in sys.path:
+                        sys.path.insert(0, models_dir)
 
-                # Prepare response
+                    if use_beat_transformer_light:
+                        from beat_transformer_detector_light import BeatTransformerDetectorLight
+                        detector = BeatTransformerDetectorLight(checkpoint_path)
+                    else:
+                        from beat_transformer_detector import BeatTransformerDetector
+                        detector = BeatTransformerDetector(checkpoint_path)
+
+                    # Call the detector to get the full result including time signature
+                    detector_result = detector.detect_beats(file_path)
+
+                    if detector_result and detector_result.get("success") and "time_signature" in detector_result:
+                        time_signature = detector_result["time_signature"]
+                        print(f"DEBUG: Beat-Transformer detected time signature: {time_signature}/4")
+                    else:
+                        print(f"DEBUG: Could not get time signature from Beat-Transformer, using default 4/4")
+
+                except Exception as e:
+                    print(f"DEBUG: Error getting time signature from Beat-Transformer: {e}")
+                    print(f"DEBUG: Using default 4/4 time signature")
+
+                # Prepare pure model output response
                 response_data = {
                     "success": True,
                     "beats": beat_times.tolist(),
-                    "beat_info": beat_info,
                     "downbeats": downbeat_times.tolist(),
-                    "downbeats_with_measures": downbeats_with_measures,
-                    "beats_with_positions": beats_with_positions,
                     "bpm": float(bpm),
                     "total_beats": len(beat_times),
                     "total_downbeats": len(downbeat_times),
                     "duration": float(duration),
                     "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer",
-                    "time_signature": int(time_signature)  # Use the model's detected time signature
+                    "time_signature": int(time_signature)  # Include the detected time signature
                 }
 
-                # Debug: Log the final response data
-                print(f"DEBUG: Final Beat-Transformer response data:")
-                print(f"  time_signature: {response_data['time_signature']}")
+                # Debug: Log the pure model output response
+                print(f"DEBUG: Pure model output response:")
                 print(f"  bpm: {response_data['bpm']}")
                 print(f"  model: {response_data['model']}")
                 print(f"  total_beats: {response_data['total_beats']}")
+                print(f"  total_downbeats: {response_data['total_downbeats']}")
+                print(f"  duration: {response_data['duration']}")
+                print(f"  time_signature: {response_data['time_signature']}/4")
 
                 # Add chunking information for long audio
                 if duration > 150:
                     response_data["processing_method"] = "chunked"
-                    response_data["chunk_size"] = chunk_duration
-                    response_data["chunk_overlap"] = overlap_duration
 
                 return jsonify(response_data)
 
@@ -1896,6 +1584,314 @@ def model_info():
             }
         }
     })
+
+@app.route('/api/genius-lyrics', methods=['POST'])
+def get_genius_lyrics():
+    """
+    Fetch lyrics from Genius.com using the lyricsgenius library
+
+    Parameters:
+    - artist: The artist name
+    - title: The song title
+    - search_query: Alternative search query (optional)
+
+    Returns:
+    - JSON with lyrics data or error message
+    """
+    if not GENIUS_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Genius lyrics service is not available. Please install lyricsgenius library."
+        }), 503
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No JSON data provided"}), 400
+
+        # Get search parameters
+        artist = data.get('artist', '').strip()
+        title = data.get('title', '').strip()
+        search_query = data.get('search_query', '').strip()
+
+        # Validate input
+        if not search_query and (not artist or not title):
+            return jsonify({
+                "success": False,
+                "error": "Either 'search_query' or both 'artist' and 'title' must be provided"
+            }), 400
+
+        # Get Genius API key from environment
+        genius_api_key = os.environ.get('GENIUS_API_KEY')
+        if not genius_api_key:
+            return jsonify({
+                "success": False,
+                "error": "Genius API key not configured. Please set GENIUS_API_KEY environment variable."
+            }), 500
+
+        # Initialize Genius client
+        import lyricsgenius
+        genius = lyricsgenius.Genius(genius_api_key)
+
+        # Configure Genius client settings
+        genius.verbose = False  # Turn off status messages
+        genius.remove_section_headers = True  # Remove [Verse], [Chorus], etc.
+        genius.skip_non_songs = True  # Skip non-song results
+        genius.excluded_terms = ["(Remix)", "(Live)", "(Acoustic)", "(Demo)"]  # Skip remixes, live versions, etc.
+
+        # Search for the song
+        song = None
+        if search_query:
+            # Use custom search query
+            print(f"Searching Genius for: '{search_query}'")
+            song = genius.search_song(search_query)
+        else:
+            # Use artist and title
+            print(f"Searching Genius for: '{title}' by '{artist}'")
+            song = genius.search_song(title, artist)
+
+        if not song:
+            return jsonify({
+                "success": False,
+                "error": "Song not found on Genius.com",
+                "searched_for": search_query if search_query else f"{title} by {artist}"
+            }), 404
+
+        # Extract lyrics and metadata
+        lyrics_text = song.lyrics if song.lyrics else ""
+
+        # Clean up lyrics text
+        if lyrics_text:
+            # Remove common artifacts
+            lyrics_text = lyrics_text.replace("\\n", "\n")
+            lyrics_text = lyrics_text.replace("\\", "")
+
+            # Remove "Lyrics" from the beginning if present
+            if lyrics_text.startswith("Lyrics\n"):
+                lyrics_text = lyrics_text[7:]
+
+            # Remove contributor info and song description at the beginning
+            lines = lyrics_text.split('\n')
+            cleaned_lines = []
+            skip_intro = True
+
+            for line in lines:
+                # Skip lines until we find the actual lyrics (usually after "Read More" or empty lines)
+                if skip_intro:
+                    if ('Read More' in line or
+                        line.strip() == '' or
+                        (len(line) > 20 and not any(word in line.lower() for word in ['contributors', 'translations', 'lyrics', 'read more']))):
+                        skip_intro = False
+                        if line.strip() != '' and 'Read More' not in line:
+                            cleaned_lines.append(line)
+                    continue
+
+                # Skip lines that look like embed info at the end
+                if 'Embed' in line and len(line) < 20:
+                    break
+
+                cleaned_lines.append(line)
+
+            lyrics_text = '\n'.join(cleaned_lines).strip()
+
+        # Prepare response with safe serialization
+        album_info = getattr(song, 'album', None)
+        album_name = None
+        if album_info:
+            # Handle both string and Album object cases
+            if hasattr(album_info, 'name'):
+                album_name = album_info.name
+            elif isinstance(album_info, str):
+                album_name = album_info
+            else:
+                album_name = str(album_info) if album_info else None
+
+        response_data = {
+            "success": True,
+            "lyrics": lyrics_text,
+            "metadata": {
+                "title": song.title,
+                "artist": song.artist,
+                "album": album_name,
+                "release_date": getattr(song, 'release_date', None),
+                "genius_url": song.url,
+                "genius_id": song.id,
+                "thumbnail_url": getattr(song, 'song_art_image_thumbnail_url', None)
+            },
+            "source": "genius.com"
+        }
+
+        print(f"Successfully fetched lyrics for '{song.title}' by '{song.artist}' from Genius")
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error fetching lyrics from Genius: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Failed to fetch lyrics: {str(e)}"
+        }), 500
+
+@app.route('/api/lrclib-lyrics', methods=['POST'])
+def get_lrclib_lyrics():
+    """
+    Fetch synchronized lyrics from LRClib API
+
+    Parameters:
+    - artist: The artist name
+    - title: The song title
+    - search_query: Alternative search query (optional)
+
+    Returns:
+    - JSON with synchronized lyrics data or error message
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No JSON data provided"}), 400
+
+        # Get search parameters
+        artist = data.get('artist', '').strip()
+        title = data.get('title', '').strip()
+        search_query = data.get('search_query', '').strip()
+
+        # Validate input
+        if not search_query and (not artist or not title):
+            return jsonify({
+                "success": False,
+                "error": "Either 'search_query' or both 'artist' and 'title' must be provided"
+            }), 400
+
+        import requests
+
+        # Search for lyrics using LRClib API
+        if artist and title:
+            # Use specific artist and title search
+            search_url = "https://lrclib.net/api/search"
+            params = {
+                "artist_name": artist,
+                "track_name": title
+            }
+            print(f"Searching LRClib for: '{title}' by '{artist}'")
+        else:
+            # Use general search query
+            search_url = "https://lrclib.net/api/search"
+            params = {
+                "q": search_query
+            }
+            print(f"Searching LRClib for: '{search_query}'")
+
+        # Make API request
+        response = requests.get(search_url, params=params, timeout=10)
+        response.raise_for_status()
+
+        search_results = response.json()
+
+        if not search_results or len(search_results) == 0:
+            return jsonify({
+                "success": False,
+                "error": "No synchronized lyrics found on LRClib",
+                "searched_for": search_query if search_query else f"{title} by {artist}"
+            }), 404
+
+        # Get the best match (first result)
+        best_match = search_results[0]
+
+        # Check if synchronized lyrics are available
+        synced_lyrics = best_match.get('syncedLyrics')
+        plain_lyrics = best_match.get('plainLyrics')
+
+        if not synced_lyrics and not plain_lyrics:
+            return jsonify({
+                "success": False,
+                "error": "No lyrics content found in LRClib result"
+            }), 404
+
+        # Parse synchronized lyrics if available
+        parsed_lyrics = None
+        if synced_lyrics:
+            parsed_lyrics = parse_lrc_format(synced_lyrics)
+
+        # Prepare response
+        response_data = {
+            "success": True,
+            "has_synchronized": bool(synced_lyrics),
+            "synchronized_lyrics": parsed_lyrics,
+            "plain_lyrics": plain_lyrics,
+            "metadata": {
+                "title": best_match.get('trackName', ''),
+                "artist": best_match.get('artistName', ''),
+                "album": best_match.get('albumName', ''),
+                "duration": best_match.get('duration', 0),
+                "lrclib_id": best_match.get('id'),
+                "instrumental": best_match.get('instrumental', False)
+            },
+            "source": "lrclib.net"
+        }
+
+        print(f"Successfully fetched {'synchronized' if synced_lyrics else 'plain'} lyrics for '{best_match.get('trackName')}' by '{best_match.get('artistName')}' from LRClib")
+        return jsonify(response_data)
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching lyrics from LRClib: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to connect to LRClib: {str(e)}"
+        }), 500
+    except Exception as e:
+        print(f"Error processing LRClib lyrics: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Failed to process lyrics: {str(e)}"
+        }), 500
+
+def parse_lrc_format(lrc_content):
+    """
+    Parse LRC format lyrics into structured data
+
+    LRC format example:
+    [00:12.34]Line of lyrics
+    [01:23.45]Another line
+
+    Returns:
+    List of dictionaries with 'time' (in seconds) and 'text' keys
+    """
+    if not lrc_content:
+        return []
+
+    import re
+
+    lines = []
+    # Regex to match LRC timestamp format [mm:ss.xx] or [mm:ss]
+    timestamp_pattern = r'\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$'
+
+    for line in lrc_content.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        match = re.match(timestamp_pattern, line)
+        if match:
+            minutes = int(match.group(1))
+            seconds = int(match.group(2))
+            milliseconds = int(match.group(3) or 0)
+
+            # Convert to total seconds
+            total_seconds = minutes * 60 + seconds + (milliseconds / 1000)
+
+            # Get lyrics text
+            lyrics_text = match.group(4).strip()
+
+            lines.append({
+                "time": total_seconds,
+                "text": lyrics_text
+            })
+
+    # Sort by time to ensure proper order
+    lines.sort(key=lambda x: x['time'])
+
+    return lines
 
 if __name__ == '__main__':
     # Get port from environment variable or default to 5000

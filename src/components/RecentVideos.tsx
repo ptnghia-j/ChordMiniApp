@@ -4,68 +4,141 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot } from 'firebase/firestore';
 
-interface CachedVideo {
+interface TranscribedVideo {
   videoId: string;
   title?: string;
   thumbnailUrl?: string;
   processedAt: number;
+  duration?: number;
+  beatModel?: string;
+  chordModel?: string;
+  bpm?: number;
+  timeSignature?: number;
+  keySignature?: string;
 }
 
-const AUDIO_FILES_COLLECTION = 'audioFiles';
-const MAX_VIDEOS = 12; // Increased from 6 to show more cached videos
+const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
+const INITIAL_LOAD_COUNT = 10; // Limit to 10 videos as requested
+const LOAD_MORE_COUNT = 10; // Number of videos to load when "Load More" is clicked
 
 export default function RecentVideos() {
-  const [videos, setVideos] = useState<CachedVideo[]>([]);
+  const [videos, setVideos] = useState<TranscribedVideo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
 
-  useEffect(() => {
-    async function fetchRecentVideos() {
-      if (!db) {
-        setError('Firebase not initialized');
-        setLoading(false);
-        return;
+  // Function to fetch transcribed videos with pagination support
+  const fetchVideos = async (isLoadMore = false) => {
+    if (!db) {
+      setError('Firebase not initialized');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (isLoadMore) {
+        setLoadingMore(true);
       }
 
-      try {
-        // Create a query to get the most recent videos
-        const videosRef = collection(db, AUDIO_FILES_COLLECTION);
-        const q = query(videosRef, orderBy('createdAt', 'desc'), limit(MAX_VIDEOS));
+      // Query transcriptions collection to get songs with chord and beat detection
+      const transcriptionsRef = collection(db, TRANSCRIPTIONS_COLLECTION);
+      let q;
 
-        // Get the documents
-        const querySnapshot = await getDocs(q);
+      if (isLoadMore && lastDoc) {
+        // Load more transcriptions starting after the last document
+        q = query(
+          transcriptionsRef,
+          orderBy('createdAt', 'desc'),
+          startAfter(lastDoc),
+          limit(LOAD_MORE_COUNT * 3) // Get more docs to account for duplicates
+        );
+      } else {
+        // Initial load - get more docs to account for duplicates
+        q = query(
+          transcriptionsRef,
+          orderBy('createdAt', 'desc'),
+          limit(INITIAL_LOAD_COUNT * 3)
+        );
+      }
 
-        // Convert the documents to CachedVideo objects
-        const cachedVideos: CachedVideo[] = [];
+      // Get the documents
+      const querySnapshot = await getDocs(q);
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
+      // Convert documents to TranscribedVideo objects and deduplicate by videoId
+      const videoMap = new Map<string, TranscribedVideo>();
+      const existingVideoIds = new Set(videos.map(v => v.videoId));
 
-          // Only include valid entries
-          if (data.videoId && !data.invalid && !data.expired) {
-            cachedVideos.push({
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Only include valid transcriptions with both beats and chords
+        if (data.videoId && data.beats && data.chords && data.beats.length > 0 && data.chords.length > 0) {
+          // Skip if we already have this video (for load more)
+          if (isLoadMore && existingVideoIds.has(data.videoId)) {
+            return;
+          }
+
+          // Only keep the most recent transcription for each video
+          if (!videoMap.has(data.videoId)) {
+            videoMap.set(data.videoId, {
               videoId: data.videoId,
               title: data.title || `Video ${data.videoId}`,
               thumbnailUrl: `https://i.ytimg.com/vi/${data.videoId}/mqdefault.jpg`,
               processedAt: data.createdAt?.toMillis?.() ||
                           data.createdAt?.seconds ? data.createdAt.seconds * 1000 :
-                          data.processedAt || Date.now()
+                          Date.now(),
+              duration: data.audioDuration,
+              beatModel: data.beatModel,
+              chordModel: data.chordModel,
+              bpm: data.bpm,
+              timeSignature: data.timeSignature,
+              keySignature: data.keySignature
             });
           }
-        });
+        }
+      });
 
-        setVideos(cachedVideos);
-      } catch (err) {
-        console.error('Error fetching recent videos:', err);
-        setError('Failed to load recent videos');
-      } finally {
-        setLoading(false);
+      // Convert map to array and limit to requested count
+      const transcribedVideos = Array.from(videoMap.values())
+        .slice(0, isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT);
+
+      // Update state
+      if (isLoadMore) {
+        setVideos(prev => [...prev, ...transcribedVideos]);
+      } else {
+        setVideos(transcribedVideos);
       }
-    }
 
-    fetchRecentVideos();
+      // Update pagination state
+      const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+      setLastDoc(lastVisible || null);
+      setHasMore(transcribedVideos.length === (isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT));
+
+      console.log(`Fetched ${transcribedVideos.length} transcribed videos${isLoadMore ? ' (load more)' : ' (initial)'}, hasMore: ${transcribedVideos.length === (isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT)}`);
+
+    } catch (err) {
+      console.error('Error fetching transcribed videos:', err);
+      setError('Failed to load transcribed videos');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // Load more videos function
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchVideos(true);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchVideos(false);
   }, []);
 
   // Format date
@@ -74,14 +147,34 @@ export default function RecentVideos() {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
+  // Format BPM
+  const formatBPM = (bpm?: number) => {
+    if (!bpm) return '';
+    return `${Math.round(bpm)} BPM`;
+  };
+
+  // Format duration
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Format time signature
+  const formatTimeSignature = (timeSignature?: number) => {
+    if (!timeSignature) return '';
+    return `${timeSignature}/4`;
+  };
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {[...Array(12)].map((_, index) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-1 transition-colors duration-300"></div>
+              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-2 transition-colors duration-300"></div>
               <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
               <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
             </div>
@@ -97,21 +190,28 @@ export default function RecentVideos() {
 
   return (
     <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
-      <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
+          Recently Transcribed Songs
+        </h3>
+        <span className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
+          {videos.length} song{videos.length !== 1 ? 's' : ''}
+        </span>
+      </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {videos.map((video) => (
           <Link
             href={`/analyze/${video.videoId}`}
             key={video.videoId}
             className="block group hover:opacity-90 transition-opacity"
           >
-            <div className="relative aspect-video bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden mb-1 shadow-sm transition-colors duration-300">
+            <div className="relative aspect-video bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden mb-2 shadow-sm transition-colors duration-300">
               <Image
                 src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
                 alt={video.title || 'Video thumbnail'}
                 fill
-                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 16vw"
+                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
                 className="object-cover"
                 onError={(e) => {
                   // Fallback if thumbnail fails to load
@@ -119,14 +219,82 @@ export default function RecentVideos() {
                 }}
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
+
+              {/* Duration overlay */}
+              {video.duration && (
+                <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">
+                  {formatDuration(video.duration)}
+                </div>
+              )}
             </div>
-            <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+
+            <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
               {video.title}
             </h4>
-            <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">{formatDate(video.processedAt)}</p>
+
+            {/* Transcription metadata */}
+            <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300 space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span>{formatDate(video.processedAt)}</span>
+                {video.bpm && (
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">
+                    {formatBPM(video.bpm)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                {video.timeSignature && (
+                  <span className="text-green-600 dark:text-green-400">
+                    {formatTimeSignature(video.timeSignature)}
+                  </span>
+                )}
+                {video.keySignature && (
+                  <span className="text-purple-600 dark:text-purple-400 font-medium">
+                    {video.keySignature}
+                  </span>
+                )}
+              </div>
+            </div>
           </Link>
         ))}
       </div>
+
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loadingMore ? (
+              <div className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading...
+              </div>
+            ) : (
+              `Load More Videos`
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Loading more indicator */}
+      {loadingMore && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mt-3">
+          {[...Array(LOAD_MORE_COUNT)].map((_, index) => (
+            <div key={`loading-${index}`} className="animate-pulse">
+              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-2 transition-colors duration-300"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

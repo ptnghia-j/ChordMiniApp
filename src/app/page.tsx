@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import SearchResults from '@/components/SearchResults';
 import RecentVideos from '@/components/RecentVideos';
 import Navigation from '@/components/Navigation';
+import TypewriterText from '@/components/TypewriterText';
 import { useTheme } from '@/contexts/ThemeContext';
 
 // YouTube search result interface
@@ -180,7 +181,16 @@ export default function Home() {
           {/* App Title and Description - Added padding-top to prevent margin collapse */}
           <div ref={titleRef} className="pt-4 pb-4 md:py-5 flex flex-col items-center justify-center">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">ChordMini</h2>
-            <p className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300">Chord recognition and analysis application</p>
+            <div className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300 min-h-[2rem] md:min-h-[2.5rem]">
+              <TypewriterText
+                text="Get your favorite songs transcribed with our app"
+                speed={30}
+                delay={800}
+                className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light transition-colors duration-300"
+                showCursor={true}
+                cursorChar="|"
+              />
+            </div>
           </div>
 
           <div className="max-w-4xl mx-auto">

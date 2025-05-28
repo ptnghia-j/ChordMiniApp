@@ -31,11 +31,19 @@ export function formatChordWithMusicalSymbols(chordName: string): string {
     quality = inversionParts[0];
     inversion = inversionParts[1];
 
-    // Convert numeric inversion to actual bass note
-    if (inversion === '3' || inversion === '5' || inversion === '7' || inversion === '9' ||
-        inversion === 'b3' || inversion === 'b5' || inversion === 'b7' || inversion === 'b9' ||
-        inversion === '#3' || inversion === '#5' || inversion === '#7' || inversion === '#9') {
-      bassNote = getBassNoteFromInversion(root, quality, inversion);
+    // Check if inversion is a scale degree (numeric with optional accidental)
+    const scaleDegreeMatcher = /^[b#]?\d+$/;
+    if (scaleDegreeMatcher.test(inversion)) {
+      // First try the new scale degree translation for unusual inversions
+      bassNote = translateScaleDegreeInversion(root, quality, inversion);
+
+      // If that didn't work (returned the original inversion), try the old method for standard inversions
+      if (bassNote === inversion &&
+          (inversion === '3' || inversion === '5' || inversion === '7' || inversion === '9' ||
+           inversion === 'b3' || inversion === 'b5' || inversion === 'b7' || inversion === 'b9' ||
+           inversion === '#3' || inversion === '#5' || inversion === '#7' || inversion === '#9')) {
+        bassNote = getBassNoteFromInversion(root, quality, inversion);
+      }
     } else {
       // If it's already a note name, keep it
       bassNote = inversion;
@@ -120,6 +128,79 @@ export function formatChordWithMusicalSymbols(chordName: string): string {
   }
 
   return formattedChord;
+}
+
+/**
+ * Translates scale degree inversions to proper note names
+ * Handles unusual inversions like F/2 -> F/E, Am/b7 -> Am/G
+ *
+ * @param root The root note of the chord
+ * @param quality The quality of the chord (maj, min, etc.)
+ * @param inversion The inversion notation (2, b7, #4, etc.)
+ * @returns The bass note as a string
+ */
+function translateScaleDegreeInversion(root: string, quality: string, inversion: string): string {
+  // Define chromatic scale starting from C
+  const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const chromaticScaleFlats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+  // Determine if we should use flats or sharps based on the root note
+  const usesFlats = root.includes('b');
+  const noteArray = usesFlats ? chromaticScaleFlats : chromaticScale;
+
+  // Find root note index
+  let rootIndex = -1;
+  for (let i = 0; i < noteArray.length; i++) {
+    if (noteArray[i] === root) {
+      rootIndex = i;
+      break;
+    }
+  }
+
+  if (rootIndex === -1) return inversion; // Fallback if root not found
+
+  // Determine if chord is minor for scale degree calculation
+  const isMinor = quality === 'min' || quality === 'm' || quality.startsWith('min') || quality.startsWith('m');
+
+  // Parse the inversion to handle accidentals
+  let scaleDegree = inversion;
+  let accidental = 0; // 0 = natural, -1 = flat, 1 = sharp
+
+  if (inversion.startsWith('b')) {
+    accidental = -1;
+    scaleDegree = inversion.substring(1);
+  } else if (inversion.startsWith('#')) {
+    accidental = 1;
+    scaleDegree = inversion.substring(1);
+  }
+
+  // Convert scale degree to semitone interval
+  let semitones = 0;
+  const degree = parseInt(scaleDegree);
+
+  if (isNaN(degree)) return inversion; // Not a numeric scale degree
+
+  // Calculate semitones based on scale degree and chord quality
+  if (isMinor) {
+    // Natural minor scale intervals: 0, 2, 3, 5, 7, 8, 10
+    const minorIntervals = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22];
+    if (degree >= 1 && degree <= minorIntervals.length) {
+      semitones = minorIntervals[degree - 1];
+    }
+  } else {
+    // Major scale intervals: 0, 2, 4, 5, 7, 9, 11
+    const majorIntervals = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
+    if (degree >= 1 && degree <= majorIntervals.length) {
+      semitones = majorIntervals[degree - 1];
+    }
+  }
+
+  // Apply accidental
+  semitones += accidental;
+
+  // Calculate the bass note
+  const bassIndex = (rootIndex + semitones) % 12;
+  return noteArray[bassIndex];
 }
 
 /**
