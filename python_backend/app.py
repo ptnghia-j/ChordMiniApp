@@ -604,9 +604,16 @@ def detect_beats():
                     if not hasattr(np, 'int'):
                         np.int = int
 
-                    # For long audio (over 150 seconds), split and process in chunks
-                    if duration > 150:
-                        print("Long audio detected. Processing in chunks...")
+                    # OPTIMIZATION: Remove high-level chunking for better accuracy
+                    # Allow the Beat-Transformer model to handle its own chunking internally
+                    # This eliminates one layer of chunking that was causing timing issues
+
+                    # Check if we should force single-pass processing
+                    FORCE_SINGLE_PASS_PROCESSING = True  # Set to True to eliminate high-level chunking
+                    MAX_SINGLE_PASS_DURATION = 600  # Maximum duration (10 minutes) for single-pass
+
+                    if duration > MAX_SINGLE_PASS_DURATION and not FORCE_SINGLE_PASS_PROCESSING:
+                        print(f"Very long audio detected ({duration:.2f}s). Processing in chunks...")
 
                         # Process in chunks of 120 seconds with 30 second overlap
                         chunk_duration = 120  # seconds
@@ -622,7 +629,12 @@ def detect_beats():
                         chunk_step = chunk_duration - overlap_duration
                         num_chunks = (int(duration) + chunk_step - 1) // chunk_step
                         print(f"DEBUG - Estimated number of chunks: {num_chunks}")
+                    elif FORCE_SINGLE_PASS_PROCESSING:
+                        print(f"OPTIMIZATION: Processing entire audio ({duration:.2f}s) in single pass")
+                        print("High-level chunking disabled - letting Beat-Transformer handle internal chunking")
 
+                    if duration > MAX_SINGLE_PASS_DURATION and not FORCE_SINGLE_PASS_PROCESSING:
+                        # Only execute chunking logic if we're not forcing single-pass
                         chunk_count = 0
                         for start_time in range(0, int(duration), chunk_duration - overlap_duration):
                             chunk_count += 1
@@ -758,7 +770,8 @@ def detect_beats():
                         for i in range(max(0, len(downbeat_times) - 10), len(downbeat_times)):
                             print(f"Downbeat {i+1}: {downbeat_times[i]:.2f}s")
                     else:
-                        # For shorter audio, process normally
+                        # OPTIMIZATION: Single-pass processing (no high-level chunking)
+                        # This allows the Beat-Transformer model to handle its own internal chunking
                         # Import the beat tracking function if not already imported
                         try:
                             # The path should already be in sys.path from the demix_spectrogram import
@@ -775,16 +788,22 @@ def detect_beats():
                         if not hasattr(np, 'int'):
                             np.int = int
 
-                        print(f"Calling run_beat_tracking for full audio with:")
+                        print(f"SINGLE-PASS: Calling run_beat_tracking for full audio ({duration:.2f}s) with:")
                         print(f"  - demixed_spec_file: {temp_spec_path}")
                         print(f"  - audio_file: {file_path}")
                         print(f"  - param_path: {checkpoint_path}")
+                        print("  - Internal model chunking will be handled by Beat-Transformer")
 
-                        beat_times, downbeat_times = run_beat_tracking(
+                        beat_times, downbeat_times, beat_time_range_start, beat_time_range_end = run_beat_tracking(
                             demixed_spec_file=temp_spec_path,
                             audio_file=file_path,
                             param_path=checkpoint_path
                         )
+
+                        print(f"SINGLE-PASS: Completed processing {duration:.2f}s audio")
+                        print(f"  - Detected {len(beat_times)} beats")
+                        print(f"  - Detected {len(downbeat_times)} downbeats")
+                        print(f"  - Beat time range: {beat_time_range_start:.3f}s to {beat_time_range_end:.3f}s")
 
                     # Pure model outputs - no time signature detection or post-processing
 
@@ -963,6 +982,26 @@ def detect_beats():
                     print(f"DEBUG: Error getting time signature from Beat-Transformer: {e}")
                     print(f"DEBUG: Using default 4/4 time signature")
 
+                # Use beat time range from the model (already calculated in single-pass processing)
+                # For chunked processing, calculate from the combined results
+                if FORCE_SINGLE_PASS_PROCESSING:
+                    # beat_time_range_start and beat_time_range_end already set from run_beat_tracking
+                    first_detected_beat = float(beat_times[0]) if len(beat_times) > 0 else 0.0
+                else:
+                    # For chunked processing, calculate from combined results
+                    first_detected_beat = float(beat_times[0]) if len(beat_times) > 0 else 0.0
+                    beat_time_range_start = first_detected_beat
+                    beat_time_range_end = float(beat_times[-1]) if len(beat_times) > 0 else duration
+
+                # Debug: Log the beat time range calculation
+                print(f"DEBUG: Beat time range calculation:")
+                print(f"  First detected beat: {first_detected_beat:.3f}s")
+                print(f"  Beat time range start: {beat_time_range_start:.3f}s")
+                print(f"  Beat time range end: {beat_time_range_end:.3f}s")
+
+                # REMOVED: Timing offset calculation - no longer needed
+                print(f"  Using direct model outputs without timing offset")
+
                 # Prepare pure model output response
                 response_data = {
                     "success": True,
@@ -973,7 +1012,9 @@ def detect_beats():
                     "total_downbeats": len(downbeat_times),
                     "duration": float(duration),
                     "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer",
-                    "time_signature": int(time_signature)  # Include the detected time signature
+                    "time_signature": int(time_signature),  # Include the detected time signature
+                    "beat_time_range_start": beat_time_range_start,  # Start of beat time range
+                    "beat_time_range_end": beat_time_range_end       # End of beat time range
                 }
 
                 # Debug: Log the pure model output response
@@ -984,10 +1025,15 @@ def detect_beats():
                 print(f"  total_downbeats: {response_data['total_downbeats']}")
                 print(f"  duration: {response_data['duration']}")
                 print(f"  time_signature: {response_data['time_signature']}/4")
+                print(f"  beat_time_range: {response_data['beat_time_range_start']:.3f}s to {response_data['beat_time_range_end']:.3f}s")
 
-                # Add chunking information for long audio
-                if duration > 150:
+                # Add processing method information
+                if FORCE_SINGLE_PASS_PROCESSING:
+                    response_data["processing_method"] = "single-pass"
+                elif duration > MAX_SINGLE_PASS_DURATION:
                     response_data["processing_method"] = "chunked"
+                else:
+                    response_data["processing_method"] = "single-pass"
 
                 return jsonify(response_data)
 
@@ -1258,6 +1304,10 @@ def detect_beats():
             if 'file' in request.files:
                 os.unlink(file_path)
 
+            # Calculate beat time range for frontend padding logic
+            beat_time_range_start = float(beat_times[0]) if len(beat_times) > 0 else 0.0
+            beat_time_range_end = float(beat_times[-1]) if len(beat_times) > 0 else duration
+
             response_data = {
                 "success": True,
                 "beats": beat_times.tolist(),
@@ -1270,7 +1320,9 @@ def detect_beats():
                 "total_downbeats": len(downbeat_times) if 'downbeat_times' in locals() else 0,
                 "duration": float(duration),
                 "model": "madmom",
-                "time_signature": int(time_signature)  # Include the detected time signature
+                "time_signature": int(time_signature),  # Include the detected time signature
+                "beat_time_range_start": beat_time_range_start,  # Start of beat time range
+                "beat_time_range_end": beat_time_range_end       # End of beat time range
             }
 
             # Debug: Log the final response data
@@ -1279,6 +1331,7 @@ def detect_beats():
             print(f"  bpm: {response_data['bpm']}")
             print(f"  model: {response_data['model']}")
             print(f"  total_beats: {response_data['total_beats']}")
+            print(f"  beat_time_range: {response_data['beat_time_range_start']:.3f}s to {response_data['beat_time_range_end']:.3f}s")
 
             return jsonify(response_data)
 

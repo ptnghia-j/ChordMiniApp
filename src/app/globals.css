@@ -84,6 +84,34 @@
   .dark .chord-grid-cell-current {
     @apply bg-blue-900 ring-blue-400 text-white;
   }
+
+  /* Quarter rest symbol styles */
+  .chord-rest-symbol {
+    transition: opacity 0.3s ease;
+  }
+
+  /* Responsive quarter rest sizing */
+  .quarter-rest-responsive {
+    min-width: 1.2em;
+    min-height: 1.2em;
+    max-width: 2em;
+    max-height: 2em;
+  }
+
+  /* Scale with cell size on smaller screens */
+  @media (max-width: 768px) {
+    .quarter-rest-responsive {
+      width: 1.3em !important;
+      height: 1.3em !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .quarter-rest-responsive {
+      width: 1.1em !important;
+      height: 1.1em !important;
+    }
+  }
 }
 
 @keyframes progress-indeterminate {

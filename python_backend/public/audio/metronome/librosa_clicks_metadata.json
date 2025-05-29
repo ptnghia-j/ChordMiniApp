@@ -1,0 +1,45 @@
+{
+  "generated_files": {
+    "librosa_default": {
+      "description": "Default librosa click",
+      "downbeat": "librosa_default_downbeat.wav",
+      "regular": "librosa_default_regular.wav",
+      "sample_rate": 44100,
+      "duration": 0.1,
+      "downbeat_freq": null,
+      "regular_freq": null
+    },
+    "librosa_pitched": {
+      "description": "Pitched librosa clicks",
+      "downbeat": "librosa_pitched_downbeat.wav",
+      "regular": "librosa_pitched_regular.wav",
+      "sample_rate": 44100,
+      "duration": 0.1,
+      "downbeat_freq": 1000,
+      "regular_freq": 800
+    },
+    "librosa_short": {
+      "description": "Short librosa clicks",
+      "downbeat": "librosa_short_downbeat.wav",
+      "regular": "librosa_short_regular.wav",
+      "sample_rate": 44100,
+      "duration": 0.1,
+      "downbeat_freq": 1200,
+      "regular_freq": 900
+    },
+    "librosa_long": {
+      "description": "Long librosa clicks",
+      "downbeat": "librosa_long_downbeat.wav",
+      "regular": "librosa_long_regular.wav",
+      "sample_rate": 44100,
+      "duration": 0.1,
+      "downbeat_freq": 800,
+      "regular_freq": 600
+    }
+  },
+  "generation_info": {
+    "sample_rate": 44100,
+    "librosa_version": "0.8.1",
+    "numpy_version": "1.22.4"
+  }
+}

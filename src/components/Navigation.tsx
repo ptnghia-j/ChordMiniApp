@@ -18,14 +18,14 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
 
   return (
     <div className={`sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 shadow-md block z-50 transition-colors duration-300 w-screen ${className}`}>
-      <div className="w-full px-4 flex justify-between items-center h-16">
+      <div className="w-full px-4 flex justify-between items-center h-12">
         <div className="flex items-center">
           <Link href="/" className="flex items-center group">
             <Image
               src={logoSrc}
               alt="ChordMini Logo"
-              width={48}
-              height={48}
+              width={40}
+              height={40}
               className="mr-2 transition-transform duration-200 group-hover:scale-105"
             />
             <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">

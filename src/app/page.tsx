@@ -183,7 +183,7 @@ export default function Home() {
             <h2 className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-gray-100 mb-0.5 transition-colors duration-300">ChordMini</h2>
             <div className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300 min-h-[2rem] md:min-h-[2.5rem]">
               <TypewriterText
-                text="Get your favorite songs transcribed with our app"
+                text="Open source chord & beat detection application. Get your favorite songs transcribed!"
                 speed={30}
                 delay={800}
                 className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light transition-colors duration-300"
@@ -247,15 +247,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-w-3xl mx-auto transition-colors duration-300">
-                <p className="font-medium">You can:</p>
-                <ul className="list-disc list-inside mt-0.5 space-y-0.5">
-                  <li>Search for songs by title, artist, etc.</li>
-                  <li>Paste YouTube URLs directly (e.g., https://youtu.be/dQw4w9WgXcQ)</li>
-                  <li>Enter a YouTube video ID (e.g., dQw4w9WgXcQ)</li>
-                  <li>Upload your own audio file for analysis</li>
-                </ul>
-              </div>
+
             </div>
           </div>
 

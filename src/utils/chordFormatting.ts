@@ -7,14 +7,28 @@
  * Formats chord names with proper musical notation and standardized chord suffixes
  *
  * @param chordName The chord name to format (e.g., "C#:min", "Bb:maj", "C#:maj/3")
+ * @param isDarkMode Whether dark mode is active (for theme-aware SVG selection)
  * @returns Formatted chord name with proper musical symbols and professional notation
  */
-export function formatChordWithMusicalSymbols(chordName: string): string {
+export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boolean = false): string {
   if (!chordName) return chordName;
 
   // Handle special cases
-  if (chordName === 'N' || chordName === 'N/C' || chordName === 'X') {
-    return chordName === 'N/C' ? 'N.C.' : chordName; // Use standard "No Chord" notation
+  if (chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.' || chordName === 'X') {
+    // Use custom SVG quarter rest symbol for "No Chord" notation instead of "N.C."
+    if (chordName === 'N/C' || chordName === 'N.C.') {
+      // Use theme-appropriate SVG file
+      const svgFile = isDarkMode ? '/quarter_rest_dark.svg' : '/quarter_rest.svg';
+      return `<span style="display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em;">
+        <img
+          src="${svgFile}"
+          alt="No Chord"
+          style="width: 100%; height: 100%; object-fit: contain;"
+          class="chord-rest-symbol quarter-rest-responsive"
+        />
+      </span>`;
+    }
+    return chordName;
   }
 
   // Split chord into root and quality parts
@@ -34,15 +48,15 @@ export function formatChordWithMusicalSymbols(chordName: string): string {
     // Check if inversion is a scale degree (numeric with optional accidental)
     const scaleDegreeMatcher = /^[b#]?\d+$/;
     if (scaleDegreeMatcher.test(inversion)) {
-      // First try the new scale degree translation for unusual inversions
-      bassNote = translateScaleDegreeInversion(root, quality, inversion);
-
-      // If that didn't work (returned the original inversion), try the old method for standard inversions
-      if (bassNote === inversion &&
-          (inversion === '3' || inversion === '5' || inversion === '7' || inversion === '9' ||
-           inversion === 'b3' || inversion === 'b5' || inversion === 'b7' || inversion === 'b9' ||
-           inversion === '#3' || inversion === '#5' || inversion === '#7' || inversion === '#9')) {
+      // FIXED: For standard chord inversions (3, 5, 7), use chord tone intervals, not scale degree intervals
+      if (inversion === '3' || inversion === '5' || inversion === '7' || inversion === '9' ||
+          inversion === 'b3' || inversion === 'b5' || inversion === 'b7' || inversion === 'b9' ||
+          inversion === '#3' || inversion === '#5' || inversion === '#7' || inversion === '#9') {
+        // Use chord tone intervals for standard inversions
         bassNote = getBassNoteFromInversion(root, quality, inversion);
+      } else {
+        // Use scale degree translation for unusual inversions (like /2, /4, /6)
+        bassNote = translateScaleDegreeInversion(root, quality, inversion);
       }
     } else {
       // If it's already a note name, keep it

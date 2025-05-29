@@ -5,7 +5,7 @@
 
 export interface MetronomeOptions {
   volume: number; // 0.0 to 1.0
-  soundStyle: 'traditional' | 'digital' | 'wood' | 'bell'; // Sound style selection
+  soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'; // Sound style selection
   clickDuration: number; // Duration of each click in seconds
 }
 
@@ -14,7 +14,7 @@ export class MetronomeService {
   private isInitialized = false;
   private isEnabled = false;
   private volume = 0.3;
-  private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' = 'traditional';
+  private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'traditional';
   private clickDuration = 0.08; // 80ms clicks for better sound quality
   private scheduledClicks: number[] = []; // Store scheduled click IDs
 
@@ -27,10 +27,45 @@ export class MetronomeService {
   }
 
   /**
+   * Load external audio file and convert to AudioBuffer
+   */
+  private async loadExternalAudioFile(url: string): Promise<AudioBuffer | null> {
+    if (!this.audioContext) return null;
+
+    try {
+      console.log(`Loading external audio file: ${url}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      console.log(`Successfully loaded external audio file: ${url}`);
+      return audioBuffer;
+    } catch (error) {
+      console.error(`Error loading external audio file ${url}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if a sound style uses external audio files (librosa styles)
+   */
+  private isExternalAudioStyle(style: string): boolean {
+    return style.startsWith('librosa_');
+  }
+
+  /**
    * Generate high-quality audio buffer for metronome clicks
    */
   private generateClickBuffer(isDownbeat: boolean, style: string): AudioBuffer | null {
     if (!this.audioContext) return null;
+
+    // For librosa styles, we'll load external files in loadAudioBuffers instead
+    if (this.isExternalAudioStyle(style)) {
+      return null; // External files are loaded separately
+    }
 
     const sampleRate = this.audioContext.sampleRate;
     const duration = this.clickDuration;
@@ -202,9 +237,30 @@ export class MetronomeService {
     try {
       console.log(`Loading metronome audio buffers for style: ${style}`);
 
-      // Generate buffers for both downbeat and regular beat
-      const downbeatBuffer = this.generateClickBuffer(true, style);
-      const regularBuffer = this.generateClickBuffer(false, style);
+      let downbeatBuffer: AudioBuffer | null = null;
+      let regularBuffer: AudioBuffer | null = null;
+
+      if (this.isExternalAudioStyle(style)) {
+        // Load external audio files for librosa styles
+        const baseUrl = '/audio/metronome';
+        const downbeatUrl = `${baseUrl}/${style}_downbeat.wav`;
+        const regularUrl = `${baseUrl}/${style}_regular.wav`;
+
+        console.log(`Loading librosa audio files: ${downbeatUrl}, ${regularUrl}`);
+
+        // Load both files in parallel
+        const [downbeatResult, regularResult] = await Promise.all([
+          this.loadExternalAudioFile(downbeatUrl),
+          this.loadExternalAudioFile(regularUrl)
+        ]);
+
+        downbeatBuffer = downbeatResult;
+        regularBuffer = regularResult;
+      } else {
+        // Generate buffers for traditional styles
+        downbeatBuffer = this.generateClickBuffer(true, style);
+        regularBuffer = this.generateClickBuffer(false, style);
+      }
 
       if (downbeatBuffer && regularBuffer) {
         this.audioBuffers.set(style, {
@@ -213,7 +269,7 @@ export class MetronomeService {
         });
         console.log(`Successfully loaded metronome buffers for style: ${style}`);
       } else {
-        throw new Error(`Failed to generate audio buffers for style: ${style}`);
+        throw new Error(`Failed to load audio buffers for style: ${style}`);
       }
     } catch (error) {
       console.error(`Error loading metronome buffers for style ${style}:`, error);
@@ -381,7 +437,7 @@ export class MetronomeService {
   /**
    * Set sound style and load corresponding buffers
    */
-  public async setSoundStyle(style: 'traditional' | 'digital' | 'wood' | 'bell'): Promise<void> {
+  public async setSoundStyle(style: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'): Promise<void> {
     if (this.soundStyle === style) return;
 
     this.soundStyle = style;
@@ -404,7 +460,7 @@ export class MetronomeService {
    * Get available sound styles
    */
   public getAvailableSoundStyles(): string[] {
-    return ['traditional', 'digital', 'wood', 'bell'];
+    return ['traditional', 'digital', 'wood', 'bell', 'librosa_default', 'librosa_pitched', 'librosa_short', 'librosa_long'];
   }
 
   /**

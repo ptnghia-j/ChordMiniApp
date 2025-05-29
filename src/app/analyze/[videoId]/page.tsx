@@ -1176,6 +1176,25 @@ export default function YouTubeVideoAnalyzePage() {
     // ReactPlayer will handle the playback rate change through its props
   };
 
+  // Handle beat cell clicks for navigation
+  const handleBeatClick = (beatIndex: number, timestamp: number) => {
+    console.log(`Seeking to beat ${beatIndex} at timestamp ${timestamp}s`);
+
+    // Seek audio element
+    if (audioRef.current) {
+      audioRef.current.currentTime = timestamp;
+      setCurrentTime(timestamp);
+    }
+
+    // Seek YouTube player if available
+    if (youtubePlayer && youtubePlayer.seekTo) {
+      youtubePlayer.seekTo(timestamp);
+    }
+
+    // Update current beat index to provide immediate visual feedback
+    setCurrentBeatIndex(beatIndex);
+  };
+
   // YouTube player event handlers
   const handleYouTubeReady = (player: unknown) => {
     console.log('YouTube player ready');
@@ -1243,65 +1262,154 @@ export default function YouTubeVideoAnalyzePage() {
         if (chordGridData && chordGridData.chords.length > 0) {
           let currentBeat = -1;
 
-          // Handle pickup beats - check if we're in the pickup phase
-          if (chordGridData.hasPickupBeats && time < (analysisResults?.beats[0]?.time || 0)) {
-            // We're in the pickup beat phase
-            const firstBeatTime = analysisResults?.beats[0]?.time || 0;
-            const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
-            const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
-            const missingBeats = chordGridData.pickupBeatsCount || 0;
+          // COMMENTED OUT: Pickup beat animation - relying on model strength now
+          // // Handle pickup beats - check if we're in the pickup phase
+          // // Use beat time range start, not first detected beat, as the boundary
+          // const beatTimeRangeStart = analysisResults?.beatDetectionResult?.beat_time_range_start ||
+          //                          analysisResults?.beats[0]?.time || 0;
 
-            if (missingBeats > 0) {
-              // Calculate which pickup beat we're currently on
-              const pickupBeatDuration = firstBeatTime / missingBeats;
-              const pickupBeatIndex = Math.floor(time / pickupBeatDuration);
+          // if (chordGridData.hasPickupBeats && time < beatTimeRangeStart) {
+          //   // We're in the pickup beat phase (0.0s to beat time range start)
+          //   const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
+          //   const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+          //   const missingBeats = chordGridData.pickupBeatsCount || 0;
 
-              // Calculate the index in the chord grid (accounting for empty cells)
-              const emptyCells = timeSignature - missingBeats;
-              currentBeat = emptyCells + pickupBeatIndex;
+          //   if (missingBeats > 0) {
+          //     // Calculate velocity: beat_time_range_start / number_of_padding_beats
+          //     const pickupBeatDuration = beatTimeRangeStart / missingBeats;
+          //     const pickupBeatIndex = Math.floor(time / pickupBeatDuration);
 
-              // Make sure we don't exceed the pickup beats
-              if (currentBeat >= emptyCells + missingBeats) {
-                currentBeat = emptyCells + missingBeats - 1;
+          //     // Calculate the index in the chord grid (accounting for empty cells)
+          //     const emptyCells = timeSignature - missingBeats;
+          //     currentBeat = emptyCells + pickupBeatIndex;
+
+          //     // Make sure we don't exceed the pickup beats
+          //     if (currentBeat >= emptyCells + missingBeats) {
+          //       currentBeat = emptyCells + missingBeats - 1;
+          //     }
+
+          //     // Special case: Very close to beat_time_range_start, ensure we're on the last pickup beat
+          //     const timeToTransition = beatTimeRangeStart - time;
+          //     if (timeToTransition < pickupBeatDuration * 0.1) { // Within 10% of next beat duration
+          //       currentBeat = emptyCells + missingBeats - 1; // Last pickup beat
+          //       console.log(`🔄 APPROACHING TRANSITION: time=${time.toFixed(3)}s, timeToTransition=${timeToTransition.toFixed(3)}s, forcing to last pickup beat ${currentBeat}`);
+          //     }
+
+          //     // Debug logging for pickup beats
+          //     if (Math.floor(time * 10) % 5 === 0) { // Log every 0.5 seconds
+          //       console.log(`Pickup Beat: time=${time.toFixed(3)}s, pickupBeat=${pickupBeatIndex + 1}/${missingBeats}, gridIndex=${currentBeat}, velocity=${pickupBeatDuration.toFixed(3)}s/beat, rangeStart=${beatTimeRangeStart.toFixed(3)}s`);
+          //     }
+          //   }
+          // } else {
+
+          // BEAT TIME RANGE SYNCHRONIZED ANIMATION
+          // The beat time range represents the model's prediction context
+          // We need to sync animation properly with this context
+
+          const beatTimeRangeStart = analysisResults?.beatDetectionResult?.beat_time_range_start || 0;
+          const firstDetectedBeat = analysisResults.beats.length > 0 ? analysisResults.beats[0].time : beatTimeRangeStart;
+
+          // Use beat_time_range_start for animation timing (this is the correct timing for padding animation)
+          const animationRangeStart = beatTimeRangeStart;
+          const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+          const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
+
+          // Calculate optimal shift (same logic as ChordGrid)
+          const calculateOptimalShift = (chords: string[], timeSignature: number): number => {
+            if (chords.length === 0) return 0;
+
+            let bestShift = 0;
+            let maxChordChanges = 0;
+
+            for (let shift = 0; shift < timeSignature; shift++) {
+              let chordChangeCount = 0;
+              let previousDownbeatChord = '';
+
+              for (let i = shift; i < chords.length; i += timeSignature) {
+                const downbeatChord = chords[i] || 'N/C';
+
+                // FIXED: Compare current downbeat with PREVIOUS downbeat, not previous beat
+                // Only count as chord change if this downbeat differs from the previous downbeat
+                const isChordChangeOnDownbeat = downbeatChord !== previousDownbeatChord &&
+                                               downbeatChord !== '' &&
+                                               downbeatChord !== 'N.C.' &&
+                                               downbeatChord !== 'N/C' &&
+                                               downbeatChord !== 'N' &&
+                                               previousDownbeatChord !== ''; // Don't count first downbeat as change
+
+                if (isChordChangeOnDownbeat) {
+                  chordChangeCount++;
+                }
+
+                // Update previous downbeat chord for next iteration
+                previousDownbeatChord = downbeatChord;
               }
 
-              // Debug logging for pickup beats
+              if (chordChangeCount > maxChordChanges) {
+                maxChordChanges = chordChangeCount;
+                bestShift = shift;
+              }
+            }
+
+            return bestShift;
+          };
+
+          const chords = analysisResults.synchronizedChords.map(item => item.chord);
+          const optimalShift = calculateOptimalShift(chords, timeSignature);
+
+          if (time < animationRangeStart) {
+            // PHASE 1: Pre-model context (0.0s to beat_time_range_start)
+            // Animate through padding N.C. labels using the time between [0.0s, beat_time_range_start]
+            const paddingCount = chordGridData.paddingCount || 0;
+            const shiftCount = chordGridData.shiftCount || 0;
+
+            if (paddingCount > 0) {
+              // Stretch the animation across the time from 0.0s to beat_time_range_start
+              const paddingDuration = animationRangeStart; // Total time for padding animation
+              const paddingBeatDuration = paddingDuration / paddingCount;
+              const paddingBeatIndex = Math.floor(time / paddingBeatDuration);
+
+              // FIXED: Start from the first orange N.C. label (after shift cells)
+              // Grid layout: [shift cells (purple/empty)] + [padding cells (orange/N.C.)] + [model beats]
+              currentBeat = shiftCount + Math.min(paddingBeatIndex, paddingCount - 1);
+
+              // Enhanced debug logging for padding
               if (Math.floor(time * 10) % 5 === 0) { // Log every 0.5 seconds
-                console.log(`Pickup Beat: time=${time.toFixed(3)}s, pickupBeat=${pickupBeatIndex + 1}/${missingBeats}, gridIndex=${currentBeat}`);
+                const progressPercent = ((time / animationRangeStart) * 100).toFixed(1);
+                console.log(`PRE-MODEL PADDING: time=${time.toFixed(3)}s/${animationRangeStart.toFixed(3)}s (${progressPercent}%), paddingBeat=${paddingBeatIndex + 1}/${paddingCount}, gridIndex=${currentBeat}, velocity=${paddingBeatDuration.toFixed(3)}s/beat`);
               }
+            } else {
+              // No padding available but we're still before beat_time_range_start
+              console.log(`⚠️ PRE-MODEL No Padding: time=${time.toFixed(3)}s < animationRangeStart=${animationRangeStart.toFixed(3)}s, but no padding beats available`);
             }
           } else {
-            // We're in the regular detected beats phase
-            const firstBeatTime = analysisResults?.beats.length > 0 ? analysisResults.beats[0].time : 0;
-            const expectedFirstBeat = 0.348; // Actual first beat timing from pure model output
-            const timingOffset = firstBeatTime - expectedFirstBeat; // Calculate offset (should be ~0.317s)
+            // PHASE 2: Model beats (beat_time_range_start onwards)
+            // Use model's beat timing with padding and shift applied
 
-            // Apply timing compensation to current time for beat matching
-            const compensatedTime = time + timingOffset;
-
-            // Debug logging for timing compensation (only log occasionally to avoid spam)
-            if (Math.floor(time * 10) % 10 === 0) { // Log every second
-              console.log(`Beat Timing: audio=${time.toFixed(3)}s, compensated=${compensatedTime.toFixed(3)}s, offset=${timingOffset.toFixed(3)}s`);
-            }
-
-            // Find the current beat by matching compensated time against the beats array
             for (let i = 0; i < analysisResults.synchronizedChords.length; i++) {
               const syncChord = analysisResults.synchronizedChords[i];
               const beatIndex = syncChord.beatIndex;
 
-              // Make sure we have a valid beat for this synchronized chord
               if (beatIndex < analysisResults.beats.length) {
                 const beat = analysisResults.beats[beatIndex];
                 const nextBeatTime = beatIndex + 1 < analysisResults.beats.length
                   ? analysisResults.beats[beatIndex + 1].time
                   : beat.time + 0.5; // Estimate for last beat
 
-                // Use compensated time for better synchronization
-                if (compensatedTime >= beat.time && compensatedTime < nextBeatTime) {
-                  // Add offset for pickup beats if they exist
-                  const pickupOffset = chordGridData.hasPickupBeats ?
-                    (chordGridData.pickupMeasureLength || 0) : 0;
-                  currentBeat = i + pickupOffset; // Use synchronized chord index plus pickup offset
+                // Check if we're currently on this model beat
+                if (time >= beat.time && time < nextBeatTime) {
+                  // FIXED: Calculate grid position correctly - first detected beat should land on first orange cell
+                  // Grid layout: [shift cells (purple/empty)] + [padding cells (orange/N.C.)] + [model beats]
+                  const paddingCount = chordGridData.paddingCount || 0;
+                  const shiftCount = chordGridData.shiftCount || 0;
+                  const baseGridIndex = shiftCount + paddingCount + i;
+
+                  currentBeat = baseGridIndex;
+
+                  // Debug the model beat tracking
+                  if (i < 5) { // Log first few beats only
+                    console.log(`MODEL Beat: syncIndex=${i}, padding=${paddingCount}, shift=${shiftCount}, gridIndex=${currentBeat}, time=${time.toFixed(3)}s, beatTime=${beat.time.toFixed(3)}s, beat=${syncChord.beatNum}, chord="${syncChord.chord}"`);
+                  }
                   break;
                 }
               }
@@ -1311,22 +1419,39 @@ export default function YouTubeVideoAnalyzePage() {
           if (currentBeat !== -1) {
             setCurrentBeatIndex(currentBeat);
 
-            // Enhanced debug current beat tracking
-            if (currentBeat < 8) { // Log first 8 beats for better analysis
-              const syncChord = analysisResults.synchronizedChords[currentBeat];
-              const beat = analysisResults.beats[syncChord.beatIndex];
-              const isDownbeat = syncChord.beatNum === 1;
-              const timeDiff = time - beat.time;
+            // COMPREHENSIVE STRATEGY: Debug logging for synchronized beat tracking
+            if (currentBeat < 20) { // Log first 20 beats (including padding and shift)
+              const paddingCount = chordGridData.paddingCount || 0;
+              const shiftCount = chordGridData.shiftCount || 0;
 
-              console.log(`\n🎵 BEAT TRACKING ${currentBeat}:`);
-              console.log(`  Audio time: ${time.toFixed(3)}s`);
-              console.log(`  Sync index: ${currentBeat} -> Beat index: ${syncChord.beatIndex}`);
-              console.log(`  Beat time: ${beat.time.toFixed(3)}s (diff: ${timeDiff.toFixed(3)}s)`);
-              console.log(`  Beat number: ${syncChord.beatNum} ${isDownbeat ? '[DOWNBEAT]' : ''}`);
-              console.log(`  Current chord: "${syncChord.chord}"`);
+              if (time < firstDetectedBeat) {
+                // This is in the pre-model context (shift or padding phase)
+                // Grid layout: [shift cells (purple/empty)] + [padding cells (orange/N.C.)] + [model beats]
+                const isInShiftPhase = currentBeat < shiftCount;
+                const isInPaddingPhase = currentBeat >= shiftCount && currentBeat < (shiftCount + paddingCount);
+                const phaseType = isInShiftPhase ? 'SHIFT' : isInPaddingPhase ? 'PADDING' : 'UNKNOWN';
+                const cellType = isInShiftPhase ? 'empty/purple' : isInPaddingPhase ? 'N.C./orange' : 'unknown';
+                console.log(`🎵 Pre-Model ${phaseType} Beat ${currentBeat}: time=${time.toFixed(3)}s, firstDetectedBeat=${firstDetectedBeat.toFixed(3)}s, cell=${cellType}`);
+              } else {
+                // This is in the model context
+                const gridIndexAfterPaddingAndShift = currentBeat - paddingCount - shiftCount;
 
-              if (!isDownbeat && syncChord.chord !== 'N/C') {
-                console.log(`  ⚠️  CHORD ON NON-DOWNBEAT: "${syncChord.chord}" appears on beat ${syncChord.beatNum}`);
+                if (gridIndexAfterPaddingAndShift >= 0 && gridIndexAfterPaddingAndShift < analysisResults.synchronizedChords.length) {
+                  // This corresponds to an actual model beat
+                  const syncChord = analysisResults.synchronizedChords[gridIndexAfterPaddingAndShift];
+                  const beat = analysisResults.beats[syncChord.beatIndex];
+                  const isDownbeat = syncChord.beatNum === 1;
+
+                  console.log(`🎵 Model Beat ${currentBeat} (sync ${gridIndexAfterPaddingAndShift}): time=${time.toFixed(3)}s, beatTime=${beat.time.toFixed(3)}s, beat=${syncChord.beatNum}${isDownbeat ? ' [DOWNBEAT]' : ''}, chord="${syncChord.chord}"`);
+
+                  // Check for chord alignment issues - should be improved with comprehensive strategy
+                  if (!isDownbeat && syncChord.chord !== 'N/C') {
+                    console.log(`  ⚠️ CHORD ON NON-DOWNBEAT: "${syncChord.chord}" on beat ${syncChord.beatNum} (comprehensive strategy should minimize this)`);
+                  }
+                } else {
+                  // This shouldn't happen with comprehensive strategy
+                  console.log(`🎵 Unexpected Beat ${currentBeat}: time=${time.toFixed(3)}s, gridIndexAfterPaddingAndShift=${gridIndexAfterPaddingAndShift} (out of range)`);
+                }
               }
             }
           }
@@ -1467,94 +1592,184 @@ Respond with only the key signature, nothing else.`;
     }
   }, [analysisResults, keySignature, isDetectingKey]);
 
-  // Utility function to calculate pickup beats
-  const calculatePickupBeats = (firstBeatTime: number, bpm: number, timeSignature: number) => {
-    if (firstBeatTime <= 0.1) {
-      // If first beat is very close to start, no pickup needed
-      return { pickupBeats: [], missingBeats: 0 };
+  // COMMENTED OUT: Pickup beat calculation - relying on model strength now
+  // const calculatePickupBeats = (beatTimeRangeStart: number, bpm: number, timeSignature: number) => {
+  //   if (beatTimeRangeStart <= 0.1) {
+  //     // If beat time range starts very close to start, no pickup needed
+  //     return { pickupBeats: [], missingBeats: 0 };
+  //   }
+
+  //   // Calculate how many beats should fit between 0.0s and beat time range start
+  //   const missingBeats = Math.floor((beatTimeRangeStart * bpm) / 60);
+
+  //   // Only proceed if we have missing beats and they're less than a full measure
+  //   if (missingBeats <= 0 || missingBeats >= timeSignature) {
+  //     return { pickupBeats: [], missingBeats: 0 };
+  //   }
+
+  //   // Calculate pickup beat timing - distribute evenly from 0.0s to beatTimeRangeStart
+  //   const pickupBeatDuration = beatTimeRangeStart / missingBeats;
+  //   const pickupBeats = [];
+
+  //   for (let i = 1; i <= missingBeats; i++) {
+  //     const pickupTime = i * pickupBeatDuration;
+  //     // Calculate beat number within measure (counting backwards from beat time range start)
+  //     const beatNum = timeSignature - missingBeats + i;
+
+  //     pickupBeats.push({
+  //       time: pickupTime,
+  //       strength: 0.5, // Default strength for pickup beats
+  //       beatNum: beatNum,
+  //       isPickup: true
+  //     });
+  //   }
+
+  //   console.log(`Pickup beats calculated: ${missingBeats} beats from 0.0s to ${beatTimeRangeStart.toFixed(3)}s (beat time range start)`);
+  //   console.log('Pickup beat times:', pickupBeats.map(b => `${b.time.toFixed(3)}s (beat ${b.beatNum})`));
+
+  //   return { pickupBeats, missingBeats };
+  // };
+
+  // COMPREHENSIVE PADDING & SHIFTING: Calculate padding based on first detected beat time
+
+  const calculatePaddingAndShift = (firstDetectedBeatTime: number, bpm: number, timeSignature: number) => {
+    if (firstDetectedBeatTime <= 0.1) {
+      // If first beat starts very close to 0.0s, no padding needed
+      return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
     }
 
-    // Calculate how many beats should fit between 0.0s and first detected beat
-    const missingBeats = Math.floor((firstBeatTime * bpm) / 60);
+    // STEP 1: Calculate padding based on first detected beat time
+    // Formula: Math.floor((first_detected_beat_time / 60) * bpm)
+    const paddingCount = Math.floor((firstDetectedBeatTime / 60) * bpm);
 
-    // Only proceed if we have missing beats and they're less than a full measure
-    if (missingBeats <= 0 || missingBeats >= timeSignature) {
-      return { pickupBeats: [], missingBeats: 0 };
+    // More reasonable limit: allow up to 4 measures of padding for long intros
+    if (paddingCount <= 0 || paddingCount >= timeSignature * 4) {
+      console.log(`Padding rejected: paddingCount=${paddingCount}, limit=${timeSignature * 4}`);
+      return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
     }
 
-    // Calculate pickup beat timing - distribute evenly from 0.0s to firstBeatTime
-    const pickupBeatDuration = firstBeatTime / missingBeats;
-    const pickupBeats = [];
+    // STEP 2: Determine beat position within measure
+    // Example: 14 padding beats means first detected beat is at position 15 (1-based)
+    // Position 15 in 4/4: (15-1) % 4 + 1 = 14 % 4 + 1 = 2 + 1 = 3
+    const beatPositionInMeasure = ((paddingCount) % timeSignature) + 1;
+    const finalBeatPosition = beatPositionInMeasure > timeSignature ? 1 : beatPositionInMeasure;
 
-    for (let i = 1; i <= missingBeats; i++) {
-      const pickupTime = i * pickupBeatDuration;
-      // Calculate beat number within measure (counting backwards from first detected beat)
-      const beatNum = timeSignature - missingBeats + i;
+    // DEBUG: Let's trace the beat position calculation
+    console.log(`  Beat position calculation:`);
+    console.log(`    paddingCount: ${paddingCount}`);
+    console.log(`    paddingCount % timeSignature: ${paddingCount % timeSignature}`);
+    console.log(`    beatPositionInMeasure: ${beatPositionInMeasure}`);
 
-      pickupBeats.push({
-        time: pickupTime,
-        strength: 0.5, // Default strength for pickup beats
-        beatNum: beatNum,
-        isPickup: true
-      });
-    }
 
-    console.log(`Pickup beats calculated: ${missingBeats} beats from 0.0s to ${firstBeatTime.toFixed(3)}s`);
-    console.log('Pickup beat times:', pickupBeats.map(b => `${b.time.toFixed(3)}s (beat ${b.beatNum})`));
 
-    return { pickupBeats, missingBeats };
+    // STEP 3: Calculate shift needed to align with downbeat (beat 1)
+    // If first detected beat is on beat 3, we need 2 beats to reach beat 1 of next measure (3→4, 4→1)
+    const shiftCount = finalBeatPosition === 1 ? 0 : (timeSignature - finalBeatPosition + 1);
+
+    // DEBUG: Let's trace this calculation
+    console.log(`  Shift calculation details:`);
+    console.log(`    finalBeatPosition: ${finalBeatPosition}`);
+    console.log(`    timeSignature: ${timeSignature}`);
+    console.log(`    Formula: ${timeSignature} - ${finalBeatPosition} + 1 = ${shiftCount}`);
+
+    const totalPaddingCount = paddingCount + shiftCount;
+
+    console.log(`\n=== COMPREHENSIVE PADDING & SHIFTING DEBUG ===`);
+    console.log(`First detected beat time: ${firstDetectedBeatTime.toFixed(3)}s`);
+    console.log(`BPM: ${bpm}, Time signature: ${timeSignature}/4`);
+    console.log(`STEP 1 - Padding calculation: Math.floor((${firstDetectedBeatTime.toFixed(3)}/60) * ${bpm}) = ${paddingCount} beats`);
+    console.log(`STEP 2 - Beat position analysis:`);
+    const fullMeasures = Math.floor(paddingCount / timeSignature);
+    const extraBeats = paddingCount % timeSignature;
+    console.log(`  Full measures: ${fullMeasures} (${fullMeasures * timeSignature} beats)`);
+    console.log(`  Extra beats: ${extraBeats}`);
+    console.log(`  First detected beat falls on beat ${beatPositionInMeasure} of measure ${fullMeasures + 1}`);
+    console.log(`STEP 3 - Shift calculation:`);
+    console.log(`  Beats needed to reach downbeat: ${shiftCount}`);
+    console.log(`  Total padding (padding + shift): ${totalPaddingCount} N.C. labels`);
+    console.log(`=== END COMPREHENSIVE PADDING & SHIFTING DEBUG ===\n`);
+
+    return { paddingCount, shiftCount, totalPaddingCount };
   };
 
-  // Get the chord grid data with pickup beat support
+  // COMPREHENSIVE PADDING & SHIFTING: Get chord grid data with padding and shifting
   const getChordGridData = () => {
     if (!analysisResults || !analysisResults.synchronizedChords) {
-      return { chords: [], beats: [], hasPickupBeats: false, pickupBeatsCount: 0 };
+      return { chords: [], beats: [], hasPadding: false, paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
     }
 
-    // Check if we need pickup beats
-    const firstBeatTime = analysisResults.beats.length > 0 ? analysisResults.beats[0].time : 0;
+    // Use first detected beat time for padding calculation
+    const firstDetectedBeat = analysisResults.beats.length > 0 ? analysisResults.beats[0].time : 0;
     const bpm = analysisResults.beatDetectionResult?.bpm || 120;
     const timeSignature = analysisResults.beatDetectionResult?.time_signature || 4;
 
-    const { pickupBeats, missingBeats } = calculatePickupBeats(firstBeatTime, bpm, timeSignature);
+    console.log('=== COMPREHENSIVE STRATEGY DEBUG ===');
+    console.log('First detected beat:', firstDetectedBeat);
+    console.log('BPM:', bpm);
+    console.log('Time signature:', timeSignature);
 
-    if (pickupBeats.length > 0) {
-      // Create pickup measure with proper structure
-      const pickupChords = [];
-      const pickupBeatIndices = [];
+    // Use first detected beat time for comprehensive padding and shifting calculation
+    const { paddingCount, shiftCount, totalPaddingCount } = calculatePaddingAndShift(firstDetectedBeat, bpm, timeSignature);
 
-      // Add empty cells for the unplayed portion of the measure
-      const emptyCells = timeSignature - missingBeats;
-      for (let i = 0; i < emptyCells; i++) {
-        pickupChords.push(''); // Empty cell
-        pickupBeatIndices.push(-1); // Invalid beat index for empty cells
-      }
+    if (paddingCount > 0) {
+      // Add only padding N.C. chords (based on first detected beat time)
+      // Shifting will be handled in the frontend as greyed-out cells
+      const paddingChords = Array(paddingCount).fill('N.C.');
+      // FIXED: Create padding timestamps that are evenly distributed from 0.0s to first detected beat
+      const paddingTimestamps = Array(paddingCount).fill(0).map((_, i) => {
+        const paddingDuration = firstDetectedBeat;
+        const paddingBeatDuration = paddingDuration / paddingCount;
+        return (i + 1) * paddingBeatDuration; // Timestamps from paddingBeatDuration to firstDetectedBeat
+      });
 
-      // Add pickup beats with "N.C." label (only on first pickup beat)
-      for (let i = 0; i < missingBeats; i++) {
-        pickupChords.push(i === 0 ? 'N.C.' : 'N.C.'); // Label all pickup beats as N.C.
-        pickupBeatIndices.push(-(i + 1)); // Negative indices for pickup beats
-      }
-
-      // Combine pickup with regular synchronized chords
+      // Combine padding with regular chords (no shift N.C. labels added here)
       const regularChords = analysisResults.synchronizedChords.map(item => item.chord);
-      const regularBeats = analysisResults.synchronizedChords.map(item => item.beatIndex);
+      // FIXED: Pass actual timestamps instead of beat indices for click navigation
+      const regularBeats = analysisResults.synchronizedChords.map(item => {
+        const beatIndex = item.beatIndex;
+        if (beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
+          return analysisResults.beats[beatIndex].time; // Get actual timestamp
+        }
+        return 0; // Fallback for invalid indices
+      });
+
+      console.log(`COMPREHENSIVE STRATEGY RESULT:`);
+      console.log(`  Added ${paddingCount} padding N.C. chords (based on first detected beat time)`);
+      console.log(`  Shift count: ${shiftCount} (will be handled as greyed-out cells in frontend)`);
+      console.log(`  Regular model chords: ${regularChords.length}`);
+      console.log(`  Final chord sequence length: ${paddingCount + regularChords.length}`);
+      console.log(`  Padding timestamps: [${paddingTimestamps.slice(0, 3).map(t => t.toFixed(3)).join(', ')}${paddingTimestamps.length > 3 ? '...' : ''}]`);
+      console.log(`  Regular beat timestamps: [${regularBeats.slice(0, 3).map(t => t.toFixed(3)).join(', ')}${regularBeats.length > 3 ? '...' : ''}]`);
+      console.log('=== END COMPREHENSIVE STRATEGY DEBUG ===');
 
       return {
-        chords: [...pickupChords, ...regularChords],
-        beats: [...pickupBeatIndices, ...regularBeats],
-        hasPickupBeats: true,
-        pickupBeatsCount: missingBeats,
-        pickupMeasureLength: timeSignature
+        chords: [...paddingChords, ...regularChords],
+        beats: [...paddingTimestamps, ...regularBeats], // Use actual timestamps for both padding and model beats
+        hasPadding: true,
+        paddingCount: paddingCount,
+        shiftCount: shiftCount,
+        totalPaddingCount: paddingCount // Only padding N.C. labels, not shift
       };
     }
 
-    // No pickup beats needed
+    console.log('No padding needed - first beat starts close to 0.0s');
+    console.log('=== END COMPREHENSIVE STRATEGY DEBUG ===');
+
+    // No padding needed - direct model output
     return {
       chords: analysisResults.synchronizedChords.map(item => item.chord),
-      beats: analysisResults.synchronizedChords.map(item => item.beatIndex),
-      hasPickupBeats: false,
-      pickupBeatsCount: 0
+      // FIXED: Use actual timestamps instead of beat indices
+      beats: analysisResults.synchronizedChords.map(item => {
+        const beatIndex = item.beatIndex;
+        if (beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
+          return analysisResults.beats[beatIndex].time; // Get actual timestamp
+        }
+        return 0; // Fallback for invalid indices
+      }),
+      hasPadding: false,
+      paddingCount: 0,
+      shiftCount: 0,
+      totalPaddingCount: 0
     };
   };
 
@@ -1846,6 +2061,11 @@ Respond with only the key signature, nothing else.`;
                             isLyricsPanelOpen={isLyricsPanelOpen}
                             hasPickupBeats={chordGridData.hasPickupBeats}
                             pickupBeatsCount={chordGridData.pickupBeatsCount}
+                            hasPadding={chordGridData.hasPadding}
+                            paddingCount={chordGridData.paddingCount}
+                            shiftCount={chordGridData.shiftCount}
+                            beatTimeRangeStart={analysisResults?.beatDetectionResult?.beat_time_range_start || 0}
+                            onBeatClick={handleBeatClick}
                           />
                         );
                       })()}

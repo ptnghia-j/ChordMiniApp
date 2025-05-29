@@ -311,6 +311,7 @@ export default function LocalAudioAnalyzePage() {
                 beats={chordGridData.beats}
                 currentBeatIndex={currentBeatIndex}
                 timeSignature={analysisResults?.beatDetectionResult?.time_signature}
+                beatTimeRangeStart={0}
               />
 
               {/* Analysis Statistics (if available) */}

@@ -102,18 +102,13 @@ interface ChordGridProps {
 }
 ```
 
-## 🔄 Critical Timing Calculations
+## 🔄 Direct Model Output Processing
 
-### Backend Timing Compensation
+### No Timing Offset Applied
 ```python
-# Calculate timing offset between first chunk and chunking
-first_chunk_first_detected = 0.350  # From first chunk processing
-chunking_first_detected = 0.650     # From chunking processing
-timing_offset = first_chunk_first_detected - chunking_first_detected  # -0.300s
-
-# Apply offset to all chunking beats
-corrected_beat_times = [beat_time + timing_offset for beat_time in beat_times]
-# Result: 0.650s + (-0.300s) = 0.350s ✅
+# REMOVED: Timing offset calculation - using direct model outputs
+# Both chord and beat models now use their raw output times directly
+# This eliminates timing synchronization issues and simplifies the pipeline
 ```
 
 ### Frontend Beat Index Calculation

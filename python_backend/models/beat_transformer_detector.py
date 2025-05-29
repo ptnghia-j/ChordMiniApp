@@ -132,7 +132,55 @@ class BeatTransformerDetector:
             ), axis=-1)
 
             dbn_downbeat_results = self.downbeat_tracker(combined_act)
-            dbn_downbeat_times = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
+            dbn_downbeat_times_raw = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
+
+            # OPTIMIZATION: Filter downbeats to only include beat 1 (true downbeats)
+            # This ensures chord alignment only considers actual measure starts
+            print(f"Raw downbeats detected: {len(dbn_downbeat_times_raw)}")
+
+            # Create beat positions to identify which beats are beat 1
+            beat_positions = []
+            for i, beat_time in enumerate(dbn_beat_times):
+                # Find which measure this beat belongs to
+                measure_idx = 0
+                while measure_idx < len(dbn_downbeat_times_raw) - 1 and beat_time >= dbn_downbeat_times_raw[measure_idx + 1]:
+                    measure_idx += 1
+
+                # If this is a downbeat, it's beat 1
+                if measure_idx < len(dbn_downbeat_times_raw) and abs(beat_time - dbn_downbeat_times_raw[measure_idx]) < 0.05:
+                    beat_num = 1
+                else:
+                    # For beats between downbeats, calculate position
+                    if measure_idx < len(dbn_downbeat_times_raw) - 1:
+                        curr_downbeat = dbn_downbeat_times_raw[measure_idx]
+                        next_downbeat = dbn_downbeat_times_raw[measure_idx + 1]
+
+                        # Count beats from the current downbeat up to (but not including) this beat
+                        beats_before = sum(1 for b in dbn_beat_times if curr_downbeat <= b < beat_time)
+                        beat_num = beats_before + 1
+                    else:
+                        # For beats in the last measure, estimate position
+                        if len(dbn_downbeat_times_raw) > 0:
+                            last_downbeat = dbn_downbeat_times_raw[-1]
+                            beats_after_last = sum(1 for b in dbn_beat_times if b >= last_downbeat)
+                            beat_num = ((i - (len(dbn_beat_times) - beats_after_last)) % 4) + 1
+                        else:
+                            beat_num = (i % 4) + 1
+
+                beat_positions.append({
+                    "time": beat_time,
+                    "beatNum": beat_num
+                })
+
+            # Filter downbeats to only include beats that are actually beat 1
+            filtered_downbeats = []
+            for beat_pos in beat_positions:
+                if beat_pos["beatNum"] == 1:
+                    filtered_downbeats.append(beat_pos["time"])
+
+            dbn_downbeat_times = np.array(filtered_downbeats)
+            print(f"Filtered downbeats (beat 1 only): {len(dbn_downbeat_times)}")
+            print(f"Downbeat filtering: {len(dbn_downbeat_times_raw)} -> {len(dbn_downbeat_times)}")
 
             # Step 5: Process beats - determine their strength based on activation
             # For each beat time, find nearest frame in the beat activation

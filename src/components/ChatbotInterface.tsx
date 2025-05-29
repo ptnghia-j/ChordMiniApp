@@ -9,7 +9,7 @@ import MarkdownRenderer from './MarkdownRenderer';
 interface ChatbotInterfaceProps {
   isOpen: boolean;
   onClose: () => void;
-  songContext: SongContext;
+  songContext?: SongContext;
   className?: string;
 }
 
@@ -112,13 +112,13 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             flex flex-col
 
             /* Desktop positioning and sizing */
-            bottom-24 right-6
-            w-96 max-w-[calc(100vw-3rem)]
-            h-[calc(100vh-8rem)] max-h-[800px] min-h-[400px]
+            bottom-16 right-4
+            w-96 max-w-[calc(100vw-2rem)]
+            h-[calc(100vh-6rem)] max-h-[800px] min-h-[400px]
 
             /* Mobile responsive - full screen on small devices */
-            sm:bottom-24 sm:right-6 sm:w-96 sm:max-w-[calc(100vw-3rem)]
-            sm:h-[calc(100vh-8rem)] sm:max-h-[800px] sm:min-h-[400px]
+            sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)]
+            sm:h-[calc(100vh-6rem)] sm:max-h-[800px] sm:min-h-[400px]
 
             /* Mobile full screen */
             max-sm:bottom-0 max-sm:right-0 max-sm:left-0 max-sm:top-0

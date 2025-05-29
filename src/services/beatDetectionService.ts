@@ -36,6 +36,8 @@ export interface BeatDetectionResult {
   model?: string;             // Which model was used
   error?: string;             // Optional error message
   time_signature?: number;    // Time signature (beats per measure, e.g., 4 for 4/4, 3 for 3/4)
+  beat_time_range_start?: number; // Start of the beat time range (for padding calculation)
+  beat_time_range_end?: number;   // End of the beat time range
 }
 
 // Interface for model info response

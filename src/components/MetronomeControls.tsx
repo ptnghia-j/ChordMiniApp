@@ -10,14 +10,14 @@ interface MetronomeControlsProps {
 const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isChatbotOpen = false, isVideoMinimized = false }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
-  const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell'>('traditional');
+  const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('traditional');
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Initialize component state from metronome service
   useEffect(() => {
     setIsEnabled(metronomeService.isMetronomeEnabled());
     setVolume(metronomeService.getVolume());
-    setSoundStyle(metronomeService.getSoundStyle() as 'traditional' | 'digital' | 'wood' | 'bell');
+    setSoundStyle(metronomeService.getSoundStyle() as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long');
   }, []);
 
   // Handle metronome toggle
@@ -43,7 +43,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Handle sound style change
   const handleSoundStyleChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStyle = event.target.value as 'traditional' | 'digital' | 'wood' | 'bell';
+    const newStyle = event.target.value as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long';
     setSoundStyle(newStyle);
     await metronomeService.setSoundStyle(newStyle);
   };
@@ -126,6 +126,12 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
               <option value="digital">Digital (Clean)</option>
               <option value="wood">Wood Block</option>
               <option value="bell">Bell</option>
+              <optgroup label="Librosa Clicks">
+                <option value="librosa_default">Librosa Default</option>
+                <option value="librosa_pitched">Librosa Pitched</option>
+                <option value="librosa_short">Librosa Short</option>
+                <option value="librosa_long">Librosa Long</option>
+              </optgroup>
             </select>
           </div>
 

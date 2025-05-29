@@ -112,6 +112,7 @@ export async function analyzeAudio(
     console.log(`Detected ${chordResults.length} chords`);
 
     // Create synchronized chords using pure model outputs
+    // REMOVED: No timing offset calculation needed
     const synchronizedChords = synchronizeChords(chordResults, beats);
 
     // Debug: Log the beat detection result before creating the final analysis result
@@ -131,7 +132,9 @@ export async function analyzeAudio(
       chordModel: chordDetector,
       beatDetectionResult: {
         time_signature: beatResults.time_signature,
-        bpm: beatResults.bpm
+        bpm: beatResults.bpm,
+        beat_time_range_start: beatResults.beat_time_range_start,
+        beat_time_range_end: beatResults.beat_time_range_end
       }
     };
   } catch (error) {
@@ -200,48 +203,88 @@ async function recognizeChords(
 // Removed frontend padding function - using pure model outputs only
 
 /**
- * Pure model output alignment: Simple distance-based chord-to-beat matching
+ * Improved chord-to-beat alignment with musical context awareness
  */
 function alignChordsToBeatsDirectly(
   chords: ChordDetectionResult[],
   beats: BeatInfo[]
 ): {chord: string, beatIndex: number}[] {
-  console.log(`=== PURE MODEL OUTPUT ALIGNMENT ===`);
-  console.log(`Aligning ${chords.length} chords to ${beats.length} beats using simple distance matching`);
+  console.log(`=== IMPROVED CHORD-TO-BEAT ALIGNMENT ===`);
+  console.log(`Aligning ${chords.length} chords to ${beats.length} beats using musical context-aware matching`);
 
   if (chords.length === 0 || beats.length === 0) {
     console.log('No chords or beats to align');
     return [];
   }
 
+  // REMOVED: Timing offset calculation - no longer needed
+  console.log(`🕐 DIRECT CHORD-TO-BEAT ALIGNMENT (no timing offset):`);
+  console.log(`  Using direct model outputs without timing adjustments`);
+
   // Create a map of chord assignments to beats
   const beatToChordMap = new Map<number, string>();
 
-  // For each chord, find the closest beat using simple distance-based matching
+  // For each chord, find the best beat using musical context-aware scoring
   for (const chord of chords) {
-    const chordName = chord.chord === "N" ? "N.C." : chord.chord;
+    const chordName = chord.chord === "N" ? "N/C" : chord.chord;
+
+    // REMOVED: No timing offset applied - use direct chord times
+    const chordStart = chord.start;
+    const chordEnd = chord.end;
 
     let bestBeatIndex = 0;
-    let bestDistance = Infinity;
+    let bestScore = Infinity;
 
-    // Find the closest beat to this chord's start time
+    console.log(`\n🎵 Aligning chord "${chordName}"`);
+    console.log(`  Direct timing: start=${chordStart.toFixed(3)}s, end=${chordEnd.toFixed(3)}s`);
+
+    // Find the best beat using improved scoring system
     for (let beatIndex = 0; beatIndex < beats.length; beatIndex++) {
       const beatTime = beats[beatIndex].time;
-      const distance = Math.abs(chord.start - beatTime);
+      const beatNum = beats[beatIndex].beatNum;
+      const distance = Math.abs(chordStart - beatTime);
 
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestBeatIndex = beatIndex;
+      // Only consider beats within reasonable range (1.5 seconds)
+      if (distance <= 1.5) {
+        let score = distance;
+
+        // FIXED: Only prefer beat 1 (downbeats) for chord changes - no bonus for beat 3
+        if (beatNum === 1) {
+          score *= 0.6; // 40% bonus for downbeats only
+          console.log(`  Beat ${beatIndex} (${beatTime.toFixed(3)}s, beat ${beatNum}): distance=${distance.toFixed(3)}s, DOWNBEAT BONUS, score=${score.toFixed(3)}`);
+        } else {
+          console.log(`  Beat ${beatIndex} (${beatTime.toFixed(3)}s, beat ${beatNum}): distance=${distance.toFixed(3)}s, score=${score.toFixed(3)}`);
+        }
+
+        // Prefer beats at or after chord start (forward-looking assignment)
+        if (beatTime >= chordStart) {
+          score *= 0.8; // 20% bonus for beats at/after chord start
+          console.log(`    FORWARD ASSIGNMENT BONUS: score=${score.toFixed(3)}`);
+        }
+
+        // Avoid beats that are much closer to the chord end than start
+        const distanceToEnd = Math.abs(chordEnd - beatTime);
+        if (distanceToEnd < distance * 0.5) {
+          score *= 1.5; // Penalty for beats closer to chord end
+          console.log(`    CHORD END PENALTY: score=${score.toFixed(3)}`);
+        }
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestBeatIndex = beatIndex;
+        }
       }
     }
 
-    // Assign the chord to the closest beat
+    console.log(`  ✅ Best match: Beat ${bestBeatIndex} (${beats[bestBeatIndex].time.toFixed(3)}s, beat ${beats[bestBeatIndex].beatNum}) with score ${bestScore.toFixed(3)}`);
+
+    // Assign the chord to the best beat
     beatToChordMap.set(bestBeatIndex, chordName);
   }
 
   // Create synchronized chord array with forward-fill logic
   const synchronizedChords: {chord: string, beatIndex: number}[] = [];
-  let currentChord = 'N.C.'; // Default to "No Chord"
+  let currentChord = 'N/C'; // Default to "No Chord"
 
   for (let beatIndex = 0; beatIndex < beats.length; beatIndex++) {
     // Check if this beat has a new chord assignment
@@ -260,18 +303,22 @@ function alignChordsToBeatsDirectly(
 }
 
 /**
- * Pure model output synchronization: Simple chord-to-beat alignment
+ * Pure model output synchronization: Improved chord-to-beat alignment
  */
-export const synchronizeChords = (chords: ChordDetectionResult[], beats: BeatInfo[]) => {
+export const synchronizeChords = (
+  chords: ChordDetectionResult[],
+  beats: BeatInfo[]
+) => {
   console.log('\n=== PURE MODEL OUTPUT SYNCHRONIZATION ===');
   console.log(`Input: ${chords.length} chords, ${beats.length} beats`);
+  console.log(`Using direct model outputs without timing offset adjustments`);
 
   if (chords.length === 0 || beats.length === 0) {
     console.log('No chords or beats to synchronize');
     return [];
   }
 
-  // Use simple distance-based alignment
+  // Use improved musical context-aware alignment
   const result = alignChordsToBeatsDirectly(chords, beats);
 
   console.log(`✅ Pure synchronization complete: ${result.length} synchronized chords`);
