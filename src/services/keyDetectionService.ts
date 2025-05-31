@@ -2,6 +2,9 @@ export interface KeyDetectionResult {
   primaryKey: string;
   modulation: string | null;
   rawResponse?: string;
+  originalChords?: string[];
+  correctedChords?: string[];
+  corrections?: Record<string, string>;
 }
 
 export interface ChordData {
@@ -12,14 +15,17 @@ export interface ChordData {
 /**
  * Detect the musical key and modulations from a chord progression
  */
-export async function detectKey(chords: ChordData[]): Promise<KeyDetectionResult> {
+export async function detectKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false): Promise<KeyDetectionResult> {
   try {
     const response = await fetch('/api/detect-key', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ chords }),
+      body: JSON.stringify({
+        chords,
+        includeEnharmonicCorrection
+      }),
     });
 
     if (!response.ok) {

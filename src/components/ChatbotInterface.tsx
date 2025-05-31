@@ -67,6 +67,10 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
       // Truncate conversation history to prevent payload from becoming too large
       const truncatedHistory = truncateConversationHistory(newMessages);
 
+      if (!songContext) {
+        throw new Error("No song context available. Please make sure a song is loaded.");
+      }
+
       const response = await sendChatMessageWithLyricsRetrieval(
         userMessage.content,
         truncatedHistory,

@@ -33,11 +33,13 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
   const { stage, progress, statusMessage, getFormattedElapsedTime } = useProcessing();
   const { theme } = useTheme();
   const [isVisible, setIsVisible] = useState(true);
-  const [dismissCountdown, setDismissCountdown] = useState(10);
+  const [dismissCountdown, setDismissCountdown] = useState(5);
+
+
   const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-dismiss the banner after 10 seconds when processing is complete
+  // Auto-dismiss the banner after 5 seconds when processing is complete
   useEffect(() => {
     // Clear any existing timeout when stage changes
     if (autoDismissTimeoutRef.current) {
@@ -52,27 +54,33 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
     }
 
     // Reset countdown when stage changes
-    setDismissCountdown(10);
+    setDismissCountdown(5);
+
+    // Reset visibility when starting new processing
+    if (stage === 'beat-detection' || stage === 'chord-recognition') {
+      setIsVisible(true);
+    }
 
     // Set a new timeout when processing is complete
     if (stage === 'complete' && isVisible) {
       // Start the auto-dismiss countdown
       autoDismissTimeoutRef.current = setTimeout(() => {
         setIsVisible(false);
-      }, 10000); // 10 seconds
+      }, 5000); // 5 seconds
 
       // Update the countdown every second
       countdownIntervalRef.current = setInterval(() => {
         setDismissCountdown(prev => {
-          if (prev <= 1) {
+          const newCount = prev <= 1 ? 0 : prev - 1;
+
+          if (newCount <= 0) {
             // Clear the interval when we reach 0
             if (countdownIntervalRef.current) {
               clearInterval(countdownIntervalRef.current);
               countdownIntervalRef.current = null;
             }
-            return 0;
           }
-          return prev - 1;
+          return newCount;
         });
       }, 1000);
     }
@@ -203,7 +211,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
                   <div
                     className={`absolute inset-0 transition-all duration-1000 ease-linear ${theme === 'dark' ? 'bg-blue-800' : 'bg-blue-100'}`}
                     style={{
-                      width: `${(dismissCountdown / 10) * 100}%`,
+                      width: `${(dismissCountdown / 5) * 100}%`,
                       opacity: 0.5
                     }}
                   />

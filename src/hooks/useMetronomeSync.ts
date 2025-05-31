@@ -63,7 +63,7 @@ export const useMetronomeSync = ({
 
         // Debug logging for metronome scheduling (reduced verbosity)
         if (i < 5) { // Only log first few beats to reduce console spam
-          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'beat'} click at ${beatTime.toFixed(3)}s`);
+          // console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'beat'} click at ${beatTime.toFixed(3)}s`);
         }
       }
 
@@ -87,7 +87,7 @@ export const useMetronomeSync = ({
     // Set last scheduled to one before current beat so we start scheduling from current beat
     lastScheduledBeatRef.current = Math.max(-1, currentBeatIndex - 1);
 
-    console.log(`Metronome: Reset scheduling from beat index ${lastScheduledBeatRef.current + 1} at time ${currentTime.toFixed(3)}s`);
+    // console.log(`Metronome: Reset scheduling from beat index ${lastScheduledBeatRef.current + 1} at time ${currentTime.toFixed(3)}s`);
   }, [beats, currentTime]);
 
   /**
@@ -104,7 +104,7 @@ export const useMetronomeSync = ({
       scheduleUpcomingClicks();
     }, scheduleInterval);
 
-    console.log('Metronome: Started scheduling interval');
+    // console.log('Metronome: Started scheduling interval');
   }, [resetScheduling, scheduleUpcomingClicks]);
 
   /**
@@ -115,7 +115,7 @@ export const useMetronomeSync = ({
       clearInterval(schedulingIntervalRef.current);
       schedulingIntervalRef.current = null;
     }
-    console.log('Metronome: Stopped scheduling interval');
+    // console.log('Metronome: Stopped scheduling interval');
   }, []);
 
   // Effect to handle play/pause state changes

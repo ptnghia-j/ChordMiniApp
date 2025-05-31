@@ -171,14 +171,20 @@ export default function RecentVideos() {
     return (
       <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
-            <div key={index} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-2 transition-colors duration-300"></div>
-              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
-            </div>
-          ))}
+        {/* Scrollable container with fixed height for loading skeleton */}
+        <div className="h-96 overflow-y-auto scrollbar-thin">
+          {/* Sidebar loading skeleton */}
+          <div className="space-y-3 pr-2">
+            {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
+              <div key={index} className="animate-pulse flex gap-3">
+                <div className="w-20 h-12 bg-gray-200 dark:bg-gray-600 rounded-md transition-colors duration-300"></div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
+                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -199,102 +205,116 @@ export default function RecentVideos() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {videos.map((video) => (
-          <Link
-            href={`/analyze/${video.videoId}`}
-            key={video.videoId}
-            className="block group hover:opacity-90 transition-opacity"
-          >
-            <div className="relative aspect-video bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden mb-2 shadow-sm transition-colors duration-300">
-              <Image
-                src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
-                alt={video.title || 'Video thumbnail'}
-                fill
-                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
-                className="object-cover"
-                onError={(e) => {
-                  // Fallback if thumbnail fails to load
-                  (e.target as HTMLImageElement).src = '/hero-image-placeholder.svg';
-                }}
-              />
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
+      {/* Scrollable container with fixed height */}
+      <div className="h-96 overflow-y-auto scrollbar-thin">
+        {/* Sidebar layout: Single column for compact display */}
+        <div className="space-y-3 pr-2">
+          {videos.map((video) => (
+            <Link
+              href={`/analyze/${video.videoId}`}
+              key={video.videoId}
+              className="block group hover:opacity-90 transition-opacity"
+            >
+              <div className="flex gap-3">
+                {/* Thumbnail */}
+                <div className="relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-colors duration-300">
+                  <Image
+                    src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
+                    alt={video.title || 'Video thumbnail'}
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    onError={(e) => {
+                      // Fallback if thumbnail fails to load
+                      (e.target as HTMLImageElement).src = '/hero-image-placeholder.svg';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
 
-              {/* Duration overlay */}
-              {video.duration && (
-                <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">
-                  {formatDuration(video.duration)}
+                  {/* Duration overlay */}
+                  {video.duration && (
+                    <div className="absolute bottom-0.5 right-0.5 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">
+                      {formatDuration(video.duration)}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
-              {video.title}
-            </h4>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
+                    {video.title}
+                  </h4>
 
-            {/* Transcription metadata */}
-            <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300 space-y-0.5">
-              <div className="flex items-center justify-between">
-                <span>{formatDate(video.processedAt)}</span>
-                {video.bpm && (
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">
-                    {formatBPM(video.bpm)}
-                  </span>
-                )}
+                  {/* Transcription metadata - Compact layout */}
+                  <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span>{formatDate(video.processedAt)}</span>
+                      {video.bpm && (
+                        <span className="text-blue-600 dark:text-blue-400 font-medium">
+                          {formatBPM(video.bpm)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      {video.timeSignature && (
+                        <span className="text-green-600 dark:text-green-400">
+                          {formatTimeSignature(video.timeSignature)}
+                        </span>
+                      )}
+                      {video.keySignature && (
+                        <span className="text-purple-600 dark:text-purple-400 font-medium">
+                          {video.keySignature}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
+            </Link>
+          ))}
 
-              <div className="flex items-center justify-between">
-                {video.timeSignature && (
-                  <span className="text-green-600 dark:text-green-400">
-                    {formatTimeSignature(video.timeSignature)}
-                  </span>
-                )}
-                {video.keySignature && (
-                  <span className="text-purple-600 dark:text-purple-400 font-medium">
-                    {video.keySignature}
-                  </span>
-                )}
-              </div>
+          {/* Loading more indicator inside scrollable area */}
+          {loadingMore && (
+            <div className="space-y-3 mt-3">
+              {[...Array(LOAD_MORE_COUNT)].map((_, index) => (
+                <div key={`loading-${index}`} className="animate-pulse flex gap-3">
+                  <div className="w-20 h-12 bg-gray-200 dark:bg-gray-600 rounded-md transition-colors duration-300"></div>
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </Link>
-        ))}
+          )}
+
+          {/* Load More Button inside scrollable area */}
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {loadingMore ? (
+                  <div className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading...
+                  </div>
+                ) : (
+                  `Load More`
+                )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Load More Button */}
-      {hasMore && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loadingMore ? (
-              <div className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Loading...
-              </div>
-            ) : (
-              `Load More Videos`
-            )}
-          </button>
-        </div>
-      )}
 
-      {/* Loading more indicator */}
-      {loadingMore && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mt-3">
-          {[...Array(LOAD_MORE_COUNT)].map((_, index) => (
-            <div key={`loading-${index}`} className="animate-pulse">
-              <div className="aspect-video bg-gray-200 dark:bg-gray-600 rounded-md mb-2 transition-colors duration-300"></div>
-              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -4,13 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import { getModelInfo, ModelInfoResult } from '@/services/beatDetectionService';
 import '@/styles/dropdown.css';
 
+type ModelType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' | 'librosa';
+
 interface BeatModelSelectorProps {
-  onChange: (model: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light') => void;
-  defaultValue?: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+  onChange: (model: Exclude<ModelType, 'librosa'>) => void;
+  defaultValue?: Exclude<ModelType, 'librosa'>;
   className?: string;
 }
-
-type ModelType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
 
 interface ModelOption {
   id: ModelType;
@@ -76,7 +76,9 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
 
   const handleModelChange = (model: ModelType) => {
     setSelectedModel(model);
-    onChange(model);
+    if (model !== 'librosa') {
+      onChange(model);
+    }
     setIsOpen(false);
   };
 

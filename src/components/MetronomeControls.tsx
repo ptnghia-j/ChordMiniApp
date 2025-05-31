@@ -3,11 +3,10 @@ import { metronomeService } from '@/services/metronomeService';
 
 interface MetronomeControlsProps {
   className?: string;
-  isChatbotOpen?: boolean;
   isVideoMinimized?: boolean;
 }
 
-const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isChatbotOpen = false, isVideoMinimized = false }) => {
+const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isVideoMinimized = false }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('traditional');

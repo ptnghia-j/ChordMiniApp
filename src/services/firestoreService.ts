@@ -32,12 +32,19 @@ export interface TranscriptionData {
   // Add beat shift field for synchronization
   beatShift?: number;
   // Add key signature field
-  keySignature?: string;
-  keyModulation?: string;
+  keySignature?: string | null;
+  keyModulation?: string | null;
+  // Add enharmonic correction fields
+  originalChords?: string[] | null;
+  correctedChords?: string[] | null;
+  chordCorrections?: Record<string, string> | null;
 }
 
 // Collection name
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
+
+// Flag to disable Firestore if CORS errors persist
+let firestoreDisabled = false;
 
 /**
  * Check if a transcription exists in the database
@@ -51,9 +58,13 @@ export async function getTranscription(
   beatModel: string,
   chordModel: string
 ): Promise<TranscriptionData | null> {
-  // Check if Firebase is initialized
-  if (!db) {
-    console.warn('Firebase not initialized, skipping transcription retrieval');
+  // Check if Firebase is initialized or disabled due to CORS issues
+  if (!db || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('Firestore disabled due to CORS issues, skipping transcription retrieval');
+    } else {
+      console.warn('Firebase not initialized, skipping transcription retrieval');
+    }
     return null;
   }
 
@@ -89,7 +100,11 @@ export async function getTranscription(
     // Log more details about the error
     if (error instanceof Error) {
       console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      // Check for CORS or network errors and handle gracefully
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        console.warn('Network/CORS error accessing Firestore - disabling Firestore for this session');
+        firestoreDisabled = true;
+      }
     }
     return null;
   }
@@ -103,9 +118,13 @@ export async function getTranscription(
 export async function saveTranscription(
   transcriptionData: Omit<TranscriptionData, 'createdAt'>
 ): Promise<boolean> {
-  // Check if Firebase is initialized
-  if (!db) {
-    console.warn('Firebase not initialized, skipping transcription save');
+  // Check if Firebase is initialized or disabled due to CORS issues
+  if (!db || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('Firestore disabled due to CORS issues, skipping transcription save');
+    } else {
+      console.warn('Firebase not initialized, skipping transcription save');
+    }
     return false;
   }
 
@@ -166,6 +185,9 @@ export async function saveTranscription(
       // Include key signature fields (handle undefined)
       keySignature: transcriptionData.keySignature ?? null,
       keyModulation: transcriptionData.keyModulation ?? null,
+      // Include enharmonic correction fields (handle undefined)
+      originalChords: transcriptionData.originalChords ?? null,
+      correctedChords: transcriptionData.correctedChords ?? null,
       createdAt: serverTimestamp()
     };
 
@@ -179,7 +201,11 @@ export async function saveTranscription(
     // Log more details about the error
     if (error instanceof Error) {
       console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      // Check for CORS or network errors and handle gracefully
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        console.warn('Network/CORS error accessing Firestore - disabling Firestore for this session');
+        firestoreDisabled = true;
+      }
     }
     return false;
   }
@@ -224,7 +250,10 @@ export async function getVideoTranscriptions(
     // Log more details about the error
     if (error instanceof Error) {
       console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      // Check for CORS or network errors and handle gracefully
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        console.warn('Network/CORS error accessing Firestore - continuing without cache');
+      }
     }
     return [];
   }

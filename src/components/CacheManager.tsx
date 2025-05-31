@@ -52,6 +52,7 @@ export default function CacheManager() {
       }
     } catch (error) {
       setMessage({ text: 'Failed to fetch cache status', type: 'error' });
+      console.error('Failed to fetch cache status:', error);
     } finally {
       setLoading(false);
     }
@@ -81,6 +82,7 @@ export default function CacheManager() {
       }
     } catch (error) {
       setMessage({ text: 'Failed to clear cache', type: 'error' });
+      console.error('Failed to clear cache:', error);
     } finally {
       setLoading(false);
     }
@@ -108,6 +110,7 @@ export default function CacheManager() {
       }
     } catch (error) {
       setMessage({ text: 'Failed to clean cache', type: 'error' });
+      console.error('Failed to clean cache:', error);
     } finally {
       setLoading(false);
     }

@@ -102,6 +102,23 @@ export async function detectBeatsFromFile(
   onProgress?: (percent: number) => void
 ): Promise<BeatDetectionResult> {
   try {
+    console.log(`Detecting beats using ${detector} detector...`);
+
+    // Enhanced input validation
+    if (!audioFile || audioFile.size === 0) {
+      throw new Error('Invalid audio file for beat detection');
+    }
+
+    if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
+      throw new Error('Audio file is too large for beat detection (>100MB)');
+    }
+
+    // Validate detector parameter
+    const validDetectors = ['auto', 'madmom', 'beat-transformer', 'beat-transformer-light'];
+    if (!validDetectors.includes(detector)) {
+      throw new Error(`Invalid detector: ${detector}. Must be one of: ${validDetectors.join(', ')}`);
+    }
+
     // Check file size and warn if over 20MB
     const fileSizeMB = audioFile.size / (1024 * 1024);
     if (fileSizeMB > 20) {
@@ -221,12 +238,114 @@ export async function detectBeatsFromFile(
     try {
       const data = await response.json();
 
-      // Simple debug logging for pure model outputs
-      console.log('=== PURE MODEL OUTPUT DEBUG ===');
-      console.log(`Received ${data.beats?.length || 0} beat timestamps`);
+      // Enhanced validation of response data
+      if (!data.success) {
+        throw new Error(`Beat detection failed: ${data.error || 'Unknown error from beat detection service'}`);
+      }
+
+      // Validate response data structure
+      if (!data.beats || !Array.isArray(data.beats)) {
+        throw new Error('Invalid beat detection response: missing or invalid beats array');
+      }
+
+      if (data.beats.length === 0) {
+        throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
+      }
+
+      // Validate beat timestamps with bounds checking
+      const invalidBeats = data.beats.filter((time: any) =>
+        typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600 // 1 hour max
+      );
+
+      if (invalidBeats.length > 0) {
+        console.warn(`⚠️  Found ${invalidBeats.length} invalid beat timestamps, filtering them out`);
+        data.beats = data.beats.filter((time: any) =>
+          typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
+        );
+
+        if (data.beats.length === 0) {
+          throw new Error('All detected beats have invalid timestamps');
+        }
+      }
+
+      // Validate BPM
+      if (typeof data.bpm !== 'number' || isNaN(data.bpm) || data.bpm <= 0 || data.bpm > 300) {
+        console.warn(`Invalid BPM detected: ${data.bpm}, using default 120`);
+        data.bpm = 120;
+      }
+
+      // Validate time signature
+      if (typeof data.time_signature !== 'number' || isNaN(data.time_signature) || data.time_signature < 2 || data.time_signature > 16) {
+        console.warn(`Invalid time signature detected: ${data.time_signature}, using default 4`);
+        data.time_signature = 4;
+      }
+
+      // Validate downbeats if present
+      if (data.downbeats && Array.isArray(data.downbeats)) {
+        const invalidDownbeats = data.downbeats.filter((time: any) =>
+          typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600
+        );
+
+        if (invalidDownbeats.length > 0) {
+          console.warn(`⚠️  Found ${invalidDownbeats.length} invalid downbeat timestamps, filtering them out`);
+          data.downbeats = data.downbeats.filter((time: any) =>
+            typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
+          );
+        }
+      } else {
+        data.downbeats = [];
+      }
+
+      // Validate beats_with_positions if present
+      if (data.beats_with_positions && Array.isArray(data.beats_with_positions)) {
+        const invalidPositions = data.beats_with_positions.filter((beat: any) =>
+          !beat ||
+          typeof beat.time !== 'number' ||
+          typeof beat.beatNum !== 'number' ||
+          isNaN(beat.time) ||
+          isNaN(beat.beatNum) ||
+          beat.time < 0 ||
+          beat.time > 3600 ||
+          beat.beatNum < 1 ||
+          beat.beatNum > data.time_signature
+        );
+
+        if (invalidPositions.length > 0) {
+          console.warn(`⚠️  Found ${invalidPositions.length} invalid beat positions, filtering them out`);
+          data.beats_with_positions = data.beats_with_positions.filter((beat: any) =>
+            beat &&
+            typeof beat.time === 'number' &&
+            typeof beat.beatNum === 'number' &&
+            !isNaN(beat.time) &&
+            !isNaN(beat.beatNum) &&
+            beat.time >= 0 &&
+            beat.time <= 3600 &&
+            beat.beatNum >= 1 &&
+            beat.beatNum <= data.time_signature
+          );
+        }
+      } else {
+        data.beats_with_positions = [];
+      }
+
+      // Validate time range values
+      if (typeof data.beat_time_range_start !== 'number' || isNaN(data.beat_time_range_start) || data.beat_time_range_start < 0) {
+        console.warn(`Invalid beat_time_range_start: ${data.beat_time_range_start}, using 0`);
+        data.beat_time_range_start = 0;
+      }
+
+      if (typeof data.beat_time_range_end !== 'number' || isNaN(data.beat_time_range_end) || data.beat_time_range_end < 0) {
+        console.warn(`Invalid beat_time_range_end: ${data.beat_time_range_end}, using last beat time`);
+        data.beat_time_range_end = data.beats.length > 0 ? data.beats[data.beats.length - 1] : 0;
+      }
+
+      // Enhanced debug logging for validated model outputs
+      console.log('=== VALIDATED MODEL OUTPUT DEBUG ===');
+      console.log(`Successfully validated ${data.beats.length} beat timestamps`);
       console.log(`BPM: ${data.bpm}, Duration: ${data.duration}s`);
       console.log(`Model: ${data.model}, Time signature: ${data.time_signature}/4`);
-      console.log('=== END PURE MODEL OUTPUT DEBUG ===');
+      console.log(`Downbeats: ${data.downbeats.length}, Beat positions: ${data.beats_with_positions.length}`);
+      console.log('=== END VALIDATED MODEL OUTPUT DEBUG ===');
 
       return data;
     } catch (parseError) {
@@ -235,13 +354,31 @@ export async function detectBeatsFromFile(
     }
   } catch (error) {
     console.error('Error in beat detection:', error);
+
+    // Enhanced error handling with specific suggestions
+    let errorMessage = 'Unknown error in beat detection';
+
+    if (error instanceof Error) {
+      if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
+        errorMessage = 'Beat detection failed due to data bounds error. This may be caused by corrupted audio data or unsupported audio format. Please try a different audio file.';
+      } else if (error.message.includes('memory') || error.message.includes('allocation')) {
+        errorMessage = 'Beat detection failed due to memory constraints. Please try a shorter audio clip or use the madmom detector.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Beat detection timed out. Please try a shorter audio clip or use the madmom detector for better performance.';
+      } else if (error.message.includes('too large')) {
+        errorMessage = 'Audio file is too large for beat detection. Please use a smaller file or try the madmom detector.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
     return {
       success: false,
       beats: [],
       bpm: 0,
       total_beats: 0,
       duration: 0,
-      error: error instanceof Error ? error.message : 'Unknown error in beat detection'
+      error: errorMessage
     };
   }
 }
