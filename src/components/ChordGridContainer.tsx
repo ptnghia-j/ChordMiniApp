@@ -34,6 +34,25 @@ interface ChordGridContainerProps {
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean;
   chordCorrections?: Record<string, string> | null;
+  // NEW: Enhanced sequence-based corrections
+  sequenceCorrections?: {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
@@ -46,9 +65,19 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
   isLyricsPanelOpen,
   onBeatClick,
   showCorrectedChords = false,
-  chordCorrections = null
+  chordCorrections = null,
+  sequenceCorrections = null
 }) => {
-
+  // Debug: Log props received by ChordGridContainer
+  console.log('📦 CHORD GRID CONTAINER PROPS:', {
+    showCorrectedChords,
+    chordCorrections,
+    hasCorrections: chordCorrections && Object.keys(chordCorrections).length > 0,
+    sequenceCorrections,
+    hasSequenceCorrections: sequenceCorrections && sequenceCorrections.correctedSequence.length > 0,
+    sequenceCorrectionLength: sequenceCorrections?.correctedSequence?.length || 0,
+    firstFewSequenceCorrections: sequenceCorrections?.correctedSequence?.slice(0, 5)
+  });
 
   // Use the comprehensive chord grid data passed as prop - no need to generate our own
 
@@ -83,6 +112,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
             onBeatClick={onBeatClick}
             showCorrectedChords={showCorrectedChords}
             chordCorrections={chordCorrections}
+            sequenceCorrections={sequenceCorrections}
           />
         );
       })()}

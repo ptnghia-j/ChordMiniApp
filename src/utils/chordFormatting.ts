@@ -31,31 +31,75 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     return chordName;
   }
 
-  // Split chord into root and quality parts
-  const parts = chordName.split(':');
-  let root = parts[0];
-  let quality = parts.length > 1 ? parts[1] : '';
-
-  // Check for inversions
+  // Parse chord name - handle both colon and non-colon formats
+  let root = '';
+  let quality = '';
   let inversion = '';
   let bassNote = '';
 
-  if (quality.includes('/')) {
-    const inversionParts = quality.split('/');
-    quality = inversionParts[0];
-    inversion = inversionParts[1];
+  // First check for inversion (slash notation)
+  if (chordName.includes('/')) {
+    const slashParts = chordName.split('/');
+    const chordPart = slashParts[0];
+    inversion = slashParts[1];
+
+    // Now parse the chord part (before the slash)
+    if (chordPart.includes(':')) {
+      // Colon format: "C#:min" or "Bb:maj7"
+      const colonParts = chordPart.split(':');
+      root = colonParts[0];
+      quality = colonParts[1];
+    } else {
+      // Non-colon format: "C#m", "B7", "F#dim", etc.
+      // Extract root note (handle sharps and flats)
+      const rootMatch = chordPart.match(/^([A-G][#b]?)/);
+      if (rootMatch) {
+        root = rootMatch[1];
+        quality = chordPart.substring(root.length);
+      } else {
+        root = chordPart;
+        quality = '';
+      }
+    }
+  } else {
+    // No inversion - parse chord normally
+    if (chordName.includes(':')) {
+      // Colon format: "C#:min" or "Bb:maj7"
+      const colonParts = chordName.split(':');
+      root = colonParts[0];
+      quality = colonParts[1];
+    } else {
+      // Non-colon format: "C#m", "B7", "F#dim", etc.
+      // Extract root note (handle sharps and flats)
+      const rootMatch = chordName.match(/^([A-G][#b]?)/);
+      if (rootMatch) {
+        root = rootMatch[1];
+        quality = chordName.substring(root.length);
+      } else {
+        root = chordName;
+        quality = '';
+      }
+    }
+  }
+
+  // Process inversion if present
+  if (inversion) {
 
     // Check if inversion is a scale degree (numeric with optional accidental)
     const scaleDegreeMatcher = /^[b#]?\d+$/;
     if (scaleDegreeMatcher.test(inversion)) {
-      // FIXED: For standard chord inversions (3, 5, 7), use chord tone intervals, not scale degree intervals
-      if (inversion === '3' || inversion === '5' || inversion === '7' || inversion === '9' ||
-          inversion === 'b3' || inversion === 'b5' || inversion === 'b7' || inversion === 'b9' ||
-          inversion === '#3' || inversion === '#5' || inversion === '#7' || inversion === '#9') {
+      // FIXED: For standard chord inversions, use chord tone intervals, not scale degree intervals
+      // Support comprehensive range: /2, /b3, /3, /4, /5, /6, /b7, /7, /9, etc.
+      if (inversion === '2' || inversion === '3' || inversion === '4' || inversion === '5' ||
+          inversion === '6' || inversion === '7' || inversion === '9' ||
+          inversion === 'b2' || inversion === 'b3' || inversion === 'b4' || inversion === 'b5' ||
+          inversion === 'b6' || inversion === 'b7' || inversion === 'b9' ||
+          inversion === '#2' || inversion === '#3' || inversion === '#4' || inversion === '#5' ||
+          inversion === '#6' || inversion === '#7' || inversion === '#9') {
         // Use chord tone intervals for standard inversions
         bassNote = getBassNoteFromInversion(root, quality, inversion);
       } else {
-        // Use scale degree translation for unusual inversions (like /2, /4, /6)
+        // Use scale degree translation for unusual inversions (like /8, /10, /11, /13)
         bassNote = translateScaleDegreeInversion(root, quality, inversion);
       }
     } else {
@@ -237,13 +281,16 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
   const isMinor = quality === 'min' || quality === 'm' || quality.startsWith('min') || quality.startsWith('m');
   const preferFlatsForMinor = isMinor && (inversion === '3' || inversion === 'b3');
 
-  // Choose the appropriate note array
-  const noteArray = usesFlats || preferFlatsForMinor ? notesWithFlats : notes;
+  // For flat inversions, prefer flat notation (e.g., C/b7 -> C/Bb instead of C/A#)
+  const isFlatInversion = inversion.startsWith('b');
+
+  // Choose the appropriate note array for the root note lookup
+  const rootNoteArray = usesFlats ? notesWithFlats : notes;
 
   // Find the root note index
   let rootIndex = -1;
-  for (let i = 0; i < noteArray.length; i++) {
-    if (noteArray[i] === root) {
+  for (let i = 0; i < rootNoteArray.length; i++) {
+    if (rootNoteArray[i] === root) {
       rootIndex = i;
       break;
     }
@@ -251,54 +298,14 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
 
   if (rootIndex === -1) return inversion; // Fallback if root not found
 
-  // Determine chord type and intervals
-  let intervals: number[] = [];
-
-  if (quality === 'maj' || quality === '') {
-    // Major chord: root, major third (4 semitones), perfect fifth (7 semitones)
-    intervals = [0, 4, 7];
-  } else if (quality === 'min' || quality === 'm') {
-    // Minor chord: root, minor third (3 semitones), perfect fifth (7 semitones)
-    intervals = [0, 3, 7];
-  } else if (quality === 'dim') {
-    // Diminished chord: root, minor third (3 semitones), diminished fifth (6 semitones)
-    intervals = [0, 3, 6];
-  } else if (quality === 'aug') {
-    // Augmented chord: root, major third (4 semitones), augmented fifth (8 semitones)
-    intervals = [0, 4, 8];
-  } else if (quality.includes('7')) {
-    if (quality.includes('maj7')) {
-      // Major seventh chord: root, major third, perfect fifth, major seventh (11 semitones)
-      intervals = [0, 4, 7, 11];
-    } else if (quality.includes('min7') || quality.includes('m7')) {
-      // Minor seventh chord: root, minor third, perfect fifth, minor seventh (10 semitones)
-      intervals = [0, 3, 7, 10];
-    } else if (quality.includes('dim7')) {
-      // Diminished seventh chord: root, minor third, diminished fifth, diminished seventh (9 semitones)
-      intervals = [0, 3, 6, 9];
-    } else {
-      // Dominant seventh chord: root, major third, perfect fifth, minor seventh (10 semitones)
-      intervals = [0, 4, 7, 10];
-    }
-  } else if (quality.startsWith('m') || quality.startsWith('min')) {
-    // Any other minor chord variant
-    intervals = [0, 3, 7];
-  } else {
-    // Default to major triad if quality not recognized
-    intervals = [0, 4, 7];
-  }
-
-  // Determine which note to use based on inversion
-  let intervalIndex = -1;
-  let intervalAdjustment = 0;
+  // Choose the note array for the bass note result based on inversion type
+  const bassNoteArray = (usesFlats || preferFlatsForMinor || isFlatInversion) ? notesWithFlats : notes;
 
   // Parse the inversion to handle different types of inversions
   let inversionNumber = inversion;
+  let intervalAdjustment = 0;
 
-  // We already have isMinor defined above, so we'll reuse it here
-  // For minor chords, 'b3' refers to the minor third (not a chromatically altered note)
-  // So we don't apply an interval adjustment for minor chords with b3
-
+  // Handle accidentals
   if (inversion.startsWith('b')) {
     inversionNumber = inversion.substring(1);
     // Only apply flat adjustment for non-minor chords or for degrees other than 3
@@ -310,24 +317,50 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
     intervalAdjustment = 1; // Sharp: raise by one semitone
   }
 
-  // Map inversion number to interval index
-  if (inversionNumber === '3') {
-    intervalIndex = 1; // Third of the chord
-  } else if (inversionNumber === '5') {
-    intervalIndex = 2; // Fifth of the chord
-  } else if (inversionNumber === '7') {
-    intervalIndex = 3; // Seventh of the chord (if it exists)
-  } else if (inversionNumber === '9') {
-    intervalIndex = 4; // Ninth of the chord (if it exists)
+  // Calculate the bass note directly using standard interval theory
+  let bassSemitones = 0;
+  const degree = parseInt(inversionNumber);
+
+  if (isNaN(degree)) return inversion; // Not a numeric inversion
+
+  // Use standard interval calculations regardless of chord quality
+  // This ensures consistent bass note calculation for all chord types
+  switch (degree) {
+    case 2:
+      bassSemitones = 2; // Major second
+      break;
+    case 3:
+      // For minor chords, the third is already minor (3 semitones)
+      // For major chords, the third is major (4 semitones)
+      bassSemitones = isMinor ? 3 : 4;
+      break;
+    case 4:
+      bassSemitones = 5; // Perfect fourth
+      break;
+    case 5:
+      bassSemitones = 7; // Perfect fifth
+      break;
+    case 6:
+      bassSemitones = 9; // Major sixth
+      break;
+    case 7:
+      // FIXED: Always start with natural 7th (major 7th = 11 semitones)
+      // Then let the accidental adjustment handle flat/sharp modifications
+      bassSemitones = 11; // Natural 7th (major seventh)
+      break;
+    case 9:
+      bassSemitones = 14; // Major ninth (octave + major second)
+      break;
+    default:
+      return inversion; // Unsupported inversion
   }
 
-  if (intervalIndex === -1 || intervalIndex >= intervals.length) {
-    return inversion; // Fallback if inversion not applicable
-  }
+  // Apply accidental adjustment
+  bassSemitones += intervalAdjustment;
 
-  // Calculate the bass note index with the adjustment for altered inversions
-  const bassIndex = (rootIndex + intervals[intervalIndex] + intervalAdjustment) % 12;
-  return noteArray[bassIndex];
+  // Calculate the bass note index
+  const bassIndex = (rootIndex + bassSemitones) % 12;
+  return bassNoteArray[bassIndex];
 }
 
 /**

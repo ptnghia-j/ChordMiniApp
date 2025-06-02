@@ -46,12 +46,26 @@ async function checkKeyDetectionCache(cacheKey: string): Promise<any | null> {
 async function saveKeyDetectionToCache(cacheKey: string, keyResult: any): Promise<void> {
   try {
     const docRef = doc(db, 'keyDetections', cacheKey);
-    await setDoc(docRef, {
+
+    // ENHANCED: Ensure sequence corrections are properly structured for caching
+    const cacheData = {
       ...keyResult,
       timestamp: serverTimestamp(),
-      cacheKey
+      cacheKey,
+      // Ensure sequence corrections are properly stored
+      sequenceCorrections: keyResult.sequenceCorrections ? {
+        originalSequence: keyResult.sequenceCorrections.originalSequence || [],
+        correctedSequence: keyResult.sequenceCorrections.correctedSequence || [],
+        keyAnalysis: keyResult.sequenceCorrections.keyAnalysis || null
+      } : null
+    };
+
+    await setDoc(docRef, cacheData);
+    console.log('🔍 SAVED KEY DETECTION TO CACHE:', {
+      hasSequenceCorrections: !!keyResult.sequenceCorrections,
+      sequenceCorrectionLength: keyResult.sequenceCorrections?.originalSequence?.length || 0,
+      cacheKey: cacheKey.substring(0, 10) + '...'
     });
-    console.log('Saved key detection to cache');
   } catch (error) {
     console.error('Error saving key detection to cache:', error);
   }
@@ -59,7 +73,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: any): Promis
 
 export async function POST(request: NextRequest) {
   try {
-    const { chords, videoId, includeEnharmonicCorrection = false } = await request.json();
+    const { chords, videoId, includeEnharmonicCorrection = false, bypassCache = false } = await request.json();
 
     if (!chords || !Array.isArray(chords) || chords.length === 0) {
       return NextResponse.json(
@@ -80,11 +94,19 @@ export async function POST(request: NextRequest) {
     // Generate cache key (include enharmonic flag in cache key)
     const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection);
 
-    // Check cache first
-    const cachedResult = await checkKeyDetectionCache(cacheKey);
-    if (cachedResult) {
+    // Check cache first (unless bypassed for testing)
+    const cachedResult = bypassCache ? null : await checkKeyDetectionCache(cacheKey);
+    if (cachedResult && !bypassCache) {
       // Extract chord names for fallback if enharmonic correction data is missing
       const chordNames = chords.map((chord: any) => chord.chord || chord);
+
+      console.log('🔍 RETURNING CACHED KEY DETECTION RESULT:', {
+        hasSequenceCorrections: !!cachedResult.sequenceCorrections,
+        hasCorrections: !!cachedResult.corrections,
+        includeEnharmonicCorrection,
+        sequenceCorrectionLength: cachedResult.sequenceCorrections?.originalSequence?.length || 0,
+        cacheKey: cacheKey.substring(0, 10) + '...'
+      });
 
       return NextResponse.json({
         primaryKey: cachedResult.primaryKey,
@@ -93,6 +115,9 @@ export async function POST(request: NextRequest) {
         // Ensure we always return these fields, even if they're missing from old cache
         originalChords: cachedResult.originalChords || (includeEnharmonicCorrection ? chordNames : undefined),
         correctedChords: cachedResult.correctedChords || (includeEnharmonicCorrection ? chordNames : undefined),
+        corrections: cachedResult.corrections || {},
+        // ENHANCED: Include sequence corrections from cache with proper structure
+        sequenceCorrections: cachedResult.sequenceCorrections || null,
         fromCache: true
       });
     }
@@ -111,35 +136,59 @@ export async function POST(request: NextRequest) {
     let prompt: string;
 
     if (includeEnharmonicCorrection) {
-      // Enhanced prompt for both key detection and enharmonic correction
-      const uniqueChords = [...new Set(chordNames.filter(chord => chord && chord !== 'N.C.' && chord !== 'N/C'))];
+      // Enhanced prompt for context-aware sequence-based enharmonic correction
+      const chordSequence = chordNames.filter(chord => chord && chord !== 'N.C.' && chord !== 'N/C');
 
-      prompt = `Analyze the following chord progression and provide both key detection and enharmonic corrections.
+      prompt = `Analyze this chord progression sequence and provide context-aware enharmonic corrections that preserve harmonic relationships and key modulations.
 
-Chord progression: ${chordProgression}
+CHORD SEQUENCE (in order): [${chordSequence.join(', ')}]
 
-Unique chords found: ${uniqueChords.join(', ')}
+TIMING INFORMATION: ${chordProgression}
 
 Please respond with ONLY a JSON object in this exact format:
 {
   "primaryKey": "[Key Name]",
   "modulation": "[Key Name]" or null,
+  "sequenceCorrections": {
+    "originalSequence": [${chordSequence.map(c => `"${c}"`).join(', ')}],
+    "correctedSequence": ["corrected1", "corrected2", ...],
+    "keyAnalysis": {
+      "sections": [
+        {
+          "startIndex": 0,
+          "endIndex": 10,
+          "key": "E major",
+          "chords": ["chord1", "chord2", ...]
+        }
+      ],
+      "modulations": [
+        {
+          "fromKey": "E major",
+          "toKey": "Ab major",
+          "atIndex": 15
+        }
+      ]
+    }
+  },
   "corrections": {
-    "originalChord1": "correctedChord1",
-    "originalChord2": "correctedChord2"
+    "originalChord1": "correctedChord1"
   }
 }
 
-Instructions:
-1. Determine the primary key and any modulations
-2. In the "corrections" object, ONLY include chords that need enharmonic correction:
-   - In flat keys (F, Bb, Eb, Ab, Db, Gb): prefer flat spellings (Db over C#, Eb over D#)
-   - In sharp keys (G, D, A, E, B, F#): prefer sharp spellings (C# over Db, F# over Gb)
-   - In C major/A minor: use the most common spelling
-3. Keep chord quality and extensions unchanged, only fix enharmonic spelling
-4. Do NOT include chords that are already correctly spelled
-5. Examples: {"C#": "Db", "C#maj7": "Dbmaj7"} in Ab major context
-6. If no corrections are needed, use empty object: "corrections": {}
+CRITICAL INSTRUCTIONS:
+1. **Preserve Harmonic Context**: Analyze the ENTIRE sequence to identify key centers and modulations
+2. **Context-Aware Corrections**: Apply different enharmonic spellings based on local key context:
+   - In E major section: C#m stays C#m (vi chord)
+   - In Ab major section: C# becomes Db (IV chord)
+3. **Sequence Integrity**: Return corrected sequence with same length as original
+4. **Key Analysis**: Identify distinct harmonic sections and modulation points
+5. **Selective Corrections**: Only correct chords that improve harmonic clarity
+6. **Quality Preservation**: Keep chord qualities (m, 7, sus, etc.) unchanged
+
+EXAMPLES:
+- Song modulating E→Ab: ["C#m", "A", "B", "E", "...", "Db", "Ab", "Eb", "Ab"]
+- Corrected sequence: ["C#m", "A", "B", "E", "...", "Db", "Ab", "Eb", "Ab"]
+- Note: C#m stays in E major section, becomes Db in Ab major section
 
 Respond with ONLY the JSON object, no explanations.`;
     } else {
@@ -165,7 +214,8 @@ Do not include any explanations, analysis, or additional text. Just give me the 
 
     // Extract and clean the response text
     const text = response.text?.trim() || '';
-    console.log('Key detection response:', text);
+    console.log('🔍 GEMINI API RAW RESPONSE:', text);
+    console.log('🔍 INCLUDE ENHARMONIC CORRECTION:', includeEnharmonicCorrection);
 
     let result: any;
 
@@ -181,22 +231,58 @@ Do not include any explanations, analysis, or additional text. Just give me the 
         }
 
         const jsonResponse = JSON.parse(cleanedText);
-        const corrections = jsonResponse.corrections || {};
-
-        // Apply corrections to create corrected chord array
-        const correctedChords = chordNames.map(chord => {
-          // Apply correction if available, otherwise keep original
-          return corrections[chord] || chord;
+        console.log('🔍 PARSED JSON RESPONSE:', {
+          hasSequenceCorrections: !!jsonResponse.sequenceCorrections,
+          hasCorrections: !!jsonResponse.corrections,
+          primaryKey: jsonResponse.primaryKey,
+          sequenceCorrectionsLength: jsonResponse.sequenceCorrections?.correctedSequence?.length || 0
         });
 
-        result = {
-          primaryKey: jsonResponse.primaryKey || 'Unknown',
-          modulation: jsonResponse.modulation || null,
-          originalChords: chordNames,
-          correctedChords: correctedChords,
-          corrections: corrections,
-          rawResponse: text
-        };
+        // Handle both new sequence-based format and legacy format
+        if (jsonResponse.sequenceCorrections) {
+          // NEW: Enhanced sequence-based corrections
+          const sequenceCorrections = jsonResponse.sequenceCorrections;
+          const correctedSequence = sequenceCorrections.correctedSequence || chordNames;
+
+          // Create legacy corrections mapping for backward compatibility
+          const legacyCorrections: Record<string, string> = {};
+          if (sequenceCorrections.originalSequence && sequenceCorrections.correctedSequence) {
+            sequenceCorrections.originalSequence.forEach((original: string, index: number) => {
+              const corrected = sequenceCorrections.correctedSequence[index];
+              if (original !== corrected) {
+                legacyCorrections[original] = corrected;
+              }
+            });
+          }
+
+          result = {
+            primaryKey: jsonResponse.primaryKey || 'Unknown',
+            modulation: jsonResponse.modulation || null,
+            originalChords: chordNames,
+            correctedChords: correctedSequence,
+            corrections: legacyCorrections,
+            sequenceCorrections: sequenceCorrections,
+            rawResponse: text
+          };
+        } else {
+          // LEGACY: Individual chord corrections (fallback)
+          const corrections = jsonResponse.corrections || {};
+
+          // Apply corrections to create corrected chord array
+          const correctedChords = chordNames.map(chord => {
+            // Apply correction if available, otherwise keep original
+            return corrections[chord] || chord;
+          });
+
+          result = {
+            primaryKey: jsonResponse.primaryKey || 'Unknown',
+            modulation: jsonResponse.modulation || null,
+            originalChords: chordNames,
+            correctedChords: correctedChords,
+            corrections: corrections,
+            rawResponse: text
+          };
+        }
       } catch (parseError) {
         console.error('Failed to parse JSON response:', parseError);
         // Fallback to original format

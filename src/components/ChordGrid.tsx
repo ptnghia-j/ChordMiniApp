@@ -32,7 +32,26 @@ interface ChordGridProps {
   onBeatClick?: (beatIndex: number, timestamp: number) => void; // Callback for beat cell clicks
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean; // Whether corrected chords are being displayed
-  chordCorrections?: Record<string, string> | null; // Mapping of original chords to corrected chords
+  chordCorrections?: Record<string, string> | null; // Mapping of original chords to corrected chords (legacy)
+  // NEW: Enhanced sequence-based corrections
+  sequenceCorrections?: {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null;
 }
 
 const ChordGrid: React.FC<ChordGridProps> = ({
@@ -53,7 +72,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   originalAudioMapping,
   onBeatClick,
   showCorrectedChords = false,
-  chordCorrections = null
+  chordCorrections = null,
+  sequenceCorrections = null
 }) => {
   // Get theme for SVG selection
   const { theme } = useTheme();
@@ -62,44 +82,139 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const actualBeatsPerMeasure = timeSignature;
 
   // Function to apply chord corrections at display time
-  const getDisplayChord = (originalChord: string): { chord: string; wasCorrected: boolean } => {
-    if (!showCorrectedChords || !chordCorrections || !originalChord) {
+  const getDisplayChord = (originalChord: string, visualIndex?: number): { chord: string; wasCorrected: boolean } => {
+    // ENHANCED: Early return with detailed logging
+    if (!showCorrectedChords || !originalChord) {
+      // Debug: Log early returns for first few chords
+      if (visualIndex !== undefined && visualIndex < 5) {
+        console.log(`🔍 EARLY RETURN [${visualIndex}]:`, {
+          originalChord,
+          showCorrectedChords,
+          reason: !showCorrectedChords ? 'showCorrectedChords is false' : 'originalChord is empty',
+          returning: 'original chord without correction'
+        });
+      }
       return { chord: originalChord, wasCorrected: false };
     }
 
-    // Extract the root note from the chord (e.g., "C#:maj" -> "C#", "F#m" -> "F#")
-    // Handle both formats: "C#:maj" and "C#m"
-    let rootNote = originalChord;
+    // Debug: Log sequence corrections availability
+    if (visualIndex === 0) { // Only log once per render
+      console.log('🔍 SEQUENCE CORRECTIONS DEBUG:', {
+        hasSequenceCorrections: !!sequenceCorrections,
+        showCorrectedChords,
+        sequenceCorrectionLength: sequenceCorrections?.originalSequence?.length || 0,
+        hasPadding,
+        shiftCount,
+        paddingCount,
+        firstFewOriginal: sequenceCorrections?.originalSequence?.slice(0, 5),
+        firstFewCorrected: sequenceCorrections?.correctedSequence?.slice(0, 5)
+      });
+    }
 
-    // For chords with colon notation (e.g., "C#:maj", "F#:min")
-    if (originalChord.includes(':')) {
-      rootNote = originalChord.split(':')[0];
-    } else {
-      // For chords without colon (e.g., "C#m", "F#", "Db7")
-      // Extract root note (handle sharps and flats)
-      const match = originalChord.match(/^([A-G][#b]?)/);
-      if (match) {
-        rootNote = match[1];
+    // NEW: Try sequence-based corrections first (more accurate)
+    if (sequenceCorrections && visualIndex !== undefined) {
+      const { originalSequence, correctedSequence } = sequenceCorrections;
+
+      // ENHANCED: Find the chord in the sequence corrections by matching the chord name
+      // The sequence corrections are indexed by the original chord sequence from the API,
+      // but the visual grid may have different indexing due to padding/shifting
+
+      // Strategy 1: Try direct index mapping (works when no padding/shifting)
+      let chordSequenceIndex = visualIndex;
+      if (hasPadding) {
+        // Remove shift and padding offset to get the actual chord sequence index
+        chordSequenceIndex = visualIndex - (shiftCount + paddingCount);
+      }
+
+      // Strategy 2: If direct mapping fails, search for the chord in the sequence
+      let foundCorrection = false;
+      let correctedChord = originalChord;
+
+      // Try direct index mapping first
+      if (chordSequenceIndex >= 0 && chordSequenceIndex < originalSequence.length && chordSequenceIndex < correctedSequence.length) {
+        const sequenceOriginal = originalSequence[chordSequenceIndex];
+        const sequenceCorrected = correctedSequence[chordSequenceIndex];
+
+        if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
+          correctedChord = sequenceCorrected;
+          foundCorrection = true;
+          console.log('🎵 SEQUENCE-BASED CORRECTION (Direct Index):', {
+            visualIndex,
+            chordSequenceIndex,
+            originalChord,
+            correctedChord: sequenceCorrected,
+            method: 'sequence-based-direct'
+          });
+        }
+      }
+
+      // If direct mapping didn't work, search for the chord in the sequence
+      if (!foundCorrection) {
+        for (let i = 0; i < originalSequence.length; i++) {
+          const sequenceOriginal = originalSequence[i];
+          const sequenceCorrected = correctedSequence[i];
+
+          if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
+            correctedChord = sequenceCorrected;
+            foundCorrection = true;
+            console.log('🎵 SEQUENCE-BASED CORRECTION (Search):', {
+              visualIndex,
+              searchIndex: i,
+              originalChord,
+              correctedChord: sequenceCorrected,
+              method: 'sequence-based-search'
+            });
+            break; // Use the first match
+          }
+        }
+      }
+
+      if (foundCorrection) {
+        return { chord: correctedChord, wasCorrected: true };
       }
     }
 
+    // FALLBACK: Use legacy chord-by-chord corrections
+    if (chordCorrections) {
+      // Extract the root note from the chord (e.g., "C#:maj" -> "C#", "F#m" -> "F#")
+      // Handle both formats: "C#:maj" and "C#m"
+      let rootNote = originalChord;
 
-
-    // Check if we have a correction for this root note
-    if (chordCorrections[rootNote]) {
-      const correctedRoot = chordCorrections[rootNote];
-
-      // Replace the root note in the original chord with the corrected one
-      let correctedChord;
+      // For chords with colon notation (e.g., "C#:maj", "F#:min")
       if (originalChord.includes(':')) {
-        // For "C#:maj" -> "Db:maj"
-        correctedChord = originalChord.replace(rootNote, correctedRoot);
+        rootNote = originalChord.split(':')[0];
       } else {
-        // For "C#m" -> "Dbm", "C#7" -> "Db7"
-        correctedChord = originalChord.replace(rootNote, correctedRoot);
+        // For chords without colon (e.g., "C#m", "F#", "Db7")
+        // Extract root note (handle sharps and flats)
+        const match = originalChord.match(/^([A-G][#b]?)/);
+        if (match) {
+          rootNote = match[1];
+        }
       }
 
-      return { chord: correctedChord, wasCorrected: true };
+      // Check if we have a correction for this root note
+      if (chordCorrections[rootNote]) {
+        const correctedRoot = chordCorrections[rootNote];
+
+        // Replace the root note in the original chord with the corrected one
+        let correctedChord;
+        if (originalChord.includes(':')) {
+          // For "C#:maj" -> "Db:maj"
+          correctedChord = originalChord.replace(rootNote, correctedRoot);
+        } else {
+          // For "C#m" -> "Dbm", "C#7" -> "Db7"
+          correctedChord = originalChord.replace(rootNote, correctedRoot);
+        }
+
+        console.log('🎵 LEGACY CORRECTION:', {
+          originalChord,
+          extractedRoot: rootNote,
+          correctedChord,
+          method: 'legacy'
+        });
+
+        return { chord: correctedChord, wasCorrected: true };
+      }
     }
 
     return { chord: originalChord, wasCorrected: false };
@@ -222,32 +337,61 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return bestShift;
   };
 
-  // SIMPLIFIED STRATEGY: Use direct model output without padding/shifting
-  // Comment out complex padding/shift logic for now to get clean baseline
+  // COMPREHENSIVE STRATEGY: Use backend-provided padding/shift data
   let shiftedChords: string[];
   let optimalShift: number;
 
-  // Always use direct model output for now
-  shiftedChords = chords; // Use chords directly from model
-  optimalShift = 0; // No shift applied
-  // console.log(`🔄 SIMPLIFIED STRATEGY: Using direct model output (${chords.length} chords, no padding/shift)`);
+  console.log(`\n🎼 CHORD GRID STRATEGY SELECTION:`);
+  console.log(`  hasPadding: ${hasPadding}, shiftCount: ${shiftCount}, paddingCount: ${paddingCount}`);
+  console.log(`  chords.length: ${chords.length}, timeSignature: ${timeSignature}`);
 
-  // COMMENTED OUT: Complex padding/shift strategies
-  // if (hasPadding) {
-  //   // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
-  //   // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
-  //   shiftedChords = chords; // Use as-is, no additional shifting needed
-  //   optimalShift = 0; // No additional shift needed
-  //   console.log(`🔄 COMPREHENSIVE STRATEGY: Using backend-provided chord order (${chords.length} cells, shiftCount=${shiftCount}, paddingCount=${paddingCount})`);
-  // } else {
-  //   // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
-  //   optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
-  //   shiftedChords = chords.length > 0 ? [
-  //     ...Array(optimalShift).fill(''), // Add k empty greyed-out cells at the beginning
-  //     ...chords // Original chords follow after the shift
-  //   ] : chords;
-  //   console.log(`🔄 FALLBACK STRATEGY: Applied ChordGrid shift of ${optimalShift} beats`);
-  // }
+  if (hasPadding) {
+    // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
+    // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
+    shiftedChords = chords; // Use as-is, no additional shifting needed
+    optimalShift = 0; // No additional shift needed
+    console.log(`🔄 COMPREHENSIVE STRATEGY: Using backend-provided chord order (${chords.length} cells, shiftCount=${shiftCount}, paddingCount=${paddingCount})`);
+
+    // DEBUG: Show what ChordGrid received from backend
+    console.log(`\n🎯 CHORDGRID RECEIVED FROM BACKEND:`);
+    console.log(`  hasPadding: ${hasPadding}`);
+    console.log(`  paddingCount: ${paddingCount}`);
+    console.log(`  shiftCount: ${shiftCount}`);
+    console.log(`  chords.length: ${chords.length}`);
+
+    // DEBUG: Show visual grid positions vs beat positions for first few chords
+    console.log(`\n🔍 VISUAL GRID ANALYSIS (first 20 positions):`);
+    for (let i = 0; i < Math.min(20, chords.length); i++) {
+      const chord = chords[i];
+      const beatInMeasure = (i % timeSignature) + 1;
+      const isDownbeat = beatInMeasure === 1;
+      const cellType = i < shiftCount ? 'SHIFT' : (i < shiftCount + paddingCount ? 'PADDING' : 'MUSIC');
+      const marker = isDownbeat ? '🔴' : '  ';
+      console.log(`  ${marker} Visual[${i.toString().padStart(2)}]: "${chord.padEnd(8)}" beat${beatInMeasure} (${cellType})`);
+    }
+
+    // DEBUG: Find where Eb specifically appears
+    console.log(`\n🎯 FINDING Eb CHORD POSITIONS:`);
+    for (let i = 0; i < chords.length; i++) {
+      const chord = chords[i];
+      if (chord === 'Eb' || chord === 'Eb:maj' || chord.startsWith('Eb')) {
+        const beatInMeasure = (i % timeSignature) + 1;
+        const isDownbeat = beatInMeasure === 1;
+        const cellType = i < shiftCount ? 'SHIFT' : (i < shiftCount + paddingCount ? 'PADDING' : 'MUSIC');
+        const marker = isDownbeat ? '🔴DOWNBEAT' : `beat${beatInMeasure}`;
+        console.log(`  Eb found at Visual[${i}]: "${chord}" -> ${marker} (${cellType})`);
+        if (i > 30) break; // Only show first few occurrences
+      }
+    }
+  } else {
+    // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
+    optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
+    shiftedChords = chords.length > 0 ? [
+      ...Array(optimalShift).fill(''), // Add k empty greyed-out cells at the beginning
+      ...chords // Original chords follow after the shift
+    ] : chords;
+    console.log(`🔄 FALLBACK STRATEGY: Applied ChordGrid shift of ${optimalShift} beats`);
+  }
 
   // Enhanced debug logging with shift verification
   // console.log(`\n🎼 CHORD GRID LAYOUT DEBUG:`);
@@ -1015,7 +1159,20 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                           {/* Enhanced chord display with pickup beat support */}
                           <div style={getChordContainerStyles()}>
                             {!isEmpty && showChordLabel && chord ? (() => {
-                              const { chord: displayChord, wasCorrected } = getDisplayChord(chord);
+                              const { chord: displayChord, wasCorrected } = getDisplayChord(chord, globalIndex);
+
+                              // Debug: Log chord display for first few chords
+                              if (globalIndex < 10) {
+                                console.log(`🎵 CHORD DISPLAY [${globalIndex}]:`, {
+                                  originalChord: chord,
+                                  displayChord,
+                                  wasCorrected,
+                                  showCorrectedChords,
+                                  hasSequenceCorrections: !!sequenceCorrections,
+                                  hasLegacyCorrections: !!chordCorrections
+                                });
+                              }
+
                               return (
                                 <div
                                   className={`${getDynamicFontSize(cellSize, displayChord.length)} font-medium leading-tight ${

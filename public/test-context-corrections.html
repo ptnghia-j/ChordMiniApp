@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context-Aware Chord Correction Test</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-header {
+            color: #4CAF50;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        .info { color: #2196F3; }
+        .highlight { background: #333; padding: 2px 4px; border-radius: 3px; }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .progress {
+            background: #333;
+            border-radius: 10px;
+            padding: 3px;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            background: #4CAF50;
+            height: 20px;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background: #333;
+            color: #4CAF50;
+        }
+        tr:nth-child(even) {
+            background: #2a2a2a;
+        }
+        .corrected {
+            color: #9C27B0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="success">🧪 Context-Aware Enharmonic Correction Test Suite</h1>
+        <p>This test validates the new sequence-based chord correction system that analyzes full progressions with harmonic context.</p>
+        
+        <div class="test-section">
+            <div class="test-header">🎵 Test Chord Progression</div>
+            <p>Using "My Heart Will Go On" style progression: <span class="highlight">E major → Ab major modulation</span></p>
+            <div id="chord-progression"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-header">🚀 Test Controls</div>
+            <button onclick="runFullTestSuite()" id="runTestBtn">Run Full Test Suite</button>
+            <button onclick="testApiOnly()" id="apiTestBtn">Test API Only</button>
+            <button onclick="clearResults()" id="clearBtn">Clear Results</button>
+            
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar" style="width: 0%;">0%</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-header">📊 Test Results</div>
+            <div id="test-results">
+                <p class="info">Click "Run Full Test Suite" to begin testing...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test chord progression data
+        const testChordProgression = [
+            // E MAJOR SECTION - should keep sharp notation
+            { chord: 'E', time: 0.0 },
+            { chord: 'B', time: 2.0 },
+            { chord: 'C#m', time: 4.0 },    // vi in E major - should STAY C#m
+            { chord: 'A', time: 6.0 },
+            { chord: 'E', time: 8.0 },
+            { chord: 'B', time: 10.0 },
+            { chord: 'F#m', time: 12.0 },   // ii in E major - should STAY F#m
+            { chord: 'B', time: 14.0 },
+            { chord: 'C#m', time: 16.0 },   // Still in E major context
+            { chord: 'G#m', time: 18.0 },   // iii in E major - should STAY G#m
+            { chord: 'A', time: 20.0 },
+            { chord: 'B', time: 22.0 },
+            
+            // MODULATION POINT
+            { chord: 'C#', time: 24.0 },    // Pivot chord - context dependent
+            { chord: 'F#', time: 26.0 },    // Leading to new key
+            { chord: 'Bb', time: 28.0 },    // First clear Ab major chord
+            { chord: 'Eb', time: 30.0 },    // V in Ab major
+            
+            // AB MAJOR SECTION - should use flat notation
+            { chord: 'Ab', time: 32.0 },    // I in Ab major
+            { chord: 'Eb', time: 34.0 },    // V in Ab major
+            { chord: 'Fm', time: 36.0 },    // vi in Ab major
+            { chord: 'Db', time: 38.0 },    // IV in Ab major
+            { chord: 'Ab', time: 40.0 },
+            { chord: 'Eb', time: 42.0 },
+            { chord: 'Bb', time: 44.0 },    // II in Ab major
+            { chord: 'Eb', time: 46.0 },
+            { chord: 'Db', time: 48.0 },    // Should stay Db (not C#)
+            { chord: 'Ab', time: 50.0 },
+            { chord: 'Eb', time: 52.0 },
+            { chord: 'Ab', time: 54.0 }
+        ];
+
+        // Display chord progression
+        function displayChordProgression() {
+            const container = document.getElementById('chord-progression');
+            let html = '<table><tr><th>Index</th><th>Time</th><th>Chord</th><th>Context</th><th>Expected Behavior</th></tr>';
+            
+            testChordProgression.forEach((chord, index) => {
+                const context = index < 12 ? 'E Major' : index < 16 ? 'Transition' : 'Ab Major';
+                let expected = 'Keep original';
+                
+                if (context === 'E Major' && ['C#m', 'F#m', 'G#m'].includes(chord.chord)) {
+                    expected = 'Stay sharp (harmonic function)';
+                } else if (context === 'Ab Major' && ['C#', 'F#', 'G#'].includes(chord.chord)) {
+                    expected = 'Convert to flat';
+                }
+                
+                html += `<tr>
+                    <td>${index}</td>
+                    <td>${chord.time}s</td>
+                    <td><strong>${chord.chord}</strong></td>
+                    <td>${context}</td>
+                    <td>${expected}</td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        // Test API endpoint
+        async function testApiEndpoint() {
+            updateProgress(10, 'Testing API endpoint...');
+            
+            try {
+                const response = await fetch('/api/detect-key', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chords: testChordProgression,
+                        includeEnharmonicCorrection: true
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                updateProgress(30, 'API response received');
+                
+                return result;
+            } catch (error) {
+                appendResult(`<div class="error">❌ API Test failed: ${error.message}</div>`);
+                return null;
+            }
+        }
+
+        // Analyze API response
+        function analyzeApiResponse(result) {
+            updateProgress(50, 'Analyzing API response...');
+            
+            let html = '<div class="test-header">📡 API Response Analysis</div>';
+            
+            html += `<p><strong>Primary Key:</strong> <span class="highlight">${result.primaryKey}</span></p>`;
+            html += `<p><strong>Modulation:</strong> <span class="highlight">${result.modulation || 'None'}</span></p>`;
+            html += `<p><strong>Has Sequence Corrections:</strong> <span class="${result.sequenceCorrections ? 'success' : 'error'}">${!!result.sequenceCorrections}</span></p>`;
+            html += `<p><strong>Has Legacy Corrections:</strong> <span class="${result.corrections ? 'success' : 'error'}">${!!result.corrections}</span></p>`;
+            
+            if (result.sequenceCorrections) {
+                const { originalSequence, correctedSequence, keyAnalysis } = result.sequenceCorrections;
+                
+                html += '<h3 class="info">🎯 Sequence Analysis</h3>';
+                html += `<p>Original sequence length: ${originalSequence?.length || 0}</p>`;
+                html += `<p>Corrected sequence length: ${correctedSequence?.length || 0}</p>`;
+                html += `<p>Length match: <span class="${originalSequence?.length === correctedSequence?.length ? 'success' : 'error'}">${originalSequence?.length === correctedSequence?.length}</span></p>`;
+                
+                // Chord-by-chord analysis
+                if (originalSequence && correctedSequence) {
+                    html += '<h3 class="info">🔍 Chord-by-Chord Analysis</h3>';
+                    html += '<table><tr><th>Index</th><th>Time</th><th>Original</th><th>Corrected</th><th>Status</th><th>Context</th></tr>';
+                    
+                    originalSequence.forEach((original, index) => {
+                        const corrected = correctedSequence[index];
+                        const wasChanged = original !== corrected;
+                        const timestamp = testChordProgression[index]?.time || 0;
+                        const context = index < 12 ? 'E Major' : index < 16 ? 'Transition' : 'Ab Major';
+                        
+                        html += `<tr>
+                            <td>${index}</td>
+                            <td>${timestamp}s</td>
+                            <td>${original}</td>
+                            <td class="${wasChanged ? 'corrected' : ''}">${corrected}</td>
+                            <td>${wasChanged ? '<span class="success">✨ CORRECTED</span>' : ''}</td>
+                            <td>${context}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</table>';
+                }
+                
+                // Key analysis
+                if (keyAnalysis?.sections) {
+                    html += '<h3 class="info">🗝️ Key Analysis Sections</h3>';
+                    keyAnalysis.sections.forEach((section, index) => {
+                        html += `<p><strong>Section ${index + 1}:</strong> ${section.key} (chords ${section.startIndex}-${section.endIndex})</p>`;
+                        html += `<p class="highlight">Chords: [${section.chords.join(', ')}]</p>`;
+                    });
+                }
+                
+                if (keyAnalysis?.modulations) {
+                    html += '<h3 class="info">🔄 Modulation Points</h3>';
+                    keyAnalysis.modulations.forEach((mod, index) => {
+                        const timestamp = testChordProgression[mod.atIndex]?.time || 0;
+                        html += `<p><strong>Modulation ${index + 1}:</strong> ${mod.fromKey} → ${mod.toKey} at index ${mod.atIndex} (${timestamp}s)</p>`;
+                    });
+                }
+            }
+            
+            return html;
+        }
+
+        // Test context-aware logic
+        function testContextAwareLogic(result) {
+            updateProgress(70, 'Testing context-aware logic...');
+            
+            if (!result?.sequenceCorrections) {
+                return '<div class="error">❌ No sequence corrections to validate</div>';
+            }
+            
+            const { originalSequence, correctedSequence } = result.sequenceCorrections;
+            
+            // Expected behavior based on musical theory
+            const expectedBehavior = {
+                'C#m': { expectedInEMajor: 'C#m', expectedInAbMajor: 'C#m', reason: 'vi chord context' },
+                'F#m': { expectedInEMajor: 'F#m', expectedInAbMajor: 'Gbm', reason: 'ii chord context' },
+                'G#m': { expectedInEMajor: 'G#m', expectedInAbMajor: 'Abm', reason: 'iii chord context' },
+                'C#': { expectedInEMajor: 'C#', expectedInAbMajor: 'Db', reason: 'IV chord in Ab major' },
+                'F#': { expectedInEMajor: 'F#', expectedInAbMajor: 'Gb', reason: 'VII chord context' },
+                'G#': { expectedInEMajor: 'G#', expectedInAbMajor: 'Ab', reason: 'I chord in Ab major' }
+            };
+            
+            let html = '<div class="test-header">🧠 Context-Aware Logic Validation</div>';
+            html += '<table><tr><th>Context</th><th>Index</th><th>Original</th><th>Corrected</th><th>Expected</th><th>Result</th><th>Reason</th></tr>';
+            
+            let correctContextualCorrections = 0;
+            let totalContextualTests = 0;
+            
+            originalSequence.forEach((original, index) => {
+                const corrected = correctedSequence[index];
+                
+                // Test E major section behavior (first 12 chords)
+                if (index < 12 && expectedBehavior[original]?.expectedInEMajor) {
+                    totalContextualTests++;
+                    const expected = expectedBehavior[original].expectedInEMajor;
+                    const isCorrect = corrected === expected;
+                    
+                    if (isCorrect) correctContextualCorrections++;
+                    
+                    html += `<tr>
+                        <td>E Major</td>
+                        <td>${index}</td>
+                        <td>${original}</td>
+                        <td class="${isCorrect ? 'success' : 'error'}">${corrected}</td>
+                        <td>${expected}</td>
+                        <td>${isCorrect ? '<span class="success">✅</span>' : '<span class="error">❌</span>'}</td>
+                        <td>${expectedBehavior[original].reason}</td>
+                    </tr>`;
+                }
+                
+                // Test Ab major section behavior (after index 16)
+                if (index >= 16 && expectedBehavior[original]?.expectedInAbMajor) {
+                    totalContextualTests++;
+                    const expected = expectedBehavior[original].expectedInAbMajor;
+                    const isCorrect = corrected === expected;
+                    
+                    if (isCorrect) correctContextualCorrections++;
+                    
+                    html += `<tr>
+                        <td>Ab Major</td>
+                        <td>${index}</td>
+                        <td>${original}</td>
+                        <td class="${isCorrect ? 'success' : 'error'}">${corrected}</td>
+                        <td>${expected}</td>
+                        <td>${isCorrect ? '<span class="success">✅</span>' : '<span class="error">❌</span>'}</td>
+                        <td>${expectedBehavior[original].reason}</td>
+                    </tr>`;
+                }
+            });
+            
+            html += '</table>';
+            
+            const successRate = totalContextualTests > 0 ? (correctContextualCorrections / totalContextualTests * 100).toFixed(1) : 0;
+            html += `<p><strong>📊 Context-Aware Success Rate:</strong> <span class="highlight">${correctContextualCorrections}/${totalContextualTests} (${successRate}%)</span></p>`;
+            
+            if (successRate >= 80) {
+                html += '<p class="success">✅ Context-aware logic is working correctly!</p>';
+            } else {
+                html += '<p class="error">❌ Context-aware logic needs improvement</p>';
+            }
+            
+            return html;
+        }
+
+        // UI helper functions
+        function updateProgress(percent, message) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            
+            progressContainer.style.display = 'block';
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = message;
+        }
+
+        function appendResult(html) {
+            const resultsContainer = document.getElementById('test-results');
+            resultsContainer.innerHTML += html;
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '<p class="info">Results cleared. Ready for new test...</p>';
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        // Main test functions
+        async function testApiOnly() {
+            clearResults();
+            const result = await testApiEndpoint();
+            if (result) {
+                appendResult(analyzeApiResponse(result));
+            }
+            updateProgress(100, 'API test complete');
+        }
+
+        async function runFullTestSuite() {
+            clearResults();
+            
+            // Disable buttons during test
+            document.getElementById('runTestBtn').disabled = true;
+            document.getElementById('apiTestBtn').disabled = true;
+            
+            try {
+                // Test API
+                const result = await testApiEndpoint();
+                if (!result) {
+                    updateProgress(100, 'Test failed');
+                    return;
+                }
+                
+                // Analyze response
+                appendResult(analyzeApiResponse(result));
+                
+                // Test context-aware logic
+                appendResult(testContextAwareLogic(result));
+                
+                updateProgress(100, 'All tests complete');
+                
+                // Summary
+                appendResult(`
+                    <div class="test-header">🏁 Test Suite Summary</div>
+                    <p class="success">✅ All tests completed successfully!</p>
+                    <p><strong>Key Findings:</strong></p>
+                    <ul>
+                        <li>Sequence corrections: ${result.sequenceCorrections ? '✅ Available' : '❌ Missing'}</li>
+                        <li>Legacy corrections: ${result.corrections ? '✅ Available' : '❌ Missing'}</li>
+                        <li>Key analysis: ${result.sequenceCorrections?.keyAnalysis ? '✅ Available' : '❌ Missing'}</li>
+                    </ul>
+                    <p class="info">💡 Check the console for detailed logs and debugging information.</p>
+                `);
+                
+            } finally {
+                // Re-enable buttons
+                document.getElementById('runTestBtn').disabled = false;
+                document.getElementById('apiTestBtn').disabled = false;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            displayChordProgression();
+        });
+    </script>
+</body>
+</html>

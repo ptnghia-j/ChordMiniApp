@@ -29,8 +29,6 @@ import { LyricsSection } from '@/components/LyricsSection';
 import { ChatbotSection } from '@/components/ChatbotSection';
 import { YouTubePlayer } from '@/types/youtube';
 import dynamic from 'next/dynamic';
-import SkeletonChordGrid from '@/components/SkeletonChordGrid';
-import SkeletonLyrics from '@/components/SkeletonLyrics';
 //import type { ReactPlayerProps } from 'react-player';
 
 // Define error types for better type safety
@@ -122,8 +120,56 @@ export default function YouTubeVideoAnalyzePage() {
   // Enharmonic correction state
   const [chordCorrections, setChordCorrections] = useState<Record<string, string> | null>(null);
   const [showCorrectedChords, setShowCorrectedChords] = useState(false);
+  // NEW: Enhanced sequence-based corrections
+  const [sequenceCorrections, setSequenceCorrections] = useState<{
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null>(null);
 
+  // Debug: Log chord corrections state changes
+  useEffect(() => {
+    console.log('🔍 CHORD CORRECTIONS STATE:', {
+      chordCorrections,
+      hasCorrections: chordCorrections !== null && Object.keys(chordCorrections).length > 0,
+      correctionCount: chordCorrections ? Object.keys(chordCorrections).length : 0,
+      buttonShouldShow: chordCorrections !== null && Object.keys(chordCorrections).length > 0
+    });
+  }, [chordCorrections]);
 
+  // Debug: Log showCorrectedChords state changes
+  useEffect(() => {
+    console.log('🔍 SHOW CORRECTED CHORDS STATE:', {
+      showCorrectedChords,
+      chordCorrections,
+      sequenceCorrections,
+      hasSequenceCorrections: sequenceCorrections && sequenceCorrections.correctedSequence.length > 0,
+      buttonText: showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'
+    });
+  }, [showCorrectedChords, chordCorrections, sequenceCorrections]);
+
+  // NEW: Auto-enable corrections when sequence corrections are available (only once)
+  const [hasAutoEnabledCorrections, setHasAutoEnabledCorrections] = useState(false);
+  useEffect(() => {
+    if (sequenceCorrections && sequenceCorrections.correctedSequence.length > 0 && !showCorrectedChords && !hasAutoEnabledCorrections) {
+      console.log('🎯 AUTO-ENABLING SEQUENCE CORRECTIONS (first time only)');
+      setShowCorrectedChords(true);
+      setHasAutoEnabledCorrections(true);
+    }
+  }, [sequenceCorrections, showCorrectedChords, hasAutoEnabledCorrections]);
 
 
   const [isRequestingEnharmonicCorrection, setIsRequestingEnharmonicCorrection] = useState(false);
@@ -243,20 +289,33 @@ export default function YouTubeVideoAnalyzePage() {
 
       import('@/services/keyDetectionService').then(({ detectKey }) => {
         console.log('🔍 KEY DETECTION SERVICE IMPORTED, calling detectKey...');
-        detectKey(chordData, true) // Request enharmonic correction
+        // ENHANCED: Use cache for sequence corrections (no bypass)
+        detectKey(chordData, true, false) // Request enharmonic correction, use cache
           .then(result => {
             console.log('🔍 KEY DETECTION RESULT:', {
               primaryKey: result.primaryKey,
               corrections: result.corrections,
               hasCorrections: result.corrections && Object.keys(result.corrections).length > 0,
-              fullResult: result
+              sequenceCorrections: result.sequenceCorrections,
+              hasSequenceCorrections: result.sequenceCorrections && result.sequenceCorrections.correctedSequence,
+              fromCache: (result as any).fromCache || false,
+              sequenceCorrectionLength: result.sequenceCorrections?.originalSequence?.length || 0
             });
 
             setKeySignature(result.primaryKey);
 
-            // Store enharmonic correction data if available
-            if (result.corrections && Object.keys(result.corrections).length > 0) {
-              console.log('✅ Setting chord corrections:', result.corrections);
+            // NEW: Handle sequence-based corrections (preferred)
+            if (result.sequenceCorrections && result.sequenceCorrections.correctedSequence) {
+              console.log('✅ Setting sequence-based corrections:', result.sequenceCorrections);
+              setSequenceCorrections(result.sequenceCorrections);
+
+              // Also set legacy corrections for backward compatibility
+              if (result.corrections && Object.keys(result.corrections).length > 0) {
+                setChordCorrections(result.corrections);
+              }
+            } else if (result.corrections && Object.keys(result.corrections).length > 0) {
+              // FALLBACK: Use legacy chord corrections
+              console.log('✅ Setting legacy chord corrections:', result.corrections);
               setChordCorrections(result.corrections);
             } else {
               console.log('❌ No corrections found or empty corrections object');
@@ -320,6 +379,8 @@ export default function YouTubeVideoAnalyzePage() {
       setKeyDetectionAttempted(false);
       setChordCorrections(null); // Reset chord corrections for new video
       setShowCorrectedChords(false); // Reset to show original chords
+      setHasAutoEnabledCorrections(false); // Reset auto-enable flag for new video
+      setSequenceCorrections(null); // Reset sequence corrections for new video
 
       // Load video info asynchronously (non-blocking)
       loadVideoInfo();
@@ -993,11 +1054,21 @@ export default function YouTubeVideoAnalyzePage() {
   });
 
   // Helper functions for chord grid data calculation
-  const calculateOptimalShift = useCallback((chords: string[], timeSignature: number): number => {
+  const calculateOptimalShift = useCallback((chords: string[], timeSignature: number, paddingCount: number = 0): number => {
     if (chords.length === 0) {
       console.log('🔄 Optimal shift calculation: No chords available, returning shift 0');
       return 0;
     }
+
+    console.log('\n=== 🔍 BEAT SHIFT DEBUG ANALYSIS ===');
+    console.log(`📊 Input: ${chords.length} chords, ${timeSignature}/4 time signature`);
+    console.log(`🎵 First 20 chords: [${chords.slice(0, 20).join(', ')}]`);
+
+    // DEBUG: Show the exact chord array being analyzed
+    console.log(`\n🔍 CHORD ARRAY VERIFICATION (first 10):`);
+    chords.slice(0, 10).forEach((chord, i) => {
+      console.log(`  raw[${i}] = "${chord}"`);
+    });
 
     let bestShift = 0;
     let maxChordChanges = 0;
@@ -1019,9 +1090,12 @@ export default function YouTubeVideoAnalyzePage() {
     // }
 
     // Test each possible shift value (0 to timeSignature-1)
-    // console.log(`\n🔄 TESTING SHIFT OPTIONS:`);
+    console.log(`\n🔄 TESTING SHIFT OPTIONS:`);
     for (let shift = 0; shift < timeSignature; shift++) {
-      // console.log(`\n📊 === SHIFT ${shift} ANALYSIS ===`);
+      console.log(`\n📊 === SHIFT ${shift} ANALYSIS ===`);
+      console.log(`   This means beat 1 starts at position ${shift} (0-indexed)`);
+      console.log(`   📊 COORDINATE SYSTEM: paddingCount=${paddingCount}, shift=${shift}, totalPadding=${paddingCount + shift}`);
+      console.log(`   📊 MAPPING: raw[i] → visual[${paddingCount + shift} + i] (e.g., raw[0] → visual[${paddingCount + shift}])`);
 
       // Show how all chord positions change with this shift (first 16 for manageable output)
       // const shiftDisplayCount = Math.min(chords.length, 16);
@@ -1043,36 +1117,121 @@ export default function YouTubeVideoAnalyzePage() {
       const downbeatPositions: number[] = [];
       const chordLabels: string[] = [];
 
+      // Show first few beats with their alignment for this shift
+      const debugBeats = Math.min(chords.length, 16); // Show first 16 beats for debugging
+      const beatAnalysis: string[] = [];
+
       // Check each beat position after applying the shift
       let previousDownbeatChord = '';
 
       for (let i = 0; i < chords.length; i++) {
         const currentChord = chords[i];
 
-        // Calculate if this beat is a downbeat after applying the shift
-        const beatInMeasure = ((i - shift + timeSignature) % timeSignature) + 1;
+        // FIXED: Calculate beat position accounting for TOTAL padding offset
+        // The music will start at position (paddingCount + shiftCount) in the final visual grid
+        // So we need to calculate what beat position this chord will have in the final grid
+        const totalPadding = paddingCount + shift; // Total offset before music starts
+        const visualPosition = totalPadding + i; // Position in final visual grid
+        const beatInMeasure = (visualPosition % timeSignature) + 1;
         const isDownbeat = beatInMeasure === 1;
+
+        // Collect debug info for first few beats
+        if (i < debugBeats) {
+          const chordDisplay = currentChord || '""';
+          const beatType = isDownbeat ? '🔴DOWNBEAT' : `beat${beatInMeasure}`;
+          beatAnalysis.push(`[${i}→${visualPosition}]=${chordDisplay}(${beatType})`);
+        }
 
         // Only check for chord changes on downbeats
         if (isDownbeat) {
-          // Detect chord change: current downbeat chord differs from previous downbeat chord
-          const isChordChange = currentChord && currentChord !== '' &&
-                               currentChord !== previousDownbeatChord &&
-                               previousDownbeatChord !== '' && // Don't count first downbeat as change
-                               currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N';
+          // FIXED: Only count chord changes, not repetitions
+          // A chord change occurs when:
+          // 1. Current chord is different from the previous downbeat chord
+          // 2. Current chord is not empty/N.C.
+          // 3. We have seen a previous downbeat chord (not the very first)
+          const isValidChord = currentChord && currentChord !== '' &&
+                              currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N';
 
-          // Score: chord change that occurs on a downbeat
-          if (isChordChange) {
-            chordChangeCount++;
-            downbeatPositions.push(i);
-            chordLabels.push(currentChord);
+          const isChordChange = isValidChord &&
+                               previousDownbeatChord !== '' && // Must have a previous chord to compare
+                               currentChord !== previousDownbeatChord; // Must be different
+
+          // Debug: Log ALL downbeat encounters for debugging
+          if (i < 20) { // Only log first 20 for readability
+            console.log(`      🎯 DOWNBEAT: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange} visualPos=${visualPosition} beat=${beatInMeasure}`);
           }
 
-          // Update previous downbeat chord for next comparison
-          if (currentChord && currentChord !== '' && currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N') {
+          // OPTION 2: Only count chord changes that START on downbeats
+          // This ensures both musical alignment (on downbeats) and visual accuracy (where chords start)
+          if (isChordChange) {
+            // Check if this chord actually starts on this downbeat position
+            const chordStartsHere = i === 0 || chords[i - 1] !== currentChord;
+
+            if (chordStartsHere) {
+              // This chord starts on this downbeat - count it!
+              chordChangeCount++;
+              downbeatPositions.push(i); // Record the downbeat position where chord starts
+              chordLabels.push(currentChord);
+
+              // Debug: Log chord changes that start on downbeats
+              if (i < 20) { // Only log first 20 for readability
+                console.log(`      🎵 CHORD STARTS ON DOWNBEAT: pos[${i}] "${previousDownbeatChord}" -> "${currentChord}" (count: ${chordChangeCount}) visualPos=${visualPosition}`);
+              }
+            } else {
+              // This chord started earlier and continues on this downbeat - don't count it
+              if (i < 20) { // Only log first 20 for readability
+                console.log(`      ⏸️  CHORD CONTINUES ON DOWNBEAT: pos[${i}] chord="${currentChord}" (started earlier, not counted)`);
+              }
+            }
+          } else {
+            // Debug: Log when we DON'T count a chord change
+            if (i < 20) { // Only log first 20 for readability
+              console.log(`      ⏸️  NO CHANGE: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange}`);
+            }
+          }
+
+          // FIXED: Update previous downbeat chord for ALL valid chords on downbeats
+          // This ensures we track the last chord seen on any downbeat for comparison
+          if (isValidChord) {
             previousDownbeatChord = currentChord;
           }
         }
+      }
+
+      // Show beat alignment for this shift
+      console.log(`   Beat alignment: ${beatAnalysis.join(' ')}`);
+
+      // DEBUG: Show exact coordinate mapping for first 10 chords
+      console.log(`   🔍 COORDINATE MAPPING (first 10 chords):`);
+      chords.slice(0, 10).forEach((chord, i) => {
+        const totalPadding = paddingCount + shift;
+        const visualPosition = totalPadding + i;
+        const beatInMeasure = (visualPosition % timeSignature) + 1;
+        const isDownbeat = beatInMeasure === 1;
+        const marker = isDownbeat ? '🎯' : '  ';
+        console.log(`     ${marker} raw[${i}] = "${chord}" → visual[${visualPosition}] beat${beatInMeasure} ${isDownbeat ? '(DOWNBEAT)' : ''}`);
+      });
+
+      // Show downbeat positions and chord changes - COMPLETE OUTPUT with visual positions
+      if (downbeatPositions.length > 0) {
+        console.log(`   🎵 COMPLETE Chord changes on downbeats (${downbeatPositions.length} total):`);
+
+        // Show ALL chord changes with both raw and visual positions
+        const allDownbeatInfo = downbeatPositions.map((pos, idx) => {
+          // FIXED: Use the same calculation as the actual visual grid construction
+          // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
+          // So a chord at raw position 'pos' appears at visual position: shiftCount + paddingCount + pos
+          const visualPos = shift + paddingCount + pos; // CORRECTED: shift + padding + raw position
+          return `raw[${pos}]→visual[${visualPos}]="${chordLabels[idx]}"`;
+        });
+
+        // Print in chunks of 5 for readability
+        for (let i = 0; i < allDownbeatInfo.length; i += 5) {
+          const chunk = allDownbeatInfo.slice(i, i + 5).join(', ');
+          console.log(`     ${chunk}`);
+        }
+      } else {
+        console.log(`   ⏸️  No chord changes found on downbeats`);
       }
 
       shiftResults.push({
@@ -1082,16 +1241,7 @@ export default function YouTubeVideoAnalyzePage() {
         chordLabels
       });
 
-      // console.log(`  ✅ RESULT: ${chordChangeCount} chord changes on downbeats`);
-
-      // if (chordChangeCount > 0) {
-      //   const allChanges = downbeatPositions.map((pos, idx) =>
-      //     `beat[${pos}]="${chordLabels[idx]}"`
-      //   ).join(', ');
-      //   console.log(`    🎵 Downbeat changes: ${allChanges}`);
-      // } else {
-      //   console.log(`    ⏸️  No chord changes on downbeats`);
-      // }
+      console.log(`   ✅ RESULT: ${chordChangeCount} chord changes on downbeats`);
 
       if (chordChangeCount > maxChordChanges) {
         maxChordChanges = chordChangeCount;
@@ -1099,30 +1249,47 @@ export default function YouTubeVideoAnalyzePage() {
       }
     }
 
-    // console.log(`\n✅ BEST SHIFT: ${bestShift} (${maxChordChanges} chord changes on downbeats)`);
+    console.log(`\n✅ BEST SHIFT: ${bestShift} (${maxChordChanges} chord changes on downbeats)`);
+
+    // Show summary of all shift results
+    console.log(`\n📊 SHIFT SUMMARY:`);
+    shiftResults.forEach(result => {
+      const marker = result.shift === bestShift ? '🎯' : '  ';
+      console.log(`  ${marker} Shift ${result.shift}: ${result.chordChanges} chord changes on downbeats`);
+    });
+
+    // Show final coordinate mapping for the best shift
+    const bestResult = shiftResults.find(r => r.shift === bestShift);
+    if (bestResult && bestResult.downbeatPositions.length > 0) {
+      console.log(`\n🎯 FINAL COORDINATE MAPPING (Best Shift ${bestShift}):`);
+      const finalTotalPadding = paddingCount + bestShift;
+      console.log(`   📊 Formula: raw[i] → visual[${bestShift} + ${paddingCount} + i] = visual[${finalTotalPadding} + i]`);
+      console.log(`   📊 Examples:`);
+      bestResult.downbeatPositions.slice(0, 5).forEach((pos, idx) => {
+        // FIXED: Use the same calculation as the actual visual grid construction
+        // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
+        const visualPos = bestShift + paddingCount + pos; // CORRECTED: shift + padding + raw position
+        console.log(`     raw[${pos}] → visual[${visualPos}] = "${bestResult.chordLabels[idx]}" (downbeatPositions[${idx}])`);
+      });
+    }
 
     // Show the effect of the best shift on the first few measures
-    // console.log(`\n📊 CHORD ALIGNMENT AFTER SHIFT ${bestShift} (first 12 beats):`);
-    // chords.slice(0, 12).forEach((chord, index) => {
-    //   const originalBeat = (index % timeSignature) + 1;
-    //   // FIXED: When we add bestShift grey cells at start, content moves right visually
-    //   // but beat positions shift backward in the measure cycle
-    //   const shiftedBeat = ((index - bestShift + timeSignature) % timeSignature) + 1;
-    //   const isDownbeat = shiftedBeat === 1;
-    //   const marker = isDownbeat ? '🎯' : '  ';
-    //   const isChordChange = index === 0 || chords[index] !== chords[index - 1];
-    //   const changeMarker = isChordChange ? '🎵' : '  ';
-    //   console.log(`  ${marker}${changeMarker} Beat[${index.toString().padStart(2)}]: "${chord.padEnd(8)}" beat ${originalBeat} -> ${shiftedBeat} ${isDownbeat && isChordChange ? '← DOWNBEAT CHANGE!' : ''}`);
-    // });
+    console.log(`\n📊 CHORD ALIGNMENT AFTER SHIFT ${bestShift} (first 12 beats):`);
+    chords.slice(0, 12).forEach((chord, index) => {
+      const originalBeat = (index % timeSignature) + 1;
+      // FIXED: Use same formula as frontend - positive shift moves grid forward
+      const shiftedBeat = ((index + bestShift) % timeSignature) + 1;
+      const isDownbeat = shiftedBeat === 1;
+      const marker = isDownbeat ? '🎯' : '  ';
+      const isChordChange = index === 0 || chords[index] !== chords[index - 1];
+      const changeMarker = isChordChange ? '🎵' : '  ';
+      console.log(`  ${marker}${changeMarker} Beat[${index.toString().padStart(2)}]: "${chord.padEnd(8)}" beat ${originalBeat} -> ${shiftedBeat} ${isDownbeat && isChordChange ? '← DOWNBEAT CHANGE!' : ''}`);
+    });
 
     return bestShift;
   }, []);
 
   const calculatePaddingAndShift = useCallback((firstDetectedBeatTime: number, bpm: number, timeSignature: number, chords: string[] = []) => {
-    // console.log('\n🔧 === PADDING & SHIFT CALCULATION ===');
-    // console.log(`First detected beat time: ${firstDetectedBeatTime.toFixed(3)}s`);
-    // console.log(`BPM: ${bpm}, Time signature: ${timeSignature}/4`);
-
     if (firstDetectedBeatTime <= 0.1) {
       // console.log('❌ First beat starts very close to 0.0s, no padding needed');
       return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
@@ -1138,12 +1305,6 @@ export default function YouTubeVideoAnalyzePage() {
     const gapRatio = firstDetectedBeatTime / beatDuration;
     const paddingCount = rawPaddingCount === 0 && gapRatio > 0.2 ? 1 : rawPaddingCount;
 
-    // console.log(`\n📊 PADDING CALCULATION:`);
-    // console.log(`  Beat duration: ${beatDuration.toFixed(3)}s`);
-    // console.log(`  Gap ratio: ${gapRatio.toFixed(3)} (${(gapRatio * 100).toFixed(1)}% of a beat)`);
-    // console.log(`  Raw padding count: ${rawPaddingCount}`);
-    // console.log(`  Final padding count: ${paddingCount}`);
-
     // More reasonable limit: allow up to 4 measures of padding for long intros
     if (paddingCount <= 0 || paddingCount >= timeSignature * 4) {
       // console.log(`❌ Padding rejected: paddingCount=${paddingCount}, limit=${timeSignature * 4}`);
@@ -1156,25 +1317,16 @@ export default function YouTubeVideoAnalyzePage() {
     if (chords.length > 0) {
       // console.log(`  Using chord-based shift calculation (${chords.length} chords available)`);
       // Use optimal chord-based shift calculation
-      shiftCount = calculateOptimalShift(chords, timeSignature);
+      shiftCount = calculateOptimalShift(chords, timeSignature, paddingCount);
     } else {
-      // console.log(`  Using fallback position-based calculation (no chords available)`);
+      // console.log(`  Using position-based shift calculation (no chords available)`);
       // Fallback to position-based calculation if no chords available
       const beatPositionInMeasure = ((paddingCount) % timeSignature) + 1;
       const finalBeatPosition = beatPositionInMeasure > timeSignature ? 1 : beatPositionInMeasure;
       shiftCount = finalBeatPosition === 1 ? 0 : (timeSignature - finalBeatPosition + 1);
-      // console.log(`    Beat position in measure: ${beatPositionInMeasure}`);
-      // console.log(`    Final beat position: ${finalBeatPosition}`);
-      // console.log(`    Calculated shift: ${shiftCount}`);
     }
 
     const totalPaddingCount = paddingCount + shiftCount;
-
-    // console.log(`\n✅ FINAL RESULT:`);
-    // console.log(`  Padding count: ${paddingCount} beats`);
-    // console.log(`  Shift count: ${shiftCount} beats`);
-    // console.log(`  Total padding: ${totalPaddingCount} beats`);
-    // console.log(`  This means ${shiftCount} grey cells + ${paddingCount} orange N.C. cells`);
 
     return { paddingCount, shiftCount, totalPaddingCount };
   }, [calculateOptimalShift]);
@@ -1197,6 +1349,16 @@ export default function YouTubeVideoAnalyzePage() {
 
     // Use first detected beat time for comprehensive padding and shifting calculation
     const { paddingCount, shiftCount } = calculatePaddingAndShift(firstDetectedBeat, bpm, timeSignature, chordData);
+
+    // console.log(`\n🔧 CHORD GRID DATA CALCULATION:`);
+    // console.log(`  paddingCount: ${paddingCount}, shiftCount: ${shiftCount}`);
+    // console.log(`  firstDetectedBeat: ${firstDetectedBeat.toFixed(3)}s, bpm: ${bpm}, timeSignature: ${timeSignature}`);
+    // console.log(`  Will use comprehensive strategy: ${paddingCount > 0 || shiftCount > 0}`);
+
+    // // DEBUG: Show what values will be returned to ChordGrid
+    // console.log(`\n🎯 VALUES THAT WILL BE PASSED TO CHORDGRID:`);
+    // console.log(`  Final paddingCount: ${paddingCount}`);
+    // console.log(`  Final shiftCount: ${shiftCount}`);
 
     // Apply comprehensive strategy if we have either padding OR shifting
     if (paddingCount > 0 || shiftCount > 0) {
@@ -1721,103 +1883,19 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Function to toggle enharmonic correction display
   const toggleEnharmonicCorrection = () => {
-    setShowCorrectedChords(!showCorrectedChords);
-  };
-
-  // Function to detect key signature using Gemini
-  const detectKeySignature = async (chords: string[]) => {
-    console.log('🔑 DETECT KEY SIGNATURE CALLED:', {
-      chords: chords.slice(0, 10), // Log first 10 chords
-      totalChords: chords.length,
-      isDetectingKey,
-      hasChords: chords && chords.length > 0
+    const newState = !showCorrectedChords;
+    console.log('🔄 TOGGLING ENHARMONIC CORRECTION:', {
+      currentState: showCorrectedChords,
+      newState,
+      chordCorrections,
+      hasLegacyCorrections: chordCorrections && Object.keys(chordCorrections).length > 0,
+      sequenceCorrections,
+      hasSequenceCorrections: sequenceCorrections && sequenceCorrections.correctedSequence.length > 0,
+      buttonWillShow: newState ? 'Show Original' : 'Fix Enharmonics',
+      expectedBehavior: newState ? 'Show corrected chords with purple highlighting' : 'Show original chords without highlighting'
     });
-
-    if (!chords || chords.length === 0 || isDetectingKey) {
-      console.log('🔑 DETECT KEY SIGNATURE SKIPPED:', {
-        hasChords: chords && chords.length > 0,
-        isDetectingKey
-      });
-      return;
-    }
-
-    setIsDetectingKey(true);
-    try {
-      // Get unique chords and their frequencies
-      const chordCounts: Record<string, number> = {};
-      chords.forEach(chord => {
-        if (chord && chord !== 'N/C') {
-          chordCounts[chord] = (chordCounts[chord] || 0) + 1;
-        }
-      });
-
-      const uniqueChords = Object.keys(chordCounts);
-      console.log('🔑 UNIQUE CHORDS:', {
-        uniqueChords,
-        chordCounts,
-        totalUniqueChords: uniqueChords.length
-      });
-
-      if (uniqueChords.length === 0) {
-        console.log('🔑 NO UNIQUE CHORDS FOUND, setting key to Unknown');
-        setKeySignature('Unknown');
-        return;
-      }
-
-      // Sort chords by frequency
-      const sortedChords = uniqueChords.sort((a, b) => chordCounts[b] - chordCounts[a]);
-      const topChords = sortedChords.slice(0, Math.min(10, sortedChords.length));
-
-      const prompt = `Analyze these chord progressions and determine the most likely key signature.
-
-Chords in order of frequency: ${topChords.join(', ')}
-
-Please respond with just the key signature in this format: "C major" or "A minor" or "F# major" etc.
-Consider:
-- The most frequent chords
-- Common chord progressions (I-V-vi-IV, ii-V-I, etc.)
-- Circle of fifths relationships
-- Major vs minor tonality
-
-Respond with only the key signature, nothing else.`;
-
-      const response = await fetch('/api/gemini-chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: prompt,
-          conversationHistory: []
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const detectedKey = data.response?.trim();
-        if (detectedKey) {
-          setKeySignature(detectedKey);
-        } else {
-          setKeySignature('Unknown');
-        }
-      } else {
-        setKeySignature('Unknown');
-      }
-    } catch (error) {
-      console.error('Error detecting key signature:', error);
-      setKeySignature('Unknown');
-    } finally {
-      setIsDetectingKey(false);
-    }
+    setShowCorrectedChords(newState);
   };
-
-  // Effect to detect key signature when analysis results are available
-  useEffect(() => {
-    if (analysisResults?.synchronizedChords && analysisResults.synchronizedChords.length > 0 && !keySignature && !isDetectingKey) {
-      const chords = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
-      detectKeySignature(chords);
-    }
-  }, [analysisResults, keySignature, isDetectingKey]);
 
   // Function to handle auto-scrolling to the current beat
   const scrollToCurrentBeat = useCallback(() => {
@@ -1974,8 +2052,8 @@ Respond with only the key signature, nothing else.`;
               </div>
             </div>
 
-            {/* Analysis results - show during processing or when complete */}
-            {(audioProcessingState.isAnalyzing || (analysisResults && audioProcessingState.isAnalyzed)) && (
+            {/* Analysis results */}
+            {analysisResults && audioProcessingState.isAnalyzed && (
             <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
@@ -1988,43 +2066,33 @@ Respond with only the key signature, nothing else.`;
                     </p>
                   </div>
                   <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                    {/* Only show interactive buttons when not processing */}
-                    {!audioProcessingState.isAnalyzing && (
-                      <>
-                        {/* Enharmonic correction toggle button */}
-                        <button
-                          onClick={toggleEnharmonicCorrection}
-                          disabled={!chordCorrections || Object.keys(chordCorrections).length === 0}
-                          className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors duration-200 ${
-                            !chordCorrections || Object.keys(chordCorrections).length === 0
-                              ? 'bg-gray-100 dark:bg-gray-600 border-gray-200 dark:border-gray-500 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                              : showCorrectedChords
-                                ? 'bg-purple-100 dark:bg-purple-200 border-purple-300 dark:border-purple-400 text-purple-800 dark:text-purple-900 hover:bg-purple-200 dark:hover:bg-purple-300'
-                                : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
-                          }`}
-                          title={
-                            !chordCorrections || Object.keys(chordCorrections).length === 0
-                              ? 'No chord corrections available'
-                              : showCorrectedChords
-                                ? 'Show original chord spellings'
-                                : 'Show corrected enharmonic spellings'
-                          }
-                        >
-                          {showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'}
-                        </button>
+                    
+                    {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
+                    {((chordCorrections !== null && Object.keys(chordCorrections).length > 0) ||
+                      (sequenceCorrections !== null && sequenceCorrections.correctedSequence.length > 0)) && (
+                      <button
+                        onClick={toggleEnharmonicCorrection}
+                        className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors duration-200 ${
+                          showCorrectedChords
+                            ? 'bg-purple-100 dark:bg-purple-200 border-purple-300 dark:border-purple-400 text-purple-800 dark:text-purple-900 hover:bg-purple-200 dark:hover:bg-purple-300'
+                            : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
+                        }`}
+                        title={showCorrectedChords ? 'Show original chord spellings' : 'Show corrected enharmonic spellings'}
+                      >
+                        {showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'}
+                      </button>
+                    )}
 
-                        <button
-                          onClick={transcribeLyrics}
-                          disabled={isTranscribingLyrics || !audioProcessingState.audioUrl}
-                          className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 w-full md:w-auto"
-                        >
-                          {isTranscribingLyrics ? "Transcribing Lyrics..." : showLyrics ? "Refresh Lyrics" : "Transcribe Lyrics"}
-                        </button>
+                    <button
+                      onClick={transcribeLyrics}
+                      disabled={isTranscribingLyrics || !audioProcessingState.audioUrl}
+                      className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 w-full md:w-auto"
+                    >
+                      {isTranscribingLyrics ? "Transcribing Lyrics..." : showLyrics ? "Refresh Lyrics" : "Transcribe Lyrics"}
+                    </button>
 
-                        {lyricsError && (
-                          <div className="text-red-500 mt-2 md:col-span-2">{lyricsError}</div>
-                        )}
-                      </>
+                    {lyricsError && (
+                      <div className="text-red-500 mt-2 md:col-span-2">{lyricsError}</div>
                     )}
                   </div>
                 </div>
@@ -2063,63 +2131,48 @@ Respond with only the key signature, nothing else.`;
                   {/* Beat & Chord Map Tab */}
                   {activeTab === 'beatChordMap' && (
                     <div>
-                      {audioProcessingState.isAnalyzing ? (
-                        <SkeletonChordGrid
-                          timeSignature={analysisResults?.beatDetectionResult?.time_signature || 4}
-                        />
-                      ) : (
-                        <>
-                          <ChordGridContainer
-                            analysisResults={analysisResults}
-                            chordGridData={chordGridData}
-                            currentBeatIndex={currentBeatIndex}
-                            keySignature={keySignature}
-                            isDetectingKey={isDetectingKey}
-                            isChatbotOpen={isChatbotOpen}
-                            isLyricsPanelOpen={isLyricsPanelOpen}
-                            onBeatClick={handleBeatClick}
-                            showCorrectedChords={showCorrectedChords}
-                            chordCorrections={chordCorrections}
-                          />
 
-                          {/* Control buttons moved to the component level */}
+                      <ChordGridContainer
+                        analysisResults={analysisResults}
+                        chordGridData={chordGridData}
+                        currentBeatIndex={currentBeatIndex}
+                        keySignature={keySignature}
+                        isDetectingKey={isDetectingKey}
+                        isChatbotOpen={isChatbotOpen}
+                        isLyricsPanelOpen={isLyricsPanelOpen}
+                        onBeatClick={handleBeatClick}
+                        showCorrectedChords={showCorrectedChords}
+                        chordCorrections={chordCorrections}
+                        sequenceCorrections={sequenceCorrections}
+                      />
 
-                          {/* Collapsible Analysis Summary */}
-                          {analysisResults && (
-                            <AnalysisSummary
-                              analysisResults={analysisResults}
-                              audioDuration={duration}
-                            />
-                          )}
-                        </>
-                      )}
+                      {/* Control buttons moved to the component level */}
+
+                      {/* Collapsible Analysis Summary */}
+                      <AnalysisSummary
+                        analysisResults={analysisResults}
+                        audioDuration={duration}
+                      />
                     </div>
                   )}
 
                   {/* Lyrics & Chords Tab */}
                   {activeTab === 'lyricsChords' && (
-                    <div>
-                      {audioProcessingState.isAnalyzing ? (
-                        <SkeletonLyrics />
-                      ) : (
-                        <LyricsSection
-                          lyrics={lyrics}
-                          showLyrics={showLyrics}
-                          currentTime={currentTime}
-                          fontSize={fontSize}
-                          onFontSizeChange={setFontSize}
-                          theme={theme}
-                          analysisResults={analysisResults}
-                        />
-                      )}
-                    </div>
+                    <LyricsSection
+                      lyrics={lyrics}
+                      showLyrics={showLyrics}
+                      currentTime={currentTime}
+                      fontSize={fontSize}
+                      onFontSizeChange={setFontSize}
+                      theme={theme}
+                      analysisResults={analysisResults}
+                    />
                   )}
                 </div>
               </div>
 
 
-              {/* Beats visualization - only show when not processing */}
-              {!audioProcessingState.isAnalyzing && (
+              {/* Beats visualization */}
               <div className="p-4 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-colors duration-300">
                 <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Timeline</h3>
                 <div className="relative h-16 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden transition-colors duration-300">
@@ -2217,7 +2270,6 @@ Respond with only the key signature, nothing else.`;
 
               {/* Beat statistics section removed as requested */}
             </div>
-            )}
           )}
           </div>
 
