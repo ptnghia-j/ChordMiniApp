@@ -14,37 +14,47 @@ ChordMini helps musicians, music students, and enthusiasts analyze songs by auto
 - Embedded YouTube player with synchronized analysis
 - Recent videos history for quick access
 
-### Beat Detection
+### Beat Detection & Animation
 - Multiple selectable beat detection models:
   - Beat-transformer (light) - default model
   - Madmom - alternative library
-- Accurate BPM detection
-- Time signature recognition
-- Visual beat grid with measure indicators
+- Accurate BPM detection and time signature recognition
+- **Continuous Beat Animation System**: Eliminates animation gaps from 0.0s to first detected beat
+  - Virtual beat animation using estimated tempo during pre-beat phase
+  - Three-phase animation strategy: padding cells → shift cells → any available cells
+  - Phase-aware safeguards allowing virtual animation during pre-beat phase
+  - Seamless transition from virtual to detected beat animation
+- Visual beat grid with measure indicators and real-time highlighting
+- Synchronized chord grid highlighting with 20Hz update rate for smooth tracking
 
 ### Chord Recognition
 - Advanced chord detection with over 300 chord types
 - Customizable models for different music genres
-- Real-time visualization of chord progressions
+- Real-time visualization of chord progressions with beat synchronization
 - Simplified chord notation for better readability
+- **Enharmonic Chord Correction**: Context-aware chord spelling using Gemini AI
+- Dynamic chord grid with pickup beat support and optimal beat alignment
 
-### Lyrics Transcription
-- Synchronized lyrics with chord annotations
-- Professional lead sheet layout with chords positioned above words
-- Karaoke-style highlighting with letter-by-letter animation
-- Adjustable font size and auto-scrolling
+### Lyrics Transcription & Translation
+- **Music.ai API Integration**: Professional lyrics transcription with word-level timing
+- Synchronized lyrics with chord annotations positioned above words
+- Professional lead sheet layout with precise chord-to-word alignment
+- Karaoke-style highlighting with letter-by-letter color transitions
+- **Gemini AI Translation**: Context-aware translation for multiple languages
+- Intelligent language detection with Firebase caching
+- Adjustable font size, auto-scrolling, and sync/static mode toggle
 
-### Lyrics Translation
-- Powered by Gemini AI for accurate translations
-- Support for multiple languages
-- Intelligent language detection
-- Translations displayed below original lyrics
+### AI-Powered Features
+- **Contextual AI Chatbot**: Song analysis assistant with complete context awareness
+- **Enharmonic Correction**: Harmonic function-based chord spelling corrections
+- **Metronome Integration**: Synchronized click sounds with distinct downbeat audio
+- Real-time audio processing with Web Audio API integration
 
-### Smart Caching System
-- Firebase-powered remote caching
-- Faster loading of previously analyzed videos
-- Cached translations and transcriptions
-- Reduced processing time for repeat analyses
+### Smart Caching & Performance
+- **Firebase Firestore**: Remote caching for audio files, analysis results, and translations
+- **Multi-layer Caching**: Sequence corrections, individual corrections, and legacy fallbacks
+- **Optimized Processing**: Faster loading of previously analyzed videos
+- **Debug Management**: Clean production logs with comprehensive error handling
 
 ### Responsive UI Design
 - Clean, modern interface with blue accent colors
@@ -93,6 +103,27 @@ ChordMini offers customizable model selection for both beat detection and chord 
 ### Database & Storage
 - **Firebase Firestore** - NoSQL database for caching and user data
 - **Firebase Storage** - Audio file storage
+
+## 📋 Documentation
+
+- [Project Requirements](requirements.md) - Detailed functional and technical requirements
+- [Task Management](tasks.md) - Development progress and task tracking
+- [Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md) - Comprehensive system architecture and data flow diagrams
+
+### 🏗️ System Architecture
+
+The ChordMini application features a sophisticated architecture with several key innovations:
+
+- **Continuous Beat Animation**: Gap-free visual feedback from 0.0s using virtual timing
+- **Multi-layer Caching**: Firebase-powered caching for audio, analysis, and translations
+- **AI Integration**: Gemini API for enharmonic corrections, translations, and contextual chat
+- **Real-time Synchronization**: 20Hz update rate for smooth audio-visual alignment
+
+See [Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md) for detailed technical documentation including:
+- Beat animation workflow and state machines
+- Chord grid data flow and construction process
+- User interaction flows and component dependencies
+- Performance optimization strategies and caching architecture
 
 ## Getting Started
 

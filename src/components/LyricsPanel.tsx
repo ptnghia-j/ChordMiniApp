@@ -45,10 +45,12 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchForSynced, setSearchForSynced] = useState(true); // Toggle for synchronized lyrics search
+  const [showTooltip, setShowTooltip] = useState(false); // State for tooltip visibility
   const [displayMode, setDisplayMode] = useState<'sync' | 'static'>('sync'); // Display mode toggle
 
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   // Focus search input when panel opens
   useEffect(() => {
@@ -60,6 +62,35 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
       }
     }
   }, [isOpen, videoTitle]);
+
+  // Handle tooltip visibility with keyboard support
+  const handleTooltipToggle = (show: boolean) => {
+    setShowTooltip(show);
+  };
+
+  // Handle keyboard navigation for tooltip
+  const handleTooltipKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setShowTooltip(!showTooltip);
+    } else if (e.key === 'Escape') {
+      setShowTooltip(false);
+    }
+  };
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+        setShowTooltip(false);
+      }
+    };
+
+    if (showTooltip) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showTooltip]);
 
   const fetchLyrics = async (query: string) => {
     if (!query.trim()) return;
@@ -202,7 +233,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
         <motion.div
           className={`
             fixed z-[9998]
-            bg-white dark:bg-gray-800 rounded-lg shadow-2xl
+            bg-white dark:bg-content-bg rounded-lg shadow-2xl
             border border-gray-200 dark:border-gray-700
             flex flex-col
 
@@ -230,7 +261,20 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 bg-green-600 rounded-full"></div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                />
+              </svg>
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm sm:text-base">Song Lyrics</h3>
               {/* Sync status indicator */}
               {lrclibData?.has_synchronized && displayMode === 'sync' && (
@@ -330,6 +374,80 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
                   >
                     {displayMode === 'sync' ? 'Switch to Static' : 'Switch to Sync'}
                   </button>
+
+                  {/* Information icon with tooltip */}
+                  <div className="relative" ref={tooltipRef}>
+                    <button
+                      onMouseEnter={() => handleTooltipToggle(true)}
+                      onMouseLeave={() => handleTooltipToggle(false)}
+                      onFocus={() => handleTooltipToggle(true)}
+                      onBlur={() => handleTooltipToggle(false)}
+                      onKeyDown={handleTooltipKeyDown}
+                      className="
+                        p-1 rounded-full text-blue-600 dark:text-blue-400
+                        hover:bg-blue-50 dark:hover:bg-blue-900/20
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+                        transition-colors duration-200
+                      "
+                      aria-label="Information about synchronized lyrics timing"
+                      aria-describedby="sync-tooltip"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </button>
+
+                    {/* Tooltip */}
+                    <AnimatePresence>
+                      {showTooltip && (
+                        <motion.div
+                          id="sync-tooltip"
+                          role="tooltip"
+                          initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                          className="
+                            absolute bottom-full right-0 mb-2 z-50
+                            w-64 p-3 text-xs
+                            bg-blue-50 dark:bg-blue-900/90
+                            border border-blue-200 dark:border-blue-700
+                            text-blue-800 dark:text-blue-200
+                            rounded-lg shadow-lg
+                            backdrop-blur-sm
+                          "
+                          style={{
+                            transform: 'translateX(50%)',
+                            maxWidth: 'calc(100vw - 2rem)'
+                          }}
+                        >
+                          <div className="relative">
+                            <p className="leading-relaxed">
+                              Synchronized lyrics timing may not be perfectly aligned due to differences between the analyzed audio version and the original song recording. This can occur when using live performances, remixes, or different releases of the same song.
+                            </p>
+                            {/* Tooltip arrow */}
+                            <div className="
+                              absolute top-full right-1/2 transform translate-x-1/2
+                              w-0 h-0 border-l-4 border-r-4 border-t-4
+                              border-l-transparent border-r-transparent
+                              border-t-blue-200 dark:border-t-blue-700
+                            "></div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               )}
             </div>

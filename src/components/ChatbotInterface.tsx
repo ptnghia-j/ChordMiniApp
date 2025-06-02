@@ -111,7 +111,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
         <motion.div
           className={`
             fixed z-[9998]
-            bg-white dark:bg-gray-800 rounded-lg shadow-2xl
+            bg-white dark:bg-content-bg rounded-lg shadow-2xl
             border border-gray-200 dark:border-gray-700
             flex flex-col
 
@@ -139,7 +139,13 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-blue-600"
+                viewBox="0 0 512 512"
+              >
+                <path d="M259.92 262.91L216.4 149.77a9 9 0 00-16.8 0l-43.52 113.14a9 9 0 01-5.17 5.17L37.77 311.6a9 9 0 000 16.8l113.14 43.52a9 9 0 015.17 5.17l43.52 113.14a9 9 0 0016.8 0l43.52-113.14a9 9 0 015.17-5.17l113.14-43.52a9 9 0 000-16.8l-113.14-43.52a9 9 0 01-5.17-5.17zM108 68L88 16 68 68 16 88l52 20 20 52 20-52 52-20-52-20zM426.67 117.33L400 48l-26.67 69.33L304 144l69.33 26.67L400 240l26.67-69.33L496 144l-69.33-26.67z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="32"/>
+              </svg>
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm sm:text-base">AI Music Assistant</h3>
             </div>
             <div className="flex items-center space-x-1 sm:space-x-2">

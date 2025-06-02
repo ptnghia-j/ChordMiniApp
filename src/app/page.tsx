@@ -134,7 +134,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -198,7 +198,7 @@ export default function Home() {
                   </div>
                 </div>
                 {/* YouTube Analysis Option - Full Width */}
-                <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
+                <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
                   <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
                     Analyze Music
                   </h3>
@@ -271,7 +271,7 @@ export default function Home() {
                       See ChordMini in Action
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+                      <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
                         <Image
                           src={theme === 'dark' ? "/demo1_dark.png" : "/demo1.png"}
                           alt="ChordMini Beat and Chord Analysis Demo"
@@ -284,7 +284,7 @@ export default function Home() {
                           <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
                         </div>
                       </div>
-                      <div className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+                      <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
                         <Image
                           src={theme === 'dark' ? "/demo2_dark.png" : "/demo2.png"}
                           alt="ChordMini Lyrics Transcription Demo"
@@ -303,7 +303,7 @@ export default function Home() {
 
                 {/* About This App Section - Moved to left column */}
                 <div className="mt-4">
-                  <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 w-full transition-colors duration-300">
+                  <div className="bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 rounded-lg p-4 w-full transition-colors duration-300">
                     <h3 className="text-xl font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">
                       About This App
                     </h3>

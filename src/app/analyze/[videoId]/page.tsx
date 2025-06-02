@@ -161,18 +161,16 @@ export default function YouTubeVideoAnalyzePage() {
     });
   }, [showCorrectedChords, chordCorrections, sequenceCorrections]);
 
-  // NEW: Auto-enable corrections when sequence corrections are available (only once)
+  // Auto-enable corrections when sequence corrections are available (only once)
   const [hasAutoEnabledCorrections, setHasAutoEnabledCorrections] = useState(false);
   useEffect(() => {
     if (sequenceCorrections && sequenceCorrections.correctedSequence.length > 0 && !showCorrectedChords && !hasAutoEnabledCorrections) {
-      console.log('🎯 AUTO-ENABLING SEQUENCE CORRECTIONS (first time only)');
       setShowCorrectedChords(true);
       setHasAutoEnabledCorrections(true);
     }
   }, [sequenceCorrections, showCorrectedChords, hasAutoEnabledCorrections]);
 
 
-  const [isRequestingEnharmonicCorrection, setIsRequestingEnharmonicCorrection] = useState(false);
   const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
 
   // Current state for playback
@@ -288,19 +286,9 @@ export default function YouTubeVideoAnalyzePage() {
       });
 
       import('@/services/keyDetectionService').then(({ detectKey }) => {
-        console.log('🔍 KEY DETECTION SERVICE IMPORTED, calling detectKey...');
-        // ENHANCED: Use cache for sequence corrections (no bypass)
+        // Use cache for sequence corrections (no bypass)
         detectKey(chordData, true, false) // Request enharmonic correction, use cache
           .then(result => {
-            console.log('🔍 KEY DETECTION RESULT:', {
-              primaryKey: result.primaryKey,
-              corrections: result.corrections,
-              hasCorrections: result.corrections && Object.keys(result.corrections).length > 0,
-              sequenceCorrections: result.sequenceCorrections,
-              hasSequenceCorrections: result.sequenceCorrections && result.sequenceCorrections.correctedSequence,
-              fromCache: (result as any).fromCache || false,
-              sequenceCorrectionLength: result.sequenceCorrections?.originalSequence?.length || 0
-            });
 
             setKeySignature(result.primaryKey);
 
@@ -1060,15 +1048,15 @@ export default function YouTubeVideoAnalyzePage() {
       return 0;
     }
 
-    console.log('\n=== 🔍 BEAT SHIFT DEBUG ANALYSIS ===');
-    console.log(`📊 Input: ${chords.length} chords, ${timeSignature}/4 time signature`);
-    console.log(`🎵 First 20 chords: [${chords.slice(0, 20).join(', ')}]`);
+    // console.log('\n=== 🔍 BEAT SHIFT DEBUG ANALYSIS ===');
+    // console.log(`📊 Input: ${chords.length} chords, ${timeSignature}/4 time signature`);
+    // console.log(`🎵 First 20 chords: [${chords.slice(0, 20).join(', ')}]`);
 
     // DEBUG: Show the exact chord array being analyzed
-    console.log(`\n🔍 CHORD ARRAY VERIFICATION (first 10):`);
-    chords.slice(0, 10).forEach((chord, i) => {
-      console.log(`  raw[${i}] = "${chord}"`);
-    });
+    // console.log(`\n🔍 CHORD ARRAY VERIFICATION (first 10):`);
+    // chords.slice(0, 10).forEach((chord, i) => {
+    //   console.log(`  raw[${i}] = "${chord}"`);
+    // });
 
     let bestShift = 0;
     let maxChordChanges = 0;
@@ -1090,12 +1078,12 @@ export default function YouTubeVideoAnalyzePage() {
     // }
 
     // Test each possible shift value (0 to timeSignature-1)
-    console.log(`\n🔄 TESTING SHIFT OPTIONS:`);
+    // console.log(`\n🔄 TESTING SHIFT OPTIONS:`);
     for (let shift = 0; shift < timeSignature; shift++) {
-      console.log(`\n📊 === SHIFT ${shift} ANALYSIS ===`);
-      console.log(`   This means beat 1 starts at position ${shift} (0-indexed)`);
-      console.log(`   📊 COORDINATE SYSTEM: paddingCount=${paddingCount}, shift=${shift}, totalPadding=${paddingCount + shift}`);
-      console.log(`   📊 MAPPING: raw[i] → visual[${paddingCount + shift} + i] (e.g., raw[0] → visual[${paddingCount + shift}])`);
+      // console.log(`\n📊 === SHIFT ${shift} ANALYSIS ===`);
+      // console.log(`   This means beat 1 starts at position ${shift} (0-indexed)`);
+      // console.log(`   📊 COORDINATE SYSTEM: paddingCount=${paddingCount}, shift=${shift}, totalPadding=${paddingCount + shift}`);
+      // console.log(`   📊 MAPPING: raw[i] → visual[${paddingCount + shift} + i] (e.g., raw[0] → visual[${paddingCount + shift}])`);
 
       // Show how all chord positions change with this shift (first 16 for manageable output)
       // const shiftDisplayCount = Math.min(chords.length, 16);
@@ -1157,9 +1145,9 @@ export default function YouTubeVideoAnalyzePage() {
                                currentChord !== previousDownbeatChord; // Must be different
 
           // Debug: Log ALL downbeat encounters for debugging
-          if (i < 20) { // Only log first 20 for readability
-            console.log(`      🎯 DOWNBEAT: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange} visualPos=${visualPosition} beat=${beatInMeasure}`);
-          }
+          // if (i < 20) { // Only log first 20 for readability
+          //   console.log(`      🎯 DOWNBEAT: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange} visualPos=${visualPosition} beat=${beatInMeasure}`);
+          // }
 
           // OPTION 2: Only count chord changes that START on downbeats
           // This ensures both musical alignment (on downbeats) and visual accuracy (where chords start)
@@ -1174,20 +1162,20 @@ export default function YouTubeVideoAnalyzePage() {
               chordLabels.push(currentChord);
 
               // Debug: Log chord changes that start on downbeats
-              if (i < 20) { // Only log first 20 for readability
-                console.log(`      🎵 CHORD STARTS ON DOWNBEAT: pos[${i}] "${previousDownbeatChord}" -> "${currentChord}" (count: ${chordChangeCount}) visualPos=${visualPosition}`);
-              }
+              // if (i < 20) { // Only log first 20 for readability
+              //   console.log(`      🎵 CHORD STARTS ON DOWNBEAT: pos[${i}] "${previousDownbeatChord}" -> "${currentChord}" (count: ${chordChangeCount}) visualPos=${visualPosition}`);
+              // }
             } else {
               // This chord started earlier and continues on this downbeat - don't count it
-              if (i < 20) { // Only log first 20 for readability
-                console.log(`      ⏸️  CHORD CONTINUES ON DOWNBEAT: pos[${i}] chord="${currentChord}" (started earlier, not counted)`);
-              }
+              // if (i < 20) { // Only log first 20 for readability
+              //   console.log(`      ⏸️  CHORD CONTINUES ON DOWNBEAT: pos[${i}] chord="${currentChord}" (started earlier, not counted)`);
+              // }
             }
           } else {
             // Debug: Log when we DON'T count a chord change
-            if (i < 20) { // Only log first 20 for readability
-              console.log(`      ⏸️  NO CHANGE: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange}`);
-            }
+            // if (i < 20) { // Only log first 20 for readability
+            //   console.log(`      ⏸️  NO CHANGE: pos[${i}] chord="${currentChord}" prev="${previousDownbeatChord}" valid=${isValidChord} change=${isChordChange}`);
+            // }
           }
 
           // FIXED: Update previous downbeat chord for ALL valid chords on downbeats
@@ -1199,40 +1187,40 @@ export default function YouTubeVideoAnalyzePage() {
       }
 
       // Show beat alignment for this shift
-      console.log(`   Beat alignment: ${beatAnalysis.join(' ')}`);
+      // console.log(`   Beat alignment: ${beatAnalysis.join(' ')}`);
 
       // DEBUG: Show exact coordinate mapping for first 10 chords
-      console.log(`   🔍 COORDINATE MAPPING (first 10 chords):`);
-      chords.slice(0, 10).forEach((chord, i) => {
-        const totalPadding = paddingCount + shift;
-        const visualPosition = totalPadding + i;
-        const beatInMeasure = (visualPosition % timeSignature) + 1;
-        const isDownbeat = beatInMeasure === 1;
-        const marker = isDownbeat ? '🎯' : '  ';
-        console.log(`     ${marker} raw[${i}] = "${chord}" → visual[${visualPosition}] beat${beatInMeasure} ${isDownbeat ? '(DOWNBEAT)' : ''}`);
-      });
+      // console.log(`   🔍 COORDINATE MAPPING (first 10 chords):`);
+      // chords.slice(0, 10).forEach((chord, i) => {
+      //   const totalPadding = paddingCount + shift;
+      //   const visualPosition = totalPadding + i;
+      //   const beatInMeasure = (visualPosition % timeSignature) + 1;
+      //   const isDownbeat = beatInMeasure === 1;
+      //   const marker = isDownbeat ? '🎯' : '  ';
+      //   console.log(`     ${marker} raw[${i}] = "${chord}" → visual[${visualPosition}] beat${beatInMeasure} ${isDownbeat ? '(DOWNBEAT)' : ''}`);
+      // });
 
       // Show downbeat positions and chord changes - COMPLETE OUTPUT with visual positions
-      if (downbeatPositions.length > 0) {
-        console.log(`   🎵 COMPLETE Chord changes on downbeats (${downbeatPositions.length} total):`);
+      // if (downbeatPositions.length > 0) {
+      //   console.log(`   🎵 COMPLETE Chord changes on downbeats (${downbeatPositions.length} total):`);
 
-        // Show ALL chord changes with both raw and visual positions
-        const allDownbeatInfo = downbeatPositions.map((pos, idx) => {
-          // FIXED: Use the same calculation as the actual visual grid construction
-          // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
-          // So a chord at raw position 'pos' appears at visual position: shiftCount + paddingCount + pos
-          const visualPos = shift + paddingCount + pos; // CORRECTED: shift + padding + raw position
-          return `raw[${pos}]→visual[${visualPos}]="${chordLabels[idx]}"`;
-        });
+      //   // Show ALL chord changes with both raw and visual positions
+      //   const allDownbeatInfo = downbeatPositions.map((pos, idx) => {
+      //     // FIXED: Use the same calculation as the actual visual grid construction
+      //     // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
+      //     // So a chord at raw position 'pos' appears at visual position: shiftCount + paddingCount + pos
+      //     const visualPos = shift + paddingCount + pos; // CORRECTED: shift + padding + raw position
+      //     return `raw[${pos}]→visual[${visualPos}]="${chordLabels[idx]}"`;
+      //   });
 
-        // Print in chunks of 5 for readability
-        for (let i = 0; i < allDownbeatInfo.length; i += 5) {
-          const chunk = allDownbeatInfo.slice(i, i + 5).join(', ');
-          console.log(`     ${chunk}`);
-        }
-      } else {
-        console.log(`   ⏸️  No chord changes found on downbeats`);
-      }
+      //   // Print in chunks of 5 for readability
+      //   for (let i = 0; i < allDownbeatInfo.length; i += 5) {
+      //     const chunk = allDownbeatInfo.slice(i, i + 5).join(', ');
+      //     console.log(`     ${chunk}`);
+      //   }
+      // } else {
+      //   console.log(`   ⏸️  No chord changes found on downbeats`);
+      // }
 
       shiftResults.push({
         shift,
@@ -1241,7 +1229,7 @@ export default function YouTubeVideoAnalyzePage() {
         chordLabels
       });
 
-      console.log(`   ✅ RESULT: ${chordChangeCount} chord changes on downbeats`);
+      // console.log(`   ✅ RESULT: ${chordChangeCount} chord changes on downbeats`);
 
       if (chordChangeCount > maxChordChanges) {
         maxChordChanges = chordChangeCount;
@@ -1249,42 +1237,42 @@ export default function YouTubeVideoAnalyzePage() {
       }
     }
 
-    console.log(`\n✅ BEST SHIFT: ${bestShift} (${maxChordChanges} chord changes on downbeats)`);
+    // console.log(`\n✅ BEST SHIFT: ${bestShift} (${maxChordChanges} chord changes on downbeats)`);
 
     // Show summary of all shift results
-    console.log(`\n📊 SHIFT SUMMARY:`);
-    shiftResults.forEach(result => {
-      const marker = result.shift === bestShift ? '🎯' : '  ';
-      console.log(`  ${marker} Shift ${result.shift}: ${result.chordChanges} chord changes on downbeats`);
-    });
+    // console.log(`\n📊 SHIFT SUMMARY:`);
+    // shiftResults.forEach(result => {
+    //   const marker = result.shift === bestShift ? '🎯' : '  ';
+    //   console.log(`  ${marker} Shift ${result.shift}: ${result.chordChanges} chord changes on downbeats`);
+    // });
 
     // Show final coordinate mapping for the best shift
-    const bestResult = shiftResults.find(r => r.shift === bestShift);
-    if (bestResult && bestResult.downbeatPositions.length > 0) {
-      console.log(`\n🎯 FINAL COORDINATE MAPPING (Best Shift ${bestShift}):`);
-      const finalTotalPadding = paddingCount + bestShift;
-      console.log(`   📊 Formula: raw[i] → visual[${bestShift} + ${paddingCount} + i] = visual[${finalTotalPadding} + i]`);
-      console.log(`   📊 Examples:`);
-      bestResult.downbeatPositions.slice(0, 5).forEach((pos, idx) => {
-        // FIXED: Use the same calculation as the actual visual grid construction
-        // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
-        const visualPos = bestShift + paddingCount + pos; // CORRECTED: shift + padding + raw position
-        console.log(`     raw[${pos}] → visual[${visualPos}] = "${bestResult.chordLabels[idx]}" (downbeatPositions[${idx}])`);
-      });
-    }
+    // const bestResult = shiftResults.find(r => r.shift === bestShift);
+    // if (bestResult && bestResult.downbeatPositions.length > 0) {
+    //   console.log(`\n🎯 FINAL COORDINATE MAPPING (Best Shift ${bestShift}):`);
+    //   const finalTotalPadding = paddingCount + bestShift;
+    //   console.log(`   📊 Formula: raw[i] → visual[${bestShift} + ${paddingCount} + i] = visual[${finalTotalPadding} + i]`);
+    //   console.log(`   📊 Examples:`);
+    //   bestResult.downbeatPositions.slice(0, 5).forEach((pos, idx) => {
+    //     // FIXED: Use the same calculation as the actual visual grid construction
+    //     // The visual grid is: [shiftCount empty cells] + [paddingCount N.C. cells] + [regular chords]
+    //     const visualPos = bestShift + paddingCount + pos; // CORRECTED: shift + padding + raw position
+    //     console.log(`     raw[${pos}] → visual[${visualPos}] = "${bestResult.chordLabels[idx]}" (downbeatPositions[${idx}])`);
+    //   });
+    // }
 
     // Show the effect of the best shift on the first few measures
-    console.log(`\n📊 CHORD ALIGNMENT AFTER SHIFT ${bestShift} (first 12 beats):`);
-    chords.slice(0, 12).forEach((chord, index) => {
-      const originalBeat = (index % timeSignature) + 1;
-      // FIXED: Use same formula as frontend - positive shift moves grid forward
-      const shiftedBeat = ((index + bestShift) % timeSignature) + 1;
-      const isDownbeat = shiftedBeat === 1;
-      const marker = isDownbeat ? '🎯' : '  ';
-      const isChordChange = index === 0 || chords[index] !== chords[index - 1];
-      const changeMarker = isChordChange ? '🎵' : '  ';
-      console.log(`  ${marker}${changeMarker} Beat[${index.toString().padStart(2)}]: "${chord.padEnd(8)}" beat ${originalBeat} -> ${shiftedBeat} ${isDownbeat && isChordChange ? '← DOWNBEAT CHANGE!' : ''}`);
-    });
+    // console.log(`\n📊 CHORD ALIGNMENT AFTER SHIFT ${bestShift} (first 12 beats):`);
+    // chords.slice(0, 12).forEach((chord, index) => {
+    //   const originalBeat = (index % timeSignature) + 1;
+    //   // FIXED: Use same formula as frontend - positive shift moves grid forward
+    //   const shiftedBeat = ((index + bestShift) % timeSignature) + 1;
+    //   const isDownbeat = shiftedBeat === 1;
+    //   const marker = isDownbeat ? '🎯' : '  ';
+    //   const isChordChange = index === 0 || chords[index] !== chords[index - 1];
+    //   const changeMarker = isChordChange ? '🎵' : '  ';
+    //   console.log(`  ${marker}${changeMarker} Beat[${index.toString().padStart(2)}]: "${chord.padEnd(8)}" beat ${originalBeat} -> ${shiftedBeat} ${isDownbeat && isChordChange ? '← DOWNBEAT CHANGE!' : ''}`);
+    // });
 
     return bestShift;
   }, []);
@@ -1545,6 +1533,8 @@ export default function YouTubeVideoAnalyzePage() {
         const time = audioRef.current.currentTime;
         setCurrentTime(time);
 
+
+
         // Find the current beat based on chord grid data (includes pickup beats)
         // This ensures consistency between beat tracking and chord display
         if (chordGridData && chordGridData.chords.length > 0) {
@@ -1607,16 +1597,56 @@ export default function YouTubeVideoAnalyzePage() {
                 }
 
               } else {
-                // Too early - before the first non-shift cell timestamp
-                // console.log(`🎬 PRE-PADDING: time=${time.toFixed(3)}s < firstNonShiftTimestamp=${firstNonShiftTimestamp?.toFixed(3) || 'null'}s, no animation yet`);
-                currentBeat = -1; // Don't highlight any cell before the first non-shift timestamp
+                // ENHANCED: Provide visual feedback even before the first detected beat
+                // Calculate a virtual beat position based on estimated tempo
+                const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+                const estimatedBeatDuration = 60 / estimatedBPM; // seconds per beat
+
+                // Calculate which virtual beat we should be on based on current time
+                const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+
+                // Map to the first available padding cell if we have padding
+                if (paddingCount > 0 && virtualBeatIndex < paddingCount) {
+                  const virtualBeat = shiftCount + virtualBeatIndex;
+
+                  // Only highlight if this is a valid padding cell
+                  if (virtualBeat >= shiftCount && virtualBeat < (shiftCount + paddingCount)) {
+                    currentBeat = virtualBeat;
+                  } else {
+                    currentBeat = -1;
+                  }
+                } else {
+                  // If no padding or beyond padding range, don't highlight
+                  currentBeat = -1;
+                }
               }
             } else {
-              // FIXED: No padding available - skip pre-model animation entirely
-              // Don't animate anything during pre-model phase if there are no padding cells
-              // This prevents highlighting of greyed-out shift cells
-              // console.log(`🎬 NO PADDING PHASE: time=${time.toFixed(3)}s < animationRangeStart=${animationRangeStart.toFixed(3)}s, skipping animation (no padding cells to animate)`);
-              currentBeat = -1; // Don't highlight any cell during pre-model phase without padding
+              // ENHANCED: Even without padding, provide visual feedback using estimated tempo
+              // This ensures users see progress indication from the very start of playback
+              const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+              const estimatedBeatDuration = 60 / estimatedBPM; // seconds per beat
+
+              // Calculate which virtual beat we should be on
+              const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+
+              // ENHANCED: Use any available cells for early animation
+              if (chordGridData && chordGridData.chords.length > 0) {
+                // Try shift cells first
+                if (shiftCount > 0 && virtualBeatIndex < shiftCount) {
+                  currentBeat = virtualBeatIndex;
+                } else {
+                  // Fallback: Use any available cell, even if it has a timestamp
+                  const maxIndex = chordGridData.chords.length - 1;
+                  const clampedIndex = Math.min(virtualBeatIndex, maxIndex);
+                  if (clampedIndex >= 0) {
+                    currentBeat = clampedIndex;
+                  } else {
+                    currentBeat = -1;
+                  }
+                }
+              } else {
+                currentBeat = -1;
+              }
             }
           } else {
             // PHASE 2: Model beats (first detected beat onwards)
@@ -1808,22 +1838,53 @@ export default function YouTubeVideoAnalyzePage() {
           }
 
           if (currentBeat !== -1) {
-            // FINAL SAFEGUARD: Never highlight shift cells (cells with null timestamps)
+            // ENHANCED SAFEGUARD: Allow virtual beat animation during pre-beat phase
             const shiftCount = chordGridData.shiftCount || 0;
+            const isPreBeatPhase = time < animationRangeStart;
 
             // Check if this beat has a null timestamp (shift cell)
             if (currentBeat < shiftCount || chordGridData.beats[currentBeat] === null || chordGridData.beats[currentBeat] === undefined) {
-              console.warn(`🚨 FINAL SAFEGUARD: Animation tried to highlight shift cell ${currentBeat} (null timestamp), skipping highlight`);
-              currentBeat = -1; // Don't highlight cells with null timestamps
+              // FIXED: Allow highlighting shift cells during pre-beat virtual animation
+              if (isPreBeatPhase) {
+                // Allow the highlighting during virtual animation phase
+              } else {
+                currentBeat = -1; // Don't highlight cells with null timestamps during model phase
+              }
             }
-
-            // console.log(`🎬 FINAL RESULT: originalBeat=${originalBeat}, finalBeat=${currentBeat}, shiftCount=${shiftCount}, timestamp=${chordGridData.beats[originalBeat]}`);
 
             setCurrentBeatIndex(currentBeat);
           } else {
-            // No animation during pre-model phase without padding - clear any existing highlight
-            setCurrentBeatIndex(-1);
-            // console.log(`🎬 NO ANIMATION: currentBeat=-1, clearing beat highlight`);
+            // ENHANCED: Provide basic visual feedback even when no specific beat is found
+            // This ensures continuous visual progress indication throughout the timeline
+            const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+            const estimatedBeatDuration = 60 / estimatedBPM;
+            const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+            const isPreBeatPhase = time < animationRangeStart;
+
+            // Try to find any available cell to highlight based on virtual timing
+            if (chordGridData && chordGridData.chords.length > 0) {
+              const maxIndex = chordGridData.chords.length - 1;
+              const clampedIndex = Math.min(virtualBeatIndex, maxIndex);
+
+              // ENHANCED: During pre-beat phase, allow highlighting any cell (including shift cells)
+              if (clampedIndex >= 0) {
+                if (isPreBeatPhase) {
+                  // During pre-beat phase, highlight any cell regardless of timestamp
+                  setCurrentBeatIndex(clampedIndex);
+                } else {
+                  // During model phase, only highlight cells with valid timestamps
+                  if (chordGridData.beats[clampedIndex] !== null && chordGridData.beats[clampedIndex] !== undefined) {
+                    setCurrentBeatIndex(clampedIndex);
+                  } else {
+                    setCurrentBeatIndex(-1);
+                  }
+                }
+              } else {
+                setCurrentBeatIndex(-1);
+              }
+            } else {
+              setCurrentBeatIndex(-1);
+            }
           }
         }
 
@@ -1883,18 +1944,7 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Function to toggle enharmonic correction display
   const toggleEnharmonicCorrection = () => {
-    const newState = !showCorrectedChords;
-    console.log('🔄 TOGGLING ENHARMONIC CORRECTION:', {
-      currentState: showCorrectedChords,
-      newState,
-      chordCorrections,
-      hasLegacyCorrections: chordCorrections && Object.keys(chordCorrections).length > 0,
-      sequenceCorrections,
-      hasSequenceCorrections: sequenceCorrections && sequenceCorrections.correctedSequence.length > 0,
-      buttonWillShow: newState ? 'Show Original' : 'Fix Enharmonics',
-      expectedBehavior: newState ? 'Show corrected chords with purple highlighting' : 'Show original chords without highlighting'
-    });
-    setShowCorrectedChords(newState);
+    setShowCorrectedChords(!showCorrectedChords);
   };
 
   // Function to handle auto-scrolling to the current beat
@@ -1946,8 +1996,8 @@ export default function YouTubeVideoAnalyzePage() {
         onRefresh={() => extractAudioFromYouTube(true)}
       />
 
-      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300" style={{ maxWidth: "98%" }}>
-        <div className="bg-white dark:bg-gray-700 shadow-md rounded-lg overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "98%" }}>
+        <div className="bg-white dark:bg-content-bg shadow-md rounded-lg overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
 
         {/* Main content area - responsive width based on chatbot and lyrics panel state */}
         <div className={`flex flex-col transition-all duration-300 ${
@@ -2057,7 +2107,7 @@ export default function YouTubeVideoAnalyzePage() {
             <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 mb-2 mt-0 transition-colors duration-300">
+              <div className="p-3 rounded-lg bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 mb-2 mt-0 transition-colors duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-2">
                   <div className="mb-2 md:mb-0">
                     <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>

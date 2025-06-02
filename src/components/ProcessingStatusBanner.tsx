@@ -146,7 +146,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       default:
         return {
           title: 'Processing',
-          color: theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-gray-50 border-gray-200',
+          color: theme === 'dark' ? 'bg-content-bg border-gray-600' : 'bg-gray-50 border-gray-200',
           textColor: theme === 'dark' ? 'text-gray-300' : 'text-gray-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">

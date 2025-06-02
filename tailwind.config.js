@@ -62,6 +62,9 @@ module.exports = {
           900: "#212121",
           950: "#121212",
         },
+        // Custom dark background colors
+        'dark-bg': '#111720',
+        'content-bg': '#1E252E',
       },
       fontFamily: {
         sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],

@@ -86,33 +86,38 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
         </button>
       </div>
 
-      {/* Summary cards - always visible */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-        <div className="bg-blue-50 dark:bg-blue-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Chords</p>
-          <p className="text-xl font-semibold text-blue-800 dark:text-blue-900 transition-colors duration-300">
-            {analysisResults.chords && analysisResults.chords.length ? analysisResults.chords.length : 0}
-          </p>
+      {/* Summary tags - compact display */}
+      <div className="flex flex-wrap gap-2 mt-3">
+        <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 transition-colors duration-300">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            Chords: {analysisResults.chords && analysisResults.chords.length ? analysisResults.chords.length : 0}
+          </span>
         </div>
-        <div className="bg-green-50 dark:bg-green-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Total Beats</p>
-          <p className="text-xl font-semibold text-green-800 dark:text-green-900 transition-colors duration-300">
-            {analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length : 0}
-          </p>
+
+        <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 transition-colors duration-300">
+          <span className="text-sm font-medium text-green-800 dark:text-green-200">
+            Beats: {analysisResults.beats && analysisResults.beats.length ? analysisResults.beats.length : 0}
+          </span>
         </div>
-        <div className="bg-purple-50 dark:bg-purple-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">BPM (Estimated)</p>
-          <p className="text-xl font-semibold text-purple-800 dark:text-purple-900 transition-colors duration-300">
-            {analysisResults.beatDetectionResult?.bpm ||
+
+        <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700 transition-colors duration-300">
+          <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+            BPM: {analysisResults.beatDetectionResult?.bpm ||
               (analysisResults.beats && analysisResults.beats.length > 1 && analysisResults.beats[0] && analysisResults.beats[1]
                 ? Math.round(60 / (analysisResults.beats[1].time - analysisResults.beats[0].time))
                 : 'N/A')}
-          </p>
+          </span>
         </div>
-        <div className="bg-amber-50 dark:bg-amber-200 p-3 rounded-lg border-2 border-blue-700 dark:border-blue-500 transition-colors duration-300">
-          <p className="text-sm text-gray-600 dark:text-gray-700 font-medium transition-colors duration-300">Most Common Chord</p>
-          <p className="text-xl font-semibold text-amber-800 dark:text-amber-900 transition-colors duration-300">
-            {(() => {
+
+        <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 transition-colors duration-300">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            Time: {analysisResults.beatDetectionResult?.time_signature ? `${analysisResults.beatDetectionResult.time_signature}/4` : '4/4'}
+          </span>
+        </div>
+
+        <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 transition-colors duration-300">
+          <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Common: {(() => {
               try {
                 return getMostCommonChord();
               } catch (error) {
@@ -120,13 +125,13 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
                 return 'N/A';
               }
             })()}
-          </p>
+          </span>
         </div>
       </div>
 
       {/* Detailed information - only visible when expanded */}
       {isExpanded && (
-        <div className="mt-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm transition-colors duration-300">
+        <div className="mt-4 bg-gray-50 dark:bg-content-bg p-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm transition-colors duration-300">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-2 text-gray-700 dark:text-gray-300 transition-colors duration-300">
             <p className="flex items-baseline">
               <span className="font-medium mr-1 whitespace-nowrap text-gray-700 dark:text-gray-300 transition-colors duration-300">Beat model:</span>

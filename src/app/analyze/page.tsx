@@ -229,7 +229,7 @@ export default function LocalAudioAnalyzePage() {
   const chordGridData = getChordGridData();
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -239,7 +239,7 @@ export default function LocalAudioAnalyzePage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left side - Chord Grid (80% width) */}
           <div className="lg:w-4/5">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-card h-full transition-colors duration-300 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-content-bg p-6 rounded-lg shadow-card h-full transition-colors duration-300 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-2xl font-heading font-bold text-gray-800 dark:text-white transition-colors duration-300">Chord Grid</h2>
 
@@ -358,7 +358,7 @@ export default function LocalAudioAnalyzePage() {
           {/* Right side - Audio player section (20% width) */}
           <div className="lg:w-1/5">
             {/* Audio Player */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card mb-6 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+            <div className="bg-white dark:bg-content-bg p-4 rounded-lg shadow-card mb-6 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
               <audio ref={audioRef} className="w-full mb-4" controls={false} />
 
               <div className="flex flex-col space-y-2">
@@ -427,7 +427,7 @@ export default function LocalAudioAnalyzePage() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-content-bg p-4 rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-medium text-gray-700 dark:text-white mb-2 transition-colors duration-300">Instructions</h3>
               <ol className="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal pl-4 transition-colors duration-300">
                 <li>Upload an audio file (MP3, WAV, etc.)</li>

@@ -52,7 +52,7 @@
 
   /* Dark mode styles */
   .dark body {
-    @apply bg-gray-900 text-gray-100;
+    @apply bg-dark-bg text-gray-100;
   }
 
   .dark .chord {
@@ -70,15 +70,15 @@
 
   /* Analysis page in dark mode */
   .dark .analysis-container {
-    @apply bg-gray-900;
+    @apply bg-dark-bg;
   }
 
   .dark .model-selector {
-    @apply bg-gray-800 text-gray-200 border-gray-700;
+    @apply bg-content-bg text-gray-200 border-gray-700;
   }
 
   .dark .chord-grid-cell {
-    @apply bg-gray-800 border-gray-600 text-gray-200;
+    @apply bg-content-bg border-gray-600 text-gray-200;
   }
 
   .dark .chord-grid-cell-current {

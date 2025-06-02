@@ -141,7 +141,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-300"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-content-bg border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-300"
         >
           <div className="flex items-center">
             {/* Model icon based on type */}
@@ -188,7 +188,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer-light', 
         {/* Dropdown menu */}
         {isOpen && (
           <div
-            className={`absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dropdown-menu transition-colors duration-300 ${
+            className={`absolute z-50 w-full bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dropdown-menu transition-colors duration-300 ${
               dropdownPosition === 'top'
                 ? 'bottom-full mb-1'
                 : 'top-full mt-1'

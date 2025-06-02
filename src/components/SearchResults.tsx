@@ -27,7 +27,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-4 transition-colors duration-300">
+      <div className="p-6 bg-white dark:bg-content-bg rounded-xl shadow-card mt-4 transition-colors duration-300">
         <div className="flex flex-col items-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -47,7 +47,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
   if (error) {
     return (
-      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-4 transition-colors duration-300">
+      <div className="p-6 bg-white dark:bg-content-bg rounded-xl shadow-card mt-4 transition-colors duration-300">
         <p className="text-red-500">Error: {error}</p>
       </div>
     );
@@ -76,7 +76,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   };
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-card mt-6 transition-colors duration-300">
+    <div className="p-6 bg-white dark:bg-content-bg rounded-xl shadow-card mt-6 transition-colors duration-300">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 transition-colors duration-300">Search Results</h3>
         {fromCache && (

@@ -61,11 +61,6 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: any): Promis
     };
 
     await setDoc(docRef, cacheData);
-    console.log('🔍 SAVED KEY DETECTION TO CACHE:', {
-      hasSequenceCorrections: !!keyResult.sequenceCorrections,
-      sequenceCorrectionLength: keyResult.sequenceCorrections?.originalSequence?.length || 0,
-      cacheKey: cacheKey.substring(0, 10) + '...'
-    });
   } catch (error) {
     console.error('Error saving key detection to cache:', error);
   }
@@ -100,13 +95,7 @@ export async function POST(request: NextRequest) {
       // Extract chord names for fallback if enharmonic correction data is missing
       const chordNames = chords.map((chord: any) => chord.chord || chord);
 
-      console.log('🔍 RETURNING CACHED KEY DETECTION RESULT:', {
-        hasSequenceCorrections: !!cachedResult.sequenceCorrections,
-        hasCorrections: !!cachedResult.corrections,
-        includeEnharmonicCorrection,
-        sequenceCorrectionLength: cachedResult.sequenceCorrections?.originalSequence?.length || 0,
-        cacheKey: cacheKey.substring(0, 10) + '...'
-      });
+
 
       return NextResponse.json({
         primaryKey: cachedResult.primaryKey,

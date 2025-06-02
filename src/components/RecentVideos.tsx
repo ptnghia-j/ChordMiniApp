@@ -169,7 +169,7 @@ export default function RecentVideos() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
         {/* Scrollable container with fixed height for loading skeleton */}
         <div className="h-96 overflow-y-auto scrollbar-thin">
@@ -195,7 +195,7 @@ export default function RecentVideos() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-700 rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+    <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
           Recently Transcribed Songs

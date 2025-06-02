@@ -197,19 +197,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
     setProcessedLyrics(enhanceLyricsWithCharacterTiming(newLyrics));
   }, [lyrics, chords]);
 
-  // Debug log the lyrics prop
-  useEffect(() => {
-    console.log('LeadSheetDisplay received lyrics:', lyrics);
-    if (lyrics && lyrics.lines) {
-      console.log(`LeadSheetDisplay has ${lyrics.lines.length} lines`);
-    } else {
-      console.warn('LeadSheetDisplay received empty or invalid lyrics');
-    }
 
-    if (chords && chords.length > 0) {
-      console.log(`LeadSheetDisplay received ${chords.length} chords`);
-    }
-  }, [lyrics, chords]);
 
   // Function to translate lyrics to a specific language with cache-first approach
   const translateLyrics = async (targetLanguage: string) => {
@@ -243,8 +231,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         },
         // Background update callback
         (updatedTranslation) => {
-          console.log('Received background translation update for', targetLanguage);
-
           // Update the translations state with the fresh translation
           setTranslatedLyrics(prev => ({
             ...prev,
@@ -271,10 +257,8 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         prev.includes(targetLanguage) ? prev : [...prev, targetLanguage]
       );
 
-      // Log whether this was from cache and track background updates
+      // Track background updates
       if (translationResponse.fromCache) {
-        console.log(`Translation for ${targetLanguage} loaded from cache, fresh translation in progress`);
-
         // Track that a background update is in progress for this language
         if (translationResponse.backgroundUpdateInProgress) {
           setBackgroundUpdatesInProgress(prev => {
@@ -283,8 +267,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
             return newSet;
           });
         }
-      } else {
-        console.log(`Fresh translation for ${targetLanguage} completed`);
       }
 
     } catch (error) {
@@ -296,35 +278,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
       setIsTranslating(false);
     }
   };
-
-  // Debug log processed lyrics
-  useEffect(() => {
-    if (processedLyrics && processedLyrics.lines) {
-      console.log(`LeadSheetDisplay has ${processedLyrics.lines.length} processed lines with chords`);
-
-      // Log a sample of lines with chords
-      const sampleLine = processedLyrics.lines.find(line => line.chords && line.chords.length > 0);
-      if (sampleLine) {
-        console.log('Sample line with chords:', sampleLine);
-      }
-
-      // Log character timing information
-      const sampleLineWithCharTimings = processedLyrics.lines.find(line =>
-        line.characterTimings && line.characterTimings.length > 0
-      );
-
-      if (sampleLineWithCharTimings && sampleLineWithCharTimings.characterTimings) {
-        console.log('Character-level timing enabled. Sample line:', {
-          text: sampleLineWithCharTimings.text,
-          startTime: sampleLineWithCharTimings.startTime,
-          endTime: sampleLineWithCharTimings.endTime,
-          characterCount: sampleLineWithCharTimings.characterTimings.length,
-          firstChar: sampleLineWithCharTimings.characterTimings[0],
-          lastChar: sampleLineWithCharTimings.characterTimings[sampleLineWithCharTimings.characterTimings.length - 1]
-        });
-      }
-    }
-  }, [processedLyrics]);
 
   // Track the last scroll time to prevent too frequent scrolling
   const lastScrollTimeRef = useRef<number>(0);
@@ -441,9 +394,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         const timeSinceLastScroll = currentTime - lastScrollTimeRef.current;
         const minTimeBetweenScrolls = 800; // Minimum 0.8 seconds between scrolls
 
-        // Log for debugging
-        console.log(`Line ${newActiveLine}: progress=${lineProgressRef.current.toFixed(2)}, isPositioned=${isCorrectlyPositioned}, isVisible=${isLineVisible}, targetPos=${Math.round(targetPosition)}, linePos=${Math.round(lineTop + lineHeight / 2)}`);
-
         if ((isNewLine || (shouldScroll && isNearEndOfLine)) &&
             timeSinceLastScroll > minTimeBetweenScrolls) {
 
@@ -458,8 +408,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
               // Update last scroll time
               lastScrollTimeRef.current = currentTime;
-
-              console.log(`Scrolled to line ${newActiveLine} at position ${idealScrollTop}`);
             }
           });
         }
@@ -1088,11 +1036,11 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
 
             {/* Language selection dropdown */}
             {isLanguageMenuOpen && !isTranslating && (
-              <div className="absolute z-10 mt-1 w-48 bg-white rounded-md shadow-lg py-1 text-sm">
+              <div className="absolute z-10 mt-1 w-48 bg-white dark:bg-content-bg rounded-md shadow-lg py-1 text-sm">
                 {availableLanguages.map((lang) => (
                   <div
                     key={lang.code}
-                    className="px-4 py-2 hover:bg-gray-100 flex items-center cursor-pointer"
+                    className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center cursor-pointer"
                     onClick={() => {
                       // Toggle language selection
                       if (selectedLanguages.includes(lang.code)) {

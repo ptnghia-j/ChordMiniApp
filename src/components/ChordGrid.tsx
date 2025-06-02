@@ -83,33 +83,12 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
   // Function to apply chord corrections at display time
   const getDisplayChord = (originalChord: string, visualIndex?: number): { chord: string; wasCorrected: boolean } => {
-    // ENHANCED: Early return with detailed logging
+    // Early return when corrections are disabled or chord is empty
     if (!showCorrectedChords || !originalChord) {
-      // Debug: Log early returns for first few chords
-      if (visualIndex !== undefined && visualIndex < 5) {
-        console.log(`🔍 EARLY RETURN [${visualIndex}]:`, {
-          originalChord,
-          showCorrectedChords,
-          reason: !showCorrectedChords ? 'showCorrectedChords is false' : 'originalChord is empty',
-          returning: 'original chord without correction'
-        });
-      }
       return { chord: originalChord, wasCorrected: false };
     }
 
-    // Debug: Log sequence corrections availability
-    if (visualIndex === 0) { // Only log once per render
-      console.log('🔍 SEQUENCE CORRECTIONS DEBUG:', {
-        hasSequenceCorrections: !!sequenceCorrections,
-        showCorrectedChords,
-        sequenceCorrectionLength: sequenceCorrections?.originalSequence?.length || 0,
-        hasPadding,
-        shiftCount,
-        paddingCount,
-        firstFewOriginal: sequenceCorrections?.originalSequence?.slice(0, 5),
-        firstFewCorrected: sequenceCorrections?.correctedSequence?.slice(0, 5)
-      });
-    }
+
 
     // NEW: Try sequence-based corrections first (more accurate)
     if (sequenceCorrections && visualIndex !== undefined) {
@@ -138,13 +117,6 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
           correctedChord = sequenceCorrected;
           foundCorrection = true;
-          console.log('🎵 SEQUENCE-BASED CORRECTION (Direct Index):', {
-            visualIndex,
-            chordSequenceIndex,
-            originalChord,
-            correctedChord: sequenceCorrected,
-            method: 'sequence-based-direct'
-          });
         }
       }
 
@@ -157,13 +129,6 @@ const ChordGrid: React.FC<ChordGridProps> = ({
           if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
             correctedChord = sequenceCorrected;
             foundCorrection = true;
-            console.log('🎵 SEQUENCE-BASED CORRECTION (Search):', {
-              visualIndex,
-              searchIndex: i,
-              originalChord,
-              correctedChord: sequenceCorrected,
-              method: 'sequence-based-search'
-            });
             break; // Use the first match
           }
         }
@@ -205,13 +170,6 @@ const ChordGrid: React.FC<ChordGridProps> = ({
           // For "C#m" -> "Dbm", "C#7" -> "Db7"
           correctedChord = originalChord.replace(rootNote, correctedRoot);
         }
-
-        console.log('🎵 LEGACY CORRECTION:', {
-          originalChord,
-          extractedRoot: rootNote,
-          correctedChord,
-          method: 'legacy'
-        });
 
         return { chord: correctedChord, wasCorrected: true };
       }
@@ -341,48 +299,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   let shiftedChords: string[];
   let optimalShift: number;
 
-  console.log(`\n🎼 CHORD GRID STRATEGY SELECTION:`);
-  console.log(`  hasPadding: ${hasPadding}, shiftCount: ${shiftCount}, paddingCount: ${paddingCount}`);
-  console.log(`  chords.length: ${chords.length}, timeSignature: ${timeSignature}`);
-
   if (hasPadding) {
     // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
     // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
     shiftedChords = chords; // Use as-is, no additional shifting needed
     optimalShift = 0; // No additional shift needed
-    console.log(`🔄 COMPREHENSIVE STRATEGY: Using backend-provided chord order (${chords.length} cells, shiftCount=${shiftCount}, paddingCount=${paddingCount})`);
-
-    // DEBUG: Show what ChordGrid received from backend
-    console.log(`\n🎯 CHORDGRID RECEIVED FROM BACKEND:`);
-    console.log(`  hasPadding: ${hasPadding}`);
-    console.log(`  paddingCount: ${paddingCount}`);
-    console.log(`  shiftCount: ${shiftCount}`);
-    console.log(`  chords.length: ${chords.length}`);
-
-    // DEBUG: Show visual grid positions vs beat positions for first few chords
-    console.log(`\n🔍 VISUAL GRID ANALYSIS (first 20 positions):`);
-    for (let i = 0; i < Math.min(20, chords.length); i++) {
-      const chord = chords[i];
-      const beatInMeasure = (i % timeSignature) + 1;
-      const isDownbeat = beatInMeasure === 1;
-      const cellType = i < shiftCount ? 'SHIFT' : (i < shiftCount + paddingCount ? 'PADDING' : 'MUSIC');
-      const marker = isDownbeat ? '🔴' : '  ';
-      console.log(`  ${marker} Visual[${i.toString().padStart(2)}]: "${chord.padEnd(8)}" beat${beatInMeasure} (${cellType})`);
-    }
-
-    // DEBUG: Find where Eb specifically appears
-    console.log(`\n🎯 FINDING Eb CHORD POSITIONS:`);
-    for (let i = 0; i < chords.length; i++) {
-      const chord = chords[i];
-      if (chord === 'Eb' || chord === 'Eb:maj' || chord.startsWith('Eb')) {
-        const beatInMeasure = (i % timeSignature) + 1;
-        const isDownbeat = beatInMeasure === 1;
-        const cellType = i < shiftCount ? 'SHIFT' : (i < shiftCount + paddingCount ? 'PADDING' : 'MUSIC');
-        const marker = isDownbeat ? '🔴DOWNBEAT' : `beat${beatInMeasure}`;
-        console.log(`  Eb found at Visual[${i}]: "${chord}" -> ${marker} (${cellType})`);
-        if (i > 30) break; // Only show first few occurrences
-      }
-    }
   } else {
     // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
     optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
@@ -390,7 +311,6 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       ...Array(optimalShift).fill(''), // Add k empty greyed-out cells at the beginning
       ...chords // Original chords follow after the shift
     ] : chords;
-    console.log(`🔄 FALLBACK STRATEGY: Applied ChordGrid shift of ${optimalShift} beats`);
   }
 
   // Enhanced debug logging with shift verification
@@ -655,23 +575,19 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
       if (mappingEntry) {
         finalTimestamp = mappingEntry.timestamp;
-        console.log(`Beat click: Visual[${globalIndex}] -> ${mappingEntry.chord} at ${finalTimestamp.toFixed(3)}s`);
       } else {
         // Fallback to beats array if no mapping found for this visual index
         finalTimestamp = beats[globalIndex];
-        console.log(`Beat click: Visual[${globalIndex}] -> no mapping found, fallback to ${finalTimestamp.toFixed(3)}s`);
       }
     } else {
       // Fallback to beats array if no audio mapping available
       finalTimestamp = beats[globalIndex];
-      console.log(`Beat click: Visual[${globalIndex}] -> no audio mapping, fallback to ${finalTimestamp.toFixed(3)}s`);
     }
 
     // Validate timestamp and execute click
     if (typeof finalTimestamp === 'number' && finalTimestamp >= 0) {
       onBeatClick(globalIndex, finalTimestamp); // Use original timestamp for accurate audio sync
     } else {
-      console.warn(`❌ BEAT CLICK FAILED: Visual[${globalIndex}] -> invalid timestamp:`, finalTimestamp);
       return;
     }
   };
@@ -761,7 +677,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     // }
 
     // Default styling - improved dark mode contrast
-    let classes = `${baseClasses} bg-white dark:bg-gray-700`;
+    let classes = `${baseClasses} bg-white dark:bg-content-bg`;
     let textColor = "text-gray-800 dark:text-gray-100";
 
     // Add hover effects for clickable cells
@@ -813,7 +729,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   if (chords.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
+        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-content-bg rounded-lg border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
           No chord data available for this song yet.
         </p>
       </div>
@@ -1161,17 +1077,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                             {!isEmpty && showChordLabel && chord ? (() => {
                               const { chord: displayChord, wasCorrected } = getDisplayChord(chord, globalIndex);
 
-                              // Debug: Log chord display for first few chords
-                              if (globalIndex < 10) {
-                                console.log(`🎵 CHORD DISPLAY [${globalIndex}]:`, {
-                                  originalChord: chord,
-                                  displayChord,
-                                  wasCorrected,
-                                  showCorrectedChords,
-                                  hasSequenceCorrections: !!sequenceCorrections,
-                                  hasLegacyCorrections: !!chordCorrections
-                                });
-                              }
+
 
                               return (
                                 <div

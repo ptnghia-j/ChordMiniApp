@@ -251,9 +251,143 @@ setSequenceCorrections(null);
 - **Console Logs**: Detailed toggle and correction logs
 - **Visual Indicators**: Purple highlighting only when corrections active
 
+## 🎬 **4. Animation Gap Fix**
+
+### **Problem Solved:**
+- No visual highlighting or animation during the time period from 0.0s to the first detected beat
+- Users experienced a "dead zone" with no feedback during early audio playback
+- Chord grid appeared static until the first beat detection kicked in
+
+### **Implementation:**
+
+#### **Enhanced Pre-Beat Animation** (`page.tsx`)
+```typescript
+// BEFORE: No animation before first detected beat
+} else {
+  currentBeat = -1; // Don't highlight any cell before the first non-shift timestamp
+}
+
+// AFTER: Virtual beat calculation for continuous feedback
+} else {
+  // ENHANCED: Provide visual feedback even before the first detected beat
+  const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+  const estimatedBeatDuration = 60 / estimatedBPM; // seconds per beat
+
+  // Calculate which virtual beat we should be on based on current time
+  const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+
+  // Map to the first available padding cell if we have padding
+  if (paddingCount > 0 && virtualBeatIndex < paddingCount) {
+    const virtualBeat = shiftCount + virtualBeatIndex;
+
+    // Only highlight if this is a valid padding cell
+    if (virtualBeat >= shiftCount && virtualBeat < (shiftCount + paddingCount)) {
+      currentBeat = virtualBeat;
+    } else {
+      currentBeat = -1;
+    }
+  } else {
+    currentBeat = -1;
+  }
+}
+```
+
+#### **Fallback Animation for Non-Padding Cases** (`page.tsx`)
+```typescript
+// Enhanced fallback when no padding cells are available
+} else {
+  // ENHANCED: Even without padding, provide visual feedback using estimated tempo
+  const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+  const estimatedBeatDuration = 60 / estimatedBPM;
+
+  // Calculate which virtual beat we should be on
+  const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+
+  // If we have shift cells, use them for early animation
+  if (shiftCount > 0 && virtualBeatIndex < shiftCount) {
+    currentBeat = virtualBeatIndex;
+  } else {
+    currentBeat = -1;
+  }
+}
+```
+
+#### **Universal Fallback Animation** (`page.tsx`)
+```typescript
+// Final fallback for any remaining gaps
+} else {
+  // ENHANCED: Provide basic visual feedback even when no specific beat is found
+  const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
+  const estimatedBeatDuration = 60 / estimatedBPM;
+  const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
+
+  // Try to find any available cell to highlight based on virtual timing
+  if (chordGridData && chordGridData.chords.length > 0) {
+    const maxIndex = chordGridData.chords.length - 1;
+    const clampedIndex = Math.min(virtualBeatIndex, maxIndex);
+
+    // Only highlight if it's not a shift cell (has valid timestamp)
+    if (clampedIndex >= 0 && chordGridData.beats[clampedIndex] !== null) {
+      setCurrentBeatIndex(clampedIndex);
+    } else {
+      setCurrentBeatIndex(-1);
+    }
+  }
+}
+```
+
+### **Benefits:**
+- ✅ **Continuous Visual Feedback**: Animation starts immediately from 0.0s
+- ✅ **Tempo-Aware**: Uses detected BPM for accurate virtual beat timing
+- ✅ **Multi-Strategy**: Works with padding cells, shift cells, or regular cells
+- ✅ **Smooth Transitions**: Seamless handoff from virtual to detected beats
+- ✅ **No Dead Zones**: Users always see progress indication during playback
+
+## 🧹 **5. Debug Code Cleanup**
+
+### **Removed Debug Elements:**
+- ✅ All console.log statements from toggle functions
+- ✅ Early return logging in getDisplayChord function
+- ✅ Sequence correction debugging logs
+- ✅ UI debug panel showing correction state
+- ✅ Comprehensive strategy debug logs
+- ✅ Beat click handler debug logs
+- ✅ Cache operation debug logs
+- ✅ Key detection debug logs
+
+### **Production-Ready Codebase:**
+- ✅ Clean console output with only essential error messages
+- ✅ Removed temporary debugging code
+- ✅ Maintained essential error handling
+- ✅ Optimized for production performance
+
+## 🧪 **Final Testing Instructions**
+
+### **1. Animation Continuity Test**
+1. **Load Song**: Navigate to `/analyze/9bFHsd3o1w0`
+2. **Click "Start Analyse Song"**: Wait for analysis to complete
+3. **Start Playback**: Click play button
+4. **Verify Early Animation**: Should see highlighting from 0.0s onwards
+5. **Check Transitions**: Animation should smoothly transition from virtual to detected beats
+6. **No Dead Zones**: Continuous visual feedback throughout entire timeline
+
+### **2. Toggle Functionality Test**
+1. **Verify Auto-Enable**: Purple highlighting should appear automatically
+2. **Test Toggle**: "Show Original" ↔ "Fix Enharmonics" should work correctly
+3. **Visual Feedback**: Purple highlighting should appear/disappear correctly
+4. **State Persistence**: Toggle state should persist during playback
+
+### **3. Performance Test**
+1. **Clean Console**: No debug logs should appear in production
+2. **Smooth Animation**: 20Hz update rate should provide smooth highlighting
+3. **Memory Usage**: No memory leaks from removed debug code
+4. **Cache Performance**: Sequence corrections should load from cache on repeat visits
+
 ## 🔮 **Future Enhancements**
 
 - **Cache Expiration**: Add TTL for cache entries (currently permanent)
 - **Cache Analytics**: Track cache hit rates and performance metrics
 - **Batch Processing**: Support multiple songs in single API call
 - **Progressive Enhancement**: Load basic corrections first, enhance with sequence data
+- **Advanced Animation**: Add smooth transitions between beat highlights
+- **Tempo Adaptation**: Dynamic BPM adjustment based on real-time analysis

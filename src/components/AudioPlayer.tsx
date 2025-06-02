@@ -113,7 +113,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
   return (
-    <div className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-lg mb-3 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+    <div className="w-full p-3 bg-gray-50 dark:bg-content-bg rounded-lg mb-3 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
       {/* Hidden audio element */}
       <audio
         ref={audioRef}
