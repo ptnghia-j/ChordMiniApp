@@ -66,26 +66,14 @@ class MusicAiService {
           throw new Error('MUSIC_AI_API_KEY is not defined in environment variables. Please add it to your .env.local file.');
         }
 
-        // Log initialization (but not the actual key)
-        console.log('Initializing Music.ai SDK with API key');
-        console.log('API Key length:', apiKey.length);
-        console.log('API Key prefix:', apiKey.substring(0, 4) + '...');
-
         // Initialize the SDK with the API key
-        console.log("Initializing Music.ai SDK with configuration:");
         const sdkConfig = {
           apiKey: apiKey,
           // Add any other configuration options here
           timeout: 120000, // 120 seconds timeout (2 minutes)
           retries: 3,      // Retry failed requests 3 times
-          debug: true      // Enable debug mode for more detailed logs
+          debug: false     // Disable debug mode for production
         };
-
-        // Log the configuration (without the actual API key)
-        console.log(JSON.stringify({
-          ...sdkConfig,
-          apiKey: "***REDACTED***"
-        }, null, 2));
 
         // Initialize both the SDK and our custom client
         this.musicAi = new MusicAi(sdkConfig);
@@ -142,11 +130,9 @@ class MusicAiService {
 
           // Upload the file to Music.ai API using our custom client
           if (this.customClient) {
-            console.log(`Uploading file to Music.ai API...`);
             try {
               // Use the new uploadLocalFile method
               inputUrl = await this.customClient.uploadLocalFile(filePath, 'audio/mpeg');
-              console.log(`File uploaded successfully. Download URL: ${inputUrl}`);
             } catch (uploadError) {
               console.error('Error uploading file to Music.ai API:', uploadError);
 
@@ -154,10 +140,8 @@ class MusicAiService {
               try {
                 const fs = await import('fs/promises');
                 const fileData = await fs.readFile(filePath);
-                console.log(`Read file directly: ${filePath} (${fileData.length} bytes)`);
 
                 inputUrl = await this.customClient.uploadFile(fileData, 'audio/mpeg');
-                console.log(`File uploaded successfully after retry. Download URL: ${inputUrl}`);
               } catch (retryError) {
                 console.error('Error in retry upload:', retryError);
                 throw retryError; // Re-throw to be caught by the outer catch
@@ -401,11 +385,9 @@ class MusicAiService {
 
           // Upload the file to Music.ai API using our custom client
           if (this.customClient) {
-            console.log(`Uploading file to Music.ai API...`);
             try {
               // Use the new uploadLocalFile method
               inputUrl = await this.customClient.uploadLocalFile(filePath, 'audio/mpeg');
-              console.log(`File uploaded successfully. Download URL: ${inputUrl}`);
             } catch (uploadError) {
               console.error('Error uploading file to Music.ai API:', uploadError);
 

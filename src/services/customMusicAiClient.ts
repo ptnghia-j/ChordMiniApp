@@ -66,11 +66,7 @@ export class CustomMusicAiClient {
       this.apiPath = config.apiPath;
     }
 
-    console.log(`[CustomMusicAiClient] Initialized with API key: ${this.apiKey ? (this.apiKey.length > 6 ? `${this.apiKey.substring(0, 3)}...${this.apiKey.substring(this.apiKey.length - 3)}` : this.apiKey) : 'none'}`);
-    console.log(`[CustomMusicAiClient] Using axios library`);
-    console.log(`[CustomMusicAiClient] Base URL: ${this.baseUrl}`);
-    console.log(`[CustomMusicAiClient] API Path: ${this.apiPath}`);
-    console.log(`[CustomMusicAiClient] Full API endpoint: ${this.baseUrl}/${this.apiPath}/job`);
+
 
     // Set up error handling for axios
     this.setupAxiosErrorHandling();
@@ -616,7 +612,6 @@ export class CustomMusicAiClient {
       const { uploadUrl, downloadUrl } = await this.getSignedUrls();
 
       // Step 2: Upload the file to the uploadUrl
-      console.log(`[CustomMusicAiClient] Uploading file to: ${uploadUrl}`);
 
       // Convert ArrayBuffer to Buffer if needed
       let data: Buffer | Blob;
@@ -634,18 +629,12 @@ export class CustomMusicAiClient {
       });
 
       if (uploadResponse && uploadResponse.status >= 200 && uploadResponse.status < 300) {
-        console.log(`[CustomMusicAiClient] File uploaded successfully`);
-        console.log(`[CustomMusicAiClient] Download URL: ${downloadUrl}`);
 
         // Verify the file is accessible
         try {
-          console.log(`[CustomMusicAiClient] Verifying file is accessible at: ${downloadUrl}`);
           const verifyResponse = await axios.head(downloadUrl, { timeout: this.timeout });
-          console.log(`[CustomMusicAiClient] File verification status: ${verifyResponse.status}`);
 
-          if (verifyResponse.status === 200) {
-            console.log(`[CustomMusicAiClient] File is accessible at the download URL`);
-          } else {
+          if (verifyResponse.status !== 200) {
             console.warn(`[CustomMusicAiClient] File may not be accessible at the download URL. Status: ${verifyResponse.status}`);
           }
         } catch (verifyError) {
@@ -675,15 +664,12 @@ export class CustomMusicAiClient {
    * @returns The download URL of the uploaded file
    */
   async uploadLocalFile(filePath: string, contentType: string = 'audio/mpeg') {
-    console.log(`[CustomMusicAiClient] Uploading local file to Music.ai API: ${filePath}`);
-
     try {
       // Import fs module
       const fs = await import('fs/promises');
 
       // Read the file
       const fileData = await fs.readFile(filePath);
-      console.log(`[CustomMusicAiClient] Read file: ${filePath} (${fileData.length} bytes)`);
 
       // Upload the file
       return await this.uploadFile(fileData, contentType);

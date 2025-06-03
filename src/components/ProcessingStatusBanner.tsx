@@ -167,17 +167,45 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
   }
 
   return (
-    <div className="fixed top-16 left-0 right-0 z-40 transition-transform duration-300 ease-in-out">
+    <div className="w-full z-40 transition-all duration-300 ease-in-out mb-4">
       <div className="max-w-screen-lg mx-auto px-4">
-        <div className={`flex items-center justify-between py-3 px-4 rounded-b-lg shadow-md ${color} border-x border-b`}>
+        {/* Single banner that adapts based on stage */}
+        <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-md ${color} border`}>
           <div className="flex items-center space-x-3">
-            {icon}
+            {/* Show 3-dot animation for processing stages, icon for others */}
+            {(stage === 'beat-detection' || stage === 'chord-recognition') ? (
+              <div className="flex space-x-1">
+                <div
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  style={{
+                    animation: 'bounce 1.4s infinite ease-in-out both',
+                    animationDelay: '0ms'
+                  }}
+                ></div>
+                <div
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  style={{
+                    animation: 'bounce 1.4s infinite ease-in-out both',
+                    animationDelay: '0.16s'
+                  }}
+                ></div>
+                <div
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  style={{
+                    animation: 'bounce 1.4s infinite ease-in-out both',
+                    animationDelay: '0.32s'
+                  }}
+                ></div>
+              </div>
+            ) : (
+              icon
+            )}
 
             <div>
               <p className={`font-medium text-base ${textColor}`}>
                 {title}
               </p>
-              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-600'}`}>
                 {stage === 'complete'
                   ? `Beat and chord analysis completed in ${getFormattedElapsedTime()}`
                   : statusMessage || `Processing ${title.toLowerCase()}...`}

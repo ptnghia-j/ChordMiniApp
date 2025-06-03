@@ -238,26 +238,21 @@ try:
                 import madmom
                 print(f"madmom is available, version: {madmom.__version__}")
                 USE_BEAT_TRANSFORMER = True
-                USE_BEAT_TRANSFORMER_LIGHT = True
                 print(f"Beat Transformer checkpoint found and dependencies available")
             except ImportError as e:
                 print(f"madmom import failed: {e}")
                 USE_BEAT_TRANSFORMER = True  # Still try to use Beat-Transformer even without madmom
-                USE_BEAT_TRANSFORMER_LIGHT = True
                 print(f"Will try to use Beat Transformer without madmom")
         except ImportError as e:
             print(f"PyTorch import failed: {e}")
             USE_BEAT_TRANSFORMER = False
-            USE_BEAT_TRANSFORMER_LIGHT = False
             print(f"Beat Transformer requires PyTorch")
     else:
         USE_BEAT_TRANSFORMER = False
-        USE_BEAT_TRANSFORMER_LIGHT = False
         print(f"Beat Transformer checkpoint not found at: {checkpoint_path}")
 except Exception as e:
     print(f"Warning: Could not check Beat Transformer checkpoint: {e}")
     USE_BEAT_TRANSFORMER = False
-    USE_BEAT_TRANSFORMER_LIGHT = False
 
 # Check if Chord-CNN-LSTM model is available
 try:
@@ -407,8 +402,7 @@ def detect_beats():
 
         print(f"Detector requested: {detector}, USE_BEAT_TRANSFORMER: {USE_BEAT_TRANSFORMER}, madmom_available: {madmom_available}")
 
-        # Initialize new variable for lightweight model
-        use_beat_transformer_light = False
+
 
         # Select detector based on request and availability
         if detector == 'beat-transformer':
@@ -417,10 +411,7 @@ def detect_beats():
                 print("Will use Beat-Transformer as requested")
             else:
                 print("Beat-Transformer requested but not available, falling back to next best option")
-                if USE_BEAT_TRANSFORMER_LIGHT:
-                    use_beat_transformer_light = True
-                    print("Falling back to Beat-Transformer Light")
-                elif madmom_available:
+                if madmom_available:
                     use_madmom = True
                     print("Falling back to madmom")
                 else:
@@ -428,23 +419,7 @@ def detect_beats():
                         "success": False,
                         "error": "No beat detection models available"
                     }), 500
-        elif detector == 'beat-transformer-light':
-            if USE_BEAT_TRANSFORMER_LIGHT:
-                use_beat_transformer_light = True
-                print("Will use Beat-Transformer Light as requested")
-            else:
-                print("Beat-Transformer Light requested but not available, falling back to next best option")
-                if USE_BEAT_TRANSFORMER:
-                    use_beat_transformer = True
-                    print("Falling back to full Beat-Transformer")
-                elif madmom_available:
-                    use_madmom = True
-                    print("Falling back to madmom")
-                else:
-                    return jsonify({
-                        "success": False,
-                        "error": "No beat detection models available"
-                    }), 500
+
         elif detector == 'madmom':
             if madmom_available:
                 use_madmom = True
@@ -458,12 +433,8 @@ def detect_beats():
             # Auto selection based on availability and file size
             file_size_mb = file_size / (1024 * 1024)
 
-            # Prefer beat-transformer-light for all file sizes if available
-            if USE_BEAT_TRANSFORMER_LIGHT:
-                use_beat_transformer_light = True
-                print(f"Auto-selected Beat-Transformer Light (file size: {file_size_mb:.1f}MB)")
-            # For smaller files, use full beat-transformer if available
-            elif file_size_mb <= 50 and USE_BEAT_TRANSFORMER:
+            # For smaller files, use beat-transformer if available
+            if file_size_mb <= 50 and USE_BEAT_TRANSFORMER:
                 use_beat_transformer = True
                 print(f"Auto-selected Beat-Transformer (file size: {file_size_mb:.1f}MB)")
             # Fall back to madmom if available
@@ -481,9 +452,6 @@ def detect_beats():
             if USE_BEAT_TRANSFORMER:
                 use_beat_transformer = True
                 print(f"Unknown detector '{detector}', falling back to Beat-Transformer")
-            elif USE_BEAT_TRANSFORMER_LIGHT:
-                use_beat_transformer_light = True
-                print(f"Unknown detector '{detector}', falling back to Beat-Transformer Light")
             elif madmom_available:
                 use_madmom = True
                 print(f"Unknown detector '{detector}', falling back to madmom")
@@ -509,35 +477,13 @@ def detect_beats():
                     print("Force parameter detected - using Beat-Transformer despite large file size")
                     use_beat_transformer = True
                 else:
-                    # If lightweight model is available, switch to it for large files
-                    if USE_BEAT_TRANSFORMER_LIGHT:
-                        print(f"Switching to Beat-Transformer Light for large file ({file_size / (1024 * 1024):.1f}MB)")
-                        use_beat_transformer = False
-                        use_beat_transformer_light = True
-                    else:
-                        use_beat_transformer = False
+                    use_beat_transformer = False
             else:
                 use_beat_transformer = True
 
-        # Check size limits for Beat-Transformer Light
-        if use_beat_transformer_light:
-            # Higher size limit for lightweight model
-            size_limit_mb = 150  # 150MB
-            if file_size > size_limit_mb * 1024 * 1024:
-                print(f"File size is {file_size / (1024 * 1024):.1f}MB - exceeds {size_limit_mb}MB limit for Beat-Transformer Light")
-                print("File is too large for Beat-Transformer Light without force parameter")
 
-                # Allow forcing Beat-Transformer Light for large files if explicitly requested
-                force_param = request.args.get('force', request.form.get('force', '')).lower()
-                if force_param == 'true':
-                    print("Force parameter detected - using Beat-Transformer Light despite large file size")
-                    use_beat_transformer_light = True
-                else:
-                    use_beat_transformer_light = False
-            else:
-                use_beat_transformer_light = True
 
-        if use_beat_transformer or use_beat_transformer_light:
+        if use_beat_transformer:
             try:
                 # Create a temporary file for the spectrogram
                 temp_spec_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
@@ -571,21 +517,7 @@ def detect_beats():
                     print(f"Calling demix_audio_to_spectrogram with {file_path} -> {temp_spec_path}")
                     demix_audio_to_spectrogram(file_path, temp_spec_path)
 
-                elif use_beat_transformer_light:
-                    # Use the lightweight version
-                    print(f"Using Beat-Transformer (Light) for beat detection on: {file_path}")
 
-                    # Run the lightweight spectrogram generation
-                    try:
-                        # Try to import from the correct path
-                        from demix_spectrogram_light import demix_audio_to_spectrogram_light
-                        print("Successfully imported demix_audio_to_spectrogram_light")
-                    except ImportError as e:
-                        print(f"Error importing demix_audio_to_spectrogram_light: {e}")
-                        raise
-
-                    print(f"Calling demix_audio_to_spectrogram_light with {file_path} -> {temp_spec_path}")
-                    demix_audio_to_spectrogram_light(file_path, temp_spec_path)
 
                 # Run the beat tracking function
                 try:
@@ -659,13 +591,8 @@ def detect_beats():
                             temp_chunk_spec_path = temp_chunk_spec_file.name
                             temp_chunk_spec_file.close()
 
-                            # Run demixing on chunk based on selected model
-                            if use_beat_transformer_light:
-                                # Use the lightweight version for chunks
-                                demix_audio_to_spectrogram_light(temp_chunk_path, temp_chunk_spec_path)
-                            else:
-                                # Use the full version for chunks
-                                demix_audio_to_spectrogram(temp_chunk_path, temp_chunk_spec_path)
+                            # Run demixing on chunk
+                            demix_audio_to_spectrogram(temp_chunk_path, temp_chunk_spec_path)
 
                             # Process chunk
                             # Calculate max_time for this chunk (relative to chunk start)
@@ -962,12 +889,8 @@ def detect_beats():
                     if models_dir not in sys.path:
                         sys.path.insert(0, models_dir)
 
-                    if use_beat_transformer_light:
-                        from beat_transformer_detector_light import BeatTransformerDetectorLight
-                        detector = BeatTransformerDetectorLight(checkpoint_path)
-                    else:
-                        from beat_transformer_detector import BeatTransformerDetector
-                        detector = BeatTransformerDetector(checkpoint_path)
+                    from beat_transformer_detector import BeatTransformerDetector
+                    detector = BeatTransformerDetector(checkpoint_path)
 
                     # Call the detector to get the full result including time signature
                     detector_result = detector.detect_beats(file_path)
@@ -1011,7 +934,7 @@ def detect_beats():
                     "total_beats": len(beat_times),
                     "total_downbeats": len(downbeat_times),
                     "duration": float(duration),
-                    "model": "beat-transformer-light" if use_beat_transformer_light else "beat-transformer",
+                    "model": "beat-transformer",
                     "time_signature": int(time_signature),  # Include the detected time signature
                     "beat_time_range_start": beat_time_range_start,  # Start of beat time range
                     "beat_time_range_end": beat_time_range_end       # End of beat time range
@@ -1522,6 +1445,211 @@ def recognize_chords():
             "error": str(e)
         }), 500
 
+def _recognize_chords_btc(model_variant):
+    """
+    Shared BTC chord recognition logic
+
+    Parameters:
+    - file: The audio file to analyze (multipart/form-data)
+    - audio_path: Alternative to file, path to an existing audio file on the server
+    - model_variant: 'sl' for Supervised Learning or 'pl' for Pseudo-Label
+
+    Returns:
+    - JSON with chord recognition results
+    """
+    import os
+    import tempfile
+    import traceback
+
+    if 'file' not in request.files and 'audio_path' not in request.form:
+        return jsonify({"error": "No file or path provided"}), 400
+
+    # Determine file path
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+
+        # Save uploaded file temporarily
+        temp_audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+        file_path = temp_audio_file.name
+        temp_audio_file.close()
+        file.save(file_path)
+    else:
+        # Use provided audio path
+        file_path = request.form['audio_path']
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"Audio file not found: {file_path}"}), 404
+
+    try:
+        # Check if BTC model is available
+        if model_variant == 'sl' and not USE_BTC_SL:
+            return jsonify({
+                "error": "BTC SL model is not available. Please check the server logs for details."
+            }), 500
+        elif model_variant == 'pl' and not USE_BTC_PL:
+            return jsonify({
+                "error": "BTC PL model is not available. Please check the server logs for details."
+            }), 500
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"File not found: {file_path}"}), 404
+
+        # Create a temporary file for the lab output
+        temp_lab_file = tempfile.NamedTemporaryFile(delete=False, suffix='.lab')
+        lab_path = temp_lab_file.name
+        temp_lab_file.close()
+
+        # Run BTC chord recognition
+        try:
+            # Import the BTC module directly from the python_backend directory
+            from btc_chord_recognition import btc_chord_recognition
+            print(f"Running BTC {model_variant.upper()} chord recognition on {file_path}")
+            success = btc_chord_recognition(file_path, lab_path, model_variant)
+            if not success:
+                return jsonify({
+                    "error": f"BTC {model_variant.upper()} chord recognition failed. See server logs for details."
+                }), 500
+        except Exception as e:
+            print(f"Error in BTC chord_recognition: {e}")
+            traceback.print_exc()
+            return jsonify({
+                "error": f"BTC {model_variant.upper()} chord recognition failed: {str(e)}"
+            }), 500
+
+        # Parse the lab file to extract chord data
+        chord_data = []
+        try:
+            with open(lab_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            start_time = float(parts[0])
+                            end_time = float(parts[1])
+                            chord_name = ' '.join(parts[2:])  # Handle chord names with spaces
+
+                            chord_data.append({
+                                'start': start_time,
+                                'end': end_time,
+                                'chord': chord_name,
+                                'confidence': 0.9  # Default confidence for BTC models
+                            })
+
+            # Print the parsed chord data for debugging
+            print(f"Parsed {len(chord_data)} chords from BTC {model_variant.upper()} lab file")
+            if chord_data:
+                print(f"First chord: {chord_data[0]}")
+                print(f"Last chord: {chord_data[-1]}")
+        except Exception as e:
+            print(f"Error parsing lab file: {e}")
+            traceback.print_exc()
+            return jsonify({
+                "error": f"Failed to parse BTC chord data: {str(e)}"
+            }), 500
+
+        # Clean up temporary files
+        try:
+            if 'file' in request.files:
+                os.unlink(file_path)
+            os.unlink(lab_path)
+        except Exception as e:
+            print(f"Warning: Failed to clean up temporary files: {e}")
+
+        # Prepare response
+        response_data = {
+            "success": True,
+            "chords": chord_data,
+            "total_chords": len(chord_data),
+            "model": f"btc-{model_variant}",
+            "chord_dict": "large_voca"
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error in BTC {model_variant.upper()} chord recognition: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/recognize-chords-btc-sl', methods=['POST'])
+def recognize_chords_btc_sl():
+    """
+    Recognize chords in an audio file using the BTC Supervised Learning model
+
+    Parameters:
+    - file: The audio file to analyze (multipart/form-data)
+    - audio_path: Alternative to file, path to an existing audio file on the server
+
+    Returns:
+    - JSON with chord recognition results
+    """
+    return _recognize_chords_btc('sl')
+
+@app.route('/api/recognize-chords-btc-pl', methods=['POST'])
+def recognize_chords_btc_pl():
+    """
+    Recognize chords in an audio file using the BTC Pseudo-Label model
+
+    Parameters:
+    - file: The audio file to analyze (multipart/form-data)
+    - audio_path: Alternative to file, path to an existing audio file on the server
+
+    Returns:
+    - JSON with chord recognition results
+    """
+    return _recognize_chords_btc('pl')
+
+# Check if BTC models are available
+def check_btc_availability():
+    """Check if BTC models and dependencies are available"""
+    try:
+        btc_dir = Path(__file__).parent / "models" / "ChordMini"
+
+        # Check for model files
+        sl_model = btc_dir / "checkpoints" / "SL" / "btc_model_large_voca.pt"
+        pl_model = btc_dir / "checkpoints" / "btc" / "btc_combined_best.pth"
+        config_file = btc_dir / "config" / "btc_config.yaml"
+
+        sl_available = sl_model.exists()
+        pl_available = pl_model.exists()
+        config_available = config_file.exists()
+
+        # Check for required Python modules
+        try:
+            import torch
+            import numpy as np
+            torch_available = True
+        except ImportError:
+            torch_available = False
+
+        return {
+            'sl_available': sl_available and config_available and torch_available,
+            'pl_available': pl_available and config_available and torch_available,
+            'sl_model_path': str(sl_model),
+            'pl_model_path': str(pl_model),
+            'config_path': str(config_file)
+        }
+    except Exception as e:
+        print(f"Error checking BTC availability: {e}")
+        return {
+            'sl_available': False,
+            'pl_available': False,
+            'sl_model_path': '',
+            'pl_model_path': '',
+            'config_path': ''
+        }
+
+# Global BTC availability check
+BTC_AVAILABILITY = check_btc_availability()
+USE_BTC_SL = BTC_AVAILABILITY['sl_available']
+USE_BTC_PL = BTC_AVAILABILITY['pl_available']
+
 @app.route('/api/model-info', methods=['GET'])
 def model_info():
     """Return information about the available beat detection models"""
@@ -1536,15 +1664,12 @@ def model_info():
     available_models = []
     if USE_BEAT_TRANSFORMER:
         available_models.append("beat-transformer")
-    if USE_BEAT_TRANSFORMER_LIGHT:
-        available_models.append("beat-transformer-light")
+
     if madmom_available:
         available_models.append("madmom")
 
-    # Set beat-transformer-light as the default model if available
-    if USE_BEAT_TRANSFORMER_LIGHT:
-        default_model = "beat-transformer-light"
-    elif USE_BEAT_TRANSFORMER:
+    # Set beat-transformer as the default model if available
+    if USE_BEAT_TRANSFORMER:
         default_model = "beat-transformer"
     elif madmom_available:
         default_model = "madmom"
@@ -1587,13 +1712,17 @@ def model_info():
     chord_models = []
     if USE_CHORD_CNN_LSTM:
         chord_models.append("chord-cnn-lstm")
+    if USE_BTC_SL:
+        chord_models.append("btc-sl")
+    if USE_BTC_PL:
+        chord_models.append("btc-pl")
 
     return jsonify({
         "success": True,
         "default_beat_model": default_model,
         "available_beat_models": available_models,
         "beat_transformer_available": USE_BEAT_TRANSFORMER,
-        "beat_transformer_light_available": USE_BEAT_TRANSFORMER_LIGHT,
+
         "madmom_available": madmom_available,
         "chord_cnn_lstm_available": USE_CHORD_CNN_LSTM,
         "default_chord_model": "chord-cnn-lstm" if USE_CHORD_CNN_LSTM else "none",
@@ -1603,23 +1732,16 @@ def model_info():
             "upload_limit_mb": 50,
             "local_file_limit_mb": 100,
             "beat_transformer_limit_mb": 100,
-            "beat_transformer_light_limit_mb": 150,  # Light version can handle larger files
+
             "force_parameter_available": True
         },
         "beat_model_info": {
             "beat-transformer": {
-                "name": "Beat-Transformer (Full)",
+                "name": "Beat-Transformer",
                 "description": "High-precision ML model with 5-channel audio separation",
                 "channels": 5,
                 "performance": "High accuracy, slower processing",
                 "uses_spleeter": True
-            },
-            "beat-transformer-light": {
-                "name": "Beat-Transformer (Light)",
-                "description": "Optimized version with single-channel processing",
-                "channels": 1,
-                "performance": "Good accuracy, faster processing",
-                "uses_spleeter": False
             },
             "madmom": {
                 "name": "Madmom",
@@ -1633,7 +1755,22 @@ def model_info():
                 "name": "Chord-CNN-LSTM",
                 "description": "Deep learning model for chord recognition using CNN and LSTM layers",
                 "performance": "High accuracy, medium processing speed",
-                "available_chord_dicts": ["full", "ismir2017", "submission", "extended"]
+                "available_chord_dicts": ["full", "ismir2017", "submission", "extended"],
+                "available": USE_CHORD_CNN_LSTM
+            },
+            "btc-sl": {
+                "name": "BTC SL (Supervised Learning)",
+                "description": "Transformer-based model trained with supervised learning, 170 chord vocabulary",
+                "performance": "High accuracy with large chord vocabulary",
+                "available_chord_dicts": ["large_voca"],
+                "available": USE_BTC_SL
+            },
+            "btc-pl": {
+                "name": "BTC PL (Pseudo-Label)",
+                "description": "Transformer-based model trained with pseudo-labeling, 170 chord vocabulary",
+                "performance": "Enhanced accuracy through pseudo-labeling technique",
+                "available_chord_dicts": ["large_voca"],
+                "available": USE_BTC_PL
             }
         }
     })

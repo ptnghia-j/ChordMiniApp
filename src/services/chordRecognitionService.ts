@@ -46,17 +46,20 @@ export interface AnalysisResult {
   };
 }
 
+// Type definition for chord detector models
+export type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
+
 /**
  * Process audio file and perform chord and beat analysis
  * @param audioInput Either an AudioBuffer or a URL string to the audio file
- * @param beatDetector Optional detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
- * @param chordDetector Optional chord detector to use ('chord-cnn-lstm')
+ * @param beatDetector Optional detector to use ('auto', 'madmom', or 'beat-transformer')
+ * @param chordDetector Optional chord detector to use ('chord-cnn-lstm', 'btc-sl', 'btc-pl')
  * @returns Promise with analysis results (chords and beats)
  */
 export async function analyzeAudio(
   audioInput: AudioBuffer | string,
-  beatDetector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
-  chordDetector: 'chord-cnn-lstm' = 'chord-cnn-lstm'
+  beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'auto',
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
   try {
     console.log('Starting audio analysis...');
@@ -187,20 +190,10 @@ export async function analyzeAudio(
       }
     }
 
-    // Enhanced debug logging for beat detection results
-    console.log('=== CHORD RECOGNITION SERVICE - BEAT DETECTION DEBUG ===');
-    console.log('Raw beatResults object:', beatResults);
-    console.log('beatResults.time_signature:', beatResults.time_signature);
-    console.log('beatResults.bpm:', beatResults.bpm);
-    console.log('beatResults.model:', beatResults.model);
-    console.log(`Validated ${beatResults.beats.length} beat timestamps`);
+
 
     // Verify beats_with_positions data integrity
     if (beatResults.beats_with_positions && Array.isArray(beatResults.beats_with_positions)) {
-      console.log(`Received ${beatResults.beats_with_positions.length} beats with positions from beat detection service`);
-      const beatPattern = beatResults.beats_with_positions.slice(0, 15).map((bp: any) => bp.beatNum);
-      console.log(`Beat pattern from beat detection service: [${beatPattern.join(', ')}]`);
-
       // Check for data integrity issues
       const invalidBeats = beatResults.beats_with_positions.filter((bp: any) => !bp.beatNum || !bp.time);
       if (invalidBeats.length > 0) {
@@ -208,19 +201,6 @@ export async function analyzeAudio(
       }
     } else {
       console.warn('⚠️  No beats_with_positions received from beat detection service');
-    }
-
-    console.log('=== END CHORD RECOGNITION SERVICE - BEAT DETECTION DEBUG ===');
-
-    console.log(`Detected ${beatResults.beats.length} beats, BPM: ${beatResults.bpm}`);
-    console.log(`Detected time signature: ${beatResults.time_signature || 4}/4`);
-
-    if (beatResults.downbeats && beatResults.downbeats.length > 0) {
-      console.log(`Detected ${beatResults.downbeats.length} downbeats using ${beatResults.model || 'unknown'} model`);
-    }
-
-    if (beatResults.beats_with_positions && beatResults.beats_with_positions.length > 0) {
-      console.log(`Detected beat positions within measures`);
     }
 
     // Convert pure model beat timestamps to BeatInfo format with bounds checking
@@ -247,7 +227,7 @@ export async function analyzeAudio(
         throw new Error('No valid beats could be processed from detection results');
       }
 
-      console.log(`Successfully processed ${beats.length} beats from ${beatResults.beats.length} detected beats`);
+
 
     } catch (beatProcessingError) {
       console.error('Error processing beats:', beatProcessingError);
@@ -255,7 +235,6 @@ export async function analyzeAudio(
     }
 
     // Recognize chords using the Chord-CNN-LSTM model with enhanced error handling
-    console.log(`Recognizing chords using ${chordDetector} model...`);
     let chordResults;
 
     try {
@@ -299,7 +278,7 @@ export async function analyzeAudio(
         );
       }
 
-      console.log(`Detected ${chordResults.length} valid chords`);
+
 
     } catch (chordError) {
       console.error('Error in chord recognition:', chordError);
@@ -353,7 +332,7 @@ export async function analyzeAudio(
         );
       }
 
-      console.log(`Successfully synchronized ${synchronizedChords.length} chords to beats`);
+
 
     } catch (syncError) {
       console.error('Error in chord synchronization:', syncError);
@@ -365,20 +344,10 @@ export async function analyzeAudio(
         beatIndex: index
       }));
 
-      console.warn(`Used fallback synchronization with ${synchronizedChords.length} N/C chords`);
+
     }
 
-    // Debug: Log the beat detection result before creating the final analysis result
-    console.log('=== CHORD RECOGNITION SERVICE DEBUG ===');
-    console.log('beatResults.time_signature:', beatResults.time_signature);
-    console.log('beatResults.time_signature type:', typeof beatResults.time_signature);
-    console.log('beatResults.bpm:', beatResults.bpm);
-    console.log('beatResults.model:', beatResults.model);
-    console.log('Final analysis summary:');
-    console.log(`  - ${chordResults.length} chords detected`);
-    console.log(`  - ${beats.length} beats processed`);
-    console.log(`  - ${synchronizedChords.length} synchronized chord-beat pairs`);
-    console.log('=== END CHORD RECOGNITION SERVICE DEBUG ===');
+
 
     return {
       chords: chordResults,
@@ -415,17 +384,16 @@ export async function analyzeAudio(
 }
 
 /**
- * Detect chords in audio file using the Chord-CNN-LSTM model
+ * Detect chords in audio file using the specified chord recognition model
  * @param audioFile The audio file to analyze
- * @param model The chord detection model to use ('chord-cnn-lstm')
+ * @param model The chord detection model to use ('chord-cnn-lstm', 'btc-sl', 'btc-pl')
  * @returns Promise with chord detection results
  */
 async function recognizeChords(
   audioFile: File,
-  model: 'chord-cnn-lstm' = 'chord-cnn-lstm'
+  model: ChordDetectorType = 'chord-cnn-lstm'
 ): Promise<ChordDetectionResult[]> {
   try {
-    console.log(`Recognizing chords with ${model} model...`);
 
     // Validate input file
     if (!audioFile || audioFile.size === 0) {
@@ -440,13 +408,24 @@ async function recognizeChords(
     const formData = new FormData();
     formData.append('file', audioFile);
 
+    // Determine API endpoint based on model
+    const apiEndpoint = {
+      'chord-cnn-lstm': '/api/recognize-chords',
+      'btc-sl': '/api/recognize-chords-btc-sl',
+      'btc-pl': '/api/recognize-chords-btc-pl'
+    }[model];
+
+    if (!apiEndpoint) {
+      throw new Error(`Unsupported chord recognition model: ${model}`);
+    }
+
     // Call the Python backend API with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
 
     let response;
     try {
-      response = await fetch('/api/recognize-chords', {
+      response = await fetch(apiEndpoint, {
         method: 'POST',
         body: formData,
         signal: controller.signal
@@ -487,8 +466,7 @@ async function recognizeChords(
       throw new Error('Invalid chord recognition response: missing or invalid chords array');
     }
 
-    console.log(`Received ${data.chords.length} chords from the API`);
-    console.log('First 5 chords from API:', data.chords.slice(0, 5));
+
 
     // Convert the API response to ChordDetectionResult format with validation
     const chords: ChordDetectionResult[] = [];
@@ -538,9 +516,6 @@ async function recognizeChords(
     // Sort chords by start time
     chords.sort((a, b) => a.start - b.start);
 
-    console.log(`Processed and sorted ${chords.length} valid chords from ${data.chords.length} raw results`);
-    console.log('First 5 processed chords:', chords.slice(0, 5));
-
     return chords;
   } catch (error) {
     console.error('Error in chord recognition:', error);
@@ -566,25 +541,9 @@ function alignChordsToBeatsDirectly(
   chords: ChordDetectionResult[],
   beats: BeatInfo[]
 ): {chord: string, beatIndex: number}[] {
-  console.log(`\n🔗 === CHORD-TO-BEAT ALIGNMENT DETAILED LOG ===`);
-  console.log(`Aligning ${chords.length} chords to ${beats.length} beats using pure temporal accuracy`);
-
   if (chords.length === 0 || beats.length === 0) {
-    console.log('No chords or beats to align');
     return [];
   }
-
-  console.log(`\n📋 ALIGNMENT INPUT VERIFICATION:`);
-  console.log(`🎼 Chord Model Inputs:`);
-  chords.forEach((chord, index) => {
-    const chordName = chord.chord === "N" ? "N/C" : chord.chord;
-    console.log(`  Input Chord ${(index + 1).toString().padStart(2)}: [${chord.start.toFixed(3)}s, ${chord.end.toFixed(3)}s] "${chordName}"`);
-  });
-
-  console.log(`\n🥁 Beat Model Inputs (showing all ${beats.length} beats):`);
-  beats.forEach((beat, index) => {
-    console.log(`  Input Beat ${(index + 1).toString().padStart(3)}: ${beat.time.toFixed(3)}s (beat ${beat.beatNum})`);
-  });
 
   // Create a map of chord assignments to beats
   const beatToChordMap = new Map<number, string>();
@@ -593,30 +552,21 @@ function alignChordsToBeatsDirectly(
   for (const chord of chords) {
     const chordName = chord.chord === "N" ? "N/C" : chord.chord;
 
-    // REMOVED: No timing offset applied - use direct chord times
+    // Use direct chord times
     const chordStart = chord.start;
-    const chordEnd = chord.end;
 
     let bestBeatIndex = 0;
     let bestScore = Infinity;
 
-    console.log(`\n🎵 Aligning chord "${chordName}"`);
-    console.log(`  Direct timing: start=${chordStart.toFixed(3)}s, end=${chordEnd.toFixed(3)}s`);
-
-    // ULTRA-AGGRESSIVE TEMPORAL ACCURACY - Find the absolute closest beat
+    // Find the absolute closest beat
     for (let beatIndex = 0; beatIndex < beats.length; beatIndex++) {
       const beatTime = beats[beatIndex].time;
-      const beatNum = beats[beatIndex].beatNum;
       const distance = Math.abs(chordStart - beatTime);
 
-      // EXPANDED range but PURE distance-based scoring
+      // Use distance-based scoring within reasonable range
       if (distance <= 2.0) {
-        // PURE temporal accuracy - NO musical context bonuses at all
         let score = distance;
 
-        console.log(`  Beat ${beatIndex} (${beatTime.toFixed(3)}s, beat ${beatNum}): distance=${distance.toFixed(3)}s, score=${score.toFixed(3)}`);
-
-        // REMOVED ALL BONUSES - pure distance-based alignment
         if (score < bestScore) {
           bestScore = score;
           bestBeatIndex = beatIndex;
@@ -624,14 +574,11 @@ function alignChordsToBeatsDirectly(
       }
     }
 
-    console.log(`  ✅ Best match: Beat ${bestBeatIndex} (${beats[bestBeatIndex].time.toFixed(3)}s, beat ${beats[bestBeatIndex].beatNum}) with score ${bestScore.toFixed(3)}`);
-
     // Assign the chord to the best beat
     beatToChordMap.set(bestBeatIndex, chordName);
   }
 
   // Create synchronized chord array with forward-fill logic
-  console.log(`\n📊 CREATING SYNCHRONIZED BEAT-TO-CHORD MAPPING:`);
   const synchronizedChords: {chord: string, beatIndex: number}[] = [];
   let currentChord = 'N/C'; // Default to "No Chord"
 
@@ -639,7 +586,6 @@ function alignChordsToBeatsDirectly(
     // Check if this beat has a new chord assignment
     if (beatToChordMap.has(beatIndex)) {
       const newChord = beatToChordMap.get(beatIndex)!;
-      console.log(`  🎵 Beat ${beatIndex.toString().padStart(3)} (${beats[beatIndex].time.toFixed(3)}s): CHORD CHANGE "${currentChord}" -> "${newChord}"`);
       currentChord = newChord;
     }
 
@@ -649,61 +595,7 @@ function alignChordsToBeatsDirectly(
     });
   }
 
-  console.log(`\n📋 COMPLETE SYNCHRONIZED OUTPUT (all ${synchronizedChords.length} beats):`);
-  synchronizedChords.forEach((item, index) => {
-    const beatTime = beats[item.beatIndex].time;
-    const beatNum = beats[item.beatIndex].beatNum;
-    console.log(`  SyncBeat ${(index + 1).toString().padStart(3)}: "${item.chord.padEnd(8)}" at ${beatTime.toFixed(3)}s (beat ${beatNum})`);
-  });
 
-  console.log(`✅ Created ${synchronizedChords.length} synchronized chords`);
-
-  // CHORD MODEL vs BEAT GRID DURATION COMPARISON
-  console.log(`\n📊 CHORD MODEL vs BEAT GRID DURATION COMPARISON:`);
-  console.log(`🎼 Original Chord Model Output:`);
-  chords.forEach((chord, index) => {
-    const duration = chord.end - chord.start;
-    const chordName = chord.chord === "N" ? "N/C" : chord.chord;
-    console.log(`  Chord ${index + 1}: [${chord.start.toFixed(3)}s, ${chord.end.toFixed(3)}s, '${chordName}'] duration=${duration.toFixed(3)}s`);
-  });
-
-  console.log(`\n🎯 Beat Grid Synchronized Output:`);
-  // Group consecutive identical chords in synchronized output
-  const groupedSyncChords: Array<{chord: string, startBeat: number, endBeat: number, startTime: number, endTime: number, duration: number}> = [];
-  let currentGroup = { chord: synchronizedChords[0]?.chord || 'N/C', startIndex: 0 };
-
-  for (let i = 1; i <= synchronizedChords.length; i++) {
-    const currentChord = i < synchronizedChords.length ? synchronizedChords[i].chord : 'END';
-
-    if (currentChord !== currentGroup.chord || i === synchronizedChords.length) {
-      const endIndex = i - 1;
-      const startBeatIndex = synchronizedChords[currentGroup.startIndex]?.beatIndex || 0;
-      const endBeatIndex = synchronizedChords[endIndex]?.beatIndex || 0;
-      const startTime = beats[startBeatIndex]?.time || 0;
-      const endTime = beats[endBeatIndex]?.time || 0;
-      const duration = endTime - startTime;
-
-      groupedSyncChords.push({
-        chord: currentGroup.chord,
-        startBeat: startBeatIndex,
-        endBeat: endBeatIndex,
-        startTime: startTime,
-        endTime: endTime,
-        duration: duration
-      });
-
-      if (i < synchronizedChords.length) {
-        currentGroup = { chord: currentChord, startIndex: i };
-      }
-    }
-  }
-
-  groupedSyncChords.forEach((segment, index) => {
-    const durationStr = segment.duration.toFixed(3) + 's';
-    console.log(`  Segment ${index + 1}: [${segment.startTime.toFixed(3)}s, ${segment.endTime.toFixed(3)}s, '${segment.chord}'] duration=${durationStr} beats[${segment.startBeat}-${segment.endBeat}]`);
-  });
-
-  console.log(`📊 END DURATION COMPARISON\n`);
 
   return synchronizedChords;
 }
@@ -715,88 +607,14 @@ export const synchronizeChords = (
   chords: ChordDetectionResult[],
   beats: BeatInfo[]
 ) => {
-  console.log('\n🎯 === COMPLETE CHORD-BEAT SYNCHRONIZATION PIPELINE ===');
-  console.log(`Input: ${chords.length} chords, ${beats.length} beats`);
-  console.log(`Using direct model outputs without timing offset adjustments`);
-
-  // STAGE 1: Log original model outputs
-  console.log('\n🎼 STAGE 1: ORIGINAL MODEL OUTPUTS');
-  console.log('📊 Chord Model Raw Output:');
-  chords.forEach((chord, index) => {
-    const chordName = chord.chord === "N" ? "N/C" : chord.chord;
-    const duration = chord.end - chord.start;
-    console.log(`  Chord ${(index + 1).toString().padStart(2)}: [${chord.start.toFixed(3)}s, ${chord.end.toFixed(3)}s] "${chordName.padEnd(8)}" duration=${duration.toFixed(3)}s`);
-  });
-
-  console.log(`\n🥁 Beat Model Raw Output (all ${beats.length} beats):`);
-  beats.forEach((beat, index) => {
-    console.log(`  Beat ${(index + 1).toString().padStart(3)}: ${beat.time.toFixed(3)}s (beat ${beat.beatNum})`);
-  });
-
   if (chords.length === 0 || beats.length === 0) {
-    console.log('No chords or beats to synchronize');
     return [];
   }
 
-  // STAGE 2: Perform alignment
-  console.log('\n🔗 STAGE 2: CHORD-TO-BEAT ALIGNMENT');
+  // Perform alignment
   const result = alignChordsToBeatsDirectly(chords, beats);
 
-  // STAGE 3: Analyze alignment results
-  console.log('\n📈 STAGE 3: ALIGNMENT RESULTS ANALYSIS');
-  console.log('🎯 Chord Alignment Summary:');
 
-  // Create alignment summary
-  const alignmentSummary: Array<{
-    originalChord: ChordDetectionResult,
-    alignedBeatIndex: number,
-    alignedBeatTime: number,
-    timingShift: number,
-    chordName: string
-  }> = [];
-
-  chords.forEach((originalChord, chordIndex) => {
-    const chordName = originalChord.chord === "N" ? "N/C" : originalChord.chord;
-
-    // Find this chord in the alignment results
-    const alignedResult = result.find(item => {
-      // Find the beat that this chord was assigned to
-      const beatTime = beats[item.beatIndex]?.time;
-      return beatTime && Math.abs(originalChord.start - beatTime) < 2.0; // Within 2 seconds
-    });
-
-    if (alignedResult) {
-      const alignedBeatTime = beats[alignedResult.beatIndex].time;
-      const timingShift = alignedBeatTime - originalChord.start;
-
-      alignmentSummary.push({
-        originalChord,
-        alignedBeatIndex: alignedResult.beatIndex,
-        alignedBeatTime,
-        timingShift,
-        chordName
-      });
-
-      const shiftStr = timingShift >= 0 ? `+${timingShift.toFixed(3)}s` : `${timingShift.toFixed(3)}s`;
-      console.log(`  Chord "${chordName.padEnd(8)}": ${originalChord.start.toFixed(3)}s -> ${alignedBeatTime.toFixed(3)}s (shift: ${shiftStr})`);
-    } else {
-      console.log(`  Chord "${chordName.padEnd(8)}": ${originalChord.start.toFixed(3)}s -> NOT ALIGNED`);
-    }
-  });
-
-  // Calculate alignment statistics
-  const shifts = alignmentSummary.map(item => item.timingShift);
-  const avgShift = shifts.reduce((sum, shift) => sum + shift, 0) / shifts.length;
-  const maxShift = Math.max(...shifts.map(Math.abs));
-
-  console.log(`\n📊 Alignment Statistics:`);
-  console.log(`  Average timing shift: ${avgShift >= 0 ? '+' : ''}${avgShift.toFixed(3)}s`);
-  console.log(`  Maximum absolute shift: ${maxShift.toFixed(3)}s`);
-  console.log(`  Shifts > 0.5s: ${shifts.filter(s => Math.abs(s) > 0.5).length}/${shifts.length}`);
-  console.log(`  Shifts > 1.0s: ${shifts.filter(s => Math.abs(s) > 1.0).length}/${shifts.length}`);
-
-  console.log(`✅ Pure synchronization complete: ${result.length} synchronized chords`);
-  console.log('=== PURE MODEL OUTPUT SYNCHRONIZATION END ===\n');
 
   return result;
 };
@@ -829,7 +647,7 @@ async function audioBufferToWav(audioBuffer: AudioBuffer): Promise<Blob> {
       throw new Error(`Invalid sample rate: ${sampleRate}Hz. Must be between 1 and 192000 Hz.`);
     }
 
-    console.log(`Converting AudioBuffer: ${numOfChannels} channels, ${length} samples, ${sampleRate}Hz`);
+
 
     const bitsPerSample = 16;
     const bytesPerSample = bitsPerSample / 8;
@@ -928,16 +746,13 @@ async function audioBufferToWav(audioBuffer: AudioBuffer): Promise<Blob> {
           writeOffset += 2;
         }
 
-        // Progress logging for very long audio
-        if (length > 1000000 && i % 100000 === 0) {
-          console.log(`WAV conversion progress: ${((i / length) * 100).toFixed(1)}%`);
-        }
+
       }
     } catch (writeError) {
       throw new Error(`Failed to write audio data: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`);
     }
 
-    console.log(`Successfully converted AudioBuffer to WAV: ${(totalBufferSize / 1024 / 1024).toFixed(2)}MB`);
+
 
     return new Blob([buffer], { type: 'audio/wav' });
   } catch (error) {

@@ -46,7 +46,7 @@ export interface ModelInfoResult {
   default_model: string;
   available_models: string[];
   beat_transformer_available: boolean;
-  beat_transformer_light_available?: boolean;
+
   madmom_available: boolean;
   model_info?: {
     [key: string]: {
@@ -92,17 +92,16 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
  * Detects beats in an audio file using the Python backend API
  *
  * @param audioFile - The audio file to analyze (File object)
- * @param detector - Which beat detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param detector - Which beat detector to use ('auto', 'madmom', or 'beat-transformer')
  * @param onProgress - Optional callback for upload progress
  * @returns Promise with beat detection results
  */
 export async function detectBeatsFromFile(
   audioFile: File,
-  detector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto',
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'auto',
   onProgress?: (percent: number) => void
 ): Promise<BeatDetectionResult> {
   try {
-    console.log(`Detecting beats using ${detector} detector...`);
 
     // Enhanced input validation
     if (!audioFile || audioFile.size === 0) {
@@ -114,7 +113,7 @@ export async function detectBeatsFromFile(
     }
 
     // Validate detector parameter
-    const validDetectors = ['auto', 'madmom', 'beat-transformer', 'beat-transformer-light'];
+    const validDetectors = ['auto', 'madmom', 'beat-transformer'];
     if (!validDetectors.includes(detector)) {
       throw new Error(`Invalid detector: ${detector}. Must be one of: ${validDetectors.join(', ')}`);
     }
@@ -143,9 +142,8 @@ export async function detectBeatsFromFile(
     formData.append('file', audioFile);
     formData.append('detector', detector);
 
-    // Add force=true parameter if Beat-Transformer or Beat-Transformer Light is explicitly requested for large files
-    if ((detector === 'beat-transformer' && fileSizeMB > 30) ||
-        (detector === 'beat-transformer-light' && fileSizeMB > 50)) {
+    // Add force=true parameter if Beat-Transformer is explicitly requested for large files
+    if (detector === 'beat-transformer' && fileSizeMB > 30) {
       formData.append('force', 'true');
       console.log(`Added force=true parameter for ${detector} with large file`);
     }
@@ -175,12 +173,9 @@ export async function detectBeatsFromFile(
             if (xhr.status === 413) {
               if (detector === 'beat-transformer') {
                 // If Beat-Transformer was requested but still got 413, the file is extremely large
-                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light or madmom detector.'));
-              } else if (detector === 'beat-transformer-light') {
-                // If Beat-Transformer Light was requested but still got 413, the file is extremely large
-                reject(new Error('The audio file is too large even with force=true. Try a smaller file, use madmom detector, or use the audio path method.'));
+                reject(new Error('The audio file is too large even with force=true. Try a smaller file or use madmom detector.'));
               } else {
-                reject(new Error('The audio file is too large to process. Try a smaller file, use madmom detector, or try again with beat-transformer-light and force=true.'));
+                reject(new Error('The audio file is too large to process. Try a smaller file or use madmom detector.'));
               }
             } else {
               try {
@@ -217,12 +212,9 @@ export async function detectBeatsFromFile(
       if (response.status === 413) {
         if (detector === 'beat-transformer') {
           // If Beat-Transformer was requested but still got 413, the file is extremely large
-          throw new Error('The audio file is too large even with force=true. Try a smaller file, use beat-transformer-light or madmom detector.');
-        } else if (detector === 'beat-transformer-light') {
-          // If Beat-Transformer Light was requested but still got 413, the file is extremely large
-          throw new Error('The audio file is too large even with force=true. Try a smaller file, use madmom detector, or use the audio path method.');
+          throw new Error('The audio file is too large even with force=true. Try a smaller file or use madmom detector.');
         } else {
-          throw new Error('The audio file is too large to process. Try a smaller file, use madmom detector, or try again with beat-transformer-light and force=true.');
+          throw new Error('The audio file is too large to process. Try a smaller file or use madmom detector.');
         }
       }
 
@@ -339,13 +331,7 @@ export async function detectBeatsFromFile(
         data.beat_time_range_end = data.beats.length > 0 ? data.beats[data.beats.length - 1] : 0;
       }
 
-      // Enhanced debug logging for validated model outputs
-      console.log('=== VALIDATED MODEL OUTPUT DEBUG ===');
-      console.log(`Successfully validated ${data.beats.length} beat timestamps`);
-      console.log(`BPM: ${data.bpm}, Duration: ${data.duration}s`);
-      console.log(`Model: ${data.model}, Time signature: ${data.time_signature}/4`);
-      console.log(`Downbeats: ${data.downbeats.length}, Beat positions: ${data.beats_with_positions.length}`);
-      console.log('=== END VALIDATED MODEL OUTPUT DEBUG ===');
+
 
       return data;
     } catch (parseError) {
@@ -387,12 +373,12 @@ export async function detectBeatsFromFile(
  * Detects beats in an audio file already on the server
  *
  * @param audioPath - Path to the audio file on the server
- * @param detector - Which beat detector to use ('auto', 'madmom', 'beat-transformer', or 'beat-transformer-light')
+ * @param detector - Which beat detector to use ('auto', 'madmom', or 'beat-transformer')
  * @returns Promise with beat detection results
  */
 export async function detectBeatsFromPath(
   audioPath: string,
-  detector: 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light' = 'auto'
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'auto'
 ): Promise<BeatDetectionResult> {
   try {
     const formData = new FormData();

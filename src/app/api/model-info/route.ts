@@ -34,14 +34,9 @@ export async function GET() {
             id: 'beat-transformer',
             name: 'Beat-Transformer',
             description: 'Deep learning model for beat tracking with downbeat detection',
-            default: false
-          },
-          {
-            id: 'beat-transformer-light',
-            name: 'Beat-Transformer (light)',
-            description: 'Lightweight version of Beat-Transformer without source separation',
             default: true
           },
+
           {
             id: 'madmom',
             name: 'Madmom',
@@ -55,6 +50,18 @@ export async function GET() {
             name: 'Chord-CNN-LSTM',
             description: 'Deep learning model for chord recognition',
             default: true
+          },
+          {
+            id: 'btc-sl',
+            name: 'BTC SL (Supervised Learning)',
+            description: 'Transformer-based model with supervised learning',
+            default: false
+          },
+          {
+            id: 'btc-pl',
+            name: 'BTC PL (Pseudo-Label)',
+            description: 'Transformer-based model with pseudo-labeling',
+            default: false
           }
         ]
       }
@@ -82,6 +89,18 @@ export async function GET() {
               name: 'Chord-CNN-LSTM',
               description: 'Deep learning model for chord recognition',
               default: true
+            },
+            {
+              id: 'btc-sl',
+              name: 'BTC SL (Supervised Learning)',
+              description: 'Transformer-based model with supervised learning',
+              default: false
+            },
+            {
+              id: 'btc-pl',
+              name: 'BTC PL (Pseudo-Label)',
+              description: 'Transformer-based model with pseudo-labeling',
+              default: false
             }
           ]
         }

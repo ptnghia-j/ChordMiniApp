@@ -5,8 +5,8 @@ import BeatModelSelector from '@/components/BeatModelSelector';
 import ChordModelSelector from '@/components/ChordModelSelector';
 
 // Define the detector types to match the main page
-type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
-type ChordDetectorType = 'chord-cnn-lstm';
+type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
+type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
 interface AnalysisControlsProps {
   isExtracted: boolean;
@@ -39,10 +39,10 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   }
 
   return (
-    <div className="w-full p-4 rounded-lg bg-gray-50 dark:bg-gray-700 overflow-visible transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+    <div className="w-full p-4 rounded-lg bg-white dark:bg-content-bg overflow-visible transition-colors duration-300 border border-gray-200 dark:border-gray-600">
       <div className="flex flex-col h-full">
         <div className="mb-2">
-          <h3 className="font-medium text-gray-900 dark:text-gray-100 transition-colors duration-300">
+          <h3 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
             Select Models for Analysis
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">

@@ -3,17 +3,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '@/styles/dropdown.css';
 
+// Import the type from the service
+type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
+
 interface ChordModelOption {
-  id: string;
+  id: ChordDetectorType;
   name: string;
   description: string;
   performance?: string;
   available_chord_dicts?: string[];
+  available?: boolean;
 }
 
 interface ChordModelSelectorProps {
-  selectedModel: 'chord-cnn-lstm';
-  onModelChange: (model: 'chord-cnn-lstm') => void;
+  selectedModel: ChordDetectorType;
+  onModelChange: (model: ChordDetectorType) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -25,7 +29,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
   className = ''
 }) => {
   const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -80,9 +84,34 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           throw new Error(data.error || 'Unknown error fetching model info');
         }
 
-        // Set available models and model info
-        setAvailableModels(data.available_chord_models || []);
-        setModelInfo(data.chord_model_info || {});
+        // Process chord model info and set available models
+        if (data.chord_model_info) {
+          const modelInfoMap: Record<string, ChordModelOption> = {};
+          const modelIds: ChordDetectorType[] = [];
+
+          Object.entries(data.chord_model_info).forEach(([key, value]: [string, any]) => {
+            const modelOption: ChordModelOption = {
+              id: key as ChordDetectorType,
+              name: value.name || key,
+              description: value.description || 'Chord recognition model',
+              performance: value.performance || 'Unknown performance',
+              available_chord_dicts: value.available_chord_dicts || [],
+              available: value.available !== false // Default to true if not specified
+            };
+
+            modelInfoMap[key] = modelOption;
+            // Only include available models
+            if (modelOption.available) {
+              modelIds.push(key as ChordDetectorType);
+            }
+          });
+
+          setModelInfo(modelInfoMap);
+          setAvailableModels(modelIds.length > 0 ? modelIds : ['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+        } else {
+          // Fallback to default models
+          setAvailableModels(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+        }
         setError(null);
       } catch (err) {
         console.error('Error fetching model info:', err);
@@ -96,18 +125,38 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
   }, []);
 
   // Handle model change
-  const handleModelChange = (newModel: 'chord-cnn-lstm') => {
+  const handleModelChange = (newModel: ChordDetectorType) => {
     onModelChange(newModel);
     setIsOpen(false);
   };
 
-  // Get the currently selected model details
-  const selectedModelOption = modelInfo[selectedModel] || {
-    id: selectedModel,
-    name: 'Chord-CNN-LSTM',
-    description: 'Advanced deep learning model capable of recognizing 301 different chord labels. This model combines CNN and LSTM architectures for accurate chord recognition across various musical genres.',
-    performance: 'High accuracy with comprehensive chord vocabulary'
+  // Default model options
+  const defaultModelOptions: Record<ChordDetectorType, ChordModelOption> = {
+    'chord-cnn-lstm': {
+      id: 'chord-cnn-lstm',
+      name: 'Chord-CNN-LSTM',
+      description: 'CNN+LSTM model with 301 chord labels for comprehensive chord recognition',
+      performance: 'High accuracy, medium processing speed',
+      available: true
+    },
+    'btc-sl': {
+      id: 'btc-sl',
+      name: 'BTC SL (Supervised Learning)',
+      description: 'Transformer model with 170 chord labels, supervised training',
+      performance: 'High accuracy with transformer architecture',
+      available: true
+    },
+    'btc-pl': {
+      id: 'btc-pl',
+      name: 'BTC PL (Pseudo-Label)',
+      description: 'Transformer model with 170 chord labels, pseudo-label training',
+      performance: 'Enhanced accuracy through pseudo-labeling',
+      available: true
+    }
   };
+
+  // Get the currently selected model details
+  const selectedModelOption = modelInfo[selectedModel] || defaultModelOptions[selectedModel];
 
   return (
     <div className={`model-selector-container ${className}`}>
@@ -142,7 +191,14 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
                 <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
               </svg>
             </span>
-            <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
+              {selectedModel === 'btc-pl' && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-700 transition-colors duration-300">
+                  EXP
+                </span>
+              )}
+            </div>
             {loading && (
               <div className="ml-2">
                 <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -166,7 +222,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
                 <li
                   key={model}
                   className={`px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-300 ${selectedModel === model ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
-                  onClick={() => handleModelChange(model as 'chord-cnn-lstm')}
+                  onClick={() => handleModelChange(model)}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-start">
@@ -177,8 +233,15 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
                           <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
                         </svg>
                       </span>
-                      <div>
-                        <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{modelInfo[model]?.name || model}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{modelInfo[model]?.name || model}</p>
+                          {model === 'btc-pl' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-700 transition-colors duration-300">
+                              EXP
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">{modelInfo[model]?.description || 'Deep learning model for chord recognition'}</p>
                       </div>
                     </div>
@@ -201,12 +264,13 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
         )}
       </div>
 
-      {/* Note about future models */}
-      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-200 border border-blue-100 dark:border-blue-300 rounded-lg text-sm text-blue-800 dark:text-blue-900 transition-colors duration-300">
-        <p className="font-medium mb-1 text-blue-800 dark:text-blue-900 transition-colors duration-300">Coming Soon:</p>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>BTC model - capable of detecting 170 chord labels</li>
-          <li>2E1D model - lighter model for 170 chord labels</li>
+
+
+      {/* Upcoming models box */}
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm transition-colors duration-300">
+        <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">Upcoming Model:</p>
+        <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-300 transition-colors duration-300">
+          <li>2E1D model - lighter model for 170 chord vocabulary</li>
         </ul>
       </div>
 

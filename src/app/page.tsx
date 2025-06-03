@@ -144,7 +144,7 @@ export default function Home() {
         <div className="absolute inset-0 z-0">
           <div className="relative w-full h-full">
             <Image
-              src="/hero-image-placeholder.svg"
+              src={theme === 'dark' ? "/hero-image-placeholder-dark.svg" : "/hero-image-placeholder.svg"}
               alt="ChordMini - Chord recognition and analysis application"
               fill
               priority
@@ -155,20 +155,20 @@ export default function Home() {
           <div className="absolute inset-0 bg-black bg-opacity-10"></div>
         </div>
 
-        {/* Decorative Music Notes */}
-        <svg className="absolute top-4 left-4 w-8 h-8 text-gray-700 opacity-40 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Decorative Music Notes with enhanced contrast */}
+        <svg className="absolute top-4 left-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 18V5l12-2v13"></path>
           <circle cx="6" cy="18" r="3"></circle>
           <circle cx="18" cy="16" r="3"></circle>
         </svg>
 
-        <svg className="absolute top-4 right-4 w-12 h-12 text-gray-700 opacity-40 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg className="absolute top-4 right-4 w-12 h-12 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 18V5l12-2v13"></path>
           <circle cx="6" cy="18" r="3"></circle>
           <circle cx="18" cy="16" r="3"></circle>
         </svg>
 
-        <svg className="absolute bottom-4 right-4 w-8 h-8 text-gray-700 opacity-40 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg className="absolute bottom-4 right-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="5.5" cy="17.5" r="3.5"></circle>
           <circle cx="18.5" cy="15.5" r="3.5"></circle>
           <path d="M18.5 5v10.5"></path>

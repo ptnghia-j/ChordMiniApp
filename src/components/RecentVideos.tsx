@@ -169,10 +169,16 @@ export default function RecentVideos() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
-        <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">Recent Videos</h3>
+      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-600 overflow-hidden">
+        {/* Minimal banner header - loading state - spans full width */}
+        <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">Recently Transcribed Songs</span>
+            <span className="text-gray-500 dark:text-gray-400 text-xs">Loading...</span>
+          </div>
+        </div>
         {/* Scrollable container with fixed height for loading skeleton */}
-        <div className="h-96 overflow-y-auto scrollbar-thin">
+        <div className="h-96 overflow-y-auto scrollbar-thin p-4">
           {/* Sidebar loading skeleton */}
           <div className="space-y-3 pr-2">
             {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
@@ -195,18 +201,17 @@ export default function RecentVideos() {
   }
 
   return (
-    <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
-          Recently Transcribed Songs
-        </h3>
-        <span className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
-          {videos.length} song{videos.length !== 1 ? 's' : ''}
-        </span>
+    <div className="bg-white dark:bg-content-bg rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-600 overflow-hidden">
+      {/* Minimal banner header - spans full width */}
+      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">Recently Transcribed Songs</span>
+          <span className="text-gray-500 dark:text-gray-400 text-xs">{videos.length} song{videos.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       {/* Scrollable container with fixed height */}
-      <div className="h-96 overflow-y-auto scrollbar-thin">
+      <div className="h-96 overflow-y-auto scrollbar-thin p-4">
         {/* Sidebar layout: Single column for compact display */}
         <div className="space-y-3 pr-2">
           {videos.map((video) => (

@@ -31,6 +31,8 @@ import { YouTubePlayer } from '@/types/youtube';
 import dynamic from 'next/dynamic';
 //import type { ReactPlayerProps } from 'react-player';
 
+
+
 // Define error types for better type safety
 interface ErrorWithSuggestion extends Error {
   suggestion?: string;
@@ -85,7 +87,7 @@ export default function YouTubeVideoAnalyzePage() {
   } = useAudioPlayer(audioProcessingState.audioUrl);
 
   // Define detector types
-  type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer' | 'beat-transformer-light';
+  type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
   type ChordDetectorType = 'chord-cnn-lstm';
 
   // Define lyrics item interface
@@ -96,7 +98,7 @@ export default function YouTubeVideoAnalyzePage() {
     endTime?: number;
     text?: string;
   }
-  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('beat-transformer-light');
+  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('beat-transformer');
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>('chord-cnn-lstm');
 
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
@@ -140,26 +142,7 @@ export default function YouTubeVideoAnalyzePage() {
     };
   } | null>(null);
 
-  // Debug: Log chord corrections state changes
-  useEffect(() => {
-    console.log('🔍 CHORD CORRECTIONS STATE:', {
-      chordCorrections,
-      hasCorrections: chordCorrections !== null && Object.keys(chordCorrections).length > 0,
-      correctionCount: chordCorrections ? Object.keys(chordCorrections).length : 0,
-      buttonShouldShow: chordCorrections !== null && Object.keys(chordCorrections).length > 0
-    });
-  }, [chordCorrections]);
 
-  // Debug: Log showCorrectedChords state changes
-  useEffect(() => {
-    console.log('🔍 SHOW CORRECTED CHORDS STATE:', {
-      showCorrectedChords,
-      chordCorrections,
-      sequenceCorrections,
-      hasSequenceCorrections: sequenceCorrections && sequenceCorrections.correctedSequence.length > 0,
-      buttonText: showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'
-    });
-  }, [showCorrectedChords, chordCorrections, sequenceCorrections]);
 
   // Auto-enable corrections when sequence corrections are available (only once)
   const [hasAutoEnabledCorrections, setHasAutoEnabledCorrections] = useState(false);
@@ -1278,7 +1261,10 @@ export default function YouTubeVideoAnalyzePage() {
   }, []);
 
   const calculatePaddingAndShift = useCallback((firstDetectedBeatTime: number, bpm: number, timeSignature: number, chords: string[] = []) => {
-    if (firstDetectedBeatTime <= 0.1) {
+    // console.log(`🔧 PADDING CALCULATION: firstDetectedBeatTime=${firstDetectedBeatTime.toFixed(3)}s, bpm=${bpm}, timeSignature=${timeSignature}`);
+
+    // DEBUG: Temporarily force padding for testing if first beat is > 0.05s
+    if (firstDetectedBeatTime <= 0.05) {
       // console.log('❌ First beat starts very close to 0.0s, no padding needed');
       return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
     }
@@ -1293,9 +1279,18 @@ export default function YouTubeVideoAnalyzePage() {
     const gapRatio = firstDetectedBeatTime / beatDuration;
     const paddingCount = rawPaddingCount === 0 && gapRatio > 0.2 ? 1 : rawPaddingCount;
 
+    // console.log(`🔧 PADDING CALC DETAILS: rawPaddingCount=${rawPaddingCount}, beatDuration=${beatDuration.toFixed(3)}s, gapRatio=${gapRatio.toFixed(3)}, finalPaddingCount=${paddingCount}`);
+
+    // DEBUG: Force padding for testing if we have a reasonable first beat time
+    let debugPaddingCount = paddingCount;
+    if (paddingCount === 0 && firstDetectedBeatTime > 0.1) {
+      debugPaddingCount = Math.max(1, Math.floor(gapRatio)); // Force at least 1 padding beat
+      // console.log(`🔧 DEBUG: Forcing padding count from ${paddingCount} to ${debugPaddingCount} for testing`);
+    }
+
     // More reasonable limit: allow up to 4 measures of padding for long intros
-    if (paddingCount <= 0 || paddingCount >= timeSignature * 4) {
-      // console.log(`❌ Padding rejected: paddingCount=${paddingCount}, limit=${timeSignature * 4}`);
+    if (debugPaddingCount <= 0 || debugPaddingCount >= timeSignature * 4) {
+      // console.log(`❌ Padding rejected: paddingCount=${debugPaddingCount}, limit=${timeSignature * 4}`);
       return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
     }
 
@@ -1305,18 +1300,20 @@ export default function YouTubeVideoAnalyzePage() {
     if (chords.length > 0) {
       // console.log(`  Using chord-based shift calculation (${chords.length} chords available)`);
       // Use optimal chord-based shift calculation
-      shiftCount = calculateOptimalShift(chords, timeSignature, paddingCount);
+      shiftCount = calculateOptimalShift(chords, timeSignature, debugPaddingCount);
     } else {
       // console.log(`  Using position-based shift calculation (no chords available)`);
       // Fallback to position-based calculation if no chords available
-      const beatPositionInMeasure = ((paddingCount) % timeSignature) + 1;
+      const beatPositionInMeasure = ((debugPaddingCount) % timeSignature) + 1;
       const finalBeatPosition = beatPositionInMeasure > timeSignature ? 1 : beatPositionInMeasure;
       shiftCount = finalBeatPosition === 1 ? 0 : (timeSignature - finalBeatPosition + 1);
     }
 
-    const totalPaddingCount = paddingCount + shiftCount;
+    const totalPaddingCount = debugPaddingCount + shiftCount;
 
-    return { paddingCount, shiftCount, totalPaddingCount };
+    // console.log(`✅ FINAL PADDING RESULT: paddingCount=${debugPaddingCount}, shiftCount=${shiftCount}, totalPaddingCount=${totalPaddingCount}`);
+
+    return { paddingCount: debugPaddingCount, shiftCount, totalPaddingCount };
   }, [calculateOptimalShift]);
 
   // COMPREHENSIVE PADDING & SHIFTING: Get chord grid data with padding and shifting
@@ -1353,11 +1350,13 @@ export default function YouTubeVideoAnalyzePage() {
       // Add only padding N.C. chords (based on first detected beat time)
       // Shifting will be handled in the frontend as greyed-out cells
       const paddingChords = Array(paddingCount).fill('N.C.');
-      // FIXED: Create padding timestamps that are evenly distributed from 0.0s to first detected beat
+      // FIXED: Create padding timestamps that start from 0.0s and are evenly distributed to first detected beat
       const paddingTimestamps = Array(paddingCount).fill(0).map((_, i) => {
         const paddingDuration = firstDetectedBeat;
         const paddingBeatDuration = paddingDuration / paddingCount;
-        return (i + 1) * paddingBeatDuration; // Timestamps from paddingBeatDuration to firstDetectedBeat
+        const timestamp = i * paddingBeatDuration; // Timestamps from 0.0s to (paddingCount-1) * paddingBeatDuration
+        // console.log(`🔧 PADDING TIMESTAMP[${i}]: ${timestamp.toFixed(3)}s (duration=${paddingBeatDuration.toFixed(3)}s)`);
+        return timestamp;
       });
 
       // Combine padding with regular chords (no shift N.C. labels added here)
@@ -1533,11 +1532,26 @@ export default function YouTubeVideoAnalyzePage() {
         const time = audioRef.current.currentTime;
         setCurrentTime(time);
 
-
+        // DEBUG: Log animation interval execution every 5 seconds
+        // if (Math.floor(time) % 5 === 0 && Math.floor(time * 10) % 10 === 0) {
+        //   console.log(`🔄 ANIMATION INTERVAL: time=${time.toFixed(3)}s, isPlaying=${isPlaying}, chordGridData exists=${!!chordGridData}`);
+        // }
 
         // Find the current beat based on chord grid data (includes pickup beats)
         // This ensures consistency between beat tracking and chord display
         if (chordGridData && chordGridData.chords.length > 0) {
+          // DEBUG: Log chord grid data structure (once)
+          // if (time < 1.0 && Math.floor(time * 10) === 0) {
+          //   console.log(`📊 CHORD GRID DATA:`, {
+          //     chordsLength: chordGridData.chords.length,
+          //     beatsLength: chordGridData.beats.length,
+          //     paddingCount: chordGridData.paddingCount,
+          //     shiftCount: chordGridData.shiftCount,
+          //     hasPadding: chordGridData.hasPadding,
+          //     firstFewChords: chordGridData.chords.slice(0, 10),
+          //     firstFewBeats: chordGridData.beats.slice(0, 10)
+          //   });
+          // }
           // Check if we have a manual override (from user click)
           if (manualBeatIndexOverride !== null) {
             // Use the manually set beat index and skip automatic calculation
@@ -1554,12 +1568,12 @@ export default function YouTubeVideoAnalyzePage() {
           // This accounts for the offset between chord model start (0.0s) and first beat detection (e.g., 0.534s)
           const animationRangeStart = firstDetectedBeat;
 
-          // Debug: Log the timing alignment fix (only once per second to avoid spam)
-          if (Math.floor(time * 4) % 20 === 0) { // Log every 5 seconds
-            const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
-            const beatDuration = Math.round((60 / bpm) * 1000) / 1000;
-            console.log(`🎬 TIMING ALIGNMENT: beatTimeRangeStart=${beatTimeRangeStart.toFixed(3)}s, firstDetectedBeat=${firstDetectedBeat.toFixed(3)}s, offset=${(firstDetectedBeat - beatTimeRangeStart).toFixed(3)}s, beatDuration=${beatDuration.toFixed(3)}s@${bpm}BPM`);
-          }
+          // Debug: Log the timing alignment fix (only once per 10 seconds to avoid spam)
+          // if (Math.floor(time) % 10 === 0 && Math.floor(time * 10) % 10 === 0) {
+          //   const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
+          //   const beatDuration = Math.round((60 / bpm) * 1000) / 1000;
+          //   console.log(`🎬 TIMING ALIGNMENT: beatTimeRangeStart=${beatTimeRangeStart.toFixed(3)}s, firstDetectedBeat=${firstDetectedBeat.toFixed(3)}s, offset=${(firstDetectedBeat - beatTimeRangeStart).toFixed(3)}s, beatDuration=${beatDuration.toFixed(3)}s@${bpm}BPM`);
+          // }
 
           if (time < animationRangeStart) {
             // PHASE 1: Pre-model context (0.0s to first detected beat)
@@ -1567,58 +1581,69 @@ export default function YouTubeVideoAnalyzePage() {
             const paddingCount = chordGridData.paddingCount || 0;
             const shiftCount = chordGridData.shiftCount || 0;
 
+            // DEBUG: Log padding phase execution
+            // console.log(`🎬 PADDING PHASE EXECUTING: time=${time.toFixed(3)}s, animationRangeStart=${animationRangeStart.toFixed(3)}s, paddingCount=${paddingCount}, shiftCount=${shiftCount}`);
+            // console.log(`🎬 PADDING PHASE ACTIVE: Should be active from 0.0s to ${animationRangeStart.toFixed(3)}s`);
+
             if (paddingCount > 0) {
-              // FIXED: Calculate the timestamp for the first non-shift cell (first padding cell)
-              const firstNonShiftCellIndex = shiftCount; // First cell after shift cells
-              const firstNonShiftTimestamp = chordGridData.beats[firstNonShiftCellIndex];
+              // FIXED: Use actual timestamps from the chord grid instead of recalculating
+              // Find the padding cell that should be highlighted based on current time
+              let bestPaddingIndex = -1;
+              let bestTimeDifference = Infinity;
 
-              // Only start animation when we reach the timestamp of the first non-shift cell
-              if (firstNonShiftTimestamp !== null && firstNonShiftTimestamp !== undefined && time >= firstNonShiftTimestamp) {
-                // Stretch the animation across the time from first non-shift timestamp to first detected beat
-                const adjustedTime = time - firstNonShiftTimestamp;
-                const adjustedDuration = animationRangeStart - firstNonShiftTimestamp;
-                const paddingBeatDuration = adjustedDuration / paddingCount;
-                // IMPROVED: Use Math.round for more accurate beat progression instead of always rounding down
-                const paddingBeatIndex = Math.round(adjustedTime / paddingBeatDuration);
+              // Search through padding cells (shift cells + padding cells)
+              for (let i = 0; i < paddingCount; i++) {
+                const rawBeat = shiftCount + i;
+                const cellTimestamp = chordGridData.beats[rawBeat];
 
-                // FIXED: Start animation from first non-shift cell (shiftCount + 0)
-                // Grid layout: [shift cells (null timestamps, never highlight)] + [padding cells (orange/N.C.)] + [model beats]
-                // Animation starts from position shiftCount (first padding cell)
-                const rawBeat = shiftCount + Math.min(paddingBeatIndex, paddingCount - 1);
+                if (cellTimestamp !== null && cellTimestamp !== undefined) {
+                  const timeDifference = Math.abs(time - cellTimestamp);
 
-                // console.log(`🎬 PADDING PHASE: time=${time.toFixed(3)}s, firstNonShiftTimestamp=${firstNonShiftTimestamp.toFixed(3)}s, paddingBeatIndex=${paddingBeatIndex}, rawBeat=${rawBeat}, shiftCount=${shiftCount}`);
-
-                // CRITICAL: Verify the beat has a valid timestamp before highlighting
-                if (chordGridData.beats[rawBeat] !== null && chordGridData.beats[rawBeat] !== undefined) {
-                  currentBeat = rawBeat;
-                } else {
-                  console.warn(`🚨 PADDING: Beat ${rawBeat} has null timestamp, skipping highlight`);
-                  currentBeat = -1; // Don't highlight cells with null timestamps
-                }
-
-              } else {
-                // ENHANCED: Provide visual feedback even before the first detected beat
-                // Calculate a virtual beat position based on estimated tempo
-                const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
-                const estimatedBeatDuration = 60 / estimatedBPM; // seconds per beat
-
-                // Calculate which virtual beat we should be on based on current time
-                const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
-
-                // Map to the first available padding cell if we have padding
-                if (paddingCount > 0 && virtualBeatIndex < paddingCount) {
-                  const virtualBeat = shiftCount + virtualBeatIndex;
-
-                  // Only highlight if this is a valid padding cell
-                  if (virtualBeat >= shiftCount && virtualBeat < (shiftCount + paddingCount)) {
-                    currentBeat = virtualBeat;
-                  } else {
-                    currentBeat = -1;
+                  // Find the cell with timestamp closest to current time
+                  if (timeDifference < bestTimeDifference) {
+                    bestTimeDifference = timeDifference;
+                    bestPaddingIndex = i;
                   }
-                } else {
-                  // If no padding or beyond padding range, don't highlight
-                  currentBeat = -1;
+
+                  // Also check if current time falls within this cell's range
+                  const nextRawBeat = shiftCount + i + 1;
+                  let nextCellTime = cellTimestamp + (animationRangeStart / paddingCount); // Default estimate
+
+                  if (nextRawBeat < chordGridData.beats.length && chordGridData.beats[nextRawBeat] !== null) {
+                    nextCellTime = chordGridData.beats[nextRawBeat];
+                  }
+
+                  // If current time falls within this cell's range, prefer this
+                  if (time >= cellTimestamp && time < nextCellTime) {
+                    bestPaddingIndex = i;
+                    bestTimeDifference = timeDifference;
+                    // console.log(`🎯 PADDING RANGE MATCH: time=${time.toFixed(3)}s in range [${cellTimestamp.toFixed(3)}s, ${nextCellTime.toFixed(3)}s) -> cell ${i}`);
+                    break;
+                  }
                 }
+              }
+
+              // console.log(`🎬 PADDING SEARCH: time=${time.toFixed(3)}s, bestPaddingIndex=${bestPaddingIndex}, bestTimeDifference=${bestTimeDifference.toFixed(3)}s`);
+
+              if (bestPaddingIndex !== -1) {
+                const rawBeat = shiftCount + bestPaddingIndex;
+                const beatTimestamp = chordGridData.beats[rawBeat];
+
+                // console.log(`🎬 PADDING FOUND: rawBeat=${rawBeat}, timestamp=${beatTimestamp?.toFixed(3)}s`);
+
+                // Verify this is a valid padding cell
+                if (rawBeat >= shiftCount && rawBeat < (shiftCount + paddingCount)) {
+                  currentBeat = rawBeat;
+                  // if (currentBeat !== currentBeatIndex) {
+                  //   console.log(`✅ PADDING HIGHLIGHT: Setting currentBeat=${rawBeat}, timestamp=${beatTimestamp?.toFixed(3)}s`);
+                  // }
+                } else {
+                  currentBeat = -1;
+                  // console.log(`❌ PADDING INVALID: rawBeat=${rawBeat} out of range [${shiftCount}, ${shiftCount + paddingCount})`);
+                }
+              } else {
+                currentBeat = -1;
+                // console.log(`❌ PADDING NOT FOUND: No valid padding cell found for time=${time.toFixed(3)}s`);
               }
             } else {
               // ENHANCED: Even without padding, provide visual feedback using estimated tempo
@@ -1631,23 +1656,27 @@ export default function YouTubeVideoAnalyzePage() {
 
               // ENHANCED: Use any available cells for early animation
               if (chordGridData && chordGridData.chords.length > 0) {
-                // Try shift cells first
+                // Try shift cells first (they have null timestamps but can be highlighted during pre-beat phase)
                 if (shiftCount > 0 && virtualBeatIndex < shiftCount) {
                   currentBeat = virtualBeatIndex;
-                } else {
-                  // Fallback: Use any available cell, even if it has a timestamp
+                } else if (virtualBeatIndex >= 0) {
+                  // Fallback: Use any available cell, but respect bounds
                   const maxIndex = chordGridData.chords.length - 1;
                   const clampedIndex = Math.min(virtualBeatIndex, maxIndex);
-                  if (clampedIndex >= 0) {
-                    currentBeat = clampedIndex;
-                  } else {
-                    currentBeat = -1;
-                  }
+                  currentBeat = clampedIndex;
+                } else {
+                  currentBeat = -1;
                 }
               } else {
                 currentBeat = -1;
               }
             }
+
+            // PADDING PHASE: Apply the result immediately
+            // if (currentBeat !== currentBeatIndex) {
+            //   console.log(`🎯 PADDING PHASE: setCurrentBeatIndex(${currentBeat})`);
+            // }
+            setCurrentBeatIndex(currentBeat);
           } else {
             // PHASE 2: Model beats (first detected beat onwards)
             // Use ChordGrid's beat array for consistency with click handling
@@ -1842,49 +1871,38 @@ export default function YouTubeVideoAnalyzePage() {
             const shiftCount = chordGridData.shiftCount || 0;
             const isPreBeatPhase = time < animationRangeStart;
 
+            // Only log beat updates when they change or every 2 seconds
+            // if (currentBeat !== currentBeatIndex || Math.floor(time) % 2 === 0) {
+            //   console.log(`🎯 BEAT UPDATE CHECK: currentBeat=${currentBeat}, isPreBeatPhase=${isPreBeatPhase}, timestamp=${chordGridData.beats[currentBeat]}`);
+            // }
+
             // Check if this beat has a null timestamp (shift cell)
             if (currentBeat < shiftCount || chordGridData.beats[currentBeat] === null || chordGridData.beats[currentBeat] === undefined) {
               // FIXED: Allow highlighting shift cells during pre-beat virtual animation
               if (isPreBeatPhase) {
                 // Allow the highlighting during virtual animation phase
+                // if (currentBeat !== currentBeatIndex) {
+                //   console.log(`✅ ALLOWING PRE-BEAT HIGHLIGHT: currentBeat=${currentBeat}`);
+                // }
               } else {
                 currentBeat = -1; // Don't highlight cells with null timestamps during model phase
+                // if (currentBeat !== currentBeatIndex) {
+                //   console.log(`❌ BLOCKING NULL TIMESTAMP: currentBeat reset to -1`);
+                // }
               }
             }
 
+            // Only log setCurrentBeatIndex calls when beat actually changes
+            // if (currentBeat !== currentBeatIndex) {
+            //   console.log(`🎯 MODEL PHASE: setCurrentBeatIndex(${currentBeat})`);
+            // }
             setCurrentBeatIndex(currentBeat);
           } else {
-            // ENHANCED: Provide basic visual feedback even when no specific beat is found
-            // This ensures continuous visual progress indication throughout the timeline
-            const estimatedBPM = analysisResults?.beatDetectionResult?.bpm || 120;
-            const estimatedBeatDuration = 60 / estimatedBPM;
-            const virtualBeatIndex = Math.floor(time / estimatedBeatDuration);
-            const isPreBeatPhase = time < animationRangeStart;
-
-            // Try to find any available cell to highlight based on virtual timing
-            if (chordGridData && chordGridData.chords.length > 0) {
-              const maxIndex = chordGridData.chords.length - 1;
-              const clampedIndex = Math.min(virtualBeatIndex, maxIndex);
-
-              // ENHANCED: During pre-beat phase, allow highlighting any cell (including shift cells)
-              if (clampedIndex >= 0) {
-                if (isPreBeatPhase) {
-                  // During pre-beat phase, highlight any cell regardless of timestamp
-                  setCurrentBeatIndex(clampedIndex);
-                } else {
-                  // During model phase, only highlight cells with valid timestamps
-                  if (chordGridData.beats[clampedIndex] !== null && chordGridData.beats[clampedIndex] !== undefined) {
-                    setCurrentBeatIndex(clampedIndex);
-                  } else {
-                    setCurrentBeatIndex(-1);
-                  }
-                }
-              } else {
-                setCurrentBeatIndex(-1);
-              }
-            } else {
-              setCurrentBeatIndex(-1);
-            }
+            // MODEL PHASE: No beat found, set to -1
+            // if (currentBeatIndex !== -1) {
+            //   console.log(`🎯 MODEL PHASE: setCurrentBeatIndex(-1) - no beat found`);
+            // }
+            setCurrentBeatIndex(-1);
           }
         }
 
@@ -1906,7 +1924,7 @@ export default function YouTubeVideoAnalyzePage() {
     }, 50); // Update at 20Hz for smoother beat tracking
 
     return () => clearInterval(interval);
-  }, [isPlaying, analysisResults, setCurrentTime, setCurrentBeatIndex]);
+  }, [isPlaying, analysisResults, setCurrentTime]);
 
   // Set up audio element event listeners
   useEffect(() => {
@@ -1979,7 +1997,7 @@ export default function YouTubeVideoAnalyzePage() {
   }, [preferredAudioSource, youtubePlayer]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -1998,6 +2016,14 @@ export default function YouTubeVideoAnalyzePage() {
 
       <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "98%" }}>
         <div className="bg-white dark:bg-content-bg shadow-md rounded-lg overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+
+        {/* Processing Status Banner - positioned in content flow */}
+        <ProcessingStatusBanner
+          analysisResults={analysisResults}
+          audioDuration={duration}
+          fromCache={audioProcessingState.fromCache}
+          fromFirestoreCache={audioProcessingState.fromFirestoreCache}
+        />
 
         {/* Main content area - responsive width based on chatbot and lyrics panel state */}
         <div className={`flex flex-col transition-all duration-300 ${
@@ -2078,13 +2104,7 @@ export default function YouTubeVideoAnalyzePage() {
                 </div>
               )}
 
-              {/* Processing Status Banner - shown at the top of the page */}
-              <ProcessingStatusBanner
-                analysisResults={analysisResults}
-                audioDuration={duration}
-                fromCache={audioProcessingState.fromCache}
-                fromFirestoreCache={audioProcessingState.fromFirestoreCache}
-              />
+
 
               {/* Analysis Controls Component */}
               <AnalysisControls
@@ -2223,9 +2243,9 @@ export default function YouTubeVideoAnalyzePage() {
 
 
               {/* Beats visualization */}
-              <div className="p-4 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+              <div className="p-4 rounded-lg bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
                 <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Timeline</h3>
-                <div className="relative h-16 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden transition-colors duration-300">
+                <div className="relative h-16 bg-gray-50 dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-md overflow-hidden transition-colors duration-300">
                   {/* Beat markers */}
                   {analysisResults && analysisResults.beats && analysisResults.beats.map ? (
                     analysisResults.beats.map((beat: {time: number, beatNum?: number}, index: number) => {
@@ -2360,7 +2380,7 @@ export default function YouTubeVideoAnalyzePage() {
               }}
             >
               {/* Floating control buttons - fixed to top of the YouTube player */}
-              <div className="absolute -top-10 left-0 right-0 z-60 flex flex-wrap justify-end gap-1 p-2 bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300">
+              <div className="absolute -top-10 left-0 right-0 z-60 flex flex-wrap justify-end gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300">
                 <button
                   onClick={toggleFollowMode}
                   className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap ${

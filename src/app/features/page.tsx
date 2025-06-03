@@ -17,7 +17,7 @@ interface FeatureProps {
 
 function CollapsibleFeature({ title, description, details, icon, isExpanded, onToggle }: FeatureProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-colors duration-300">
+    <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 transition-colors duration-300">{title}</h2>
@@ -25,7 +25,7 @@ function CollapsibleFeature({ title, description, details, icon, isExpanded, onT
         </div>
         <button
           onClick={onToggle}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200"
           aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
         >
           <svg
@@ -44,7 +44,7 @@ function CollapsibleFeature({ title, description, details, icon, isExpanded, onT
         {description}
       </p>
       {isExpanded && (
-        <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg transition-all duration-300 ease-in-out border border-blue-200 dark:border-blue-700">
+        <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-lg transition-all duration-300 ease-in-out border border-blue-200 dark:border-gray-600">
           <ul className="list-disc list-inside text-gray-700 dark:text-gray-200 space-y-2 transition-colors duration-300">
             {details.map((detail, index) => (
               <li key={index} dangerouslySetInnerHTML={{ __html: detail }} />
@@ -74,7 +74,7 @@ export default function FeaturesPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 

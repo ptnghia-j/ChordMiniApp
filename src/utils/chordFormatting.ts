@@ -218,7 +218,10 @@ function translateScaleDegreeInversion(root: string, quality: string, inversion:
   if (rootIndex === -1) return inversion; // Fallback if root not found
 
   // Determine if chord is minor for scale degree calculation
-  const isMinor = quality === 'min' || quality === 'm' || quality.startsWith('min') || quality.startsWith('m');
+  // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
+  const isMinor = quality === 'min' || quality === 'm' ||
+                  (quality.startsWith('min') && quality !== 'maj') ||
+                  (quality.startsWith('m') && !quality.startsWith('maj'));
 
   // Parse the inversion to handle accidentals
   let scaleDegree = inversion;
@@ -269,7 +272,7 @@ function translateScaleDegreeInversion(root: string, quality: string, inversion:
  * @param inversion The inversion number (3, 5, 7, etc.)
  * @returns The bass note as a string
  */
-function getBassNoteFromInversion(root: string, quality: string, inversion: string): string {
+export function getBassNoteFromInversion(root: string, quality: string, inversion: string): string {
   // Define the notes in order
   const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const notesWithFlats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -278,8 +281,21 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
   const usesFlats = root.includes('b');
 
   // For minor chords, prefer flat notation for the third (e.g., Em/G instead of Em/F#)
-  const isMinor = quality === 'min' || quality === 'm' || quality.startsWith('min') || quality.startsWith('m');
+  // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
+  const isMinor = quality === 'min' || quality === 'm' ||
+                  (quality.startsWith('min') && quality !== 'maj') ||
+                  (quality.startsWith('m') && !quality.startsWith('maj'));
   const preferFlatsForMinor = isMinor && (inversion === '3' || inversion === 'b3');
+
+  // DEBUG: Log input parameters and chord quality detection
+  // console.log(`🔍 getBassNoteFromInversion DEBUG:`, {
+  //   root,
+  //   quality,
+  //   inversion,
+  //   isMinor,
+  //   preferFlatsForMinor,
+  //   usesFlats
+  // });
 
   // For flat inversions, prefer flat notation (e.g., C/b7 -> C/Bb instead of C/A#)
   const isFlatInversion = inversion.startsWith('b');
@@ -333,6 +349,7 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
       // For minor chords, the third is already minor (3 semitones)
       // For major chords, the third is major (4 semitones)
       bassSemitones = isMinor ? 3 : 4;
+      // console.log(`🔍 Case 3: isMinor=${isMinor}, bassSemitones=${bassSemitones}`);
       break;
     case 4:
       bassSemitones = 5; // Perfect fourth
@@ -360,7 +377,19 @@ function getBassNoteFromInversion(root: string, quality: string, inversion: stri
 
   // Calculate the bass note index
   const bassIndex = (rootIndex + bassSemitones) % 12;
-  return bassNoteArray[bassIndex];
+  const result = bassNoteArray[bassIndex];
+
+  // DEBUG: Log final calculation
+  // console.log(`🔍 Final calculation:`, {
+  //   rootIndex,
+  //   bassSemitones,
+  //   intervalAdjustment,
+  //   bassIndex,
+  //   result,
+  //   bassNoteArray: bassNoteArray === notes ? 'sharps' : 'flats'
+  // });
+
+  return result;
 }
 
 /**

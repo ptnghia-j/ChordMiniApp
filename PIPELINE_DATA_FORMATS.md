@@ -38,7 +38,7 @@
   ],
   "bpm": 120.5,
   "time_signature": 3, // Detected time signature (3/4, 4/4, etc.)
-  "model": "beat-transformer-light",
+  "model": "beat-transformer",
   "total_beats": 992,
   "duration": 180.5
 }

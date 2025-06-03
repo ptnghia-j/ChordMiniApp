@@ -75,6 +75,9 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   chordCorrections = null,
   sequenceCorrections = null
 }) => {
+  // DEBUG: Log currentBeatIndex changes (only when it changes)
+  // console.log(`🎯 CHORDGRID RENDER: currentBeatIndex=${currentBeatIndex}, hasPadding=${hasPadding}, paddingCount=${paddingCount}, shiftCount=${shiftCount}`);
+
   // Get theme for SVG selection
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
@@ -541,24 +544,27 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       return; // Don't allow clicking on shift cells
     }
 
-    // Handle padding cells - calculate timestamps based on time range
+    // Handle padding cells - use the actual timestamp from beats array
     if (isPaddingCell) {
-      const paddingIndex = globalIndex - shiftCount;
+      // FIXED: Use the actual timestamp from the beats array instead of calculating
+      // This ensures consistency with the animation logic
+      const timestamp = beats[globalIndex];
 
-      // FIXED: Calculate padding timestamps based on beat_time_range_start
-      // Padding cells represent time from 0.0s to beat_time_range_start
-      const firstDetectedBeatTime = beats.length > 0 ? beats[0] : 0;
-      const paddingDuration = beatTimeRangeStart > 0 ? beatTimeRangeStart : firstDetectedBeatTime;
-
-      if (paddingCount > 0 && paddingDuration > 0) {
-        // Calculate timestamp for this padding cell
-        const paddingCellDuration = paddingDuration / paddingCount;
-        const timestamp = paddingIndex * paddingCellDuration;
-
-        // console.log(`Beat cell clicked: visual index ${globalIndex} -> padding cell ${paddingIndex} -> timestamp ${timestamp.toFixed(3)}s (calculated from ${paddingDuration.toFixed(3)}s range, beatTimeRangeStart=${beatTimeRangeStart})`);
-        onBeatClick(globalIndex, timestamp); // Use globalIndex as beatIndex for padding cells
+      if (timestamp !== null && timestamp !== undefined && timestamp >= 0) {
+        // console.log(`Beat cell clicked: visual index ${globalIndex} -> padding cell -> timestamp ${timestamp.toFixed(3)}s (from beats array)`);
+        onBeatClick(globalIndex, timestamp);
       } else {
-        // console.warn(`Beat cell clicked: padding cell ${paddingIndex} -> cannot calculate timestamp (paddingCount=${paddingCount}, paddingDuration=${paddingDuration}, beatTimeRangeStart=${beatTimeRangeStart})`);
+        // Fallback calculation if timestamp is not available
+        const paddingIndex = globalIndex - shiftCount;
+        const firstDetectedBeatTime = beats.find(beat => beat !== null && beat !== undefined) || 0;
+        const paddingDuration = beatTimeRangeStart > 0 ? beatTimeRangeStart : firstDetectedBeatTime;
+
+        if (paddingCount > 0 && paddingDuration > 0) {
+          const paddingCellDuration = paddingDuration / paddingCount;
+          const fallbackTimestamp = paddingIndex * paddingCellDuration;
+          // console.log(`Beat cell clicked: visual index ${globalIndex} -> padding cell ${paddingIndex} -> fallback timestamp ${fallbackTimestamp.toFixed(3)}s`);
+          onBeatClick(globalIndex, fallbackTimestamp);
+        }
       }
       return;
     }
@@ -763,14 +769,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       currentIndex++;
     }
 
-    // Pad incomplete measures to maintain consistent grid layout
-    while (measure.chords.length < actualBeatsPerMeasure) {
-      measure.chords.push(''); // Empty cell for padding
-      measure.beats.push(-1); // Invalid beat index for padding
+    // FIXED: Only pad incomplete measures if they have actual content
+    // This prevents trailing empty measures from beat-transformer-light
+    if (measure.chords.length > 0) {
+      // Pad incomplete measures to maintain consistent grid layout
+      while (measure.chords.length < actualBeatsPerMeasure) {
+        measure.chords.push(''); // Empty cell for padding
+        measure.beats.push(-1); // Invalid beat index for padding
+      }
+      groupedByMeasure.push(measure);
+      measureNumber++;
     }
-
-    groupedByMeasure.push(measure);
-    measureNumber++;
   }
 
   // DEBUG: Show simplified measure grouping
@@ -1037,7 +1046,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                       // if (isCurrentBeat) {
                       //   const beatTime = beats[globalIndex];
                       //   const beatTimeStr = typeof beatTime === 'number' ? beatTime.toFixed(3) + 's' : String(beatTime);
-                      //   console.log(`🎯 CURRENT BEAT HIGHLIGHT: Visual[${globalIndex}] chord="${chord}" beat=${beatTimeStr} (currentBeatIndex=${currentBeatIndex})`);
+                      //   console.log(`🎯 UI HIGHLIGHT: Visual[${globalIndex}] chord="${chord}" beat=${beatTimeStr} (currentBeatIndex=${currentBeatIndex})`);
                       // }
                       const showChordLabel = shouldShowChordLabel(globalIndex);
                       const isEmpty = chord === '';
