@@ -15,6 +15,11 @@ python-dotenv==1.0.0
 tensorflow>=2.8.0,<2.16.0
 madmom>=0.16.1
 spleeter>=2.4.0
+# Fix Spleeter click dependency conflict
+click>=7.0,<8.0
+# Additional dependencies for Beat-Transformer
+ipython>=7.0.0
+jupyter>=1.0.0
 # Chord-CNN-LSTM dependencies
 pretty_midi>=0.2.9
 h5py>=2.9.0
