@@ -9,6 +9,20 @@ requests==2.31.0
 Pillow==10.0.0
 werkzeug==2.3.4
 gunicorn==21.2.0
+lyricsgenius>=3.0.1
+python-dotenv==1.0.0
+# ML model dependencies - re-enabled for full functionality
+tensorflow>=2.8.0,<2.16.0
 madmom>=0.16.1
 spleeter>=2.4.0
-lyricsgenius>=3.0.1
+# Chord-CNN-LSTM dependencies
+pretty_midi>=0.2.9
+h5py>=2.9.0
+matplotlib>=2.2.4
+mir_eval>=0.5
+pydub>=0.23.1
+joblib>=0.13.2
+figures>=0.3.16
+jams>=0.3.4
+pumpp>=0.5.0
+scikit_learn>=0.23.2
