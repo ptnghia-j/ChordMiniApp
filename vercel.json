@@ -1,5 +1,4 @@
 {
-  "buildCommand": "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp && chmod +x ./yt-dlp && cp ./yt-dlp ./.next/standalone/yt-dlp 2>/dev/null || true && npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
   "functions": {
