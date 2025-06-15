@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  getCacheIndex, 
-  cleanCache, 
-  removeCacheEntry,
-  CacheEntry
+import {
+  getCacheIndex,
+  cleanCache,
+  removeCacheEntry
 } from '@/services/cacheService';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 // GET handler to retrieve cache status
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const cacheIndex = await getCacheIndex();
     
     // Calculate total size
     let totalSize = 0;
     for (const entry of cacheIndex) {
-      if (entry.fileSize) {
+      if (entry.fileSize && typeof entry.fileSize === 'number') {
         totalSize += entry.fileSize;
       }
     }
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
         
         // Remove all files
         for (const entry of cacheIndex) {
-          if (entry.audioUrl) {
+          if (entry.audioUrl && typeof entry.audioUrl === 'string') {
             try {
               const audioPath = path.join(process.cwd(), 'public', entry.audioUrl);
               await fs.unlink(audioPath);
@@ -87,7 +86,7 @@ export async function POST(request: NextRequest) {
             }
           }
           
-          if (entry.videoUrl) {
+          if (entry.videoUrl && typeof entry.videoUrl === 'string') {
             try {
               const videoPath = path.join(process.cwd(), 'public', entry.videoUrl);
               await fs.unlink(videoPath);

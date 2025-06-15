@@ -1,6 +1,6 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '@/config/firebase';
-import { collection, doc, getDoc, setDoc, query, where, getDocs, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 // Collection name for audio files
 const AUDIO_FILES_COLLECTION = 'audioFiles';
@@ -16,6 +16,13 @@ export interface AudioFileData {
   videoFileSize?: number;
   duration?: number;
   createdAt: Timestamp;
+}
+
+// Extended interface for cached data that may have additional properties
+interface CachedAudioFileData extends AudioFileData {
+  invalid?: boolean;
+  expired?: boolean;
+  processedAt?: number;
 }
 
 /**
@@ -70,7 +77,7 @@ export async function uploadAudioFile(
       // Upload audio file
       console.log(`Starting upload of audio file to ${audioStoragePath}`);
       const audioSnapshot = await uploadBytes(audioStorageRef, audioBlob);
-      console.log('Audio file uploaded successfully, size:', audioSnapshot.totalBytes);
+      console.log('Audio file uploaded successfully, size:', audioSnapshot.metadata.size);
 
       // Get download URL
       const audioUrl = await getDownloadURL(audioSnapshot.ref);
@@ -96,7 +103,7 @@ export async function uploadAudioFile(
 
         console.log(`Starting upload of video file to ${videoStoragePath}`);
         const videoSnapshot = await uploadBytes(videoStorageRef, videoBlob);
-        console.log('Video file uploaded successfully, size:', videoSnapshot.totalBytes);
+        console.log('Video file uploaded successfully, size:', videoSnapshot.metadata.size);
 
         videoUrl = await getDownloadURL(videoSnapshot.ref);
         console.log(`Generated public download URL for video: ${videoUrl}`);
@@ -222,7 +229,7 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
     // Check if the document exists
     if (docSnap.exists()) {
       console.log('Found cached audio file in Firestore');
-      const data = docSnap.data() as AudioFileData;
+      const data = docSnap.data() as CachedAudioFileData;
 
       // Check if the entry is already marked as invalid or expired
       if (data.invalid || data.expired) {

@@ -1,0 +1,60 @@
+# Full Backend Deployment - Simplified exclusion approach
+
+# Exclude only unnecessary files
+myenv/
+
+# Virtual environments
+venv/
+env/
+.env
+.venv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Development files
+.git/
+.gitignore
+README.md
+*.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test directories (but keep individual test files like test_btc.py)
+tests/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Large data files (keep only essential models)
+pretrained_models/
+output_with_clicks.wav
+beats_with_positions.txt
+downbeats_measures.txt
+
+# Development scripts
+setup.sh
+setup_beat_transformer.sh
+
+# Documentation
+instructions_*.md

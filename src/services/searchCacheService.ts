@@ -5,10 +5,21 @@ import path from 'path';
 const CACHE_DIR = path.join(process.cwd(), 'cache');
 const SEARCH_CACHE_PATH = path.join(CACHE_DIR, 'search_cache.json');
 
+// Define search result types
+export interface SearchResult {
+  id: string;
+  title: string;
+  url?: string;
+  description?: string;
+  thumbnail?: string;
+  duration?: string;
+  [key: string]: unknown; // Allow additional properties
+}
+
 // Define the search cache entry type
 export interface SearchCacheEntry {
   query: string;
-  results: any[];
+  results: SearchResult[];
   timestamp: number;
   expiresAt: number;
 }
@@ -19,7 +30,7 @@ export async function initSearchCache(): Promise<void> {
     // Create cache directory if it doesn't exist
     try {
       await fs.mkdir(CACHE_DIR, { recursive: true });
-    } catch (error) {
+    } catch {
       // Ignore if directory already exists
     }
 
@@ -70,8 +81,8 @@ export async function getCachedSearch(query: string): Promise<SearchCacheEntry |
 
 // Add a search result to the cache
 export async function addToSearchCache(
-  query: string, 
-  results: any[], 
+  query: string,
+  results: SearchResult[],
   ttlHours: number = 24
 ): Promise<void> {
   const normalizedQuery = query.trim();

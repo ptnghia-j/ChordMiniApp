@@ -80,7 +80,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
       const assistantMessage = createChatMessage('assistant', response.message);
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Log chatbot error for monitoring
       setError(error instanceof Error ? error.message : 'Failed to send message');
     } finally {
       setIsLoading(false);

@@ -7,10 +7,21 @@
 
 import axios from 'axios';
 
+// Types for fetch fallback client
+interface FetchConfig {
+  headers: Record<string, string>;
+  timeout?: number;
+}
+
+interface FetchResponse<T = unknown> {
+  status: number;
+  data: T;
+}
+
 // Helper function to create a fetch-based fallback client
 const createFetchFallback = () => {
   return {
-    post: async (url: string, data: any, config: any) => {
+    post: async <T = unknown>(url: string, data: unknown, config: FetchConfig): Promise<FetchResponse<T>> => {
       const response = await fetch(url, {
         method: 'POST',
         headers: config.headers,
@@ -19,10 +30,10 @@ const createFetchFallback = () => {
 
       return {
         status: response.status,
-        data: await response.json()
+        data: await response.json() as T
       };
     },
-    get: async (url: string, config: any) => {
+    get: async <T = unknown>(url: string, config: FetchConfig): Promise<FetchResponse<T>> => {
       const response = await fetch(url, {
         method: 'GET',
         headers: config.headers
@@ -30,7 +41,7 @@ const createFetchFallback = () => {
 
       return {
         status: response.status,
-        data: await response.json()
+        data: await response.json() as T
       };
     },
     isAxiosError: () => false,
@@ -41,7 +52,7 @@ const createFetchFallback = () => {
 interface MusicAiJob {
   id: string;
   status: string;
-  result?: any;
+  result?: Record<string, unknown>;
   error?: string;
 }
 
@@ -112,7 +123,7 @@ export class CustomMusicAiClient {
    * @param params The parameters for the job
    * @returns The job ID
    */
-  async addJob(workflow: string, params: Record<string, any>) {
+  async addJob(workflow: string, params: Record<string, string | number | boolean | object>) {
     console.log(`[CustomMusicAiClient] Creating job with workflow: ${workflow}`);
     console.log(`[CustomMusicAiClient] Parameters:`, JSON.stringify(params, null, 2));
 
@@ -159,9 +170,10 @@ export class CustomMusicAiClient {
         }
 
         throw new Error(`Failed to create job: Unexpected response: ${JSON.stringify(response?.data)}`);
-      } catch (error: any) {
+      } catch (error) {
         // If the standard endpoint fails, try fallback options
-        console.log(`[CustomMusicAiClient] Standard endpoint failed: ${error?.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.log(`[CustomMusicAiClient] Standard endpoint failed: ${errorMessage}`);
         console.log('[CustomMusicAiClient] Trying fallback options...');
 
         // Fallback to trying multiple endpoints and auth headers
@@ -566,7 +578,7 @@ export class CustomMusicAiClient {
           console.log(`[CustomMusicAiClient] Successfully got signed URLs from: ${endpoint}`);
           break;
         } catch (error) {
-          console.log(`[CustomMusicAiClient] Endpoint ${endpoint} failed:`, error.message);
+          console.log(`[CustomMusicAiClient] Endpoint ${endpoint} failed:`, error instanceof Error ? error.message : String(error));
           lastError = error;
         }
       }
@@ -638,7 +650,7 @@ export class CustomMusicAiClient {
             console.warn(`[CustomMusicAiClient] File may not be accessible at the download URL. Status: ${verifyResponse.status}`);
           }
         } catch (verifyError) {
-          console.warn(`[CustomMusicAiClient] Could not verify file accessibility: ${verifyError.message}`);
+          console.warn(`[CustomMusicAiClient] Could not verify file accessibility: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`);
           // Continue anyway, as the file might still be processing
         }
 

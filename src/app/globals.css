@@ -265,3 +265,105 @@
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgb(107 114 128);
 }
+
+/* Animated Title Sweep Effect */
+@keyframes sweepText {
+  0% {
+    background-position: -200% 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    background-position: 200% 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    background-position: 200% 0;
+    opacity: 0;
+  }
+}
+
+.animate-sweep-text {
+  animation: sweepText 12s ease-in-out infinite;
+}
+
+/* Animated Border Sweep Effect - Perimeter Traveling Highlight */
+@keyframes borderRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.shooting-star-border {
+  position: relative;
+  border-radius: 1rem;
+  padding: 3px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.dark .shooting-star-border {
+  background: #4b5563;
+}
+
+.shooting-star-border::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 280deg,
+    #60a5fa 290deg,
+    #3b82f6 320deg,
+    #1d4ed8 340deg,
+    #2563eb 350deg,
+    #1d4ed8 360deg,
+    #3b82f6 10deg,
+    #60a5fa 40deg,
+    transparent 70deg,
+    transparent 360deg
+  );
+  animation: borderRotate 5s linear infinite;
+  z-index: 1;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+.shooting-star-border::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 0.875rem;
+  z-index: 2;
+}
+
+.dark .shooting-star-border::after {
+  background: #1E252E;
+}
+
+.shooting-star-content {
+  position: relative;
+  z-index: 3;
+  border: none;
+  background: transparent;
+  border-radius: 0.875rem;
+}
+
+.dark .shooting-star-content {
+  background: transparent;
+}

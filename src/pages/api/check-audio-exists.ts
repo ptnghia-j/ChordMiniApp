@@ -23,11 +23,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       // Check if the directory exists
       await fs.access(audioDir);
-    } catch (error) {
+    } catch {
       // If the directory doesn't exist, create it
       await fs.mkdir(audioDir, { recursive: true });
       console.log(`Created audio directory: ${audioDir}`);
-      
+
       // Since we just created the directory, the file doesn't exist
       return res.status(200).json({ exists: false });
     }
@@ -45,11 +45,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       try {
         await fs.access(specificFilePath);
-        return res.status(200).json({ 
+        return res.status(200).json({
           exists: true,
           path: `/audio/${specificFile}`
         });
-      } catch (error) {
+      } catch {
         return res.status(200).json({ exists: false });
       }
     }
@@ -62,11 +62,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? `/audio/${files.find(file => file.startsWith(`${videoId}_`))}`
         : null
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error checking if audio exists:', error);
-    return res.status(500).json({ 
-      error: 'Error checking if audio exists', 
-      details: error.message 
+    return res.status(500).json({
+      error: 'Error checking if audio exists',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }

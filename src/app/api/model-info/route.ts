@@ -6,23 +6,31 @@ import { NextResponse } from 'next/server';
  */
 export async function GET() {
   try {
-    // Try to call the Python backend API first
+    // Try to call the Python backend API first with timeout
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app';
     try {
-      const response = await fetch('http://localhost:5000/api/model-info', {
+      const response = await fetch(`${backendUrl}/api/model-info`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(8000) // 8 second timeout
       });
 
       if (response.ok) {
-        // Parse the response
         const data = await response.json();
-        // Return the response
-        return NextResponse.json(data);
+        // Return the response with cache headers for better performance
+        return new NextResponse(JSON.stringify(data), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600', // Cache for 5 minutes
+          },
+        });
       }
-    } catch (backendError) {
-      console.warn('Backend not available, using fallback model info');
+    } catch (error) {
+      console.warn('Backend model-info not available, using fallback:', error);
     }
 
     // Fallback model information when the backend is not available
@@ -67,8 +75,14 @@ export async function GET() {
       }
     };
 
-    // Return the fallback response
-    return NextResponse.json(fallbackModelInfo);
+    // Return the fallback response with cache headers
+    return new NextResponse(JSON.stringify(fallbackModelInfo), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600', // Cache for 5 minutes
+      },
+    });
   } catch (error) {
     console.error('Error in model-info API route:', error);
     return NextResponse.json(

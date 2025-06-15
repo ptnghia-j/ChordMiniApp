@@ -103,7 +103,7 @@ export async function extractAudio(videoId: string): Promise<{
             } else {
               throw new Error(`Failed to fetch audio data from local cache: ${localAudioUrl}`);
             }
-          } catch (localError) {
+          } catch {
             console.log('Local audio file not available or is a placeholder, fetching from original URL');
 
             // Try the original URL
@@ -154,7 +154,7 @@ export async function extractAudio(videoId: string): Promise<{
         }
       } catch (error) {
         console.error('Error fetching audio data:', error);
-        throw new Error(`Failed to fetch audio data: ${error.message}`);
+        throw new Error(`Failed to fetch audio data: ${error instanceof Error ? error.message : String(error)}`);
       }
 
       if (!audioData || audioData.byteLength === 0) {

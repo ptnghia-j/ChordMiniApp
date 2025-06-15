@@ -9,7 +9,7 @@ export interface AudioPlayerState {
   preferredAudioSource: 'youtube' | 'extracted';
 }
 
-export const useAudioPlayer = (audioUrl?: string) => {
+export const useAudioPlayer = () => {
   const [state, setState] = useState<AudioPlayerState>({
     isPlaying: false,
     currentTime: 0,

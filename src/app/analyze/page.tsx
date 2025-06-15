@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Navigation from '@/components/Navigation';
-import { analyzeAudio, AnalysisResult } from '@/services/chordRecognitionService';
+import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chordRecognitionService';
 import BeatModelSelector from '@/components/BeatModelSelector';
 import ChordModelSelector from '@/components/ChordModelSelector';
 import ProcessingStatusBanner from '@/components/ProcessingStatusBanner';
@@ -10,7 +10,7 @@ import AnalysisSummary from '@/components/AnalysisSummary';
 import MetronomeControls from '@/components/MetronomeControls';
 import { ChordGridContainer } from '@/components/ChordGridContainer';
 import { useProcessing } from '@/contexts/ProcessingContext';
-import { useTheme } from '@/contexts/ThemeContext';
+// import { useTheme } from '@/contexts/ThemeContext';
 
 export default function LocalAudioAnalyzePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -22,8 +22,8 @@ export default function LocalAudioAnalyzePage() {
 
   // Use processing context
   const {
-    stage,
-    progress,
+    // stage,
+    // progress,
     setStage,
     setProgress,
     setStatusMessage,
@@ -31,7 +31,7 @@ export default function LocalAudioAnalyzePage() {
     completeProcessing,
     failProcessing
   } = useProcessing();
-  const { theme } = useTheme();
+  // const { theme } = useTheme();
 
   // Define detector types
   type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
@@ -61,13 +61,25 @@ export default function LocalAudioAnalyzePage() {
   const keySignature = null;
   const isDetectingKey = false;
   const showCorrectedChords = false;
-  const chordCorrections: Record<string, string> = {};
-  const sequenceCorrections: Array<{
-    originalChord: string;
-    correctedChord: string;
-    position: number;
-    confidence: number;
-  }> = [];
+  const chordCorrections = useMemo(() => ({} as Record<string, string>), []);
+  const sequenceCorrections = useMemo(() => (null as {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null), []);
 
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,13 +126,6 @@ export default function LocalAudioAnalyzePage() {
         error: null,
       }));
 
-      // Update to chord recognition stage after a brief delay
-      stageTimeout = setTimeout(() => {
-        setStage('chord-recognition');
-        setProgress(50);
-        setStatusMessage('Recognizing chords and synchronizing with beats...');
-      }, 1000);
-
       // Read the file as ArrayBuffer
       const arrayBuffer = await audioFile.arrayBuffer();
 
@@ -131,6 +136,18 @@ export default function LocalAudioAnalyzePage() {
       // Decode audio data
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
+      // Set duration from AudioBuffer IMMEDIATELY for progress calculation
+      if (audioBuffer.duration && duration === 0) {
+        setDuration(audioBuffer.duration);
+      }
+
+      // Update to chord recognition stage after audio is decoded and duration is set
+      stageTimeout = setTimeout(() => {
+        setStage('chord-recognition');
+        // Don't set progress here - let ProcessingStatusBanner calculate it
+        setStatusMessage('Recognizing chords and synchronizing with beats...');
+      }, 500); // Reduced delay since we now have duration
+
       setAudioProcessingState(prev => ({
         ...prev,
         isExtracted: true,
@@ -139,7 +156,7 @@ export default function LocalAudioAnalyzePage() {
       }));
 
       // Start chord and beat analysis with selected detectors
-      const results = await analyzeAudio(audioBuffer, beatDetector, chordDetector);
+      const results = await analyzeAudioWithRateLimit(audioBuffer, beatDetector, chordDetector);
 
       // FIXED: Clear the stage timeout to prevent it from overriding completion
       if (stageTimeout) {
@@ -162,7 +179,7 @@ export default function LocalAudioAnalyzePage() {
       setStatusMessage('Analysis complete!');
       completeProcessing();
 
-      console.log('Analysis complete!', results);
+      // Analysis completed successfully
     } catch (error) {
       console.error('Error in audio processing:', error);
 
@@ -293,17 +310,10 @@ export default function LocalAudioAnalyzePage() {
       };
     }
 
-    // DEBUG: Essential structure info (once only)
-    console.log(`🔬 Analysis Structure:`, {
-      topLevelKeys: Object.keys(analysisResults),
-      beatsLocation: (analysisResults as any).beats ? 'top-level' : 'beatDetectionResult',
-      beatsCount: (analysisResults as any).beats?.length || analysisResults.beatDetectionResult?.beats?.length || 0,
-      firstBeat: (analysisResults as any).beats?.[0] || analysisResults.beatDetectionResult?.beats?.[0],
-      bpm: analysisResults.beatDetectionResult?.bpm || (analysisResults as any).bpm
-    });
+    // Analysis structure validation
 
     // Calculate padding for audio uploads
-    const rawBeats = (analysisResults as any).beats || [];
+    const rawBeats = analysisResults.beats || [];
 
     // Extract first beat time correctly (handle both number and object formats)
     let firstBeatTime = 0;
@@ -318,7 +328,7 @@ export default function LocalAudioAnalyzePage() {
       }
     }
 
-    const bpm = analysisResults.beatDetectionResult?.bpm || (analysisResults as any).bpm || 120;
+    const bpm = analysisResults.beatDetectionResult?.bpm || 120;
     const beatDuration = 60 / bpm; // seconds per beat
 
     // Calculate how many padding beats we need to start from 0.0s
@@ -327,7 +337,7 @@ export default function LocalAudioAnalyzePage() {
     const paddingCount = analysisResults.beatDetectionResult?.paddingCount || calculatedPaddingCount;
     const shiftCount = analysisResults.beatDetectionResult?.shiftCount || 0;
 
-    console.log(`🔢 Padding: firstBeat=${firstBeatTime}s, bpm=${bpm.toFixed(1)}, padding=${paddingCount} beats`);
+    // Padding calculation completed
 
     // FIXED: Use YouTube approach - only include chords that actually have timestamps within audio duration
     const filteredSynchronizedChords = analysisResults.synchronizedChords.filter(item => {
@@ -359,7 +369,7 @@ export default function LocalAudioAnalyzePage() {
 
     const limitedSynchronizedChords = filteredSynchronizedChords.slice(0, maxReasonableCells);
 
-    console.log(`📊 Cell Limiting: duration=${duration.toFixed(1)}s, estimatedBPM=${estimatedBPM}, expectedBeats=${expectedBeats}, maxCells=${maxReasonableCells}, actualCells=${limitedSynchronizedChords.length}`);
+    // Cell limiting applied for performance
 
     // Process limited synchronized chords with proper formatting
     const processedChords = limitedSynchronizedChords.map(item => {
@@ -371,10 +381,12 @@ export default function LocalAudioAnalyzePage() {
       }
 
       // Apply sequence corrections if available
-      if (showCorrectedChords && sequenceCorrections.length > 0) {
-        const sequenceCorrection = sequenceCorrections.find(sc => sc.position === item.beatIndex);
-        if (sequenceCorrection) {
-          chord = sequenceCorrection.correctedChord;
+      if (showCorrectedChords && sequenceCorrections?.correctedSequence) {
+        const correctedIndex = sequenceCorrections.correctedSequence.findIndex((_, idx) =>
+          sequenceCorrections.originalSequence[idx] === item.chord
+        );
+        if (correctedIndex >= 0) {
+          chord = sequenceCorrections.correctedSequence[correctedIndex];
         }
       }
 
@@ -387,9 +399,9 @@ export default function LocalAudioAnalyzePage() {
       const beatIndex = item.beatIndex;
 
       // Access beats from the correct location (log once)
-      let beatsArray = (analysisResults as any).beats;
+      let beatsArray = analysisResults.beats;
       if (!beatsArray || beatsArray.length === 0) {
-        beatsArray = analysisResults.beatDetectionResult?.beats;
+        beatsArray = analysisResults.beatDetectionResult?.beats || [];
       }
       const beatsLength = beatsArray?.length || 0;
 
@@ -423,11 +435,6 @@ export default function LocalAudioAnalyzePage() {
         }
       }
 
-      // FALLBACK: Use item.timestamp if available
-      if (item.timestamp && typeof item.timestamp === 'number') {
-        return item.timestamp;
-      }
-
       return 0; // Fallback for invalid indices
     });
 
@@ -435,7 +442,8 @@ export default function LocalAudioAnalyzePage() {
     const originalAudioMapping = limitedSynchronizedChords.map((item, index) => ({
       chord: item.chord,
       timestamp: processedBeats[index],
-      visualIndex: index
+      visualIndex: index,
+      audioIndex: index // Store the original audio index for accurate beat click handling
     }));
 
     // Add actual padding beats to the beginning of the arrays

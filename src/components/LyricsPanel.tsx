@@ -61,7 +61,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
         setSearchQuery(videoTitle);
       }
     }
-  }, [isOpen, videoTitle]);
+  }, [isOpen, videoTitle, searchQuery]);
 
   // Handle tooltip visibility with keyboard support
   const handleTooltipToggle = (show: boolean) => {
@@ -118,11 +118,12 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
           }
         } catch (lrclibError) {
           console.warn('LRClib search failed, falling back to Genius:', lrclibError);
+          console.warn('LRClib error details:', lrclibError instanceof Error ? lrclibError.message : String(lrclibError));
         }
       }
 
       // Fallback to Genius.com or if synchronized search is disabled
-      const response = await fetch('http://localhost:5000/api/genius-lyrics', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app'}/api/genius-lyrics`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +143,8 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
       }
     } catch (error) {
       console.error('Error fetching lyrics:', error);
-      setError('Failed to connect to lyrics service');
+      console.error('Error details:', error instanceof Error ? error.message : String(error));
+      setError(`Failed to connect to lyrics service: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoading(false);
     }

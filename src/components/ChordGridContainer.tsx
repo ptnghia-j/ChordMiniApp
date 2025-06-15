@@ -9,6 +9,7 @@ interface AudioMappingItem {
   chord: string;
   timestamp: number;
   visualIndex: number;
+  audioIndex: number; // Original audio index for accurate beat click handling
 }
 
 interface ChordGridData {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { metronomeService } from '@/services/metronomeService';
+import type { MetronomeService } from '@/services/metronomeService';
 
 interface MetronomeControlsProps {
   className?: string;
@@ -11,16 +11,25 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
   const [volume, setVolume] = useState(0.3);
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('traditional');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
 
-  // Initialize component state from metronome service
+  // Initialize metronome service on client side only
   useEffect(() => {
-    setIsEnabled(metronomeService.isMetronomeEnabled());
-    setVolume(metronomeService.getVolume());
-    setSoundStyle(metronomeService.getSoundStyle() as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long');
+    const initMetronome = async () => {
+      if (typeof window !== 'undefined') {
+        const { metronomeService: service } = await import('@/services/metronomeService');
+        setMetronomeService(service);
+        setIsEnabled(service.isMetronomeEnabled());
+        setVolume(service.getVolume());
+        setSoundStyle(service.getSoundStyle() as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long');
+      }
+    };
+    initMetronome();
   }, []);
 
   // Handle metronome toggle
   const handleToggle = async () => {
+    if (!metronomeService) return;
     const newEnabled = !isEnabled;
     setIsEnabled(newEnabled);
     await metronomeService.setEnabled(newEnabled);
@@ -35,6 +44,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Handle volume change
   const handleVolumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!metronomeService) return;
     const newVolume = parseFloat(event.target.value);
     setVolume(newVolume);
     metronomeService.setVolume(newVolume);
@@ -42,6 +52,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Handle sound style change
   const handleSoundStyleChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!metronomeService) return;
     const newStyle = event.target.value as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long';
     setSoundStyle(newStyle);
     await metronomeService.setSoundStyle(newStyle);
@@ -49,11 +60,13 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Test downbeat click
   const testDownbeat = () => {
+    if (!metronomeService) return;
     metronomeService.testClick(true);
   };
 
   // Test regular beat click
   const testRegularBeat = () => {
+    if (!metronomeService) return;
     metronomeService.testClick(false);
   };
 

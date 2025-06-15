@@ -1,4 +1,4 @@
-import { analyzeAudio, AnalysisResult } from '@/services/chordRecognitionService';
+import { analyzeAudioWithRateLimit, AnalysisResult, ChordDetectorType } from '@/services/chordRecognitionService';
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 
 // Define error types for better type safety
@@ -76,7 +76,7 @@ export class AudioProcessingService {
 
       // Create an error object with additional properties
       const errorWithSuggestion: ErrorWithSuggestion = new Error(errorMessage);
-      errorWithSuggestion.suggestion = suggestion;
+      errorWithSuggestion.suggestion = suggestion || undefined;
       throw errorWithSuggestion;
     }
   }
@@ -92,7 +92,7 @@ export class AudioProcessingService {
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
-        console.log('Using cached analysis results from Firestore');
+
         // Convert cached data to AnalysisResult format
         return {
           chords: cachedData.chords,
@@ -105,14 +105,13 @@ export class AudioProcessingService {
           beatDetectionResult: {
             time_signature: cachedData.timeSignature,
             bpm: cachedData.bpm,
-            beatShift: cachedData.beatShift,
-            beat_time_range_start: cachedData.beat_time_range_start
+            beatShift: cachedData.beatShift
           }
         };
       }
 
-      // Perform analysis
-      const analysisResults = await analyzeAudio(audioUrl, beatDetector, chordDetector);
+      // Perform analysis with rate limiting
+      const analysisResults = await analyzeAudioWithRateLimit(audioUrl, beatDetector as 'auto' | 'madmom' | 'beat-transformer', chordDetector as ChordDetectorType);
 
       // Cache the results (note: enharmonic correction data will be added later via updateTranscriptionWithKey)
       const transcriptionData = {
@@ -128,7 +127,6 @@ export class AudioProcessingService {
         timeSignature: analysisResults.beatDetectionResult?.time_signature,
         bpm: analysisResults.beatDetectionResult?.bpm,
         beatShift: analysisResults.beatDetectionResult?.beatShift,
-        beat_time_range_start: analysisResults.beatDetectionResult?.beat_time_range_start,
         timestamp: new Date()
       };
 
@@ -145,7 +143,7 @@ export class AudioProcessingService {
       }
 
       const errorWithSuggestion: ErrorWithSuggestion = new Error(errorMessage);
-      errorWithSuggestion.suggestion = suggestion;
+      errorWithSuggestion.suggestion = suggestion || undefined;
       throw errorWithSuggestion;
     }
   }

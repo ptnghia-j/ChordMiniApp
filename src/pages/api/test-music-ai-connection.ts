@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           break;
         }
       } catch (error) {
-        console.log(`Endpoint ${endpoint} failed:`, error.message);
+        console.log(`Endpoint ${endpoint} failed:`, error instanceof Error ? error.message : String(error));
         lastError = error;
       }
     }
@@ -89,20 +89,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         jobs: response.data
       });
     } catch (error) {
-      console.log('SDK endpoint failed:', error.message);
+      console.log('SDK endpoint failed:', error instanceof Error ? error.message : String(error));
 
       // If all endpoints failed, return the error
       return res.status(500).json({
         error: 'Failed to connect to Music.ai API',
-        details: lastError ? lastError.message : 'Unknown error',
+        details: lastError instanceof Error ? lastError.message : String(lastError),
         possibleEndpoints
       });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error testing Music.ai API connection:', error);
     return res.status(500).json({
       error: 'Error testing Music.ai API connection',
-      details: error.message
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }

@@ -42,10 +42,13 @@ export const searchYouTubeVideos = async (query: string) => {
     }
     
     const params = new URLSearchParams({
-      ...DEFAULT_SEARCH_PARAMS,
+      part: DEFAULT_SEARCH_PARAMS.part,
+      maxResults: DEFAULT_SEARCH_PARAMS.maxResults.toString(),
+      type: DEFAULT_SEARCH_PARAMS.type,
+      videoCategoryId: DEFAULT_SEARCH_PARAMS.videoCategoryId,
       q: query,
       key: YOUTUBE_API_KEY,
-    } as any);
+    });
     
     const response = await fetch(`${YOUTUBE_SEARCH_URL}?${params.toString()}`);
     

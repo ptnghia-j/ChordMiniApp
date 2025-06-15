@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface ExtractionNotificationProps {
   isVisible: boolean;
@@ -16,6 +17,7 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
   onRefresh
 }) => {
   const [isShowing, setIsShowing] = useState(false);
+  const { theme } = useTheme();
 
   // Handle animation states
   useEffect(() => {
@@ -43,31 +45,39 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
   if (!isShowing) return null;
 
   return (
-    <div
-      className={`fixed top-12 left-0 right-0 z-40 transition-transform duration-300 ease-in-out ${
-        isVisible ? 'translate-y-0' : '-translate-y-full'
-      }`}
-    >
+    <div className={`w-full z-40 transition-all duration-300 ease-in-out mb-4 ${
+      isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+    }`}>
       <div className="max-w-screen-lg mx-auto px-4">
-        <div className={`flex items-center justify-between py-2 px-4 rounded-b-lg shadow-md ${
-          fromCache ? 'bg-blue-50 border-x border-b border-blue-200' : 'bg-green-50 border-x border-b border-green-200'
+        <div className={`flex items-center justify-between py-2 px-4 rounded-lg shadow-md border ${
+          fromCache
+            ? theme === 'dark'
+              ? 'bg-blue-900/30 border-blue-600'
+              : 'bg-blue-50 border-blue-200'
+            : theme === 'dark'
+              ? 'bg-green-900/30 border-green-600'
+              : 'bg-green-50 border-green-200'
         }`}>
           <div className="flex items-center space-x-2">
             {fromCache ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-500'}`} viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8l4-2 4 2V6z" clipRule="evenodd" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-green-400' : 'text-green-500'}`} viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             )}
 
             <div>
-              <p className="font-medium text-sm">
+              <p className={`font-medium text-sm ${
+                fromCache
+                  ? theme === 'dark' ? 'text-blue-200' : 'text-blue-800'
+                  : theme === 'dark' ? 'text-green-200' : 'text-green-800'
+              }`}>
                 {fromCache ? 'Audio Loaded from Cache' : 'Audio Extracted Successfully'}
               </p>
-              <p className="text-xs text-gray-600">
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                 {fromCache
                   ? 'Using cached audio file. Select models to begin analysis.'
                   : 'Audio extraction complete. Select models to begin analysis.'}

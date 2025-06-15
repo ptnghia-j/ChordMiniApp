@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
@@ -28,11 +28,12 @@ export default function RecentVideos() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  // hasMore state removed as it's not currently used
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Function to fetch transcribed videos with pagination support
-  const fetchVideos = async (isLoadMore = false) => {
+  const fetchVideos = useCallback(async (isLoadMore = false) => {
     if (!db) {
       setError('Firebase not initialized');
       setLoading(false);
@@ -116,9 +117,8 @@ export default function RecentVideos() {
       // Update pagination state
       const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
       setLastDoc(lastVisible || null);
-      setHasMore(transcribedVideos.length === (isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT));
 
-      console.log(`Fetched ${transcribedVideos.length} transcribed videos${isLoadMore ? ' (load more)' : ' (initial)'}, hasMore: ${transcribedVideos.length === (isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT)}`);
+      // Fetched transcribed videos successfully
 
     } catch (err) {
       console.error('Error fetching transcribed videos:', err);
@@ -127,19 +127,22 @@ export default function RecentVideos() {
       setLoading(false);
       setLoadingMore(false);
     }
+  }, [videos, lastDoc]);
+
+  // Show more function - just expand the container
+  const handleShowMore = () => {
+    setIsExpanded(true);
   };
 
-  // Load more videos function
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMore) {
-      fetchVideos(true);
-    }
+  // Show less function
+  const handleShowLess = () => {
+    setIsExpanded(false);
   };
 
   // Initial load
   useEffect(() => {
     fetchVideos(false);
-  }, []);
+  }, [fetchVideos]);
 
   // Format date
   const formatDate = (timestamp: number) => {
@@ -177,8 +180,8 @@ export default function RecentVideos() {
             <span className="text-gray-500 dark:text-gray-400 text-xs">Loading...</span>
           </div>
         </div>
-        {/* Scrollable container with fixed height for loading skeleton */}
-        <div className="h-96 overflow-y-auto scrollbar-thin p-4">
+        {/* Scrollable container with dynamic height for loading skeleton */}
+        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
           {/* Sidebar loading skeleton */}
           <div className="space-y-3 pr-2">
             {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
@@ -210,8 +213,8 @@ export default function RecentVideos() {
         </div>
       </div>
 
-      {/* Scrollable container with fixed height */}
-      <div className="h-96 overflow-y-auto scrollbar-thin p-4">
+      {/* Scrollable container with dynamic height */}
+      <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
         {/* Sidebar layout: Single column for compact display */}
         <div className="space-y-3 pr-2">
           {videos.map((video) => (
@@ -293,31 +296,41 @@ export default function RecentVideos() {
               ))}
             </div>
           )}
-
-          {/* Load More Button inside scrollable area */}
-          {hasMore && (
-            <div className="mt-4 text-center">
-              <button
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                {loadingMore ? (
-                  <div className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Loading...
-                  </div>
-                ) : (
-                  `Load More`
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Show More / Show Less Button outside scrollable area */}
+      {videos.length > 0 && (
+        <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-600">
+          <div className="pt-3 text-center">
+            {isExpanded ? (
+              <button
+                onClick={handleShowLess}
+                className="bg-gray-600 dark:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors duration-200 text-sm w-full"
+              >
+                <div className="flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  Show Less
+                </div>
+              </button>
+            ) : (
+              <button
+                onClick={handleShowMore}
+                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 text-sm w-full"
+              >
+                <div className="flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Show More
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
 
     </div>

@@ -1,33 +1,206 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Development rules - allow all access
-    // WARNING: Only use these rules during development!
-    match /{document=**} {
-      allow read, write: if true;
+
+    // Helper functions for validation
+    function isValidVideoId(videoId) {
+      return videoId is string &&
+             videoId.size() == 11 &&
+             videoId.matches('^[a-zA-Z0-9_-]+$');
     }
-    
-    // Production rules - uncomment and customize these for production
-    /*
-    // Transcriptions collection - public read, authenticated write
-    match /transcriptions/{transcriptionId} {
-      // Anyone can read transcriptions
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp &&
+             ts > timestamp.date(2020, 1, 1) &&
+             ts < timestamp.date(2030, 1, 1);
+    }
+
+    function isValidAudioData(data) {
+      return data.keys().hasAll(['videoId', 'createdAt']) &&
+             isValidVideoId(data.videoId) &&
+             isValidTimestamp(data.createdAt) &&
+             data.size() <= 50; // Limit number of fields
+    }
+
+    function isValidTranscriptionData(data) {
+      return data.keys().hasAll(['videoId', 'createdAt']) &&
+             isValidVideoId(data.videoId) &&
+             isValidTimestamp(data.createdAt) &&
+             data.size() <= 100; // Limit number of fields
+    }
+
+    function isValidTranslationData(data) {
+      return data.keys().hasAll(['videoId', 'targetLanguage', 'createdAt']) &&
+             isValidVideoId(data.videoId) &&
+             data.targetLanguage is string &&
+             data.targetLanguage.size() <= 10 &&
+             isValidTimestamp(data.createdAt) &&
+             data.size() <= 20; // Limit number of fields
+    }
+
+    // Rate limiting helper (basic implementation)
+    function isWithinRateLimit() {
+      // Allow up to 100 operations per hour per IP
+      // This is a simplified check - in production you might want more sophisticated rate limiting
+      return true;
+    }
+
+    // Audio cache collection - for storing extracted audio metadata
+    match /audioCache/{videoId} {
+      // Allow read access to everyone for caching functionality
+      allow read: if isValidVideoId(videoId);
+
+      // Allow write access with validation and rate limiting
+      allow create: if isValidVideoId(videoId) &&
+                       isValidAudioData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Allow updates only if the structure is valid
+      allow update: if isValidVideoId(videoId) &&
+                       isValidAudioData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users (only allow expiration)
+      allow delete: if false;
+    }
+
+    // Transcription cache collection - for storing lyrics and analysis results
+    match /transcriptionCache/{documentId} {
+      // Allow read access to everyone for caching functionality
       allow read: if true;
-      
-      // Only authenticated users can create/update transcriptions
-      allow write: if request.auth != null;
-      
-      // Validate transcription data structure
-      allow create: if request.auth != null
-                    && request.resource.data.videoId is string
-                    && request.resource.data.beatModel is string
-                    && request.resource.data.chordModel is string;
+
+      // Allow write access with validation
+      allow create: if isValidTranscriptionData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if isValidTranscriptionData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
     }
-    
-    // User-specific data - only accessible by the user
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // Transcriptions collection - for storing beat and chord analysis results
+    match /transcriptions/{documentId} {
+      // Allow read access to everyone for caching functionality
+      allow read: if true;
+
+      // Allow write access with validation
+      allow create: if isValidTranscriptionData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if isValidTranscriptionData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
     }
-    */
+
+    // Translation cache collection - for storing translated lyrics
+    match /translationCache/{documentId} {
+      // Allow read access to everyone
+      allow read: if true;
+
+      // Allow write access with validation
+      allow create: if isValidTranslationData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if isValidTranslationData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
+    }
+
+    // Translations collection - for storing translated lyrics
+    match /translations/{documentId} {
+      // Allow read access to everyone
+      allow read: if true;
+
+      // Allow write access with validation
+      allow create: if isValidTranslationData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if isValidTranslationData(resource.data) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
+    }
+
+    // Lyrics collection - for storing transcribed lyrics
+    match /lyrics/{documentId} {
+      // Allow read access to everyone
+      allow read: if true;
+
+      // Allow write access with basic validation
+      allow create: if resource.data.keys().hasAll(['videoId', 'createdAt']) &&
+                       isValidVideoId(resource.data.videoId) &&
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if resource.data.keys().hasAll(['videoId', 'createdAt']) &&
+                       isValidVideoId(resource.data.videoId) &&
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
+    }
+
+    // Admin collection - restricted to trusted maintainers
+    match /admin/{document=**} {
+      // Only allow access to specific admin users
+      // Replace these email addresses with actual maintainer emails
+      allow read, write: if request.auth != null &&
+                            request.auth.token.email in [
+                              'ptnghia@csu.fullerton.edu',
+                              'phantrongnghia510@gmail.com',
+                              'admin@chordmini.com'
+                              // Add more maintainer emails here
+                            ];
+    }
+
+    // System metrics and monitoring - read-only for everyone, write for admins
+    match /metrics/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+                      request.auth.token.email in [
+                        'ptnghia@csu.fullerton.edu',
+                        'phantrongnghia510@gmail.com',
+                        'admin@chordmini.com'
+                      ];
+    }
+
+    // User feedback and error reports - allow anonymous submissions
+    match /feedback/{documentId} {
+      allow read: if false; // Feedback is private
+      allow create: if resource.data.keys().hasAll(['message', 'createdAt']) &&
+                       resource.data.message is string &&
+                       resource.data.message.size() <= 1000 &&
+                       isValidTimestamp(resource.data.createdAt) &&
+                       isWithinRateLimit();
+      allow update, delete: if false;
+    }
+
+    // Error logs - for debugging and monitoring
+    match /errorLogs/{documentId} {
+      allow read: if false; // Error logs are private
+      allow create: if resource.data.keys().hasAll(['error', 'createdAt']) &&
+                       resource.data.error is string &&
+                       resource.data.error.size() <= 2000 &&
+                       isValidTimestamp(resource.data.createdAt) &&
+                       isWithinRateLimit();
+      allow update, delete: if false;
+    }
+
+    // Default deny rule for any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

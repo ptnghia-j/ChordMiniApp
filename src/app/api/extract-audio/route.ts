@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import {
   initCache,
   isVideoInCache,
@@ -21,7 +20,9 @@ const COOKIE_FILE_PATH = path.join(process.cwd(), 'temp', 'cookies', 'youtube_co
 interface ExtractionError {
   stderr?: string;
   message?: string;
-  [key: string]: any;
+  code?: string;
+  signal?: string;
+  status?: number;
 }
 
 // Ensure directories exist
@@ -548,8 +549,8 @@ export async function POST(request: NextRequest) {
       try {
         firebaseUrls = await uploadAudioFile(
           videoId,
-          audioFileBuffer,
-          videoFileBuffer || undefined
+          new Uint8Array(audioFileBuffer).buffer,
+          videoFileBuffer ? new Uint8Array(videoFileBuffer).buffer : undefined
         );
 
         if (firebaseUrls) {
@@ -704,7 +705,7 @@ export async function POST(request: NextRequest) {
 
         // Check if the files were created
         const audioExists = await fileExists(outputPath);
-        const videoExists = await fileExists(videoPath);
+        await fileExists(videoPath);
 
         if (audioExists) {
           success = true;
@@ -761,8 +762,8 @@ export async function POST(request: NextRequest) {
         try {
           firebaseUrls = await uploadAudioFile(
             videoId,
-            audioFileBuffer,
-            videoFileBuffer || undefined
+            new Uint8Array(audioFileBuffer).buffer,
+            videoFileBuffer ? new Uint8Array(videoFileBuffer).buffer : undefined
           );
 
           if (firebaseUrls) {
@@ -897,7 +898,7 @@ export async function POST(request: NextRequest) {
           console.log('Shorts URL failed, listing available formats...');
           const listFormatsCommand = `yt-dlp --list-formats --no-check-certificate --geo-bypass ${configOption} "${youtubeUrl}"`;
           try {
-            const { stdout: formatsOutput } = await execPromise(listFormatsCommand, 10000);
+            const { stdout: formatsOutput } = await execPromise(listFormatsCommand);
             console.log('Available formats:', formatsOutput);
 
             // Parse the formats output to find available format IDs
@@ -1128,8 +1129,8 @@ export async function POST(request: NextRequest) {
           try {
             firebaseUrls = await uploadAudioFile(
               videoId,
-              audioFileBuffer,
-              videoFileBuffer || undefined
+              new Uint8Array(audioFileBuffer).buffer,
+              videoFileBuffer ? new Uint8Array(videoFileBuffer).buffer : undefined
             );
 
             if (firebaseUrls) {
@@ -1491,11 +1492,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error extracting audio:', error);
 
     // Filter out confusing error messages and provide more helpful ones
-    let errorMessage = error.stderr || error.message || String(error);
+    let errorMessage = '';
+    if (error && typeof error === 'object') {
+      const errorObj = error as { stderr?: string; message?: string };
+      errorMessage = errorObj.stderr || errorObj.message || String(error);
+    } else {
+      errorMessage = String(error);
+    }
     let suggestion = 'Please try a different video or try again later. You can also try uploading an audio file directly.';
 
     if (typeof errorMessage === 'string') {

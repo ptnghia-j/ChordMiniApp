@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
 import musicAiService from '@/services/musicAiService';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { firebaseApp, saveLyricsToFirestore } from '@/services/firebaseService';
+
+interface CachedLyricsData {
+  lyrics?: string;
+  lines?: Array<{ chords?: unknown[] }>;
+  [key: string]: unknown;
+}
 
 /**
  * API route to transcribe lyrics from an audio file
@@ -33,14 +39,14 @@ export async function POST(request: NextRequest) {
     // If lyrics are cached and forceRefresh is not true, return them
     if (lyricsDoc.exists() && !forceRefresh) {
       console.log(`Found cached lyrics for video ID: ${videoId}`);
-      const cachedData = lyricsDoc.data();
+      const cachedData = lyricsDoc.data() as CachedLyricsData;
 
       // Process the cached data to ensure it's in the correct format
       try {
         // Check if the cached data itself is a URL string
-        if (typeof cachedData === 'string' && cachedData.startsWith('http')) {
+        if (typeof cachedData === 'string' && (cachedData as string).startsWith('http')) {
           console.log(`Cached data is a direct URL string: ${cachedData}`);
-          const processedLyrics = await musicAiService.processLyricsResult(cachedData);
+          const processedLyrics = await musicAiService.processLyricsResult({ lyrics: cachedData });
           return NextResponse.json({
             success: true,
             message: 'Lyrics retrieved from cache and processed',
@@ -49,9 +55,9 @@ export async function POST(request: NextRequest) {
           });
         }
         // If the cached data contains a URL instead of actual lyrics lines, fetch and process it
-        else if (cachedData.lyrics && typeof cachedData.lyrics === 'string' && cachedData.lyrics.startsWith('http')) {
+        else if (cachedData && cachedData.lyrics && typeof cachedData.lyrics === 'string' && cachedData.lyrics.startsWith('http')) {
           console.log(`Cached lyrics contains a URL, fetching and processing: ${cachedData.lyrics}`);
-          const processedLyrics = await musicAiService.processLyricsResult(cachedData.lyrics);
+          const processedLyrics = await musicAiService.processLyricsResult({ lyrics: cachedData.lyrics });
           return NextResponse.json({
             success: true,
             message: 'Lyrics retrieved from cache and processed',
@@ -60,10 +66,10 @@ export async function POST(request: NextRequest) {
           });
         }
         // If the cached data already has lines property, ensure it has the correct format
-        else if (cachedData.lines) {
+        else if (cachedData && cachedData.lines) {
           console.log(`Cached lyrics already has lines property with ${cachedData.lines.length} lines`);
           // Make sure each line has a chords array
-          const processedLines = cachedData.lines.map((line: any) => ({
+          const processedLines = cachedData.lines.map((line: { chords?: unknown[] }) => ({
             ...line,
             chords: line.chords || []
           }));
@@ -166,11 +172,11 @@ export async function POST(request: NextRequest) {
       lyrics: lyricsData,
       cached: false
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error transcribing lyrics:', error);
     return NextResponse.json({
       error: 'Error transcribing lyrics',
-      details: error.message
+      details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

@@ -1,6 +1,8 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import tempfile
 import numpy as np
 import soundfile as sf
@@ -124,14 +126,21 @@ def detect_time_signature_from_pattern(pattern):
 
     return None
 
-# Apply scipy patches before importing librosa
-from scipy_patch import apply_scipy_patches, patch_librosa_beat_tracker, monkey_patch_beat_track
-apply_scipy_patches()
-patch_librosa_beat_tracker()
-monkey_patch_beat_track()
+# Defer heavy imports until needed
+def lazy_import_librosa():
+    """Lazy import librosa with patches applied"""
+    global librosa
+    if 'librosa' not in globals():
+        # Apply scipy patches before importing librosa
+        from scipy_patch import apply_scipy_patches, patch_librosa_beat_tracker, monkey_patch_beat_track
+        apply_scipy_patches()
+        patch_librosa_beat_tracker()
+        monkey_patch_beat_track()
 
-# Now it's safe to import librosa
-import librosa
+        # Now it's safe to import librosa
+        import librosa as _librosa
+        globals()['librosa'] = _librosa
+    return globals()['librosa']
 
 # Add the model directories to the Python path
 BEAT_TRANSFORMER_DIR = Path(__file__).parent / "models" / "Beat-Transformer"
@@ -150,13 +159,58 @@ except ImportError:
     from beat_tracking_demo import run_beat_tracking
     run_beat_tracking_wrapper = None
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app = Flask(__name__, template_folder='templates')
+
+# Configure rate limiting
+# Use Redis if available, otherwise fall back to in-memory storage
+redis_url = os.environ.get('REDIS_URL')
+if redis_url:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        storage_uri=redis_url,
+        default_limits=["100 per hour"]
+    )
+    print(f"Rate limiting configured with Redis: {redis_url}")
+else:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["100 per hour"]
+    )
+    print("Rate limiting configured with in-memory storage")
+
+# Configure CORS for production deployment
+# Allow requests from Vercel frontend and localhost for development
+cors_origins = [
+    "http://localhost:3000",  # Development
+    "http://127.0.0.1:3000",  # Development
+    "https://*.vercel.app",   # Vercel deployments
+]
+
+# Add custom domain if specified in environment
+custom_frontend_url = os.environ.get('CORS_ORIGINS')
+if custom_frontend_url:
+    if isinstance(custom_frontend_url, str):
+        cors_origins.extend(custom_frontend_url.split(','))
+    print(f"Added custom CORS origins: {custom_frontend_url}")
+
+CORS(app, origins=cors_origins, supports_credentials=True)
 
 # Configure maximum content length from environment variable or default to 150MB
 max_content_mb = int(os.environ.get('FLASK_MAX_CONTENT_LENGTH_MB', 150))
 app.config['MAX_CONTENT_LENGTH'] = max_content_mb * 1024 * 1024
 print(f"Setting maximum upload size to {max_content_mb}MB")
+
+# Rate limiting error handler
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Handle rate limit exceeded errors"""
+    return jsonify({
+        "error": "Rate limit exceeded",
+        "message": "Too many requests. Please wait before trying again.",
+        "retry_after": getattr(e, 'retry_after', None)
+    }), 429
 
 # Fix for Python 3.10+ compatibility with madmom
 # MUST come before any madmom imports
@@ -178,126 +232,102 @@ try:
 except Exception as e:
     print(f"Note: NumPy compatibility patch not needed: {e}")
 
-# Check if Spleeter is available and download the model if needed
-try:
-    # Try to import Spleeter
-    import spleeter
-    from spleeter.separator import Separator
+# Defer all heavy checks to runtime - just assume everything is available for startup
+SPLEETER_AVAILABLE = True  # Will check at runtime
+USE_BEAT_TRANSFORMER = True  # Will check at runtime
+USE_CHORD_CNN_LSTM = True  # Will check at runtime
+GENIUS_AVAILABLE = True  # Will check at runtime
 
-    # Try to get version, but don't fail if not available
+print("Deferred model availability checks to runtime for faster startup")
+
+# Runtime model availability checks
+def check_spleeter_availability():
+    """Check if Spleeter is available without loading models"""
     try:
-        version = spleeter.__version__
-    except:
-        version = "unknown"
+        import spleeter
+        return True
+    except ImportError:
+        return False
 
-    print(f"Spleeter is available (version {version})")
-
-    # Check if the Spleeter model is downloaded
-    import os
-    from pathlib import Path
-
-    # Get the Spleeter pretrained models path
-    spleeter_models_dir = Path.home() / ".cache" / "spleeter"
-    print(f"Checking for Spleeter models in: {spleeter_models_dir}")
-
-    # Check if the 5stems model exists
-    model_path = spleeter_models_dir / "5stems"
-    if not model_path.exists():
-        print("Spleeter 5stems model not found. Downloading...")
-        # Create a temporary separator to trigger the download
-        try:
-            temp_separator = Separator('spleeter:5stems')
-            print("Spleeter 5stems model downloaded successfully")
-        except Exception as e:
-            print(f"Error downloading Spleeter model: {e}")
-    else:
-        print("Spleeter 5stems model already downloaded")
-
-    SPLEETER_AVAILABLE = True
-except Exception as e:
-    print(f"Spleeter is not available: {e}. Install with: pip install spleeter")
-    SPLEETER_AVAILABLE = False
-
-# Check if Beat-Transformer model is available
-try:
-    # Check if the checkpoint file exists
-    checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
-    print(f"Looking for Beat Transformer checkpoint at: {checkpoint_path}")
-    print(f"Checkpoint exists: {checkpoint_path.exists()}")
-
-    if checkpoint_path.exists():
-        # Check if PyTorch is available
-        try:
-            import torch
-            print(f"PyTorch is available, version: {torch.__version__}")
-            print(f"CUDA is available: {torch.cuda.is_available()}")
-
-            # Check if madmom is available
+def check_beat_transformer_availability():
+    """Check if Beat-Transformer is available without loading it"""
+    try:
+        checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
+        if checkpoint_path.exists():
+            # Check if PyTorch is available
             try:
-                # Try importing madmom after patching
-                import madmom
-                print(f"madmom is available, version: {madmom.__version__}")
-                USE_BEAT_TRANSFORMER = True
-                print(f"Beat Transformer checkpoint found and dependencies available")
-            except ImportError as e:
-                print(f"madmom import failed: {e}")
-                USE_BEAT_TRANSFORMER = True  # Still try to use Beat-Transformer even without madmom
-                print(f"Will try to use Beat Transformer without madmom")
-        except ImportError as e:
-            print(f"PyTorch import failed: {e}")
-            USE_BEAT_TRANSFORMER = False
-            print(f"Beat Transformer requires PyTorch")
-    else:
-        USE_BEAT_TRANSFORMER = False
-        print(f"Beat Transformer checkpoint not found at: {checkpoint_path}")
-except Exception as e:
-    print(f"Warning: Could not check Beat Transformer checkpoint: {e}")
-    USE_BEAT_TRANSFORMER = False
+                import torch
+                return True
+            except ImportError:
+                return False
+        return False
+    except Exception:
+        return False
 
-# Check if Chord-CNN-LSTM model is available
-try:
-    # Add the Chord-CNN-LSTM directory to the Python path
-    sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
-
-    # Change the working directory temporarily to load the model
-    original_dir = os.getcwd()
-    os.chdir(str(CHORD_CNN_LSTM_DIR))
-
+def check_chord_cnn_lstm_availability():
+    """Check if Chord-CNN-LSTM is available without loading it"""
     try:
-        # Import the real chord recognition module
-        from chord_recognition import chord_recognition
-        print("Successfully imported real chord_recognition module")
-        USE_CHORD_CNN_LSTM = True
-    finally:
-        # Change back to the original directory
-        os.chdir(original_dir)
-except ImportError as e:
-    print(f"Error importing chord_recognition module: {e}")
-    USE_CHORD_CNN_LSTM = False
-except Exception as e:
-    print(f"Error with chord_recognition module: {e}")
-    USE_CHORD_CNN_LSTM = False
+        # Check if the model directory exists and has required files
+        model_dir = CHORD_CNN_LSTM_DIR
+        if model_dir.exists():
+            # Check for key files that indicate the model is present
+            required_files = ['chord_recognition.py']
+            for file in required_files:
+                if not (model_dir / file).exists():
+                    return False
+            return True
+        return False
+    except Exception:
+        return False
 
-# Check if Genius API is available
-try:
-    import lyricsgenius
-    GENIUS_AVAILABLE = True
-    print("lyricsgenius library is available")
-except ImportError:
-    GENIUS_AVAILABLE = False
-    print("lyricsgenius library not available. Install with: pip install lyricsgenius")
+def check_genius_availability():
+    """Check if Genius API is available"""
+    try:
+        import lyricsgenius
+        return True
+    except ImportError:
+        return False
 
 @app.route('/')
+@limiter.limit("30 per minute")  # Allow more frequent health checks
 def index():
     return jsonify({
         "status": "healthy",
-        "message": "Audio analysis API is running",
-        "beat_model": "Beat-Transformer" if USE_BEAT_TRANSFORMER else "librosa",
-        "chord_model": "Chord-CNN-LSTM" if USE_CHORD_CNN_LSTM else "None",
-        "genius_available": GENIUS_AVAILABLE
+        "message": "Audio analysis API is running"
     })
 
+@app.route('/debug/files')
+def debug_files():
+    """Debug endpoint to check if essential files exist"""
+    import os
+    files_to_check = [
+        '/app/models/ChordMini/test_btc.py',
+        '/app/models/Chord-CNN-LSTM/data/train00.csv',
+        '/app/models/ChordMini/config/btc_config.yaml',
+        '/app/models/ChordMini/checkpoints/btc/btc_combined_best.pth'
+    ]
+
+    results = {}
+    for file_path in files_to_check:
+        results[file_path] = {
+            'exists': os.path.exists(file_path),
+            'is_file': os.path.isfile(file_path) if os.path.exists(file_path) else False
+        }
+        if os.path.exists(file_path):
+            try:
+                results[file_path]['size'] = os.path.getsize(file_path)
+            except:
+                results[file_path]['size'] = 'unknown'
+
+    return jsonify(results)
+
+@app.route('/health')
+def health():
+    """Simple health check endpoint for Cloud Run"""
+    return jsonify({"status": "healthy"}), 200
+
 @app.route('/api/detect-beats', methods=['POST'])
+@limiter.limit("10 per minute")  # Heavy processing endpoint
 def detect_beats():
     """
     Detect beats in an audio file
@@ -315,6 +345,9 @@ def detect_beats():
     import os
     import tempfile
     import traceback
+
+    # Lazy load librosa when needed
+    librosa = lazy_import_librosa()
 
     if 'file' not in request.files and 'audio_path' not in request.form:
         return jsonify({"error": "No file or path provided"}), 400
@@ -396,17 +429,18 @@ def detect_beats():
         except ImportError:
             madmom_available = False
 
-        # Determine which detector to use
+        # Determine which detector to use - check availability at runtime
         use_beat_transformer = False
         use_madmom = False
 
-        print(f"Detector requested: {detector}, USE_BEAT_TRANSFORMER: {USE_BEAT_TRANSFORMER}, madmom_available: {madmom_available}")
+        # Runtime checks for model availability
+        beat_transformer_available = check_beat_transformer_availability()
 
-
+        print(f"Detector requested: {detector}, beat_transformer_available: {beat_transformer_available}, madmom_available: {madmom_available}")
 
         # Select detector based on request and availability
         if detector == 'beat-transformer':
-            if USE_BEAT_TRANSFORMER:
+            if beat_transformer_available:
                 use_beat_transformer = True
                 print("Will use Beat-Transformer as requested")
             else:
@@ -434,7 +468,7 @@ def detect_beats():
             file_size_mb = file_size / (1024 * 1024)
 
             # For smaller files, use beat-transformer if available
-            if file_size_mb <= 50 and USE_BEAT_TRANSFORMER:
+            if file_size_mb <= 50 and beat_transformer_available:
                 use_beat_transformer = True
                 print(f"Auto-selected Beat-Transformer (file size: {file_size_mb:.1f}MB)")
             # Fall back to madmom if available
@@ -449,7 +483,7 @@ def detect_beats():
                 }), 500
         else:
             # Default fallback
-            if USE_BEAT_TRANSFORMER:
+            if beat_transformer_available:
                 use_beat_transformer = True
                 print(f"Unknown detector '{detector}', falling back to Beat-Transformer")
             elif madmom_available:
@@ -485,495 +519,88 @@ def detect_beats():
 
         if use_beat_transformer:
             try:
-                # Create a temporary file for the spectrogram
-                temp_spec_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
-                temp_spec_path = temp_spec_file.name
-                temp_spec_file.close()
+                # Use the enhanced BeatTransformerDetector
+                print(f"Using enhanced Beat-Transformer detector for beat detection on: {file_path}")
 
                 # Set paths for Beat-Transformer
                 checkpoint_path = str(BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt")
 
-                # Add the Beat-Transformer directory to the Python path
+                # Add the models directory to the Python path
                 import sys
                 import os
-                beat_transformer_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', 'Beat-Transformer')
-                if beat_transformer_dir not in sys.path:
-                    sys.path.append(beat_transformer_dir)
-                    print(f"Added {beat_transformer_dir} to Python path")
-
-                if use_beat_transformer:
-                    # First, demix the audio and create spectrogram
-                    print(f"Using Beat-Transformer (Full) for beat detection on: {file_path}")
-
-                    # Run the demixing process
-                    try:
-                        # Try to import from the correct path
-                        from demix_spectrogram import demix_audio_to_spectrogram
-                        print("Successfully imported demix_audio_to_spectrogram")
-                    except ImportError as e:
-                        print(f"Error importing demix_audio_to_spectrogram: {e}")
-                        raise
-
-                    print(f"Calling demix_audio_to_spectrogram with {file_path} -> {temp_spec_path}")
-                    demix_audio_to_spectrogram(file_path, temp_spec_path)
-
-
-
-                # Run the beat tracking function
-                try:
-                    # Use the original function with our fixes
-                    print("Using run_beat_tracking function with fixes")
-
-                    # Check audio duration first
-                    y, sr = librosa.load(file_path, sr=None)
-                    duration = librosa.get_duration(y=y, sr=sr)
-                    print(f"Audio duration: {duration:.2f} seconds")
-
-                    # Fix numpy float issue
-                    import numpy as np
-                    if not hasattr(np, 'float'):
-                        np.float = float
-                    if not hasattr(np, 'int'):
-                        np.int = int
-
-                    # OPTIMIZATION: Remove high-level chunking for better accuracy
-                    # Allow the Beat-Transformer model to handle its own chunking internally
-                    # This eliminates one layer of chunking that was causing timing issues
-
-                    # Check if we should force single-pass processing
-                    FORCE_SINGLE_PASS_PROCESSING = True  # Set to True to eliminate high-level chunking
-                    MAX_SINGLE_PASS_DURATION = 600  # Maximum duration (10 minutes) for single-pass
-
-                    if duration > MAX_SINGLE_PASS_DURATION and not FORCE_SINGLE_PASS_PROCESSING:
-                        print(f"Very long audio detected ({duration:.2f}s). Processing in chunks...")
-
-                        # Process in chunks of 120 seconds with 30 second overlap
-                        chunk_duration = 120  # seconds
-                        overlap_duration = 30  # seconds
-                        all_beat_times = []
-                        all_downbeat_times = []
-
-                        # Process each chunk
-                        print(f"\nDEBUG - Audio duration: {duration:.2f}s")
-                        print(f"DEBUG - Will process in chunks of {chunk_duration}s with {overlap_duration}s overlap")
-
-                        # Calculate how many chunks we'll need
-                        chunk_step = chunk_duration - overlap_duration
-                        num_chunks = (int(duration) + chunk_step - 1) // chunk_step
-                        print(f"DEBUG - Estimated number of chunks: {num_chunks}")
-                    elif FORCE_SINGLE_PASS_PROCESSING:
-                        print(f"OPTIMIZATION: Processing entire audio ({duration:.2f}s) in single pass")
-                        print("High-level chunking disabled - letting Beat-Transformer handle internal chunking")
-
-                    if duration > MAX_SINGLE_PASS_DURATION and not FORCE_SINGLE_PASS_PROCESSING:
-                        # Only execute chunking logic if we're not forcing single-pass
-                        chunk_count = 0
-                        for start_time in range(0, int(duration), chunk_duration - overlap_duration):
-                            chunk_count += 1
-                            end_time = min(start_time + chunk_duration, duration)
-                            print(f"\nDEBUG - Processing chunk {chunk_count}/{num_chunks} from {start_time}s to {end_time}s (duration: {end_time-start_time:.2f}s)")
-
-                            # Extract chunk
-                            start_sample = int(start_time * sr)
-                            end_sample = int(end_time * sr)
-                            y_chunk = y[start_sample:end_sample]
-
-                            # Create temporary file for this chunk
-                            temp_chunk_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-                            temp_chunk_path = temp_chunk_file.name
-                            temp_chunk_file.close()
-
-                            # Save chunk to temporary file
-                            sf.write(temp_chunk_path, y_chunk, sr)
-
-                            # Create spectrogram for this chunk
-                            temp_chunk_spec_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
-                            temp_chunk_spec_path = temp_chunk_spec_file.name
-                            temp_chunk_spec_file.close()
-
-                            # Run demixing on chunk
-                            demix_audio_to_spectrogram(temp_chunk_path, temp_chunk_spec_path)
-
-                            # Process chunk
-                            # Calculate max_time for this chunk (relative to chunk start)
-                            chunk_max_time = min(end_time - start_time, 120)  # Limit to 120 seconds per chunk
-
-                            # Import the beat tracking function if not already imported
-                            try:
-                                # The path should already be in sys.path from the demix_spectrogram import
-                                from beat_tracking_demo import run_beat_tracking
-                                print("Successfully imported run_beat_tracking")
-                            except ImportError as e:
-                                print(f"Error importing run_beat_tracking: {e}")
-                                raise
-
-                            # Fix numpy float issue for each chunk
-                            import numpy as np
-                            if not hasattr(np, 'float'):
-                                np.float = float
-                            if not hasattr(np, 'int'):
-                                np.int = int
-
-                            print(f"Calling run_beat_tracking for chunk with:")
-                            print(f"  - demixed_spec_file: {temp_chunk_spec_path}")
-                            print(f"  - audio_file: {temp_chunk_path}")
-                            print(f"  - param_path: {checkpoint_path}")
-                            print(f"  - max_time: {chunk_max_time}")
-
-                            chunk_beat_times, chunk_downbeat_times = run_beat_tracking(
-                                demixed_spec_file=temp_chunk_spec_path,
-                                audio_file=temp_chunk_path,
-                                param_path=checkpoint_path,
-                                max_time=chunk_max_time
-                            )
-
-                            # Debug: Print chunk results
-                            print(f"DEBUG - Chunk {chunk_count} results (relative to chunk start):")
-                            print(f"  - Found {len(chunk_beat_times)} beats, time range: ", end="")
-                            if len(chunk_beat_times) > 0:
-                                print(f"{chunk_beat_times[0]:.3f}s to {chunk_beat_times[-1]:.3f}s")
-                                print(f"  - First 3 beats: {chunk_beat_times[:3]}")
-                            else:
-                                print("N/A (no beats found)")
-
-                            print(f"  - Found {len(chunk_downbeat_times)} downbeats, time range: ", end="")
-                            if len(chunk_downbeat_times) > 0:
-                                print(f"{chunk_downbeat_times[0]:.3f}s to {chunk_downbeat_times[-1]:.3f}s")
-                            else:
-                                print("N/A (no downbeats found)")
-
-                            # Adjust times to global timeline
-                            chunk_beat_times = chunk_beat_times + start_time
-                            chunk_downbeat_times = chunk_downbeat_times + start_time
-
-                            # Debug: Print adjusted times
-                            print(f"DEBUG - Chunk {chunk_count} adjusted to global timeline:")
-                            if len(chunk_beat_times) > 0:
-                                print(f"  - Beats: {chunk_beat_times[0]:.3f}s to {chunk_beat_times[-1]:.3f}s")
-                                print(f"  - First 3 global beats: {chunk_beat_times[:3]}")
-                            if len(chunk_downbeat_times) > 0:
-                                print(f"  - Downbeats: {chunk_downbeat_times[0]:.3f}s to {chunk_downbeat_times[-1]:.3f}s")
-
-                            # Pure model output - no overlap filtering or beat adjustment
-
-                            # Add to overall results
-                            all_beat_times.extend(chunk_beat_times)
-                            all_downbeat_times.extend(chunk_downbeat_times)
-
-                            # Debug: Show cumulative results
-                            print(f"DEBUG - Cumulative results after chunk {chunk_count}:")
-                            print(f"  - Total beats so far: {len(all_beat_times)}")
-                            if len(all_beat_times) > 0:
-                                print(f"  - First beat overall: {all_beat_times[0]:.3f}s")
-                                print(f"  - Last beat overall: {all_beat_times[-1]:.3f}s")
-
-                            # Clean up temporary files
-                            try:
-                                os.unlink(temp_chunk_path)
-                                os.unlink(temp_chunk_spec_path)
-                            except Exception as e:
-                                print(f"Warning: Failed to clean up temporary chunk files: {e}")
-
-                        # Sort and convert to numpy arrays
-                        beat_times = np.array(sorted(all_beat_times))
-                        downbeat_times = np.array(sorted(all_downbeat_times))
-
-                        print(f"\nDEBUG - Final combined results:")
-                        print(f"Total beats after chunking: {len(beat_times)}")
-                        print(f"Total downbeats after chunking: {len(downbeat_times)}")
-
-                        # Print time range of beats and downbeats
-                        if len(beat_times) > 0:
-                            print(f"Beat time range: {beat_times[0]:.2f}s to {beat_times[-1]:.2f}s")
-                        if len(downbeat_times) > 0:
-                            print(f"Downbeat time range: {downbeat_times[0]:.2f}s to {downbeat_times[-1]:.2f}s")
-
-                        # Print the last 10 beats and downbeats
-                        print("\nDEBUG - Last 10 beats from combined results:")
-                        for i in range(max(0, len(beat_times) - 10), len(beat_times)):
-                            print(f"Beat {i+1}: {beat_times[i]:.2f}s")
-
-                        print("\nDEBUG - Last 10 downbeats from combined results:")
-                        for i in range(max(0, len(downbeat_times) - 10), len(downbeat_times)):
-                            print(f"Downbeat {i+1}: {downbeat_times[i]:.2f}s")
-                    else:
-                        # OPTIMIZATION: Single-pass processing (no high-level chunking)
-                        # This allows the Beat-Transformer model to handle its own internal chunking
-                        # Import the beat tracking function if not already imported
-                        try:
-                            # The path should already be in sys.path from the demix_spectrogram import
-                            from beat_tracking_demo import run_beat_tracking
-                            print("Successfully imported run_beat_tracking")
-                        except ImportError as e:
-                            print(f"Error importing run_beat_tracking: {e}")
-                            raise
-
-                        # Fix numpy float issue for full audio
-                        import numpy as np
-                        if not hasattr(np, 'float'):
-                            np.float = float
-                        if not hasattr(np, 'int'):
-                            np.int = int
-
-                        print(f"SINGLE-PASS: Calling run_beat_tracking for full audio ({duration:.2f}s) with:")
-                        print(f"  - demixed_spec_file: {temp_spec_path}")
-                        print(f"  - audio_file: {file_path}")
-                        print(f"  - param_path: {checkpoint_path}")
-                        print("  - Internal model chunking will be handled by Beat-Transformer")
-
-                        beat_times, downbeat_times, beat_time_range_start, beat_time_range_end = run_beat_tracking(
-                            demixed_spec_file=temp_spec_path,
-                            audio_file=file_path,
-                            param_path=checkpoint_path
-                        )
-
-                        print(f"SINGLE-PASS: Completed processing {duration:.2f}s audio")
-                        print(f"  - Detected {len(beat_times)} beats")
-                        print(f"  - Detected {len(downbeat_times)} downbeats")
-                        print(f"  - Beat time range: {beat_time_range_start:.3f}s to {beat_time_range_end:.3f}s")
-
-                    # Pure model outputs - no time signature detection or post-processing
-
-                    # Pure model outputs - no beat position generation
-                except Exception as e:
-                    print(f"Error using run_beat_tracking: {e}")
-                    print(traceback.format_exc())
-
-                    # Fall back to madmom beat detection
-                    print("Falling back to madmom beat detection")
-
-                    try:
-                        # Import madmom beat tracking modules
-                        from madmom.features.beats import RNNBeatProcessor
-                        from madmom.features.downbeats import RNNDownBeatProcessor
-                        from madmom.features.beats import DBNBeatTrackingProcessor
-                        from madmom.features.downbeats import DBNDownBeatTrackingProcessor
-
-                        # Process the audio file with madmom
-                        # First, get beat activation function
-                        beat_proc = RNNBeatProcessor()
-                        beat_activation = beat_proc(file_path)
-
-                        # Then track the beats with a DBN
-                        beat_tracker = DBNBeatTrackingProcessor(fps=100)
-                        beat_times = beat_tracker(beat_activation)
-
-                        # Get downbeat activation function
-                        downbeat_proc = RNNDownBeatProcessor()
-                        downbeat_activation = downbeat_proc(file_path)
-
-                        # Track downbeats with a DBN - with error handling
-                        try:
-                            downbeat_tracker = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=100)
-                            downbeats_with_beats = downbeat_tracker(downbeat_activation)
-
-                            # Make sure the result is properly formatted before processing
-                            if isinstance(downbeats_with_beats, np.ndarray) and downbeats_with_beats.ndim == 2:
-                                # Extract only the downbeats (where second column is 1)
-                                downbeat_times = downbeats_with_beats[downbeats_with_beats[:, 1] == 1][:, 0]
-                                print(f"Successfully extracted {len(downbeat_times)} downbeats")
-                            else:
-                                print("Warning: Unexpected format from downbeat tracker, using beat-based downbeats")
-                                # Fall back to using every 4th beat as a downbeat
-                                downbeat_times = beat_times[::4]
-                        except Exception as e:
-                            print(f"Error in downbeat tracking: {e}")
-                            # Fall back to using every 4th beat as a downbeat
-                            downbeat_times = beat_times[::4]
-
-                        print(f"Madmom detected {len(beat_times)} beats and {len(downbeat_times)} downbeats")
-
-                        # Create beat positions
-                        beats_with_positions = []
-                        for i, beat_time in enumerate(beat_times):
-                            # Find which measure this beat belongs to
-                            measure_idx = 0
-                            while measure_idx < len(downbeat_times) - 1 and beat_time >= downbeat_times[measure_idx + 1]:
-                                measure_idx += 1
-
-                            # If this is a downbeat, it's beat 1
-                            if measure_idx < len(downbeat_times) and abs(beat_time - downbeat_times[measure_idx]) < 0.01:
-                                beat_num = 1
-                            else:
-                                # For beats between downbeats, calculate position
-                                if measure_idx < len(downbeat_times) - 1:
-                                    # Find position of this beat in the measure
-                                    curr_downbeat = downbeat_times[measure_idx]
-                                    next_downbeat = downbeat_times[measure_idx + 1]
-
-                                    # Count beats in this measure
-                                    beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
-
-                                    # Default to 4/4 time signature if we can't determine
-                                    time_signature = 4
-                                    if 2 <= beats_in_measure <= 12:
-                                        time_signature = beats_in_measure
-
-                                    # Find position of this beat in the measure
-                                    # Count beats from the current downbeat up to (but not including) this beat
-                                    beats_before = sum(1 for b in beat_times if curr_downbeat <= b < beat_time)
-                                    beat_num = beats_before + 1
-
-                                    # Ensure beat numbers are within the time signature
-                                    beat_num = ((beat_num - 1) % time_signature) + 1
-                                else:
-                                    # For beats in the last measure, use modulo 4
-                                    beat_num = ((i % 4) + 1)
-
-                            beats_with_positions.append({
-                                "time": float(beat_time),
-                                "beatNum": int(beat_num)
-                            })
-
-                        # Create downbeat positions
-                        downbeats_with_measures = [
-                            {"time": float(time), "measureNum": i + 1}
-                            for i, time in enumerate(downbeat_times)
-                        ]
-
-                    except Exception as e:
-                        print(f"Error using madmom: {e}")
-                        print(traceback.format_exc())
-
-                        # Fall back to librosa as a last resort
-                        print("Falling back to librosa beat detection as last resort")
-                        y, sr = librosa.load(file_path, sr=None)
-                        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-                        beat_times = librosa.frames_to_time(beats, sr=sr)
-
-                        # Create simple beat positions
-                        beats_with_positions = [
-                            {"time": float(time), "beatNum": ((i % 4) + 1)}
-                            for i, time in enumerate(beat_times)
-                        ]
-
-                        # Create simple downbeats (every 4th beat)
-                        downbeat_times = beat_times[::4]
-                        downbeats_with_measures = [
-                            {"time": float(time), "measureNum": i + 1}
-                            for i, time in enumerate(downbeat_times)
-                        ]
-
-                # Simple BPM calculation from raw beat times
-                if len(beat_times) > 1:
-                    intervals = np.diff(beat_times)
-                    median_interval = np.median(intervals)
-                    bpm = 60.0 / median_interval if median_interval > 0 else 120.0
-                else:
-                    bpm = 120.0
-
-                # Load audio to get duration
-                audio, sr = librosa.load(file_path, sr=None)
-                duration = librosa.get_duration(y=audio, sr=sr)
-
-                # Clean up temporary files
-                try:
-                    os.unlink(temp_spec_path)
-                    # Clean up the trimmed audio file
-                    if 'original_file_path' in locals():
-                        os.unlink(file_path)  # This is the trimmed file
-                        print(f"Cleaned up trimmed audio file: {file_path}")
-                    # Clean up the original uploaded file if it exists
-                    if 'file' in request.files and 'original_file_path' in locals():
-                        os.unlink(original_file_path)
-                        print(f"Cleaned up original uploaded file: {original_file_path}")
-                except Exception as e:
-                    print(f"Warning: Failed to clean up temporary files: {e}")
-
-                # Get time signature from the Beat-Transformer model
-                time_signature = 4  # Default fallback
-                try:
-                    # Import the detector to get time signature
-                    import sys
-                    models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
-                    if models_dir not in sys.path:
-                        sys.path.insert(0, models_dir)
-
-                    from beat_transformer_detector import BeatTransformerDetector
-                    detector = BeatTransformerDetector(checkpoint_path)
-
-                    # Call the detector to get the full result including time signature
-                    detector_result = detector.detect_beats(file_path)
-
-                    if detector_result and detector_result.get("success") and "time_signature" in detector_result:
-                        time_signature = detector_result["time_signature"]
-                        print(f"DEBUG: Beat-Transformer detected time signature: {time_signature}/4")
-                    else:
-                        print(f"DEBUG: Could not get time signature from Beat-Transformer, using default 4/4")
-
-                except Exception as e:
-                    print(f"DEBUG: Error getting time signature from Beat-Transformer: {e}")
-                    print(f"DEBUG: Using default 4/4 time signature")
-
-                # Use beat time range from the model (already calculated in single-pass processing)
-                # For chunked processing, calculate from the combined results
-                if FORCE_SINGLE_PASS_PROCESSING:
-                    # beat_time_range_start and beat_time_range_end already set from run_beat_tracking
-                    first_detected_beat = float(beat_times[0]) if len(beat_times) > 0 else 0.0
-                else:
-                    # For chunked processing, calculate from combined results
-                    first_detected_beat = float(beat_times[0]) if len(beat_times) > 0 else 0.0
-                    beat_time_range_start = first_detected_beat
+                import numpy as np  # Import numpy for array operations
+                models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+                if models_dir not in sys.path:
+                    sys.path.insert(0, models_dir)
+                    print(f"Added {models_dir} to Python path")
+
+                # Import and use the enhanced detector
+                from beat_transformer_detector import BeatTransformerDetector
+                detector = BeatTransformerDetector(checkpoint_path)
+
+                # Get the comprehensive beat detection results
+                result = detector.detect_beats(file_path)
+
+                if result.get("success"):
+                    print(f"Enhanced Beat-Transformer detection successful!")
+                    print(f"Found {result['total_beats']} beats and {result['total_downbeats']} downbeats")
+                    print(f"BPM: {result['bpm']}, Duration: {result['duration']:.2f}s")
+                    print(f"Time signature: {result['time_signature']}")
+
+                    # Convert the result to match the expected format
+                    beat_times = np.array(result['beats'])
+                    downbeat_times = np.array(result['downbeats'])
+                    bpm = result['bpm']
+                    duration = result['duration']
+                    time_signature = int(result['time_signature'].split('/')[0])  # Extract number from "4/4"
+
+                    # Calculate beat time range
+                    beat_time_range_start = float(beat_times[0]) if len(beat_times) > 0 else 0.0
                     beat_time_range_end = float(beat_times[-1]) if len(beat_times) > 0 else duration
 
-                # Debug: Log the beat time range calculation
-                print(f"DEBUG: Beat time range calculation:")
-                print(f"  First detected beat: {first_detected_beat:.3f}s")
-                print(f"  Beat time range start: {beat_time_range_start:.3f}s")
-                print(f"  Beat time range end: {beat_time_range_end:.3f}s")
 
-                # REMOVED: Timing offset calculation - no longer needed
-                print(f"  Using direct model outputs without timing offset")
+                    # Prepare the response data with enhanced detector results
+                    response_data = {
+                        "success": True,
+                        "beats": beat_times.tolist(),
+                        "beat_info": result.get('beat_info', []),
+                        "downbeats": downbeat_times.tolist(),
+                        "bpm": float(bpm),
+                        "total_beats": len(beat_times),
+                        "total_downbeats": len(downbeat_times),
+                        "duration": float(duration),
+                        "model": "beat-transformer",
+                        "time_signature": int(time_signature),
+                        "beat_time_range_start": beat_time_range_start,
+                        "beat_time_range_end": beat_time_range_end,
+                        "processing_method": "enhanced-detector"
+                    }
 
-                # Prepare pure model output response
-                response_data = {
-                    "success": True,
-                    "beats": beat_times.tolist(),
-                    "downbeats": downbeat_times.tolist(),
-                    "bpm": float(bpm),
-                    "total_beats": len(beat_times),
-                    "total_downbeats": len(downbeat_times),
-                    "duration": float(duration),
-                    "model": "beat-transformer",
-                    "time_signature": int(time_signature),  # Include the detected time signature
-                    "beat_time_range_start": beat_time_range_start,  # Start of beat time range
-                    "beat_time_range_end": beat_time_range_end       # End of beat time range
-                }
+                    # Clean up temporary files if any were created
+                    if 'file' in request.files:
+                        try:
+                            os.unlink(file_path)
+                        except Exception as e:
+                            print(f"Warning: Failed to clean up temporary file: {e}")
 
-                # Debug: Log the pure model output response
-                print(f"DEBUG: Pure model output response:")
-                print(f"  bpm: {response_data['bpm']}")
-                print(f"  model: {response_data['model']}")
-                print(f"  total_beats: {response_data['total_beats']}")
-                print(f"  total_downbeats: {response_data['total_downbeats']}")
-                print(f"  duration: {response_data['duration']}")
-                print(f"  time_signature: {response_data['time_signature']}/4")
-                print(f"  beat_time_range: {response_data['beat_time_range_start']:.3f}s to {response_data['beat_time_range_end']:.3f}s")
+                    return jsonify(response_data)
 
-                # Add processing method information
-                if FORCE_SINGLE_PASS_PROCESSING:
-                    response_data["processing_method"] = "single-pass"
-                elif duration > MAX_SINGLE_PASS_DURATION:
-                    response_data["processing_method"] = "chunked"
                 else:
-                    response_data["processing_method"] = "single-pass"
-
-                return jsonify(response_data)
+                    print(f"Enhanced Beat-Transformer detection failed: {result.get('error', 'Unknown error')}")
+                    # Fall back to madmom or other detection methods
+                    use_beat_transformer = False
+                    if madmom_available:
+                        use_madmom = True
+                        print("Falling back to madmom after Beat-Transformer failure")
 
             except Exception as e:
-                print(f"Error using Beat-Transformer: {e}")
+                print(f"Error using enhanced Beat-Transformer: {e}")
+                import traceback
                 traceback.print_exc()
-
-                # Clean up temporary files
-                try:
-                    if os.path.exists(temp_spec_path):
-                        os.unlink(temp_spec_path)
-                except Exception:
-                    pass
-
                 use_beat_transformer = False
-
-
+                if madmom_available:
+                    use_madmom = True
+                    print("Falling back to madmom after Beat-Transformer exception")
 
         # Use madmom if selected
         if use_madmom:
@@ -1269,6 +896,7 @@ def detect_beats():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/recognize-chords', methods=['POST'])
+@limiter.limit("10 per minute")  # Heavy processing endpoint
 def recognize_chords():
     """
     Recognize chords in an audio file using the Chord-CNN-LSTM model
@@ -1460,6 +1088,9 @@ def _recognize_chords_btc(model_variant):
     import os
     import tempfile
     import traceback
+    import time
+
+    processing_start_time = time.time()
 
     if 'file' not in request.files and 'audio_path' not in request.form:
         return jsonify({"error": "No file or path provided"}), 400
@@ -1482,15 +1113,11 @@ def _recognize_chords_btc(model_variant):
             return jsonify({"error": f"Audio file not found: {file_path}"}), 404
 
     try:
-        # Check if BTC model is available
+        # Log BTC model availability but don't fail immediately - allow fallback
         if model_variant == 'sl' and not USE_BTC_SL:
-            return jsonify({
-                "error": "BTC SL model is not available. Please check the server logs for details."
-            }), 500
+            print(f"⚠️ BTC SL model not available, will attempt fallback to Chord-CNN-LSTM")
         elif model_variant == 'pl' and not USE_BTC_PL:
-            return jsonify({
-                "error": "BTC PL model is not available. Please check the server logs for details."
-            }), 500
+            print(f"⚠️ BTC PL model not available, will attempt fallback to Chord-CNN-LSTM")
 
         # Check if file exists
         if not os.path.exists(file_path):
@@ -1501,21 +1128,61 @@ def _recognize_chords_btc(model_variant):
         lab_path = temp_lab_file.name
         temp_lab_file.close()
 
-        # Run BTC chord recognition
-        try:
-            # Import the BTC module directly from the python_backend directory
-            from btc_chord_recognition import btc_chord_recognition
-            print(f"Running BTC {model_variant.upper()} chord recognition on {file_path}")
-            success = btc_chord_recognition(file_path, lab_path, model_variant)
-            if not success:
-                return jsonify({
-                    "error": f"BTC {model_variant.upper()} chord recognition failed. See server logs for details."
-                }), 500
-        except Exception as e:
-            print(f"Error in BTC chord_recognition: {e}")
-            traceback.print_exc()
+        # Run BTC chord recognition with fallback to Chord-CNN-LSTM
+        btc_success = False
+        fallback_used = False
+
+        # Check if BTC model is actually available before attempting
+        btc_available = (model_variant == 'sl' and USE_BTC_SL) or (model_variant == 'pl' and USE_BTC_PL)
+
+        if btc_available:
+            try:
+                # Check config file exists in models directory
+                config_source = os.path.join(os.path.dirname(__file__), 'models', 'ChordMini', 'config', 'btc_config.yaml')
+                print(f"DEBUG: Checking config source: {config_source}")
+                print(f"DEBUG: Config source exists: {os.path.exists(config_source)}")
+
+                if not os.path.exists(config_source):
+                    raise FileNotFoundError(f"BTC config file not found at {config_source}")
+
+                # Import the BTC module from the models directory
+                from models.ChordMini.btc_chord_recognition import btc_chord_recognition
+                print(f"Running BTC {model_variant.upper()} chord recognition on {file_path}")
+                success = btc_chord_recognition(file_path, lab_path, model_variant)
+                if success:
+                    btc_success = True
+                    print(f"BTC {model_variant.upper()} chord recognition completed successfully")
+                else:
+                    print(f"BTC {model_variant.upper()} chord recognition failed, attempting fallback...")
+            except Exception as e:
+                print(f"Error in BTC chord_recognition: {e}")
+                print(f"BTC {model_variant.upper()} failed, attempting fallback to Chord-CNN-LSTM...")
+                traceback.print_exc()
+        else:
+            print(f"BTC {model_variant.upper()} model not available, skipping to fallback...")
+
+        # If BTC failed, try fallback to Chord-CNN-LSTM
+        if not btc_success and USE_CHORD_CNN_LSTM:
+            print(f"🔄 Falling back to Chord-CNN-LSTM for {file_path}")
+            try:
+                # Use the existing chord recognition function as fallback
+                from chord_recognition import chord_recognition
+                success = chord_recognition(file_path, lab_path)
+                if success:
+                    fallback_used = True
+                    print("✅ Fallback to Chord-CNN-LSTM successful")
+                else:
+                    print("❌ Fallback to Chord-CNN-LSTM also failed")
+            except Exception as fallback_e:
+                print(f"❌ Fallback to Chord-CNN-LSTM failed: {fallback_e}")
+                traceback.print_exc()
+
+        # If both BTC and fallback failed, return error
+        if not btc_success and not fallback_used:
             return jsonify({
-                "error": f"BTC {model_variant.upper()} chord recognition failed: {str(e)}"
+                "error": f"BTC {model_variant.upper()} chord recognition failed and fallback unavailable. See server logs for details.",
+                "btc_failed": True,
+                "fallback_available": USE_CHORD_CNN_LSTM
             }), 500
 
         # Parse the lab file to extract chord data
@@ -1525,17 +1192,20 @@ def _recognize_chords_btc(model_variant):
                 for line in f:
                     line = line.strip()
                     if line:
-                        parts = line.split()
+                        # All models now use unified tab-separated format: start_time\tend_time\tchord_name
+                        parts = line.split('\t')
+
                         if len(parts) >= 3:
                             start_time = float(parts[0])
                             end_time = float(parts[1])
                             chord_name = ' '.join(parts[2:])  # Handle chord names with spaces
 
+                            # Use the unified format (start, end, chord, confidence) - removed redundant time property
                             chord_data.append({
                                 'start': start_time,
                                 'end': end_time,
                                 'chord': chord_name,
-                                'confidence': 0.9  # Default confidence for BTC models
+                                'confidence': 1.0  # BTC models don't provide confidence scores
                             })
 
             # Print the parsed chord data for debugging
@@ -1558,14 +1228,35 @@ def _recognize_chords_btc(model_variant):
         except Exception as e:
             print(f"Warning: Failed to clean up temporary files: {e}")
 
-        # Prepare response
-        response_data = {
-            "success": True,
-            "chords": chord_data,
-            "total_chords": len(chord_data),
-            "model": f"btc-{model_variant}",
-            "chord_dict": "large_voca"
-        }
+        # Calculate processing time (duration in seconds)
+        processing_time = time.time() - processing_start_time
+
+        # Prepare response in the format expected by frontend
+        if fallback_used:
+            response_data = {
+                "success": True,
+                "chords": chord_data,
+                "total_chords": len(chord_data),
+                "model_used": "chord-cnn-lstm",
+                "model_name": "Chord-CNN-LSTM (Fallback)",
+                "chord_dict": "full",
+                "processing_time": round(processing_time, 2),
+                "fallback_info": {
+                    "original_model_requested": f"btc-{model_variant}",
+                    "fallback_reason": f"BTC {model_variant.upper()} model failed",
+                    "fallback_model": "chord-cnn-lstm"
+                }
+            }
+        else:
+            response_data = {
+                "success": True,
+                "chords": chord_data,
+                "total_chords": len(chord_data),
+                "model_used": f"btc-{model_variant}",
+                "model_name": f"BTC {'SL (Supervised Learning)' if model_variant == 'sl' else 'PL (Pseudo-Label)'}",
+                "chord_dict": "large_voca",
+                "processing_time": round(processing_time, 2)
+            }
 
         return jsonify(response_data)
 
@@ -1578,6 +1269,7 @@ def _recognize_chords_btc(model_variant):
         }), 500
 
 @app.route('/api/recognize-chords-btc-sl', methods=['POST'])
+@limiter.limit("10 per minute")  # Heavy processing endpoint
 def recognize_chords_btc_sl():
     """
     Recognize chords in an audio file using the BTC Supervised Learning model
@@ -1592,6 +1284,7 @@ def recognize_chords_btc_sl():
     return _recognize_chords_btc('sl')
 
 @app.route('/api/recognize-chords-btc-pl', methods=['POST'])
+@limiter.limit("10 per minute")  # Heavy processing endpoint
 def recognize_chords_btc_pl():
     """
     Recognize chords in an audio file using the BTC Pseudo-Label model
@@ -1651,6 +1344,7 @@ USE_BTC_SL = BTC_AVAILABILITY['sl_available']
 USE_BTC_PL = BTC_AVAILABILITY['pl_available']
 
 @app.route('/api/model-info', methods=['GET'])
+@limiter.limit("20 per minute")  # Information endpoint, allow more requests
 def model_info():
     """Return information about the available beat detection models"""
     # Check if madmom is available
@@ -1776,6 +1470,7 @@ def model_info():
     })
 
 @app.route('/api/genius-lyrics', methods=['POST'])
+@limiter.limit("15 per minute")  # External API calls, moderate limit
 def get_genius_lyrics():
     """
     Fetch lyrics from Genius.com using the lyricsgenius library
@@ -1922,7 +1617,341 @@ def get_genius_lyrics():
             "error": f"Failed to fetch lyrics: {str(e)}"
         }), 500
 
+@app.route('/docs')
+@limiter.limit("50 per minute")  # Documentation endpoint, allow many requests
+def api_docs():
+    """Serve API documentation page"""
+    return render_template('docs.html')
+
+@app.route('/api/docs')
+@limiter.limit("50 per minute")  # Documentation endpoint, allow many requests
+def api_docs_json():
+    """Return API documentation in JSON format"""
+    docs = {
+        "title": "ChordMini Audio Analysis API",
+        "version": "1.0.0",
+        "description": "API for audio analysis including beat detection, chord recognition, and lyrics fetching",
+        "base_url": request.host_url.rstrip('/'),
+        "endpoints": [
+            {
+                "path": "/",
+                "method": "GET",
+                "summary": "Health check and API status",
+                "description": "Returns the current status of the API and available models",
+                "responses": {
+                    "200": {
+                        "description": "API status information",
+                        "example": {
+                            "status": "healthy",
+                            "message": "Audio analysis API is running",
+                            "beat_model": "Beat-Transformer",
+                            "chord_model": "Chord-CNN-LSTM",
+                            "genius_available": True
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/model-info",
+                "method": "GET",
+                "summary": "Get available models information",
+                "description": "Returns detailed information about available beat detection and chord recognition models",
+                "responses": {
+                    "200": {
+                        "description": "Model information",
+                        "example": {
+                            "success": True,
+                            "models": {
+                                "beat": [
+                                    {
+                                        "id": "beat-transformer",
+                                        "name": "Beat-Transformer",
+                                        "description": "Deep learning model for beat tracking with downbeat detection",
+                                        "default": True,
+                                        "available": True
+                                    },
+                                    {
+                                        "id": "madmom",
+                                        "name": "Madmom",
+                                        "description": "Classical beat tracking algorithm",
+                                        "default": False,
+                                        "available": True
+                                    }
+                                ],
+                                "chord": [
+                                    {
+                                        "id": "chord-cnn-lstm",
+                                        "name": "Chord-CNN-LSTM",
+                                        "description": "Deep learning model for chord recognition",
+                                        "default": True,
+                                        "available": True
+                                    },
+                                    {
+                                        "id": "btc-sl",
+                                        "name": "BTC SL (Supervised Learning)",
+                                        "description": "Transformer-based model with supervised learning",
+                                        "default": False,
+                                        "available": True
+                                    },
+                                    {
+                                        "id": "btc-pl",
+                                        "name": "BTC PL (Pseudo-Label)",
+                                        "description": "Transformer-based model with pseudo-labeling",
+                                        "default": False,
+                                        "available": True
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/detect-beats",
+                "method": "POST",
+                "summary": "Detect beats in audio file",
+                "description": "Analyze an audio file to detect beat positions and downbeats",
+                "parameters": {
+                    "audio_file": {
+                        "type": "file",
+                        "required": True,
+                        "description": "Audio file (MP3, WAV, FLAC, etc.)"
+                    },
+                    "model": {
+                        "type": "string",
+                        "required": False,
+                        "default": "beat-transformer",
+                        "options": ["beat-transformer", "madmom"],
+                        "description": "Beat detection model to use"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Beat detection results",
+                        "example": {
+                            "success": True,
+                            "beats": [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0],
+                            "downbeats": [0.5, 2.5, 4.5],
+                            "total_beats": 8,
+                            "total_downbeats": 3,
+                            "bpm": 120.0,
+                            "time_signature": "4/4",
+                            "model_used": "beat-transformer",
+                            "model_name": "Beat-Transformer",
+                            "processing_time": 2.34,
+                            "audio_duration": 4.5
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - missing or invalid audio file"
+                    },
+                    "500": {
+                        "description": "Internal server error during processing"
+                    }
+                }
+            },
+            {
+                "path": "/api/recognize-chords",
+                "method": "POST",
+                "summary": "Recognize chords in audio file (Chord-CNN-LSTM)",
+                "description": "Analyze an audio file to recognize chord progressions using the Chord-CNN-LSTM model",
+                "parameters": {
+                    "audio_file": {
+                        "type": "file",
+                        "required": True,
+                        "description": "Audio file (MP3, WAV, FLAC, etc.)"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Chord recognition results",
+                        "example": {
+                            "success": True,
+                            "chords": [
+                                {"start": 0.0, "end": 2.0, "chord": "C", "confidence": 0.95},
+                                {"start": 2.0, "end": 4.0, "chord": "Am", "confidence": 0.87},
+                                {"start": 4.0, "end": 6.0, "chord": "F", "confidence": 0.92},
+                                {"start": 6.0, "end": 8.0, "chord": "G", "confidence": 0.89}
+                            ],
+                            "total_chords": 4,
+                            "model_used": "chord-cnn-lstm",
+                            "model_name": "Chord-CNN-LSTM",
+                            "chord_dict": "large_voca",
+                            "processing_time": 3.21,
+                            "audio_duration": 8.0
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/recognize-chords-btc-sl",
+                "method": "POST",
+                "summary": "Recognize chords using BTC Supervised Learning model",
+                "description": "Analyze an audio file to recognize chord progressions using the BTC SL model",
+                "parameters": {
+                    "audio_file": {
+                        "type": "file",
+                        "required": True,
+                        "description": "Audio file (MP3, WAV, FLAC, etc.)"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Chord recognition results",
+                        "example": {
+                            "success": True,
+                            "chords": [
+                                {"start": 0.0, "end": 0.1, "chord": "N", "confidence": 1.0},
+                                {"start": 0.1, "end": 0.2, "chord": "C", "confidence": 1.0},
+                                {"start": 0.2, "end": 0.3, "chord": "Am", "confidence": 1.0}
+                            ],
+                            "total_chords": 3,
+                            "model_used": "btc-sl",
+                            "model_name": "BTC SL (Supervised Learning)",
+                            "chord_dict": "large_voca",
+                            "processing_time": 1.23
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/recognize-chords-btc-pl",
+                "method": "POST",
+                "summary": "Recognize chords using BTC Pseudo-Label model",
+                "description": "Analyze an audio file to recognize chord progressions using the BTC PL model",
+                "parameters": {
+                    "audio_file": {
+                        "type": "file",
+                        "required": True,
+                        "description": "Audio file (MP3, WAV, FLAC, etc.)"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Chord recognition results",
+                        "example": {
+                            "success": True,
+                            "chords": [
+                                {"start": 0.0, "end": 0.1, "chord": "N", "confidence": 1.0},
+                                {"start": 0.1, "end": 0.2, "chord": "C", "confidence": 1.0},
+                                {"start": 0.2, "end": 0.3, "chord": "Am", "confidence": 1.0}
+                            ],
+                            "total_chords": 3,
+                            "model_used": "btc-pl",
+                            "model_name": "BTC PL (Pseudo-Label)",
+                            "chord_dict": "large_voca",
+                            "processing_time": 1.45
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/genius-lyrics",
+                "method": "POST",
+                "summary": "Fetch lyrics from Genius.com",
+                "description": "Search and retrieve lyrics from Genius.com using artist and song title. API key is configured server-side.",
+                "parameters": {
+                    "artist": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Artist name"
+                    },
+                    "title": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Song title"
+                    },
+                    "search_query": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Alternative search query (optional, overrides artist/title)"
+                    }
+                },
+                "example_request": {
+                    "curl": "curl -X POST \"https://chordmini-backend-full-12071603127.us-central1.run.app/api/genius-lyrics\" -H \"Content-Type: application/json\" -d '{\"artist\": \"The Beatles\", \"title\": \"Hey Jude\"}'",
+                    "note": "No API key required in request - configured server-side. Genius API key must be set as GENIUS_API_KEY environment variable on the server."
+                },
+                "responses": {
+                    "200": {
+                        "description": "Lyrics retrieval results",
+                        "example": {
+                            "success": True,
+                            "lyrics": "Hey Jude, don't make it bad...",
+                            "metadata": {
+                                "title": "Hey Jude",
+                                "artist": "The Beatles",
+                                "album": "Hey Jude",
+                                "genius_url": "https://genius.com/the-beatles-hey-jude-lyrics",
+                                "genius_id": 378195,
+                                "thumbnail_url": "https://images.genius.com/..."
+                            },
+                            "source": "genius.com"
+                        }
+                    },
+                    "404": {
+                        "description": "Song not found",
+                        "example": {
+                            "success": False,
+                            "error": "Song not found on Genius.com",
+                            "searched_for": "Hey Jude by The Beatles"
+                        }
+                    },
+                    "500": {
+                        "description": "API key not configured or other server error",
+                        "example": {
+                            "success": False,
+                            "error": "Genius API key not configured. Please set GENIUS_API_KEY environment variable."
+                        }
+                    }
+                }
+            },
+            {
+                "path": "/api/lrclib-lyrics",
+                "method": "POST",
+                "summary": "Fetch synchronized lyrics from LRClib",
+                "description": "Search and retrieve synchronized lyrics from LRClib API",
+                "parameters": {
+                    "artist": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Artist name"
+                    },
+                    "title": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Song title"
+                    },
+                    "album": {
+                        "type": "string",
+                        "required": False,
+                        "description": "Album name (optional, improves accuracy)"
+                    },
+                    "duration": {
+                        "type": "number",
+                        "required": False,
+                        "description": "Song duration in seconds (optional, improves accuracy)"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Synchronized lyrics retrieval results",
+                        "example": {
+                            "success": True,
+                            "lyrics": "[00:12.34] First line of lyrics\n[00:15.67] Second line...",
+                            "artist": "Artist Name",
+                            "title": "Song Title",
+                            "album": "Album Name",
+                            "duration": 180.5
+                        }
+                    }
+                }
+            }
+        ]
+    }
+    return jsonify(docs)
+
 @app.route('/api/lrclib-lyrics', methods=['POST'])
+@limiter.limit("15 per minute")  # External API calls, moderate limit
 def get_lrclib_lyrics():
     """
     Fetch synchronized lyrics from LRClib API
@@ -2083,7 +2112,482 @@ def parse_lrc_format(lrc_content):
 
     return lines
 
+# Debug endpoints for BTC troubleshooting
+@app.route('/api/debug-btc', methods=['POST'])
+def debug_btc():
+    """Debug endpoint to test BTC model components individually"""
+    try:
+        data = request.get_json() or {}
+        results = {}
+
+        # Test imports
+        if data.get('test_imports', False):
+            import_results = {}
+            try:
+                import torch
+                import_results['torch'] = f"✅ PyTorch {torch.__version__}"
+            except Exception as e:
+                import_results['torch'] = f"❌ PyTorch: {str(e)}"
+
+            try:
+                import numpy as np
+                import_results['numpy'] = f"✅ NumPy {np.__version__}"
+            except Exception as e:
+                import_results['numpy'] = f"❌ NumPy: {str(e)}"
+
+            try:
+                import librosa
+                import_results['librosa'] = f"✅ Librosa {librosa.__version__}"
+            except Exception as e:
+                import_results['librosa'] = f"❌ Librosa: {str(e)}"
+
+            # Test BTC-specific imports
+            try:
+                import sys
+                import os
+                btc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "ChordMini")
+                sys.path.insert(0, btc_dir)
+
+                from test_btc import process_audio_with_padding
+                import_results['test_btc'] = "✅ test_btc module"
+            except Exception as e:
+                import_results['test_btc'] = f"❌ test_btc: {str(e)}"
+
+            try:
+                from modules.utils import logger
+                import_results['logger'] = "✅ modules.utils.logger"
+            except Exception as e:
+                import_results['logger'] = f"❌ logger: {str(e)}"
+
+            try:
+                from modules.utils.mir_eval_modules import idx2voca_chord
+                import_results['mir_eval'] = "✅ modules.utils.mir_eval_modules"
+            except Exception as e:
+                import_results['mir_eval'] = f"❌ mir_eval: {str(e)}"
+
+            try:
+                from modules.utils.hparams import HParams
+                import_results['hparams'] = "✅ modules.utils.hparams"
+            except Exception as e:
+                import_results['hparams'] = f"❌ hparams: {str(e)}"
+
+            try:
+                from modules.models.Transformer.btc_model import BTC_model
+                import_results['btc_model'] = "✅ modules.models.Transformer.btc_model"
+            except Exception as e:
+                import_results['btc_model'] = f"❌ btc_model: {str(e)}"
+
+            results['imports'] = import_results
+
+        # Test model files
+        if data.get('test_model_files', False):
+            file_results = {}
+            btc_dir = Path(__file__).parent / "models" / "ChordMini"
+
+            sl_model = btc_dir / "checkpoints" / "SL" / "btc_model_large_voca.pt"
+            pl_model = btc_dir / "checkpoints" / "btc" / "btc_combined_best.pth"
+            config_file = btc_dir / "config" / "btc_config.yaml"
+
+            file_results['sl_model'] = f"{'✅' if sl_model.exists() else '❌'} {sl_model}"
+            file_results['pl_model'] = f"{'✅' if pl_model.exists() else '❌'} {pl_model}"
+            file_results['config'] = f"{'✅' if config_file.exists() else '❌'} {config_file}"
+
+            if sl_model.exists():
+                file_results['sl_size'] = f"{sl_model.stat().st_size / 1024 / 1024:.2f} MB"
+            if pl_model.exists():
+                file_results['pl_size'] = f"{pl_model.stat().st_size / 1024 / 1024:.2f} MB"
+
+            results['files'] = file_results
+
+        # Test config loading
+        if data.get('test_config', False):
+            config_results = {}
+            try:
+                btc_dir = Path(__file__).parent / "models" / "ChordMini"
+                config_file = btc_dir / "config" / "btc_config.yaml"
+
+                import sys
+                sys.path.insert(0, str(btc_dir))
+                from modules.utils.hparams import HParams
+
+                config = HParams.load(str(config_file))
+                config_results['config_load'] = "✅ Config loaded successfully"
+                config_results['model_config'] = dict(config.model)
+
+            except Exception as e:
+                config_results['config_load'] = f"❌ Config load failed: {str(e)}"
+
+            results['config'] = config_results
+
+        # Test torch device
+        if data.get('test_torch', False):
+            torch_results = {}
+            try:
+                import torch
+                torch_results['version'] = torch.__version__
+                torch_results['cuda_available'] = torch.cuda.is_available()
+                torch_results['device_count'] = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+                device = torch.device("cpu")
+                torch_results['device'] = str(device)
+
+                # Test tensor creation
+                test_tensor = torch.randn(2, 3).to(device)
+                torch_results['tensor_test'] = "✅ Tensor creation successful"
+
+            except Exception as e:
+                torch_results['error'] = f"❌ Torch test failed: {str(e)}"
+
+            results['torch'] = torch_results
+
+        return jsonify({
+            "success": True,
+            "debug_results": results
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Debug failed: {str(e)}",
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-btc-import', methods=['GET'])
+def test_btc_import():
+    """Simple endpoint to test BTC imports"""
+    try:
+        import sys
+        import os
+
+        # Add BTC directory to path
+        btc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "ChordMini")
+        sys.path.insert(0, btc_dir)
+
+        # Test each import individually
+        results = {}
+
+        try:
+            from test_btc import process_audio_with_padding, main as btc_main
+            results['test_btc'] = "✅ Imported successfully"
+        except Exception as e:
+            results['test_btc'] = f"❌ Import failed: {str(e)}"
+
+        try:
+            from modules.utils import logger
+            results['logger'] = "✅ Imported successfully"
+        except Exception as e:
+            results['logger'] = f"❌ Import failed: {str(e)}"
+
+        try:
+            from modules.utils.mir_eval_modules import idx2voca_chord
+            results['mir_eval'] = "✅ Imported successfully"
+        except Exception as e:
+            results['mir_eval'] = f"❌ Import failed: {str(e)}"
+
+        try:
+            from modules.utils.hparams import HParams
+            results['hparams'] = "✅ Imported successfully"
+        except Exception as e:
+            results['hparams'] = f"❌ Import failed: {str(e)}"
+
+        try:
+            from modules.models.Transformer.btc_model import BTC_model
+            results['btc_model'] = "✅ Imported successfully"
+        except Exception as e:
+            results['btc_model'] = f"❌ Import failed: {str(e)}"
+
+        return jsonify({
+            "success": True,
+            "import_results": results
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Import test failed: {str(e)}",
+            "traceback": traceback.format_exc()
+        }), 500
+
+# Simple test endpoints for each model
+@app.route('/api/test-beat-transformer', methods=['GET'])
+@limiter.limit("5 per minute")
+def test_beat_transformer():
+    """Test Beat-Transformer model availability and basic functionality"""
+    try:
+        # Check if Beat-Transformer is available
+        available = check_beat_transformer_availability()
+
+        if not available:
+            return jsonify({
+                "success": False,
+                "model": "Beat-Transformer",
+                "status": "unavailable",
+                "error": "Beat-Transformer model or dependencies not found"
+            }), 404
+
+        # Try to import required modules
+        import torch
+        checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
+
+        return jsonify({
+            "success": True,
+            "model": "Beat-Transformer",
+            "status": "available",
+            "checkpoint_exists": checkpoint_path.exists(),
+            "pytorch_version": torch.__version__,
+            "message": "Beat-Transformer model is ready for use"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "model": "Beat-Transformer",
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-madmom', methods=['GET'])
+@limiter.limit("5 per minute")
+def test_madmom():
+    """Test Madmom beat detection model availability"""
+    try:
+        # Try to import madmom
+        import madmom
+
+        return jsonify({
+            "success": True,
+            "model": "Madmom",
+            "status": "available",
+            "version": getattr(madmom, '__version__', 'unknown'),
+            "message": "Madmom beat detection model is ready for use"
+        })
+
+    except ImportError as e:
+        return jsonify({
+            "success": False,
+            "model": "Madmom",
+            "status": "unavailable",
+            "error": f"Madmom not installed: {str(e)}"
+        }), 404
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "model": "Madmom",
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-chord-cnn-lstm', methods=['GET'])
+@limiter.limit("5 per minute")
+def test_chord_cnn_lstm():
+    """Test Chord-CNN-LSTM model availability"""
+    try:
+        # Check if Chord-CNN-LSTM is available
+        available = check_chord_cnn_lstm_availability()
+
+        if not available:
+            return jsonify({
+                "success": False,
+                "model": "Chord-CNN-LSTM",
+                "status": "unavailable",
+                "error": "Chord-CNN-LSTM model files not found"
+            }), 404
+
+        # Try to import the chord recognition module
+        sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+        from chord_recognition import ChordRecognition
+
+        return jsonify({
+            "success": True,
+            "model": "Chord-CNN-LSTM",
+            "status": "available",
+            "model_dir": str(CHORD_CNN_LSTM_DIR),
+            "message": "Chord-CNN-LSTM model is ready for use"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "model": "Chord-CNN-LSTM",
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-btc-pl', methods=['GET'])
+@limiter.limit("5 per minute")
+def test_btc_pl():
+    """Test BTC-PL (Beat-Transformer-Chord Pretrained-Labeled) model availability"""
+    try:
+        # Check for BTC model files in ChordMini directory
+        btc_dir = Path(__file__).parent / "models" / "ChordMini"
+        checkpoint_dir = btc_dir / "checkpoints"
+
+        if not btc_dir.exists():
+            return jsonify({
+                "success": False,
+                "model": "BTC-PL",
+                "status": "unavailable",
+                "error": "ChordMini directory not found"
+            }), 404
+
+        # Try to import BTC modules
+        sys.path.insert(0, str(btc_dir))
+        from btc_chord_recognition import btc_chord_recognition
+
+        # Check for checkpoint files
+        checkpoint_files = list(checkpoint_dir.glob("*.pt")) if checkpoint_dir.exists() else []
+
+        return jsonify({
+            "success": True,
+            "model": "BTC-PL",
+            "status": "available",
+            "model_dir": str(btc_dir),
+            "checkpoint_dir": str(checkpoint_dir),
+            "checkpoint_files": [f.name for f in checkpoint_files],
+            "message": "BTC-PL model is ready for use"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "model": "BTC-PL",
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-btc-sl', methods=['GET'])
+@limiter.limit("5 per minute")
+def test_btc_sl():
+    """Test BTC-SL (Beat-Transformer-Chord Self-Labeled) model availability"""
+    try:
+        # Check for BTC model files in ChordMini directory
+        btc_dir = Path(__file__).parent / "models" / "ChordMini"
+        config_dir = btc_dir / "config"
+
+        if not btc_dir.exists():
+            return jsonify({
+                "success": False,
+                "model": "BTC-SL",
+                "status": "unavailable",
+                "error": "ChordMini directory not found"
+            }), 404
+
+        # Try to import BTC modules
+        sys.path.insert(0, str(btc_dir))
+        from btc_chord_recognition import btc_chord_recognition
+
+        # Check for config files
+        config_files = list(config_dir.glob("*.yaml")) if config_dir.exists() else []
+
+        return jsonify({
+            "success": True,
+            "model": "BTC-SL",
+            "status": "available",
+            "model_dir": str(btc_dir),
+            "config_dir": str(config_dir),
+            "config_files": [f.name for f in config_files],
+            "message": "BTC-SL model is ready for use"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "model": "BTC-SL",
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/test-all-models', methods=['GET'])
+@limiter.limit("3 per minute")
+def test_all_models():
+    """Test all 5 models availability in one endpoint"""
+    try:
+        results = {}
+
+        # Test Beat-Transformer
+        try:
+            available = check_beat_transformer_availability()
+            if available:
+                import torch
+                checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
+                results['beat_transformer'] = {
+                    "status": "available",
+                    "checkpoint_exists": checkpoint_path.exists(),
+                    "pytorch_version": torch.__version__
+                }
+            else:
+                results['beat_transformer'] = {"status": "unavailable"}
+        except Exception as e:
+            results['beat_transformer'] = {"status": "error", "error": str(e)}
+
+        # Test Madmom
+        try:
+            import madmom
+            results['madmom'] = {
+                "status": "available",
+                "version": getattr(madmom, '__version__', 'unknown')
+            }
+        except ImportError:
+            results['madmom'] = {"status": "unavailable"}
+        except Exception as e:
+            results['madmom'] = {"status": "error", "error": str(e)}
+
+        # Test Chord-CNN-LSTM
+        try:
+            available = check_chord_cnn_lstm_availability()
+            if available:
+                results['chord_cnn_lstm'] = {"status": "available"}
+            else:
+                results['chord_cnn_lstm'] = {"status": "unavailable"}
+        except Exception as e:
+            results['chord_cnn_lstm'] = {"status": "error", "error": str(e)}
+
+        # Test BTC-PL
+        try:
+            btc_dir = Path(__file__).parent / "models" / "ChordMini"
+            if btc_dir.exists():
+                results['btc_pl'] = {"status": "available", "model_dir": str(btc_dir)}
+            else:
+                results['btc_pl'] = {"status": "unavailable"}
+        except Exception as e:
+            results['btc_pl'] = {"status": "error", "error": str(e)}
+
+        # Test BTC-SL
+        try:
+            btc_dir = Path(__file__).parent / "models" / "ChordMini"
+            if btc_dir.exists():
+                results['btc_sl'] = {"status": "available", "model_dir": str(btc_dir)}
+            else:
+                results['btc_sl'] = {"status": "unavailable"}
+        except Exception as e:
+            results['btc_sl'] = {"status": "error", "error": str(e)}
+
+        # Count available models
+        available_count = sum(1 for model in results.values() if model.get("status") == "available")
+
+        return jsonify({
+            "success": True,
+            "total_models": 5,
+            "available_models": available_count,
+            "models": results,
+            "message": f"{available_count}/5 models are available"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
 if __name__ == '__main__':
     # Get port from environment variable or default to 5000
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    print(f"Starting Flask app on port {port}")
+    print("App is ready to serve requests")
+    app.run(host='0.0.0.0', port=port, debug=False)  # Disable debug for production

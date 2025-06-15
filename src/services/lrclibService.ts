@@ -80,7 +80,7 @@ export async function searchLRCLibLyrics(params: {
     return {
       success: true,
       has_synchronized: !!syncedLyrics,
-      synchronized_lyrics: parsedLyrics,
+      synchronized_lyrics: parsedLyrics || undefined,
       plain_lyrics: plainLyrics,
       metadata: {
         title: bestMatch.trackName || '',

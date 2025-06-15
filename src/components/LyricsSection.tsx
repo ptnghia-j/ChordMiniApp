@@ -13,6 +13,7 @@ interface LyricsSectionProps {
   theme: string;
   analysisResults: AnalysisResult | null;
   onFontSizeChange: (size: number) => void;
+
 }
 
 export const LyricsSection: React.FC<LyricsSectionProps> = ({

@@ -25,19 +25,54 @@ interface ProcessingStatusBannerProps {
 }
 
 const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
-  analysisResults = null,
-  audioDuration = 0,
+  audioDuration,
   fromCache = false,
   fromFirestoreCache = false
 }) => {
-  const { stage, progress, statusMessage, getFormattedElapsedTime } = useProcessing();
+  const { stage, statusMessage, getFormattedElapsedTime, elapsedTime } = useProcessing();
   const { theme } = useTheme();
   const [isVisible, setIsVisible] = useState(true);
   const [dismissCountdown, setDismissCountdown] = useState(5);
+  const [estimatedProgress, setEstimatedProgress] = useState(0);
 
 
   const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Calculate estimated progress for beat and chord detection
+  useEffect(() => {
+    const elapsedSeconds = elapsedTime / 1000;
+
+    if (stage === 'beat-detection' || stage === 'chord-recognition') {
+      if (audioDuration && audioDuration > 0) {
+        // Use the formula: estimated_time = 0.8 * audio_duration
+        // This means processing takes about 80% of the audio duration
+        const estimatedTime = audioDuration * 0.8;
+        const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 95);
+        setEstimatedProgress(progress);
+        console.log(`📊 PROGRESS CALCULATION: audioDuration=${audioDuration.toFixed(1)}s, elapsedSeconds=${elapsedSeconds.toFixed(1)}s, estimatedTime=${estimatedTime.toFixed(1)}s, progress=${progress.toFixed(1)}%`);
+      } else {
+        // Fallback: Use time-based estimation when duration is not available yet
+        // Assume average 3-minute song for initial estimation
+        const fallbackDuration = 180; // 3 minutes in seconds
+        const estimatedTime = fallbackDuration * 0.8; // Apply same 0.8 factor
+        const fallbackProgress = Math.min((elapsedSeconds / estimatedTime) * 100, 30); // Cap at 30% until real duration is available
+        setEstimatedProgress(fallbackProgress);
+        console.log(`📊 PROGRESS FALLBACK: audioDuration=null, elapsedSeconds=${elapsedSeconds.toFixed(1)}s, fallbackProgress=${fallbackProgress.toFixed(1)}% (capped at 30%)`);
+      }
+    } else {
+      setEstimatedProgress(0);
+    }
+  }, [elapsedTime, stage, audioDuration]);
+
+  // Log when audioDuration becomes available
+  useEffect(() => {
+    if (audioDuration && audioDuration > 0) {
+      console.log(`🎵 AUDIO DURATION AVAILABLE: ${audioDuration.toFixed(1)}s for stage=${stage}`);
+    } else {
+      console.log(`🎵 AUDIO DURATION NOT AVAILABLE: audioDuration=${audioDuration} for stage=${stage}`);
+    }
+  }, [audioDuration, stage]);
 
   // Auto-dismiss the banner after 5 seconds when processing is complete
   useEffect(() => {
@@ -101,10 +136,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'beat-detection':
         return {
           title: 'Detecting Beats',
-          color: theme === 'dark' ? 'bg-blue-200 border-blue-300' : 'bg-blue-50 border-blue-200',
-          textColor: theme === 'dark' ? 'text-blue-900' : 'text-blue-700',
+          color: theme === 'dark' ? 'bg-blue-900/30 border-blue-600' : 'bg-blue-50 border-blue-200',
+          textColor: theme === 'dark' ? 'text-blue-200' : 'text-blue-700',
           icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-500'}`} viewBox="0 0 20 20" fill="currentColor">
               <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
               <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
             </svg>
@@ -113,10 +148,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'chord-recognition':
         return {
           title: 'Recognizing Chords',
-          color: theme === 'dark' ? 'bg-purple-200 border-purple-300' : 'bg-purple-50 border-purple-200',
-          textColor: theme === 'dark' ? 'text-purple-900' : 'text-purple-700',
+          color: theme === 'dark' ? 'bg-purple-900/30 border-purple-600' : 'bg-purple-50 border-purple-200',
+          textColor: theme === 'dark' ? 'text-purple-200' : 'text-purple-700',
           icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-500" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-500'}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
             </svg>
           )
@@ -124,10 +159,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       case 'complete':
         return {
           title: 'Processing Complete',
-          color: theme === 'dark' ? 'bg-green-200 border-green-300' : 'bg-green-50 border-green-200',
-          textColor: theme === 'dark' ? 'text-green-900' : 'text-green-700',
+          color: theme === 'dark' ? 'bg-green-900/30 border-green-600' : 'bg-green-50 border-green-200',
+          textColor: theme === 'dark' ? 'text-green-200' : 'text-green-700',
           icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-green-400' : 'text-green-500'}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
           )
@@ -146,10 +181,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
       default:
         return {
           title: 'Processing',
-          color: theme === 'dark' ? 'bg-content-bg border-gray-600' : 'bg-gray-50 border-gray-200',
-          textColor: theme === 'dark' ? 'text-gray-300' : 'text-gray-700',
+          color: theme === 'dark' ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-50 border-gray-200',
+          textColor: theme === 'dark' ? 'text-gray-200' : 'text-gray-700',
           icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
             </svg>
           )
@@ -176,21 +211,21 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
             {(stage === 'beat-detection' || stage === 'chord-recognition') ? (
               <div className="flex space-x-1">
                 <div
-                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'}`}
                   style={{
                     animation: 'bounce 1.4s infinite ease-in-out both',
                     animationDelay: '0ms'
                   }}
                 ></div>
                 <div
-                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'}`}
                   style={{
                     animation: 'bounce 1.4s infinite ease-in-out both',
                     animationDelay: '0.16s'
                   }}
                 ></div>
                 <div
-                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'}`}
+                  className={`w-2 h-2 rounded-full ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'}`}
                   style={{
                     animation: 'bounce 1.4s infinite ease-in-out both',
                     animationDelay: '0.32s'
@@ -201,10 +236,42 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
               icon
             )}
 
-            <div>
-              <p className={`font-medium text-base ${textColor}`}>
-                {title}
-              </p>
+            <div className="flex-1">
+              <div className="flex justify-between items-center mb-1">
+                <p className={`font-medium text-base ${textColor}`}>
+                  {title}
+                </p>
+                {(stage === 'beat-detection' || stage === 'chord-recognition') && (
+                  <p className={`text-sm ${textColor}`}>
+                    {estimatedProgress > 0 ? Math.round(estimatedProgress) : 0}%
+                    {!audioDuration && (
+                      <span className="text-xs opacity-75 ml-1">~</span>
+                    )}
+                  </p>
+                )}
+              </div>
+
+              {/* Progress bar for beat and chord detection - always show during processing stages */}
+              {(stage === 'beat-detection' || stage === 'chord-recognition') && (
+                <div className={`w-full rounded-full h-1.5 mb-2 ${
+                  stage === 'beat-detection'
+                    ? (theme === 'dark' ? 'bg-blue-800/50' : 'bg-blue-200')
+                    : (theme === 'dark' ? 'bg-purple-800/50' : 'bg-purple-200')
+                }`}>
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-300 ease-in-out ${
+                      stage === 'beat-detection'
+                        ? (theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500')
+                        : (theme === 'dark' ? 'bg-purple-400' : 'bg-purple-500')
+                    } ${!audioDuration ? 'opacity-75' : ''}`}
+                    style={{
+                      width: `${Math.max(estimatedProgress, 2)}%`, // Minimum 2% width for visibility
+                      minWidth: estimatedProgress === 0 ? '8px' : 'auto' // Show at least 8px when starting
+                    }}
+                  ></div>
+                </div>
+              )}
+
               <p className={`text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-600'}`}>
                 {stage === 'complete'
                   ? `Beat and chord analysis completed in ${getFormattedElapsedTime()}`

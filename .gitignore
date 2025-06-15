@@ -96,6 +96,7 @@ Icon
 
 # Python backend
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -118,6 +119,10 @@ wheels/
 *.egg
 venv/
 ENV/
+.venv/
+python_backend/.env
+python_backend/venv/
+python_backend/__pycache__/
 
 # ML models
 *.h5
@@ -139,6 +144,12 @@ ENV/
 # Custom
 .qodo
 
+# Cache directories and files
+/cache/
+cache/
+**/cache/
+*.cache
+
 # Temporary audio files
 /temp/
 /tmp/
@@ -156,9 +167,25 @@ python_backend/venv/
 *.jar
 *.pack
 *.pack.gz
+bfg.jar
+
+# Video files (temporary downloads)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Data files
+*.npy
+*.npz
+*.pkl
+*.pickle
 
 # Pretrained models
 **/pretrained_models/
+**/checkpoints/
+checkpoints/
 
 # API keys and sensitive information
 **/api-keys*.txt
@@ -189,3 +216,33 @@ python_backend/venv/
 **/*.cer
 **/*.der
 **/*.pfx
+
+# Development and testing files
+test_*.html
+test_*.py
+**/test_output/
+**/test_results/
+task.md
+tasks.md
+*.md.bak
+
+# Documentation files (exclude all .md except README.md and README-PYTHON-BACKEND.md)
+*.md
+!README.md
+!README-PYTHON-BACKEND.md
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Cookie and config files (may contain sensitive data)
+**/cookies/
+**/config/ytdlp-config.txt
+youtube_cookies.txt
+
+# Output files from processing
+output_with_clicks.wav
+beats_with_positions.txt
+downbeats_measures.txt

@@ -11,6 +11,7 @@ interface AudioMappingItem {
   chord: string;
   timestamp: number;
   visualIndex: number;
+  audioIndex: number; // Original audio index for accurate beat click handling
 }
 
 interface ChordGridProps {
@@ -75,8 +76,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   chordCorrections = null,
   sequenceCorrections = null
 }) => {
-  // DEBUG: Log currentBeatIndex changes (only when it changes)
-  // console.log(`🎯 CHORDGRID RENDER: currentBeatIndex=${currentBeatIndex}, hasPadding=${hasPadding}, paddingCount=${paddingCount}, shiftCount=${shiftCount}`);
+
+
 
   // Get theme for SVG selection
   const { theme } = useTheme();
@@ -185,18 +186,16 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const calculateOptimalShift = (chords: string[], timeSignature: number): number => {
     // Use the shift count from backend if available, otherwise calculate
     if (hasPadding && shiftCount !== undefined) {
-      // console.log(`Beat shift calculation: Using backend shift count: ${shiftCount}`);
+
       return shiftCount;
     }
 
     if (chords.length === 0) {
-      // console.log('Beat shift calculation: No chords available, returning shift 0');
+
       return 0;
     }
 
-    // console.log('\n=== BEAT SHIFT OPTIMIZATION DEBUG ===');
-    // console.log(`Input: ${chords.length} chords, ${timeSignature}/4 time signature`);
-    // console.log('First 12 chords:', chords.slice(0, 12));
+
 
     let bestShift = 0;
     let maxChordChanges = 0;
@@ -223,10 +222,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         const beatInMeasure = ((i + shift) % timeSignature) + 1;
         const isDownbeat = beatInMeasure === 1;
 
-        // Debug logging for compound time signature issues
-        // if (timeSignature === 3 && i < shift + 12) { // Log first 4 measures for 3/4 time
-        //   console.log(`  Beat ${i}: chord="${currentChord}", prevChord="${previousChord}", beatInMeasure=${beatInMeasure}, isDownbeat=${isDownbeat}, isChordChange=${isChordChange}`);
-        // }
+
 
         // Score: chord change that occurs on a downbeat
         if (isChordChange && isDownbeat) {
@@ -248,52 +244,10 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         bestShift = shift;
       }
 
-      // console.log(`Shift ${shift}: ${chordChangeCount} chord changes on downbeats (NEW STRATEGY: compare with previous beat)`);
-      // console.log(`  Downbeat positions: [${downbeatPositions.slice(0, 6).join(', ')}${downbeatPositions.length > 6 ? '...' : ''}]`);
-      // console.log(`  Chord labels: [${chordLabels.slice(0, 6).join(', ')}${chordLabels.length > 6 ? '...' : ''}]`);
+
     }
 
-    // console.log(`\n🎯 OPTIMAL SHIFT SELECTED: ${bestShift} (NEW STRATEGY)`);
-    // console.log(`📊 RESULTS SUMMARY (chord changes from previous beat that land on downbeats):`);
-    // shiftResults.forEach(result => {
-    //   const isSelected = result.shift === bestShift;
-    //   console.log(`  Shift ${result.shift}: ${result.chordChanges} chord changes on downbeats ${isSelected ? '← SELECTED' : ''}`);
 
-    //   // Enhanced debugging for compound time signatures
-    //   if (timeSignature === 3 && result.downbeatPositions.length > 0) {
-    //     console.log(`    First few downbeat positions: [${result.downbeatPositions.slice(0, 6).join(', ')}]`);
-    //     console.log(`    Corresponding chord labels: [${result.chordLabels.slice(0, 6).join(', ')}]`);
-
-    //     // Verify beat positions are actually downbeats
-    //     result.downbeatPositions.slice(0, 6).forEach(pos => {
-    //       const beatInMeasure = ((pos - result.shift) % timeSignature) + 1;
-    //       console.log(`      Position ${pos}: beatInMeasure=${beatInMeasure} ${beatInMeasure === 1 ? '✓ DOWNBEAT' : '✗ NOT DOWNBEAT'}`);
-    //     });
-    //   }
-    // });
-
-    // Show before/after comparison
-    // const beforeDownbeats = shiftResults[0]; // Shift 0 (original)
-    // const afterDownbeats = shiftResults[bestShift];
-    // console.log(`\n📈 IMPROVEMENT: ${beforeDownbeats.chordChanges} → ${afterDownbeats.chordChanges} chord changes on downbeats (+${afterDownbeats.chordChanges - beforeDownbeats.chordChanges})`);
-
-    // Additional debugging for compound time signatures
-    // if (timeSignature === 3) {
-    //   console.log(`\n🔍 COMPOUND TIME SIGNATURE (3/4) ANALYSIS:`);
-    //   console.log(`  Time signature: ${timeSignature}/4`);
-    //   console.log(`  Best shift: ${bestShift}`);
-    //   console.log(`  Expected downbeat pattern: beat positions ${bestShift}, ${bestShift + 3}, ${bestShift + 6}, ${bestShift + 9}...`);
-
-    //   // Verify the first few measures have correct downbeat alignment
-    //   const expectedDownbeats = [];
-    //   for (let measure = 0; measure < 4; measure++) {
-    //     expectedDownbeats.push(bestShift + (measure * timeSignature));
-    //   }
-    //   console.log(`  Expected first 4 downbeats: [${expectedDownbeats.join(', ')}]`);
-    //   console.log(`  Actual downbeats found: [${afterDownbeats.downbeatPositions.slice(0, 4).join(', ')}]`);
-    // }
-
-    // console.log('=== END BEAT SHIFT OPTIMIZATION DEBUG (NEW STRATEGY) ===\n');
 
     return bestShift;
   };
@@ -316,44 +270,9 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     ] : chords;
   }
 
-  // Enhanced debug logging with shift verification
-  // console.log(`\n🎼 CHORD GRID LAYOUT DEBUG:`);
-  // console.log(`📊 Grid Info: ${chords.length} chords, ${timeSignature}/4 time signature`);
-  // if (hasPadding && shiftCount !== undefined) {
-  //   console.log(`🔄 Applied Shift: ${optimalShift} beats (using backend shift count)`);
-  // } else {
-  //   console.log(`🔄 Applied Shift: ${optimalShift} beats (calculated from NEW chord analysis strategy)`);
-  // }
 
-  // Verify the shift was applied correctly
-  // if (optimalShift > 0 && chords.length > 0) {
-  //   console.log(`✅ SHIFT VERIFICATION:`);
-  //   console.log(`  Original first 6 chords: [${chords.slice(0, 6).join(', ')}]`);
-  //   console.log(`  Shifted first 6 chords:  [${shiftedChords.slice(0, 6).join(', ')}]`);
-  //   console.log(`  Expected shift pattern: Original[${optimalShift}:] + Original[0:${optimalShift}]`);
 
-  //   // Verify downbeat alignment in shifted data - check for chord changes
-  //   const shiftedDownbeatChords = [];
-  //   for (let i = 0; i < shiftedChords.length; i += timeSignature) {
-  //     shiftedDownbeatChords.push(shiftedChords[i] || 'empty');
-  //   }
-  //   console.log(`  Shifted downbeat chords: [${shiftedDownbeatChords.slice(0, 6).join(', ')}${shiftedDownbeatChords.length > 6 ? '...' : ''}]`);
 
-  //   // Count chord changes in shifted data for verification
-  //   let shiftedChordChanges = 0;
-  //   let prevChord = '';
-  //   for (const chord of shiftedDownbeatChords) {
-  //     if (chord !== prevChord && chord !== 'empty' && chord !== 'N/C' && chord !== 'N.C.' && chord !== 'N') {
-  //       shiftedChordChanges++;
-  //     }
-  //     prevChord = chord;
-  //   }
-  //   console.log(`  Chord changes on downbeats after forward shift: ${shiftedChordChanges}`);
-  //   console.log(`  Note: Shift ${optimalShift} means chord labels moved ${optimalShift} beats forward`);
-  // } else if (optimalShift === 0) {
-  //   console.log(`ℹ️  No shift applied (optimal shift = 0)`);
-  // }
-  // console.log(`🎼 END CHORD GRID LAYOUT DEBUG\n`);
 
   // Helper to get the appropriate CSS grid columns class based on time signature
   const getGridColumnsClass = (beatsPerMeasure: number): string => {
@@ -387,7 +306,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
   };
 
-  // Removed complex debug logging
+
   // Reference to the grid container for measuring cell size
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(0);
@@ -452,8 +371,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
           const width = firstCell.offsetWidth;
           setCellSize(width);
 
-          // Debug: Log cell size changes for font sizing
-          // console.log(`ChordGrid cell size updated: ${width}px, dynamic font class: ${getDynamicFontSize(width)}`);
+
         }
       }
     };
@@ -532,6 +450,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const handleBeatClick = (globalIndex: number) => {
     if (!onBeatClick || !beats || beats.length === 0) return;
 
+
+
     // FIXED: Use beat index matching instead of chord type matching
     // Map visual grid index to the corresponding beat index in originalAudioMapping
 
@@ -540,8 +460,15 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     const isPaddingCell = hasPadding && globalIndex >= shiftCount && globalIndex < (shiftCount + paddingCount);
 
     if (isShiftCell) {
-      // console.log(`Beat cell clicked: visual index ${globalIndex} -> not clickable (shift cell)`);
+
       return; // Don't allow clicking on shift cells
+    }
+
+    // FIXED: Block clicking on empty cells (greyed-out cells)
+    const chord = chords[globalIndex] || 'undefined';
+    const isEmptyCell = chord === '' || chord === 'N.C.';
+    if (isEmptyCell) {
+      return; // Don't allow clicking on empty cells
     }
 
     // Handle padding cells - use the actual timestamp from beats array
@@ -551,7 +478,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       const timestamp = beats[globalIndex];
 
       if (timestamp !== null && timestamp !== undefined && timestamp >= 0) {
-        // console.log(`Beat cell clicked: visual index ${globalIndex} -> padding cell -> timestamp ${timestamp.toFixed(3)}s (from beats array)`);
+
         onBeatClick(globalIndex, timestamp);
       } else {
         // Fallback calculation if timestamp is not available
@@ -562,7 +489,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         if (paddingCount > 0 && paddingDuration > 0) {
           const paddingCellDuration = paddingDuration / paddingCount;
           const fallbackTimestamp = paddingIndex * paddingCellDuration;
-          // console.log(`Beat cell clicked: visual index ${globalIndex} -> padding cell ${paddingIndex} -> fallback timestamp ${fallbackTimestamp.toFixed(3)}s`);
+
           onBeatClick(globalIndex, fallbackTimestamp);
         }
       }
@@ -581,18 +508,22 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
       if (mappingEntry) {
         finalTimestamp = mappingEntry.timestamp;
+
+
       } else {
         // Fallback to beats array if no mapping found for this visual index
         finalTimestamp = beats[globalIndex];
+
       }
     } else {
       // Fallback to beats array if no audio mapping available
       finalTimestamp = beats[globalIndex];
+
     }
 
     // Validate timestamp and execute click
     if (typeof finalTimestamp === 'number' && finalTimestamp >= 0) {
-      onBeatClick(globalIndex, finalTimestamp); // Use original timestamp for accurate audio sync
+      onBeatClick(globalIndex, finalTimestamp); // FIXED: Use visual index for animation, timestamp for audio seeking
     } else {
       return;
     }
@@ -651,7 +582,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     // Ensure we don't exceed screen-appropriate maximums
     measuresPerRow = Math.min(measuresPerRow, maxMeasuresPerRow);
 
-    // console.log(`Screen-aware layout: width=${currentScreenWidth}px, timeSignature=${timeSignature}, chatbot=${chatbotOpen}, lyrics=${lyricsPanelOpen}, anyPanel=${anyPanelOpen}, targetCells=${targetCellsPerRow}, calculatedMeasures=${measuresPerRow}, maxAllowed=${maxMeasuresPerRow}, totalCells=${measuresPerRow * timeSignature}`);
+
 
     return measuresPerRow;
   };
@@ -674,13 +605,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     // const isShiftBeat = hasPadding && chord === '' && beatIndex < shiftCount;
     // const isPaddingBeat = hasPadding && chord === 'N.C.' && beatIndex >= shiftCount && beatIndex < (shiftCount + paddingCount);
 
-    // DEBUG: Log styling decisions for first few cells
-    // if (beatIndex < 5) {
-    //   console.log(`🎨 STYLING DEBUG[${beatIndex}]: chord="${chord}" hasPadding=${hasPadding} shiftCount=${shiftCount} paddingCount=${paddingCount}`);
-    //   console.log(`  isShiftBeat=${isShiftBeat} (chord==='${chord}' && beatIndex=${beatIndex} < shiftCount=${shiftCount})`);
-    //   console.log(`  isPaddingBeat=${isPaddingBeat} (chord==='${chord}' && beatIndex=${beatIndex} >= ${shiftCount} && < ${shiftCount + paddingCount})`);
-    //   console.log(`  isEmpty=${isEmpty} isPickupBeat=${isPickupBeat}`);
-    // }
+
 
     // Default styling - improved dark mode contrast
     let classes = `${baseClasses} bg-white dark:bg-content-bg`;
@@ -782,66 +707,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
   }
 
-  // DEBUG: Show simplified measure grouping
-  // console.log(`📊 SIMPLIFIED MEASURE GROUPING: ${groupedByMeasure.length} measures`);
-  // groupedByMeasure.slice(0, 3).forEach((m, i) => {
-  //   console.log(`  Measure ${i}: [${m.chords.join(', ')}]`);
-  // });
 
-  // COMMENTED OUT: Complex padding/shift measure grouping
-  // const firstMusicBeatOffset = hasPadding ? (shiftCount + paddingCount) : 0;
-  // console.log(`🎼 DOWNBEAT CALCULATION: firstMusicBeatOffset=${firstMusicBeatOffset}, timeSignature=${actualBeatsPerMeasure}`);
-  // console.log(`   Expected downbeats (visual positions): [${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(i => ((i - firstMusicBeatOffset) % actualBeatsPerMeasure) === 0).slice(0, 6).join(', ')}]`);
 
-  // BEAT/CHORD ALIGNMENT DEBUG - Enhanced debug output for measure grouping with shift verification
-  // console.log(`\n🎵 BEAT/CHORD ALIGNMENT DEBUG:`);
-  // console.log(`📊 Grid: ${groupedByMeasure.length} measures, ${actualBeatsPerMeasure}/4 time signature`);
-  // console.log(`🔄 Applied shift: ${optimalShift} beats`);
-  // console.log(`📈 Data lengths: chords=${chords.length}, beats=${beats.length}, shiftedChords=${shiftedChords.length}`);
-  // console.log(`🎯 Padding info: hasPadding=${hasPadding}, shiftCount=${shiftCount}, paddingCount=${paddingCount}`);
 
-  // Show first few measures with their chord content
-  // console.log('📋 First 3 measures structure:');
-  // groupedByMeasure.slice(0, 3).forEach((m, i) => {
-  //   console.log(`  Measure ${i}: [${m.chords.join(', ')}] ${m.isPickupMeasure ? '(pickup)' : ''}`);
-  //   console.log(`  Measure ${i} beats: [${m.beats.join(', ')}]`);
-  // });
 
-  // Debug: Verify sequential beat progression using shifted chords
-  // const allShiftedBeats = groupedByMeasure.flatMap(m => m.chords);
-  // console.log(`🎼 Shifted chord sequence (first 12): [${allShiftedBeats.slice(0, 12).join(', ')}]`);
 
-  // Compare with original sequence for verification
-  // console.log(`📊 Original chord sequence (first 12): [${chords.slice(0, 12).join(', ')}]`);
-  // console.log(`✅ Shift verification: Original[${optimalShift}:] should match Shifted[0:]`);
-  // console.log(`   Original[${optimalShift}:${optimalShift + 6}]: [${chords.slice(optimalShift, optimalShift + 6).join(', ')}]`);
-  // console.log(`   Shifted[0:6]: [${allShiftedBeats.slice(0, 6).join(', ')}]`);
 
-  // BEAT TIMING ANALYSIS
-  // console.log(`\n🕐 BEAT TIMING ANALYSIS:`);
-  // console.log(`📊 Comprehensive beats array (first 12): [${beats.slice(0, 12).map(b => typeof b === 'number' ? b.toFixed(3) : b).join(', ')}]`);
 
-  // Show beat-to-chord mapping for first 12 positions
-  // console.log(`\n🎯 BEAT-TO-CHORD MAPPING (first 12 visual positions):`);
-  // for (let i = 0; i < Math.min(12, Math.max(shiftedChords.length, beats.length)); i++) {
-  //   const chord = shiftedChords[i] || 'undefined';
-  //   const beatTime = beats[i];
-  //   const beatTimeStr = typeof beatTime === 'number' ? beatTime.toFixed(3) + 's' : String(beatTime);
-  //   console.log(`  Visual[${i}]: chord="${chord}" -> beat=${beatTimeStr}`);
-  // }
-
-  // COMPLETE BEAT GRID PRINTOUT
-  // console.log(`\n📋 COMPLETE BEAT GRID STRUCTURE:`);
-  // console.log(`🎼 Total visual positions: ${Math.max(shiftedChords.length, beats.length)}`);
-  // console.log(`📊 Grid layout: ${groupedByMeasure.length} measures × ${actualBeatsPerMeasure} beats/measure`);
-
-  // Print complete grid with visual index, chord, and beat time
-  // console.log(`\n🎯 COMPLETE BEAT-TO-CHORD MAPPING:`);
-  // const maxLength = Math.max(shiftedChords.length, beats.length);
-  // for (let i = 0; i < maxLength; i++) {
-  //   const chord = shiftedChords[i] || 'undefined';
-  //   const beatTime = beats[i];
-  //   const beatTimeStr = typeof beatTime === 'number' ? beatTime.toFixed(3) + 's' : String(beatTime);
 
   //   // Determine cell type for context
   //   let cellType = 'model';
@@ -855,11 +727,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   //   const measureNum = Math.floor(i / actualBeatsPerMeasure);
   //   const beatInMeasure = (i % actualBeatsPerMeasure) + 1;
 
-  //   console.log(`  Visual[${i.toString().padStart(2)}]: chord="${chord.padEnd(8)}" beat=${beatTimeStr.padEnd(8)} type=${cellType.padEnd(7)} measure=${measureNum} beat=${beatInMeasure}/${actualBeatsPerMeasure}`);
-  // }
 
-  // CHORD DURATION ANALYSIS - Calculate actual durations vs expected
-  // console.log(`\n⏱️ CHORD DURATION ANALYSIS:`);
 
   // Group consecutive identical chords and calculate their durations
   const chordDurations: Array<{chord: string, startBeat: number, endBeat: number, startTime: number, endTime: number, duration: number}> = [];
@@ -904,16 +772,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
   }
 
-  // Print chord duration analysis
-  // console.log(`📊 Found ${chordDurations.length} chord segments:`);
-  // chordDurations.forEach((segment, index) => {
-  //   const startTimeStr = segment.startTime.toFixed(3) + 's';
-  //   const endTimeStr = segment.endTime.toFixed(3) + 's';
-  //   const durationStr = segment.duration.toFixed(3) + 's';
-  //   console.log(`  ${index.toString().padStart(2)}: "${segment.chord.padEnd(8)}" beats[${segment.startBeat.toString().padStart(2)}-${segment.endBeat.toString().padStart(2)}] time[${startTimeStr.padEnd(8)}-${endTimeStr.padEnd(8)}] duration=${durationStr.padEnd(8)}`);
-  // });
 
-  // console.log(`🎵 END COMPLETE BEAT GRID DEBUG\n`);
 
   // Group measures into rows using the dynamic measures per row
   const rows: Array<typeof groupedByMeasure> = [];
@@ -1042,21 +901,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                       // The analyze page animation logic handles shift and padding correctly
                       const isCurrentBeat = globalIndex === currentBeatIndex;
 
-                      // BEAT ANIMATION DEBUG - Log current beat highlighting
-                      // if (isCurrentBeat) {
-                      //   const beatTime = beats[globalIndex];
-                      //   const beatTimeStr = typeof beatTime === 'number' ? beatTime.toFixed(3) + 's' : String(beatTime);
-                      //   console.log(`🎯 UI HIGHLIGHT: Visual[${globalIndex}] chord="${chord}" beat=${beatTimeStr} (currentBeatIndex=${currentBeatIndex})`);
-                      // }
+
                       const showChordLabel = shouldShowChordLabel(globalIndex);
                       const isEmpty = chord === '';
 
                       // SIMPLIFIED: Basic click logic without padding/shift complexity
                       let isClickable = false;
                       if (!!onBeatClick) {
-                        // Simple check: cell is clickable if it has a valid timestamp
+                        // Simple check: cell is clickable if it has a valid timestamp AND is not empty
                         const timestamp = beats[globalIndex];
-                        isClickable = typeof timestamp === 'number' && timestamp >= 0;
+                        const isEmptyCell = chord === '' || chord === 'N.C.';
+                        isClickable = typeof timestamp === 'number' && timestamp >= 0 && !isEmptyCell;
                       }
 
                       // COMMENTED OUT: Complex padding/shift click logic
@@ -1093,16 +948,16 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                                   className={`${getDynamicFontSize(cellSize, displayChord.length)} font-medium leading-tight ${
                                     wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
                                   }`}
-                                  style={getChordLabelStyles(displayChord)}
+                                  style={getChordLabelStyles()}
                                   dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(displayChord, isDarkMode) }}
                                 />
                               );
                             })() : isEmpty ? (
                               // Empty cell - no content
-                              <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
+                              <div className="opacity-0" style={getChordLabelStyles()}>·</div>
                             ) : (
                               // Non-empty cell but no label to show
-                              <div className="opacity-0" style={getChordLabelStyles('')}>·</div>
+                              <div className="opacity-0" style={getChordLabelStyles()}>·</div>
                             )}
                           </div>
                         </div>

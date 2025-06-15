@@ -38,34 +38,25 @@ const TypewriterText: React.FC<TypewriterTextProps> = ({
 
     // Start typing after initial delay
     const startTimeout = setTimeout(() => {
-      const typeNextChar = () => {
-        if (currentIndex < text.length) {
-          setDisplayedText(text.slice(0, currentIndex + 1));
-          setCurrentIndex(prev => prev + 1);
-        } else {
-          setIsComplete(true);
-          onComplete?.();
-        }
-      };
-
-      // Start typing immediately after delay
-      typeNextChar();
+      setCurrentIndex(1); // Start with first character
     }, delay);
 
     return () => clearTimeout(startTimeout);
-  }, [text, delay, onComplete]);
+  }, [text, delay]);
 
   useEffect(() => {
-    if (currentIndex < text.length && currentIndex > 0) {
-      const timeout = setTimeout(() => {
-        setDisplayedText(text.slice(0, currentIndex + 1));
-        setCurrentIndex(prev => prev + 1);
-      }, typingInterval);
+    if (currentIndex > 0 && currentIndex <= text.length) {
+      setDisplayedText(text.slice(0, currentIndex));
 
-      return () => clearTimeout(timeout);
-    } else if (currentIndex >= text.length) {
-      setIsComplete(true);
-      onComplete?.();
+      if (currentIndex < text.length) {
+        const timeout = setTimeout(() => {
+          setCurrentIndex(prev => prev + 1);
+        }, typingInterval);
+        return () => clearTimeout(timeout);
+      } else {
+        setIsComplete(true);
+        onComplete?.();
+      }
     }
   }, [currentIndex, text, typingInterval, onComplete]);
 

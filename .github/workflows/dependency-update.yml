@@ -1,0 +1,236 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-dependencies:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Check for outdated packages
+      id: outdated
+      run: |
+        echo "Checking for outdated packages..."
+        npm outdated --json > outdated.json || true
+        
+        # Count outdated packages
+        OUTDATED_COUNT=$(cat outdated.json | jq 'length // 0')
+        echo "outdated_count=$OUTDATED_COUNT" >> $GITHUB_OUTPUT
+        
+        if [ "$OUTDATED_COUNT" -gt 0 ]; then
+          echo "Found $OUTDATED_COUNT outdated packages"
+          cat outdated.json | jq '.'
+        else
+          echo "All packages are up to date"
+        fi
+        
+    - name: Update patch and minor versions
+      if: steps.outdated.outputs.outdated_count > 0
+      run: |
+        echo "Updating patch and minor versions..."
+        
+        # Update patch versions (safe updates)
+        npm update
+        
+        # Check if package-lock.json was modified
+        if git diff --quiet package-lock.json; then
+          echo "No updates applied"
+          echo "updates_applied=false" >> $GITHUB_ENV
+        else
+          echo "Updates applied"
+          echo "updates_applied=true" >> $GITHUB_ENV
+        fi
+        
+    - name: Run tests after updates
+      if: env.updates_applied == 'true'
+      run: |
+        echo "Running tests after dependency updates..."
+        
+        # Install updated dependencies
+        npm ci
+        
+        # Run TypeScript check
+        npx tsc --noEmit
+        
+        # Run ESLint
+        npm run lint
+        
+        # Run build
+        npm run build
+        
+    - name: Generate update summary
+      if: env.updates_applied == 'true'
+      run: |
+        echo "Generating update summary..."
+        
+        # Get the diff of package-lock.json to see what changed
+        git diff package-lock.json > package-lock-diff.txt
+        
+        # Create a summary of changes
+        cat > update-summary.md << EOF
+        # Dependency Update Summary
+        
+        **Date:** $(date)
+        **Automated Update:** Patch and minor versions
+        
+        ## Changes Applied
+        
+        The following dependencies were updated:
+        
+        \`\`\`
+        $(npm list --depth=0 2>/dev/null | grep -E "├──|└──" | head -20)
+        \`\`\`
+        
+        ## Verification
+        
+        - ✅ TypeScript compilation: Passed
+        - ✅ ESLint checks: Passed  
+        - ✅ Build process: Passed
+        
+        ## Next Steps
+        
+        1. Review the changes in this PR
+        2. Test the application manually if needed
+        3. Merge if everything looks good
+        
+        **This PR was automatically created by the dependency update workflow.**
+        EOF
+        
+    - name: Create Pull Request
+      if: env.updates_applied == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: |
+          chore: update dependencies (automated)
+          
+          - Updated patch and minor versions
+          - All tests passing
+          - Ready for review
+        title: '🔄 Automated Dependency Updates'
+        body-path: update-summary.md
+        branch: automated/dependency-updates
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
+          maintenance
+        reviewers: |
+          ptnghia-j
+        draft: false
+        
+    - name: Check for major version updates
+      id: major-updates
+      run: |
+        echo "Checking for major version updates..."
+        
+        # Use npm-check-updates to find major updates
+        npx npm-check-updates --target major --jsonUpgraded > major-updates.json || true
+        
+        MAJOR_COUNT=$(cat major-updates.json | jq 'length // 0')
+        echo "major_count=$MAJOR_COUNT" >> $GITHUB_OUTPUT
+        
+        if [ "$MAJOR_COUNT" -gt 0 ]; then
+          echo "Found $MAJOR_COUNT packages with major updates available"
+          cat major-updates.json | jq '.'
+        fi
+        
+    - name: Create issue for major updates
+      if: steps.major-updates.outputs.major_count > 0
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const majorCount = ${{ steps.major-updates.outputs.major_count }};
+          
+          // Check if there's already an open major updates issue
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'dependencies,major-update',
+            state: 'open'
+          });
+          
+          if (issues.data.length === 0) {
+            const fs = require('fs');
+            const majorUpdates = JSON.parse(fs.readFileSync('major-updates.json', 'utf8'));
+            
+            let updatesList = '';
+            for (const [pkg, version] of Object.entries(majorUpdates)) {
+              updatesList += `- \`${pkg}\`: ${version}\n`;
+            }
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `📦 Major Dependency Updates Available (${majorCount} packages)`,
+              body: `**Major version updates are available for ${majorCount} packages**
+              
+              ## Available Updates
+              
+              ${updatesList}
+              
+              ## Action Required
+              
+              Major version updates may contain breaking changes and require manual review:
+              
+              1. **Review changelog** for each package
+              2. **Check for breaking changes**
+              3. **Update code** if necessary
+              4. **Test thoroughly** before applying
+              5. **Apply updates incrementally**
+              
+              ## Commands to Update
+              
+              \`\`\`bash
+              # Check what would be updated
+              npx npm-check-updates --target major
+              
+              # Update specific package
+              npm install package-name@latest
+              
+              # Update all (use with caution)
+              npx npm-check-updates -u --target major
+              npm install
+              \`\`\`
+              
+              ## Testing Checklist
+              
+              - [ ] TypeScript compilation passes
+              - [ ] ESLint checks pass
+              - [ ] Build process succeeds
+              - [ ] Application starts correctly
+              - [ ] Core functionality works
+              - [ ] No runtime errors in console
+              
+              **This issue was automatically created by the dependency update workflow.**`,
+              labels: ['dependencies', 'major-update', 'manual-review', 'automated']
+            });
+          }
+          
+    - name: Security audit after updates
+      if: env.updates_applied == 'true'
+      run: |
+        echo "Running security audit after updates..."
+        npm audit --audit-level=moderate || true
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        # Clean up temporary files
+        rm -f outdated.json major-updates.json package-lock-diff.txt update-summary.md

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { db, TRANSLATIONS_COLLECTION } from '@/config/firebase';
 import { collection, doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
-import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 
 // Get the API key from environment variables

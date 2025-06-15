@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 interface YouTubeSearchResult {
   id: string;
@@ -93,12 +94,12 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             onClick={() => onVideoSelect(result.id)}
           >
             <div className="flex-shrink-0 w-36 h-20 relative overflow-hidden rounded-md">
-              <img
+              <Image
                 src={result.thumbnail}
                 alt={result.title}
-                className="object-cover w-full h-full"
-                width={144}
-                height={80}
+                className="object-cover"
+                fill
+                sizes="144px"
               />
               {result.duration_string && (
                 <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1 py-0.5 rounded">

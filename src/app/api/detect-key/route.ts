@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { db, TRANSCRIPTIONS_COLLECTION } from '@/config/firebase';
-import { collection, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { firestoreDb } from '@/services/firebaseService';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;
@@ -12,8 +12,14 @@ const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 // Define the model name to use
 const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
 
+// Define types for chord data
+interface ChordData {
+  chord: string;
+  time?: number;
+}
+
 // Helper function to generate cache key for key detection
-function generateKeyDetectionCacheKey(chords: any[], includeEnharmonicCorrection: boolean = false): string {
+function generateKeyDetectionCacheKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false): string {
   const chordString = chords
     .map(chord => `${chord.time?.toFixed(2) || 0}:${chord.chord || chord}`)
     .join('|');
@@ -23,14 +29,43 @@ function generateKeyDetectionCacheKey(chords: any[], includeEnharmonicCorrection
   return Buffer.from(keyString).toString('base64').substring(0, 50);
 }
 
+// Define types for key detection result
+interface KeyDetectionResult {
+  primaryKey: string;
+  modulation?: string | null;
+  originalChords?: string[];
+  correctedChords?: string[];
+  corrections?: Record<string, string>;
+  sequenceCorrections?: {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+      }>;
+    };
+  } | null;
+  rawResponse?: string;
+  timestamp?: unknown;
+  cacheKey?: string;
+}
+
 // Helper function to check cache for key detection
-async function checkKeyDetectionCache(cacheKey: string): Promise<any | null> {
+async function checkKeyDetectionCache(cacheKey: string): Promise<KeyDetectionResult | null> {
   try {
-    const docRef = doc(db, 'keyDetections', cacheKey);
+    const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
+      const data = docSnap.data() as KeyDetectionResult;
       console.log('Found cached key detection');
       return data;
     }
@@ -43,9 +78,9 @@ async function checkKeyDetectionCache(cacheKey: string): Promise<any | null> {
 }
 
 // Helper function to save key detection to cache
-async function saveKeyDetectionToCache(cacheKey: string, keyResult: any): Promise<void> {
+async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetectionResult): Promise<void> {
   try {
-    const docRef = doc(db, 'keyDetections', cacheKey);
+    const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
 
     // ENHANCED: Ensure sequence corrections are properly structured for caching
     const cacheData = {
@@ -68,7 +103,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: any): Promis
 
 export async function POST(request: NextRequest) {
   try {
-    const { chords, videoId, includeEnharmonicCorrection = false, bypassCache = false } = await request.json();
+    const { chords, includeEnharmonicCorrection = false, bypassCache = false } = await request.json();
 
     if (!chords || !Array.isArray(chords) || chords.length === 0) {
       return NextResponse.json(
@@ -93,7 +128,12 @@ export async function POST(request: NextRequest) {
     const cachedResult = bypassCache ? null : await checkKeyDetectionCache(cacheKey);
     if (cachedResult && !bypassCache) {
       // Extract chord names for fallback if enharmonic correction data is missing
-      const chordNames = chords.map((chord: any) => chord.chord || chord);
+      const chordNames = chords.map((chord: ChordData) => {
+        if (typeof chord === 'string') {
+          return chord;
+        }
+        return chord.chord || String(chord);
+      });
 
 
 
@@ -113,14 +153,19 @@ export async function POST(request: NextRequest) {
 
     // Format chord progression for AI analysis
     const chordProgression = chords
-      .map((chord: any, index: number) => {
+      .map((chord: ChordData, index: number) => {
         const timestamp = chord.time ? `${chord.time.toFixed(2)}s` : `${index}`;
         return `${timestamp}: ${chord.chord || chord}`;
       })
       .join(', ');
 
     // Extract just the chord names for enharmonic correction
-    const chordNames = chords.map((chord: any) => chord.chord || chord);
+    const chordNames = chords.map((chord: ChordData) => {
+      if (typeof chord === 'string') {
+        return chord;
+      }
+      return chord.chord || String(chord);
+    });
 
     let prompt: string;
 
@@ -206,7 +251,7 @@ Do not include any explanations, analysis, or additional text. Just give me the 
     console.log('🔍 GEMINI API RAW RESPONSE:', text);
     console.log('🔍 INCLUDE ENHARMONIC CORRECTION:', includeEnharmonicCorrection);
 
-    let result: any;
+    let result: KeyDetectionResult;
 
     if (includeEnharmonicCorrection) {
       // Parse JSON response for enhanced mode

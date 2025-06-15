@@ -59,13 +59,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (audioRef.current) {
       onLoadedMetadata(audioRef.current.duration);
     }
-  }, [onLoadedMetadata]);
+  }, [onLoadedMetadata, audioRef]);
 
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
       onTimeUpdate(audioRef.current.currentTime);
     }
-  }, [onTimeUpdate]);
+  }, [onTimeUpdate, audioRef]);
 
   const handlePlay = useCallback(() => {
     onPlay();
@@ -84,13 +84,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audioRef.current.pause();
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, audioRef]);
 
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate;
     }
-  }, [playbackRate]);
+  }, [playbackRate, audioRef]);
 
   // Handle seeking
   const handleSeek = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

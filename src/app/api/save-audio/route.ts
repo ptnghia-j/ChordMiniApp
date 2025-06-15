@@ -88,7 +88,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error saving audio file:', error);
     return NextResponse.json(
-      { error: 'Failed to save audio file', details: error.message },
+      {
+        error: 'Failed to save audio file',
+        details: error && typeof error === 'object' && 'message' in error
+          ? (error as { message: string }).message
+          : String(error)
+      },
       { status: 500 }
     );
   }

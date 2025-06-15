@@ -191,8 +191,7 @@ async function performBackgroundTranslation(
   cacheKey: string,
   lyrics: string,
   sourceLanguage?: string,
-  targetLanguage: string = 'English',
-  videoId?: string
+  targetLanguage: string = 'English'
 ): Promise<void> {
   try {
     console.log('Starting background translation update');
@@ -293,7 +292,7 @@ export async function POST(request: NextRequest) {
       if (!isBackgroundUpdateInProgress) {
         console.log('Starting new background update');
         setImmediate(() => {
-          performBackgroundTranslation(cacheKey, lyrics, sourceLanguage, targetLanguage, videoId)
+          performBackgroundTranslation(cacheKey, lyrics, sourceLanguage, targetLanguage)
             .catch(error => {
               console.error('Background translation failed:', error);
               // Background failures are non-critical since we already returned cached data

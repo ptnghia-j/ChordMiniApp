@@ -15,18 +15,32 @@ interface ChordModelOption {
   available?: boolean;
 }
 
+interface ModelInfoResponse {
+  name?: string;
+  description?: string;
+  performance?: string;
+  available_chord_dicts?: string[];
+  available?: boolean;
+}
+
 interface ChordModelSelectorProps {
   selectedModel: ChordDetectorType;
   onModelChange: (model: ChordDetectorType) => void;
   disabled?: boolean;
   className?: string;
+  fallbackInfo?: {
+    original_model_requested?: string;
+    fallback_reason?: string;
+    fallback_model?: string;
+  } | null;
 }
 
 const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
   selectedModel,
   onModelChange,
   disabled = false,
-  className = ''
+  className = '',
+  fallbackInfo = null
 }) => {
   const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
   const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
@@ -53,7 +67,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
 
   // Check if dropdown would be cut off at the bottom
   useEffect(() => {
-    if (isOpen && buttonRef.current) {
+    if (isOpen && buttonRef.current && typeof window !== 'undefined') {
       const buttonRect = buttonRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - buttonRect.bottom;
@@ -89,18 +103,18 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           const modelInfoMap: Record<string, ChordModelOption> = {};
           const modelIds: ChordDetectorType[] = [];
 
-          Object.entries(data.chord_model_info).forEach(([key, value]: [string, any]) => {
+          Object.entries(data.chord_model_info).forEach(([key, value]) => {
             const modelOption: ChordModelOption = {
               id: key as ChordDetectorType,
-              name: value.name || key,
-              description: value.description || 'Chord recognition model',
-              performance: value.performance || 'Unknown performance',
-              available_chord_dicts: value.available_chord_dicts || [],
-              available: value.available !== false // Default to true if not specified
+              name: (value as ModelInfoResponse).name || key,
+              description: (value as ModelInfoResponse).description || 'Chord recognition model',
+              performance: (value as ModelInfoResponse).performance || 'Unknown performance',
+              available_chord_dicts: (value as ModelInfoResponse).available_chord_dicts || [],
+              available: (value as ModelInfoResponse).available !== false // Default to true if not specified
             };
 
             modelInfoMap[key] = modelOption;
-            // Only include available models
+            // Include all available models
             if (modelOption.available) {
               modelIds.push(key as ChordDetectorType);
             }
@@ -136,21 +150,21 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
       id: 'chord-cnn-lstm',
       name: 'Chord-CNN-LSTM',
       description: 'CNN+LSTM model with 301 chord labels for comprehensive chord recognition',
-      performance: 'High accuracy, medium processing speed',
+      performance: 'High accuracy, medium processing speed (~25s)',
       available: true
     },
     'btc-sl': {
       id: 'btc-sl',
       name: 'BTC SL (Supervised Learning)',
-      description: 'Transformer model with 170 chord labels, supervised training',
-      performance: 'High accuracy with transformer architecture',
+      description: 'Transformer model with 170 chord labels, supervised training (with fallback)',
+      performance: 'High accuracy with transformer architecture (auto-fallback to CNN-LSTM if needed)',
       available: true
     },
     'btc-pl': {
       id: 'btc-pl',
       name: 'BTC PL (Pseudo-Label)',
-      description: 'Transformer model with 170 chord labels, pseudo-label training',
-      performance: 'Enhanced accuracy through pseudo-labeling',
+      description: 'Transformer model with 170 chord labels, pseudo-label training (with fallback)',
+      performance: 'Enhanced accuracy through pseudo-labeling (auto-fallback to CNN-LSTM if needed)',
       available: true
     }
   };
@@ -173,6 +187,19 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Loading Banner */}
+      {loading && (
+        <div className="mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 transition-colors duration-300">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <div>
+              <p className="font-medium text-blue-800 dark:text-blue-200 text-sm">Loading Chord Models</p>
+              <p className="text-blue-600 dark:text-blue-300 text-xs">Fetching available models from the backend...</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Model Selector */}
       <div className="relative" ref={dropdownRef}>
@@ -264,7 +291,27 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
         )}
       </div>
 
+      {/* Description of selected model */}
+      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
+        {selectedModelOption.description}
+        {selectedModelOption.performance && (
+          <span className="block mt-1 text-gray-500 dark:text-gray-400 transition-colors duration-300">Performance: {selectedModelOption.performance}</span>
+        )}
+      </div>
 
+
+
+      {/* Fallback status */}
+      {fallbackInfo && (
+        <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm transition-colors duration-300">
+          <p className="font-medium mb-1 text-yellow-800 dark:text-yellow-200 transition-colors duration-300">
+            🔄 Fallback Active
+          </p>
+          <p className="text-yellow-700 dark:text-yellow-300 transition-colors duration-300">
+            {fallbackInfo.fallback_reason} - Using {fallbackInfo.fallback_model} instead.
+          </p>
+        </div>
+      )}
 
       {/* Upcoming models box */}
       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm transition-colors duration-300">
@@ -280,14 +327,6 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           Error: {error}
         </div>
       )}
-
-      {/* Description of selected model */}
-      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
-        {selectedModelOption.description}
-        {selectedModelOption.performance && (
-          <span className="block mt-1 text-gray-500 dark:text-gray-400 transition-colors duration-300">Performance: {selectedModelOption.performance}</span>
-        )}
-      </div>
     </div>
   );
 };

@@ -19,6 +19,7 @@ import {
   EnhancedLyricLine
 } from '@/utils/lyricsTimingUtils';
 
+
 /**
  * Utility function to detect if text contains Chinese characters
  */
@@ -72,6 +73,7 @@ interface LeadSheetProps {
   onFontSizeChange: (size: number) => void;
   darkMode?: boolean;
   chords?: ChordData[]; // Optional chord data from analysis results
+
 }
 
 /**
@@ -310,15 +312,45 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
     };
   }, []);
 
-  // Find the active line based on current playback time
+  // Find the active line based on synchronized playback time
   useEffect(() => {
     if (!processedLyrics || !processedLyrics.lines || processedLyrics.lines.length === 0) {
       setActiveLine(-1);
       return;
     }
 
+    // Simple approach: Use chord timing to determine when lyrics should start
+    let syncedTime = currentTime;
+    let shouldShowLyrics = true;
+
+    // If we have chord data, find the first non-"N" chord to determine music start time
+    if (chords && chords.length > 0) {
+      // Find the first actual chord (not "N" which represents no chord/silence)
+      const firstActualChord = chords.find(chord =>
+        chord.chord && chord.chord !== 'N' && chord.chord.trim() !== ''
+      );
+
+      if (firstActualChord) {
+        const musicStartTime = firstActualChord.time || 0;
+
+        // If current time is before the music starts, don't show lyrics
+        if (currentTime < musicStartTime) {
+          shouldShowLyrics = false;
+        } else {
+          // Adjust timing to account for music start offset
+          syncedTime = currentTime;
+        }
+      }
+    }
+
+    // If lyrics shouldn't be shown yet (before music starts), set no active line
+    if (!shouldShowLyrics) {
+      setActiveLine(-1);
+      return;
+    }
+
     const newActiveLine = processedLyrics.lines.findIndex(
-      line => currentTime >= line.startTime && currentTime <= line.endTime
+      line => syncedTime >= line.startTime && syncedTime <= line.endTime
     );
 
     // If no active line found but we have a current time, find the closest upcoming line
@@ -413,7 +445,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
         }
       }
     }
-  }, [currentTime, processedLyrics, activeLine]);
+  }, [currentTime, processedLyrics, activeLine, chords]);
 
   /**
    * Find word boundaries in a string
@@ -604,9 +636,9 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
             >
               {segment.chords.length > 0 && (
                 <div
-                  className={getResponsiveChordFontSize(segment.chords[0])}
+                  className={getResponsiveChordFontSize()}
                   style={{
-                    ...getChordLabelStyles(segment.chords[0]),
+                    ...getChordLabelStyles(),
                     marginBottom: '0px', // Reduced from 2px to 0px
                     minHeight: 'auto',
                     fontSize: `${fontSize * 0.9}px`,

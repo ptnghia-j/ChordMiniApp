@@ -106,7 +106,7 @@ export class MetronomeService {
       const phase = 2 * Math.PI * baseFreq * t;
 
       // Single clean sine wave tone
-      let sample = Math.sin(phase);
+      const sample = Math.sin(phase);
 
       // Sharp attack with exponential decay for clean single click
       let envelope = 1;
@@ -127,7 +127,6 @@ export class MetronomeService {
     const length = data.length;
     const baseFreq = isDownbeat ? 1400 : 900;
     const attackTime = 0.001; // 1ms attack
-    const releaseTime = 0.04; // 40ms release
 
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
@@ -156,7 +155,6 @@ export class MetronomeService {
     const length = data.length;
     const baseFreq = isDownbeat ? 800 : 600;
     const attackTime = 0.001; // 1ms attack
-    const decayTime = 0.015; // 15ms decay
 
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
@@ -283,8 +281,14 @@ export class MetronomeService {
    */
   private async initializeAudioContext(): Promise<void> {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        console.log('Metronome: Skipping AudioContext initialization (SSR environment)');
+        return;
+      }
+
       // Create AudioContext with optimal settings for metronome
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      this.audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
         latencyHint: 'interactive', // Low latency for precise timing
         sampleRate: 44100
       });
@@ -512,7 +516,7 @@ export class MetronomeService {
    */
   public async testClick(isDownbeat: boolean = false): Promise<void> {
     if (!await this.ensureAudioContext()) {
-      console.error('Cannot test metronome: AudioContext not available');
+      // AudioContext not available for metronome test
       return;
     }
 

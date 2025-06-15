@@ -6,8 +6,10 @@ import { formatSongContextForAI, validateSongContext } from '@/services/chatbotS
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;
 
-// Log API key status for debugging (without revealing the key)
-console.log('Gemini API Key status for chatbot:', apiKey ? 'Provided' : 'Missing');
+// Validate API key availability (production logging)
+if (!apiKey) {
+  console.error('CRITICAL: Gemini API Key not configured for chatbot service');
+}
 
 // Initialize Gemini API with the API key
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
@@ -73,24 +75,12 @@ function formatConversationForGemini(
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('Chatbot API called');
-
     // Parse the request body
     const body: ChatbotRequest = await request.json();
     const { message, conversationHistory, songContext } = body;
 
-    console.log('Chatbot request details:', {
-      messageLength: message?.length || 0,
-      conversationLength: conversationHistory?.length || 0,
-      videoId: songContext?.videoId,
-      hasBeats: !!(songContext?.beats?.length),
-      hasChords: !!(songContext?.chords?.length),
-      hasLyrics: !!(songContext?.lyrics?.lines?.length)
-    });
-
     // Validate input
     if (!message || message.trim() === '') {
-      console.warn('Empty message provided to chatbot API');
       return NextResponse.json(
         { error: 'Message is required' },
         { status: 400 }

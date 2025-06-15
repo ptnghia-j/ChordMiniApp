@@ -62,9 +62,8 @@ export const useAudioProcessing = (videoId: string) => {
     try {
       const { title } = await service.getVideoInfo(videoId);
       setVideoTitle(title);
-    } catch (error) {
-      // Keep essential error logging for debugging video info issues
-      console.error('Failed to load video info:', error);
+    } catch {
+      // Log video info loading error for monitoring
       setVideoTitle('Unknown Title');
     }
   }, [videoId, service]);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 export type ProcessingStage =
   | 'idle'
@@ -85,7 +85,7 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
   };
 
   // Stop the timer and freeze the elapsed time
-  const stopTimer = () => {
+  const stopTimer = useCallback(() => {
     // Only proceed if there's an active timer
     if (timerInterval) {
       // Clear the interval
@@ -102,7 +102,7 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
       // Clear the start time to prevent any further updates
       setStartTime(null);
     }
-  };
+  }, [timerInterval, startTime]);
 
   const reset = () => {
     stopTimer();
@@ -153,10 +153,21 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
   // Additional effect to ensure timer stops when stage changes to 'complete'
   React.useEffect(() => {
     if (stage === 'complete' && timerInterval) {
-      stopTimer();
-      console.log('Timer stopped due to stage change to complete');
+      // Clear the interval directly to avoid dependency issues
+      clearInterval(timerInterval);
+      setTimerInterval(null);
+
+      // Calculate and freeze the final elapsed time
+      if (startTime !== null) {
+        const finalElapsedTime = Date.now() - startTime;
+        setElapsedTime(finalElapsedTime);
+        console.log(`Timer stopped due to stage change. Final time: ${finalElapsedTime}ms`);
+      }
+
+      // Clear the start time to prevent any further updates
+      setStartTime(null);
     }
-  }, [stage]);
+  }, [stage, timerInterval, startTime]); // Include all dependencies
 
   return (
     <ProcessingContext.Provider

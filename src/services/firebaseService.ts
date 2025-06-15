@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, deleteDoc, Firestore } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, Storage } from 'firebase/storage';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { LyricsData } from '@/types/musicAiTypes';
 
 // Firebase configuration
@@ -15,8 +15,6 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let firebaseApp: FirebaseApp;
-let firestoreDb: Firestore;
-let firebaseStorage: Storage;
 
 if (getApps().length === 0) {
   firebaseApp = initializeApp(firebaseConfig);
@@ -24,8 +22,8 @@ if (getApps().length === 0) {
   firebaseApp = getApps()[0];
 }
 
-firestoreDb = getFirestore(firebaseApp);
-firebaseStorage = getStorage(firebaseApp);
+const firestoreDb = getFirestore(firebaseApp);
+const firebaseStorage = getStorage(firebaseApp);
 
 /**
  * Save lyrics data to Firestore
@@ -74,13 +72,22 @@ export async function getLyricsFromFirestore(videoId: string): Promise<LyricsDat
  * @param videoId YouTube video ID
  * @returns Promise that resolves with the audio file metadata or null if not found
  */
-export async function getAudioFileMetadata(videoId: string): Promise<any | null> {
+interface AudioFileMetadata {
+  filename: string;
+  contentType: string;
+  downloadUrl: string;
+  size: number;
+  videoId: string;
+  timestamp: string;
+}
+
+export async function getAudioFileMetadata(videoId: string): Promise<AudioFileMetadata | null> {
   try {
     const audioRef = doc(firestoreDb, 'audio_files', videoId);
     const audioDoc = await getDoc(audioRef);
     
     if (audioDoc.exists()) {
-      return audioDoc.data();
+      return audioDoc.data() as AudioFileMetadata;
     }
     
     return null;
@@ -96,7 +103,7 @@ export async function getAudioFileMetadata(videoId: string): Promise<any | null>
  * @param metadata Audio file metadata to save
  * @returns Promise that resolves when the data is saved
  */
-export async function saveAudioFileMetadata(videoId: string, metadata: any): Promise<void> {
+export async function saveAudioFileMetadata(videoId: string, metadata: Partial<AudioFileMetadata>): Promise<void> {
   try {
     const audioRef = doc(firestoreDb, 'audio_files', videoId);
     await setDoc(audioRef, {
@@ -131,7 +138,7 @@ export async function uploadAudioToStorage(videoId: string, audioData: Blob | Ar
       filename,
       contentType,
       downloadUrl,
-      size: audioData.byteLength
+      size: audioData instanceof ArrayBuffer ? audioData.byteLength : audioData.size
     });
     
     return downloadUrl;

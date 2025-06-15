@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import axios from 'axios';
 import LyricsPlayer from '@/components/LyricsPlayer';
 import { LyricsData } from '@/types/musicAiTypes';
@@ -12,8 +12,7 @@ import Link from 'next/link';
  */
 export default function LyricsPage() {
   const params = useParams();
-  const router = useRouter();
-  const videoId = params.videoId as string;
+  const videoId = params?.videoId as string;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,7 @@ export default function LyricsPage() {
           // No cached lyrics found - show message to user
           setError('No lyrics found for this video. Please use the main analyze page to transcribe lyrics first.');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error checking cached lyrics:', error);
         setError('No lyrics found for this video. Please use the main analyze page to transcribe lyrics first.');
       } finally {

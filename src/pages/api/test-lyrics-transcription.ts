@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await fs.access(audioFilePath);
       console.log(`File exists at ${audioFilePath}`);
-    } catch (error) {
+    } catch {
       return res.status(404).json({ error: `Audio file not found at ${audioFilePath}` });
     }
 
@@ -55,8 +55,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Lyrics transcribed successfully',
       transcription
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Unexpected error:', error);
-    return res.status(500).json({ error: 'Unexpected error', details: error.message });
+    return res.status(500).json({
+      error: 'Unexpected error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }

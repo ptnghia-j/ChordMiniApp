@@ -16,11 +16,11 @@ const PUBLIC_AUDIO_DIR = path.join(process.cwd(), 'public', 'audio');
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    // Make sure to await params if needed
-    const filename = params.filename;
+    // Await params as it's now a Promise in Next.js 15+
+    const { filename } = await params;
 
     if (!filename) {
       return NextResponse.json(
@@ -36,7 +36,7 @@ export async function GET(
     // Check if the file exists
     try {
       await fs.access(filePath);
-    } catch (error) {
+    } catch {
       console.error(`File not found: ${filePath}`);
       return NextResponse.json(
         { error: 'File not found' },
@@ -74,14 +74,14 @@ export async function GET(
   } catch (error) {
     console.error('Error serving audio file:', error);
     return NextResponse.json(
-      { error: 'Failed to serve audio file', details: error.message },
+      { error: 'Failed to serve audio file', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
 }
 
 // Handle OPTIONS requests for CORS preflight
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

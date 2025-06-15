@@ -1,7 +1,8 @@
 // Beat detection service to communicate with the Python backend
 import { config } from '@/config/env';
+import { apiService } from '@/services/apiService';
 
-// Base URL for the Python API
+// Base URL for the Python API (full backend with all features)
 const API_BASE_URL = config.pythonApiUrl;
 
 // Interface for beat info with strength
@@ -67,24 +68,110 @@ export interface ModelInfoResult {
  */
 export async function getModelInfo(): Promise<ModelInfoResult> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/model-info`);
+    const response = await fetch(`${API_BASE_URL}/`);
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to get model info');
+    if (response.ok) {
+      const data = await response.json();
+      // Convert health check response to model info format
+      return {
+        success: true,
+        default_model: data.beat_model || 'beat-transformer',
+        available_models: [data.beat_model, data.chord_model].filter(Boolean),
+        beat_transformer_available: data.beat_model === 'Beat-Transformer',
+        madmom_available: true, // Available as fallback in the backend
+        model_info: {
+          'beat-transformer': {
+            name: 'Beat-Transformer',
+            description: 'Advanced beat detection using transformer architecture',
+            performance: 'High accuracy, slower processing',
+            uses_spleeter: true
+          },
+          'chord-cnn-lstm': {
+            name: 'Chord-CNN-LSTM',
+            description: 'Chord recognition using CNN-LSTM architecture',
+            performance: 'High accuracy chord detection'
+          }
+        }
+      };
+    }
+  } catch (error) {
+    console.error('Backend service unavailable:', error);
+  }
+
+  // Fallback response if service is unavailable
+  return {
+    success: false,
+    default_model: 'madmom',
+    available_models: ['madmom'],
+    beat_transformer_available: false,
+    madmom_available: true,
+    error: 'Backend service unavailable'
+  };
+}
+
+/**
+ * Detects beats in an audio file using the enhanced API service with rate limiting
+ *
+ * @param audioFile - The audio file to analyze (File object)
+ * @param detector - Which beat detector to use ('auto', 'madmom', or 'beat-transformer')
+ * @returns Promise with beat detection results
+ */
+export async function detectBeatsWithRateLimit(
+  audioFile: File,
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
+): Promise<BeatDetectionResult> {
+  try {
+    // Enhanced input validation
+    if (!audioFile || audioFile.size === 0) {
+      throw new Error('Invalid audio file for beat detection');
     }
 
-    return await response.json();
-  } catch (error) {
-    console.error('Error getting model info:', error);
+    if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
+      throw new Error('Audio file is too large for beat detection (>100MB)');
+    }
+
+    // Use the enhanced API service with rate limiting
+    const response = await apiService.detectBeats(audioFile, {
+      detector,
+      force: detector === 'beat-transformer'
+    });
+
+    if (!response.success) {
+      if (response.rateLimited) {
+        throw new Error(`Rate limited: ${response.error}`);
+      }
+
+      // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+      if (detector === 'beat-transformer' && response.error?.includes('500')) {
+
+        return detectBeatsWithRateLimit(audioFile, 'madmom');
+      }
+
+      throw new Error(response.error || 'Beat detection failed');
+    }
+
+    const data = response.data as Record<string, unknown>;
+
+    // Validate response structure
+    if (!data || !Array.isArray(data.beats)) {
+      throw new Error('Invalid response format from beat detection API');
+    }
+
+    // Convert to expected format
     return {
-      success: false,
-      default_model: 'madmom',
-      available_models: ['madmom'],
-      beat_transformer_available: false,
-      madmom_available: true,
-      error: error instanceof Error ? error.message : 'Unknown error getting model info'
+      success: true,
+      beats: data.beats as number[],
+      downbeats: (data.downbeats as number[]) || [],
+      bpm: (data.BPM as number) || (data.bpm as number) || 120,
+      total_beats: (data.beats as number[]).length,
+      duration: (data.duration as number) || 0,
+      time_signature: (data.time_signature as number) || 4,
+      model: (data.model_used as string) || detector
     };
+
+  } catch (error) {
+    console.error('Error in beat detection with rate limiting:', error);
+    throw error;
   }
 }
 
@@ -98,7 +185,7 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
  */
 export async function detectBeatsFromFile(
   audioFile: File,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'auto',
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
   onProgress?: (percent: number) => void
 ): Promise<BeatDetectionResult> {
   try {
@@ -165,7 +252,7 @@ export async function detectBeatsFromFile(
             try {
               const response = JSON.parse(xhr.responseText);
               resolve(response);
-            } catch (e) {
+            } catch {
               reject(new Error('Invalid response format from beat detection API'));
             }
           } else {
@@ -180,9 +267,30 @@ export async function detectBeatsFromFile(
             } else {
               try {
                 const errorData = JSON.parse(xhr.responseText);
-                reject(new Error(errorData.error || `Failed to detect beats (HTTP ${xhr.status})`));
-              } catch (e) {
-                reject(new Error(`Beat detection failed with status ${xhr.status}`));
+                // Provide more helpful error messages for common issues
+                if (errorData.error?.includes('No beat detection model available')) {
+                  // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+                  if (detector === 'beat-transformer') {
+                    console.log('Beat-Transformer failed, trying madmom as fallback...');
+                    resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
+                    return;
+                  }
+                  reject(new Error('Beat detection service is temporarily unavailable. Please try again in a few moments or contact support.'));
+                } else {
+                  reject(new Error(errorData.error || `Failed to detect beats (HTTP ${xhr.status})`));
+                }
+              } catch {
+                if (xhr.status === 500) {
+                  // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+                  if (detector === 'beat-transformer') {
+                    console.log('Beat-Transformer failed with 500 error, trying madmom as fallback...');
+                    resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
+                    return;
+                  }
+                  reject(new Error('Beat detection service encountered an internal error. Please try again or contact support.'));
+                } else {
+                  reject(new Error(`Beat detection failed with status ${xhr.status}`));
+                }
               }
             }
           }
@@ -201,39 +309,33 @@ export async function detectBeatsFromFile(
       });
     }
 
-    // Standard fetch if no progress tracking needed
-    const response = await fetch(`${API_BASE_URL}/api/detect-beats`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      // Handle different status codes appropriately
-      if (response.status === 413) {
-        if (detector === 'beat-transformer') {
-          // If Beat-Transformer was requested but still got 413, the file is extremely large
-          throw new Error('The audio file is too large even with force=true. Try a smaller file or use madmom detector.');
-        } else {
-          throw new Error('The audio file is too large to process. Try a smaller file or use madmom detector.');
-        }
-      }
-
-      try {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to detect beats (HTTP ${response.status})`);
-      } catch (jsonError) {
-        // If response isn't valid JSON
-        throw new Error(`Beat detection failed with status ${response.status}: ${response.statusText}`);
-      }
-    }
-
+    // Use the API service for consistent timeout and error handling
     try {
-      const data = await response.json();
+      const response = await apiService.detectBeats(audioFile, {
+        detector,
+        force: detector === 'beat-transformer'
+      });
+
+      if (!response.success) {
+        // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+        if (detector === 'beat-transformer' && !response.rateLimited) {
+
+          return detectBeatsFromFile(audioFile, 'madmom', onProgress);
+        }
+        throw new Error(response.error || 'Beat detection failed');
+      }
+
+      const data = response.data as BeatDetectionResult & Record<string, unknown>;
+
+
 
       // Enhanced validation of response data
-      if (!data.success) {
-        throw new Error(`Beat detection failed: ${data.error || 'Unknown error from beat detection service'}`);
+      if (!data || !data.success) {
+        throw new Error(`Beat detection failed: ${data?.error || 'Unknown error from beat detection service'}`);
       }
+
+      // Add model identification for debugging
+      console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
 
       // Validate response data structure
       if (!data.beats || !Array.isArray(data.beats)) {
@@ -245,13 +347,13 @@ export async function detectBeatsFromFile(
       }
 
       // Validate beat timestamps with bounds checking
-      const invalidBeats = data.beats.filter((time: any) =>
+      const invalidBeats = data.beats.filter((time: unknown) =>
         typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600 // 1 hour max
       );
 
       if (invalidBeats.length > 0) {
         console.warn(`⚠️  Found ${invalidBeats.length} invalid beat timestamps, filtering them out`);
-        data.beats = data.beats.filter((time: any) =>
+        data.beats = data.beats.filter((time: unknown) =>
           typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
         );
 
@@ -274,13 +376,13 @@ export async function detectBeatsFromFile(
 
       // Validate downbeats if present
       if (data.downbeats && Array.isArray(data.downbeats)) {
-        const invalidDownbeats = data.downbeats.filter((time: any) =>
+        const invalidDownbeats = data.downbeats.filter((time: unknown) =>
           typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600
         );
 
         if (invalidDownbeats.length > 0) {
           console.warn(`⚠️  Found ${invalidDownbeats.length} invalid downbeat timestamps, filtering them out`);
-          data.downbeats = data.downbeats.filter((time: any) =>
+          data.downbeats = data.downbeats.filter((time: unknown) =>
             typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
           );
         }
@@ -289,35 +391,36 @@ export async function detectBeatsFromFile(
       }
 
       // Validate beats_with_positions if present
-      if (data.beats_with_positions && Array.isArray(data.beats_with_positions)) {
-        const invalidPositions = data.beats_with_positions.filter((beat: any) =>
+      const beatsWithPositions = (data as Record<string, unknown>).beats_with_positions;
+      if (beatsWithPositions && Array.isArray(beatsWithPositions)) {
+        const invalidPositions = beatsWithPositions.filter((beat: unknown) =>
           !beat ||
-          typeof beat.time !== 'number' ||
-          typeof beat.beatNum !== 'number' ||
-          isNaN(beat.time) ||
-          isNaN(beat.beatNum) ||
-          beat.time < 0 ||
-          beat.time > 3600 ||
-          beat.beatNum < 1 ||
-          beat.beatNum > data.time_signature
+          typeof (beat as Record<string, unknown>).time !== 'number' ||
+          typeof (beat as Record<string, unknown>).beatNum !== 'number' ||
+          isNaN((beat as Record<string, unknown>).time as number) ||
+          isNaN((beat as Record<string, unknown>).beatNum as number) ||
+          ((beat as Record<string, unknown>).time as number) < 0 ||
+          ((beat as Record<string, unknown>).time as number) > 3600 ||
+          ((beat as Record<string, unknown>).beatNum as number) < 1 ||
+          ((beat as Record<string, unknown>).beatNum as number) > (data.time_signature || 4)
         );
 
         if (invalidPositions.length > 0) {
           console.warn(`⚠️  Found ${invalidPositions.length} invalid beat positions, filtering them out`);
-          data.beats_with_positions = data.beats_with_positions.filter((beat: any) =>
+          (data as Record<string, unknown>).beats_with_positions = beatsWithPositions.filter((beat: unknown) =>
             beat &&
-            typeof beat.time === 'number' &&
-            typeof beat.beatNum === 'number' &&
-            !isNaN(beat.time) &&
-            !isNaN(beat.beatNum) &&
-            beat.time >= 0 &&
-            beat.time <= 3600 &&
-            beat.beatNum >= 1 &&
-            beat.beatNum <= data.time_signature
+            typeof (beat as Record<string, unknown>).time === 'number' &&
+            typeof (beat as Record<string, unknown>).beatNum === 'number' &&
+            !isNaN((beat as Record<string, unknown>).time as number) &&
+            !isNaN((beat as Record<string, unknown>).beatNum as number) &&
+            ((beat as Record<string, unknown>).time as number) >= 0 &&
+            ((beat as Record<string, unknown>).time as number) <= 3600 &&
+            ((beat as Record<string, unknown>).beatNum as number) >= 1 &&
+            ((beat as Record<string, unknown>).beatNum as number) <= (data.time_signature || 4)
           );
         }
       } else {
-        data.beats_with_positions = [];
+        (data as Record<string, unknown>).beats_with_positions = [];
       }
 
       // Validate time range values
@@ -334,37 +437,50 @@ export async function detectBeatsFromFile(
 
 
       return data;
-    } catch (parseError) {
-      console.error('Error parsing response:', parseError);
-      throw new Error('Invalid response format from beat detection API');
+    } catch (error) {
+      console.error('Error in beat detection:', error);
+
+      // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+      if (detector === 'beat-transformer') {
+        console.log('Beat-Transformer failed, trying madmom as fallback...');
+        return detectBeatsFromFile(audioFile, 'madmom', onProgress);
+      }
+
+      // Enhanced error handling with specific suggestions
+      let errorMessage = 'Unknown error in beat detection';
+
+      if (error instanceof Error) {
+        if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
+          errorMessage = 'Beat detection failed due to data bounds error. This may be caused by corrupted audio data or unsupported audio format. Please try a different audio file.';
+        } else if (error.message.includes('memory') || error.message.includes('allocation')) {
+          errorMessage = 'Beat detection failed due to memory constraints. Please try a shorter audio clip or use the madmom detector.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Beat detection timed out. Please try a shorter audio clip or use the madmom detector for better performance.';
+        } else if (error.message.includes('too large')) {
+          errorMessage = 'Audio file is too large for beat detection. Please use a smaller file or try the madmom detector.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      return {
+        success: false,
+        beats: [],
+        bpm: 0,
+        total_beats: 0,
+        duration: 0,
+        error: errorMessage
+      };
     }
   } catch (error) {
-    console.error('Error in beat detection:', error);
-
-    // Enhanced error handling with specific suggestions
-    let errorMessage = 'Unknown error in beat detection';
-
-    if (error instanceof Error) {
-      if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
-        errorMessage = 'Beat detection failed due to data bounds error. This may be caused by corrupted audio data or unsupported audio format. Please try a different audio file.';
-      } else if (error.message.includes('memory') || error.message.includes('allocation')) {
-        errorMessage = 'Beat detection failed due to memory constraints. Please try a shorter audio clip or use the madmom detector.';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'Beat detection timed out. Please try a shorter audio clip or use the madmom detector for better performance.';
-      } else if (error.message.includes('too large')) {
-        errorMessage = 'Audio file is too large for beat detection. Please use a smaller file or try the madmom detector.';
-      } else {
-        errorMessage = error.message;
-      }
-    }
-
+    console.error('Error in detectBeatsFromFile:', error);
     return {
       success: false,
       beats: [],
       bpm: 0,
       total_beats: 0,
       duration: 0,
-      error: errorMessage
+      error: error instanceof Error ? error.message : 'Unknown error in beat detection'
     };
   }
 }
@@ -378,7 +494,7 @@ export async function detectBeatsFromFile(
  */
 export async function detectBeatsFromPath(
   audioPath: string,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'auto'
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
 ): Promise<BeatDetectionResult> {
   try {
     const formData = new FormData();
@@ -410,15 +526,36 @@ export async function detectBeatsFromPath(
 
       try {
         const errorData = await response.json();
+        // Provide more helpful error messages for common issues
+        if (errorData.error?.includes('No beat detection model available')) {
+          // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+          if (detector === 'beat-transformer') {
+            console.log('Beat-Transformer failed, trying madmom as fallback...');
+            return detectBeatsFromPath(audioPath, 'madmom');
+          }
+          throw new Error('Beat detection service is temporarily unavailable. Please try again in a few moments or contact support.');
+        }
         throw new Error(errorData.error || `Failed to detect beats (HTTP ${response.status})`);
-      } catch (jsonError) {
+      } catch {
         // If response isn't valid JSON
+        if (response.status === 500) {
+          // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+          if (detector === 'beat-transformer') {
+
+            return detectBeatsFromPath(audioPath, 'madmom');
+          }
+          throw new Error('Beat detection service encountered an internal error. Please try again or contact support.');
+        }
         throw new Error(`Beat detection failed with status ${response.status}: ${response.statusText}`);
       }
     }
 
     try {
       const data = await response.json();
+
+      // Add model identification for debugging
+      console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
+
       return data;
     } catch (parseError) {
       console.error('Error parsing response:', parseError);

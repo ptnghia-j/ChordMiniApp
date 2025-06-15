@@ -51,12 +51,45 @@ export interface SynchronizedLyrics {
 }
 
 /**
+ * Represents a Music.ai API job result data
+ */
+export interface MusicAiJobResultData {
+  // Lyrics-related results
+  lyrics?: string | LyricLine[];
+  transcript?: string;
+  wordTimestamps?: Array<{
+    text: string;
+    start?: number;
+    startTime?: number;
+    end?: number;
+    endTime?: number;
+  }>;
+  lines?: LyricLine[];
+
+  // Chord-related results
+  chords?: Array<{
+    time: number;
+    name?: string;
+    chord?: string;
+  }>;
+
+  // Beat-related results
+  beats?: number[] | Array<{ time: number }>;
+  downbeats?: number[];
+  bpm?: number;
+  time_signature?: number;
+
+  // Generic properties for unknown result types
+  [key: string]: unknown;
+}
+
+/**
  * Represents a Music.ai API job
  */
 export interface MusicAiJob {
   id: string;
   status: string;
-  result?: any;
+  result?: MusicAiJobResultData;
   error?: string;
 }
 
@@ -74,5 +107,5 @@ export interface MusicAiWorkflow {
  * Represents a Music.ai API job result
  */
 export interface MusicAiJobResult {
-  [key: string]: any;
+  [key: string]: unknown;
 }

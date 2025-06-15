@@ -13,6 +13,14 @@ import { db } from '@/config/firebase';
 import { ChordDetectionResult } from './chordRecognitionService';
 import { BeatInfo } from './beatDetectionService';
 
+// Extended interface for synchronized chords that may have additional properties
+interface ExtendedSynchronizedChord {
+  chord: string;
+  beatIndex: number;
+  beatNum?: number;
+  source?: string;
+}
+
 // Define the transcription data structure
 export interface TranscriptionData {
   videoId: string;
@@ -173,7 +181,7 @@ export async function saveTranscription(
         chord: sc.chord,
         beatIndex: sc.beatIndex,
         beatNum: sc.beatNum || 0,
-        source: sc.source || 'detected' // Preserve source field for timing compensation
+        source: (sc as ExtendedSynchronizedChord).source || 'detected' // Preserve source field for timing compensation
       })),
       audioDuration: transcriptionData.audioDuration || 0,
       totalProcessingTime: transcriptionData.totalProcessingTime || 0,
@@ -194,18 +202,20 @@ export async function saveTranscription(
     // Save the document
     await setDoc(docRef, sanitizedData);
 
-    console.log('Transcription saved successfully to Firestore');
+    // Transcription saved successfully to Firestore
     return true;
   } catch (error) {
-    console.error('Error saving transcription to Firestore:', error);
-    // Log more details about the error
+    // Log error for production monitoring
     if (error instanceof Error) {
-      console.error('Error message:', error.message);
       // Check for CORS or network errors and handle gracefully
       if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
         console.warn('Network/CORS error accessing Firestore - disabling Firestore for this session');
         firestoreDisabled = true;
+      } else {
+        console.error('Error saving transcription to Firestore:', error.message);
       }
+    } else {
+      console.error('Unknown error saving transcription to Firestore:', error);
     }
     return false;
   }

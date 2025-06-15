@@ -30,7 +30,7 @@ export async function safeApiCall<T>(
  * @param error - The error object
  * @param context - Additional context information
  */
-export function logError(message: string, error: unknown, context?: Record<string, any>): void {
+export function logError(message: string, error: unknown, context?: Record<string, unknown>): void {
   console.error(
     `[ERROR] ${message}`,
     error instanceof Error ? error : 'Unknown error',

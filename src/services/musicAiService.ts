@@ -7,6 +7,7 @@
 
 import MusicAi from "@music.ai/sdk";
 import { CustomMusicAiClient } from "./customMusicAiClient";
+import { apiKeyStorage } from "./apiKeyStorageService";
 
 // Define types for the Music.ai SDK responses
 interface ChordData {
@@ -40,11 +41,77 @@ interface SynchronizedLyrics {
 }
 
 interface MusicAiJobResult {
-  [key: string]: any;
+  lines?: Array<{
+    text: string;
+    startTime?: number;
+    endTime?: number;
+    start?: number;
+    end?: number;
+  }>;
+  chords?: Array<{
+    time: number;
+    name: string;
+  }>;
+  words?: Array<{
+    text: string;
+    startTime?: number;
+    endTime?: number;
+    start?: number;
+    end?: number;
+  }>;
+  lyrics?: string;
+  transcript?: string;
+  wordTimestamps?: WordTimestamp[];
+  [key: string]: unknown;
+}
+
+// Additional interfaces for lyrics processing
+interface LyricsLineData {
+  text: string;
+  start?: number;
+  startTime?: number;
+  end?: number;
+  endTime?: number;
+}
+
+interface WordTimestamp {
+  text: string;
+  start?: number;
+  startTime?: number;
+  end?: number;
+  endTime?: number;
+}
+
+interface ChordResultData {
+  time: number;
+  name?: string;
+  chord?: string;
+}
+
+// Define interface for Music.ai SDK
+interface MusicAiSDK {
+  workflows: {
+    list: () => Promise<Array<{
+      slug: string;
+      name: string;
+      description?: string;
+    }>>;
+  };
+  jobs: {
+    create: (params: { workflow: string; input: Record<string, unknown> }) => Promise<{
+      id: string;
+      status: string;
+    }>;
+    get: (id: string) => Promise<{
+      id: string;
+      status: string;
+      result?: MusicAiJobResult;
+    }>;
+  };
 }
 
 class MusicAiService {
-  private musicAi: any;
+  private musicAi: MusicAiSDK | null = null;
   private customClient: CustomMusicAiClient | null = null;
   private initialized: boolean = false;
 
@@ -56,14 +123,21 @@ class MusicAiService {
   /**
    * Initialize the Music.ai SDK with the API key
    * This is done lazily to avoid issues during SSR
+   * Prioritizes user-provided API key over environment variable
    */
-  private initialize = (): void => {
+  private initialize = async (): Promise<void> => {
     if (!this.initialized) {
       try {
-        // Check for API key in environment variables
-        const apiKey = process.env.MUSIC_AI_API_KEY;
+        // First try to get user-provided API key
+        let apiKey = await apiKeyStorage.getApiKey('musicAi');
+
+        // Fallback to environment variable if no user key is provided
         if (!apiKey) {
-          throw new Error('MUSIC_AI_API_KEY is not defined in environment variables. Please add it to your .env.local file.');
+          apiKey = process.env.MUSIC_AI_API_KEY || null;
+        }
+
+        if (!apiKey) {
+          throw new Error('Music.ai API key is required. Please provide your API key in settings or add MUSIC_AI_API_KEY to environment variables.');
         }
 
         // Initialize the SDK with the API key
@@ -76,7 +150,7 @@ class MusicAiService {
         };
 
         // Initialize both the SDK and our custom client
-        this.musicAi = new MusicAi(sdkConfig);
+        this.musicAi = new MusicAi(sdkConfig) as unknown as MusicAiSDK;
         this.customClient = new CustomMusicAiClient(sdkConfig);
 
         console.log('Music.ai SDK and custom client initialized successfully');
@@ -97,13 +171,8 @@ class MusicAiService {
   transcribeLyrics = async (audioUrl: string, workflowSlug?: string): Promise<LyricsData> => {
     // We only use Music.ai API for lyrics transcription, never for chord or beat detection
     try {
-      // Check if API key is available
-      if (!process.env.MUSIC_AI_API_KEY) {
-        console.error('MUSIC_AI_API_KEY is not defined in environment variables');
-        return this.createEmptyLyricsWithError('API key not configured');
-      }
-
-      this.initialize();
+      // Initialize with user-provided or environment API key
+      await this.initialize();
       console.log(`Transcribing lyrics from: ${audioUrl}`);
 
       // Handle local file paths
@@ -173,7 +242,7 @@ class MusicAiService {
 
       // Find a workflow for lyrics transcription
       console.log('Available workflows:');
-      workflows.forEach(workflow => {
+      workflows.forEach((workflow: { name: string; slug: string; description?: string }) => {
         console.log(`- ${workflow.name} (slug: ${workflow.slug}, description: ${workflow.description || 'none'})`);
       });
 
@@ -183,7 +252,7 @@ class MusicAiService {
       // If a specific workflow slug is provided, try to use it
       if (workflowSlug) {
         console.log(`Looking for provided workflow slug: ${workflowSlug}`);
-        lyricsWorkflow = workflows.find(w => w.slug === workflowSlug);
+        lyricsWorkflow = workflows.find((w: { name: string; slug: string; description?: string }) => w.slug === workflowSlug);
 
         if (lyricsWorkflow) {
           console.log(`Found provided workflow by slug: ${lyricsWorkflow.name} (${lyricsWorkflow.slug})`);
@@ -198,19 +267,19 @@ class MusicAiService {
         console.log("Looking for lyrics-only workflows...");
 
         // First try the "Lyric Transcription and Alignment" workflow by exact slug
-        lyricsWorkflow = workflows.find(w => w.slug === 'untitled-workflow-1b8940f');
+        lyricsWorkflow = workflows.find((w: { name: string; slug: string; description?: string }) => w.slug === 'untitled-workflow-1b8940f');
 
         if (lyricsWorkflow) {
           console.log(`Found "Lyric Transcription and Alignment" workflow by exact slug: ${lyricsWorkflow.slug}`);
         } else {
           // Try another known lyrics workflow
-          lyricsWorkflow = workflows.find(w => w.slug === 'untitled-workflow-1b8813b');
+          lyricsWorkflow = workflows.find((w: { name: string; slug: string; description?: string }) => w.slug === 'untitled-workflow-1b8813b');
 
           if (lyricsWorkflow) {
             console.log(`Found alternative lyrics workflow by exact slug: ${lyricsWorkflow.slug}`);
           } else {
             // If not found by exact slug, look for workflows related to lyrics
-            const lyricsWorkflows = workflows.filter(w => this.isLyricsWorkflow(w));
+            const lyricsWorkflows = workflows.filter((w: { name: string; slug: string; description?: string }) => this.isLyricsWorkflow(w));
 
             if (lyricsWorkflows.length > 0) {
               lyricsWorkflow = lyricsWorkflows[0];
@@ -239,7 +308,7 @@ class MusicAiService {
       // Create a job for lyrics transcription
       console.log(`Using workflow: ${selectedWorkflowSlug} for lyrics transcription`);
       // Prepare parameters based on the workflow
-      const params: Record<string, any> = {
+      const params: Record<string, string | number | boolean | object> = {
         input: inputUrl
       };
 
@@ -315,7 +384,10 @@ class MusicAiService {
         console.log(`Job result:`, job.result);
 
         // Process and return the results
-        const lyricsData: LyricsData = await this.processLyricsResult(job.result);
+        if (!job.result) {
+          throw new Error('Job completed but no result data available');
+        }
+        const lyricsData: LyricsData = await this.processLyricsResult(job.result as MusicAiJobResult);
 
         // Check if we have any lyrics
         if (lyricsData.lines.length === 0) {
@@ -352,13 +424,8 @@ class MusicAiService {
    */
   generateChords = async (audioUrl: string): Promise<ChordData[]> => {
     try {
-      // Check if API key is available
-      if (!process.env.MUSIC_AI_API_KEY) {
-        console.error('MUSIC_AI_API_KEY is not defined in environment variables');
-        return [];
-      }
-
-      this.initialize();
+      // Initialize with user-provided or environment API key
+      await this.initialize();
       console.log(`Generating chords from: ${audioUrl}`);
 
       // Handle local file paths
@@ -434,7 +501,7 @@ class MusicAiService {
         console.log(`Found ${workflows.length} workflows`);
 
         // Look for workflows related to chords
-        const chordWorkflows = workflows.filter(w => this.isChordWorkflow(w));
+        const chordWorkflows = workflows.filter((w: { name: string; slug: string; description?: string }) => this.isChordWorkflow(w));
 
         if (chordWorkflows.length > 0) {
           chordWorkflow = chordWorkflows[0];
@@ -463,7 +530,7 @@ class MusicAiService {
       // Create a job for chord generation
       console.log(`Using workflow: ${workflowSlug} for chord generation`);
       // Prepare parameters based on the workflow
-      const params: Record<string, any> = {
+      const params: Record<string, string | number | boolean | object> = {
         input: inputUrl
       };
 
@@ -483,7 +550,10 @@ class MusicAiService {
         console.log(`Job result:`, job.result);
 
         // Process and return the results
-        const chordData: ChordData[] = this.processChordResult(job.result);
+        if (!job.result) {
+          throw new Error('Job completed but no result data available');
+        }
+        const chordData: ChordData[] = this.processChordResult(job.result as MusicAiJobResult);
 
         // Check if we have any chords
         if (chordData.length === 0) {
@@ -600,7 +670,7 @@ class MusicAiService {
    * @param result Raw API result
    * @returns Structured lyrics data
    */
-  processLyricsResult = async (result: MusicAiJobResult): Promise<LyricsData> => {
+  processLyricsResult = async (result: MusicAiJobResult | string): Promise<LyricsData> => {
     try {
       console.log("Processing lyrics result - Type:", typeof result);
       console.log("Is Array?", Array.isArray(result));
@@ -632,7 +702,8 @@ class MusicAiService {
         urlToFetch = result;
       }
       // Check if the result contains a URL to the lyrics data
-      else if (result.lyrics && typeof result.lyrics === 'string' && result.lyrics.startsWith('http')) {
+      else if (typeof result === 'object' && result !== null && 'lyrics' in result &&
+               typeof result.lyrics === 'string' && result.lyrics.startsWith('http')) {
         console.log("Lyrics data is available at URL:", result.lyrics);
         urlToFetch = result.lyrics;
       }
@@ -657,12 +728,12 @@ class MusicAiService {
           // If the fetched data is an array, process it directly
           if (Array.isArray(lyricsData)) {
             console.log("Processing array of lyrics lines directly");
-            lyricsData.forEach((item: any) => {
+            lyricsData.forEach((item: { text: string; start?: number; startTime?: number; end?: number; endTime?: number }) => {
               if (item.text && (item.start !== undefined || item.startTime !== undefined) &&
                   (item.end !== undefined || item.endTime !== undefined)) {
                 lines.push({
-                  startTime: parseFloat(item.start || item.startTime),
-                  endTime: parseFloat(item.end || item.endTime),
+                  startTime: parseFloat(String(item.start || item.startTime || 0)),
+                  endTime: parseFloat(String(item.end || item.endTime || 0)),
                   text: item.text.trim()
                 });
               }
@@ -672,12 +743,12 @@ class MusicAiService {
           else if (lyricsData) {
             // Format 1: Direct lines array
             if (Array.isArray(lyricsData.lines)) {
-              lyricsData.lines.forEach((line: any) => {
+              lyricsData.lines.forEach((line: LyricsLineData) => {
                 if (line.text && (line.startTime !== undefined || line.start !== undefined) &&
                     (line.endTime !== undefined || line.end !== undefined)) {
                   lines.push({
-                    startTime: parseFloat(line.startTime || line.start),
-                    endTime: parseFloat(line.endTime || line.end),
+                    startTime: parseFloat(String(line.startTime || line.start || 0)),
+                    endTime: parseFloat(String(line.endTime || line.end || 0)),
                     text: line.text.trim()
                   });
                 }
@@ -686,7 +757,6 @@ class MusicAiService {
             // Format 2: Transcript with word timestamps
             else if (lyricsData.transcript && lyricsData.wordTimestamps) {
               // Create lines from the transcript
-              const text = lyricsData.transcript;
               const words = lyricsData.wordTimestamps;
 
               // Group words into lines (assuming words are in order)
@@ -694,11 +764,11 @@ class MusicAiService {
               let lineStartTime = 0;
               let lineEndTime = 0;
 
-              words.forEach((word: any, index: number) => {
+              words.forEach((word: WordTimestamp, index: number) => {
                 if (word.text && (word.startTime !== undefined || word.start !== undefined) &&
                     (word.endTime !== undefined || word.end !== undefined)) {
-                  const wordStartTime = parseFloat(word.startTime || word.start);
-                  const wordEndTime = parseFloat(word.endTime || word.end);
+                  const wordStartTime = parseFloat(String(word.startTime || word.start || 0));
+                  const wordEndTime = parseFloat(String(word.endTime || word.end || 0));
 
                   // If this is the first word or if we should start a new line
                   if (currentLine === "" || word.text.startsWith("\n") || currentLine.length > 80) {
@@ -743,22 +813,21 @@ class MusicAiService {
       } else {
         // Try to extract lyrics directly from the result object
         // Format 1: Direct lines array
-        if (Array.isArray(result.lines)) {
-          result.lines.forEach((line: any) => {
+        if (typeof result === 'object' && result !== null && 'lines' in result && Array.isArray(result.lines)) {
+          result.lines.forEach((line: LyricsLineData) => {
             if (line.text && (line.startTime !== undefined || line.start !== undefined) &&
                 (line.endTime !== undefined || line.end !== undefined)) {
               lines.push({
-                startTime: parseFloat(line.startTime || line.start),
-                endTime: parseFloat(line.endTime || line.end),
+                startTime: parseFloat(String(line.startTime || line.start || 0)),
+                endTime: parseFloat(String(line.endTime || line.end || 0)),
                 text: line.text.trim()
               });
             }
           });
         }
         // Format 2: Transcript with word timestamps
-        else if (result.transcript && result.wordTimestamps) {
+        else if (typeof result === 'object' && result !== null && 'transcript' in result && 'wordTimestamps' in result && result.transcript && result.wordTimestamps) {
           // Create lines from the transcript
-          const text = result.transcript;
           const words = result.wordTimestamps;
 
           // Group words into lines (assuming words are in order)
@@ -766,11 +835,11 @@ class MusicAiService {
           let lineStartTime = 0;
           let lineEndTime = 0;
 
-          words.forEach((word: any, index: number) => {
+          words.forEach((word: WordTimestamp, index: number) => {
             if (word.text && (word.startTime !== undefined || word.start !== undefined) &&
                 (word.endTime !== undefined || word.end !== undefined)) {
-              const wordStartTime = parseFloat(word.startTime || word.start);
-              const wordEndTime = parseFloat(word.endTime || word.end);
+              const wordStartTime = parseFloat(String(word.startTime || word.start || 0));
+              const wordEndTime = parseFloat(String(word.endTime || word.end || 0));
 
               // If this is the first word or if we should start a new line
               if (currentLine === "" || word.text.startsWith("\n") || currentLine.length > 80) {
@@ -810,12 +879,12 @@ class MusicAiService {
       if (Array.isArray(result) && result.length > 0) {
         console.log("Result is an array of lyrics lines, processing directly");
 
-        result.forEach((item: any) => {
+        result.forEach((item: LyricsLineData) => {
           if (item.text && (item.start !== undefined || item.startTime !== undefined) &&
               (item.end !== undefined || item.endTime !== undefined)) {
             lines.push({
-              startTime: parseFloat(item.start || item.startTime),
-              endTime: parseFloat(item.end || item.endTime),
+              startTime: parseFloat(String(item.start || item.startTime || 0)),
+              endTime: parseFloat(String(item.end || item.endTime || 0)),
               text: item.text.trim()
             });
           }
@@ -864,16 +933,16 @@ class MusicAiService {
       // The Music.ai API might return chords in different formats
       if (result.chords && Array.isArray(result.chords)) {
         // Format 1: Array of chord objects with time and name properties
-        result.chords.forEach((chord: any) => {
+        result.chords.forEach((chord: ChordResultData) => {
           if (chord.time !== undefined && chord.name) {
             chords.push({
-              time: parseFloat(chord.time),
+              time: parseFloat(String(chord.time)),
               chord: chord.name
             });
           } else if (chord.time !== undefined && chord.chord) {
             // Alternative property name
             chords.push({
-              time: parseFloat(chord.time),
+              time: parseFloat(String(chord.time)),
               chord: chord.chord
             });
           }
@@ -901,7 +970,7 @@ class MusicAiService {
    * @param workflow The workflow to check
    * @returns True if the workflow is suitable for lyrics transcription
    */
-  private isLyricsWorkflow = (workflow: any): boolean => {
+  private isLyricsWorkflow = (workflow: { slug: string; name: string; description?: string }): boolean => {
     // We only use Music.ai API for lyrics transcription, never for chord or beat detection
 
     // Check for known lyrics-only workflows by slug
@@ -943,7 +1012,7 @@ class MusicAiService {
    * @param workflow The workflow to check
    * @returns True if the workflow is suitable for chord recognition
    */
-  private isChordWorkflow = (workflow: any): boolean => {
+  private isChordWorkflow = (workflow: { slug: string; name: string; description?: string }): boolean => {
     // Check if the workflow name or description contains chord-related keywords
     const chordKeywords = ['chord', 'harmony', 'music', 'note', 'beat', 'mapping'];
 

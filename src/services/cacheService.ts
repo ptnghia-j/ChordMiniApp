@@ -42,7 +42,7 @@ export async function getCacheIndex(): Promise<CacheEntry[]> {
     const cacheIndex = JSON.parse(data);
 
     // Convert any YouTube URLs to privacy-enhanced mode
-    return cacheIndex.map(entry => {
+    return cacheIndex.map((entry: CacheEntry) => {
       if (entry.youtubeEmbedUrl && entry.youtubeEmbedUrl.includes('youtube.com')) {
         entry.youtubeEmbedUrl = convertToPrivacyEnhancedUrl(entry.youtubeEmbedUrl);
       }

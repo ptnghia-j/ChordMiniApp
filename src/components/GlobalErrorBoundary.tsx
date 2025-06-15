@@ -66,7 +66,11 @@ class GlobalErrorBoundary extends Component<Props, State> {
             </div>
           )}
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
             className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
           >
             Refresh Page

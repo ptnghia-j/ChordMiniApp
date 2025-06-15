@@ -50,7 +50,7 @@ export default function CacheManagementPage() {
       } else {
         setMessage({ text: data.error || 'Failed to fetch cache status', type: 'error' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ text: 'Failed to fetch cache status', type: 'error' });
     } finally {
       setLoading(false);
@@ -79,7 +79,7 @@ export default function CacheManagementPage() {
       } else {
         setMessage({ text: data.error || 'Failed to clear cache', type: 'error' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ text: 'Failed to clear cache', type: 'error' });
     } finally {
       setLoading(false);
@@ -106,7 +106,7 @@ export default function CacheManagementPage() {
       } else {
         setMessage({ text: data.error || 'Failed to clean cache', type: 'error' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ text: 'Failed to clean cache', type: 'error' });
     } finally {
       setLoading(false);

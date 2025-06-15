@@ -1,0 +1,259 @@
+name: ChordMini CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # Pre-deployment validation job
+  validate:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: TypeScript compilation check
+      run: npx tsc --noEmit
+      
+    - name: ESLint check
+      run: npm run lint
+      
+    - name: Build verification
+      run: npm run build
+      
+    - name: Run pre-deployment checklist
+      run: |
+        chmod +x scripts/pre-deployment-checklist.sh
+        ./scripts/pre-deployment-checklist.sh
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: .next/
+        retention-days: 1
+
+  # Deploy to Vercel Preview (for PRs)
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Vercel CLI
+      run: npm install --global vercel@latest
+      
+    - name: Pull Vercel Environment Information
+      run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Build Project Artifacts
+      run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Deploy Project Artifacts to Vercel
+      id: deploy
+      run: |
+        DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+        echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "Deployed to: $DEPLOYMENT_URL"
+        
+    - name: Comment PR with preview URL
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🚀 **Preview Deployment Ready!**
+            
+            **Preview URL:** ${{ steps.deploy.outputs.deployment_url }}
+            
+            **Changes in this PR:**
+            - Build: ✅ Successful
+            - TypeScript: ✅ No errors
+            - ESLint: ✅ Clean
+            
+            The preview will be automatically updated with new commits.`
+          })
+
+  # Deploy to Production (for main branch)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment_url }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Vercel CLI
+      run: npm install --global vercel@latest
+      
+    - name: Pull Vercel Environment Information
+      run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Build Project Artifacts
+      run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Deploy Project Artifacts to Vercel
+      id: deploy
+      run: |
+        DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+        echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "Deployed to: $DEPLOYMENT_URL"
+        
+    - name: Wait for deployment to be ready
+      run: |
+        echo "Waiting for deployment to be ready..."
+        sleep 30
+        
+    - name: Post-deployment verification
+      run: |
+        chmod +x scripts/post-deployment-verification.sh
+        ./scripts/post-deployment-verification.sh ${{ steps.deploy.outputs.deployment_url }}
+        
+    - name: Notify deployment success
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: context.sha,
+            state: 'success',
+            target_url: '${{ steps.deploy.outputs.deployment_url }}',
+            description: 'Production deployment successful',
+            context: 'vercel/deployment'
+          })
+
+  # Notification job for failures
+  notify-failure:
+    name: Notify Deployment Failure
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-production]
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Notify failure
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: context.sha,
+            state: 'failure',
+            description: 'Deployment failed - check logs',
+            context: 'vercel/deployment'
+          })
+          
+          // Create an issue for deployment failure
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🚨 Production Deployment Failed - ${context.sha.substring(0, 7)}`,
+            body: `**Deployment failed for commit:** ${context.sha}
+            
+            **Branch:** ${context.ref}
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            
+            **Action Required:**
+            1. Check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            2. Fix any issues identified
+            3. Push a new commit to trigger redeployment
+            
+            **Quick Links:**
+            - [View Logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            - [Vercel Dashboard](https://vercel.com/dashboard)
+            - [Firebase Console](https://console.firebase.google.com/project/chordmini-d29f9)`,
+            labels: ['bug', 'deployment', 'urgent']
+          })
+
+  # Security scan job
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run security audit
+      run: |
+        npm audit --audit-level=high
+        
+    - name: Check for sensitive files
+      run: |
+        echo "Checking for sensitive files..."
+        if find . -name "*.env" -o -name "*.key" -o -name "*secret*" -o -name "*credential*" | grep -v node_modules | grep -v .env.example; then
+          echo "❌ Sensitive files found in repository!"
+          exit 1
+        else
+          echo "✅ No sensitive files found"
+        fi
+        
+    - name: Verify environment variables
+      run: |
+        echo "Checking environment variable configuration..."
+        if [ ! -f ".env.example" ]; then
+          echo "❌ .env.example file missing"
+          exit 1
+        fi
+        echo "✅ Environment configuration verified"

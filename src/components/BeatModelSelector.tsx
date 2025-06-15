@@ -44,7 +44,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
 
   // Check if dropdown would be cut off at the bottom
   useEffect(() => {
-    if (isOpen && buttonRef.current) {
+    if (isOpen && buttonRef.current && typeof window !== 'undefined') {
       const buttonRect = buttonRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - buttonRect.bottom;
@@ -127,6 +127,19 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
           </div>
         </div>
       </div>
+
+      {/* Loading Banner */}
+      {loading && (
+        <div className="mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 transition-colors duration-300">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <div>
+              <p className="font-medium text-blue-800 dark:text-blue-200 text-sm">Loading Beat Models</p>
+              <p className="text-blue-600 dark:text-blue-300 text-xs">Fetching available models from the backend...</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative" ref={dropdownRef}>
         {/* Dropdown button */}

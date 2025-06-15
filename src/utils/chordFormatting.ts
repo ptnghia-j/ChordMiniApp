@@ -122,7 +122,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
 
   // Apply professional chord quality notation with uniform font weight
   // All parts of chord labels use regular font weight for cleaner appearance
-  let formattedRoot = `<span style="font-weight: 400;">${root}</span>`;
+  const formattedRoot = `<span style="font-weight: 400;">${root}</span>`;
 
   if (quality === 'maj') {
     // Major chords don't need a suffix in standard notation
@@ -399,7 +399,7 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
  * @param chordName The chord name to display
  * @returns CSS class for the chord label
  */
-export function getResponsiveChordFontSize(chordName: string): string {
+export function getResponsiveChordFontSize(): string {
   // Use uniform font weight for cleaner appearance, matching commercial products
   // All chord parts use regular weight for consistent styling
   return "font-normal text-gray-800 dark:text-gray-200 text-base whitespace-normal transition-colors duration-300";
@@ -412,7 +412,7 @@ export function getResponsiveChordFontSize(chordName: string): string {
  * @param chordName The chord name to display
  * @returns Object with CSS styles for professional chord display
  */
-export function getChordLabelStyles(chordName: string): React.CSSProperties {
+export function getChordLabelStyles(): React.CSSProperties {
   return {
     padding: '0.125rem 0.125rem 0.125rem 0.0625rem', // Minimal left padding (1px), small right padding
     lineHeight: '1.2', // Slightly tighter line height

@@ -9,10 +9,11 @@ const Footer: React.FC = () => {
   const { theme } = useTheme();
 
   const navigationLinks = [
-    { name: 'About', href: '#', disabled: true },
-    { name: 'Help & Support', href: '#', disabled: true },
-    { name: 'Privacy Policy', href: '#', disabled: true },
-    { name: 'Terms of Service', href: '#', disabled: true },
+    { name: 'About', href: '/about', disabled: false },
+    { name: 'Changelog', href: '/changelog', disabled: false },
+    { name: 'Help & Support', href: '/help', disabled: false },
+    { name: 'Privacy Policy', href: '/privacy', disabled: false },
+    { name: 'Terms of Service', href: '/terms', disabled: false },
   ];
 
   const technologies = [
@@ -70,7 +71,7 @@ const Footer: React.FC = () => {
     },
     {
       name: 'Music.AI',
-      icon: <Image src="/musicAI.png" alt="Music.AI Logo" width={24} height={24} className="w-6 h-6 object-contain" />,
+      icon: <Image src="/musicAI.png" alt="Music.AI Logo" width={24} height={24} className="w-6 h-6 object-contain" style={{ width: 'auto', height: 'auto' }} />,
     },
     {
       name: 'LRClib',
@@ -167,10 +168,10 @@ const Footer: React.FC = () => {
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              © 2025 Chord Recognition App. All rights reserved.
+              © 2025 ChordMini App
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Version 1.0.0 • Made with Next.js & AI
+              Version 0.1.0 
             </p>
           </div>
         </div>

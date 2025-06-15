@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
 
     // Call the GET handler
     return GET(newRequest);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { 
         success: false,

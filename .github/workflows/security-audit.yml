@@ -1,0 +1,233 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Run security audit daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security-audit.yml'
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run npm audit
+      id: audit
+      run: |
+        echo "Running npm audit..."
+        npm audit --audit-level=moderate --json > audit-results.json || true
+        
+        # Check if there are any vulnerabilities
+        VULNERABILITIES=$(cat audit-results.json | jq '.metadata.vulnerabilities.total // 0')
+        echo "vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+        
+        if [ "$VULNERABILITIES" -gt 0 ]; then
+          echo "Found $VULNERABILITIES vulnerabilities"
+          npm audit --audit-level=moderate
+        else
+          echo "No vulnerabilities found"
+        fi
+        
+    - name: Check for sensitive files
+      run: |
+        echo "Checking for sensitive files in repository..."
+        
+        # Check for common sensitive file patterns
+        SENSITIVE_FILES=$(find . -type f \( \
+          -name "*.env" -o \
+          -name "*.key" -o \
+          -name "*.pem" -o \
+          -name "*.p12" -o \
+          -name "*.jks" -o \
+          -name "*.keystore" -o \
+          -name "*secret*" -o \
+          -name "*credential*" -o \
+          -name "*password*" -o \
+          -name "*.pfx" \
+        \) ! -path "./node_modules/*" ! -name ".env.example" ! -name "*.md")
+        
+        if [ -n "$SENSITIVE_FILES" ]; then
+          echo "❌ Sensitive files found:"
+          echo "$SENSITIVE_FILES"
+          exit 1
+        else
+          echo "✅ No sensitive files found"
+        fi
+        
+    - name: Check environment variable configuration
+      run: |
+        echo "Verifying environment variable setup..."
+        
+        # Check if .env.example exists
+        if [ ! -f ".env.example" ]; then
+          echo "❌ .env.example file missing"
+          exit 1
+        fi
+        
+        # Check if .env.local is properly ignored
+        if [ -f ".env.local" ] && git check-ignore .env.local; then
+          echo "✅ .env.local is properly ignored"
+        elif [ -f ".env.local" ]; then
+          echo "❌ .env.local exists but is not ignored by git"
+          exit 1
+        else
+          echo "✅ No .env.local file found"
+        fi
+        
+    - name: Scan for hardcoded secrets
+      run: |
+        echo "Scanning for potential hardcoded secrets..."
+        
+        # Look for potential API keys, tokens, and secrets in code
+        POTENTIAL_SECRETS=$(grep -r -i \
+          --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+          --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git \
+          -E "(api[_-]?key|secret|token|password|credential)" . | \
+          grep -v "process.env" | \
+          grep -v "// " | \
+          grep -v "* " | \
+          head -10)
+        
+        if [ -n "$POTENTIAL_SECRETS" ]; then
+          echo "⚠️ Potential hardcoded secrets found (review manually):"
+          echo "$POTENTIAL_SECRETS"
+        else
+          echo "✅ No obvious hardcoded secrets found"
+        fi
+        
+    - name: Check dependency licenses
+      run: |
+        echo "Checking dependency licenses..."
+        npx license-checker --summary || echo "License checker not available, skipping..."
+        
+    - name: Create security report
+      if: steps.audit.outputs.vulnerabilities > 0
+      run: |
+        echo "Creating security report..."
+        
+        cat > security-report.md << EOF
+        # Security Audit Report
+        
+        **Date:** $(date)
+        **Commit:** ${{ github.sha }}
+        **Vulnerabilities Found:** ${{ steps.audit.outputs.vulnerabilities }}
+        
+        ## Audit Results
+        
+        \`\`\`json
+        $(cat audit-results.json | jq '.metadata')
+        \`\`\`
+        
+        ## Recommendations
+        
+        1. Run \`npm audit fix\` to automatically fix vulnerabilities
+        2. Review and update dependencies manually if needed
+        3. Consider using \`npm audit fix --force\` for breaking changes
+        4. Monitor security advisories for used packages
+        
+        ## Next Steps
+        
+        - [ ] Review vulnerability details
+        - [ ] Apply security fixes
+        - [ ] Test application after fixes
+        - [ ] Update dependencies to latest secure versions
+        EOF
+        
+    - name: Upload security report
+      if: steps.audit.outputs.vulnerabilities > 0
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-report
+        path: |
+          security-report.md
+          audit-results.json
+        retention-days: 30
+        
+    - name: Create issue for vulnerabilities
+      if: steps.audit.outputs.vulnerabilities > 0 && github.event_name == 'schedule'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const vulnerabilities = ${{ steps.audit.outputs.vulnerabilities }};
+          
+          // Check if there's already an open security issue
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'security,vulnerability',
+            state: 'open'
+          });
+          
+          if (issues.data.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔒 Security Vulnerabilities Detected (${vulnerabilities} found)`,
+              body: `**Security audit found ${vulnerabilities} vulnerabilities**
+              
+              **Detected on:** ${new Date().toISOString()}
+              **Commit:** ${context.sha}
+              
+              ## Action Required
+              
+              1. Review the security audit results
+              2. Run \`npm audit\` locally to see details
+              3. Apply fixes using \`npm audit fix\`
+              4. Test the application after applying fixes
+              5. Update this issue with resolution status
+              
+              ## Audit Command
+              \`\`\`bash
+              npm audit
+              npm audit fix
+              \`\`\`
+              
+              ## Resources
+              - [npm audit documentation](https://docs.npmjs.com/cli/v8/commands/npm-audit)
+              - [GitHub Security Advisories](https://github.com/advisories)
+              - [Node.js Security Working Group](https://github.com/nodejs/security-wg)
+              
+              **This issue was automatically created by the security audit workflow.**`,
+              labels: ['security', 'vulnerability', 'automated']
+            });
+          }
+          
+    - name: Update commit status
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const vulnerabilities = ${{ steps.audit.outputs.vulnerabilities || 0 }};
+          const state = vulnerabilities > 0 ? 'failure' : 'success';
+          const description = vulnerabilities > 0 
+            ? `${vulnerabilities} vulnerabilities found` 
+            : 'No vulnerabilities detected';
+            
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: context.sha,
+            state: state,
+            target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            description: description,
+            context: 'security-audit'
+          });

@@ -1,0 +1,60 @@
+# BTC (Beat-Transformer-Chord) Configuration
+# Configuration for BTC-SL and BTC-PL chord recognition models
+
+# Audio processing settings
+mp3:
+  song_hz: 22050
+  inst_len: 10.0
+  skip_interval: 5.0
+
+feature:
+  n_bins: 144
+  bins_per_octave: 24
+  hop_length: 2048
+  large_voca: True
+  sample_rate: 22050
+  hop_duration: 0.09288  # hop_length / sample_rate
+
+experiment:
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  max_epoch: 100
+  batch_size: 128
+  save_step: 10
+  data_ratio: 0.8
+
+# Model configuration - This is the key section that was missing!
+model:
+  feature_size: 144
+  seq_len: 108
+  stride: 108
+  num_chords: 170
+  frame_duration: 0.09288
+  timestep: 108
+  input_features: 144
+
+  # Transformer parameters
+  input_dropout: 0.2
+  layer_dropout: 0.2
+  attention_dropout: 0.2
+  relu_dropout: 0.2
+  num_layers: 8
+  num_heads: 4
+  hidden_size: 128
+  total_key_depth: 128
+  total_value_depth: 128
+  filter_size: 128
+  loss: 'ce'
+  probs_out: True
+
+# Model paths (for reference)
+models:
+  btc_sl:
+    path: "/app/models/ChordMini/checkpoints/SL/btc_model_large_voca.pt"
+    variant: "sl"  # Single-layer variant
+    description: "BTC Single-Layer model for fast chord recognition"
+
+  btc_pl:
+    path: "/app/models/ChordMini/checkpoints/btc/btc_combined_best.pth"
+    variant: "pl"  # Pre-trained layer variant
+    description: "BTC Pre-trained Layer model for high-accuracy chord recognition"
