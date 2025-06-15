@@ -7,6 +7,16 @@ const execPromise = promisify(exec);
 // YouTube video ID validation regex
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 
+// Get the correct yt-dlp path for different environments
+const getYtDlpPath = () => {
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (isServerless) {
+    // In Vercel, yt-dlp should be in the project root after build
+    return './yt-dlp';
+  }
+  return 'yt-dlp'; // Use system PATH in local development
+};
+
 /**
  * Enhanced YouTube Video Info API Route
  * Fetches video metadata using yt-dlp with comprehensive error handling
@@ -45,16 +55,18 @@ export async function GET(request: NextRequest) {
     // Construct YouTube URL
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
+    const ytDlpPath = getYtDlpPath();
+
     // Enhanced yt-dlp command with multiple fallback options
     const commands = [
       // Primary command - fastest and most reliable
-      `yt-dlp --dump-single-json --no-warnings --no-check-certificate --geo-bypass "${youtubeUrl}"`,
-      
+      `${ytDlpPath} --dump-single-json --no-warnings --no-check-certificate --geo-bypass "${youtubeUrl}"`,
+
       // Fallback 1 - with additional headers
-      `yt-dlp --dump-single-json --no-warnings --no-check-certificate --geo-bypass --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "${youtubeUrl}"`,
-      
+      `${ytDlpPath} --dump-single-json --no-warnings --no-check-certificate --geo-bypass --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "${youtubeUrl}"`,
+
       // Fallback 2 - with different extraction method
-      `yt-dlp --dump-single-json --no-warnings --force-ipv4 --ignore-errors "${youtubeUrl}"`
+      `${ytDlpPath} --dump-single-json --no-warnings --force-ipv4 --ignore-errors "${youtubeUrl}"`
     ];
 
     let lastError: Error | null = null;

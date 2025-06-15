@@ -2,9 +2,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
 
-// Define the cache directory
+// Check if we're in a serverless environment (Vercel)
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+// Define the cache directory (only used in non-serverless environments)
 const CACHE_DIR = path.join(process.cwd(), 'cache');
 const CACHE_INDEX_PATH = path.join(CACHE_DIR, 'cache_index.json');
+
+// In-memory cache for serverless environments
+let memoryCache: CacheEntry[] = [];
 
 // Define the cache entry type
 export interface CacheEntry {
@@ -21,6 +27,12 @@ export interface CacheEntry {
 
 // Initialize the cache
 export async function initCache() {
+  if (isServerless) {
+    // In serverless environments, use memory cache
+    console.log('Using in-memory cache for serverless environment');
+    return;
+  }
+
   try {
     // Ensure cache directory exists
     await fs.mkdir(CACHE_DIR, { recursive: true });
@@ -39,6 +51,16 @@ export async function initCache() {
 
 // Get cache index
 export async function getCacheIndex(): Promise<CacheEntry[]> {
+  if (isServerless) {
+    // In serverless environments, return memory cache
+    return memoryCache.map((entry: CacheEntry) => {
+      if (entry.youtubeEmbedUrl && entry.youtubeEmbedUrl.includes('youtube.com')) {
+        entry.youtubeEmbedUrl = convertToPrivacyEnhancedUrl(entry.youtubeEmbedUrl);
+      }
+      return entry;
+    });
+  }
+
   try {
     const data = await fs.readFile(CACHE_INDEX_PATH, 'utf-8');
     const cacheIndex = JSON.parse(data);
@@ -91,6 +113,27 @@ export async function isVideoInCache(videoId: string): Promise<CacheEntry | null
 
 // Add a video to the cache
 export async function addToCache(entry: CacheEntry): Promise<void> {
+  if (isServerless) {
+    // In serverless environments, use memory cache
+    const existingIndex = memoryCache.findIndex(e => e.videoId === entry.videoId);
+    if (existingIndex !== -1) {
+      memoryCache.splice(existingIndex, 1);
+    }
+
+    // Ensure YouTube embed URL uses privacy-enhanced mode
+    if (entry.youtubeEmbedUrl && entry.youtubeEmbedUrl.includes('youtube.com')) {
+      entry.youtubeEmbedUrl = convertToPrivacyEnhancedUrl(entry.youtubeEmbedUrl);
+    }
+
+    memoryCache.push(entry);
+
+    // Limit memory cache size to prevent memory issues
+    if (memoryCache.length > 50) {
+      memoryCache = memoryCache.slice(-50);
+    }
+    return;
+  }
+
   const cacheIndex = await getCacheIndex();
 
   // Remove existing entry if it exists
@@ -124,6 +167,12 @@ export async function addToCache(entry: CacheEntry): Promise<void> {
 
 // Remove a video from the cache
 export async function removeCacheEntry(videoId: string): Promise<void> {
+  if (isServerless) {
+    // In serverless environments, use memory cache
+    memoryCache = memoryCache.filter(entry => entry.videoId !== videoId);
+    return;
+  }
+
   const cacheIndex = await getCacheIndex();
   const updatedIndex = cacheIndex.filter(entry => entry.videoId !== videoId);
   await fs.writeFile(CACHE_INDEX_PATH, JSON.stringify(updatedIndex, null, 2));

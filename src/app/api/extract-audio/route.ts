@@ -19,6 +19,16 @@ const COOKIE_FILE_PATH = path.join(process.cwd(), 'temp', 'cookies', 'youtube_co
 // YouTube stream URL cache duration (6 hours in milliseconds)
 const STREAM_URL_CACHE_DURATION = 6 * 60 * 60 * 1000;
 
+// Get the correct yt-dlp path for different environments
+const getYtDlpPath = () => {
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (isServerless) {
+    // In Vercel, yt-dlp should be in the project root after build
+    return './yt-dlp';
+  }
+  return 'yt-dlp'; // Use system PATH in local development
+};
+
 // Error type with stderr property
 interface ExtractionError {
   stderr?: string;
@@ -192,19 +202,21 @@ async function extractYouTubeStreamUrl(videoId: string): Promise<YouTubeStreamRe
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
 
+  const ytDlpPath = getYtDlpPath();
+
   // Try multiple approaches to get the stream URL
   const commands = [
     // Primary: Get best audio stream URL
-    `yt-dlp --get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `${ytDlpPath} --get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 1: Android player client
-    `yt-dlp --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `${ytDlpPath} --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 2: iOS player client
-    `yt-dlp --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `${ytDlpPath} --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 3: Specific audio format
-    `yt-dlp --get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`
+    `${ytDlpPath} --get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`
   ];
 
   let lastError: Error | null = null;
@@ -250,7 +262,10 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const data = await request.json();
-    const { videoId, forceRefresh = false, getInfoOnly = false, useStreamUrl = true } = data;
+    const { videoId, forceRefresh = false, getInfoOnly = false, streamOnly = false } = data;
+
+    // Force stream URL usage in serverless environments (Vercel)
+    const useStreamUrl = streamOnly || (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) || data.useStreamUrl !== false;
 
     if (!videoId) {
       return NextResponse.json(
@@ -263,7 +278,8 @@ export async function POST(request: NextRequest) {
     if (getInfoOnly) {
       try {
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const infoCommand = `yt-dlp --dump-single-json --no-warnings "${youtubeUrl}"`;
+        const ytDlpPath = getYtDlpPath();
+        const infoCommand = `${ytDlpPath} --dump-single-json --no-warnings "${youtubeUrl}"`;
 
         const { stdout } = await execPromise(infoCommand);
         const videoInfo = JSON.parse(stdout);
@@ -404,8 +420,18 @@ export async function POST(request: NextRequest) {
           message: streamResponse.message
         });
       } catch (streamError) {
-        console.error('Stream URL extraction failed, falling back to file download:', streamError);
-        // Continue with file download approach
+        console.error('Stream URL extraction failed:', streamError);
+
+        // In serverless environments, don't attempt file download
+        if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+          return NextResponse.json({
+            error: 'Failed to extract audio from YouTube',
+            details: streamError instanceof Error ? streamError.message : 'Stream URL extraction failed',
+            suggestion: 'Please try a different video or try again later. You can also try uploading an audio file directly.'
+          }, { status: 500 });
+        }
+
+        // Continue with file download approach for non-serverless environments
       }
     }
 

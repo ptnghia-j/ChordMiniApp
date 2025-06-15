@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { getCachedSearch, addToSearchCache, cleanExpiredSearchCache, SearchResult } from '@/services/searchCacheService';
 
+// Get the correct yt-dlp path for different environments
+const getYtDlpPath = () => {
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (isServerless) {
+    // In Vercel, yt-dlp should be in the project root after build
+    return './yt-dlp';
+  }
+  return 'yt-dlp'; // Use system PATH in local development
+};
+
 // Execute shell command as promise with timeout
 function execPromise(command: string, timeoutMs: number = 10000): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -110,9 +120,11 @@ async function searchYouTube(
     // Not in cache, perform the search
     console.log(`Searching YouTube for "${sanitizedQuery}"...`);
 
+    const ytDlpPath = getYtDlpPath();
+
     // Use a single, optimized command with the most reliable options
     // Limit to 8 results for faster response
-    const ytDlpSearchCommand = `yt-dlp "ytsearch8:${sanitizedQuery}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames`;
+    const ytDlpSearchCommand = `${ytDlpPath} "ytsearch8:${sanitizedQuery}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames`;
 
     // Execute yt-dlp search command with a shorter timeout
     const { stdout } = await execPromise(ytDlpSearchCommand, timeoutMs);
@@ -177,7 +189,7 @@ async function searchYouTube(
     // Fallback to line-by-line parsing if single JSON fails
     try {
       // Try with --dump-json instead of --dump-single-json
-      const fallbackCommand = `yt-dlp "ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
+      const fallbackCommand = `${ytDlpPath} "ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
       // Use the same timeout for the fallback command
       const { stdout: fallbackStdout } = await execPromise(fallbackCommand, timeoutMs);
 
