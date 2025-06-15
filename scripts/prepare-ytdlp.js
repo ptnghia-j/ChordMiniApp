@@ -58,9 +58,15 @@ async function main() {
   try {
     console.log('🔧 Preparing yt-dlp binary for Vercel deployment...');
 
+    // Log environment info for debugging
+    const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
+    const isCI = process.env.CI || process.env.GITHUB_ACTIONS;
+    console.log(`📍 Environment: Vercel=${!!isVercel}, CI=${!!isCI}, Platform=${process.platform}`);
+
     // Create bin directory if it doesn't exist
     const binDir = path.join(process.cwd(), 'bin');
     if (!fs.existsSync(binDir)) {
+      console.log('📁 Creating bin directory...');
       fs.mkdirSync(binDir, { recursive: true });
     }
 
@@ -69,47 +75,95 @@ async function main() {
     // Check if binary already exists and is valid
     if (fs.existsSync(ytdlpPath)) {
       const stats = fs.statSync(ytdlpPath);
+      console.log(`📦 Existing yt-dlp binary found (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+
       if (stats.size > 1024 * 1024) { // At least 1MB
-        console.log('📦 Existing yt-dlp binary found, verifying...');
+        console.log('🔍 Verifying existing binary...');
         try {
           const { stdout } = await execAsync(`"${ytdlpPath}" --version`, { timeout: 5000 });
           console.log('✅ Existing binary is valid!');
           console.log(`🔢 Version: ${stdout.trim()}`);
+
+          // In Vercel environment, also ensure permissions are correct
+          if (isVercel && process.platform !== 'win32') {
+            try {
+              fs.chmodSync(ytdlpPath, '755');
+              console.log('🔐 Permissions updated for Vercel environment');
+            } catch (chmodError) {
+              console.warn('⚠️ Could not update permissions:', chmodError.message);
+            }
+          }
+
           console.log('🎉 yt-dlp preparation complete (using existing binary)!');
           return;
         } catch (error) {
-          console.log('⚠️ Existing binary is invalid, downloading new one...');
+          console.log('⚠️ Existing binary verification failed:', error.message);
+          console.log('🔄 Will attempt to download new binary...');
+          try {
+            fs.unlinkSync(ytdlpPath);
+          } catch (unlinkError) {
+            console.warn('⚠️ Could not remove invalid binary:', unlinkError.message);
+          }
+        }
+      } else {
+        console.log('⚠️ Existing binary is too small, downloading new one...');
+        try {
           fs.unlinkSync(ytdlpPath);
+        } catch (unlinkError) {
+          console.warn('⚠️ Could not remove small binary:', unlinkError.message);
         }
       }
+    } else {
+      console.log('📥 No existing binary found, will download...');
     }
-    
+
     // Download yt-dlp binary
     console.log('📥 Downloading yt-dlp binary...');
+    console.log(`🌐 Target URL: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`);
+    console.log(`📁 Target path: ${ytdlpPath}`);
 
     // Try Node.js download first, fallback to curl in CI environments
     let downloadSuccess = false;
 
     try {
+      console.log('🔄 Attempting Node.js download...');
       await downloadFile(
         'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp',
         ytdlpPath
       );
       downloadSuccess = true;
+      console.log('✅ Node.js download successful');
     } catch (downloadError) {
       console.log('⚠️ Node.js download failed:', downloadError.message);
 
       // Fallback to curl for CI environments
-      const isCI = process.env.CI || process.env.GITHUB_ACTIONS || process.env.VERCEL;
-      if (isCI) {
-        console.log('🔄 Trying curl fallback for CI environment...');
+      const isCIEnvironment = process.env.CI || process.env.GITHUB_ACTIONS || process.env.VERCEL || process.env.VERCEL_ENV;
+      if (isCIEnvironment) {
+        console.log('🔄 Trying curl fallback for CI/Vercel environment...');
         try {
-          await execAsync(`curl -L -o "${ytdlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`, { timeout: 60000 });
-          downloadSuccess = true;
-          console.log('✅ Downloaded using curl');
+          const curlCommand = `curl -L -o "${ytdlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`;
+          console.log(`🔧 Executing: ${curlCommand}`);
+
+          const { stdout, stderr } = await execAsync(curlCommand, { timeout: 60000 });
+
+          if (stdout) console.log('Curl stdout:', stdout);
+          if (stderr) console.log('Curl stderr:', stderr);
+
+          // Verify the download
+          if (fs.existsSync(ytdlpPath)) {
+            const stats = fs.statSync(ytdlpPath);
+            if (stats.size > 1024 * 1024) { // At least 1MB
+              downloadSuccess = true;
+              console.log(`✅ Downloaded using curl (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+            } else {
+              throw new Error(`Downloaded file is too small: ${stats.size} bytes`);
+            }
+          } else {
+            throw new Error('Downloaded file does not exist');
+          }
         } catch (curlError) {
           console.error('❌ Curl download also failed:', curlError.message);
-          throw new Error('Both Node.js and curl download methods failed');
+          throw new Error(`Both Node.js and curl download methods failed. Last error: ${curlError.message}`);
         }
       } else {
         throw downloadError;
