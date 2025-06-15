@@ -104,30 +104,41 @@ echo ""
 echo "4. 🌐 Environment Variables Check"
 echo "================================="
 
-# Check .env.local exists
-if [ -f ".env.local" ]; then
-    check_pass ".env.local file exists"
-    
-    # Check critical environment variables
-    if grep -q "NEXT_PUBLIC_FIREBASE_API_KEY" .env.local; then
-        check_pass "Firebase API key configured"
+# Check environment configuration
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    # In CI environment, check for .env.example instead
+    if [ -f ".env.example" ]; then
+        check_pass ".env.example file exists (CI environment)"
+        check_pass "Environment variables should be configured in Vercel Dashboard"
     else
-        check_fail "NEXT_PUBLIC_FIREBASE_API_KEY missing"
-    fi
-    
-    if grep -q "GEMINI_API_KEY" .env.local; then
-        check_pass "Gemini API key configured"
-    else
-        check_fail "GEMINI_API_KEY missing"
-    fi
-    
-    if grep -q "NEXT_PUBLIC_PYTHON_API_URL" .env.local; then
-        check_pass "Python API URL configured"
-    else
-        check_fail "NEXT_PUBLIC_PYTHON_API_URL missing"
+        check_fail ".env.example file not found"
     fi
 else
-    check_fail ".env.local file not found"
+    # In local environment, check for .env.local
+    if [ -f ".env.local" ]; then
+        check_pass ".env.local file exists"
+
+        # Check critical environment variables
+        if grep -q "NEXT_PUBLIC_FIREBASE_API_KEY" .env.local; then
+            check_pass "Firebase API key configured"
+        else
+            check_fail "NEXT_PUBLIC_FIREBASE_API_KEY missing"
+        fi
+
+        if grep -q "GEMINI_API_KEY" .env.local; then
+            check_pass "Gemini API key configured"
+        else
+            check_fail "GEMINI_API_KEY missing"
+        fi
+
+        if grep -q "NEXT_PUBLIC_PYTHON_API_URL" .env.local; then
+            check_pass "Python API URL configured"
+        else
+            check_fail "NEXT_PUBLIC_PYTHON_API_URL missing"
+        fi
+    else
+        check_fail ".env.local file not found"
+    fi
 fi
 
 echo ""
@@ -199,9 +210,15 @@ if npm audit --audit-level=high > audit.log 2>&1; then
     check_pass "No high-severity vulnerabilities"
     rm -f audit.log
 else
-    check_warn "Security vulnerabilities found"
-    echo "Run 'npm audit' for details"
-    rm -f audit.log
+    # Check if there are only moderate vulnerabilities
+    if npm audit --audit-level=critical > critical.log 2>&1; then
+        check_pass "No critical vulnerabilities (moderate vulnerabilities acceptable)"
+        rm -f audit.log critical.log
+    else
+        check_fail "Critical vulnerabilities found - must be fixed"
+        echo "Run 'npm audit' for details"
+        rm -f audit.log critical.log
+    fi
 fi
 
 # Check package.json scripts

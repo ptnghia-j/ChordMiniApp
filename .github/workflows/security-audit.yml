@@ -55,7 +55,18 @@ jobs:
 
         if [ "$VULNERABILITIES" -gt 0 ]; then
           echo "Found $VULNERABILITIES vulnerabilities"
-          npm audit --audit-level=moderate || echo "Vulnerabilities found but continuing..."
+
+          # Check if vulnerabilities are only in non-critical packages
+          HIGH_CRITICAL=$(cat audit-results.json | jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical')
+
+          if [ "$HIGH_CRITICAL" -gt 0 ]; then
+            echo "❌ High or critical vulnerabilities found - requires immediate attention"
+            npm audit --audit-level=moderate
+            exit 1
+          else
+            echo "⚠️  Only moderate vulnerabilities found - acceptable for deployment"
+            npm audit --audit-level=moderate || echo "Moderate vulnerabilities logged"
+          fi
         else
           echo "No vulnerabilities found"
         fi

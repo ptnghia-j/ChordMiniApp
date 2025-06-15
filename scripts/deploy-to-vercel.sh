@@ -70,30 +70,43 @@ echo "Required Environment Variables:"
 echo "==============================="
 echo ""
 
-# Read from .env.local and display required variables
-if [ -f ".env.local" ]; then
+# Display required environment variables (using .env.example as reference)
+if [ -f ".env.example" ]; then
     echo "🔥 Firebase Configuration (Client-side):"
-    grep "NEXT_PUBLIC_FIREBASE_" .env.local | sed 's/=.*/=***HIDDEN***/'
+    echo "NEXT_PUBLIC_FIREBASE_API_KEY=***REQUIRED***"
+    echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=***REQUIRED***"
+    echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=***REQUIRED***"
+    echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=***REQUIRED***"
+    echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=***REQUIRED***"
+    echo "NEXT_PUBLIC_FIREBASE_APP_ID=***REQUIRED***"
     echo ""
-    
+
     echo "🤖 API Keys (Server-side):"
-    echo "GEMINI_API_KEY=***HIDDEN***"
-    echo "GENIUS_API_KEY=***HIDDEN***"
-    echo "MUSIC_AI_API_KEY=***HIDDEN***"
+    echo "GEMINI_API_KEY=***REQUIRED***"
+    echo "GENIUS_API_KEY=***REQUIRED***"
+    echo "MUSIC_AI_API_KEY=***REQUIRED***"
     echo ""
-    
+
     echo "🌐 Service URLs (Client-side):"
-    grep "NEXT_PUBLIC_PYTHON_API_URL" .env.local
-    grep "NEXT_PUBLIC_YOUTUBE_API_KEY" .env.local | sed 's/=.*/=***HIDDEN***/'
+    echo "NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+    echo "NEXT_PUBLIC_YOUTUBE_API_KEY=***REQUIRED***"
     echo "NEXT_PUBLIC_BASE_URL=https://your-vercel-domain.vercel.app"
     echo ""
-    
+
     echo "⚙️  Optional Configuration:"
     echo "USE_MOCK_MUSIC_AI=false"
     echo "NEXT_DISABLE_DEV_OVERLAY=true"
     echo "BACKEND_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+    echo ""
+
+    # Check if running in CI environment
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        log_info "Running in CI environment - skipping interactive environment variable check"
+        log_info "Environment variables should be configured in Vercel Dashboard"
+    fi
 else
-    log_error ".env.local file not found"
+    log_error ".env.example file not found"
+    log_info "Please ensure .env.example exists with all required environment variables"
     exit 1
 fi
 
