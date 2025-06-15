@@ -9,6 +9,7 @@
     "lint": "next lint",
     "export-cookies": "node scripts/export-cookies.js",
     "prepare-ytdlp": "node scripts/prepare-ytdlp.js",
+    "prepare-ytdlp-shell": "bash scripts/prepare-ytdlp.sh",
     "prebuild": "npm run prepare-ytdlp"
   },
   "dependencies": {
