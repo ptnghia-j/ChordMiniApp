@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run prepare-ytdlp && next build",
     "start": "next start",
     "lint": "next lint",
     "export-cookies": "node scripts/export-cookies.js",
     "prepare-ytdlp": "node scripts/prepare-ytdlp.js",
     "prepare-ytdlp-shell": "bash scripts/prepare-ytdlp.sh",
-    "prebuild": "npm run prepare-ytdlp"
+    "prebuild": "npm run prepare-ytdlp",
+    "postinstall": "npm run prepare-ytdlp"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.10",
