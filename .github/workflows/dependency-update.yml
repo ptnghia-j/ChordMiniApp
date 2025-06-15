@@ -6,6 +6,11 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   update-dependencies:
     name: Update Dependencies
@@ -16,6 +21,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        submodules: recursive
         
     - name: Setup Node.js
       uses: actions/setup-node@v4

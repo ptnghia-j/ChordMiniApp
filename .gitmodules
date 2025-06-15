@@ -4,3 +4,6 @@
 [submodule "python_backend/models/Chord-CNN-LSTM"]
 	path = python_backend/models/Chord-CNN-LSTM
 	url = https://github.com/ptnghia-j/chord-cnn-lstm-model.git
+[submodule "python_backend/models/ChordMini"]
+	path = python_backend/models/ChordMini
+	url = https://github.com/ptnghia-j/ChordMini.git
