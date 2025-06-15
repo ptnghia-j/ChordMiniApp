@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getValidatedYtDlpPath, isYtDlpAvailable, getYtDlpVersion, executeYtDlp } from '@/utils/ytdlp-utils';
 import fs from 'fs/promises';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const diagnostics: any = {
+    const diagnostics = {
       timestamp: new Date().toISOString(),
       environment: {
         isVercel: !!process.env.VERCEL,
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         arch: process.arch,
         cwd: process.cwd(),
       },
-      tests: {}
+      tests: {} as Record<string, unknown>
     };
 
     // Test 1: Check if yt-dlp is available using enhanced utility
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest) {
         success: available,
         message: available ? 'yt-dlp is available' : 'yt-dlp is not available'
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       diagnostics.tests.ytdlpAvailable = {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
 
@@ -38,10 +38,10 @@ export async function GET(request: NextRequest) {
         success: true,
         path: validatedPath
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       diagnostics.tests.validatedPath = {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
 
@@ -52,10 +52,10 @@ export async function GET(request: NextRequest) {
         success: !!version,
         version: version || null
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       diagnostics.tests.versionCheck = {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
 
@@ -66,10 +66,10 @@ export async function GET(request: NextRequest) {
         success: true,
         files: files.filter(f => f.includes('yt') || f.includes('dlp') || f === 'yt-dlp')
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       diagnostics.tests.directoryContents = {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
 
@@ -80,20 +80,20 @@ export async function GET(request: NextRequest) {
         success: true,
         helpOutput: stdout.substring(0, 200) + '...' // First 200 chars
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       diagnostics.tests.commandExecution = {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
 
     return NextResponse.json(diagnostics, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({
       success: false,
-      error: error.message,
-      stack: error.stack
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }

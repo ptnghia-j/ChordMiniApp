@@ -2,52 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCachedSearch, addToSearchCache, cleanExpiredSearchCache, SearchResult } from '@/services/searchCacheService';
 import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
 
-// Get the correct yt-dlp path for different environments
-const getYtDlpPath = () => {
-  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-  if (isServerless) {
-    // Try multiple possible paths in Vercel environment
-    const possiblePaths = [
-      './yt-dlp',                    // Project root
-      '/tmp/yt-dlp',                 // Temp directory
-      '/var/task/yt-dlp',           // Lambda task directory
-      'yt-dlp'                       // System PATH fallback
-    ];
-
-    // Return the first path that might work (we'll validate at runtime)
-    return possiblePaths[0];
-  }
-  return 'yt-dlp'; // Use system PATH in local development
-};
-
-// Execute shell command as promise with timeout
-function execPromise(command: string, timeoutMs: number = 10000): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const process = exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-      if (error) {
-        reject({ error, stderr });
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-
-    // Set timeout to kill the process if it takes too long
-    const timeoutId = setTimeout(() => {
-      if (process.pid) {
-        // Kill the process if it's still running
-        try {
-          process.kill();
-        } catch (e) {
-          console.error('Failed to kill process:', e);
-        }
-      }
-      reject({ error: new Error('Command execution timed out'), stderr: `Timeout after ${timeoutMs}ms` });
-    }, timeoutMs);
-
-    // Clear timeout if process completes before timeout
-    process.on('close', () => clearTimeout(timeoutId));
-  });
-}
+// Note: execPromise function removed as it's replaced by executeYtDlp from ytdlp-utils
 
 // Define the structure of a YouTube search result item
 interface YouTubeSearchResult {

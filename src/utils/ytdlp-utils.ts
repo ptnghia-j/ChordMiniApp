@@ -104,12 +104,13 @@ export async function executeYtDlp(args: string, timeoutMs: number = 30000): Pro
     });
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`❌ yt-dlp command failed: ${command}`);
-    console.error('Error details:', error.message);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     
     // If the error suggests yt-dlp is not found, invalidate cache and retry once
-    if (error.message.includes('not found') || error.message.includes('ENOENT')) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('not found') || errorMessage.includes('ENOENT')) {
       console.log('🔄 yt-dlp not found, invalidating cache and retrying...');
       validatedYtDlpPath = null;
       lastValidationTime = 0;

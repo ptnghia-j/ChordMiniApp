@@ -9,7 +9,7 @@ import {
   CacheEntry
 } from '@/services/cacheService';
 import { getAudioFileMetadata, saveAudioFileMetadata, uploadAudioFile, saveStreamUrlMetadata } from '@/services/firebaseStorageService';
-import { executeYtDlp, isYtDlpAvailable, getValidatedYtDlpPath } from '@/utils/ytdlp-utils';
+import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
 
 // Configure paths
 const TEMP_DIR = path.join(process.cwd(), 'temp');
