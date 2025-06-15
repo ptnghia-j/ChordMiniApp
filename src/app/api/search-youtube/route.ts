@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
 import { getCachedSearch, addToSearchCache, cleanExpiredSearchCache, SearchResult } from '@/services/searchCacheService';
+import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
 
 // Get the correct yt-dlp path for different environments
 const getYtDlpPath = () => {
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
   if (isServerless) {
-    // In Vercel, yt-dlp should be in the project root after build
-    return './yt-dlp';
+    // Try multiple possible paths in Vercel environment
+    const possiblePaths = [
+      './yt-dlp',                    // Project root
+      '/tmp/yt-dlp',                 // Temp directory
+      '/var/task/yt-dlp',           // Lambda task directory
+      'yt-dlp'                       // System PATH fallback
+    ];
+
+    // Return the first path that might work (we'll validate at runtime)
+    return possiblePaths[0];
   }
   return 'yt-dlp'; // Use system PATH in local development
 };
@@ -120,14 +128,17 @@ async function searchYouTube(
     // Not in cache, perform the search
     console.log(`Searching YouTube for "${sanitizedQuery}"...`);
 
-    const ytDlpPath = getYtDlpPath();
+    // Check if yt-dlp is available
+    if (!(await isYtDlpAvailable())) {
+      return { success: false, results: [], error: 'yt-dlp is not available in this environment' };
+    }
 
     // Use a single, optimized command with the most reliable options
     // Limit to 8 results for faster response
-    const ytDlpSearchCommand = `${ytDlpPath} "ytsearch8:${sanitizedQuery}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames`;
+    const ytDlpArgs = `"ytsearch8:${sanitizedQuery}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames`;
 
-    // Execute yt-dlp search command with a shorter timeout
-    const { stdout } = await execPromise(ytDlpSearchCommand, timeoutMs);
+    // Execute yt-dlp search command with enhanced error handling
+    const { stdout } = await executeYtDlp(ytDlpArgs, timeoutMs);
 
     if (!stdout) {
       return { success: false, results: [], error: 'No results from search' };
@@ -189,9 +200,9 @@ async function searchYouTube(
     // Fallback to line-by-line parsing if single JSON fails
     try {
       // Try with --dump-json instead of --dump-single-json
-      const fallbackCommand = `${ytDlpPath} "ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
+      const fallbackArgs = `"ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
       // Use the same timeout for the fallback command
-      const { stdout: fallbackStdout } = await execPromise(fallbackCommand, timeoutMs);
+      const { stdout: fallbackStdout } = await executeYtDlp(fallbackArgs, timeoutMs);
 
       if (fallbackStdout) {
         const results = parseYtDlpOutput(fallbackStdout);

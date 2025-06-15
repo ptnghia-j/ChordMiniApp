@@ -9,6 +9,7 @@ import {
   CacheEntry
 } from '@/services/cacheService';
 import { getAudioFileMetadata, saveAudioFileMetadata, uploadAudioFile, saveStreamUrlMetadata } from '@/services/firebaseStorageService';
+import { executeYtDlp, isYtDlpAvailable, getValidatedYtDlpPath } from '@/utils/ytdlp-utils';
 
 // Configure paths
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -23,8 +24,16 @@ const STREAM_URL_CACHE_DURATION = 6 * 60 * 60 * 1000;
 const getYtDlpPath = () => {
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
   if (isServerless) {
-    // In Vercel, yt-dlp should be in the project root after build
-    return './yt-dlp';
+    // Try multiple possible paths in Vercel environment
+    const possiblePaths = [
+      './yt-dlp',                    // Project root
+      '/tmp/yt-dlp',                 // Temp directory
+      '/var/task/yt-dlp',           // Lambda task directory
+      'yt-dlp'                       // System PATH fallback
+    ];
+
+    // Return the first path that might work (we'll validate at runtime)
+    return possiblePaths[0];
   }
   return 'yt-dlp'; // Use system PATH in local development
 };
@@ -202,29 +211,32 @@ async function extractYouTubeStreamUrl(videoId: string): Promise<YouTubeStreamRe
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
 
-  const ytDlpPath = getYtDlpPath();
+  // Check if yt-dlp is available
+  if (!(await isYtDlpAvailable())) {
+    throw new Error('yt-dlp is not available in this environment');
+  }
 
   // Try multiple approaches to get the stream URL
-  const commands = [
+  const commandArgs = [
     // Primary: Get best audio stream URL
-    `${ytDlpPath} --get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `--get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 1: Android player client
-    `${ytDlpPath} --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 2: iOS player client
-    `${ytDlpPath} --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+    `--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
 
     // Fallback 3: Specific audio format
-    `${ytDlpPath} --get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`
+    `--get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`
   ];
 
   let lastError: Error | null = null;
 
-  for (const command of commands) {
+  for (const args of commandArgs) {
     try {
-      console.log(`Attempting to extract stream URL with command: ${command}`);
-      const { stdout, stderr } = await execPromise(command);
+      console.log(`Attempting to extract stream URL with args: ${args}`);
+      const { stdout, stderr } = await executeYtDlp(args, 30000);
 
       if (stderr && !stderr.includes('WARNING')) {
         console.warn('Stream extraction stderr:', stderr);
@@ -247,7 +259,7 @@ async function extractYouTubeStreamUrl(videoId: string): Promise<YouTubeStreamRe
         };
       }
     } catch (error) {
-      console.error(`Stream extraction failed with command: ${command}`, error);
+      console.error(`Stream extraction failed with args: ${args}`, error);
       lastError = error as Error;
     }
   }
