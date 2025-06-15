@@ -19,6 +19,8 @@ export interface AudioProcessingState {
   suggestion?: string | null;
   fromCache: boolean;
   fromFirestoreCache: boolean;
+  isStreamUrl?: boolean;
+  streamExpiresAt?: number;
 }
 
 export class AudioProcessingService {
@@ -33,8 +35,9 @@ export class AudioProcessingService {
 
   async extractAudioFromYouTube(
     videoId: string,
-    forceRedownload: boolean = false
-  ): Promise<{ audioUrl: string; fromCache: boolean }> {
+    forceRedownload: boolean = false,
+    useStreamUrl: boolean = true
+  ): Promise<{ audioUrl: string; fromCache: boolean; isStreamUrl?: boolean; streamExpiresAt?: number }> {
     try {
       const response = await fetch('/api/extract-audio', {
         method: 'POST',
@@ -43,7 +46,8 @@ export class AudioProcessingService {
         },
         body: JSON.stringify({
           videoId,
-          forceRedownload
+          forceRedownload,
+          useStreamUrl
         }),
       });
 
@@ -59,7 +63,9 @@ export class AudioProcessingService {
 
       return {
         audioUrl: data.audioUrl,
-        fromCache: data.fromCache || false
+        fromCache: data.fromCache || false,
+        isStreamUrl: data.isStreamUrl || false,
+        streamExpiresAt: data.streamExpiresAt
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -309,7 +315,9 @@ export class AudioProcessingService {
   updateStateForDownloadSuccess(
     state: AudioProcessingState,
     audioUrl: string,
-    fromCache: boolean
+    fromCache: boolean,
+    isStreamUrl?: boolean,
+    streamExpiresAt?: number
   ): AudioProcessingState {
     return {
       ...state,
@@ -318,6 +326,8 @@ export class AudioProcessingService {
       isExtracted: true,
       audioUrl,
       fromCache,
+      isStreamUrl,
+      streamExpiresAt,
       error: undefined,
       suggestion: undefined
     };

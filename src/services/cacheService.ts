@@ -15,6 +15,8 @@ export interface CacheEntry {
   title?: string;
   processedAt: number; // timestamp
   fileSize?: number;
+  streamExpiresAt?: number; // For YouTube stream URLs
+  isStreamUrl?: boolean; // Flag to indicate if audioUrl is a YouTube stream URL
 }
 
 // Initialize the cache
@@ -61,16 +63,30 @@ export async function isVideoInCache(videoId: string): Promise<CacheEntry | null
 
   if (!entry) return null;
 
-  // Verify that the files actually exist
-  const audioPath = path.join(process.cwd(), 'public', entry.audioUrl);
-  try {
-    await fs.access(audioPath);
+  // For YouTube stream URLs, check if they're expired
+  if (entry.isStreamUrl && entry.streamExpiresAt) {
+    if (Date.now() > entry.streamExpiresAt) {
+      console.log(`YouTube stream URL expired for ${videoId}, removing from cache`);
+      await removeCacheEntry(videoId);
+      return null;
+    }
     return entry;
-  } catch {
-    // File doesn't exist, remove from cache
-    await removeCacheEntry(videoId);
-    return null;
   }
+
+  // For local files, verify that the files actually exist
+  if (!entry.isStreamUrl) {
+    const audioPath = path.join(process.cwd(), 'public', entry.audioUrl);
+    try {
+      await fs.access(audioPath);
+      return entry;
+    } catch {
+      // File doesn't exist, remove from cache
+      await removeCacheEntry(videoId);
+      return null;
+    }
+  }
+
+  return entry;
 }
 
 // Add a video to the cache
@@ -83,8 +99,8 @@ export async function addToCache(entry: CacheEntry): Promise<void> {
     cacheIndex.splice(existingIndex, 1);
   }
 
-  // Calculate file sizes if not provided
-  if (!entry.fileSize && entry.audioUrl) {
+  // Calculate file sizes if not provided (only for local files)
+  if (!entry.fileSize && entry.audioUrl && !entry.isStreamUrl) {
     try {
       const audioPath = path.join(process.cwd(), 'public', entry.audioUrl);
       const stats = await fs.stat(audioPath);

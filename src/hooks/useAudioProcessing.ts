@@ -15,13 +15,13 @@ export const useAudioProcessing = (videoId: string) => {
     setState(prev => service.updateStateForDownloadStart(prev));
 
     try {
-      const { audioUrl, fromCache } = await service.extractAudioFromYouTube(videoId, forceRedownload);
-      setState(prev => service.updateStateForDownloadSuccess(prev, audioUrl, fromCache));
-      return { audioUrl, fromCache };
+      const { audioUrl, fromCache, isStreamUrl, streamExpiresAt } = await service.extractAudioFromYouTube(videoId, forceRedownload);
+      setState(prev => service.updateStateForDownloadSuccess(prev, audioUrl, fromCache, isStreamUrl, streamExpiresAt));
+      return { audioUrl, fromCache, isStreamUrl, streamExpiresAt };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       let suggestion: string | undefined;
-      
+
       if (error instanceof Error && 'suggestion' in error) {
         suggestion = (error as ErrorWithSuggestion).suggestion;
       }

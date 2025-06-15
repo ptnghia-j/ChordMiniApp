@@ -16,6 +16,8 @@ export interface AudioFileData {
   videoFileSize?: number;
   duration?: number;
   createdAt: Timestamp;
+  isStreamUrl?: boolean;
+  streamExpiresAt?: number;
 }
 
 // Extended interface for cached data that may have additional properties
@@ -237,7 +239,30 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
         return null;
       }
 
-      // Check if the entry is too old (more than 7 days)
+      // For stream URLs, check if they're expired
+      if (data.isStreamUrl && data.streamExpiresAt) {
+        const now = Date.now();
+        if (now > data.streamExpiresAt) {
+          console.log(`Stream URL for ${videoId} has expired, will re-extract`);
+
+          // Mark the entry as expired
+          setDoc(docRef, {
+            ...data,
+            expired: true,
+            expirationReason: 'Stream URL expired',
+            expirationTimestamp: serverTimestamp()
+          }).catch(err => {
+            console.error(`Failed to mark stream URL entry for ${videoId} as expired:`, err);
+          });
+
+          return null;
+        }
+
+        // Stream URL is still valid, return it
+        return data;
+      }
+
+      // For regular files, check if the entry is too old (more than 7 days)
       const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() :
                         data.createdAt?.seconds ? data.createdAt.seconds * 1000 :
                         data.processedAt || Date.now() - 30 * 24 * 60 * 60 * 1000; // Use processedAt as fallback
@@ -258,14 +283,14 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
         }).then(() => {
           console.log(`Marked cache entry for ${videoId} as expired`);
 
-          // Schedule deletion of storage files in the background
-          if (data.storagePath) {
+          // Schedule deletion of storage files in the background (only for non-stream URLs)
+          if (!data.isStreamUrl && data.storagePath) {
             deleteAudioFile(data.storagePath)
               .then(() => console.log(`Deleted expired audio file: ${data.storagePath}`))
               .catch(err => console.error(`Failed to delete expired audio file: ${data.storagePath}`, err));
           }
 
-          if (data.videoStoragePath) {
+          if (!data.isStreamUrl && data.videoStoragePath) {
             deleteAudioFile(data.videoStoragePath)
               .then(() => console.log(`Deleted expired video file: ${data.videoStoragePath}`))
               .catch(err => console.error(`Failed to delete expired video file: ${data.videoStoragePath}`, err));
@@ -373,6 +398,67 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
       console.error('Error stack:', error.stack);
     }
     return null;
+  }
+}
+
+/**
+ * Save YouTube stream URL metadata to Firestore
+ * @param videoId YouTube video ID
+ * @param audioUrl YouTube stream URL
+ * @param streamExpiresAt Expiration timestamp for the stream URL
+ * @param videoUrl Optional video URL
+ * @returns True if successful, false otherwise
+ */
+export async function saveStreamUrlMetadata(
+  videoId: string,
+  audioUrl: string,
+  streamExpiresAt: number,
+  videoUrl?: string
+): Promise<boolean> {
+  if (!db) {
+    console.warn('Firebase not initialized, skipping stream URL metadata save');
+    return false;
+  }
+
+  try {
+    console.log('Saving stream URL metadata to Firestore:', {
+      videoId,
+      streamExpiresAt: new Date(streamExpiresAt).toISOString()
+    });
+
+    // Create a unique document ID based on the video ID
+    const docId = videoId;
+
+    // Get the document reference
+    const docRef = doc(db, AUDIO_FILES_COLLECTION, docId);
+
+    // Prepare data for Firestore
+    const streamData = {
+      videoId,
+      audioUrl,
+      videoUrl: videoUrl || null,
+      storagePath: '', // No storage path for stream URLs
+      videoStoragePath: null,
+      fileSize: 0, // No file size for stream URLs
+      videoFileSize: null,
+      duration: null,
+      isStreamUrl: true,
+      streamExpiresAt,
+      createdAt: serverTimestamp()
+    };
+
+    // Save the document
+    await setDoc(docRef, streamData);
+
+    console.log('Stream URL metadata saved successfully to Firestore');
+    return true;
+  } catch (error) {
+    console.error('Error saving stream URL metadata to Firestore:', error);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    return false;
   }
 }
 

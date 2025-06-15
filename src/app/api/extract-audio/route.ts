@@ -8,13 +8,16 @@ import {
   addToCache,
   CacheEntry
 } from '@/services/cacheService';
-import { getAudioFileMetadata, saveAudioFileMetadata, uploadAudioFile } from '@/services/firebaseStorageService';
+import { getAudioFileMetadata, saveAudioFileMetadata, uploadAudioFile, saveStreamUrlMetadata } from '@/services/firebaseStorageService';
 
 // Configure paths
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 const PUBLIC_AUDIO_DIR = path.join(process.cwd(), 'public', 'audio');
 const CONFIG_DIR = path.join(process.cwd(), 'temp', 'config');
 const COOKIE_FILE_PATH = path.join(process.cwd(), 'temp', 'cookies', 'youtube_cookies.txt');
+
+// YouTube stream URL cache duration (6 hours in milliseconds)
+const STREAM_URL_CACHE_DURATION = 6 * 60 * 60 * 1000;
 
 // Error type with stderr property
 interface ExtractionError {
@@ -23,6 +26,16 @@ interface ExtractionError {
   code?: string;
   signal?: string;
   status?: number;
+}
+
+// Interface for YouTube stream URL response
+interface YouTubeStreamResponse {
+  audioUrl: string;
+  videoUrl?: string;
+  youtubeEmbedUrl: string;
+  streamExpiresAt: number;
+  fromCache: boolean;
+  message: string;
 }
 
 // Ensure directories exist
@@ -174,6 +187,62 @@ function execPromise(command: string): Promise<{ stdout: string; stderr: string 
   });
 }
 
+// Extract YouTube audio stream URL without downloading
+async function extractYouTubeStreamUrl(videoId: string): Promise<YouTubeStreamResponse> {
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
+
+  // Try multiple approaches to get the stream URL
+  const commands = [
+    // Primary: Get best audio stream URL
+    `yt-dlp --get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+
+    // Fallback 1: Android player client
+    `yt-dlp --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+
+    // Fallback 2: iOS player client
+    `yt-dlp --get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`,
+
+    // Fallback 3: Specific audio format
+    `yt-dlp --get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "${youtubeUrl}"`
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const command of commands) {
+    try {
+      console.log(`Attempting to extract stream URL with command: ${command}`);
+      const { stdout, stderr } = await execPromise(command);
+
+      if (stderr && !stderr.includes('WARNING')) {
+        console.warn('Stream extraction stderr:', stderr);
+      }
+
+      const streamUrl = stdout.trim();
+
+      if (streamUrl && streamUrl.startsWith('http')) {
+        console.log(`Successfully extracted stream URL: ${streamUrl.substring(0, 100)}...`);
+
+        // Calculate expiration time (YouTube URLs typically expire in 6 hours)
+        const streamExpiresAt = Date.now() + STREAM_URL_CACHE_DURATION;
+
+        return {
+          audioUrl: streamUrl,
+          youtubeEmbedUrl,
+          streamExpiresAt,
+          fromCache: false,
+          message: 'Extracted YouTube stream URL'
+        };
+      }
+    } catch (error) {
+      console.error(`Stream extraction failed with command: ${command}`, error);
+      lastError = error as Error;
+    }
+  }
+
+  throw new Error(`Failed to extract YouTube stream URL: ${lastError?.message || 'Unknown error'}`);
+}
+
 export async function POST(request: NextRequest) {
   try {
     await ensureDirectoriesExist();
@@ -181,7 +250,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const data = await request.json();
-    const { videoId, forceRefresh = false, getInfoOnly = false } = data;
+    const { videoId, forceRefresh = false, getInfoOnly = false, useStreamUrl = true } = data;
 
     if (!videoId) {
       return NextResponse.json(
@@ -227,27 +296,7 @@ export async function POST(request: NextRequest) {
       if (firebaseAudio) {
         console.log(`Found audio in Firebase Storage for ${videoId}`);
 
-        // Extract the filename from the URL
-        const audioUrlParts = firebaseAudio.audioUrl.split('/');
-        const audioFilename = audioUrlParts[audioUrlParts.length - 1];
-        const localAudioPath = path.join(PUBLIC_AUDIO_DIR, audioFilename);
-
-        // Check if the file exists locally
-        const localAudioExists = await fileExists(localAudioPath);
-
-        if (!localAudioExists) {
-          console.log(`Audio file ${audioFilename} not found locally, creating a placeholder file`);
-
-          // Create an empty file to ensure the path exists
-          try {
-            // Create a placeholder file with a small size
-            await fs.writeFile(localAudioPath, 'placeholder');
-            console.log(`Created placeholder file at ${localAudioPath}`);
-          } catch (error) {
-            console.error(`Error creating placeholder file: ${error}`);
-          }
-        }
-
+        // For Firebase Storage URLs, return directly without local file checks
         return NextResponse.json({
           success: true,
           audioUrl: firebaseAudio.audioUrl,
@@ -269,6 +318,8 @@ export async function POST(request: NextRequest) {
           videoUrl: cachedEntry.videoUrl,
           youtubeEmbedUrl: cachedEntry.youtubeEmbedUrl,
           fromCache: true,
+          isStreamUrl: cachedEntry.isStreamUrl || false,
+          streamExpiresAt: cachedEntry.streamExpiresAt,
           message: 'Retrieved from cache'
         });
       }
@@ -307,6 +358,56 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`No cache entry found for ${videoId} or refresh forced, proceeding with extraction`);
+
+    // Try YouTube stream URL extraction first (faster and deployment-friendly)
+    if (useStreamUrl) {
+      try {
+        console.log(`Attempting to extract YouTube stream URL for ${videoId}`);
+        const streamResponse = await extractYouTubeStreamUrl(videoId);
+
+        // Save stream URL metadata to Firebase
+        try {
+          await saveStreamUrlMetadata(
+            videoId,
+            streamResponse.audioUrl,
+            streamResponse.streamExpiresAt,
+            streamResponse.videoUrl
+          );
+          console.log('Successfully saved stream URL metadata to Firebase');
+        } catch (firebaseError) {
+          console.error('Error saving stream URL metadata to Firebase:', firebaseError);
+          // Continue even if Firebase save fails
+        }
+
+        // Add to cache
+        const cacheEntry: CacheEntry = {
+          videoId,
+          audioUrl: streamResponse.audioUrl,
+          videoUrl: streamResponse.videoUrl,
+          youtubeEmbedUrl: streamResponse.youtubeEmbedUrl,
+          processedAt: Date.now(),
+          streamExpiresAt: streamResponse.streamExpiresAt,
+          isStreamUrl: true
+        };
+
+        await addToCache(cacheEntry);
+        console.log(`Added video ${videoId} to cache (stream URL method)`);
+
+        return NextResponse.json({
+          success: true,
+          audioUrl: streamResponse.audioUrl,
+          videoUrl: streamResponse.videoUrl,
+          youtubeEmbedUrl: streamResponse.youtubeEmbedUrl,
+          fromCache: false,
+          isStreamUrl: true,
+          streamExpiresAt: streamResponse.streamExpiresAt,
+          message: streamResponse.message
+        });
+      } catch (streamError) {
+        console.error('Stream URL extraction failed, falling back to file download:', streamError);
+        // Continue with file download approach
+      }
+    }
 
     // Generate unique filename to avoid collisions
     const timestamp = Date.now();

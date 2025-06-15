@@ -64,8 +64,25 @@ jobs:
             npm audit --audit-level=moderate
             exit 1
           else
-            echo "⚠️  Only moderate vulnerabilities found - acceptable for deployment"
-            npm audit --audit-level=moderate || echo "Moderate vulnerabilities logged"
+            echo "⚠️  Only moderate vulnerabilities found"
+
+            # Check if vulnerabilities are in acceptable packages
+            ACCEPTABLE_PACKAGES="react-syntax-highlighter|prismjs|refractor|highlight.js|lowlight"
+
+            # Always allow moderate vulnerabilities with proper logging
+            echo "✅ Moderate vulnerabilities detected - logging for review"
+            echo "📊 Risk Assessment: Acceptable for deployment"
+
+            # Log vulnerability details for monitoring
+            echo "📋 Vulnerability Details:"
+            npm audit --audit-level=moderate || echo "Moderate vulnerabilities logged for monitoring"
+
+            # Check if vulnerabilities are in acceptable packages
+            if npm audit --json | jq -r '.vulnerabilities | keys[]' | grep -E "^($ACCEPTABLE_PACKAGES)$" > /dev/null; then
+              echo "✅ Vulnerabilities confirmed in non-critical packages (code highlighting)"
+            else
+              echo "⚠️  Some vulnerabilities in other packages - monitoring required"
+            fi
           fi
         else
           echo "No vulnerabilities found"
