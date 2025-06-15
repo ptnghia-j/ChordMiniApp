@@ -314,5 +314,84 @@
     ],
     "timestamp": 1749994957330,
     "expiresAt": 1750081357330
+  },
+  {
+    "query": "photograph",
+    "results": [
+      {
+        "id": "KKQl-pIRQMY",
+        "title": "Ed Sheeran - Photograph (Official Lyric Video)",
+        "thumbnail": "https://i.ytimg.com/vi/KKQl-pIRQMY/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCqlZeP2whsxjOZZyjnY3i_U_XRGw",
+        "channel": "Ed Sheeran",
+        "duration_string": "",
+        "view_count": 25159280,
+        "upload_date": ""
+      },
+      {
+        "id": "HpphFd_mzXE",
+        "title": "Ed Sheeran - Photograph (Lyrics)",
+        "thumbnail": "https://i.ytimg.com/vi/HpphFd_mzXE/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAkzVvVU9wUIEH4HbuUcPcDDw69zw",
+        "channel": "7clouds",
+        "duration_string": "",
+        "view_count": 53228501,
+        "upload_date": ""
+      },
+      {
+        "id": "T3rXdeOvhNE",
+        "title": "Nickelback - Photograph [OFFICIAL VIDEO]",
+        "thumbnail": "https://i.ytimg.com/vi/T3rXdeOvhNE/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAutCGycysj5mVh1VGtIZelOTXeSQ",
+        "channel": "Roadrunner Records",
+        "duration_string": "",
+        "view_count": 85293824,
+        "upload_date": ""
+      },
+      {
+        "id": "D4dHr8evt6k",
+        "title": "Def Leppard - Photograph",
+        "thumbnail": "https://i.ytimg.com/vi/D4dHr8evt6k/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDDqvT2e8OmKSPWSXsc0PuZ9U-n0w",
+        "channel": "DEF LEPPARD",
+        "duration_string": "",
+        "view_count": 13797746,
+        "upload_date": ""
+      },
+      {
+        "id": "5J-UPxcRga4",
+        "title": "Def Leppard Photograph",
+        "thumbnail": "https://i.ytimg.com/vi/5J-UPxcRga4/hq720.jpg?sqp=-oaymwE2COgCEMoBSFXyq4qpAygIARUAAIhCGAFwAcABBvABAfgB_gmAAtAFigIMCAAQARggIFYocjAP&rs=AOn4CLCybmuHW5ZCG87YhPLq-xXGXdS1jw",
+        "channel": "Tommy Frankfort",
+        "duration_string": "",
+        "view_count": 623104,
+        "upload_date": ""
+      },
+      {
+        "id": "nSDgHBxUbVQ",
+        "title": "Ed Sheeran - Photograph (Official Music Video)",
+        "thumbnail": "https://i.ytimg.com/vi/nSDgHBxUbVQ/hqdefault.jpg?sqp=-oaymwEcCOADEI4CSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLA3WTvC0ho3EY7NvVdIN0CMNtDK2A",
+        "channel": "Ed Sheeran",
+        "duration_string": "",
+        "view_count": 1443130430,
+        "upload_date": ""
+      },
+      {
+        "id": "tIRi44nVNCA",
+        "title": "Photograph",
+        "thumbnail": "https://i.ytimg.com/vi/tIRi44nVNCA/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBF_g0LejOhufTzA0htvHNh_XaAVg",
+        "channel": "J. Cole",
+        "duration_string": "",
+        "view_count": 16472712,
+        "upload_date": ""
+      },
+      {
+        "id": "ULwIM6Za0QA",
+        "title": "Photograph",
+        "thumbnail": "https://i.ytimg.com/vi/ULwIM6Za0QA/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLC6aWRg9ySli7GQOsP94Tq0ho876w",
+        "channel": "Nickelback",
+        "duration_string": "",
+        "view_count": 3090831,
+        "upload_date": ""
+      }
+    ],
+    "timestamp": 1750010767342,
+    "expiresAt": 1750097167342
   }
 ]

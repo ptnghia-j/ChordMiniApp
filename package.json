@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "export-cookies": "node scripts/export-cookies.js"
+    "export-cookies": "node scripts/export-cookies.js",
+    "prepare-ytdlp": "node scripts/prepare-ytdlp.js",
+    "prebuild": "npm run prepare-ytdlp"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.10",

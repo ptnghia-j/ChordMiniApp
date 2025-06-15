@@ -6,6 +6,8 @@ __pycache__/
 venv/
 .env
 
+# IMPORTANT: bin/ directory is NOT ignored - it contains yt-dlp binary for serverless deployment
+
 # Development files
 .git/
 .gitignore
@@ -42,8 +44,9 @@ Dockerfile*
 docker-compose*.yml
 cloudbuild.yaml
 
-# Scripts
-scripts/
+# Scripts (excluding prepare scripts needed for build)
+scripts/*.sh
+scripts/export-cookies.js
 
 # Test files
 test_*.py

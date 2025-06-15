@@ -14,18 +14,20 @@ const VALIDATION_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
  */
 export async function getValidatedYtDlpPath(): Promise<string> {
   const now = Date.now();
-  
+
   // Return cached path if still valid
   if (validatedYtDlpPath && (now - lastValidationTime) < VALIDATION_CACHE_DURATION) {
     return validatedYtDlpPath;
   }
 
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-  
+
   const possiblePaths = isServerless ? [
+    './bin/yt-dlp',                // Project bin directory (bundled binary)
     './yt-dlp',                    // Project root
-    '/tmp/yt-dlp',                 // Temp directory
+    '/var/task/bin/yt-dlp',       // Lambda task bin directory
     '/var/task/yt-dlp',           // Lambda task directory
+    '/tmp/yt-dlp',                 // Temp directory
     'yt-dlp'                       // System PATH fallback
   ] : [
     'yt-dlp',                      // System PATH (local development)
@@ -69,9 +71,9 @@ export async function getValidatedYtDlpPath(): Promise<string> {
     try {
       console.log('🔄 Attempting to download yt-dlp to /tmp...');
       const tmpPath = '/tmp/yt-dlp';
-      
+
       await execAsync(`curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${tmpPath} && chmod +x ${tmpPath}`, { timeout: 30000 });
-      
+
       // Test the downloaded binary
       const { stdout } = await execAsync(`${tmpPath} --version`, { timeout: 5000 });
       if (stdout && stdout.trim()) {
@@ -82,10 +84,15 @@ export async function getValidatedYtDlpPath(): Promise<string> {
       }
     } catch (error) {
       console.error('❌ Failed to download yt-dlp to /tmp:', error);
+      console.error('💡 Ensure the yt-dlp binary is included in your deployment by running: npm run prepare-ytdlp');
     }
   }
 
-  throw new Error('yt-dlp is not available in any expected location. Please ensure yt-dlp is installed and accessible.');
+  const errorMessage = isServerless
+    ? 'yt-dlp is not available in this serverless environment. The binary should be included in the deployment package. Run "npm run prepare-ytdlp" before deploying.'
+    : 'yt-dlp is not available in any expected location. Please ensure yt-dlp is installed and accessible.';
+
+  throw new Error(errorMessage);
 }
 
 /**
