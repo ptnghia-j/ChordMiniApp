@@ -1,194 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedSearch, addToSearchCache, cleanExpiredSearchCache, SearchResult } from '@/services/searchCacheService';
-import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
 
-// Note: execPromise function removed as it's replaced by executeYtDlp from ytdlp-utils
-
-// Define the structure of a YouTube search result item
-interface YouTubeSearchResult {
-  id: string;
-  title: string;
-  thumbnail: string;
-  channel: string;
-  duration_string?: string;
-  view_count?: number;
-  upload_date?: string;
-  webpage_url?: string;
-}
-
-// Helper function to parse yt-dlp JSON output into search results
-function parseYtDlpOutput(stdout: string): YouTubeSearchResult[] {
-  if (!stdout) return [];
-
-  const lines = stdout.trim().split('\n');
-  const results: YouTubeSearchResult[] = [];
-
-  for (const line of lines) {
-    try {
-      const result = JSON.parse(line);
-
-      // Get thumbnail URL - simplified to avoid expensive sorting
-      let thumbnailUrl = '';
-      if (result.thumbnails && Array.isArray(result.thumbnails) && result.thumbnails.length > 0) {
-        // Just take the first thumbnail that's hqdefault or mqdefault
-        thumbnailUrl = result.thumbnails.find((t: { url?: string }) =>
-          t.url && (t.url.includes('hqdefault') || t.url.includes('mqdefault'))
-        )?.url || result.thumbnails[0]?.url || '';
-      } else if (result.thumbnail) {
-        thumbnailUrl = result.thumbnail;
-      }
-
-      // Generate a default thumbnail URL if none is available
-      if (!thumbnailUrl && result.id) {
-        thumbnailUrl = `https://i.ytimg.com/vi/${result.id}/hqdefault.jpg`;
-      }
-
-      const searchResult: YouTubeSearchResult = {
-        id: result.id,
-        title: result.title,
-        thumbnail: thumbnailUrl,
-        channel: result.channel || result.uploader || '',
-        duration_string: result.duration_string || '',
-        view_count: result.view_count,
-        upload_date: result.upload_date
-      };
-
-      results.push(searchResult);
-    } catch (e) {
-      console.error('Failed to parse JSON line:', e);
-      // Skip invalid lines
-    }
-  }
-
-  return results;
-}
-
-// Optimized search function that uses the most efficient approach
-async function searchYouTube(
-  sanitizedQuery: string,
-  timeoutMs: number = 15000 // Increased from 8000ms to 15000ms (15 seconds)
-): Promise<{ success: boolean; results: YouTubeSearchResult[]; error?: string; fromCache?: boolean }> {
-  try {
-    // Check cache first
-    const cachedResults = await getCachedSearch(sanitizedQuery);
-    if (cachedResults) {
-      console.log(`Using cached results for "${sanitizedQuery}"`);
-      return {
-        success: true,
-        results: cachedResults.results as unknown as YouTubeSearchResult[],
-        fromCache: true
-      };
-    }
-
-    // Not in cache, perform the search
-    console.log(`Searching YouTube for "${sanitizedQuery}"...`);
-
-    // Check if yt-dlp is available
-    if (!(await isYtDlpAvailable())) {
-      return { success: false, results: [], error: 'yt-dlp is not available in this environment' };
-    }
-
-    // Use a single, optimized command with the most reliable options
-    // Limit to 8 results for faster response
-    const ytDlpArgs = `"ytsearch8:${sanitizedQuery}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames`;
-
-    // Execute yt-dlp search command with enhanced error handling
-    const { stdout } = await executeYtDlp(ytDlpArgs, timeoutMs);
-
-    if (!stdout) {
-      return { success: false, results: [], error: 'No results from search' };
-    }
-
-    try {
-      // Parse the single JSON object
-      const result = JSON.parse(stdout);
-
-      // Check if it's a playlist with entries
-      if (result.entries && Array.isArray(result.entries) && result.entries.length > 0) {
-        // Convert the entries to our standard format
-        const results = result.entries.map((entry: {
-          id: string;
-          title: string;
-          thumbnails?: Array<{ url?: string }>;
-          thumbnail?: string;
-          channel?: string;
-          uploader?: string;
-          duration_string?: string;
-          view_count?: number;
-          upload_date?: string;
-        }) => {
-          // Simplified thumbnail selection
-          let thumbnailUrl = '';
-          if (entry.thumbnails && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
-            thumbnailUrl = entry.thumbnails[0]?.url || '';
-          } else if (entry.thumbnail) {
-            thumbnailUrl = entry.thumbnail;
-          }
-
-          // Generate a default thumbnail URL if none is available
-          if (!thumbnailUrl && entry.id) {
-            thumbnailUrl = `https://i.ytimg.com/vi/${entry.id}/hqdefault.jpg`;
-          }
-
-          return {
-            id: entry.id,
-            title: entry.title,
-            thumbnail: thumbnailUrl,
-            channel: entry.channel || entry.uploader || '',
-            duration_string: entry.duration_string || '',
-            view_count: entry.view_count || 0,
-            upload_date: entry.upload_date || ''
-          };
-        });
-
-        console.log(`Found ${results.length} results for "${sanitizedQuery}"`);
-
-        // Cache the results
-        await addToSearchCache(sanitizedQuery, results);
-
-        return { success: true, results };
-      }
-    } catch (parseErr) {
-      console.error('Error parsing JSON from search:', parseErr);
-    }
-
-    // Fallback to line-by-line parsing if single JSON fails
-    try {
-      // Try with --dump-json instead of --dump-single-json
-      const fallbackArgs = `"ytsearch8:${sanitizedQuery}" --dump-json --no-warnings --flat-playlist --restrict-filenames`;
-      // Use the same timeout for the fallback command
-      const { stdout: fallbackStdout } = await executeYtDlp(fallbackArgs, timeoutMs);
-
-      if (fallbackStdout) {
-        const results = parseYtDlpOutput(fallbackStdout);
-
-        if (results.length > 0) {
-          console.log(`Found ${results.length} results with fallback method for "${sanitizedQuery}"`);
-
-          // Cache the results
-          await addToSearchCache(sanitizedQuery, results as unknown as SearchResult[]);
-
-          return { success: true, results };
-        }
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback search method failed:', fallbackErr);
-    }
-
-    return { success: false, results: [], error: 'Failed to parse results from search' };
-  } catch (err) {
-    console.error(`Error searching YouTube:`, err);
-    return { success: false, results: [], error: String(err) };
-  }
-}
+/**
+ * YouTube Search API Route - Proxy to Python Backend
+ *
+ * This route proxies YouTube search requests to the Python backend
+ * which handles yt-dlp functionality in a serverless-compatible environment.
+ */
 
 export async function POST(request: NextRequest) {
   try {
-    // Clean expired cache entries in the background
-    cleanExpiredSearchCache().catch(err => {
-      console.error('Error cleaning expired search cache:', err);
-    });
-
     // Parse request body
     const data = await request.json();
     const { query } = data;
@@ -200,78 +20,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sanitize query to prevent command injection
-    const sanitizedQuery = query.replace(/[";&|`$()<>]/g, '');
-    if (sanitizedQuery.trim() === '') {
-      return NextResponse.json(
-        { error: 'Invalid search query after sanitization' },
-        { status: 400 }
-      );
-    }
+    // Forward the request to the Python backend
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app';
 
-    // Set a timeout for the entire search operation
-    const searchTimeoutMs = 20000; // 20 seconds max (increased from 10 seconds)
+    console.log(`Proxying YouTube search to backend: ${backendUrl}/api/search-youtube`);
 
-    // Create a timeout promise
-    const timeoutPromise = new Promise<{ success: false, results: [], error: string }>((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: false,
-          results: [],
-          error: 'Search timeout exceeded'
-        });
-      }, searchTimeoutMs);
+    const response = await fetch(`${backendUrl}/api/search-youtube`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
     });
 
-    // Perform the search with our optimized function
-    const searchPromise = searchYouTube(sanitizedQuery, 15000); // Increased from 8000ms to 15000ms (15 seconds)
-
-    // Race the search promise and the timeout
-    const searchResult = await Promise.race([
-      searchPromise,
-      timeoutPromise
-    ]);
-
-    const { success, results, error: searchError } = searchResult;
-    const fromCache = 'fromCache' in searchResult ? searchResult.fromCache : false;
-
-    if (!success || results.length === 0) {
-      // Check if it's a timeout error
-      const errorDetails = searchError || 'No results found';
-      const isTimeout = errorDetails.includes('timeout') || errorDetails.includes('timed out');
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Backend search failed: ${response.status} ${response.statusText} - ${errorText}`);
 
       return NextResponse.json(
         {
-          error: isTimeout
-            ? 'Search timed out. Please try again. First searches may take longer to complete.'
-            : 'Failed to search YouTube',
-          details: errorDetails
+          error: 'Failed to search YouTube',
+          details: `Backend error: ${response.status} ${response.statusText}`
         },
-        { status: 500 }
+        { status: response.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      results: results,
-      fromCache: fromCache || false
-    });
+    const result = await response.json();
+    console.log(`Backend search successful: ${result.results?.length || 0} results`);
+
+    return NextResponse.json(result);
 
   } catch (error: unknown) {
-    console.error('Error searching YouTube:', error);
+    console.error('Error proxying YouTube search:', error);
 
-    // Check if it's a timeout error
-    const errorDetails = error && typeof error === 'object' && 'message' in error
-      ? (error as { message: string }).message
-      : String(error);
-    const isTimeout = errorDetails.includes('timeout') || errorDetails.includes('timed out');
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     return NextResponse.json(
       {
-        error: isTimeout
-          ? 'Search timed out. Please try again. First searches may take longer to complete.'
-          : 'Failed to search YouTube',
-        details: errorDetails
+        error: 'Failed to search YouTube',
+        details: errorMessage
       },
       { status: 500 }
     );
