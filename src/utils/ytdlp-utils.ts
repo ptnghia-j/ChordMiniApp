@@ -22,6 +22,44 @@ export async function getValidatedYtDlpPath(): Promise<string> {
 
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
+  // DIRECT FIX: In Vercel, we know the binary is in public directory
+  if (isServerless) {
+    const directPath = './public/yt-dlp';
+    console.log(`🎯 Direct fix: Testing known Vercel path: ${directPath}`);
+
+    try {
+      // Check if file exists
+      const stats = await fs.stat(directPath);
+      if (stats.isFile() && stats.size > 1024 * 1024) { // At least 1MB
+        console.log(`✅ Direct fix: Binary found at ${directPath}, size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+        // Try to make it executable
+        try {
+          await execAsync(`chmod +x "${directPath}"`, { timeout: 2000 });
+          console.log(`✅ Direct fix: Made ${directPath} executable`);
+        } catch (chmodError) {
+          console.log(`⚠️ Direct fix: chmod failed, but continuing:`, chmodError instanceof Error ? chmodError.message : chmodError);
+        }
+
+        // Test execution with a simple approach
+        try {
+          const { stdout } = await execAsync(`"${directPath}" --version`, { timeout: 10000 });
+          if (stdout && stdout.trim()) {
+            console.log(`🎉 Direct fix SUCCESS! yt-dlp working at ${directPath}, version: ${stdout.trim()}`);
+            validatedYtDlpPath = directPath;
+            lastValidationTime = now;
+            return directPath;
+          }
+        } catch (execError) {
+          console.log(`⚠️ Direct fix: Execution test failed:`, execError instanceof Error ? execError.message : execError);
+          // Continue to fallback logic
+        }
+      }
+    } catch (statError) {
+      console.log(`⚠️ Direct fix: File not found at ${directPath}:`, statError instanceof Error ? statError.message : statError);
+    }
+  }
+
   const possiblePaths = isServerless ? [
     './public/yt-dlp',             // Public directory (always included in Vercel)
     './bin/yt-dlp',                // Project bin directory (bundled binary)
