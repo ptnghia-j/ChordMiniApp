@@ -29,14 +29,27 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Handle metronome toggle
   const handleToggle = async () => {
-    if (!metronomeService) return;
+    console.log('MetronomeControls: Toggle clicked', {
+      hasService: !!metronomeService,
+      currentEnabled: isEnabled
+    });
+
+    if (!metronomeService) {
+      console.error('MetronomeControls: No metronome service available');
+      return;
+    }
+
     const newEnabled = !isEnabled;
+    console.log('MetronomeControls: Setting enabled to', newEnabled);
+
     setIsEnabled(newEnabled);
     await metronomeService.setEnabled(newEnabled);
 
     // Test click when enabling
     if (newEnabled) {
+      console.log('MetronomeControls: Scheduling test click...');
       setTimeout(() => {
+        console.log('MetronomeControls: Executing test click...');
         metronomeService.testClick(false);
       }, 100);
     }
@@ -60,13 +73,21 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Test downbeat click
   const testDownbeat = () => {
-    if (!metronomeService) return;
+    console.log('MetronomeControls: Test downbeat clicked');
+    if (!metronomeService) {
+      console.error('MetronomeControls: No metronome service for downbeat test');
+      return;
+    }
     metronomeService.testClick(true);
   };
 
   // Test regular beat click
   const testRegularBeat = () => {
-    if (!metronomeService) return;
+    console.log('MetronomeControls: Test regular beat clicked');
+    if (!metronomeService) {
+      console.error('MetronomeControls: No metronome service for regular beat test');
+      return;
+    }
     metronomeService.testClick(false);
   };
 

@@ -114,6 +114,10 @@ export async function POST(request: NextRequest) {
     console.log(`Search query:`, query);
 
     try {
+      // Create an AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch(`${backendUrl}/api/search-youtube`, {
         method: 'POST',
         headers: {
@@ -121,7 +125,10 @@ export async function POST(request: NextRequest) {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
         body: JSON.stringify({ query }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -161,6 +168,11 @@ export async function POST(request: NextRequest) {
     } catch (fetchError) {
       console.error('Network error during backend search:', fetchError);
 
+      // Check if it's a timeout error
+      const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+      const errorMessage = isTimeout ? 'Request timeout (30s)' :
+                          (fetchError instanceof Error ? fetchError.message : String(fetchError));
+
       // Try local search as fallback for network errors (only in development)
       if (process.env.NODE_ENV === 'development') {
         console.log('Network error, attempting local search fallback...');
@@ -175,9 +187,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Failed to search YouTube',
-          details: `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
-          suggestion: 'Please check your internet connection and try again.',
-          backendUrl: backendUrl
+          details: `Network error: ${errorMessage}`,
+          suggestion: isTimeout ?
+            'The search request timed out. Please try again with a shorter query.' :
+            'Please check your internet connection and try again.',
+          backendUrl: backendUrl,
+          isTimeout: isTimeout
         },
         { status: 500 }
       );

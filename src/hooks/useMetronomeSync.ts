@@ -103,7 +103,9 @@ export const useMetronomeSync = ({
         const beatId = `${dataSource}_${i}_${beatTime.toFixed(3)}`;
 
         // Schedule the click with duplicate prevention
-        metronomeService.scheduleClick(beatTime, isDownbeatClick, beatId);
+        // Pass the beat time relative to current playback time
+        const relativeTime = beatTime - now;
+        metronomeService.scheduleClick(relativeTime, isDownbeatClick, beatId);
 
         // Debug logging for metronome scheduling (reduced verbosity)
         if (i < 5) { // Only log first few beats to reduce console spam

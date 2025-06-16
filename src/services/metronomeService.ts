@@ -314,31 +314,63 @@ export class MetronomeService {
    * Ensure AudioContext is ready for use
    */
   private async ensureAudioContext(): Promise<boolean> {
+    console.log('Metronome: ensureAudioContext called', {
+      hasAudioContext: !!this.audioContext,
+      isInitialized: this.isInitialized,
+      audioContextState: this.audioContext?.state
+    });
+
     if (!this.audioContext) {
+      console.log('Metronome: No AudioContext, initializing...');
       await this.initializeAudioContext();
     }
 
     if (this.audioContext && this.audioContext.state === 'suspended') {
+      console.log('Metronome: AudioContext suspended, resuming...');
       try {
         await this.audioContext.resume();
+        console.log('Metronome: AudioContext resumed successfully');
       } catch (error) {
         console.error('Failed to resume AudioContext:', error);
         return false;
       }
     }
 
-    return this.isInitialized && this.audioContext !== null;
+    const result = this.isInitialized && this.audioContext !== null;
+    console.log('Metronome: ensureAudioContext result', {
+      result,
+      isInitialized: this.isInitialized,
+      hasAudioContext: !!this.audioContext,
+      audioContextState: this.audioContext?.state
+    });
+
+    return result;
   }
 
   /**
    * Create a click sound using pre-generated audio buffers
    */
   private async createClick(isDownbeat: boolean, startTime: number): Promise<void> {
-    if (!this.audioContext || !this.isEnabled) return;
+    console.log('Metronome: createClick called', {
+      isDownbeat,
+      startTime,
+      currentTime: this.audioContext?.currentTime,
+      isEnabled: this.isEnabled,
+      hasAudioContext: !!this.audioContext
+    });
+
+    if (!this.audioContext || !this.isEnabled) {
+      console.log('Metronome: createClick early return', {
+        hasAudioContext: !!this.audioContext,
+        isEnabled: this.isEnabled
+      });
+      return;
+    }
 
     try {
       // Ensure buffers are loaded for current sound style
       if (!this.audioBuffers.has(this.soundStyle)) {
+        console.log('Metronome: Loading buffers for createClick...');
         await this.loadAudioBuffers(this.soundStyle);
       }
 
@@ -347,6 +379,8 @@ export class MetronomeService {
         console.error(`No audio buffers available for sound style: ${this.soundStyle}`);
         return;
       }
+
+      console.log('Metronome: Buffers ready, creating audio nodes...');
 
       // Select appropriate buffer
       const buffer = isDownbeat ? buffers.downbeat : buffers.regular;
@@ -373,11 +407,19 @@ export class MetronomeService {
       // Set up automatic cleanup when source ends
       source.onended = () => {
         this.activeSources = this.activeSources.filter(s => s !== source);
+        console.log('Metronome: Audio source ended and cleaned up');
       };
 
       // Schedule the click with precise timing
       source.start(startTime);
       source.stop(startTime + this.clickDuration); // Stop exactly at click duration for better separation
+
+      console.log('Metronome: Click scheduled successfully', {
+        startTime,
+        duration: this.clickDuration,
+        volume: this.volume,
+        soundStyle: this.soundStyle
+      });
 
     } catch (error) {
       console.error('Error creating metronome click:', error);
@@ -386,8 +428,11 @@ export class MetronomeService {
 
   /**
    * Schedule a click at a specific time with duplicate prevention
+   * @param relativeTime - Time relative to current playback time when the click should occur (in seconds)
+   * @param isDownbeat - Whether this is a downbeat click
+   * @param beatId - Unique identifier to prevent duplicate scheduling
    */
-  public scheduleClick(time: number, isDownbeat: boolean = false, beatId?: string): void {
+  public scheduleClick(relativeTime: number, isDownbeat: boolean = false, beatId?: string): void {
     if (!this.audioContext || !this.isEnabled) return;
 
     // Prevent duplicate scheduling for the same beat
@@ -403,11 +448,12 @@ export class MetronomeService {
       }, (this.clickDuration + 0.2) * 1000); // Increased buffer to 200ms
     }
 
-    const audioTime = this.audioContext.currentTime + Math.max(0, time - Date.now() / 1000);
-
-    // Only schedule if the audio time is in the future
-    if (audioTime > this.audioContext.currentTime) {
+    // Schedule the click relative to current AudioContext time
+    // Only schedule if the relative time is in the future (with small buffer for immediate scheduling)
+    if (relativeTime >= -0.01) { // Allow very small negative values for immediate scheduling
+      const audioTime = this.audioContext.currentTime + Math.max(0.01, relativeTime);
       this.createClick(isDownbeat, audioTime);
+      console.log(`Metronome: Scheduled ${isDownbeat ? 'downbeat' : 'regular'} click at audio time ${audioTime.toFixed(3)}s (relative time: ${relativeTime.toFixed(3)}s)`);
     }
   }
 
@@ -545,19 +591,42 @@ export class MetronomeService {
    * Test the metronome with a single click
    */
   public async testClick(isDownbeat: boolean = false): Promise<void> {
+    console.log('Metronome: Testing click...', { isDownbeat, isEnabled: this.isEnabled });
+
     if (!await this.ensureAudioContext()) {
-      // AudioContext not available for metronome test
+      console.error('Metronome: AudioContext not available for test click');
       return;
     }
+
+    console.log('Metronome: AudioContext ready, state:', this.audioContext?.state);
+
+    // Ensure buffers are loaded for current sound style
+    if (!this.audioBuffers.has(this.soundStyle)) {
+      console.log('Metronome: Loading audio buffers for test click...');
+      await this.loadAudioBuffers(this.soundStyle);
+    }
+
+    const buffers = this.audioBuffers.get(this.soundStyle);
+    if (!buffers) {
+      console.error('Metronome: No audio buffers available for test click');
+      return;
+    }
+
+    console.log('Metronome: Audio buffers ready, creating test click...');
 
     const wasEnabled = this.isEnabled;
     this.isEnabled = true;
 
-    this.scheduleClick(Date.now() / 1000, isDownbeat);
+    // Use immediate scheduling for test click
+    const currentTime = this.audioContext!.currentTime;
+    this.createClick(isDownbeat, currentTime + 0.1); // Schedule 100ms in the future
+
+    console.log('Metronome: Test click scheduled at', currentTime + 0.1);
 
     // Restore previous state after a short delay
     setTimeout(() => {
       this.isEnabled = wasEnabled;
+      console.log('Metronome: Restored enabled state to', wasEnabled);
     }, 200);
   }
 }

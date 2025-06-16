@@ -81,11 +81,11 @@ export default function StatusPage() {
                       endpoints.some(e => e.status === 'online') ? 'partial' : 'offline';
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-dark-bg">
+    <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       <Navigation />
       
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 text-white">
+      <div className=" bg-white dark:bg-dark-bg text-black dark:text-white">
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           <div className="text-center">
             <div className="flex items-center justify-center gap-3 mb-3">
@@ -100,13 +100,13 @@ export default function StatusPage() {
               overallStatus === 'partial' ? 'bg-yellow-600' : 'bg-red-600'
             }`}>
               {overallStatus === 'online' ? (
-                <FiCheckCircle className="w-5 h-5" />
+                <FiCheckCircle className="w-5 h-5 text-white" />
               ) : overallStatus === 'partial' ? (
-                <FiAlertTriangle className="w-5 h-5" />
+                <FiAlertTriangle className="w-5 h-5 text-white" />
               ) : (
-                <FiXCircle className="w-5 h-5" />
+                <FiXCircle className="w-5 h-5 text-white" />
               )}
-              <span className="font-semibold">
+              <span className="font-semibold text-white">
                 {overallStatus === 'online' ? 'All Systems Operational' :
                  overallStatus === 'partial' ? 'Partial Outage' : 'Service Unavailable'}
               </span>

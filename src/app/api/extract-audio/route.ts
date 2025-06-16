@@ -137,6 +137,10 @@ export async function POST(request: NextRequest) {
       console.log(`Request data:`, { videoId, forceRedownload, getInfoOnly });
 
       try {
+        // Create an AbortController for timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for audio extraction
+
         const response = await fetch(`${backendUrl}/api/extract-audio`, {
           method: 'POST',
           headers: {
@@ -149,7 +153,10 @@ export async function POST(request: NextRequest) {
             useEnhancedExtraction: true,
             retryCount: 0
           }),
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -220,6 +227,11 @@ export async function POST(request: NextRequest) {
       } catch (fetchError) {
         console.error('Network error during backend extraction:', fetchError);
 
+        // Check if it's a timeout error
+        const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+        const errorMessage = isTimeout ? 'Request timeout (60s)' :
+                            (fetchError instanceof Error ? fetchError.message : String(fetchError));
+
         // Try local extraction as fallback for network errors (only in development)
         if (process.env.NODE_ENV === 'development') {
           console.log('Network error, attempting local extraction fallback...');
@@ -246,9 +258,12 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             error: 'Failed to extract audio from YouTube',
-            details: `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
-            suggestion: 'Please check your internet connection and try again.',
-            backendUrl: backendUrl
+            details: `Network error: ${errorMessage}`,
+            suggestion: isTimeout ?
+              'The audio extraction request timed out. Please try a shorter video or try again later.' :
+              'Please check your internet connection and try again.',
+            backendUrl: backendUrl,
+            isTimeout: isTimeout
           },
           { status: 500 }
         );

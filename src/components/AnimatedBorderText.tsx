@@ -14,9 +14,9 @@ const AnimatedBorderText: React.FC<AnimatedBorderTextProps> = ({
   return (
     <div className={`inline-block ${className}`}>
       {/* Shooting star border container */}
-      <div className="shooting-star-border">
+      <div className="shooting-star-border w-full">
         {/* Static content */}
-        <div className="shooting-star-content px-6 py-3 transition-colors duration-300">
+        <div className="shooting-star-content px-6 py-3 transition-colors duration-300 w-full">
           {children}
         </div>
       </div>
