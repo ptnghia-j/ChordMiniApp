@@ -59,16 +59,34 @@ export async function GET() {
       };
     }
 
-    // Test 4: Check bin and public directory contents
+    // Test 4: Check bin and public directory contents with detailed path testing
     try {
       const binFiles = await fs.readdir('./bin').catch(() => []);
       const publicFiles = await fs.readdir('./public').catch(() => []);
+
+      // Test specific file existence
+      const pathTests = {
+        './public/yt-dlp': false,
+        './bin/yt-dlp': false,
+        '/var/task/public/yt-dlp': false,
+        '/var/task/bin/yt-dlp': false
+      };
+
+      for (const testPath of Object.keys(pathTests)) {
+        try {
+          const stats = await fs.stat(testPath);
+          pathTests[testPath] = stats.isFile();
+        } catch {
+          pathTests[testPath] = false;
+        }
+      }
 
       diagnostics.tests.directoryContents = {
         success: true,
         binFiles: binFiles,
         publicFiles: publicFiles.filter(f => f.includes('yt') || f.includes('dlp')),
-        allFiles: [...binFiles, ...publicFiles.filter(f => f.includes('yt') || f.includes('dlp'))]
+        allFiles: [...binFiles, ...publicFiles.filter(f => f.includes('yt') || f.includes('dlp'))],
+        pathTests: pathTests
       };
     } catch (error: unknown) {
       diagnostics.tests.directoryContents = {
