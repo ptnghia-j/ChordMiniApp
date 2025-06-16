@@ -132,46 +132,104 @@ export class LocalExtractionService {
       const tempDir = path.join(process.cwd(), 'temp');
       await fs.mkdir(tempDir, { recursive: true });
 
-      const outputTemplate = path.join(tempDir, `${videoId}.%(ext)s`);
+      // Use a simpler approach - first get info, then download
+      console.log('Step 1: Getting video info...');
+      const infoResult = await this.getVideoInfo(youtubeUrl, videoId);
 
-      // Extract audio using yt-dlp
-      const { stdout } = await executeYtDlp(
-        `--extract-audio --audio-format mp3 --audio-quality 192K --output "${outputTemplate}" --print-json "${youtubeUrl}"`,
-        120000 // 2 minutes timeout
-      );
-
-      // Parse the JSON output to get file info
-      const lines = stdout.trim().split('\n');
-      const jsonLine = lines.find(line => line.startsWith('{'));
-      
-      if (!jsonLine) {
-        throw new Error('No JSON output from yt-dlp');
+      if (!infoResult.success) {
+        throw new Error(infoResult.error || 'Failed to get video info');
       }
 
-      const videoInfo = JSON.parse(jsonLine);
-      const title = videoInfo.title || `YouTube Video ${videoId}`;
-      const duration = videoInfo.duration || 0;
+      const title = infoResult.title || `YouTube Video ${videoId}`;
+      const duration = infoResult.duration || 0;
+
+      console.log('Step 2: Downloading and extracting audio...');
+
+      // Use a more reliable extraction approach
+      const outputTemplate = path.join(tempDir, `${videoId}`);
+
+      try {
+        // Try direct audio extraction with fallback
+        await executeYtDlp(
+          `--extract-audio --audio-format mp3 --audio-quality 192K --output "${outputTemplate}.%(ext)s" --no-playlist "${youtubeUrl}"`,
+          120000 // 2 minutes timeout
+        );
+      } catch (extractError) {
+        console.warn('Direct extraction failed, trying alternative method:', extractError);
+
+        // Fallback: download video first, then extract audio
+        await executeYtDlp(
+          `--format "best[height<=720]" --output "${outputTemplate}.%(ext)s" --no-playlist "${youtubeUrl}"`,
+          120000
+        );
+
+        // Find the downloaded video file
+        const tempFiles = await fs.readdir(tempDir);
+        const videoFile = tempFiles.find(file => file.startsWith(videoId) && !file.endsWith('.mp3'));
+
+        if (videoFile) {
+          const videoPath = path.join(tempDir, videoFile);
+          const audioPath = path.join(tempDir, `${videoId}.mp3`);
+
+          // Extract audio from video using ffmpeg (if available) or yt-dlp
+          try {
+            await executeYtDlp(
+              `--extract-audio --audio-format mp3 --audio-quality 192K --output "${audioPath}" "${videoPath}"`,
+              60000
+            );
+          } catch {
+            // If that fails, just rename if it's already an audio file
+            if (videoFile.includes('audio') || videoFile.endsWith('.m4a') || videoFile.endsWith('.webm')) {
+              await fs.rename(videoPath, audioPath);
+            } else {
+              throw new Error('Could not extract audio from downloaded file');
+            }
+          }
+
+          // Clean up video file
+          try {
+            await fs.unlink(videoPath);
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+      }
 
       // Find the extracted audio file
       const audioFile = path.join(tempDir, `${videoId}.mp3`);
-      
+
       try {
         await fs.access(audioFile);
+        console.log(`Audio file created successfully: ${audioFile}`);
       } catch {
-        throw new Error('Audio file was not created');
+        // Try to find any audio file with the video ID
+        const tempFiles = await fs.readdir(tempDir);
+        const audioFiles = tempFiles.filter(file =>
+          file.startsWith(videoId) && (file.endsWith('.mp3') || file.endsWith('.m4a') || file.endsWith('.webm'))
+        );
+
+        if (audioFiles.length > 0) {
+          const foundFile = path.join(tempDir, audioFiles[0]);
+          if (!foundFile.endsWith('.mp3')) {
+            // Rename to .mp3
+            await fs.rename(foundFile, audioFile);
+          }
+        } else {
+          throw new Error(`Audio file was not created. Expected: ${audioFile}`);
+        }
       }
 
       // Read the audio file
       const audioBuffer = await fs.readFile(audioFile);
-      
-      // Upload to Firebase Storage for caching
-      const uploadResult = await uploadAudioFile(videoId, audioBuffer);
-      
-      if (!uploadResult) {
-        // Fallback: serve from local temp directory
-        const localUrl = `/temp/${videoId}.mp3`;
-        
-        // Save metadata for caching
+      console.log(`Read audio file: ${audioBuffer.byteLength} bytes`);
+
+      // For local development, serve directly from temp directory to avoid Firebase issues
+      const localUrl = `/api/temp/${videoId}.mp3`;
+
+      console.log(`Using local URL for development: ${localUrl}`);
+
+      // Try to save metadata for caching (but don't fail if it doesn't work)
+      try {
         await saveAudioFileMetadata({
           videoId,
           audioUrl: localUrl,
@@ -179,39 +237,17 @@ export class LocalExtractionService {
           fileSize: audioBuffer.byteLength,
           duration
         });
-
-        return {
-          success: true,
-          audioUrl: localUrl,
-          title,
-          duration,
-          fromCache: false
-        };
+        console.log('Successfully saved metadata to Firestore');
+      } catch (metadataError) {
+        console.warn('Failed to save metadata (continuing anyway):', metadataError);
       }
 
-      // Save metadata with Firebase URLs
-      await saveAudioFileMetadata({
-        videoId,
-        audioUrl: uploadResult.audioUrl,
-        videoUrl: uploadResult.videoUrl,
-        storagePath: uploadResult.storagePath,
-        videoStoragePath: uploadResult.videoStoragePath,
-        fileSize: audioBuffer.byteLength,
-        duration
-      });
-
-      // Clean up temp file
-      try {
-        await fs.unlink(audioFile);
-      } catch (cleanupError) {
-        console.warn('Failed to clean up temp file:', cleanupError);
-      }
-
-      console.log(`Successfully extracted and uploaded audio for ${videoId}`);
+      // Don't clean up temp file since we're serving it directly
+      console.log(`Successfully extracted audio for ${videoId}, serving from temp directory`);
 
       return {
         success: true,
-        audioUrl: uploadResult.audioUrl,
+        audioUrl: localUrl,
         title,
         duration,
         fromCache: false

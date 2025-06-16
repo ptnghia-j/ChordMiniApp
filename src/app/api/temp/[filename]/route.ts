@@ -15,7 +15,7 @@ export async function GET(
     const { filename } = params;
 
     // Security: Only allow specific file extensions and patterns
-    if (!filename || !filename.match(/^[a-zA-Z0-9_-]+\.(mp3|mp4|wav)$/)) {
+    if (!filename || !filename.match(/^[a-zA-Z0-9_-]+\.(mp3|mp4|wav|webm|m4a)$/)) {
       return NextResponse.json(
         { error: 'Invalid filename' },
         { status: 400 }
@@ -47,14 +47,18 @@ export async function GET(
     try {
       // Check if file exists
       await fs.access(filePath);
-      
+
+      // Get file stats
+      const stats = await fs.stat(filePath);
+      console.log(`Serving temp file: ${filename} (${stats.size} bytes)`);
+
       // Read the file
       const fileBuffer = await fs.readFile(filePath);
-      
+
       // Determine content type
       const ext = path.extname(filename).toLowerCase();
       let contentType = 'application/octet-stream';
-      
+
       switch (ext) {
         case '.mp3':
           contentType = 'audio/mpeg';
@@ -65,6 +69,12 @@ export async function GET(
         case '.wav':
           contentType = 'audio/wav';
           break;
+        case '.webm':
+          contentType = 'audio/webm';
+          break;
+        case '.m4a':
+          contentType = 'audio/mp4';
+          break;
       }
 
       // Return the file with appropriate headers
@@ -74,14 +84,27 @@ export async function GET(
           'Content-Type': contentType,
           'Content-Length': fileBuffer.length.toString(),
           'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-          'Content-Disposition': `inline; filename="${filename}"`
+          'Content-Disposition': `inline; filename="${filename}"`,
+          'Accept-Ranges': 'bytes'
         }
       });
 
     } catch (fileError) {
-      console.error('Error reading temp file:', fileError);
+      console.error(`Error reading temp file ${filename}:`, fileError);
+
+      // Try to list available files for debugging
+      try {
+        const tempFiles = await fs.readdir(tempDir);
+        console.log('Available temp files:', tempFiles);
+      } catch (listError) {
+        console.error('Could not list temp directory:', listError);
+      }
+
       return NextResponse.json(
-        { error: 'File not found' },
+        {
+          error: 'File not found',
+          details: `Could not find ${filename} in temp directory`
+        },
         { status: 404 }
       );
     }

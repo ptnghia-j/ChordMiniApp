@@ -190,6 +190,8 @@ export async function saveAudioFileMetadata(
       fileSize: audioFileData.fileSize,
       videoFileSize: audioFileData.videoFileSize || null,
       duration: audioFileData.duration || null,
+      isStreamUrl: audioFileData.isStreamUrl || false,
+      streamExpiresAt: audioFileData.streamExpiresAt || null,
       createdAt: serverTimestamp()
     };
 
@@ -200,6 +202,13 @@ export async function saveAudioFileMetadata(
     return true;
   } catch (error) {
     console.error('Error saving audio file metadata to Firestore:', error);
+
+    // Check for specific permission errors
+    if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
+      console.warn('Firestore permissions not configured for audio file metadata. This is expected in development.');
+      console.warn('To fix this, update your Firestore security rules to allow writes to the audioFiles collection.');
+    }
+
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
