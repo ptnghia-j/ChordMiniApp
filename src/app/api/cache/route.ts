@@ -4,28 +4,66 @@ import {
   cleanCache,
   removeCacheEntry
 } from '@/services/cacheService';
+import { localCacheService } from '@/services/localCacheService';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 // GET handler to retrieve cache status
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cacheIndex = await getCacheIndex();
-    
-    // Calculate total size
-    let totalSize = 0;
-    for (const entry of cacheIndex) {
-      if (entry.fileSize && typeof entry.fileSize === 'number') {
-        totalSize += entry.fileSize;
-      }
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action') || 'stats';
+    const videoId = searchParams.get('videoId');
+
+    switch (action) {
+      case 'stats':
+        // Get both local cache and Firebase cache stats
+        const localStats = await localCacheService.getCacheStats();
+
+        let firebaseStats = { cacheEntries: 0, totalSize: 0, cacheIndex: [] };
+        try {
+          const cacheIndex = await getCacheIndex();
+          let totalSize = 0;
+          for (const entry of cacheIndex) {
+            if (entry.fileSize && typeof entry.fileSize === 'number') {
+              totalSize += entry.fileSize;
+            }
+          }
+          firebaseStats = {
+            cacheEntries: cacheIndex.length,
+            totalSize,
+            cacheIndex
+          };
+        } catch (firebaseError) {
+          console.warn('Firebase cache not available:', firebaseError);
+        }
+
+        return NextResponse.json({
+          success: true,
+          local: localStats,
+          firebase: firebaseStats
+        });
+
+      case 'get':
+        if (!videoId) {
+          return NextResponse.json(
+            { error: 'videoId required for get action' },
+            { status: 400 }
+          );
+        }
+
+        const cached = await localCacheService.getCachedAudio(videoId);
+        return NextResponse.json({
+          success: true,
+          cached: cached || null
+        });
+
+      default:
+        return NextResponse.json(
+          { error: 'Invalid action. Use: stats, get' },
+          { status: 400 }
+        );
     }
-    
-    return NextResponse.json({
-      success: true,
-      cacheEntries: cacheIndex.length,
-      totalSize,
-      cacheIndex
-    });
   } catch (error) {
     console.error('Failed to get cache status:', error);
     return NextResponse.json(

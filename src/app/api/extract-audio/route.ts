@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedAudioFile, saveAudioFileMetadata } from '@/services/firebaseStorageService';
 import { localExtractionService } from '@/services/localExtractionService';
+import { localCacheService } from '@/services/localCacheService';
 
 /**
  * Audio Extraction API Route with Caching Support
@@ -40,10 +41,36 @@ export async function POST(request: NextRequest) {
 
     // Check cache first (unless force redownload or info only)
     if (!forceRedownload && !getInfoOnly) {
+      console.log(`Checking cache for ${videoId}...`);
+
+      // Try local cache first (for development)
+      if (shouldUseLocalExtraction()) {
+        try {
+          const localCached = await localCacheService.getCachedAudio(videoId);
+          if (localCached) {
+            console.log(`Found local cached audio for ${videoId}, returning from cache`);
+
+            return NextResponse.json({
+              success: true,
+              audioUrl: localCached.audioUrl,
+              title: localCached.title,
+              duration: localCached.duration,
+              youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+              fromCache: true,
+              isStreamUrl: false,
+              message: 'Loaded from local cache'
+            });
+          }
+        } catch (localCacheError) {
+          console.warn('Local cache check failed:', localCacheError);
+        }
+      }
+
+      // Try Firebase cache (for production)
       try {
         const cachedAudio = await getCachedAudioFile(videoId);
         if (cachedAudio) {
-          console.log(`Found cached audio for ${videoId}, returning from cache`);
+          console.log(`Found Firebase cached audio for ${videoId}, returning from cache`);
 
           return NextResponse.json({
             success: true,
@@ -52,11 +79,11 @@ export async function POST(request: NextRequest) {
             fromCache: true,
             isStreamUrl: cachedAudio.isStreamUrl || false,
             streamExpiresAt: cachedAudio.streamExpiresAt,
-            message: 'Loaded from cache'
+            message: 'Loaded from Firebase cache'
           });
         }
       } catch (cacheError) {
-        console.warn('Cache check failed, proceeding with extraction:', cacheError);
+        console.warn('Firebase cache check failed, proceeding with extraction:', cacheError);
       }
     }
 

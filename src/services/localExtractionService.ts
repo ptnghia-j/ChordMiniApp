@@ -1,5 +1,6 @@
 import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
 import { uploadAudioFile, saveAudioFileMetadata } from '@/services/firebaseStorageService';
+import { localCacheService } from '@/services/localCacheService';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -223,12 +224,24 @@ export class LocalExtractionService {
       const audioBuffer = await fs.readFile(audioFile);
       console.log(`Read audio file: ${audioBuffer.byteLength} bytes`);
 
-      // For local development, serve directly from temp directory to avoid Firebase issues
+      // For local development, serve directly from temp directory
       const localUrl = `/api/temp/${videoId}.mp3`;
 
       console.log(`Using local URL for development: ${localUrl}`);
 
-      // Try to save metadata for caching (but don't fail if it doesn't work)
+      // Add to local cache
+      try {
+        await localCacheService.addToCache(videoId, localUrl, audioFile, {
+          title,
+          duration,
+          fileSize: audioBuffer.byteLength
+        });
+        console.log('Successfully added to local cache');
+      } catch (cacheError) {
+        console.warn('Failed to add to local cache (continuing anyway):', cacheError);
+      }
+
+      // Try to save metadata to Firebase (but don't fail if it doesn't work)
       try {
         await saveAudioFileMetadata({
           videoId,
@@ -239,7 +252,7 @@ export class LocalExtractionService {
         });
         console.log('Successfully saved metadata to Firestore');
       } catch (metadataError) {
-        console.warn('Failed to save metadata (continuing anyway):', metadataError);
+        console.warn('Failed to save metadata to Firestore (continuing anyway):', metadataError);
       }
 
       // Don't clean up temp file since we're serving it directly

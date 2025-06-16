@@ -9,10 +9,10 @@ import path from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const { filename } = params;
+    const { filename } = await params;
 
     // Security: Only allow specific file extensions and patterns
     if (!filename || !filename.match(/^[a-zA-Z0-9_-]+\.(mp3|mp4|wav|webm|m4a)$/)) {
