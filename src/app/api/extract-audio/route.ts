@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
 
     console.log(`Proxying audio extraction to backend: ${backendUrl}/api/extract-audio`);
 

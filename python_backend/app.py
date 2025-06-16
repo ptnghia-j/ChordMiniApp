@@ -2674,17 +2674,43 @@ def search_youtube():
 
         print(f"Searching YouTube for: {sanitized_query}")
 
-        # Use yt-dlp to search YouTube (limit to 8 results for performance)
-        ytdlp_args = f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames'
+        # Use yt-dlp to search YouTube with enhanced bot prevention for production
+        # Try multiple search strategies with different client types
+        search_strategies = [
+            # Primary: Android TV client (often less restricted for searches)
+            f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames --extractor-args "youtube:player_client=android_tv" --user-agent "com.google.android.tv.youtube/2.12.08 (Linux; U; Android 9; SM-T720 Build/PPR1.180610.011) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:85"',
 
-        # Execute yt-dlp search command
-        result = execute_ytdlp(ytdlp_args, timeout=20)
-        stdout = result['stdout']
+            # Fallback 1: Android embedded client
+            f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames --extractor-args "youtube:player_client=android_embedded" --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:55"',
 
-        if not stdout:
+            # Fallback 2: Web embedded client
+            f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames --extractor-args "youtube:player_client=web_embedded" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Referer:https://www.youtube.com/"',
+
+            # Fallback 3: Standard Android client
+            f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames --extractor-args "youtube:player_client=android" --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9"'
+        ]
+
+        # Try each search strategy until one succeeds
+        result = None
+        for i, ytdlp_args in enumerate(search_strategies):
+            try:
+                print(f"Attempting search with strategy {i+1}: {ytdlp_args[:100]}...")
+                result = execute_ytdlp(ytdlp_args, timeout=20)
+                if result['stdout']:
+                    print(f"Search strategy {i+1} succeeded")
+                    break
+            except Exception as e:
+                print(f"Search strategy {i+1} failed: {e}")
+                if i < len(search_strategies) - 1:
+                    import time
+                    time.sleep(1)  # Brief delay between attempts
+                continue
+
+        if not result or not result['stdout']:
             return jsonify({
-                'error': 'No results from search'
+                'error': 'All search strategies failed'
             }), 500
+        stdout = result['stdout']
 
         try:
             # Parse the single JSON object
@@ -2803,8 +2829,24 @@ def extract_audio():
         # If only video info is requested
         if get_info_only:
             try:
-                info_args = f'--dump-single-json --no-warnings "{youtube_url}"'
-                result = execute_ytdlp(info_args, timeout=15)
+                # Try multiple strategies for info extraction
+                info_strategies = [
+                    f'--dump-single-json --no-warnings --extractor-args "youtube:player_client=android_tv" --user-agent "com.google.android.tv.youtube/2.12.08 (Linux; U; Android 9; SM-T720 Build/PPR1.180610.011) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:85" "{youtube_url}"',
+                    f'--dump-single-json --no-warnings --extractor-args "youtube:player_client=android_embedded" --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:55" "{youtube_url}"',
+                    f'--dump-single-json --no-warnings --extractor-args "youtube:player_client=android" --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9" "{youtube_url}"'
+                ]
+
+                result = None
+                for info_args in info_strategies:
+                    try:
+                        result = execute_ytdlp(info_args, timeout=15)
+                        if result['stdout']:
+                            break
+                    except Exception:
+                        continue
+
+                if not result or not result['stdout']:
+                    raise Exception("All info extraction strategies failed")
 
                 video_info = json.loads(result['stdout'])
 
@@ -2824,22 +2866,32 @@ def extract_audio():
 
         # Extract audio stream URL
         try:
-            # Try multiple approaches for stream URL extraction
+            # Try multiple approaches for stream URL extraction with enhanced bot prevention
+            # Production-optimized strategies for Cloud Run environment
             command_args = [
-                # Primary: Get best audio stream URL
-                f'--get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+                # Primary: Android TV client with enhanced evasion
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android_tv" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "com.google.android.tv.youtube/2.12.08 (Linux; U; Android 9; SM-T720 Build/PPR1.180610.011) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:85" --add-header "X-YouTube-Client-Version:2.12.08" "{youtube_url}"',
 
-                # Fallback 1: Android player client
-                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+                # Fallback 1: Android embedded client (less detection)
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android_embedded" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "X-YouTube-Client-Name:55" "{youtube_url}"',
 
-                # Fallback 2: iOS player client
-                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+                # Fallback 2: iOS music client (specialized for audio)
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios_music" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "com.google.ios.youtubemusic/4.32.1 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)" --add-header "Accept-Language:en-US,en;q=0.9" "{youtube_url}"',
 
-                # Fallback 3: Specific audio format
-                f'--get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"'
+                # Fallback 3: Web embedded client (often bypasses restrictions)
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=web_embedded" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Referer:https://www.youtube.com/" "{youtube_url}"',
+
+                # Fallback 4: Android client with specific audio formats
+                f'--get-url -f "140/251/250/249" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip" --add-header "Accept-Language:en-US,en;q=0.9" "{youtube_url}"',
+
+                # Fallback 5: TV HTML5 client (smart TV simulation)
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=tv_html5" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1" --add-header "Accept-Language:en-US,en;q=0.9" "{youtube_url}"',
+
+                # Fallback 6: Basic approach with residential-like headers
+                f'--get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0" --add-header "Accept-Language:en-US,en;q=0.5" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" "{youtube_url}"'
             ]
 
-            for args in command_args:
+            for i, args in enumerate(command_args):
                 try:
                     print(f"Attempting stream extraction with: {args}")
                     result = execute_ytdlp(args, timeout=30)
@@ -2863,6 +2915,11 @@ def extract_audio():
 
                 except Exception as e:
                     print(f"Stream extraction attempt failed: {e}")
+
+                    # Add delay between attempts to avoid rate limiting (except for last attempt)
+                    if i < len(command_args) - 1:
+                        import time
+                        time.sleep(2)
                     continue
 
             # If all attempts failed

@@ -657,7 +657,7 @@ export default function YouTubeVideoAnalyzePage() {
       // If LRClib didn't work, try Genius
       if (!lyricsFound) {
         try {
-          const geniusResponse = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app'}/api/genius-lyrics`, {
+          const geniusResponse = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app'}/api/genius-lyrics`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
