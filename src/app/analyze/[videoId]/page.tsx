@@ -907,13 +907,14 @@ export default function YouTubeVideoAnalyzePage() {
     }
   };
 
-  // Metronome synchronization hook - direct alignment approach
+  // Metronome synchronization hook - direct alignment approach with padding compensation
   useMetronomeSync({
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
     isPlaying,
-    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4
+    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
+    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0
   });
 
   // Helper functions for chord grid data calculation

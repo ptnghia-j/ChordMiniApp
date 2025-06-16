@@ -8,6 +8,7 @@ interface UseMetronomeSyncProps {
   currentTime: number;
   isPlaying: boolean;
   timeSignature?: number; // Add time signature for proper beat position calculation
+  beatTimeRangeStart?: number; // Beat detection timing offset for padding compensation
 }
 
 /**
@@ -18,7 +19,8 @@ export const useMetronomeSync = ({
   downbeats = [],
   currentTime,
   isPlaying,
-  timeSignature = 4
+  timeSignature = 4,
+  beatTimeRangeStart = 0
 }: UseMetronomeSyncProps) => {
   const lastScheduledBeatRef = useRef<number>(-1);
   const schedulingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,7 +53,8 @@ export const useMetronomeSync = ({
     // Find beats that need to be scheduled
     for (let i = lastScheduledBeatRef.current + 1; i < beats.length; i++) {
       const beat = beats[i];
-      const beatTime = beat.time; // Use beat time directly - no shift compensation needed
+      // Apply beat detection timing offset compensation
+      const beatTime = beat.time - beatTimeRangeStart;
 
       // Stop if we've gone beyond our look-ahead window
       if (beatTime > scheduleUntil) {
@@ -62,30 +65,33 @@ export const useMetronomeSync = ({
       if (beatTime > now - 0.01) {
         const isDownbeatClick = isDownbeat(i); // Use beat index instead of beat time
 
-        // Schedule the click
+        // Schedule the click with compensated timing
         metronomeService.scheduleClick(beatTime, isDownbeatClick);
 
         // Debug logging for metronome scheduling (reduced verbosity)
         if (i < 5) { // Only log first few beats to reduce console spam
           const beatNum = (i % timeSignature) + 1;
-          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'regular'} click (beat ${beatNum}) at ${beatTime.toFixed(3)}s`);
+          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'regular'} click (beat ${beatNum}) at ${beatTime.toFixed(3)}s (offset: ${beatTimeRangeStart.toFixed(3)}s)`);
         }
       }
 
       lastScheduledBeatRef.current = i;
     }
-  }, [beats, currentTime, isPlaying, isDownbeat]); // beatShift removed - not used in direct alignment
+  }, [beats, currentTime, isPlaying, isDownbeat, beatTimeRangeStart]); // Include beatTimeRangeStart in dependencies
 
   /**
    * Reset scheduling when playback starts or seeks
    */
   const resetScheduling = useCallback(() => {
-    // Find the current beat index based on current time
+    // Find the current beat index based on current time (with timing offset compensation)
     let currentBeatIndex = -1;
     if (beats && beats.length > 0) {
       currentBeatIndex = beats.findIndex((beat, index) => {
-        const nextBeatTime = index < beats.length - 1 ? beats[index + 1].time : beat.time + 1;
-        return currentTime >= beat.time && currentTime < nextBeatTime;
+        const beatTime = beat.time - beatTimeRangeStart;
+        const nextBeatTime = index < beats.length - 1
+          ? (beats[index + 1].time - beatTimeRangeStart)
+          : beatTime + 1;
+        return currentTime >= beatTime && currentTime < nextBeatTime;
       });
     }
 
@@ -93,7 +99,7 @@ export const useMetronomeSync = ({
     lastScheduledBeatRef.current = Math.max(-1, currentBeatIndex - 1);
 
     // console.log(`Metronome: Reset scheduling from beat index ${lastScheduledBeatRef.current + 1} at time ${currentTime.toFixed(3)}s`);
-  }, [beats, currentTime]);
+  }, [beats, currentTime, beatTimeRangeStart]);
 
   /**
    * Start the scheduling interval
