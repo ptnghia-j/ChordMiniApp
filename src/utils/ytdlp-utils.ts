@@ -23,13 +23,17 @@ export async function getValidatedYtDlpPath(): Promise<string> {
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
   const possiblePaths = isServerless ? [
+    './public/yt-dlp',             // Public directory (always included in Vercel)
     './bin/yt-dlp',                // Project bin directory (bundled binary)
     './yt-dlp',                    // Project root
+    '/var/task/public/yt-dlp',    // Lambda task public directory
     '/var/task/bin/yt-dlp',       // Lambda task bin directory
     '/var/task/yt-dlp',           // Lambda task directory
     '/tmp/yt-dlp',                 // Temp directory
     'yt-dlp'                       // System PATH fallback
   ] : [
+    './public/yt-dlp',             // Public directory (local testing)
+    './bin/yt-dlp',                // Local bin directory
     'yt-dlp',                      // System PATH (local development)
     '/usr/local/bin/yt-dlp',      // Common installation path
     '/usr/bin/yt-dlp'             // Alternative installation path

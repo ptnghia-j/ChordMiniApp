@@ -59,12 +59,16 @@ export async function GET() {
       };
     }
 
-    // Test 4: Check bin directory contents
+    // Test 4: Check bin and public directory contents
     try {
-      const files = await fs.readdir('./bin');
+      const binFiles = await fs.readdir('./bin').catch(() => []);
+      const publicFiles = await fs.readdir('./public').catch(() => []);
+
       diagnostics.tests.directoryContents = {
         success: true,
-        files: files
+        binFiles: binFiles,
+        publicFiles: publicFiles.filter(f => f.includes('yt') || f.includes('dlp')),
+        allFiles: [...binFiles, ...publicFiles.filter(f => f.includes('yt') || f.includes('dlp'))]
       };
     } catch (error: unknown) {
       diagnostics.tests.directoryContents = {
@@ -75,10 +79,21 @@ export async function GET() {
 
     // Test 4.5: Check for script execution marker
     try {
-      const markerContent = await fs.readFile('./bin/script-executed.marker', 'utf-8');
+      let markerContent: string;
+      let markerLocation: string;
+
+      try {
+        markerContent = await fs.readFile('./bin/script-executed.marker', 'utf-8');
+        markerLocation = './bin/script-executed.marker';
+      } catch {
+        markerContent = await fs.readFile('./public/script-executed.marker', 'utf-8');
+        markerLocation = './public/script-executed.marker';
+      }
+
       const markerData = JSON.parse(markerContent);
       diagnostics.tests.scriptExecutionMarker = {
         success: true,
+        location: markerLocation,
         marker: markerData
       };
     } catch (error: unknown) {

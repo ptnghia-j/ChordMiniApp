@@ -13,6 +13,41 @@ const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 
+async function copyFilesToPublicDirectory() {
+  // Copy binary and marker to public directory for Vercel deployment
+  console.log('📁 Copying files to public directory for Vercel...');
+  const publicDir = path.join(process.cwd(), 'public');
+  const binDir = path.join(process.cwd(), 'bin');
+  const ytdlpPath = path.join(binDir, 'yt-dlp');
+  const markerPath = path.join(binDir, 'script-executed.marker');
+
+  try {
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+
+    // Copy yt-dlp binary to public directory
+    const publicYtdlpPath = path.join(publicDir, 'yt-dlp');
+    if (fs.existsSync(ytdlpPath)) {
+      fs.copyFileSync(ytdlpPath, publicYtdlpPath);
+      if (process.platform !== 'win32') {
+        fs.chmodSync(publicYtdlpPath, '755');
+      }
+      console.log('✅ Copied yt-dlp binary to public directory');
+    }
+
+    // Copy marker file to public directory
+    const publicMarkerPath = path.join(publicDir, 'script-executed.marker');
+    if (fs.existsSync(markerPath)) {
+      fs.copyFileSync(markerPath, publicMarkerPath);
+      console.log('✅ Copied execution marker to public directory');
+    }
+
+  } catch (copyError) {
+    console.warn('⚠️ Could not copy files to public directory:', copyError.message);
+  }
+}
+
 async function downloadFile(url, destination) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destination);
@@ -118,8 +153,17 @@ async function main() {
             }
           }
 
-          console.log('🎉 yt-dlp preparation complete (using existing binary)!');
-          return;
+          // Continue to copying section instead of returning early
+          console.log('✅ Binary verification complete, proceeding to copy files...');
+
+          // Skip download section and go directly to copying
+          const skipDownload = true;
+          if (skipDownload) {
+            // Jump to copying section
+            await copyFilesToPublicDirectory();
+            console.log('🎉 yt-dlp preparation complete (using existing binary)!');
+            return;
+          }
         } catch (error) {
           console.log('⚠️ Existing binary verification failed:', error.message);
           console.log('🔄 Will attempt to download new binary...');
@@ -281,8 +325,11 @@ async function main() {
       }
     }
     
+    // Copy files to public directory for Vercel deployment
+    await copyFilesToPublicDirectory();
+
     console.log('🎉 yt-dlp preparation complete!');
-    
+
   } catch (error) {
     console.error('❌ Failed to prepare yt-dlp binary:');
     console.error('Error:', error.message);
