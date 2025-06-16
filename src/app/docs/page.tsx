@@ -52,7 +52,7 @@ export default function DocsPage() {
     title: "ChordMini API",
     version: "1.0.0",
     description: "Powerful Audio Analysis API",
-    base_url: "https://chordmini-backend-full-pluj3yargq-uc.a.run.app",
+    base_url: "https://chordmini-backend-full-12071603127.us-central1.run.app",
     endpoints: [
       {
         path: "/",
@@ -202,7 +202,7 @@ export default function DocsPage() {
             </p>
             <div className="bg-black/20 backdrop-blur-sm rounded-lg p-3 inline-block">
               <p className="text-xs opacity-90">
-                <strong>Backend API:</strong> <code className="bg-black/30 px-2 py-1 rounded text-xs">https://chordmini-backend-full-pluj3yargq-uc.a.run.app</code>
+                <strong>Backend API:</strong> <code className="bg-black/30 px-2 py-1 rounded text-xs">https://chordmini-backend-full-12071603127.us-central1.run.app</code>
               </p>
             </div>
           </div>
@@ -980,10 +980,10 @@ Content-Type: application/json
                   <div className="relative mb-6">
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Backend Health Check</h4>
                     <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-3 rounded overflow-x-auto text-xs border border-gray-700">
-                      {`curl -X GET "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/"`}
+                      {`curl -X GET "https://chordmini-backend-full-12071603127.us-central1.run.app/"`}
                     </pre>
                     <button
-                      onClick={() => copyToClipboard(`curl -X GET "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/"`)}
+                      onClick={() => copyToClipboard(`curl -X GET "https://chordmini-backend-full-12071603127.us-central1.run.app/"`)}
                       className="absolute top-6 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                       title="Copy to clipboard"
                     >
@@ -1009,12 +1009,12 @@ Content-Type: application/json
                   <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-100">Beat Detection Example</h3>
                   <div className="relative">
                     <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                      {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/detect-beats" \\
+                      {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/detect-beats" \\
   -F "file=@song.mp3" \\
   --max-time 120`}
                     </pre>
                     <button
-                      onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/detect-beats" \\\n  -F "file=@song.mp3" \\\n  --max-time 120`)}
+                      onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/detect-beats" \\\n  -F "file=@song.mp3" \\\n  --max-time 120`)}
                       className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                       title="Copy to clipboard"
                     >
@@ -1031,12 +1031,12 @@ Content-Type: application/json
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Default Model (Chord-CNN-LSTM)</h4>
                     <div className="relative">
                       <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                        {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords" \\
+                        {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords" \\
   -F "file=@song.mp3" \\
   --max-time 180`}
                       </pre>
                       <button
-                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
+                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
                         className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                         title="Copy to clipboard"
                       >
@@ -1050,12 +1050,12 @@ Content-Type: application/json
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">BTC Supervised Learning Model</h4>
                     <div className="relative">
                       <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                        {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords-btc-sl" \\
+                        {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords-btc-sl" \\
   -F "file=@song.mp3" \\
   --max-time 180`}
                       </pre>
                       <button
-                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords-btc-sl" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
+                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords-btc-sl" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
                         className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                         title="Copy to clipboard"
                       >
@@ -1069,12 +1069,12 @@ Content-Type: application/json
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">BTC Pseudo-Label Model</h4>
                     <div className="relative">
                       <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                        {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords-btc-pl" \\
+                        {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords-btc-pl" \\
   -F "file=@song.mp3" \\
   --max-time 180`}
                       </pre>
                       <button
-                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords-btc-pl" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
+                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/recognize-chords-btc-pl" \\\n  -F "file=@song.mp3" \\\n  --max-time 180`)}
                         className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                         title="Copy to clipboard"
                       >
@@ -1092,12 +1092,12 @@ Content-Type: application/json
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Genius.com Lyrics</h4>
                     <div className="relative">
                       <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                        {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/genius-lyrics" \\
+                        {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/genius-lyrics" \\
   -H "Content-Type: application/json" \\
   -d '{"artist": "The Beatles", "title": "Hey Jude"}'`}
                       </pre>
                       <button
-                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/genius-lyrics" \\\n  -H "Content-Type: application/json" \\\n  -d '{"artist": "The Beatles", "title": "Hey Jude"}'`)}
+                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/genius-lyrics" \\\n  -H "Content-Type: application/json" \\\n  -d '{"artist": "The Beatles", "title": "Hey Jude"}'`)}
                         className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                         title="Copy to clipboard"
                       >
@@ -1111,12 +1111,12 @@ Content-Type: application/json
                     <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">LRClib Synchronized Lyrics</h4>
                     <div className="relative">
                       <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded overflow-x-auto text-sm border border-gray-700">
-                        {`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/lrclib-lyrics" \\
+                        {`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/lrclib-lyrics" \\
   -H "Content-Type: application/json" \\
   -d '{"artist": "The Beatles", "title": "Hey Jude", "duration": 431}'`}
                       </pre>
                       <button
-                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/lrclib-lyrics" \\\n  -H "Content-Type: application/json" \\\n  -d '{"artist": "The Beatles", "title": "Hey Jude", "duration": 431}'`)}
+                        onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-12071603127.us-central1.run.app/api/lrclib-lyrics" \\\n  -H "Content-Type: application/json" \\\n  -d '{"artist": "The Beatles", "title": "Hey Jude", "duration": 431}'`)}
                         className="absolute top-2 right-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                         title="Copy to clipboard"
                       >

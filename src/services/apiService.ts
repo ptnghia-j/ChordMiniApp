@@ -31,8 +31,8 @@ class ApiService {
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL ||
-                   'https://chordmini-backend-full-pluj3yargq-uc.a.run.app';
-    
+                   'https://chordmini-backend-full-12071603127.us-central1.run.app';
+
     // Client-side rate limiter: 8 requests per minute (slightly under server limit)
     this.clientLimiter = new ClientRateLimiter(8, 60000);
   }

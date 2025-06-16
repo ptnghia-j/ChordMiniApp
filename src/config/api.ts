@@ -9,8 +9,8 @@
 // Backend URLs
 export const BACKEND_URLS = {
   // Google Cloud Run Python backend
-  PYTHON_BACKEND: 'https://chordmini-backend-full-1207160312.us-central1.run.app',
-  
+  PYTHON_BACKEND: 'https://chordmini-backend-full-12071603127.us-central1.run.app',
+
   // Vercel frontend (current domain)
   VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
 } as const;
