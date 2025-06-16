@@ -139,22 +139,41 @@ export async function getValidatedYtDlpPath(): Promise<string> {
   // If no working yt-dlp found, try to download it to /tmp in serverless environment
   if (isServerless) {
     try {
-      console.log('🔄 Attempting to download yt-dlp to /tmp...');
+      console.log('🔄 Runtime download: Attempting to download yt-dlp to /tmp...');
       const tmpPath = '/tmp/yt-dlp';
 
+      // First try to copy from public directory if it exists
+      try {
+        console.log('📋 Runtime download: Trying to copy from public directory...');
+        await execAsync(`cp ./public/yt-dlp ${tmpPath} && chmod +x ${tmpPath}`, { timeout: 10000 });
+
+        // Test the copied binary
+        const { stdout: copyTestStdout } = await execAsync(`${tmpPath} --version`, { timeout: 5000 });
+        if (copyTestStdout && copyTestStdout.trim()) {
+          console.log(`🎉 Runtime download SUCCESS: Copied from public to /tmp (version: ${copyTestStdout.trim()})`);
+          validatedYtDlpPath = tmpPath;
+          lastValidationTime = now;
+          return tmpPath;
+        }
+      } catch (copyError) {
+        console.log('⚠️ Runtime download: Copy from public failed:', copyError instanceof Error ? copyError.message : copyError);
+      }
+
+      // Fallback to downloading fresh copy
+      console.log('🌐 Runtime download: Downloading fresh copy from GitHub...');
       await execAsync(`curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${tmpPath} && chmod +x ${tmpPath}`, { timeout: 30000 });
 
       // Test the downloaded binary
       const { stdout } = await execAsync(`${tmpPath} --version`, { timeout: 5000 });
       if (stdout && stdout.trim()) {
-        console.log(`✅ Successfully downloaded yt-dlp to /tmp (version: ${stdout.trim()})`);
+        console.log(`✅ Runtime download SUCCESS: Downloaded fresh copy to /tmp (version: ${stdout.trim()})`);
         validatedYtDlpPath = tmpPath;
         lastValidationTime = now;
         return tmpPath;
       }
     } catch (error) {
-      console.error('❌ Failed to download yt-dlp to /tmp:', error);
-      console.error('💡 Ensure the yt-dlp binary is included in your deployment by running: npm run prepare-ytdlp');
+      console.error('❌ Runtime download failed:', error);
+      console.error('💡 All yt-dlp acquisition methods failed');
     }
   }
 
