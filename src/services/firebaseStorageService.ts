@@ -463,6 +463,15 @@ export async function saveStreamUrlMetadata(
 }
 
 /**
+ * Get cached audio file with validation
+ * @param videoId YouTube video ID
+ * @returns Cached audio file data if valid, null otherwise
+ */
+export async function getCachedAudioFile(videoId: string): Promise<AudioFileData | null> {
+  return await getAudioFileMetadata(videoId);
+}
+
+/**
  * Delete an audio file from Firebase Storage
  * @param storagePath Storage path of the file to delete
  * @returns True if successful, false otherwise

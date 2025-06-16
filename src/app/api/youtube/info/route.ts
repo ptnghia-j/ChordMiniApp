@@ -49,10 +49,13 @@ export async function GET(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
       body: JSON.stringify({
         videoId,
-        getInfoOnly: true
+        getInfoOnly: true,
+        useEnhancedExtraction: true,
+        retryCount: 0
       }),
     });
 
@@ -60,11 +63,39 @@ export async function GET(request: NextRequest) {
       const errorText = await response.text();
       console.error(`Backend info request failed: ${response.status} ${response.statusText} - ${errorText}`);
 
+      // If backend fails with 500, try local extraction as fallback
+      if (response.status === 500) {
+        console.log('Backend info request failed with 500, attempting local fallback...');
+
+        try {
+          const { localExtractionService } = await import('@/services/localExtractionService');
+          const localResult = await localExtractionService.extractAudio(videoId, true);
+
+          if (localResult.success) {
+            console.log('Local info extraction fallback succeeded');
+            return NextResponse.json({
+              success: true,
+              title: localResult.title || `YouTube Video ${videoId}`,
+              duration: localResult.duration || 0,
+              uploader: 'Unknown',
+              description: '',
+              videoId,
+              url: `https://www.youtube.com/watch?v=${videoId}`
+            });
+          }
+        } catch (fallbackError) {
+          console.warn('Local info extraction fallback failed:', fallbackError);
+        }
+      }
+
       return NextResponse.json(
         {
           success: false,
           error: 'Failed to fetch video info',
-          details: `Backend error: ${response.status} ${response.statusText}`
+          details: `Backend error: ${response.status} ${response.statusText}`,
+          suggestion: response.status === 500 ?
+            'The video may be restricted or temporarily unavailable. Please try a different video.' :
+            'Please check the video URL and try again.'
         },
         { status: response.status }
       );

@@ -1,17 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCachedAudioFile, saveAudioFileMetadata } from '@/services/firebaseStorageService';
+import { localExtractionService } from '@/services/localExtractionService';
 
 /**
- * Audio Extraction API Route - Proxy to Python Backend
+ * Audio Extraction API Route with Caching Support
  *
- * This route proxies audio extraction requests to the Python backend
- * which handles yt-dlp functionality in a serverless-compatible environment.
+ * This route implements a caching layer that:
+ * - Checks for cached audio files first (Firebase Storage + Firestore)
+ * - Falls back to Python backend for new extractions
+ * - Supports both local development and production environments
  */
+
+/**
+ * Determine if we should use local extraction or backend
+ */
+function shouldUseLocalExtraction(): boolean {
+  // Use local extraction for development (localhost)
+  const isLocalhost = process.env.NODE_ENV === 'development' ||
+                     process.env.VERCEL_ENV === undefined;
+
+  // Enable local extraction for development
+  return isLocalhost;
+}
 
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const data = await request.json();
-    const { videoId } = data;
+    const { videoId, forceRedownload = false, getInfoOnly = false } = data;
 
     if (!videoId) {
       return NextResponse.json(
@@ -20,36 +36,152 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+    console.log(`Audio extraction request: videoId=${videoId}, forceRedownload=${forceRedownload}, getInfoOnly=${getInfoOnly}`);
 
-    console.log(`Proxying audio extraction to backend: ${backendUrl}/api/extract-audio`);
+    // Check cache first (unless force redownload or info only)
+    if (!forceRedownload && !getInfoOnly) {
+      try {
+        const cachedAudio = await getCachedAudioFile(videoId);
+        if (cachedAudio) {
+          console.log(`Found cached audio for ${videoId}, returning from cache`);
 
-    const response = await fetch(`${backendUrl}/api/extract-audio`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Backend audio extraction failed: ${response.status} ${response.statusText} - ${errorText}`);
-
-      return NextResponse.json(
-        {
-          error: 'Failed to extract audio from YouTube',
-          details: `Backend error: ${response.status} ${response.statusText}`
-        },
-        { status: response.status }
-      );
+          return NextResponse.json({
+            success: true,
+            audioUrl: cachedAudio.audioUrl,
+            youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+            fromCache: true,
+            isStreamUrl: cachedAudio.isStreamUrl || false,
+            streamExpiresAt: cachedAudio.streamExpiresAt,
+            message: 'Loaded from cache'
+          });
+        }
+      } catch (cacheError) {
+        console.warn('Cache check failed, proceeding with extraction:', cacheError);
+      }
     }
 
-    const result = await response.json();
-    console.log(`Backend audio extraction successful`);
+    // Determine extraction method
+    if (shouldUseLocalExtraction()) {
+      // Use local extraction for development
+      console.log('Using local extraction for development');
 
-    return NextResponse.json(result);
+      try {
+        const result = await localExtractionService.extractAudio(videoId, getInfoOnly);
+
+        if (!result.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: result.error || 'Local extraction failed',
+              details: 'Local yt-dlp extraction failed'
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          audioUrl: result.audioUrl,
+          title: result.title,
+          duration: result.duration,
+          youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+          fromCache: result.fromCache || false,
+          isStreamUrl: false,
+          message: 'Extracted using local yt-dlp'
+        });
+
+      } catch (localError) {
+        console.error('Local extraction failed, falling back to backend:', localError);
+        // Fall through to backend extraction
+      }
+    }
+
+    // Use backend extraction (production or local fallback)
+    {
+      // Use backend extraction
+      console.log('Using backend extraction');
+      const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+
+      console.log(`Proxying audio extraction to backend: ${backendUrl}/api/extract-audio`);
+
+      const response = await fetch(`${backendUrl}/api/extract-audio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        body: JSON.stringify({
+          ...data,
+          // Add additional parameters to help with bot detection
+          useEnhancedExtraction: true,
+          retryCount: 0
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Backend audio extraction failed: ${response.status} ${response.statusText} - ${errorText}`);
+
+        // If backend fails with 500, try local extraction as fallback (if available)
+        if (response.status === 500 && !getInfoOnly) {
+          console.log('Backend failed with 500, attempting local extraction fallback...');
+
+          try {
+            const localResult = await localExtractionService.extractAudio(videoId, getInfoOnly);
+
+            if (localResult.success) {
+              console.log('Local extraction fallback succeeded');
+              return NextResponse.json({
+                success: true,
+                audioUrl: localResult.audioUrl,
+                title: localResult.title,
+                duration: localResult.duration,
+                youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+                fromCache: false,
+                isStreamUrl: false,
+                message: 'Extracted using local fallback after backend failure'
+              });
+            }
+          } catch (fallbackError) {
+            console.warn('Local extraction fallback also failed:', fallbackError);
+          }
+        }
+
+        return NextResponse.json(
+          {
+            error: 'Failed to extract audio from YouTube',
+            details: `Backend error: ${response.status} ${response.statusText}`,
+            suggestion: response.status === 500 ?
+              'The video may be restricted or temporarily unavailable. Please try a different video or try again later.' :
+              'Please check the video URL and try again.'
+          },
+          { status: response.status }
+        );
+      }
+
+      const result = await response.json();
+      console.log(`Backend audio extraction successful`);
+
+      // Cache the result if it's a successful extraction (not info-only)
+      if (result.success && !getInfoOnly && result.audioUrl) {
+        try {
+          await saveAudioFileMetadata({
+            videoId,
+            audioUrl: result.audioUrl,
+            storagePath: `stream/${videoId}`, // Virtual path for stream URLs
+            fileSize: 0, // Unknown for stream URLs
+            duration: result.duration || 0,
+            isStreamUrl: true,
+            streamExpiresAt: result.streamExpiresAt
+          });
+          console.log(`Cached audio metadata for ${videoId}`);
+        } catch (cacheError) {
+          console.warn('Failed to cache audio metadata:', cacheError);
+        }
+      }
+
+      return NextResponse.json(result);
+    }
 
   } catch (error: unknown) {
     console.error('Error proxying audio extraction:', error);
