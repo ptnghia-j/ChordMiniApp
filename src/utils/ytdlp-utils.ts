@@ -42,27 +42,55 @@ export async function getValidatedYtDlpPath(): Promise<string> {
   // Test each path to find a working one
   for (const path of possiblePaths) {
     try {
+      console.log(`🔍 Testing yt-dlp path: ${path}`);
+
       // First check if file exists (for absolute paths)
       if (path.startsWith('/') || path.startsWith('./')) {
         try {
           const stats = await fs.stat(path);
-          if (!stats.isFile()) continue;
-          
-          // Check if executable
-          const isExecutable = !!(stats.mode & parseInt('111', 8));
-          if (!isExecutable) continue;
-        } catch {
+          console.log(`📁 File exists at ${path}, size: ${stats.size} bytes, isFile: ${stats.isFile()}`);
+
+          if (!stats.isFile()) {
+            console.log(`⚠️ ${path} is not a file, skipping`);
+            continue;
+          }
+
+          // Check if executable (but don't fail if permission check fails)
+          try {
+            const isExecutable = !!(stats.mode & parseInt('111', 8));
+            console.log(`🔐 Executable check for ${path}: ${isExecutable} (mode: ${stats.mode.toString(8)})`);
+
+            // In serverless environments, try to make it executable if it's not
+            if (!isExecutable && isServerless) {
+              console.log(`🔧 Attempting to make ${path} executable in serverless environment...`);
+              try {
+                await execAsync(`chmod +x "${path}"`, { timeout: 2000 });
+                console.log(`✅ Successfully made ${path} executable`);
+              } catch (chmodError) {
+                console.log(`⚠️ Could not make ${path} executable:`, chmodError instanceof Error ? chmodError.message : chmodError);
+                // Continue anyway - the file might still work
+              }
+            }
+          } catch (permError) {
+            console.log(`⚠️ Permission check failed for ${path}:`, permError instanceof Error ? permError.message : permError);
+            // Continue anyway - the file might still work
+          }
+        } catch (statError) {
+          console.log(`❌ File stat failed for ${path}:`, statError instanceof Error ? statError.message : statError);
           continue; // File doesn't exist
         }
       }
 
       // Test if yt-dlp actually works
-      const { stdout } = await execAsync(`${path} --version`, { timeout: 5000 });
+      console.log(`🧪 Testing execution of ${path}...`);
+      const { stdout } = await execAsync(`"${path}" --version`, { timeout: 5000 });
       if (stdout && stdout.trim()) {
         console.log(`✅ Found working yt-dlp at: ${path} (version: ${stdout.trim()})`);
         validatedYtDlpPath = path;
         lastValidationTime = now;
         return path;
+      } else {
+        console.log(`⚠️ ${path} executed but returned no version output`);
       }
     } catch (error) {
       console.log(`❌ yt-dlp test failed for path: ${path}`, error instanceof Error ? error.message : error);
