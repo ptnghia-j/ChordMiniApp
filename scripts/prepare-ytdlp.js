@@ -58,6 +58,10 @@ async function main() {
   try {
     console.log('🔧 Preparing yt-dlp binary for Vercel deployment...');
 
+    // Create a marker file to verify script execution
+    const markerPath = path.join(process.cwd(), 'bin', 'script-executed.marker');
+    const timestamp = new Date().toISOString();
+
     // Log environment info for debugging
     const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
     const isCI = process.env.CI || process.env.GITHUB_ACTIONS;
@@ -68,6 +72,26 @@ async function main() {
     if (!fs.existsSync(binDir)) {
       console.log('📁 Creating bin directory...');
       fs.mkdirSync(binDir, { recursive: true });
+    }
+
+    // Create marker file to verify script execution
+    try {
+      const markerContent = JSON.stringify({
+        timestamp,
+        environment: {
+          vercel: !!isVercel,
+          ci: !!isCI,
+          platform: process.platform,
+          nodeVersion: process.version,
+          cwd: process.cwd()
+        },
+        scriptVersion: '1.0.0'
+      }, null, 2);
+
+      fs.writeFileSync(markerPath, markerContent);
+      console.log(`📝 Created execution marker: ${markerPath}`);
+    } catch (markerError) {
+      console.warn('⚠️ Could not create marker file:', markerError.message);
     }
 
     const ytdlpPath = path.join(binDir, 'yt-dlp');

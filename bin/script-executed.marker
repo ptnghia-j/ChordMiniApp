@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-06-16T04:06:02.137Z",
+  "environment": {
+    "vercel": false,
+    "ci": false,
+    "platform": "darwin",
+    "nodeVersion": "v20.7.0",
+    "cwd": "/Users/nghiaphan/Desktop/ChordMiniApp"
+  },
+  "scriptVersion": "1.0.0"
+}

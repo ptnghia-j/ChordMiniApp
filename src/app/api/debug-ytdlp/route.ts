@@ -59,15 +59,30 @@ export async function GET() {
       };
     }
 
-    // Test 4: Check current directory contents
+    // Test 4: Check bin directory contents
     try {
-      const files = await fs.readdir('.');
+      const files = await fs.readdir('./bin');
       diagnostics.tests.directoryContents = {
         success: true,
-        files: files.filter(f => f.includes('yt') || f.includes('dlp') || f === 'yt-dlp')
+        files: files
       };
     } catch (error: unknown) {
       diagnostics.tests.directoryContents = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+
+    // Test 4.5: Check for script execution marker
+    try {
+      const markerContent = await fs.readFile('./bin/script-executed.marker', 'utf-8');
+      const markerData = JSON.parse(markerContent);
+      diagnostics.tests.scriptExecutionMarker = {
+        success: true,
+        marker: markerData
+      };
+    } catch (error: unknown) {
+      diagnostics.tests.scriptExecutionMarker = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
