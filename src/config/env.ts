@@ -2,7 +2,7 @@
 
 export const config = {
   // Python backend API URL - Production Google Cloud Run endpoint
-  pythonApiUrl: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app',
+  pythonApiUrl: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app',
 
   // Local development fallback
   localApiUrl: 'http://localhost:5000',

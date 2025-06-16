@@ -9,7 +9,7 @@
 // Backend URLs
 export const BACKEND_URLS = {
   // Google Cloud Run Python backend
-  PYTHON_BACKEND: 'https://chordmini-backend-full-1207160312.us-central1.run.app',
+  PYTHON_BACKEND: 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app',
 
   // Vercel frontend (current domain)
   VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
@@ -17,10 +17,10 @@ export const BACKEND_URLS = {
 
 // Endpoint routing configuration
 export const API_ROUTES = {
-  // YouTube endpoints - routed to Python backend
-  SEARCH_YOUTUBE: `${BACKEND_URLS.PYTHON_BACKEND}/api/search-youtube`,
-  EXTRACT_AUDIO: `${BACKEND_URLS.PYTHON_BACKEND}/api/extract-audio`,
-  
+  // YouTube endpoints - use local API routes with backend fallback
+  SEARCH_YOUTUBE: '/api/search-youtube',
+  EXTRACT_AUDIO: '/api/extract-audio',
+
   // Other endpoints - remain on Vercel frontend
   RECOGNIZE_CHORDS: '/api/recognize-chords',
   RECOGNIZE_CHORDS_BTC_PL: '/api/recognize-chords-btc-pl',
