@@ -37,7 +37,7 @@ export class AudioProcessingService {
     videoId: string,
     forceRedownload: boolean = false,
     useStreamUrl: boolean = true
-  ): Promise<{ audioUrl: string; fromCache: boolean; isStreamUrl?: boolean; streamExpiresAt?: number }> {
+  ): Promise<{ audioUrl: string; fromCache: boolean; isStreamUrl?: boolean; streamExpiresAt?: number; title?: string; duration?: number }> {
     try {
       const response = await fetch('/api/extract-audio', {
         method: 'POST',
@@ -65,7 +65,9 @@ export class AudioProcessingService {
         audioUrl: data.audioUrl,
         fromCache: data.fromCache || false,
         isStreamUrl: data.isStreamUrl || false,
-        streamExpiresAt: data.streamExpiresAt
+        streamExpiresAt: data.streamExpiresAt,
+        title: data.title,
+        duration: data.duration
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

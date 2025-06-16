@@ -15,8 +15,9 @@ export class MetronomeService {
   private isEnabled = false;
   private volume = 0.3;
   private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'librosa_short';
-  private clickDuration = 0.08; // 80ms clicks for better sound quality
-  private scheduledClicks: number[] = []; // Store scheduled click IDs
+  private clickDuration = 0.06; // 60ms clicks for better separation
+  private scheduledClicks: Set<string> = new Set(); // Store scheduled beat IDs to prevent duplicates
+  private activeSources: AudioBufferSourceNode[] = []; // Track active audio sources for cleanup
 
   // Audio buffers for different sound styles
   private audioBuffers: Map<string, { downbeat: AudioBuffer; regular: AudioBuffer }> = new Map();
@@ -357,24 +358,26 @@ export class MetronomeService {
       // Configure source
       source.buffer = buffer;
 
-      // Configure gain
-      gainNode.gain.setValueAtTime(this.volume, startTime);
+      // Configure gain with aggressive envelope for better separation
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(this.volume, startTime + 0.002); // 2ms attack
+      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + this.clickDuration * 0.8); // Faster decay for better separation
 
       // Connect nodes
       source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
-      // Schedule the click
+      // Track active source for cleanup
+      this.activeSources.push(source);
+
+      // Set up automatic cleanup when source ends
+      source.onended = () => {
+        this.activeSources = this.activeSources.filter(s => s !== source);
+      };
+
+      // Schedule the click with precise timing
       source.start(startTime);
-
-      // Store reference for potential cleanup
-      const clickId = Date.now() + Math.random();
-      this.scheduledClicks.push(clickId);
-
-      // Clean up reference after click completes
-      setTimeout(() => {
-        this.scheduledClicks = this.scheduledClicks.filter(id => id !== clickId);
-      }, (this.clickDuration + 0.1) * 1000);
+      source.stop(startTime + this.clickDuration); // Stop exactly at click duration for better separation
 
     } catch (error) {
       console.error('Error creating metronome click:', error);
@@ -382,10 +385,23 @@ export class MetronomeService {
   }
 
   /**
-   * Schedule a click at a specific time
+   * Schedule a click at a specific time with duplicate prevention
    */
-  public scheduleClick(time: number, isDownbeat: boolean = false): void {
+  public scheduleClick(time: number, isDownbeat: boolean = false, beatId?: string): void {
     if (!this.audioContext || !this.isEnabled) return;
+
+    // Prevent duplicate scheduling for the same beat
+    if (beatId) {
+      if (this.scheduledClicks.has(beatId)) {
+        return; // Already scheduled
+      }
+      this.scheduledClicks.add(beatId);
+
+      // Clean up the beat ID after the click duration
+      setTimeout(() => {
+        this.scheduledClicks.delete(beatId);
+      }, (this.clickDuration + 0.1) * 1000);
+    }
 
     const audioTime = this.audioContext.currentTime + Math.max(0, time - Date.now() / 1000);
 
@@ -432,10 +448,19 @@ export class MetronomeService {
   }
 
   /**
-   * Clear all scheduled clicks
+   * Clear all scheduled clicks and stop active audio sources
    */
   private clearScheduledClicks(): void {
-    this.scheduledClicks = [];
+    // Stop all active audio sources to prevent overlap
+    this.activeSources.forEach(source => {
+      try {
+        source.stop();
+      } catch {
+        // Source may already be stopped, ignore error
+      }
+    });
+    this.activeSources = [];
+    this.scheduledClicks.clear(); // Clear the Set
   }
 
   /**

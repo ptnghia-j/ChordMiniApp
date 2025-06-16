@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: true,
             audioUrl: cachedAudio.audioUrl,
+            title: cachedAudio.title || `YouTube Video ${videoId}`, // Include title from cache
+            duration: cachedAudio.duration || 0, // Include duration from cache
             youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
             fromCache: true,
             isStreamUrl: cachedAudio.isStreamUrl || false,
@@ -195,6 +197,7 @@ export async function POST(request: NextRequest) {
           await saveAudioFileMetadata({
             videoId,
             audioUrl: result.audioUrl,
+            title: result.title || `YouTube Video ${videoId}`, // Include title in cache
             storagePath: `stream/${videoId}`, // Virtual path for stream URLs
             fileSize: 0, // Unknown for stream URLs
             duration: result.duration || 0,

@@ -10,6 +10,7 @@ export interface AudioFileData {
   videoId: string;
   audioUrl: string;
   videoUrl?: string | null;
+  title?: string; // Video title
   storagePath: string;
   videoStoragePath?: string | null;
   fileSize: number;
@@ -185,6 +186,7 @@ export async function saveAudioFileMetadata(
       videoId: audioFileData.videoId,
       audioUrl: audioFileData.audioUrl,
       videoUrl: audioFileData.videoUrl || null,
+      title: audioFileData.title || null,
       storagePath: audioFileData.storagePath,
       videoStoragePath: audioFileData.videoStoragePath || null,
       fileSize: audioFileData.fileSize,

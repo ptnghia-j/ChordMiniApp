@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         // Get both local cache and Firebase cache stats
         const localStats = await localCacheService.getCacheStats();
 
-        let firebaseStats = { cacheEntries: 0, totalSize: 0, cacheIndex: [] };
+        let firebaseStats: { cacheEntries: number; totalSize: number; cacheIndex: unknown[] } = { cacheEntries: 0, totalSize: 0, cacheIndex: [] };
         try {
           const cacheIndex = await getCacheIndex();
           let totalSize = 0;

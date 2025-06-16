@@ -15,9 +15,15 @@ export const useAudioProcessing = (videoId: string) => {
     setState(prev => service.updateStateForDownloadStart(prev));
 
     try {
-      const { audioUrl, fromCache, isStreamUrl, streamExpiresAt } = await service.extractAudioFromYouTube(videoId, forceRedownload);
+      const { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title, duration } = await service.extractAudioFromYouTube(videoId, forceRedownload);
       setState(prev => service.updateStateForDownloadSuccess(prev, audioUrl, fromCache, isStreamUrl, streamExpiresAt));
-      return { audioUrl, fromCache, isStreamUrl, streamExpiresAt };
+
+      // Set video title immediately if available from extraction response
+      if (title) {
+        setVideoTitle(title);
+      }
+
+      return { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title, duration };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       let suggestion: string | undefined;

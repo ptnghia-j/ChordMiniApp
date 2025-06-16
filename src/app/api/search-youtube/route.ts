@@ -22,7 +22,7 @@ function shouldUseLocalSearch(): boolean {
 /**
  * Perform local YouTube search using yt-dlp
  */
-async function performLocalSearch(query: string): Promise<any> {
+async function performLocalSearch(query: string): Promise<Record<string, unknown>> {
   try {
     console.log(`Performing local YouTube search for: "${query}"`);
 
@@ -49,7 +49,7 @@ async function performLocalSearch(query: string): Promise<any> {
     }
 
     // Transform yt-dlp results to match expected format
-    const results = searchResults.entries.map((entry: any) => ({
+    const results = searchResults.entries.map((entry: Record<string, unknown>) => ({
       id: entry.id,
       title: entry.title || 'Unknown Title',
       description: entry.description || '',

@@ -331,6 +331,50 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
+
+                {/* Support ChordMini Project Section - Dropdown */}
+                <div className="mt-8 mb-6">
+                  <details className="group">
+                    <summary className="cursor-pointer list-none">
+                      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 border border-gray-200 dark:border-gray-600 transition-colors duration-300 hover:shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 transition-colors duration-300">
+                            Support ChordMini Project
+                          </h3>
+                          <svg
+                            className="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 group-open:rotate-180"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </summary>
+                    <div className="mt-2 bg-white dark:bg-content-bg rounded-lg shadow-card p-6 border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed transition-colors duration-300">
+                        The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints.
+                        We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep
+                        the backend server running, you can use the donation link below. We really appreciate your support!
+                      </p>
+                      <div className="text-center">
+                        <a
+                          href="https://coff.ee/nghiaphan"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
+                        >
+                          <span className="text-lg">☕</span>
+                          <span>Donation</span>
+                        </a>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 transition-colors duration-300">
+                          (Buy Me a Coffee link)
+                        </p>
+                      </div>
+                    </div>
+                  </details>
+                </div>
               </div>
 
               {/* Right Column: Recent Videos (25% width on desktop) */}
@@ -346,7 +390,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-
 
         </div>
       </main>

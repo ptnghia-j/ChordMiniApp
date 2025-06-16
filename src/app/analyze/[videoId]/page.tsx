@@ -71,7 +71,7 @@ export default function YouTubeVideoAnalyzePage() {
     videoTitle,
     extractAudio: extractAudioFromService,
     analyzeAudio: analyzeAudioFromService,
-    loadVideoInfo,
+    loadVideoInfo: _loadVideoInfo, // eslint-disable-line @typescript-eslint/no-unused-vars
     setState: setAudioProcessingState,
     // setAnalysisResults,
     // setVideoTitle
@@ -339,8 +339,7 @@ export default function YouTubeVideoAnalyzePage() {
       setHasAutoEnabledCorrections(false); // Reset auto-enable flag for new video
       setSequenceCorrections(null); // Reset sequence corrections for new video
 
-      // Load video info asynchronously (non-blocking)
-      loadVideoInfo();
+      // Extract audio (video title will be loaded automatically with extraction)
       extractAudioFromService();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -584,7 +583,7 @@ export default function YouTubeVideoAnalyzePage() {
       // Try LRClib first for synchronized lyrics
       if (parsedTitle.artist && parsedTitle.title) {
         try {
-          const lrclibResponse = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app'}/api/lrclib-lyrics`, {
+          const lrclibResponse = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app'}/api/lrclib-lyrics`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -906,16 +905,6 @@ export default function YouTubeVideoAnalyzePage() {
       audioRef.current.currentTime = state.playedSeconds;
     }
   };
-
-  // Metronome synchronization hook - direct alignment approach with padding compensation
-  useMetronomeSync({
-    beats: analysisResults?.beats || [],
-    downbeats: analysisResults?.downbeats,
-    currentTime,
-    isPlaying,
-    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
-    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0
-  });
 
   // Helper functions for chord grid data calculation
   const calculateOptimalShift = useCallback((chords: string[], timeSignature: number, paddingCount: number = 0): number => {
@@ -1610,6 +1599,19 @@ export default function YouTubeVideoAnalyzePage() {
   }, [analysisResults, calculatePaddingAndShift]);
 
   const chordGridData = useMemo(() => getChordGridData(), [getChordGridData]);
+
+  // Metronome synchronization hook - uses same beat data as chord grid for perfect sync
+  useMetronomeSync({
+    beats: analysisResults?.beats || [],
+    downbeats: analysisResults?.downbeats,
+    currentTime,
+    isPlaying,
+    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
+    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
+    shiftCount: chordGridData.shiftCount || 0,
+    paddingCount: chordGridData.paddingCount || 0,
+    chordGridBeats: chordGridData.beats || [] // Use same processed beats as chord grid
+  });
 
   // DEBUG: Log analysis results state
   // useEffect(() => {

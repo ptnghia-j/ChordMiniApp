@@ -1,5 +1,5 @@
 import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
-import { uploadAudioFile, saveAudioFileMetadata } from '@/services/firebaseStorageService';
+import { saveAudioFileMetadata } from '@/services/firebaseStorageService';
 import { localCacheService } from '@/services/localCacheService';
 import fs from 'fs/promises';
 import path from 'path';
