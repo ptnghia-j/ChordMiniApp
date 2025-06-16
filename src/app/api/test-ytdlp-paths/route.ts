@@ -7,7 +7,7 @@ const execAsync = promisify(exec);
 
 export async function GET() {
   const logs: string[] = [];
-  const results: Record<string, any> = {};
+  const results: Record<string, unknown> = {};
 
   try {
     logs.push('🔧 Starting yt-dlp path testing...');
@@ -26,7 +26,7 @@ export async function GET() {
     // Test each path
     for (const path of possiblePaths) {
       logs.push(`\n🔍 Testing path: ${path}`);
-      const pathResult: any = { path, exists: false, isFile: false, size: 0, executable: false, works: false };
+      const pathResult: Record<string, unknown> = { path, exists: false, isFile: false, size: 0, executable: false, works: false };
 
       try {
         // Check if file exists

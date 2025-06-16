@@ -65,7 +65,7 @@ export async function GET() {
       const publicFiles = await fs.readdir('./public').catch(() => []);
 
       // Test specific file existence
-      const pathTests = {
+      const pathTests: Record<string, boolean> = {
         './public/yt-dlp': false,
         './bin/yt-dlp': false,
         '/var/task/public/yt-dlp': false,

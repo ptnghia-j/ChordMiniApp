@@ -116,7 +116,7 @@ export async function apiRequest(
  */
 export async function apiPost(
   endpoint: keyof typeof API_ROUTES,
-  data: any,
+  data: Record<string, unknown>,
   options: RequestInit = {}
 ): Promise<Response> {
   return apiRequest(endpoint, {
