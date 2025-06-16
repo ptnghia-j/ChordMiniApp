@@ -6,6 +6,8 @@
  * for chord and beat analysis.
  */
 
+import { apiPost } from '@/config/api';
+
 /**
  * Extracts audio from a YouTube video and returns the audio URL and data
  * @param videoId The YouTube video ID
@@ -25,15 +27,8 @@ export async function extractAudio(videoId: string): Promise<{
     const timeoutId = setTimeout(() => controller.abort(), 180000);
 
     try {
-      console.log('Making API request to extract audio...');
-      const response = await fetch('/api/extract-audio', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ videoId }),
-        signal: controller.signal
-      });
+      console.log('Making API request to extract audio (routed to Python backend)...');
+      const response = await apiPost('EXTRACT_AUDIO', { videoId }, { signal: controller.signal });
 
       clearTimeout(timeoutId);
 

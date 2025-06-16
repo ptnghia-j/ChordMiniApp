@@ -1,4 +1,8 @@
 import os
+import json
+import subprocess
+import re
+import time
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -186,6 +190,7 @@ cors_origins = [
     "http://localhost:3000",  # Development
     "http://127.0.0.1:3000",  # Development
     "https://*.vercel.app",   # Vercel deployments
+    "https://chord-mini-app.vercel.app",  # Specific Vercel deployment
 ]
 
 # Add custom domain if specified in environment
@@ -2583,6 +2588,301 @@ def test_all_models():
             "success": False,
             "error": str(e),
             "traceback": traceback.format_exc()
+        }), 500
+
+# YouTube functionality endpoints
+def check_ytdlp_availability():
+    """Check if yt-dlp is available in the system"""
+    try:
+        result = subprocess.run(['yt-dlp', '--version'],
+                              capture_output=True, text=True, timeout=10)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+def execute_ytdlp(args, timeout=30):
+    """Execute yt-dlp command with proper error handling"""
+    try:
+        cmd = f'yt-dlp {args}'
+        result = subprocess.run(cmd, shell=True, capture_output=True,
+                              text=True, timeout=timeout)
+
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, cmd,
+                                              output=result.stdout, stderr=result.stderr)
+
+        return {'stdout': result.stdout, 'stderr': result.stderr}
+    except subprocess.TimeoutExpired:
+        raise Exception(f"yt-dlp command timed out after {timeout} seconds")
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"yt-dlp command failed: {e.stderr or e.output}")
+
+@app.route('/api/search-youtube', methods=['POST'])
+@limiter.limit("10 per minute")  # Rate limit for YouTube searches
+def search_youtube():
+    """
+    Search YouTube videos using yt-dlp
+
+    Request body:
+    {
+        "query": "search terms"
+    }
+
+    Response:
+    {
+        "success": true,
+        "results": [
+            {
+                "id": "video_id",
+                "title": "Video Title",
+                "thumbnail": "thumbnail_url",
+                "channel": "Channel Name",
+                "duration_string": "3:45",
+                "view_count": 12345,
+                "upload_date": "20231201"
+            }
+        ],
+        "fromCache": false
+    }
+    """
+    try:
+        # Parse request body
+        data = request.get_json()
+        if not data or 'query' not in data:
+            return jsonify({
+                'error': 'Missing or invalid search query parameter'
+            }), 400
+
+        query = data['query']
+        if not query or not isinstance(query, str) or not query.strip():
+            return jsonify({
+                'error': 'Missing or invalid search query parameter'
+            }), 400
+
+        # Sanitize query to prevent command injection
+        sanitized_query = re.sub(r'[;&|`$()<>"]', '', query.strip())
+        if not sanitized_query:
+            return jsonify({
+                'error': 'Invalid search query after sanitization'
+            }), 400
+
+        # Check if yt-dlp is available
+        if not check_ytdlp_availability():
+            return jsonify({
+                'error': 'yt-dlp is not available in this environment'
+            }), 500
+
+        print(f"Searching YouTube for: {sanitized_query}")
+
+        # Use yt-dlp to search YouTube (limit to 8 results for performance)
+        ytdlp_args = f'"ytsearch8:{sanitized_query}" --dump-single-json --no-warnings --flat-playlist --restrict-filenames'
+
+        # Execute yt-dlp search command
+        result = execute_ytdlp(ytdlp_args, timeout=20)
+        stdout = result['stdout']
+
+        if not stdout:
+            return jsonify({
+                'error': 'No results from search'
+            }), 500
+
+        try:
+            # Parse the single JSON object
+            search_result = json.loads(stdout)
+
+            # Check if it's a playlist with entries
+            if search_result.get('entries') and isinstance(search_result['entries'], list):
+                # Convert the entries to our standard format
+                results = []
+                for entry in search_result['entries']:
+                    # Get thumbnail URL
+                    thumbnail_url = ''
+                    if entry.get('thumbnails') and isinstance(entry['thumbnails'], list):
+                        thumbnail_url = entry['thumbnails'][0].get('url', '')
+                    elif entry.get('thumbnail'):
+                        thumbnail_url = entry['thumbnail']
+
+                    # Generate default thumbnail if none available
+                    if not thumbnail_url and entry.get('id'):
+                        thumbnail_url = f"https://i.ytimg.com/vi/{entry['id']}/hqdefault.jpg"
+
+                    result_item = {
+                        'id': entry.get('id', ''),
+                        'title': entry.get('title', ''),
+                        'thumbnail': thumbnail_url,
+                        'channel': entry.get('channel') or entry.get('uploader', ''),
+                        'duration_string': entry.get('duration_string', ''),
+                        'view_count': entry.get('view_count', 0),
+                        'upload_date': entry.get('upload_date', '')
+                    }
+                    results.append(result_item)
+
+                print(f"Found {len(results)} results for '{sanitized_query}'")
+
+                return jsonify({
+                    'success': True,
+                    'results': results,
+                    'fromCache': False
+                })
+            else:
+                return jsonify({
+                    'error': 'No search results found'
+                }), 500
+
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse yt-dlp JSON output: {e}")
+            return jsonify({
+                'error': 'Failed to parse search results'
+            }), 500
+
+    except Exception as e:
+        print(f"Error searching YouTube: {e}")
+        return jsonify({
+            'error': 'Failed to search YouTube',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/extract-audio', methods=['POST'])
+@limiter.limit("5 per minute")  # Lower rate limit for audio extraction
+def extract_audio():
+    """
+    Extract audio stream URL from YouTube video using yt-dlp
+
+    Request body:
+    {
+        "videoId": "youtube_video_id",
+        "forceRefresh": false,
+        "getInfoOnly": false,
+        "streamOnly": true
+    }
+
+    Response:
+    {
+        "success": true,
+        "audioUrl": "stream_url",
+        "youtubeEmbedUrl": "embed_url",
+        "streamExpiresAt": timestamp,
+        "fromCache": false,
+        "message": "Extracted YouTube stream URL"
+    }
+    """
+    try:
+        # Parse request body
+        data = request.get_json()
+        if not data or 'videoId' not in data:
+            return jsonify({
+                'error': 'Missing videoId parameter'
+            }), 400
+
+        video_id = data['videoId']
+        get_info_only = data.get('getInfoOnly', False)
+
+        if not video_id or not isinstance(video_id, str):
+            return jsonify({
+                'error': 'Invalid videoId parameter'
+            }), 400
+
+        # Sanitize video ID
+        video_id = re.sub(r'[^a-zA-Z0-9_-]', '', video_id)
+        if not video_id:
+            return jsonify({
+                'error': 'Invalid videoId after sanitization'
+            }), 400
+
+        # Check if yt-dlp is available
+        if not check_ytdlp_availability():
+            return jsonify({
+                'error': 'yt-dlp is not available in this environment'
+            }), 500
+
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        youtube_embed_url = f"https://www.youtube.com/embed/{video_id}"
+
+        print(f"Processing YouTube video: {video_id}")
+
+        # If only video info is requested
+        if get_info_only:
+            try:
+                info_args = f'--dump-single-json --no-warnings "{youtube_url}"'
+                result = execute_ytdlp(info_args, timeout=15)
+
+                video_info = json.loads(result['stdout'])
+
+                return jsonify({
+                    'success': True,
+                    'title': video_info.get('title', f'YouTube Video {video_id}'),
+                    'duration': video_info.get('duration', 0),
+                    'uploader': video_info.get('uploader', 'Unknown'),
+                    'description': video_info.get('description', ''),
+                    'videoId': video_id
+                })
+            except Exception as e:
+                return jsonify({
+                    'error': 'Failed to get video info',
+                    'details': str(e)
+                }), 500
+
+        # Extract audio stream URL
+        try:
+            # Try multiple approaches for stream URL extraction
+            command_args = [
+                # Primary: Get best audio stream URL
+                f'--get-url -f "bestaudio/best" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+
+                # Fallback 1: Android player client
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=android" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+
+                # Fallback 2: iOS player client
+                f'--get-url -f "bestaudio/best" --extractor-args "youtube:player_client=ios" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"',
+
+                # Fallback 3: Specific audio format
+                f'--get-url -f "140/251/250/249" --no-check-certificate --geo-bypass --force-ipv4 "{youtube_url}"'
+            ]
+
+            for args in command_args:
+                try:
+                    print(f"Attempting stream extraction with: {args}")
+                    result = execute_ytdlp(args, timeout=30)
+
+                    stream_url = result['stdout'].strip()
+
+                    if stream_url and stream_url.startswith('http'):
+                        print(f"Successfully extracted stream URL: {stream_url[:100]}...")
+
+                        # Calculate expiration time (YouTube URLs typically expire in 6 hours)
+                        stream_expires_at = int(time.time() * 1000) + (6 * 60 * 60 * 1000)
+
+                        return jsonify({
+                            'success': True,
+                            'audioUrl': stream_url,
+                            'youtubeEmbedUrl': youtube_embed_url,
+                            'streamExpiresAt': stream_expires_at,
+                            'fromCache': False,
+                            'message': 'Extracted YouTube stream URL'
+                        })
+
+                except Exception as e:
+                    print(f"Stream extraction attempt failed: {e}")
+                    continue
+
+            # If all attempts failed
+            return jsonify({
+                'error': 'Failed to extract audio stream URL',
+                'details': 'All extraction methods failed'
+            }), 500
+
+        except Exception as e:
+            print(f"Error during audio extraction: {e}")
+            return jsonify({
+                'error': 'Failed to extract audio from YouTube',
+                'details': str(e)
+            }), 500
+
+    except Exception as e:
+        print(f"Error in extract_audio endpoint: {e}")
+        return jsonify({
+            'error': 'Failed to extract audio from YouTube',
+            'details': str(e)
         }), 500
 
 if __name__ == '__main__':

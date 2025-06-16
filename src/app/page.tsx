@@ -12,6 +12,7 @@ import AnimatedTitle from '@/components/AnimatedTitle';
 import AnimatedBorderText from '@/components/AnimatedBorderText';
 import FeaturesSection from '@/components/FeaturesSection';
 import { useTheme } from '@/contexts/ThemeContext';
+import { apiPost } from '@/config/api';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -88,14 +89,8 @@ export default function Home() {
     }, 2000);
 
     try {
-
-      const response = await fetch('/api/search-youtube', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: searchQuery }),
-      });
+      // Use the new API configuration to route to Python backend
+      const response = await apiPost('SEARCH_YOUTUBE', { query: searchQuery });
 
       if (!response.ok) {
         const errorData = await response.json();

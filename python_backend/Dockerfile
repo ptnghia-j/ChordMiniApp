@@ -114,6 +114,9 @@ RUN pip install --no-cache-dir \
     PyYAML>=6.0 \
     tqdm>=4.64.0
 
+# Step 13: Install yt-dlp for YouTube functionality
+RUN pip install --no-cache-dir yt-dlp>=2023.12.30
+
 # Copy application code
 COPY *.py ./
 

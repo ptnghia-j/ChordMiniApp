@@ -15,6 +15,7 @@ import LyricsToggleButton from '@/components/LyricsToggleButton';
 import LyricsPanel from '@/components/LyricsPanel';
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { apiPost } from '@/config/api';
 import { SongContext } from '@/types/chatbotTypes';
 import { LyricsData } from '@/types/musicAiTypes';
 import { useMetronomeSync } from '@/hooks/useMetronomeSync';
@@ -743,14 +744,8 @@ export default function YouTubeVideoAnalyzePage() {
     }));
 
     try {
-      // Call our API endpoint to extract audio
-      const response = await fetch('/api/extract-audio', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ videoId, forceRefresh }),
-      });
+      // Call our API endpoint to extract audio (now routed to Python backend)
+      const response = await apiPost('EXTRACT_AUDIO', { videoId, forceRefresh });
 
       if (!response.ok) {
         const errorData = await response.json();
