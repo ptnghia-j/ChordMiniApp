@@ -336,24 +336,26 @@ export default function Home() {
                 <div className="mt-8 mb-6">
                   <details className="group">
                     <summary className="cursor-pointer list-none">
-                      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 border border-gray-200 dark:border-gray-600 transition-colors duration-300 hover:shadow-lg">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 transition-colors duration-300">
-                            Support ChordMini Project
-                          </h3>
-                          <svg
-                            className="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 group-open:rotate-180"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
+                      <AnimatedBorderText>
+                        <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg shadow-card p-4 border border-blue-200 dark:border-blue-700 transition-all duration-300 hover:shadow-lg hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-800/30 dark:hover:to-purple-800/30">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 transition-colors duration-300">
+                              Support ChordMini Project
+                            </h3>
+                            <svg
+                              className="w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform duration-200 group-open:rotate-180"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
                         </div>
-                      </div>
+                      </AnimatedBorderText>
                     </summary>
-                    <div className="mt-2 bg-white dark:bg-content-bg rounded-lg shadow-card p-6 border border-gray-200 dark:border-gray-600 transition-colors duration-300">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed transition-colors duration-300">
+                    <div className="mt-2 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg shadow-card p-6 border border-green-200 dark:border-green-700 transition-all duration-300">
+                      <p className="text-sm text-green-700 dark:text-green-300 mb-4 leading-relaxed transition-colors duration-300">
                         The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints.
                         We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep
                         the backend server running, you can use the donation link below. We really appreciate your support!
@@ -368,7 +370,7 @@ export default function Home() {
                           <span className="text-lg">☕</span>
                           <span>Donation</span>
                         </a>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 transition-colors duration-300">
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-2 transition-colors duration-300">
                           (Buy Me a Coffee link)
                         </p>
                       </div>

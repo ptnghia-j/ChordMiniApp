@@ -12,11 +12,14 @@ import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
  * Determine if we should use local search or backend
  */
 function shouldUseLocalSearch(): boolean {
-  // Use local search for development (localhost)
-  const isLocalhost = process.env.NODE_ENV === 'development' ||
-                     process.env.VERCEL_ENV === undefined;
+  // Only use local search for true local development
+  const isLocalDevelopment = process.env.NODE_ENV === 'development' &&
+                            process.env.VERCEL === undefined &&
+                            process.env.VERCEL_ENV === undefined;
 
-  return isLocalhost;
+  console.log(`Environment check: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}, VERCEL_ENV=${process.env.VERCEL_ENV}, shouldUseLocal=${isLocalDevelopment}`);
+
+  return isLocalDevelopment;
 }
 
 /**
@@ -108,24 +111,59 @@ export async function POST(request: NextRequest) {
     const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app';
 
     console.log(`Proxying YouTube search to backend: ${backendUrl}/api/search-youtube`);
+    console.log(`Search query:`, query);
 
-    const response = await fetch(`${backendUrl}/api/search-youtube`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-      body: JSON.stringify({ query }),
-    });
+    try {
+      const response = await fetch(`${backendUrl}/api/search-youtube`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        body: JSON.stringify({ query }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Backend search failed: ${response.status} ${response.statusText} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Backend search failed: ${response.status} ${response.statusText} - ${errorText}`);
+        console.error(`Backend URL used: ${backendUrl}`);
+        console.error(`Full response headers:`, Object.fromEntries(response.headers.entries()));
 
-      // If backend fails with 500, try local search as fallback
-      if (response.status === 500) {
-        console.log('Backend failed with 500, attempting local search fallback...');
+        // If backend fails with 500, try local search as fallback (only in development)
+        if (response.status === 500 && process.env.NODE_ENV === 'development') {
+          console.log('Backend failed with 500, attempting local search fallback...');
 
+          try {
+            const localResult = await performLocalSearch(query);
+            return NextResponse.json(localResult);
+          } catch (fallbackError) {
+            console.warn('Local search fallback also failed:', fallbackError);
+          }
+        }
+
+        return NextResponse.json(
+          {
+            error: 'Failed to search YouTube',
+            details: `Backend error: ${response.status} ${response.statusText} - ${errorText}`,
+            suggestion: response.status === 500 ?
+              'YouTube search is temporarily unavailable. Please try again later.' :
+              'Please check your search query and try again.',
+            backendUrl: backendUrl // Include backend URL for debugging
+          },
+          { status: response.status }
+        );
+      }
+
+      const result = await response.json();
+      console.log(`Backend search successful: ${result.results?.length || 0} results`);
+
+      return NextResponse.json(result);
+    } catch (fetchError) {
+      console.error('Network error during backend search:', fetchError);
+
+      // Try local search as fallback for network errors (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Network error, attempting local search fallback...');
         try {
           const localResult = await performLocalSearch(query);
           return NextResponse.json(localResult);
@@ -137,19 +175,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Failed to search YouTube',
-          details: `Backend error: ${response.status} ${response.statusText}`,
-          suggestion: response.status === 500 ?
-            'YouTube search is temporarily unavailable. Please try again later.' :
-            'Please check your search query and try again.'
+          details: `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+          suggestion: 'Please check your internet connection and try again.',
+          backendUrl: backendUrl
         },
-        { status: response.status }
+        { status: 500 }
       );
     }
-
-    const result = await response.json();
-    console.log(`Backend search successful: ${result.results?.length || 0} results`);
-
-    return NextResponse.json(result);
 
   } catch (error: unknown) {
     console.error('Error proxying YouTube search:', error);

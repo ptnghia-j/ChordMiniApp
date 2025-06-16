@@ -30,8 +30,9 @@ export const useMetronomeSync = ({
 }: UseMetronomeSyncProps) => {
   const lastScheduledBeatRef = useRef<number>(-1);
   const schedulingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCurrentTimeRef = useRef<number>(currentTime);
   const lookAheadTime = 0.25; // Schedule clicks 250ms ahead
-  const scheduleInterval = 25; // Check for new beats to schedule every 25ms
+  const scheduleInterval = 50; // Check for new beats to schedule every 50ms (reduced frequency)
 
   /**
    * Check if a beat corresponds to a downbeat based on beat position
@@ -97,7 +98,9 @@ export const useMetronomeSync = ({
           : isDownbeat(i + shiftCount + paddingCount); // Apply shift/padding to raw beat index
 
         // Create unique beat ID to prevent duplicate scheduling
-        const beatId = `beat_${i}_${beatTime.toFixed(3)}`;
+        // Include data source to ensure uniqueness across different beat arrays
+        const dataSource = chordGridBeats && chordGridBeats.length > 0 ? 'grid' : 'raw';
+        const beatId = `${dataSource}_${i}_${beatTime.toFixed(3)}`;
 
         // Schedule the click with duplicate prevention
         metronomeService.scheduleClick(beatTime, isDownbeatClick, beatId);
@@ -193,12 +196,20 @@ export const useMetronomeSync = ({
     };
   }, [isPlaying, startScheduling, stopScheduling]);
 
-  // Effect to handle seeking (significant time jumps)
+  // Effect to handle seeking (significant time jumps only)
   useEffect(() => {
     if (isPlaying && metronomeService.isMetronomeEnabled()) {
-      // Reset scheduling when there's a significant time jump (seeking)
-      resetScheduling();
+      const timeDifference = Math.abs(currentTime - lastCurrentTimeRef.current);
+
+      // Only reset scheduling if there's a significant time jump (seeking)
+      // Normal playback should have time differences < 0.1 seconds
+      if (timeDifference > 0.5) {
+        console.log(`Metronome: Detected seeking (time jump: ${timeDifference.toFixed(3)}s), resetting scheduling`);
+        resetScheduling();
+      }
     }
+
+    lastCurrentTimeRef.current = currentTime;
   }, [currentTime, resetScheduling, isPlaying]);
 
   // Note: Beat shift effects removed - direct alignment approach doesn't use shifting

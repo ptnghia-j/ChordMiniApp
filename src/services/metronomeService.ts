@@ -397,15 +397,18 @@ export class MetronomeService {
       }
       this.scheduledClicks.add(beatId);
 
-      // Clean up the beat ID after the click duration
+      // Clean up the beat ID after the click duration with extra buffer
       setTimeout(() => {
         this.scheduledClicks.delete(beatId);
-      }, (this.clickDuration + 0.1) * 1000);
+      }, (this.clickDuration + 0.2) * 1000); // Increased buffer to 200ms
     }
 
     const audioTime = this.audioContext.currentTime + Math.max(0, time - Date.now() / 1000);
 
-    this.createClick(isDownbeat, audioTime);
+    // Only schedule if the audio time is in the future
+    if (audioTime > this.audioContext.currentTime) {
+      this.createClick(isDownbeat, audioTime);
+    }
   }
 
   /**
@@ -461,6 +464,8 @@ export class MetronomeService {
     });
     this.activeSources = [];
     this.scheduledClicks.clear(); // Clear the Set
+
+    console.log('Metronome: Cleared all scheduled clicks and active sources');
   }
 
   /**
