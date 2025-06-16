@@ -7,6 +7,7 @@ interface UseMetronomeSyncProps {
   downbeats?: number[];
   currentTime: number;
   isPlaying: boolean;
+  timeSignature?: number; // Add time signature for proper beat position calculation
 }
 
 /**
@@ -16,7 +17,8 @@ export const useMetronomeSync = ({
   beats,
   downbeats = [],
   currentTime,
-  isPlaying
+  isPlaying,
+  timeSignature = 4
 }: UseMetronomeSyncProps) => {
   const lastScheduledBeatRef = useRef<number>(-1);
   const schedulingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -24,14 +26,16 @@ export const useMetronomeSync = ({
   const scheduleInterval = 25; // Check for new beats to schedule every 25ms
 
   /**
-   * Check if a beat time corresponds to a downbeat
+   * Check if a beat corresponds to a downbeat based on beat position
+   * Uses the same logic as the UI for determining beat numbers
    */
-  const isDownbeat = useCallback((beatTime: number): boolean => {
-    if (!downbeats || downbeats.length === 0) return false;
-
-    // Check if this beat time is close to any downbeat time (within 50ms tolerance)
-    return downbeats.some(downbeatTime => Math.abs(beatTime - downbeatTime) < 0.05);
-  }, [downbeats]);
+  const isDownbeat = useCallback((beatIndex: number): boolean => {
+    // Calculate beat number using the same logic as the UI
+    // Beat number = (index % timeSignature) + 1
+    // Beat 1 is the downbeat, beats 2, 3, 4, etc. are regular beats
+    const beatNum = (beatIndex % timeSignature) + 1;
+    return beatNum === 1;
+  }, [timeSignature]);
 
   /**
    * Schedule metronome clicks for upcoming beats
@@ -56,14 +60,15 @@ export const useMetronomeSync = ({
 
       // Only schedule if the beat is in the future (with small tolerance for timing precision)
       if (beatTime > now - 0.01) {
-        const isDownbeatClick = isDownbeat(beatTime);
+        const isDownbeatClick = isDownbeat(i); // Use beat index instead of beat time
 
         // Schedule the click
         metronomeService.scheduleClick(beatTime, isDownbeatClick);
 
         // Debug logging for metronome scheduling (reduced verbosity)
         if (i < 5) { // Only log first few beats to reduce console spam
-          // console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'beat'} click at ${beatTime.toFixed(3)}s`);
+          const beatNum = (i % timeSignature) + 1;
+          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'regular'} click (beat ${beatNum}) at ${beatTime.toFixed(3)}s`);
         }
       }
 

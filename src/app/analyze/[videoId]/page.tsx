@@ -912,7 +912,8 @@ export default function YouTubeVideoAnalyzePage() {
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
-    isPlaying
+    isPlaying,
+    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4
   });
 
   // Helper functions for chord grid data calculation

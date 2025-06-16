@@ -9,7 +9,7 @@ interface MetronomeControlsProps {
 const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isVideoMinimized = false }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
-  const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('traditional');
+  const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('librosa_short');
   const [isExpanded, setIsExpanded] = useState(false);
   const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
 

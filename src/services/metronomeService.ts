@@ -14,7 +14,7 @@ export class MetronomeService {
   private isInitialized = false;
   private isEnabled = false;
   private volume = 0.3;
-  private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'traditional';
+  private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'librosa_short';
   private clickDuration = 0.08; // 80ms clicks for better sound quality
   private scheduledClicks: number[] = []; // Store scheduled click IDs
 
