@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use backend search (production or local fallback)
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-12071603127.us-central1.run.app';
 
     console.log(`Proxying YouTube search to backend: ${backendUrl}/api/search-youtube`);
     console.log(`Search query:`, query);

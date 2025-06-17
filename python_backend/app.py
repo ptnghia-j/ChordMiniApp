@@ -326,6 +326,69 @@ def debug_files():
 
     return jsonify(results)
 
+@app.route('/debug/ytdlp')
+def debug_ytdlp():
+    """Debug endpoint to check yt-dlp availability and configuration"""
+    import os
+    import subprocess
+    import shutil
+
+    results = {
+        'timestamp': time.time(),
+        'environment': {
+            'PATH': os.environ.get('PATH', ''),
+            'PYTHONPATH': os.environ.get('PYTHONPATH', ''),
+            'HOME': os.environ.get('HOME', ''),
+            'USER': os.environ.get('USER', ''),
+            'PWD': os.environ.get('PWD', ''),
+        },
+        'tests': {}
+    }
+
+    # Test 1: Check if yt-dlp is in PATH
+    ytdlp_path = shutil.which('yt-dlp')
+    results['tests']['ytdlp_in_path'] = {
+        'success': ytdlp_path is not None,
+        'path': ytdlp_path
+    }
+
+    # Test 2: Try to run yt-dlp --version
+    try:
+        result = subprocess.run(['yt-dlp', '--version'],
+                              capture_output=True, text=True, timeout=10)
+        results['tests']['version_check'] = {
+            'success': result.returncode == 0,
+            'returncode': result.returncode,
+            'stdout': result.stdout.strip(),
+            'stderr': result.stderr.strip()
+        }
+    except Exception as e:
+        results['tests']['version_check'] = {
+            'success': False,
+            'error': str(e)
+        }
+
+    # Test 3: Check availability using our function
+    results['tests']['availability_function'] = {
+        'success': check_ytdlp_availability()
+    }
+
+    # Test 4: Try a simple yt-dlp command
+    try:
+        test_result = execute_ytdlp('--help', timeout=5)
+        results['tests']['help_command'] = {
+            'success': True,
+            'stdout_length': len(test_result['stdout']),
+            'stderr_length': len(test_result['stderr'])
+        }
+    except Exception as e:
+        results['tests']['help_command'] = {
+            'success': False,
+            'error': str(e)
+        }
+
+    return jsonify(results)
+
 @app.route('/health')
 def health():
     """Simple health check endpoint for Cloud Run"""
