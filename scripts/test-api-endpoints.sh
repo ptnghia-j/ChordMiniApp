@@ -3,7 +3,7 @@
 # ChordMini API Endpoint Testing Script
 # Tests all endpoints with the unified URL: https://chordmini-backend-full-pluj3yargq-uc.a.run.app
 
-BASE_URL="https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+BASE_URL="https://chordmini-backend-full-1207160312.us-central1.run.app"
 
 echo "🧪 Testing ChordMini API Endpoints"
 echo "=================================="

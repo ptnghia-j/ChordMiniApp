@@ -52,6 +52,7 @@ export const useMetronomeSync = ({
 
   /**
    * Schedule metronome clicks for upcoming beats using chord grid beat data
+   * FIXED: Handle gaps in beat arrays by generating synthetic beats for continuous metronome
    */
   const scheduleUpcomingClicks = useCallback(() => {
     if (!isPlaying) {
@@ -81,22 +82,64 @@ export const useMetronomeSync = ({
     let scheduledCount = 0;
     let skippedCount = 0;
 
+    // IMPROVED: Generate continuous metronome clicks even when there are gaps in beat array
+    // Calculate expected beat interval from BPM
+    const bpm = 120; // Default BPM, could be passed from analysis results
+    const beatInterval = 60 / bpm; // seconds per beat
+
+    // Find the last valid beat time to establish timing reference
+    let lastValidBeatTime = null;
+    let lastValidBeatIndex = -1;
+
+    for (let i = Math.max(0, startIndex - 10); i < startIndex; i++) {
+      if (chordGridBeats && chordGridBeats.length > 0) {
+        const chordGridBeat = chordGridBeats[i];
+        if (chordGridBeat !== null && chordGridBeat !== undefined) {
+          lastValidBeatTime = chordGridBeat;
+          lastValidBeatIndex = i;
+        }
+      } else if (beats[i]) {
+        const beat = beats[i] as BeatInfo;
+        lastValidBeatTime = beat.time - beatTimeRangeStart;
+        lastValidBeatIndex = i;
+      }
+    }
+
     // Find beats that need to be scheduled
     for (let i = startIndex; i < beatsToUse.length; i++) {
-      let beatTime: number;
+      let beatTime: number | null = null;
 
       if (chordGridBeats && chordGridBeats.length > 0) {
         // Using chord grid beats (already processed with shifting/padding)
         const chordGridBeat = chordGridBeats[i];
-        if (chordGridBeat === null || chordGridBeat === undefined) {
-          skippedCount++;
-          continue; // Skip null beats (shift cells)
+        if (chordGridBeat !== null && chordGridBeat !== undefined) {
+          beatTime = chordGridBeat;
         }
-        beatTime = chordGridBeat;
       } else {
         // Using raw beats (apply offset compensation)
         const beat = beats[i] as BeatInfo;
-        beatTime = beat.time - beatTimeRangeStart;
+        if (beat) {
+          beatTime = beat.time - beatTimeRangeStart;
+        }
+      }
+
+      // IMPROVED: If we have a null beat but we have a timing reference, generate synthetic beat
+      if (beatTime === null && lastValidBeatTime !== null && lastValidBeatIndex >= 0) {
+        const beatsSinceLastValid = i - lastValidBeatIndex;
+        beatTime = lastValidBeatTime + (beatsSinceLastValid * beatInterval);
+        console.log(`Metronome: Generated synthetic beat ${i} at ${beatTime.toFixed(3)}s (${beatsSinceLastValid} beats after last valid)`);
+      }
+
+      // Skip if we still don't have a valid beat time
+      if (beatTime === null) {
+        skippedCount++;
+        continue;
+      }
+
+      // Update timing reference for future synthetic beats
+      if (beatTime !== null) {
+        lastValidBeatTime = beatTime;
+        lastValidBeatIndex = i;
       }
 
       // Stop if we've gone beyond our look-ahead window
