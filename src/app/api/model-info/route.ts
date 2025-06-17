@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // Try to call the Python backend API first with timeout
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app';
     try {
       const response = await fetch(`${backendUrl}/api/model-info`, {
         method: 'GET',

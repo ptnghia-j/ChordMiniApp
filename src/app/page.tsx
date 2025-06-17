@@ -334,48 +334,48 @@ export default function Home() {
 
                 {/* Support ChordMini Project Section - Dropdown */}
                 <div className="mt-8 mb-6 w-full">
-                  <details className="group w-full">
-                    <summary className="cursor-pointer list-none w-full">
-                      <AnimatedBorderText className="w-full">
-                        <div className="w-full bg-white dark:bg-transparent border-2 border-transparent dark:border-gray-600 rounded-lg shadow-card p-4 transition-all duration-300 hover:shadow-lg">
-                          <div className="flex items-center justify-between w-full">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-300">
-                              Support ChordMini Project
-                            </h3>
-                            <svg
-                              className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-transform duration-200 group-open:rotate-180"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                  <AnimatedBorderText className="w-full">
+                    <details className="group w-full bg-white dark:bg-transparent border-2 border-transparent dark:border-gray-600 rounded-lg shadow-card transition-all duration-300 hover:shadow-lg">
+                      <summary className="cursor-pointer list-none w-full p-4">
+                        <div className="flex items-center justify-between w-full">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-300">
+                            Support ChordMini Project
+                          </h3>
+                          <svg
+                            className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-transform duration-200 group-open:rotate-180"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </summary>
+                      <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-600 mt-2">
+                        <div className="pt-4">
+                          <p className="text-sm text-gray-800 dark:text-gray-200 mb-4 leading-relaxed transition-colors duration-300">
+                            The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints.
+                            We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep
+                            the backend server running, you can use the donation link below. We really appreciate your support!
+                          </p>
+                          <div className="text-center">
+                            <a
+                              href="https://coff.ee/nghiaphan"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
                             >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
+                              <span className="text-lg">☕</span>
+                              <span>Donation</span>
+                            </a>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 transition-colors duration-300">
+                              (Buy Me a Coffee link)
+                            </p>
                           </div>
                         </div>
-                      </AnimatedBorderText>
-                    </summary>
-                    <div className="mt-2 w-full bg-white dark:bg-transparent border-2 border-green-500 dark:border-green-400 rounded-lg shadow-card p-6 transition-all duration-300">
-                      <p className="text-sm text-gray-800 dark:text-gray-200 mb-4 leading-relaxed transition-colors duration-300">
-                        The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints.
-                        We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep
-                        the backend server running, you can use the donation link below. We really appreciate your support!
-                      </p>
-                      <div className="text-center">
-                        <a
-                          href="https://coff.ee/nghiaphan"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
-                        >
-                          <span className="text-lg">☕</span>
-                          <span>Donation</span>
-                        </a>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 transition-colors duration-300">
-                          (Buy Me a Coffee link)
-                        </p>
                       </div>
-                    </div>
-                  </details>
+                    </details>
+                  </AnimatedBorderText>
                 </div>
               </div>
 

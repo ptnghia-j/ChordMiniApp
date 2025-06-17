@@ -12,7 +12,7 @@ const http = require('http');
 const endpoints = [
   {
     name: 'Backend Service',
-    url: 'https://chordmini-backend-full-12071603127.us-central1.run.app/',
+    url: 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app/',
     expected: 'beat_model'
   }
 ];
@@ -121,10 +121,10 @@ async function runTests() {
   if (successful.length === endpoints.length) {
     console.log('✅ All services are operational!');
     console.log('✅ Your frontend can use this endpoint:');
-    console.log('   NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-12071603127.us-central1.run.app');
+    console.log('   NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app');
   } else if (successful.length > 0) {
     console.log('⚠️  Backend service is available:');
-    console.log('   Use backend service: NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-12071603127.us-central1.run.app');
+    console.log('   Use backend service: NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app');
   } else {
     console.log('❌ No services are available. Check your deployment or use local development:');
     console.log('   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000');

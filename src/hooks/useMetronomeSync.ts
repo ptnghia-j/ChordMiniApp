@@ -55,6 +55,12 @@ export const useMetronomeSync = ({
    */
   const scheduleUpcomingClicks = useCallback(() => {
     if (!isPlaying) {
+      console.log('Metronome: Not playing, skipping scheduling');
+      return;
+    }
+
+    if (!metronomeService.isMetronomeEnabled()) {
+      console.log('Metronome: Not enabled, skipping scheduling');
       return;
     }
 
@@ -62,20 +68,28 @@ export const useMetronomeSync = ({
     const beatsToUse = chordGridBeats && chordGridBeats.length > 0 ? chordGridBeats : beats;
 
     if (!beatsToUse || beatsToUse.length === 0) {
+      console.log('Metronome: No beats available for scheduling');
       return;
     }
 
     const now = currentTime;
     const scheduleUntil = now + lookAheadTime;
+    const startIndex = lastScheduledBeatRef.current + 1;
+
+    console.log(`Metronome: Scheduling from beat ${startIndex} to ${beatsToUse.length - 1}, current time: ${now.toFixed(3)}s, schedule until: ${scheduleUntil.toFixed(3)}s`);
+
+    let scheduledCount = 0;
+    let skippedCount = 0;
 
     // Find beats that need to be scheduled
-    for (let i = lastScheduledBeatRef.current + 1; i < beatsToUse.length; i++) {
+    for (let i = startIndex; i < beatsToUse.length; i++) {
       let beatTime: number;
 
       if (chordGridBeats && chordGridBeats.length > 0) {
         // Using chord grid beats (already processed with shifting/padding)
         const chordGridBeat = chordGridBeats[i];
         if (chordGridBeat === null || chordGridBeat === undefined) {
+          skippedCount++;
           continue; // Skip null beats (shift cells)
         }
         beatTime = chordGridBeat;
@@ -87,6 +101,7 @@ export const useMetronomeSync = ({
 
       // Stop if we've gone beyond our look-ahead window
       if (beatTime > scheduleUntil) {
+        console.log(`Metronome: Beat ${i} at ${beatTime.toFixed(3)}s is beyond schedule window, stopping`);
         break;
       }
 
@@ -107,16 +122,23 @@ export const useMetronomeSync = ({
         const relativeTime = beatTime - now;
         metronomeService.scheduleClick(relativeTime, isDownbeatClick, beatId);
 
-        // Debug logging for metronome scheduling (reduced verbosity)
-        if (i < 5) { // Only log first few beats to reduce console spam
+        scheduledCount++;
+
+        // Enhanced debug logging for metronome scheduling
+        if (scheduledCount <= 10 || i % 20 === 0) { // Log first 10 beats and every 20th beat
           const beatNum = (i % timeSignature) + 1;
           const dataSource = chordGridBeats && chordGridBeats.length > 0 ? 'chordGrid' : 'raw';
-          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'regular'} click (beat ${beatNum}) at ${beatTime.toFixed(3)}s (source: ${dataSource}, index: ${i})`);
+          console.log(`Metronome: Scheduled ${isDownbeatClick ? 'downbeat' : 'regular'} click (beat ${beatNum}) at ${beatTime.toFixed(3)}s (source: ${dataSource}, index: ${i}, relative: ${relativeTime.toFixed(3)}s)`);
         }
+      } else {
+        console.log(`Metronome: Beat ${i} at ${beatTime.toFixed(3)}s is in the past (now: ${now.toFixed(3)}s), skipping`);
+        skippedCount++;
       }
 
       lastScheduledBeatRef.current = i;
     }
+
+    console.log(`Metronome: Scheduling complete - scheduled: ${scheduledCount}, skipped: ${skippedCount}, last scheduled beat: ${lastScheduledBeatRef.current}`);
   }, [beats, chordGridBeats, currentTime, isPlaying, isDownbeat, beatTimeRangeStart, timeSignature, shiftCount, paddingCount]); // Include all timing parameters in dependencies
 
   /**
@@ -162,6 +184,7 @@ export const useMetronomeSync = ({
    */
   const startScheduling = useCallback(() => {
     if (schedulingIntervalRef.current) {
+      console.log('Metronome: Clearing existing scheduling interval');
       clearInterval(schedulingIntervalRef.current);
     }
 
@@ -171,7 +194,7 @@ export const useMetronomeSync = ({
       scheduleUpcomingClicks();
     }, scheduleInterval);
 
-    // console.log('Metronome: Started scheduling interval');
+    console.log(`Metronome: Started scheduling interval (${scheduleInterval}ms)`);
   }, [resetScheduling, scheduleUpcomingClicks]);
 
   /**
@@ -179,17 +202,21 @@ export const useMetronomeSync = ({
    */
   const stopScheduling = useCallback(() => {
     if (schedulingIntervalRef.current) {
+      console.log('Metronome: Stopping scheduling interval');
       clearInterval(schedulingIntervalRef.current);
       schedulingIntervalRef.current = null;
     }
-    // console.log('Metronome: Stopped scheduling interval');
   }, []);
 
   // Effect to handle play/pause state changes
   useEffect(() => {
+    console.log(`Metronome: Play/pause state changed - isPlaying: ${isPlaying}, metronomeEnabled: ${metronomeService.isMetronomeEnabled()}`);
+
     if (isPlaying && metronomeService.isMetronomeEnabled()) {
+      console.log('Metronome: Starting scheduling due to play state');
       startScheduling();
     } else {
+      console.log('Metronome: Stopping scheduling due to pause/disabled state');
       stopScheduling();
     }
 
