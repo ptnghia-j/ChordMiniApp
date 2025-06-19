@@ -90,48 +90,20 @@ export default function Home() {
     }, 2000);
 
     try {
-      // Check if we're in production (Vercel) environment
-      const isProduction = process.env.NODE_ENV === 'production' ||
-                          typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      // Use yt-dlp search for both local and production
+      const response = await apiPost('SEARCH_YOUTUBE', { query: searchQuery });
 
-      if (isProduction) {
-        // Use YouTube Data API v3 directly for production
-        const { YouTubeApiService } = await import('@/services/youtubeApiService');
-        const youtubeApi = new YouTubeApiService(process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || '');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to search YouTube');
+      }
 
-        const searchResults = await youtubeApi.searchWithDetails(searchQuery, 10, {
-          order: 'relevance',
-          videoCategoryId: '10' // Music category
-        });
+      const data = await response.json();
 
-        // Convert to the expected format
-        const formattedResults = searchResults.map(result => ({
-          id: result.id,
-          title: result.title,
-          thumbnail: result.thumbnail,
-          channel: result.channel,
-          duration_string: result.duration,
-          view_count: result.viewCount,
-          upload_date: result.publishedAt
-        }));
-
-        setSearchResults(formattedResults);
+      if (data.success && data.results) {
+        setSearchResults(data.results);
       } else {
-        // Use backend search for local development
-        const response = await apiPost('SEARCH_YOUTUBE', { query: searchQuery });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to search YouTube');
-        }
-
-        const data = await response.json();
-
-        if (data.success && data.results) {
-          setSearchResults(data.results);
-        } else {
-          throw new Error('Invalid response format');
-        }
+        throw new Error('Invalid response format');
       }
     } catch (error: unknown) {
       console.error('Error searching YouTube:', error);
@@ -232,15 +204,15 @@ export default function Home() {
 
                 {/* Demo Images - Only show when not displaying search results */}
                 {!searchResults.length && !isSearching && (
-                  <div className="mt-4">
-                    <div className="text-center mb-3">
+                  <div className="mt-3">
+                    <div className="text-center mb-2">
                       <AnimatedBorderText>
-                        <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
+                        <h3 className="text-base font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
                           See ChordMini in Action
                         </h3>
                       </AnimatedBorderText>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-all duration-300 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg group">
                         <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/9' }}>
                           <Image
@@ -252,9 +224,9 @@ export default function Home() {
                             priority
                           />
                         </div>
-                        <div className="p-3">
-                          <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat & Chord Analysis</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
+                        <div className="p-2">
+                          <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300 text-sm">Beat & Chord Analysis</h4>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
                         </div>
                       </div>
                       <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-all duration-300 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg group">
@@ -268,9 +240,9 @@ export default function Home() {
                             priority
                           />
                         </div>
-                        <div className="p-3">
-                          <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">Lyrics & Chord Transcription</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">Follow along with synchronized lyrics and chord annotations</p>
+                        <div className="p-2">
+                          <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300 text-sm">Lyrics & Chord Transcription</h4>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 transition-colors duration-300">Follow along with synchronized lyrics and chord annotations</p>
                         </div>
                       </div>
                     </div>
