@@ -11,6 +11,7 @@ import TypewriterText from '@/components/TypewriterText';
 import AnimatedTitle from '@/components/AnimatedTitle';
 import AnimatedBorderText from '@/components/AnimatedBorderText';
 import FeaturesSection from '@/components/FeaturesSection';
+import IntegratedSearchContainer from '@/components/IntegratedSearchContainer';
 import { useTheme } from '@/contexts/ThemeContext';
 import { apiPost } from '@/config/api';
 
@@ -215,72 +216,19 @@ export default function Home() {
                     />
                   </div>
                 </div>
-                {/* YouTube Analysis Option - Full Width */}
-                <div className="bg-white dark:bg-content-bg rounded-lg shadow-card p-4 hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
-                    Analyze Music
-                  </h3>
-
-                  <div className="space-y-3 max-w-3xl mx-auto">
-                    {/* Unified Search/URL Input */}
-                    <div>
-                      <form onSubmit={handleSearch} className="space-y-2">
-                        <div>
-                          <input
-                            id="youtube-search"
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
-                              setError('');
-                              setSearchError(null);
-                            }}
-                            placeholder="Search for a song or paste YouTube URL..."
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
-                          />
-                          {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
-                        </div>
-
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                          <button
-                            type="submit"
-                            disabled={isSearching}
-                            className="w-full md:w-auto bg-primary-600 dark:bg-primary-700 text-white font-medium py-2 px-6 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-800 transition-colors duration-200 disabled:opacity-50 flex-grow md:flex-grow-0"
-                          >
-                            {isSearching ? "Searching..." : "Search or Analyze URL"}
-                          </button>
-
-                          <div className="relative group w-full md:w-auto">
-                            <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 transform -translate-x-1/2 bg-gray-600 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-2">
-                              Upload audio files (MP3, WAV, FLAC) up to 20MB
-                            </div>
-                            <Link
-                              href="/analyze"
-                              className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 text-center block"
-                              aria-label="Upload audio file"
-                            >
-                              Upload Audio
-                            </Link>
-                          </div>
-                        </div>
-                      </form>
-                      {searchError && <p className="text-red-500 text-sm mt-2">{searchError}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Search Results */}
-                {(searchResults.length > 0 || isSearching) && (
-                  <div className="mt-3">
-                    <SearchResults
-                      results={searchResults}
-                      isLoading={isSearching}
-                      error={searchError}
-                      onVideoSelect={handleVideoSelect}
-                      fromCache={searchResults.length > 0}
-                    />
-                  </div>
-                )}
+                {/* Integrated Search Container */}
+                <IntegratedSearchContainer
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  handleSearch={handleSearch}
+                  isSearching={isSearching}
+                  searchError={searchError}
+                  error={error}
+                  setError={setError}
+                  setSearchError={setSearchError}
+                  searchResults={searchResults}
+                  handleVideoSelect={handleVideoSelect}
+                />
 
                 {/* Demo Images - Only show when not displaying search results */}
                 {!searchResults.length && !isSearching && (
