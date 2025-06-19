@@ -109,8 +109,25 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
       hasTimestamp: !!cacheData.timestamp,
       dataSize: Object.keys(cacheData).length,
       primaryKeyType: typeof cacheData.primaryKey,
-      primaryKeyLength: cacheData.primaryKey?.length || 0
+      primaryKeyLength: cacheData.primaryKey?.length || 0,
+      // Deep inspection of sequenceCorrections
+      sequenceCorrectionsStructure: cacheData.sequenceCorrections ? {
+        hasOriginalSequence: !!cacheData.sequenceCorrections.originalSequence,
+        hasCorrectSequence: !!cacheData.sequenceCorrections.correctedSequence,
+        hasKeyAnalysis: !!cacheData.sequenceCorrections.keyAnalysis,
+        originalSequenceLength: cacheData.sequenceCorrections.originalSequence?.length || 0,
+        correctedSequenceLength: cacheData.sequenceCorrections.correctedSequence?.length || 0,
+        keyAnalysisStructure: cacheData.sequenceCorrections.keyAnalysis ? {
+          hasSections: !!cacheData.sequenceCorrections.keyAnalysis.sections,
+          hasModulations: !!cacheData.sequenceCorrections.keyAnalysis.modulations,
+          sectionsLength: cacheData.sequenceCorrections.keyAnalysis.sections?.length || 0,
+          modulationsLength: cacheData.sequenceCorrections.keyAnalysis.modulations?.length || 0
+        } : null
+      } : null
     });
+
+    // Also log the full data structure for debugging
+    console.log('🔍 FULL CACHE DATA STRUCTURE:', JSON.stringify(cacheData, null, 2));
 
     await setDoc(docRef, cacheData);
     console.log('✅ Key detection saved to cache successfully');
