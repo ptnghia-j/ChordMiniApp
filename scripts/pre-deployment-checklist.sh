@@ -182,7 +182,7 @@ echo ""
 echo "6. 🔗 Backend Service Check"
 echo "==========================="
 
-BACKEND_URL="https://chordmini-backend-12071603127.us-central1.run.app"
+BACKEND_URL="https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
 
 # Test backend health
 echo -n "Testing backend health... "

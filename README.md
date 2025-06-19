@@ -58,7 +58,7 @@ Before starting, ensure you have:
    Edit `.env.local` with your configuration:
    ```bash
    # Backend API (Production service available)
-   NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-12071603127.us-central1.run.app
+   NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app
 
    # Firebase Configuration
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
@@ -267,7 +267,7 @@ app.run(host='0.0.0.0', port=5001)
 **Use Production Backend:**
 ```bash
 # In .env.local
-NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-12071603127.us-central1.run.app
+NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app
 ```
 
 **Use Local Backend:**
@@ -376,7 +376,7 @@ GENIUS_API_KEY=your_genius_key
 MUSIC_AI_API_KEY=your_music_ai_key
 
 # Service URLs
-NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-12071603127.us-central1.run.app
+NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app
 NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_key
 NEXT_PUBLIC_BASE_URL=https://your-vercel-domain.vercel.app
 ```

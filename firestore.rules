@@ -24,8 +24,15 @@ service cloud.firestore {
     }
 
     function isValidTranscriptionData(data) {
-      return data.keys().hasAll(['videoId', 'createdAt']) &&
+      return data.keys().hasAll(['videoId', 'beatModel', 'chordModel', 'beats', 'chords', 'synchronizedChords', 'createdAt']) &&
              isValidVideoId(data.videoId) &&
+             data.beatModel is string &&
+             data.beatModel.size() <= 50 &&
+             data.chordModel is string &&
+             data.chordModel.size() <= 50 &&
+             data.beats is list &&
+             data.chords is list &&
+             data.synchronizedChords is list &&
              isValidTimestamp(data.createdAt) &&
              data.size() <= 100; // Limit number of fields
     }

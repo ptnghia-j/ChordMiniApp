@@ -89,23 +89,48 @@ export default function Home() {
     }, 2000);
 
     try {
-      // Use the new API configuration to route to Python backend
-      const response = await apiPost('SEARCH_YOUTUBE', { query: searchQuery });
+      // Check if we're in production (Vercel) environment
+      const isProduction = process.env.NODE_ENV === 'production' ||
+                          typeof window !== 'undefined' && window.location.hostname !== 'localhost';
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to search YouTube');
-      }
+      if (isProduction) {
+        // Use YouTube Data API v3 directly for production
+        const { YouTubeApiService } = await import('@/services/youtubeApiService');
+        const youtubeApi = new YouTubeApiService(process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || '');
 
-      const data = await response.json();
+        const searchResults = await youtubeApi.searchWithDetails(searchQuery, 10, {
+          order: 'relevance',
+          videoCategoryId: '10' // Music category
+        });
 
+        // Convert to the expected format
+        const formattedResults = searchResults.map(result => ({
+          id: result.id,
+          title: result.title,
+          thumbnail: result.thumbnail,
+          channel: result.channel,
+          duration_string: result.duration,
+          view_count: result.viewCount,
+          upload_date: result.publishedAt
+        }));
 
-
-
-      if (data.success && data.results) {
-        setSearchResults(data.results);
+        setSearchResults(formattedResults);
       } else {
-        throw new Error('Invalid response format');
+        // Use backend search for local development
+        const response = await apiPost('SEARCH_YOUTUBE', { query: searchQuery });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to search YouTube');
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.results) {
+          setSearchResults(data.results);
+        } else {
+          throw new Error('Invalid response format');
+        }
       }
     } catch (error: unknown) {
       console.error('Error searching YouTube:', error);
