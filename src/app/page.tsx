@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, FormEvent, useRef, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import SearchResults from '@/components/SearchResults';
 import RecentVideos from '@/components/RecentVideos';
 import Navigation from '@/components/Navigation';
 import TypewriterText from '@/components/TypewriterText';

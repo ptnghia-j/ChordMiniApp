@@ -31,6 +31,53 @@ export interface YouTubeVideoDetails {
   tags?: string[];
 }
 
+// YouTube API response interfaces
+interface YouTubeThumbnail {
+  url: string;
+  width: number;
+  height: number;
+}
+
+interface YouTubeThumbnails {
+  default?: YouTubeThumbnail;
+  medium?: YouTubeThumbnail;
+  high?: YouTubeThumbnail;
+  standard?: YouTubeThumbnail;
+  maxres?: YouTubeThumbnail;
+}
+
+interface YouTubeApiVideoItem {
+  id: string | { videoId: string };
+  snippet: {
+    title: string;
+    description: string;
+    channelTitle: string;
+    publishedAt: string;
+    thumbnails: YouTubeThumbnails;
+    tags?: string[];
+  };
+  contentDetails?: {
+    duration: string;
+  };
+  statistics?: {
+    viewCount: string;
+    likeCount?: string;
+  };
+}
+
+interface YouTubeApiSearchItem {
+  id: {
+    videoId: string;
+  };
+  snippet: {
+    title: string;
+    description: string;
+    channelTitle: string;
+    publishedAt: string;
+    thumbnails: YouTubeThumbnails;
+  };
+}
+
 export class YouTubeApiService {
   private apiKey: string;
   private baseUrl = 'https://www.googleapis.com/youtube/v3';
@@ -133,7 +180,7 @@ export class YouTubeApiService {
       const response = await fetch(`${this.baseUrl}/videos?${params}`);
       const data = await response.json();
       
-      return data.items?.map((item: any) => this.formatVideoDetails(item)) || [];
+      return data.items?.map((item: YouTubeApiVideoItem) => this.formatVideoDetails(item)) || [];
     } catch (error) {
       console.error('Failed to get multiple video details:', error);
       return [];
@@ -175,7 +222,7 @@ export class YouTubeApiService {
   /**
    * Format search results from YouTube API response
    */
-  private formatSearchResults(items: any[]): YouTubeSearchResult[] {
+  private formatSearchResults(items: YouTubeApiSearchItem[]): YouTubeSearchResult[] {
     return items.map(item => ({
       id: item.id.videoId,
       title: item.snippet.title || 'Unknown Title',
@@ -190,15 +237,15 @@ export class YouTubeApiService {
   /**
    * Format video details from YouTube API response
    */
-  private formatVideoDetails(item: any): YouTubeVideoDetails {
+  private formatVideoDetails(item: YouTubeApiVideoItem): YouTubeVideoDetails {
     return {
-      id: item.id,
+      id: typeof item.id === 'string' ? item.id : item.id.videoId,
       title: item.snippet.title || 'Unknown Title',
       description: item.snippet.description || '',
       thumbnail: this.getBestThumbnail(item.snippet.thumbnails),
-      duration: this.parseDuration(item.contentDetails.duration),
-      viewCount: parseInt(item.statistics.viewCount || '0'),
-      likeCount: parseInt(item.statistics.likeCount || '0'),
+      duration: this.parseDuration(item.contentDetails?.duration || 'PT0S'),
+      viewCount: parseInt(item.statistics?.viewCount || '0'),
+      likeCount: parseInt(item.statistics?.likeCount || '0'),
       channelTitle: item.snippet.channelTitle || 'Unknown Channel',
       publishedAt: item.snippet.publishedAt || '',
       tags: item.snippet.tags || [],
@@ -208,7 +255,7 @@ export class YouTubeApiService {
   /**
    * Get the best available thumbnail URL
    */
-  private getBestThumbnail(thumbnails: any): string {
+  private getBestThumbnail(thumbnails: YouTubeThumbnails): string {
     if (thumbnails.maxres?.url) return thumbnails.maxres.url;
     if (thumbnails.high?.url) return thumbnails.high.url;
     if (thumbnails.medium?.url) return thumbnails.medium.url;

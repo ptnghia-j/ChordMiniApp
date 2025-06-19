@@ -4,22 +4,22 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { YouTubeApiService, YouTubeSearchResult, youtubeUtils } from '@/services/youtubeApiService';
 
 // Simple debounce utility
-function useDebounce<T extends (...args: any[]) => any>(
-  callback: T,
+function useDebounce(
+  callback: (query: string) => Promise<void>,
   delay: number
-): T {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+): (query: string) => void {
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   return useCallback(
-    ((...args: Parameters<T>) => {
+    (query: string) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
 
       timeoutRef.current = setTimeout(() => {
-        callback(...args);
+        callback(query);
       }, delay);
-    }) as T,
+    },
     [callback, delay]
   );
 }
@@ -175,7 +175,7 @@ export const EnhancedYouTubeSearch: React.FC<EnhancedYouTubeSearchProps> = ({
           <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
           </svg>
-          <p className="text-gray-500">No videos found for "{query}"</p>
+          <p className="text-gray-500">No videos found for &quot;{query}&quot;</p>
           <p className="text-gray-400 text-sm mt-1">Try a different search term or paste a YouTube URL</p>
         </div>
       )}

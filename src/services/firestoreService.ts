@@ -6,8 +6,7 @@ import {
   query,
   where,
   getDocs,
-  Timestamp,
-  serverTimestamp
+  Timestamp
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '@/config/firebase';
@@ -141,7 +140,7 @@ export async function saveTranscription(
 
   // Wait for authentication to be ready
   return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth!, async (user) => {
       unsubscribe(); // Clean up the listener
 
       if (!user) {
@@ -184,7 +183,7 @@ async function performFirestoreSave(
 
     // Get the document reference
     console.log('📂 Creating document reference for collection:', TRANSCRIPTIONS_COLLECTION);
-    const docRef = doc(db, TRANSCRIPTIONS_COLLECTION, docId);
+    const docRef = doc(db!, TRANSCRIPTIONS_COLLECTION, docId);
     console.log('✅ Document reference created successfully');
 
     // Prepare data for Firestore

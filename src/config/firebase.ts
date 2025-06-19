@@ -85,15 +85,26 @@ async function setupAnonymousAuth() {
     onAuthStateChanged(auth, (user) => {
       if (user) {
         console.log('🔐 User authenticated:', user.isAnonymous ? 'Anonymous' : 'Signed in');
+        console.log('🔐 User UID:', user.uid);
+        console.log('🔐 Auth state ready for Firestore operations');
       } else {
         console.log('🔓 User not authenticated, signing in anonymously...');
         // Sign in anonymously if not already authenticated
         signInAnonymously(auth!)
-          .then(() => {
+          .then((result) => {
             console.log('✅ Anonymous authentication successful');
+            console.log('✅ Anonymous user UID:', result.user.uid);
           })
           .catch((error) => {
             console.error('❌ Anonymous authentication failed:', error);
+            console.error('❌ Error code:', error.code);
+            console.error('❌ Error message:', error.message);
+
+            // Check if anonymous auth is disabled
+            if (error.code === 'auth/operation-not-allowed') {
+              console.error('🚨 Anonymous authentication is not enabled in Firebase Console!');
+              console.error('🚨 Please enable it at: https://console.firebase.google.com/project/chordmini-d29f9/authentication/providers');
+            }
           });
       }
     });

@@ -640,11 +640,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     if (isCurrentBeat) {
       if (isEmpty) {
         // Don't highlight empty cells as strongly but make them more visible in dark mode
-        classes = `${baseClasses} bg-gray-200 dark:bg-gray-500 ring-2 ring-gray-400 dark:ring-gray-300`;
+        classes = `${baseClasses} bg-gray-200 dark:bg-gray-500 ring-2 ring-gray-400 dark:ring-gray-300 relative z-10`;
         textColor = "text-gray-600 dark:text-gray-200";
       } else {
-        // Much brighter and more visible current beat highlighting
-        classes = `${baseClasses} bg-blue-100 dark:bg-blue-600 ring-2 ring-blue-500 dark:ring-blue-300 shadow-lg`;
+        // Much brighter and more visible current beat highlighting with proper z-index
+        classes = `${baseClasses} bg-blue-100 dark:bg-blue-600 ring-2 ring-blue-500 dark:ring-blue-300 shadow-lg relative z-10`;
         textColor = "text-gray-800 dark:text-white";
       }
 
