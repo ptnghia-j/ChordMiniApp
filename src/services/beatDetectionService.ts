@@ -72,13 +72,15 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
 
     if (response.ok) {
       const data = await response.json();
+      console.log('🔍 Backend health check response:', data);
+
       // Convert health check response to model info format
-      return {
+      const result = {
         success: true,
         default_model: data.beat_model || 'beat-transformer',
         available_models: [data.beat_model, data.chord_model].filter(Boolean),
-        beat_transformer_available: data.beat_model === 'Beat-Transformer',
-        madmom_available: true, // Available as fallback in the backend
+        beat_transformer_available: data.beat_transformer_available || data.beat_model === 'Beat-Transformer',
+        madmom_available: data.madmom_available || true, // Available as fallback in the backend
         model_info: {
           'beat-transformer': {
             name: 'Beat-Transformer',
@@ -93,6 +95,9 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
           }
         }
       };
+
+      console.log('🔍 Processed model info result:', result);
+      return result;
     }
   } catch (error) {
     console.error('Backend service unavailable:', error);

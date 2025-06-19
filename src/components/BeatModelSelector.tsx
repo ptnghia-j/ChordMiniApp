@@ -109,8 +109,10 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
   // Get the currently selected model details
   const selectedModelOption = getModelOptions().find(option => option.id === selectedModel) || getModelOptions()[0];
 
-  // Filter available models
-  const availableModels = getModelOptions().filter(model => model.available);
+  // Filter available models - always show beat-transformer since it's the default
+  const availableModels = getModelOptions().filter(model =>
+    model.available || model.id === 'beat-transformer'
+  );
 
   return (
     <div className={`model-selector-container ${className}`}>
