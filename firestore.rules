@@ -222,24 +222,36 @@ service cloud.firestore {
       // Allow read access to everyone for caching functionality
       allow read: if true;
 
-      // Allow write access with basic validation for key detection data
-      allow create: if resource.data.keys().hasAny(['primaryKey', 'timestamp']) &&
-                       (resource.data.primaryKey is string || resource.data.primaryKey == null) &&
-                       (resource.data.modulation is string || resource.data.modulation == null) &&
+      // Allow write access with comprehensive validation for key detection data
+      allow create: if resource.data.keys().hasAll(['primaryKey']) &&
+                       resource.data.primaryKey is string &&
+                       resource.data.primaryKey.size() <= 100 &&
+                       // Optional fields validation
+                       (!resource.data.keys().hasAny(['modulation']) || resource.data.modulation == null || (resource.data.modulation is string && resource.data.modulation.size() <= 100)) &&
                        (!resource.data.keys().hasAny(['originalChords']) || resource.data.originalChords is list) &&
                        (!resource.data.keys().hasAny(['correctedChords']) || resource.data.correctedChords is list) &&
+                       (!resource.data.keys().hasAny(['corrections']) || resource.data.corrections is map) &&
                        (!resource.data.keys().hasAny(['sequenceCorrections']) || resource.data.sequenceCorrections == null || resource.data.sequenceCorrections is map) &&
-                       resource.data.size() <= 20 && // Limit number of fields
+                       (!resource.data.keys().hasAny(['rawResponse']) || resource.data.rawResponse is string) &&
+                       (!resource.data.keys().hasAny(['cacheKey']) || resource.data.cacheKey is string) &&
+                       (!resource.data.keys().hasAny(['timestamp']) || resource.data.timestamp is timestamp) &&
+                       resource.data.size() <= 50 && // Increased limit for complex key detection data
                        isWithinRateLimit();
 
       // Allow updates with validation
-      allow update: if resource.data.keys().hasAny(['primaryKey', 'timestamp']) &&
-                       (resource.data.primaryKey is string || resource.data.primaryKey == null) &&
-                       (resource.data.modulation is string || resource.data.modulation == null) &&
+      allow update: if resource.data.keys().hasAll(['primaryKey']) &&
+                       resource.data.primaryKey is string &&
+                       resource.data.primaryKey.size() <= 100 &&
+                       // Optional fields validation
+                       (!resource.data.keys().hasAny(['modulation']) || resource.data.modulation == null || (resource.data.modulation is string && resource.data.modulation.size() <= 100)) &&
                        (!resource.data.keys().hasAny(['originalChords']) || resource.data.originalChords is list) &&
                        (!resource.data.keys().hasAny(['correctedChords']) || resource.data.correctedChords is list) &&
+                       (!resource.data.keys().hasAny(['corrections']) || resource.data.corrections is map) &&
                        (!resource.data.keys().hasAny(['sequenceCorrections']) || resource.data.sequenceCorrections == null || resource.data.sequenceCorrections is map) &&
-                       resource.data.size() <= 20 && // Limit number of fields
+                       (!resource.data.keys().hasAny(['rawResponse']) || resource.data.rawResponse is string) &&
+                       (!resource.data.keys().hasAny(['cacheKey']) || resource.data.cacheKey is string) &&
+                       (!resource.data.keys().hasAny(['timestamp']) || resource.data.timestamp is timestamp) &&
+                       resource.data.size() <= 50 && // Increased limit for complex key detection data
                        isWithinRateLimit();
 
       // Prevent deletion by regular users

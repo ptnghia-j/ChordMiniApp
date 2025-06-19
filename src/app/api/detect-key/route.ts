@@ -95,9 +95,34 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
       } : null
     };
 
+    // Debug: Log the exact data structure being saved
+    console.log('🔍 KEY DETECTION CACHE DATA:', {
+      keys: Object.keys(cacheData),
+      primaryKey: cacheData.primaryKey,
+      modulation: cacheData.modulation,
+      hasOriginalChords: !!cacheData.originalChords,
+      hasCorrectedChords: !!cacheData.correctedChords,
+      hasCorrections: !!cacheData.corrections,
+      hasSequenceCorrections: !!cacheData.sequenceCorrections,
+      hasRawResponse: !!cacheData.rawResponse,
+      hasCacheKey: !!cacheData.cacheKey,
+      hasTimestamp: !!cacheData.timestamp,
+      dataSize: Object.keys(cacheData).length,
+      primaryKeyType: typeof cacheData.primaryKey,
+      primaryKeyLength: cacheData.primaryKey?.length || 0
+    });
+
     await setDoc(docRef, cacheData);
+    console.log('✅ Key detection saved to cache successfully');
   } catch (error) {
-    console.error('Error saving key detection to cache:', error);
+    console.error('❌ Error saving key detection to cache:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 500)
+      });
+    }
   }
 }
 
