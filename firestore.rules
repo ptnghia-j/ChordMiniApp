@@ -217,6 +217,35 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Key detection cache collection - for storing musical key analysis results
+    match /keyDetections/{documentId} {
+      // Allow read access to everyone for caching functionality
+      allow read: if true;
+
+      // Allow write access with basic validation for key detection data
+      allow create: if resource.data.keys().hasAny(['primaryKey', 'timestamp']) &&
+                       (resource.data.primaryKey is string || resource.data.primaryKey == null) &&
+                       (resource.data.modulation is string || resource.data.modulation == null) &&
+                       (!resource.data.keys().hasAny(['originalChords']) || resource.data.originalChords is list) &&
+                       (!resource.data.keys().hasAny(['correctedChords']) || resource.data.correctedChords is list) &&
+                       (!resource.data.keys().hasAny(['sequenceCorrections']) || resource.data.sequenceCorrections == null || resource.data.sequenceCorrections is map) &&
+                       resource.data.size() <= 20 && // Limit number of fields
+                       isWithinRateLimit();
+
+      // Allow updates with validation
+      allow update: if resource.data.keys().hasAny(['primaryKey', 'timestamp']) &&
+                       (resource.data.primaryKey is string || resource.data.primaryKey == null) &&
+                       (resource.data.modulation is string || resource.data.modulation == null) &&
+                       (!resource.data.keys().hasAny(['originalChords']) || resource.data.originalChords is list) &&
+                       (!resource.data.keys().hasAny(['correctedChords']) || resource.data.correctedChords is list) &&
+                       (!resource.data.keys().hasAny(['sequenceCorrections']) || resource.data.sequenceCorrections == null || resource.data.sequenceCorrections is map) &&
+                       resource.data.size() <= 20 && // Limit number of fields
+                       isWithinRateLimit();
+
+      // Prevent deletion by regular users
+      allow delete: if false;
+    }
+
     // Default deny rule for any other collections
     match /{document=**} {
       allow read, write: if false;
