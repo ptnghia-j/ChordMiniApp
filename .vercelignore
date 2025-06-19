@@ -54,7 +54,7 @@ test_*.html
 *.test.js
 *.test.ts
 
-# Large files
+# Large files (except metronome sounds)
 *.mp4
 *.wav
 *.mp3
@@ -65,6 +65,10 @@ test_*.html
 *.mkv
 *.webm
 bfg.jar
+
+# Allow metronome audio files for Vercel deployment
+!public/audio/metronome/
+!public/audio/metronome/*.wav
 
 # GitHub Actions
 .github/

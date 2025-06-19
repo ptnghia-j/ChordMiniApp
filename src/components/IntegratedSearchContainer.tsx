@@ -163,13 +163,13 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                     className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
                     onClick={() => handleVideoSelect(result.id)}
                   >
-                    <div className="flex-shrink-0 w-40 h-24 relative overflow-hidden rounded-md">
+                    <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
                       <Image
                         src={result.thumbnail}
                         alt={result.title}
                         className="object-cover"
                         fill
-                        sizes="160px"
+                        sizes="80px"
                       />
                       {result.duration_string && (
                         <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
@@ -218,13 +218,13 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                             className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
                             onClick={() => handleVideoSelect(result.id)}
                           >
-                            <div className="flex-shrink-0 w-40 h-24 relative overflow-hidden rounded-md">
+                            <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
                               <Image
                                 src={result.thumbnail}
                                 alt={result.title}
                                 className="object-cover"
                                 fill
-                                sizes="160px"
+                                sizes="80px"
                               />
                               {result.duration_string && (
                                 <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded font-medium">

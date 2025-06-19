@@ -134,12 +134,15 @@ python_backend/__pycache__/
 *.mlmodel
 /models/
 
-# Audio files
+# Audio files (except metronome sounds)
 *.wav
 *.mp3
 *.ogg
 *.flac
 /audio/
+# Allow metronome audio files
+!public/audio/metronome/
+!public/audio/metronome/*.wav
 
 # Custom
 .qodo

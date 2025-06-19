@@ -781,10 +781,10 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   }
 
   return (
-    <div ref={gridContainerRef} className="chord-grid-container mx-auto px-1 sm:px-2 relative" style={{ maxWidth: "98%" }}>
+    <div ref={gridContainerRef} className="chord-grid-container mx-auto px-0.5 sm:px-1 relative" style={{ maxWidth: "99%" }}>
 
       {/* Header section with improved layout - title left, tags right */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
         {/* Left side - Title */}
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
@@ -852,11 +852,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       </div>
 
       {/* Render rows of measures */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
             {/* Grid of measures with aggressive responsive layout to prevent fall-through */}
-            <div className={`grid gap-1 md:gap-2 ${
+            <div className={`grid gap-0.5 md:gap-1 ${
               // More aggressive responsive grid that reaches target measures per row faster
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
               dynamicMeasuresPerRow === 2 ? 'grid-cols-1 sm:grid-cols-2' :
@@ -880,7 +880,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                   }}
                 >
                   {/* Chord cells for this measure - consistent grid based on time signature */}
-                  <div className={`grid gap-1 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
+                  <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
                       // Calculate global index with consistent measure layout
                       // Each measure always has exactly actualBeatsPerMeasure cells
@@ -924,7 +924,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                         <div
                           id={`chord-${globalIndex}`}
                           key={`chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[3.75rem] chord-cell`}
+                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2.5rem] chord-cell`}
                           onClick={isClickable ? () => handleBeatClick(globalIndex) : undefined}
                           role={isClickable ? "button" : undefined}
                           tabIndex={isClickable ? 0 : undefined}

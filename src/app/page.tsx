@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useRef } from 'react';
+import { useState, FormEvent, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -35,6 +35,7 @@ export default function Home() {
   const titleRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { theme } = useTheme();
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // No longer need intersection observer since we have a permanent sticky header
 
@@ -60,6 +61,80 @@ export default function Home() {
 
     return null;
   };
+
+  // Debounced search function for continuous searching
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    // Check if it's a direct YouTube URL or video ID
+    const videoId = extractVideoId(query);
+    if (videoId) {
+      // Don't auto-navigate for URLs during typing, just clear results
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      const response = await apiPost('SEARCH_YOUTUBE', { query });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to search YouTube');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.results) {
+        setSearchResults(data.results);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error: unknown) {
+      console.error('Error searching YouTube:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to search for videos';
+      if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        setSearchError('Search timed out. Please try again. First searches may take longer to complete.');
+      } else {
+        setSearchError(errorMessage);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set new timer for debounced search
+    if (searchQuery.trim()) {
+      debounceTimerRef.current = setTimeout(() => {
+        performSearch(searchQuery);
+      }, 800); // 800ms debounce delay
+    } else {
+      // Clear results immediately when query is empty
+      setSearchResults([]);
+      setSearchError(null);
+    }
+
+    // Cleanup function
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery, performSearch]);
 
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();

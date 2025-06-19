@@ -45,9 +45,9 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
 
     if (stage === 'beat-detection' || stage === 'chord-recognition') {
       if (audioDuration && audioDuration > 0) {
-        // Use the formula: estimated_time = 0.8 * audio_duration
-        // This means processing takes about 80% of the audio duration
-        const estimatedTime = audioDuration * 0.8;
+        // Use 1:1 ratio: x minutes audio = x minutes processing
+        // This means processing takes approximately the same time as audio duration
+        const estimatedTime = audioDuration;
         const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 95);
         setEstimatedProgress(progress);
         console.log(`📊 PROGRESS CALCULATION: audioDuration=${audioDuration.toFixed(1)}s, elapsedSeconds=${elapsedSeconds.toFixed(1)}s, estimatedTime=${estimatedTime.toFixed(1)}s, progress=${progress.toFixed(1)}%`);
@@ -55,7 +55,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = ({
         // Fallback: Use time-based estimation when duration is not available yet
         // Assume average 3-minute song for initial estimation
         const fallbackDuration = 180; // 3 minutes in seconds
-        const estimatedTime = fallbackDuration * 0.8; // Apply same 0.8 factor
+        const estimatedTime = fallbackDuration; // 1:1 ratio
         const fallbackProgress = Math.min((elapsedSeconds / estimatedTime) * 100, 30); // Cap at 30% until real duration is available
         setEstimatedProgress(fallbackProgress);
         console.log(`📊 PROGRESS FALLBACK: audioDuration=null, elapsedSeconds=${elapsedSeconds.toFixed(1)}s, fallbackProgress=${fallbackProgress.toFixed(1)}% (capped at 30%)`);
