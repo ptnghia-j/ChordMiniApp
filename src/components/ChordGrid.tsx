@@ -551,17 +551,17 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     let maxMeasuresPerRow: number;
 
     if (isMobile) {
-      targetCellsPerRow = anyPanelOpen ? 4 : 6; // More conservative when panels are open
-      maxMeasuresPerRow = anyPanelOpen ? 1 : 2;
+      targetCellsPerRow = anyPanelOpen ? 6 : 8; // Increased for more compact layout
+      maxMeasuresPerRow = anyPanelOpen ? 2 : 3;
     } else if (isTablet) {
-      targetCellsPerRow = anyPanelOpen ? 8 : 12; // Reduce when panels are open
-      maxMeasuresPerRow = anyPanelOpen ? 3 : 4;
+      targetCellsPerRow = anyPanelOpen ? 12 : 16; // Increased for more compact layout
+      maxMeasuresPerRow = anyPanelOpen ? 4 : 5;
     } else if (isDesktop) {
-      targetCellsPerRow = anyPanelOpen ? 12 : 18; // Significant reduction when panels are open
-      maxMeasuresPerRow = anyPanelOpen ? 4 : 6;
-    } else { // Large desktop
-      targetCellsPerRow = anyPanelOpen ? 16 : 24; // Still reduce for large screens
+      targetCellsPerRow = anyPanelOpen ? 16 : 24; // Increased for more compact layout
       maxMeasuresPerRow = anyPanelOpen ? 6 : 8;
+    } else { // Large desktop
+      targetCellsPerRow = anyPanelOpen ? 20 : 32; // Increased for more compact layout
+      maxMeasuresPerRow = anyPanelOpen ? 8 : 10;
     }
 
     // Calculate base measures per row
@@ -784,7 +784,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     <div ref={gridContainerRef} className="chord-grid-container mx-auto px-0.5 sm:px-1 relative" style={{ maxWidth: "99%" }}>
 
       {/* Header section with improved layout - title left, tags right */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1 p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
         {/* Left side - Title */}
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
@@ -852,11 +852,11 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       </div>
 
       {/* Render rows of measures */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
             {/* Grid of measures with aggressive responsive layout to prevent fall-through */}
-            <div className={`grid gap-0.5 md:gap-1 ${
+            <div className={`grid gap-0.5 ${
               // More aggressive responsive grid that reaches target measures per row faster
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
               dynamicMeasuresPerRow === 2 ? 'grid-cols-1 sm:grid-cols-2' :
@@ -874,13 +874,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                 return (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="border-l-[3px] border-gray-600 dark:border-gray-300 transition-colors duration-300"
+                  className="border-l-[2px] border-gray-600 dark:border-gray-300 transition-colors duration-300"
                   style={{
-                    paddingLeft: '4px'
+                    paddingLeft: '2px'
                   }}
                 >
                   {/* Chord cells for this measure - consistent grid based on time signature */}
-                  <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
+                  <div className={`grid gap-0 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
                       // Calculate global index with consistent measure layout
                       // Each measure always has exactly actualBeatsPerMeasure cells
@@ -924,7 +924,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                         <div
                           id={`chord-${globalIndex}`}
                           key={`chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2.5rem] chord-cell`}
+                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2rem] chord-cell`}
                           onClick={isClickable ? () => handleBeatClick(globalIndex) : undefined}
                           role={isClickable ? "button" : undefined}
                           tabIndex={isClickable ? 0 : undefined}

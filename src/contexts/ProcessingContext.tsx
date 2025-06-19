@@ -74,14 +74,12 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
 
     // Create a new timer interval
     const interval = setInterval(() => {
-      if (startTime !== null) {
-        setElapsedTime(Date.now() - now);
-      }
-    }, 10); // Update every 10ms for smooth display
+      setElapsedTime(Date.now() - now);
+    }, 100); // Update every 100ms for better performance
 
     setTimerInterval(interval);
 
-    console.log('Timer started');
+    console.log('Timer started at:', now);
   };
 
   // Stop the timer and freeze the elapsed time

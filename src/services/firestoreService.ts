@@ -196,7 +196,7 @@ export async function saveTranscription(
       // Include enharmonic correction fields (handle undefined)
       originalChords: transcriptionData.originalChords ?? null,
       correctedChords: transcriptionData.correctedChords ?? null,
-      createdAt: serverTimestamp()
+      createdAt: Timestamp.now()
     };
 
     // Save the document
