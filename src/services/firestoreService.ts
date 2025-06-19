@@ -9,7 +9,8 @@ import {
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/config/firebase';
 import { ChordDetectionResult } from './chordRecognitionService';
 import { BeatInfo } from './beatDetectionService';
 
@@ -127,17 +128,47 @@ export async function saveTranscription(
   transcriptionData: Omit<TranscriptionData, 'createdAt'>
 ): Promise<boolean> {
   // Check if Firebase is initialized or disabled due to CORS issues
-  if (!db || firestoreDisabled) {
+  if (!db || !auth || firestoreDisabled) {
     if (firestoreDisabled) {
       console.warn('Firestore disabled due to CORS issues, skipping transcription save');
-    } else {
-      console.warn('Firebase not initialized, skipping transcription save');
+    } else if (!db) {
+      console.warn('Firebase Firestore not initialized, skipping transcription save');
+    } else if (!auth) {
+      console.warn('Firebase Auth not initialized, skipping transcription save');
     }
     return false;
   }
 
+  // Wait for authentication to be ready
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribe(); // Clean up the listener
+
+      if (!user) {
+        console.error('❌ User not authenticated, cannot save to Firestore');
+        resolve(false);
+        return;
+      }
+
+      console.log('🔐 User authenticated, proceeding with Firestore save');
+      const result = await performFirestoreSave(transcriptionData);
+      resolve(result);
+    });
+  });
+}
+
+/**
+ * Internal function to perform the actual Firestore save operation
+ * @param transcriptionData The transcription data to save
+ * @returns True if successful, false otherwise
+ */
+async function performFirestoreSave(
+  transcriptionData: Omit<TranscriptionData, 'createdAt'>
+): Promise<boolean> {
+
   try {
-    console.log('Saving transcription to Firestore:', {
+    console.log('🔄 Starting authenticated Firestore save process...');
+    console.log('Initial transcription data:', {
       videoId: transcriptionData.videoId,
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
@@ -149,11 +180,15 @@ export async function saveTranscription(
 
     // Create a unique document ID based on the parameters
     const docId = `${transcriptionData.videoId}_${transcriptionData.beatModel}_${transcriptionData.chordModel}`;
+    console.log('📄 Document ID created:', docId);
 
     // Get the document reference
+    console.log('📂 Creating document reference for collection:', TRANSCRIPTIONS_COLLECTION);
     const docRef = doc(db, TRANSCRIPTIONS_COLLECTION, docId);
+    console.log('✅ Document reference created successfully');
 
     // Prepare data for Firestore
+    console.log('🧹 Starting data sanitization process...');
     // Convert any complex objects to a format Firestore can handle
     const sanitizedData = {
       videoId: transcriptionData.videoId,

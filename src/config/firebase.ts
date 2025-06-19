@@ -2,6 +2,7 @@
 import { initializeApp, FirebaseApp, getApps } from "firebase/app";
 import { getFirestore, Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getAuth, Auth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -27,6 +28,7 @@ console.log('Firebase config:', {
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
+let auth: Auth | null = null;
 
 // Check if we have the required configuration
 const hasRequiredConfig =
@@ -50,12 +52,17 @@ if (hasRequiredConfig) {
 
     db = getFirestore(app);
     storage = getStorage(app);
+    auth = getAuth(app);
+
+    // Set up anonymous authentication
+    setupAnonymousAuth();
   } catch (error) {
     console.error('Error initializing Firebase:', error);
 
     // Create a fallback implementation to prevent app crashes
     db = null;
     storage = null;
+    auth = null;
   }
 } else {
   console.warn('Missing required Firebase configuration. Firebase will not be initialized.');
@@ -64,6 +71,35 @@ if (hasRequiredConfig) {
   console.warn('- NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
   console.warn('- NEXT_PUBLIC_FIREBASE_PROJECT_ID');
   console.warn('- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+}
+
+// Anonymous authentication setup
+async function setupAnonymousAuth() {
+  if (!auth) {
+    console.warn('Firebase Auth not initialized, skipping anonymous authentication');
+    return;
+  }
+
+  try {
+    // Listen for auth state changes
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('🔐 User authenticated:', user.isAnonymous ? 'Anonymous' : 'Signed in');
+      } else {
+        console.log('🔓 User not authenticated, signing in anonymously...');
+        // Sign in anonymously if not already authenticated
+        signInAnonymously(auth!)
+          .then(() => {
+            console.log('✅ Anonymous authentication successful');
+          })
+          .catch((error) => {
+            console.error('❌ Anonymous authentication failed:', error);
+          });
+      }
+    });
+  } catch (error) {
+    console.error('Error setting up anonymous authentication:', error);
+  }
 }
 
 // Collection names
@@ -94,4 +130,4 @@ export const initTranslationsCollection = async () => {
   }
 };
 
-export { db, storage };
+export { db, storage, auth };
