@@ -34,7 +34,19 @@ service cloud.firestore {
              data.chords is list &&
              data.synchronizedChords is list &&
              isValidTimestamp(data.createdAt) &&
-             data.size() <= 100; // Limit number of fields
+             // Allow optional fields for enhanced transcription data
+             (!data.keys().hasAny(['downbeats']) || data.downbeats is list) &&
+             (!data.keys().hasAny(['downbeats_with_measures']) || data.downbeats_with_measures is list) &&
+             (!data.keys().hasAny(['audioDuration']) || data.audioDuration is number) &&
+             (!data.keys().hasAny(['totalProcessingTime']) || data.totalProcessingTime is number) &&
+             (!data.keys().hasAny(['timeSignature']) || data.timeSignature is number) &&
+             (!data.keys().hasAny(['bpm']) || data.bpm is number) &&
+             (!data.keys().hasAny(['beatShift']) || data.beatShift is number) &&
+             (!data.keys().hasAny(['keySignature']) || data.keySignature == null || data.keySignature is string) &&
+             (!data.keys().hasAny(['keyModulation']) || data.keyModulation == null || data.keyModulation is string) &&
+             (!data.keys().hasAny(['originalChords']) || data.originalChords == null || data.originalChords is list) &&
+             (!data.keys().hasAny(['correctedChords']) || data.correctedChords == null || data.correctedChords is list) &&
+             data.size() <= 25; // Increased limit to accommodate additional fields
     }
 
     function isValidTranslationData(data) {

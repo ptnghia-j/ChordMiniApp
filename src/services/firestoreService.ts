@@ -199,23 +199,45 @@ export async function saveTranscription(
       createdAt: Timestamp.now()
     };
 
+    // Log the data being saved for debugging
+    console.log('Attempting to save transcription with data structure:', {
+      docId,
+      videoId: sanitizedData.videoId,
+      videoIdLength: sanitizedData.videoId.length,
+      beatModel: sanitizedData.beatModel,
+      chordModel: sanitizedData.chordModel,
+      fieldCount: Object.keys(sanitizedData).length,
+      hasRequiredFields: ['videoId', 'beatModel', 'chordModel', 'beats', 'chords', 'synchronizedChords', 'createdAt'].every(field => field in sanitizedData),
+      createdAtType: typeof sanitizedData.createdAt,
+      createdAtValue: sanitizedData.createdAt
+    });
+
     // Save the document
     await setDoc(docRef, sanitizedData);
 
-    // Transcription saved successfully to Firestore
+    console.log('✅ Transcription saved successfully to Firestore');
     return true;
   } catch (error) {
-    // Log error for production monitoring
+    // Enhanced error logging for debugging
+    console.error('❌ Error saving transcription to Firestore:', error);
+
     if (error instanceof Error) {
-      // Check for CORS or network errors and handle gracefully
-      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        console.warn('Network/CORS error accessing Firestore - disabling Firestore for this session');
+      console.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 500) // Limit stack trace length
+      });
+
+      // Check for specific Firebase errors
+      if (error.message.includes('Missing or insufficient permissions')) {
+        console.error('🔒 Firestore permissions error - this suggests a security rules validation failure');
+        console.error('Check that the data structure matches the security rules in firestore.rules');
+      } else if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        console.warn('🌐 Network/CORS error accessing Firestore - disabling Firestore for this session');
         firestoreDisabled = true;
-      } else {
-        console.error('Error saving transcription to Firestore:', error.message);
       }
     } else {
-      console.error('Unknown error saving transcription to Firestore:', error);
+      console.error('Unknown error type:', typeof error, error);
     }
     return false;
   }
