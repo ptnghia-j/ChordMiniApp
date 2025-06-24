@@ -1,0 +1,377 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore, with the addition of
+# "#!include" directives (which insert the entries of the given .gitignore-style
+# file at that point).
+
+# For more information, run:
+#   $ gcloud topic gcloudignore
+
+.gcloudignore
+# If you would like to upload your .git directory, .gitignore file or files
+# from your .gitignore file, remove the corresponding line below:
+.git
+.gitignore
+
+# Python pycache:
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Model files and large data
+models/
+*.h5
+*.pkl
+*.joblib
+*.model
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Audio files
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.aac
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Large datasets
+data/
+datasets/
+*.csv
+*.json
+*.xml
+*.parquet
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components/
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript v1 declaration files
+typings/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Exclude large model files that might be in the directory
+*.safetensors
+*.msgpack
+*.h5
+*.hdf5
+
+# Exclude any backup files
+*.bak
+*.backup
+
+# Exclude test files and directories
+test/
+tests/
+*_test.py
+test_*.py
+
+# Exclude documentation
+docs/
+doc/
+*.md
+README*
+
+# Exclude configuration files that shouldn't be deployed
+*.ini
+*.cfg
+config.py
+settings.py
+
+# Exclude any local development files
+local/
+dev/
+development/
+
+# Exclude any cache directories
+cache/
+.cache/
+
+# Exclude any benchmark or evaluation files
+benchmark/
+benchmarks/
+evaluation/
+eval/
+
+# Exclude any scripts that are not needed for production
+scripts/
+script/
+*.sh
+*.bat
+
+# Exclude any example files
+examples/
+example/
+sample/
+samples/
+
+# Exclude any research or experimental files
+research/
+experimental/
+experiment/
+experiments/
+
+# Exclude any training files
+training/
+train/
+
+# Exclude any validation files
+validation/
+valid/
+
+# Exclude any preprocessing files
+preprocessing/
+preprocess/
+
+# Exclude any analysis files
+analysis/
+analyze/
+
+# Exclude any visualization files
+visualization/
+visualize/
+plots/
+figures/
+
+# Exclude any notebook files
+*.ipynb
+notebooks/
+
+# Exclude any large binary files
+*.so
+*.dll
+*.dylib
+
+# Exclude any compressed files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Exclude any image files (unless needed for the app)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.svg
+
+# Exclude any font files
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.eot
+
+# Exclude any database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Exclude any lock files
+*.lock
+Pipfile.lock
+poetry.lock
+package-lock.json
+yarn.lock

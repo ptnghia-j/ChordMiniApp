@@ -172,7 +172,7 @@ class BeatTransformerDetector:
             print(f"Enhanced beat activation stats: min={beat_activation_enhanced.min():.3f}, max={beat_activation_enhanced.max():.3f}")
             print(f"Enhanced downbeat activation stats: min={downbeat_activation_enhanced.min():.3f}, max={downbeat_activation_enhanced.max():.3f}")
 
-            # Use enhanced DBN processors with lower thresholds
+            # Use enhanced DBN processors with lower thresholds and better error handling
             try:
                 # Create DBN processors with more sensitive parameters
                 from madmom.features.beats import DBNBeatTrackingProcessor
@@ -191,18 +191,46 @@ class BeatTransformerDetector:
                     num_tempi=None, threshold=0.05  # Much lower threshold
                 )
 
+                # Try beat tracking first
                 dbn_beat_times = enhanced_beat_tracker(beat_activation_enhanced)
                 print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
 
-                # Combined activation for downbeat tracking
-                combined_act = np.concatenate((
-                    np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))[:, np.newaxis],
-                    downbeat_activation_enhanced[:, np.newaxis]
-                ), axis=-1)
+                # Only attempt downbeat tracking if we have beats
+                if len(dbn_beat_times) > 0:
+                    try:
+                        # Combined activation for downbeat tracking - use safer array creation for NumPy 1.24+
+                        beat_only = np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))
 
-                dbn_downbeat_results = enhanced_downbeat_tracker(combined_act)
-                dbn_downbeat_times_raw = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
-                print(f"Enhanced DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
+                        # Create combined activation with explicit dtype and shape validation
+                        combined_act = np.column_stack([beat_only, downbeat_activation_enhanced])
+
+                        # Ensure the array is contiguous and has the right dtype
+                        combined_act = np.ascontiguousarray(combined_act, dtype=np.float64)
+
+                        print(f"Combined activation shape: {combined_act.shape}, dtype: {combined_act.dtype}")
+
+                        dbn_downbeat_results = enhanced_downbeat_tracker(combined_act)
+
+                        # Safely extract downbeats
+                        if len(dbn_downbeat_results) > 0 and dbn_downbeat_results.shape[1] >= 2:
+                            downbeat_mask = dbn_downbeat_results[:, 1] == 1
+                            if np.any(downbeat_mask):
+                                dbn_downbeat_times_raw = dbn_downbeat_results[downbeat_mask, 0]
+                            else:
+                                dbn_downbeat_times_raw = np.array([])
+                        else:
+                            dbn_downbeat_times_raw = np.array([])
+
+                        print(f"Enhanced DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
+
+                    except Exception as downbeat_error:
+                        print(f"Enhanced downbeat tracking failed: {downbeat_error}")
+                        # Generate downbeats from beats if downbeat tracking fails
+                        dbn_downbeat_times_raw = dbn_beat_times[::4] if len(dbn_beat_times) >= 4 else np.array([dbn_beat_times[0]]) if len(dbn_beat_times) > 0 else np.array([])
+                        print(f"Generated {len(dbn_downbeat_times_raw)} downbeats from beats")
+                else:
+                    print("No beats detected, cannot perform downbeat tracking")
+                    dbn_downbeat_times_raw = np.array([])
 
             except Exception as e:
                 print(f"Enhanced DBN processors failed: {e}")
@@ -211,14 +239,30 @@ class BeatTransformerDetector:
                     dbn_beat_times = self.beat_tracker(beat_activation_enhanced)
                     print(f"Original DBN beat tracker with enhanced activations returned {len(dbn_beat_times)} beats")
 
-                    combined_act = np.concatenate((
-                        np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))[:, np.newaxis],
-                        downbeat_activation_enhanced[:, np.newaxis]
-                    ), axis=-1)
+                    if len(dbn_beat_times) > 0:
+                        try:
+                            # Safer combined activation creation
+                            beat_only = np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))
+                            combined_act = np.column_stack([beat_only, downbeat_activation_enhanced])
+                            combined_act = np.ascontiguousarray(combined_act, dtype=np.float64)
 
-                    dbn_downbeat_results = self.downbeat_tracker(combined_act)
-                    dbn_downbeat_times_raw = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
-                    print(f"Original DBN downbeat tracker with enhanced activations returned {len(dbn_downbeat_times_raw)} downbeats")
+                            dbn_downbeat_results = self.downbeat_tracker(combined_act)
+
+                            if len(dbn_downbeat_results) > 0 and dbn_downbeat_results.shape[1] >= 2:
+                                downbeat_mask = dbn_downbeat_results[:, 1] == 1
+                                if np.any(downbeat_mask):
+                                    dbn_downbeat_times_raw = dbn_downbeat_results[downbeat_mask, 0]
+                                else:
+                                    dbn_downbeat_times_raw = np.array([])
+                            else:
+                                dbn_downbeat_times_raw = np.array([])
+
+                            print(f"Original DBN downbeat tracker with enhanced activations returned {len(dbn_downbeat_times_raw)} downbeats")
+                        except Exception as downbeat_error2:
+                            print(f"Original downbeat tracking also failed: {downbeat_error2}")
+                            dbn_downbeat_times_raw = dbn_beat_times[::4] if len(dbn_beat_times) >= 4 else np.array([dbn_beat_times[0]]) if len(dbn_beat_times) > 0 else np.array([])
+                    else:
+                        dbn_downbeat_times_raw = np.array([])
 
                 except Exception as e2:
                     print(f"All DBN approaches failed: {e2}")

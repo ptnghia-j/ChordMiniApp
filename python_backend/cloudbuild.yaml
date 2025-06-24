@@ -1,0 +1,34 @@
+# Google Cloud Build configuration for ChordMini Backend
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/chordmini-backend', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/chordmini-backend']
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'chordmini-backend-full'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/chordmini-backend'
+      - '--region'
+      - 'us-central1'
+      - '--memory'
+      - '16Gi'
+      - '--cpu'
+      - '4'
+      - '--timeout'
+      - '600'
+      - '--max-instances'
+      - '5'
+      - '--allow-unauthenticated'
+      - '--platform'
+      - 'managed'
+
+# Build timeout (30 minutes for ML model installation)
+timeout: 1800s
+
+# Use high-performance machine for building
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 100
