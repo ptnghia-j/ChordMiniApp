@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, doc, getDoc } from 'firebase/firestore';
+import { FiMusic, FiCloud, FiHardDrive, FiClock } from 'react-icons/fi';
 
 interface TranscribedVideo {
   videoId: string;
@@ -17,9 +18,15 @@ interface TranscribedVideo {
   bpm?: number;
   timeSignature?: number;
   keySignature?: string;
+  // Audio file metadata
+  audioFilename?: string;
+  audioUrl?: string;
+  isStreamUrl?: boolean;
+  fromCache?: boolean;
 }
 
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
+const AUDIO_FILES_COLLECTION = 'audioFiles';
 const INITIAL_LOAD_COUNT = 10; // Limit to 10 videos as requested
 const LOAD_MORE_COUNT = 10; // Number of videos to load when "Load More" is clicked
 
@@ -31,6 +38,68 @@ export default function RecentVideos() {
   // hasMore state removed as it's not currently used
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Audio file metadata interface
+  interface AudioFileMetadata {
+    audioFilename: string;
+    audioUrl: string;
+    isStreamUrl: boolean;
+    fromCache: boolean;
+    fileSize: number;
+    streamExpiresAt?: number;
+  }
+
+  // Helper function to batch query audio files for video IDs with smart caching
+  const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
+    if (!db || videoIds.length === 0) {
+      return new Map<string, AudioFileMetadata>();
+    }
+
+    // Import smart cache
+    const { audioMetadataCache } = await import('@/services/smartFirebaseCache');
+
+    // Use smart cache for batch queries
+    const audioFilesMap = await audioMetadataCache.getBatch(
+      videoIds,
+      async (videoId: string) => {
+        try {
+          if (!db) return null;
+          const audioDocRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
+          const audioDocSnap = await getDoc(audioDocRef);
+
+          if (audioDocSnap.exists()) {
+            const audioData = audioDocSnap.data();
+            return {
+              audioFilename: audioData.storagePath || audioData.title || 'Unknown',
+              audioUrl: audioData.audioUrl,
+              isStreamUrl: audioData.isStreamUrl || false,
+              fromCache: true,
+              fileSize: audioData.fileSize || 0,
+              streamExpiresAt: audioData.streamExpiresAt
+            };
+          }
+          return null;
+        } catch (error) {
+          // Error handling is done by smart cache
+          return null;
+        }
+      },
+      // Check if audio metadata is complete
+      (data: any) => {
+        return !!(data.audioUrl && data.audioFilename);
+      }
+    );
+
+    // Convert to the expected format
+    const resultMap = new Map<string, AudioFileMetadata>();
+    for (const [videoId, data] of audioFilesMap.entries()) {
+      if (data) {
+        resultMap.set(videoId, data as AudioFileMetadata);
+      }
+    }
+
+    return resultMap;
+  }, []);
 
   // Function to fetch transcribed videos with pagination support
   const fetchVideos = useCallback(async (isLoadMore = false) => {
@@ -72,6 +141,7 @@ export default function RecentVideos() {
       // Convert documents to TranscribedVideo objects and deduplicate by videoId
       const videoMap = new Map<string, TranscribedVideo>();
       const existingVideoIds = new Set(videos.map(v => v.videoId));
+      const videoIds: string[] = [];
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -85,6 +155,7 @@ export default function RecentVideos() {
 
           // Only keep the most recent transcription for each video
           if (!videoMap.has(data.videoId)) {
+            videoIds.push(data.videoId);
             videoMap.set(data.videoId, {
               videoId: data.videoId,
               title: data.title || `Video ${data.videoId}`,
@@ -97,9 +168,28 @@ export default function RecentVideos() {
               chordModel: data.chordModel,
               bpm: data.bpm,
               timeSignature: data.timeSignature,
-              keySignature: data.keySignature
+              keySignature: data.keySignature,
+              // Initialize audio file metadata (will be populated below)
+              audioFilename: undefined,
+              audioUrl: undefined,
+              isStreamUrl: false,
+              fromCache: false
             });
           }
+        }
+      });
+
+      // Batch fetch audio file metadata for all video IDs
+      const audioFilesMap = await fetchAudioFiles(videoIds);
+
+      // Merge audio file metadata with transcription data
+      audioFilesMap.forEach((audioData, videoId) => {
+        const video = videoMap.get(videoId);
+        if (video) {
+          video.audioFilename = audioData.audioFilename;
+          video.audioUrl = audioData.audioUrl;
+          video.isStreamUrl = audioData.isStreamUrl;
+          video.fromCache = audioData.fromCache;
         }
       });
 
@@ -127,7 +217,7 @@ export default function RecentVideos() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [videos, lastDoc]);
+  }, [videos, lastDoc, fetchAudioFiles]);
 
   // Show more function - just expand the container
   const handleShowMore = () => {
@@ -168,6 +258,53 @@ export default function RecentVideos() {
   const formatTimeSignature = (timeSignature?: number) => {
     if (!timeSignature) return '';
     return `${timeSignature}/4`;
+  };
+
+  // Helper function to get audio source type and icon
+  const getAudioSourceInfo = (video: TranscribedVideo) => {
+    if (!video.audioFilename && !video.audioUrl) {
+      return { type: 'Unknown', icon: FiMusic, color: 'text-gray-500' };
+    }
+
+    if (video.isStreamUrl) {
+      return {
+        type: 'QuickTube',
+        icon: FiCloud,
+        color: 'text-blue-500',
+        tooltip: 'Streamed from QuickTube service'
+      };
+    }
+
+    if (video.audioFilename?.includes('yt-dlp') || video.audioFilename?.includes('.mp3')) {
+      return {
+        type: 'yt-dlp',
+        icon: FiHardDrive,
+        color: 'text-green-500',
+        tooltip: 'Extracted using yt-dlp'
+      };
+    }
+
+    return {
+      type: 'Cached',
+      icon: FiClock,
+      color: 'text-purple-500',
+      tooltip: 'Loaded from cache'
+    };
+  };
+
+  // Helper function to format audio filename for display
+  const formatAudioFilename = (filename?: string): string => {
+    if (!filename) return 'No audio file';
+
+    // Extract just the filename without path
+    const baseName = filename.split('/').pop() || filename;
+
+    // Truncate long filenames
+    if (baseName.length > 30) {
+      return baseName.substring(0, 27) + '...';
+    }
+
+    return baseName;
   };
 
   if (loading) {
@@ -252,6 +389,31 @@ export default function RecentVideos() {
                   <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
                     {video.title}
                   </h4>
+
+                  {/* Audio file information */}
+                  {(video.audioFilename || video.audioUrl) && (
+                    <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1">
+                      {(() => {
+                        const sourceInfo = getAudioSourceInfo(video);
+                        const IconComponent = sourceInfo.icon;
+                        return (
+                          <>
+                            <IconComponent className={`w-3 h-3 ${sourceInfo.color}`} />
+                            <span className={sourceInfo.color}>{sourceInfo.type}</span>
+                            <span className="text-gray-500">•</span>
+                            <span title={video.audioFilename || 'Unknown filename'}>
+                              {formatAudioFilename(video.audioFilename)}
+                            </span>
+                            {video.fromCache && (
+                              <span className="text-green-500 ml-1" title="Loaded from cache">
+                                ⚡
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {/* Transcription metadata - Compact layout */}
                   <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300 space-y-0.5">
