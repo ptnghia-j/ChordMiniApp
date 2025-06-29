@@ -32,15 +32,15 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
     }
   }, [isVisible]);
 
-  // Auto-dismiss after 5 seconds if not from cache
+  // Auto-dismiss after 5 seconds for all notifications
   useEffect(() => {
-    if (isVisible && !fromCache) {
+    if (isVisible) {
       const timer = setTimeout(() => {
         onDismiss();
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [isVisible, fromCache, onDismiss]);
+  }, [isVisible, onDismiss]);
 
   if (!isShowing) return null;
 

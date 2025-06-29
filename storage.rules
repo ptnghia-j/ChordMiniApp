@@ -1,0 +1,75 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for ChordMiniApp
+// These rules allow anonymous users to upload and access audio files
+// while maintaining security and preventing abuse
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions for validation
+    function isValidAudioFile() {
+      // Allow common audio formats and octet-stream for MP3 files
+      return (request.resource != null &&
+              (request.resource.contentType.matches('audio/.*') ||
+               request.resource.contentType == 'application/octet-stream')) ||
+             (resource != null &&
+              (resource.contentType.matches('audio/.*') ||
+               resource.contentType == 'application/octet-stream'));
+    }
+    
+    function isValidFileSize() {
+      // Limit file size to 50MB (typical for 5-minute songs)
+      return request.resource.size <= 50 * 1024 * 1024;
+    }
+    
+    function isValidFileName() {
+      // Ensure filename follows our pattern: contains video ID in brackets
+      // Check both existing resource name and new request resource name
+      return (resource != null && resource.name.matches('.*\\[.{11}\\].*')) ||
+             (request.resource != null && request.resource.name.matches('.*\\[.{11}\\].*'));
+    }
+    
+    // Audio files storage - allow anonymous access for caching
+    match /audio/{fileName} {
+      // Allow read access to everyone (for serving cached audio)
+      allow read: if true;
+      
+      // Allow write access for anonymous users with validation
+      allow write: if isValidAudioFile() && 
+                      isValidFileSize() &&
+                      isValidFileName();
+      
+      // Allow delete only for cleanup operations (optional)
+      allow delete: if false; // Disable deletion for now
+    }
+    
+    // Video files storage (if needed in the future)
+    match /video/{fileName} {
+      // Allow read access to everyone
+      allow read: if true;
+      
+      // Allow write access with validation
+      allow write: if request.resource.contentType.matches('video/.*') &&
+                      request.resource.size <= 100 * 1024 * 1024 && // 100MB limit
+                      isValidFileName();
+      
+      // Disable deletion
+      allow delete: if false;
+    }
+    
+    // Temporary files (for processing)
+    match /temp/{fileName} {
+      // Allow read/write for temporary processing
+      allow read, write: if isValidFileSize();
+      
+      // Allow deletion for cleanup
+      allow delete: if true;
+    }
+    
+    // Default deny for all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

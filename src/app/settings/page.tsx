@@ -112,9 +112,7 @@ export default function SettingsPage() {
           <div className="mt-8">
             {activeTab === 'general' && (
               <div className="space-y-6">
-                <div className={`p-6 rounded-lg border ${
-                  theme === 'dark' ? 'bg-content-bg border-gray-600' : 'bg-white border-gray-200'
-                }`}>
+                <div>
                   <h3 className={`text-lg font-medium mb-4 ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}>
@@ -153,9 +151,7 @@ export default function SettingsPage() {
             )}
 
             {activeTab === 'apiKeys' && (
-              <div className={`p-6 rounded-lg border ${
-                theme === 'dark' ? 'bg-content-bg border-gray-600' : 'bg-white border-gray-200'
-              }`}>
+              <div>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -174,9 +170,7 @@ export default function SettingsPage() {
 
             {activeTab === 'privacy' && (
               <div className="space-y-6">
-                <div className={`p-6 rounded-lg border ${
-                  theme === 'dark' ? 'bg-content-bg border-gray-600' : 'bg-white border-gray-200'
-                }`}>
+                <div>
                   <h3 className={`text-lg font-medium mb-4 ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}>
@@ -192,7 +186,7 @@ export default function SettingsPage() {
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                       }`}>
-                        API keys are encrypted and stored locally in your browser using the Web Crypto API. 
+                        API keys are encrypted and stored locally in your browser using the Web Crypto API.
                         They never leave your device and are not sent to our servers.
                       </p>
                     </div>
@@ -205,7 +199,7 @@ export default function SettingsPage() {
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                       }`}>
-                        Analysis results and transcriptions are cached in Firebase to improve performance. 
+                        Analysis results and transcriptions are cached in Firebase to improve performance.
                         No personal information is stored.
                       </p>
                     </div>
@@ -218,7 +212,7 @@ export default function SettingsPage() {
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                       }`}>
-                        We collect anonymous usage statistics to improve the application. 
+                        We collect anonymous usage statistics to improve the application.
                         No personal data or API keys are included in analytics.
                       </p>
                     </div>

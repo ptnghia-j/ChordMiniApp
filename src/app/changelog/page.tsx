@@ -8,7 +8,7 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.1.0',
-      date: 'June 6, 2025',
+      date: 'June, 2025',
       title: 'Production Ready Release',
       description: 'Complete chord recognition and music analysis platform with AI assistance',
       features: [

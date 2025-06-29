@@ -54,7 +54,7 @@ const HelpPage: React.FC = () => {
         </div>
 
         {/* Quick Start Guide */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Quick Start Guide
           </h2>
@@ -102,7 +102,7 @@ const HelpPage: React.FC = () => {
         </div>
 
         {/* FAQ Section */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Frequently Asked Questions
           </h2>
@@ -140,7 +140,7 @@ const HelpPage: React.FC = () => {
         </div>
 
         {/* Contact Support */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Need More Help?
           </h2>
@@ -149,7 +149,7 @@ const HelpPage: React.FC = () => {
               If you can&apos;t find the answer to your question, please reach out to our support team:
             </p>
             <div className="space-y-2">
-              <p><strong>Email Support:</strong> [Support email will be added]</p>
+              <p><strong>Email Support:</strong> <a href="mailto:phantrongnghia510@gmail.com" className="text-blue-600 dark:text-blue-400 hover:underline">phantrongnghia510@gmail.com</a></p>
               <p><strong>GitHub Issues:</strong> <a href="https://github.com/ptnghia-j/ChordMiniApp/issues" className="text-blue-600 dark:text-blue-400 hover:underline">Report bugs or request features</a></p>
               <p><strong>Response Time:</strong> We typically respond within 24-48 hours</p>
             </div>

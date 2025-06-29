@@ -10,9 +10,23 @@ import {
   detectBeatsWithRateLimit,
   BeatInfo,
   BeatPosition,
-  DownbeatInfo
+  DownbeatInfo,
+  BeatDetectionBackendResponse
 } from './beatDetectionService';
-import { apiService } from '@/services/apiService';
+import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { vercelBlobUploadService } from './vercelBlobUploadService';
+
+// Interface for Python backend chord recognition response
+interface ChordRecognitionBackendResponse {
+  success: boolean;
+  chords: ChordDetectionResult[];
+  model_used?: string;
+  total_chords?: number;
+  processing_time?: number;
+  error?: string;
+}
+
 
 // Interface for chord detection results
 export interface ChordDetectionResult {
@@ -38,6 +52,7 @@ export interface AnalysisResult {
   synchronizedChords: {chord: string, beatIndex: number, beatNum?: number}[];
   beatModel?: string;    // Which model was used for beat detection
   chordModel?: string;   // Which model was used for chord detection
+  audioDuration?: number; // Audio duration in seconds
   beatDetectionResult?: {
     time_signature?: number; // Time signature (beats per measure)
     bpm?: number;           // Beats per minute
@@ -56,13 +71,13 @@ export type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
 /**
  * Process audio file and perform chord and beat analysis with rate limiting
- * @param audioInput Either an AudioBuffer or a URL string to the audio file
+ * @param audioInput Either a File object, AudioBuffer, or a URL string to the audio file
  * @param beatDetector Optional detector to use ('auto', 'madmom', or 'beat-transformer')
  * @param chordDetector Optional chord detector to use ('chord-cnn-lstm', 'btc-sl', 'btc-pl')
  * @returns Promise with analysis results (chords and beats)
  */
 export async function analyzeAudioWithRateLimit(
-  audioInput: AudioBuffer | string,
+  audioInput: File | AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
   chordDetector: ChordDetectorType = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
@@ -72,14 +87,60 @@ export async function analyzeAudioWithRateLimit(
 
     // Enhanced input validation and bounds checking
     let audioFile: File;
+    let audioDuration: number | undefined;
 
-    if (typeof audioInput === 'string') {
-      // Handle URL input - fetch and convert to File
+    if (audioInput instanceof File) {
+      // Handle File input directly - no conversion needed!
+      console.log('Processing File input directly (no AudioBuffer conversion)');
+
+      // Validate file size and format
+      if (audioInput.size === 0) {
+        throw new Error('Audio file is empty or corrupted');
+      }
+
+      if (audioInput.size > 100 * 1024 * 1024) { // 100MB limit
+        throw new Error('Audio file is too large (>100MB). Please use a smaller file.');
+      }
+
+      audioFile = audioInput;
+      console.log(`Using original File object: ${(audioInput.size / 1024 / 1024).toFixed(2)}MB`);
+
+      // Capture audio duration for File input
+      try {
+        audioDuration = await getAudioDurationFromFile(audioFile);
+        console.log(`🎵 Audio duration detected: ${audioDuration.toFixed(1)} seconds`);
+      } catch (durationError) {
+        console.warn(`⚠️ Could not detect audio duration: ${durationError}`);
+        audioDuration = undefined;
+      }
+
+    } else if (typeof audioInput === 'string') {
+      // Handle URL input - fetch through proxy to avoid CORS issues
       console.log('Processing audio from URL:', audioInput);
 
       try {
-        const response = await fetch(audioInput);
+        // Use our proxy endpoint to avoid CORS issues
+        // CRITICAL FIX: For QuickTube URLs, preserve square brackets during URL encoding
+        let encodedUrl;
+        if (audioInput.includes('quicktube.app/dl/')) {
+          // For QuickTube URLs, encode everything except square brackets
+          encodedUrl = encodeURIComponent(audioInput).replace(/%5B/g, '[').replace(/%5D/g, ']');
+        } else {
+          // For other URLs, use standard encoding
+          encodedUrl = encodeURIComponent(audioInput);
+        }
+        const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
+        console.log(`🔧 Proxy URL for audio: ${proxyUrl}`);
+        const response = await fetch(proxyUrl);
         if (!response.ok) {
+          // If proxy fails, it might be due to backend issues
+          if (response.status >= 500) {
+            throw new Error(`Backend service temporarily unavailable (${response.status}). Please try again in a few minutes or use the file upload option.`);
+          } else if (response.status === 413) {
+            throw new Error(`Audio file too large for processing (${response.status}). Please try a shorter audio clip or use a different video.`);
+          } else if (response.status === 408 || response.status === 504) {
+            throw new Error(`Request timed out (${response.status}). The backend service may be experiencing high load. Please try again in a few minutes.`);
+          }
           throw new Error(`Failed to fetch audio from URL: ${response.status} ${response.statusText}`);
         }
 
@@ -96,6 +157,138 @@ export async function analyzeAudioWithRateLimit(
 
         audioFile = new File([audioBlob], "audio.wav", { type: "audio/wav" });
         console.log(`Audio file created from URL: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+        // Capture audio duration for URL input
+        try {
+          audioDuration = await getAudioDurationFromFile(audioFile);
+          console.log(`🎵 Audio duration detected: ${audioDuration.toFixed(1)} seconds`);
+        } catch (durationError) {
+          console.warn(`⚠️ Could not detect audio duration: ${durationError}`);
+          audioDuration = undefined;
+        }
+
+        // Check if this file should use Vercel Blob upload due to size
+        if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+          console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+
+          try {
+            // Use Vercel Blob upload for large files
+            const blobResult = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, chordDetector);
+
+            if (blobResult.success) {
+              console.log(`✅ Vercel Blob chord recognition completed successfully`);
+              // Extract chords array from the Python backend response
+              const backendResponse = blobResult.data as ChordRecognitionBackendResponse;
+              console.log(`🔍 Backend response structure:`, {
+                hasSuccess: 'success' in backendResponse,
+                hasChords: 'chords' in backendResponse,
+                chordsIsArray: Array.isArray(backendResponse.chords),
+                chordsLength: backendResponse.chords?.length || 0,
+                modelUsed: backendResponse.model_used
+              });
+
+              // Validate that we have a chords array
+              if (!backendResponse.chords || !Array.isArray(backendResponse.chords)) {
+                throw new Error(`Invalid chord recognition response: chords array not found or not an array`);
+              }
+
+              const chordResults = backendResponse.chords as ChordDetectionResult[];
+
+              // Now also run beat detection for blob uploads using Vercel Blob approach
+              console.log(`🥁 Running beat detection for blob upload using ${beatDetector} model...`);
+              let beatResults;
+
+              try {
+                // Use Vercel Blob upload for beat detection as well (since file is > 4.0MB)
+                console.log(`🔄 Using Vercel Blob upload for beat detection (file size: ${vercelBlobUploadService.getFileSizeString(audioFile.size)})`);
+                const beatBlobResult = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, beatDetector);
+
+                if (beatBlobResult.success) {
+                  console.log(`✅ Vercel Blob beat detection completed successfully`);
+                  const beatBackendResponse = beatBlobResult.data as BeatDetectionBackendResponse;
+
+                  // Validate that we have a beats array
+                  if (!beatBackendResponse.beats || !Array.isArray(beatBackendResponse.beats)) {
+                    console.warn('⚠️ Invalid beat detection response from blob upload, using empty beats array');
+                    beatResults = { beats: [], bpm: undefined, time_signature: undefined };
+                  } else {
+                    beatResults = beatBackendResponse;
+                    console.log(`✅ Beat detection completed for blob upload: ${beatResults.beats.length} beats detected`);
+                  }
+                } else {
+                  console.warn(`⚠️ Vercel Blob beat detection failed: ${beatBlobResult.error}, using empty beats array`);
+                  beatResults = { beats: [], bpm: undefined, time_signature: undefined };
+                }
+
+              } catch (beatError) {
+                console.warn(`⚠️ Beat detection failed for blob upload: ${beatError}, using empty beats array`);
+                beatResults = { beats: [], bpm: undefined, time_signature: undefined };
+              }
+
+              // Convert beat timestamps to BeatInfo format
+              const beats: BeatInfo[] = [];
+              if (Array.isArray(beatResults.beats)) {
+                for (let index = 0; index < beatResults.beats.length; index++) {
+                  const time = beatResults.beats[index];
+                  if (typeof time === 'number' && !isNaN(time) && time >= 0) {
+                    beats.push({
+                      time,
+                      strength: 0.8, // Default strength
+                      beatNum: (index % (beatResults.time_signature || 4)) + 1
+                    });
+                  }
+                }
+              }
+
+              // CRITICAL FIX: Perform chord synchronization for blob API path
+              let synchronizedChords;
+              try {
+                console.log(`🔄 Synchronizing ${chordResults.length} chords with ${beats.length} beats for blob API...`);
+                synchronizedChords = synchronizeChords(chordResults, beats);
+
+                // Validate synchronization results
+                if (!synchronizedChords || !Array.isArray(synchronizedChords)) {
+                  throw new Error('Chord synchronization failed: invalid result format');
+                }
+
+                console.log(`✅ Blob API synchronization completed: ${synchronizedChords.length} synchronized chords`);
+
+              } catch (syncError) {
+                console.error('Error in blob API chord synchronization:', syncError);
+
+                // Provide fallback synchronization if main sync fails
+                console.log('Attempting fallback synchronization for blob API...');
+                synchronizedChords = beats.map((_, index) => ({
+                  chord: 'N/C', // No chord fallback
+                  beatIndex: index
+                }));
+              }
+
+              return {
+                chords: chordResults,
+                beats: beats,
+                downbeats: beatResults.downbeats || [],
+                downbeats_with_measures: [], // Will be calculated from downbeats if needed
+                synchronizedChords: synchronizedChords, // FIXED: Now properly synchronized!
+                chordModel: chordDetector,
+                beatModel: beatDetector,
+                audioDuration: audioDuration,
+                beatDetectionResult: {
+                  time_signature: beatResults.time_signature,
+                  bpm: beatResults.bpm || ('BPM' in beatResults ? (beatResults as { BPM: number }).BPM : undefined),
+                  beatShift: 0
+                }
+              };
+            } else {
+              // If blob upload fails, fall back to direct processing with warning
+              console.warn(`⚠️ Vercel Blob upload failed: ${blobResult.error}, falling back to direct processing`);
+              console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+            }
+          } catch (blobError) {
+            console.warn(`⚠️ Vercel Blob upload error: ${blobError}, falling back to direct processing`);
+            console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+          }
+        }
 
       } catch (fetchError) {
         console.error('Error fetching audio from URL:', fetchError);
@@ -125,6 +318,10 @@ export async function analyzeAudioWithRateLimit(
 
       console.log(`AudioBuffer properties: duration=${audioInput.duration.toFixed(2)}s, sampleRate=${audioInput.sampleRate}Hz, channels=${audioInput.numberOfChannels}`);
 
+      // Capture audio duration from AudioBuffer
+      audioDuration = audioInput.duration;
+      console.log(`🎵 Audio duration from AudioBuffer: ${audioDuration.toFixed(1)} seconds`);
+
       try {
         // Convert AudioBuffer to File/Blob for API calls with bounds checking
         const audioBlob = await audioBufferToWav(audioInput);
@@ -137,7 +334,7 @@ export async function analyzeAudioWithRateLimit(
       }
 
     } else {
-      throw new Error('Invalid audio input: must be either AudioBuffer or URL string');
+      throw new Error('Invalid audio input: must be either File object, AudioBuffer, or URL string');
     }
 
     // Detect beats using the enhanced API service with rate limiting
@@ -315,6 +512,7 @@ export async function analyzeAudioWithRateLimit(
       synchronizedChords: synchronizedChords,
       beatModel: beatResults.model,
       chordModel: chordDetector,
+      audioDuration: audioDuration,
       beatDetectionResult: {
         time_signature: beatResults.time_signature,
         bpm: beatResults.bpm
@@ -361,13 +559,26 @@ export async function analyzeAudio(
 
     // Enhanced input validation and bounds checking
     let audioFile: File;
+    let audioDuration: number | undefined;
 
     if (typeof audioInput === 'string') {
-      // Handle URL input - fetch and convert to File
+      // Handle URL input - fetch through proxy to avoid CORS issues
       console.log('Processing audio from URL:', audioInput);
 
       try {
-        const response = await fetch(audioInput);
+        // Use our proxy endpoint to avoid CORS issues
+        // CRITICAL FIX: For QuickTube URLs, preserve square brackets during URL encoding
+        let encodedUrl;
+        if (audioInput.includes('quicktube.app/dl/')) {
+          // For QuickTube URLs, encode everything except square brackets
+          encodedUrl = encodeURIComponent(audioInput).replace(/%5B/g, '[').replace(/%5D/g, ']');
+        } else {
+          // For other URLs, use standard encoding
+          encodedUrl = encodeURIComponent(audioInput);
+        }
+        const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
+        console.log(`🔧 Proxy URL for audio (beat detection): ${proxyUrl}`);
+        const response = await fetch(proxyUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch audio from URL: ${response.status} ${response.statusText}`);
         }
@@ -385,6 +596,15 @@ export async function analyzeAudio(
 
         audioFile = new File([audioBlob], "audio.wav", { type: "audio/wav" });
         console.log(`Audio file created from URL: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+        // Capture audio duration for URL input
+        try {
+          audioDuration = await getAudioDurationFromFile(audioFile);
+          console.log(`🎵 Audio duration detected: ${audioDuration.toFixed(1)} seconds`);
+        } catch (durationError) {
+          console.warn(`⚠️ Could not detect audio duration: ${durationError}`);
+          audioDuration = undefined;
+        }
 
       } catch (fetchError) {
         console.error('Error fetching audio from URL:', fetchError);
@@ -413,6 +633,10 @@ export async function analyzeAudio(
       }
 
       console.log(`AudioBuffer properties: duration=${audioInput.duration.toFixed(2)}s, sampleRate=${audioInput.sampleRate}Hz, channels=${audioInput.numberOfChannels}`);
+
+      // Capture audio duration from AudioBuffer
+      audioDuration = audioInput.duration;
+      console.log(`🎵 Audio duration from AudioBuffer: ${audioDuration.toFixed(1)} seconds`);
 
       try {
         // Convert AudioBuffer to File/Blob for API calls with bounds checking
@@ -641,6 +865,7 @@ export async function analyzeAudio(
       synchronizedChords: synchronizedChords,
       beatModel: beatResults.model,
       chordModel: chordDetector,
+      audioDuration: audioDuration,
       beatDetectionResult: {
         time_signature: beatResults.time_signature,
         bpm: beatResults.bpm
@@ -651,12 +876,18 @@ export async function analyzeAudio(
 
     // Enhanced error handling with specific suggestions
     if (error instanceof Error) {
-      if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
+      if (error.message.includes('Backend service temporarily unavailable') ||
+          error.message.includes('TimeoutError') ||
+          error.message.includes('The operation was aborted due to timeout')) {
+        throw new Error('Backend service is temporarily unavailable due to high load or cold start. Please try again in a few minutes, or use the "Upload Audio File" option for immediate processing.');
+      } else if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
         throw new Error('Audio analysis failed due to data bounds error. This may be caused by corrupted audio data or unsupported audio format. Please try a different audio file or format.');
       } else if (error.message.includes('memory') || error.message.includes('allocation')) {
         throw new Error('Audio analysis failed due to memory constraints. Please try a shorter audio clip or use a different detector model.');
       } else if (error.message.includes('timeout')) {
         throw new Error('Audio analysis timed out. Please try a shorter audio clip or use the madmom detector for better performance.');
+      } else if (error.message.includes('Failed to fetch audio from URL')) {
+        throw new Error('Unable to download audio for analysis. The video may be restricted or temporarily unavailable. Please try a different video or use the file upload option.');
       } else {
         throw new Error(`Audio analysis failed: ${error.message}`);
       }
@@ -682,21 +913,80 @@ async function recognizeChordsWithRateLimit(
       throw new Error('Invalid audio file for chord recognition');
     }
 
+    // Check if file should use Vercel Blob upload (> 4.0MB)
+    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+
+      try {
+        // Use Vercel Blob upload for large files
+        const blobResult = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, model);
+
+        if (blobResult.success) {
+          console.log(`✅ Vercel Blob chord recognition completed successfully`);
+          // Extract chords array from the Python backend response
+          const backendResponse = blobResult.data as ChordRecognitionBackendResponse;
+          console.log(`🔍 Backend response structure:`, {
+            hasSuccess: 'success' in backendResponse,
+            hasChords: 'chords' in backendResponse,
+            chordsIsArray: Array.isArray(backendResponse.chords),
+            chordsLength: backendResponse.chords?.length || 0,
+            modelUsed: backendResponse.model_used
+          });
+
+          // Validate that we have a chords array
+          if (!backendResponse.chords || !Array.isArray(backendResponse.chords)) {
+            throw new Error(`Invalid chord recognition response: chords array not found or not an array`);
+          }
+
+          return backendResponse.chords as ChordDetectionResult[];
+        } else {
+          // If blob upload fails, fall back to direct processing with warning
+          console.warn(`⚠️ Vercel Blob upload failed: ${blobResult.error}, falling back to direct processing`);
+          console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+        }
+      } catch (blobError) {
+        console.warn(`⚠️ Vercel Blob upload error: ${blobError}, falling back to direct processing`);
+        console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+      }
+    }
+
     if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
       throw new Error('Audio file is too large for chord recognition (>100MB)');
     }
 
-    // Use the enhanced API service with rate limiting
-    const response = await apiService.recognizeChords(audioFile, { model });
+    // Audio duration is now captured earlier and included in the analysis results
 
-    if (!response.success) {
-      if (response.rateLimited) {
-        throw new Error(`Rate limited: ${response.error}`);
-      }
-      throw new Error(response.error || 'Chord recognition failed');
+    // Use the frontend API route for proper timeout handling
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    if (model !== 'chord-cnn-lstm') {
+      formData.append('chord_dict', 'large_voca'); // BTC models use large_voca
+    } else {
+      formData.append('chord_dict', 'full'); // CNN-LSTM uses full
     }
 
-    const data = response.data as Record<string, unknown>;
+    const endpoint = model === 'btc-sl' ? '/api/recognize-chords-btc-sl' :
+                    model === 'btc-pl' ? '/api/recognize-chords-btc-pl' :
+                    '/api/recognize-chords';
+
+    // Create a safe timeout signal that works across environments
+    const timeoutValue = 600000; // 10 minutes timeout
+    console.log(`🔍 Chord recognition timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
+
+    const abortSignal = createSafeTimeoutSignal(timeoutValue);
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+      signal: abortSignal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `Chord recognition failed: ${response.status}`);
+    }
+
+    const data = await response.json();
 
     if (!data.success) {
       throw new Error(`Chord recognition failed: ${(data.error as string) || 'Unknown error from chord recognition service'}`);

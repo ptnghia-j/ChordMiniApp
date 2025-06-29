@@ -22,13 +22,13 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Introduction */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Introduction
           </h2>
           <div className="space-y-4 text-gray-700 dark:text-gray-300">
             <p>
-              Welcome to ChordMini, a research project developed at California State University, Fullerton. 
+              Welcome to ChordMini, a research project developed at California State University, Fullerton.
               These Terms of Service govern your use of our AI-powered chord recognition platform.
             </p>
             <p>
@@ -38,7 +38,7 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Research Purpose */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Research and Academic Use
           </h2>
@@ -48,7 +48,7 @@ const TermsPage: React.FC = () => {
                 Important Notice
               </h3>
               <p>
-                ChordMini is provided as a research tool for educational and academic purposes. 
+                ChordMini is provided as a research tool for educational and academic purposes.
                 It is not intended for commercial use or production environments.
               </p>
             </div>
@@ -62,7 +62,7 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Acceptable Use */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Acceptable Use
           </h2>
@@ -94,8 +94,8 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Intellectual Property */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
-          <h2 className="text-2xl font-semibent text-gray-900 dark:text-white mb-6">
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Intellectual Property
           </h2>
           <div className="space-y-4 text-gray-700 dark:text-gray-300">
@@ -110,7 +110,7 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Disclaimers */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Disclaimers and Limitations
           </h2>
@@ -134,7 +134,7 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Privacy and Data */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Privacy and Data Use
           </h2>
@@ -152,13 +152,13 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Changes to Terms */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Changes to These Terms
           </h2>
           <div className="space-y-4 text-gray-700 dark:text-gray-300">
             <p>
-              We may update these Terms of Service as our research progresses. 
+              We may update these Terms of Service as our research progresses.
               Significant changes will be communicated through the platform.
             </p>
             <p>
@@ -168,7 +168,7 @@ const TermsPage: React.FC = () => {
         </div>
 
         {/* Contact Information */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Contact Information
           </h2>

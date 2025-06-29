@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   formatChordWithMusicalSymbols,
   getChordLabelStyles,
@@ -31,6 +31,7 @@ interface ChordGridProps {
   beatTimeRangeStart?: number; // Start time of beat detection range (for padding timestamp calculation)
   originalAudioMapping?: AudioMappingItem[]; // NEW: Original timestamp-to-chord mapping for audio sync
   onBeatClick?: (beatIndex: number, timestamp: number) => void; // Callback for beat cell clicks
+  isUploadPage?: boolean; // Whether this is the upload audio file page (for different layout)
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean; // Whether corrected chords are being displayed
   chordCorrections?: Record<string, string> | null; // Mapping of original chords to corrected chords (legacy)
@@ -55,7 +56,7 @@ interface ChordGridProps {
   } | null;
 }
 
-const ChordGrid: React.FC<ChordGridProps> = ({
+const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   chords,
   beats,
   currentBeatIndex = -1,
@@ -72,6 +73,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   beatTimeRangeStart = 0,
   originalAudioMapping,
   onBeatClick,
+  isUploadPage = false,
   showCorrectedChords = false,
   chordCorrections = null,
   sequenceCorrections = null
@@ -186,16 +188,29 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   const calculateOptimalShift = (chords: string[], timeSignature: number): number => {
     // Use the shift count from backend if available, otherwise calculate
     if (hasPadding && shiftCount !== undefined) {
-
+      // console.log(`🔧 Using backend shift count: ${shiftCount}`);
       return shiftCount;
     }
 
     if (chords.length === 0) {
-
+      // console.log(`🔧 No chords available, returning shift 0`);
       return 0;
     }
 
+    // console.log(`🔧 FRONTEND SHIFT CALCULATION DEBUG - Analyzing ${chords.length} chords with ${timeSignature}/4 time signature`);
+    // console.log(`🔧 FRONTEND First 20 chords: [${chords.slice(0, 20).join(', ')}]`);
 
+    // Test downbeat calculation logic
+    // console.log(`🔧 DOWNBEAT CALCULATION TEST for timeSignature=${timeSignature}:`);
+    // for (let testShift = 0; testShift < timeSignature; testShift++) {
+    //   const testPositions = [];
+    //   for (let testI = testShift; testI < testShift + 8; testI++) {
+    //     const beatInMeasure = ((testI - testShift) % timeSignature) + 1;
+    //     const isDownbeat = beatInMeasure === 1;
+    //     testPositions.push(`i=${testI}→beat${beatInMeasure}${isDownbeat ? '(DB)' : ''}`);
+    //   }
+    //   console.log(`🔧   Shift ${testShift}: ${testPositions.join(', ')}`);
+    // }
 
     let bestShift = 0;
     let maxChordChanges = 0;
@@ -218,17 +233,21 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                              currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N';
 
         // FIXED: Correct downbeat calculation - beat position in the shifted sequence
-        // Positive shift moves grid forward, negative shift moves grid backward (intuitive)
+        // The shift moves the starting point, so we need to calculate the beat position correctly
+        // If shift=0: beats 0,1,2,3 map to measure positions 1,2,3,4
+        // If shift=1: beats 1,2,3,4 map to measure positions 1,2,3,4 (beat 0 is skipped)
+        // If shift=2: beats 2,3,4,5 map to measure positions 1,2,3,4 (beats 0,1 are skipped)
         const beatInMeasure = ((i + shift) % timeSignature) + 1;
         const isDownbeat = beatInMeasure === 1;
-
-
 
         // Score: chord change that occurs on a downbeat
         if (isChordChange && isDownbeat) {
           chordChangeCount++;
           downbeatPositions.push(i);
           chordLabels.push(currentChord);
+          // console.log(`🔧     CHORD CHANGE ON DOWNBEAT: i=${i}, beat${beatInMeasure}, ${previousChord} → ${currentChord}`);
+        } else if (isChordChange) {
+          // console.log(`🔧     chord change (not downbeat): i=${i}, beat${beatInMeasure}, ${previousChord} → ${currentChord}`);
         }
       }
 
@@ -239,15 +258,36 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         chordLabels
       });
 
+      // console.log(`🔧 Shift ${shift}: ${chordChangeCount} chord changes on downbeats - positions: [${downbeatPositions.join(', ')}] - chords: [${chordLabels.join(', ')}]`);
+
       if (chordChangeCount > maxChordChanges) {
         maxChordChanges = chordChangeCount;
         bestShift = shift;
       }
-
-
     }
 
+    // console.log(`🔧 FRONTEND SHIFT RESULT: Best shift = ${bestShift} with ${maxChordChanges} chord changes on downbeats`);
+    // console.log(`🔧 All shift results:`, shiftResults);
 
+    // Create a visual representation of what each shift would look like
+    // console.log(`🔧 VISUAL REPRESENTATION OF SHIFTS:`);
+    // for (let shift = 0; shift < timeSignature; shift++) {
+    //   const visualGrid = [];
+    //   for (let i = 0; i < Math.min(16, chords.length + shift); i++) {
+    //     if (i < shift) {
+    //       visualGrid.push('___'); // Empty shift cells
+    //     } else {
+    //       const chordIndex = i - shift;
+    //       const chord = chords[chordIndex] || '';
+    //       const beatInMeasure = ((chordIndex) % timeSignature) + 1;
+    //       const isDownbeat = beatInMeasure === 1;
+    //       const marker = isDownbeat ? '|' : ' ';
+    //       visualGrid.push(`${marker}${chord.substring(0, 2).padEnd(2)}${marker}`);
+    //     }
+    //   }
+    //   const result = shiftResults.find(r => r.shift === shift);
+    //   console.log(`🔧   Shift ${shift} (${result?.chordChanges || 0} changes): ${visualGrid.join(' ')}`);
+    // }
 
     return bestShift;
   };
@@ -259,15 +299,18 @@ const ChordGrid: React.FC<ChordGridProps> = ({
   if (hasPadding) {
     // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
     // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
+    // console.log(`🔧 USING BACKEND STRATEGY: hasPadding=true, shiftCount=${shiftCount}, chords already include padding/shift`);
     shiftedChords = chords; // Use as-is, no additional shifting needed
     optimalShift = 0; // No additional shift needed
   } else {
     // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
+    // console.log(`🔧 USING FRONTEND STRATEGY: hasPadding=false, calculating own shift`);
     optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
     shiftedChords = chords.length > 0 ? [
       ...Array(optimalShift).fill(''), // Add k empty greyed-out cells at the beginning
       ...chords // Original chords follow after the shift
     ] : chords;
+    // console.log(`🔧 FRONTEND APPLIED SHIFT: ${optimalShift}, shiftedChords length: ${shiftedChords.length}`);
   }
 
 
@@ -323,16 +366,16 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     // Larger cells (desktop/simple time signatures) get larger fonts
     let baseFontSize: number;
 
-    if (cellSize < 60) {
-      baseFontSize = 10; // Very small cells (mobile, complex time signatures)
-    } else if (cellSize < 80) {
-      baseFontSize = 12; // Small cells
-    } else if (cellSize < 100) {
-      baseFontSize = 14; // Medium cells
-    } else if (cellSize < 120) {
-      baseFontSize = 16; // Large cells
+    if (cellSize < 50) {
+      baseFontSize = 9; // Very small cells (mobile, complex time signatures)
+    } else if (cellSize < 70) {
+      baseFontSize = 11; // Small cells (mobile optimized)
+    } else if (cellSize < 90) {
+      baseFontSize = 13; // Medium cells
+    } else if (cellSize < 110) {
+      baseFontSize = 15; // Large cells
     } else {
-      baseFontSize = 18; // Very large cells (wide screens)
+      baseFontSize = 17; // Very large cells (wide screens)
     }
 
     // Adjust for chord complexity (longer chord names get slightly smaller fonts)
@@ -343,10 +386,10 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
 
     // Convert to Tailwind CSS classes
-    if (baseFontSize <= 10) return 'text-xs';
-    if (baseFontSize <= 12) return 'text-sm';
-    if (baseFontSize <= 14) return 'text-base';
-    if (baseFontSize <= 16) return 'text-lg';
+    if (baseFontSize <= 9) return 'text-xs';
+    if (baseFontSize <= 11) return 'text-sm';
+    if (baseFontSize <= 13) return 'text-base';
+    if (baseFontSize <= 15) return 'text-lg';
     return 'text-xl';
   };
 
@@ -401,7 +444,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         resizeObserver.disconnect();
       }
     };
-  }, [chords.length, actualBeatsPerMeasure]); // Re-run when chord data or time signature changes
+  }, []); // Only run once on mount - size calculations don't depend on chord data
 
 
   // FIXED: Helper to determine if this beat should show a chord label
@@ -446,8 +489,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     return shiftedChords[index] !== '';
   };
 
-  // Handle beat cell clicks for navigation
-  const handleBeatClick = (globalIndex: number) => {
+  // Memoized beat cell click handler for navigation
+  const handleBeatClick = useCallback((globalIndex: number) => {
     if (!onBeatClick || !beats || beats.length === 0) return;
 
 
@@ -527,18 +570,24 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     } else {
       return;
     }
-  };
+  }, [onBeatClick, beats, hasPadding, shiftCount, paddingCount, chords, originalAudioMapping, beatTimeRangeStart]);
 
 
 
 
 
-  // Enhanced dynamic measures per row calculation with screen width awareness
-  const getDynamicMeasuresPerRow = (timeSignature: number, chatbotOpen: boolean, lyricsPanelOpen: boolean, currentScreenWidth: number): number => {
+  // Memoized dynamic measures per row calculation with screen width awareness
+  const getDynamicMeasuresPerRow = useMemo(() => (timeSignature: number, chatbotOpen: boolean, lyricsPanelOpen: boolean, currentScreenWidth: number): number => {
+    // Special case for upload page: use 4 measures (16 cells) per row for better spacing
+    if (isUploadPage) {
+      return 4;
+    }
+
     // Use the current screen width from state
 
-    // Determine screen category
+    // Determine screen category with landscape mobile consideration
     const isMobile = currentScreenWidth < 768;
+    const isMobileLandscape = currentScreenWidth >= 568 && currentScreenWidth < 768; // Mobile landscape
     const isTablet = currentScreenWidth >= 768 && currentScreenWidth < 1024;
     const isDesktop = currentScreenWidth >= 1024 && currentScreenWidth < 1440;
     // const isLargeDesktop = currentScreenWidth >= 1440;
@@ -551,17 +600,25 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     let maxMeasuresPerRow: number;
 
     if (isMobile) {
-      targetCellsPerRow = anyPanelOpen ? 6 : 8; // Increased for more compact layout
-      maxMeasuresPerRow = anyPanelOpen ? 2 : 3;
+      // Optimized for mobile: more cells per row to reduce white space
+      if (isMobileLandscape) {
+        // Mobile landscape: optimize for wider screen with better space utilization
+        targetCellsPerRow = anyPanelOpen ? 16 : 20;
+        maxMeasuresPerRow = anyPanelOpen ? 4 : 5;
+      } else {
+        // Mobile portrait: optimized for 8 cells (2 measures) per row for better readability
+        targetCellsPerRow = 8;
+        maxMeasuresPerRow = 2;
+      }
     } else if (isTablet) {
-      targetCellsPerRow = anyPanelOpen ? 12 : 16; // Increased for more compact layout
-      maxMeasuresPerRow = anyPanelOpen ? 4 : 5;
+      targetCellsPerRow = anyPanelOpen ? 12 : 16; // Moderate for tablet
+      maxMeasuresPerRow = anyPanelOpen ? 3 : 4; // Reduced from 4:5 to 3:4
     } else if (isDesktop) {
-      targetCellsPerRow = anyPanelOpen ? 16 : 24; // Increased for more compact layout
-      maxMeasuresPerRow = anyPanelOpen ? 6 : 8;
+      targetCellsPerRow = anyPanelOpen ? 16 : 20; // Reduced from 16:24 to 16:20
+      maxMeasuresPerRow = anyPanelOpen ? 4 : 5; // Reduced from 6:8 to 4:5
     } else { // Large desktop
-      targetCellsPerRow = anyPanelOpen ? 20 : 32; // Increased for more compact layout
-      maxMeasuresPerRow = anyPanelOpen ? 8 : 10;
+      targetCellsPerRow = anyPanelOpen ? 20 : 24; // Reduced from 20:32 to 20:24
+      maxMeasuresPerRow = anyPanelOpen ? 5 : 6; // Reduced from 8:10 to 5:6
     }
 
     // Calculate base measures per row
@@ -585,13 +642,13 @@ const ChordGrid: React.FC<ChordGridProps> = ({
 
 
     return measuresPerRow;
-  };
+  }, [isUploadPage]);
 
   // Use dynamic measures per row with current screen width
   const dynamicMeasuresPerRow = getDynamicMeasuresPerRow(actualBeatsPerMeasure, isChatbotOpen, isLyricsPanelOpen, screenWidth);
 
-  // Enhanced chord styling with pickup beat support and clickable behavior
-  const getChordStyle = (chord: string, isCurrentBeat: boolean, beatIndex: number, isClickable: boolean = true) => {
+  // Memoized chord styling with pickup beat support and clickable behavior
+  const getChordStyle = useCallback((chord: string, isCurrentBeat: boolean, beatIndex: number, isClickable: boolean = true) => {
     // Base classes for all cells - add cursor pointer and hover effects for clickable cells
     const baseClasses = `flex flex-col items-start justify-center aspect-square transition-all duration-200 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden ${
       isClickable ? 'cursor-pointer hover:shadow-md hover:scale-105 active:scale-95' : ''
@@ -655,25 +712,19 @@ const ChordGrid: React.FC<ChordGridProps> = ({
     }
 
     return `${classes} ${textColor}`;
-  };
+  }, [hasPickupBeats, timeSignature, pickupBeatsCount]);
 
-  if (chords.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-content-bg rounded-lg border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
-          No chord data available for this song yet.
-        </p>
-      </div>
-    );
-  }
-
-  // Enhanced measure grouping with proper pickup beat handling using shifted chords
-  const groupedByMeasure: Array<{
-    measureNumber: number;
-    chords: string[];
-    beats: number[];
-    isPickupMeasure?: boolean;
-  }> = [];
+  // Memoized measure grouping with proper pickup beat handling using shifted chords
+  const groupedByMeasure = useMemo(() => {
+    if (chords.length === 0) {
+      return [];
+    }
+    const measures: Array<{
+      measureNumber: number;
+      chords: string[];
+      beats: number[];
+      isPickupMeasure?: boolean;
+    }> = [];
 
   // SIMPLIFIED: Basic measure grouping without padding/shift complexity
   let currentIndex = 0;
@@ -702,9 +753,23 @@ const ChordGrid: React.FC<ChordGridProps> = ({
         measure.chords.push(''); // Empty cell for padding
         measure.beats.push(-1); // Invalid beat index for padding
       }
-      groupedByMeasure.push(measure);
+      measures.push(measure);
       measureNumber++;
     }
+  }
+
+    return measures;
+  }, [shiftedChords, beats, actualBeatsPerMeasure, chords.length]);
+
+  // Early return if no chords available
+  if (chords.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-content-bg rounded-lg border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
+          No chord data available for this song yet.
+        </p>
+      </div>
+    );
   }
 
 
@@ -852,35 +917,35 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       </div>
 
       {/* Render rows of measures */}
-      <div className="space-y-0.5">
+      <div className="space-y-1 sm:space-y-2">
         {rows.map((row, rowIdx) => (
           <div key={`row-${rowIdx}`} className="measure-row">
-            {/* Grid of measures with aggressive responsive layout to prevent fall-through */}
-            <div className={`grid gap-0.5 ${
-              // More aggressive responsive grid that reaches target measures per row faster
+            {/* Grid of measures with mobile-optimized responsive layout */}
+            <div className={`grid gap-1 sm:gap-2 ${
+              // Mobile-optimized responsive grid that utilizes more space on mobile
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
-              dynamicMeasuresPerRow === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-              dynamicMeasuresPerRow === 3 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' :
-              dynamicMeasuresPerRow === 4 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4' :
-              dynamicMeasuresPerRow === 5 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
-              dynamicMeasuresPerRow === 6 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6' :
-              dynamicMeasuresPerRow === 7 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7' :
-              dynamicMeasuresPerRow === 8 ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8' :
-              dynamicMeasuresPerRow === 9 ? 'grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9' :
-              dynamicMeasuresPerRow === 10 ? 'grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10' :
-              'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' // Fallback
+              dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
+              dynamicMeasuresPerRow === 3 ? 'grid-cols-2 sm:grid-cols-3' :
+              dynamicMeasuresPerRow === 4 ? 'grid-cols-2 sm:grid-cols-4' :
+              dynamicMeasuresPerRow === 5 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' :
+              dynamicMeasuresPerRow === 6 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6' :
+              dynamicMeasuresPerRow === 7 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-7' :
+              dynamicMeasuresPerRow === 8 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-8' :
+              dynamicMeasuresPerRow === 9 ? 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-9' :
+              dynamicMeasuresPerRow === 10 ? 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-10' :
+              'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' // Fallback
             }`}>
               {row.map((measure, measureIdx) => {
                 return (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="border-l-[2px] border-gray-600 dark:border-gray-300 transition-colors duration-300"
+                  className="border-l-[3px] sm:border-l-[4px] border-gray-600 dark:border-gray-300 transition-colors duration-300 rounded-l-md"
                   style={{
                     paddingLeft: '2px'
                   }}
                 >
                   {/* Chord cells for this measure - consistent grid based on time signature */}
-                  <div className={`grid gap-0 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
+                  <div className={`grid gap-0.5 sm:gap-1 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
                       // Calculate global index with consistent measure layout
                       // Each measure always has exactly actualBeatsPerMeasure cells
@@ -924,7 +989,7 @@ const ChordGrid: React.FC<ChordGridProps> = ({
                         <div
                           id={`chord-${globalIndex}`}
                           key={`chord-${globalIndex}`}
-                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2rem] chord-cell`}
+                          className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2.5rem] sm:min-h-[3rem] chord-cell`}
                           onClick={isClickable ? () => handleBeatClick(globalIndex) : undefined}
                           role={isClickable ? "button" : undefined}
                           tabIndex={isClickable ? 0 : undefined}
@@ -973,6 +1038,8 @@ const ChordGrid: React.FC<ChordGridProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ChordGrid.displayName = 'ChordGrid';
 
 export default ChordGrid;

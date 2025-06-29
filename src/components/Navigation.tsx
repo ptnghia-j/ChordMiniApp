@@ -108,7 +108,10 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
               alt="ChordMini Logo"
               width={40}
               height={40}
+              sizes="40px"
               className="mr-2 transition-transform duration-200 group-hover:scale-105"
+              style={{ width: '40px', height: '40px' }}
+              priority
             />
             <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
               Chord Mini
@@ -195,7 +198,9 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
                   alt="ChordMini Logo"
                   width={32}
                   height={32}
+                  sizes="32px"
                   className="mr-2"
+                  style={{ width: '32px', height: '32px' }}
                 />
                 <h2 className="text-lg font-bold text-primary-700 dark:text-primary-300">
                   Chord Mini

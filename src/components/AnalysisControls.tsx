@@ -19,6 +19,8 @@ interface AnalysisControlsProps {
   onBeatDetectorChange: (detector: BeatDetectorType) => void;
   onChordDetectorChange: (detector: ChordDetectorType) => void;
   onStartAnalysis: () => void;
+  cacheAvailable?: boolean;
+  cacheCheckCompleted?: boolean;
 }
 
 export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
@@ -31,7 +33,9 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   chordDetector,
   onBeatDetectorChange,
   onChordDetectorChange,
-  onStartAnalysis
+  onStartAnalysis,
+  cacheAvailable = false,
+  cacheCheckCompleted = false
 }) => {
   // Only show when audio is extracted but not yet analyzed
   if (!isExtracted || isAnalyzed || isAnalyzing || hasError || stage === 'complete') {
@@ -48,6 +52,31 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
           <p className="text-sm text-gray-600 dark:text-gray-300 transition-colors duration-300">
             Choose beat and chord detection models to analyze the audio.
           </p>
+
+          {/* Cache availability indicator */}
+          {cacheCheckCompleted && (
+            <div className={`mt-2 p-2 rounded-md border-2 ${
+              cacheAvailable
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-500'
+                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-400 dark:border-orange-500'
+            }`}>
+              {cacheAvailable ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full border border-green-600"></span>
+                  <span className="text-green-700 dark:text-green-300">
+                    Cached results available for {beatDetector} + {chordDetector}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-orange-500 rounded-full border border-orange-600"></span>
+                  <span className="text-orange-700 dark:text-orange-300">
+                    No cached results for {beatDetector} + {chordDetector} - will run new analysis
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-start overflow-visible">
@@ -70,7 +99,10 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
               onClick={onStartAnalysis}
               className="w-full px-4 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors font-medium"
             >
-              Start Audio Analysis
+              {cacheCheckCompleted && cacheAvailable
+                ? 'Load Cached Results'
+                : 'Start Audio Analysis'
+              }
             </button>
           </div>
         </div>

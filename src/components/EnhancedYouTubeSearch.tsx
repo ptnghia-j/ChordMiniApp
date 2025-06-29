@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import Image from 'next/image';
 import { YouTubeApiService, YouTubeSearchResult, youtubeUtils } from '@/services/youtubeApiService';
 
 // Simple debounce utility
@@ -25,7 +26,7 @@ function useDebounce(
 }
 
 interface EnhancedYouTubeSearchProps {
-  onVideoSelect: (videoId: string) => void;
+  onVideoSelect: (videoId: string, title?: string) => void;
   apiKey: string;
   className?: string;
 }
@@ -55,7 +56,7 @@ export const EnhancedYouTubeSearch: React.FC<EnhancedYouTubeSearchProps> = ({
     const videoId = youtubeUtils.extractVideoId(searchQuery);
     if (videoId) {
       setSearchMode('url');
-      onVideoSelect(videoId);
+      onVideoSelect(videoId); // No title available for direct URL input
       return;
     }
 
@@ -88,7 +89,8 @@ export const EnhancedYouTubeSearch: React.FC<EnhancedYouTubeSearchProps> = ({
   }, [query, debouncedSearch]);
 
   const handleVideoSelect = (result: YouTubeSearchResult) => {
-    onVideoSelect(result.id);
+    // Pass both videoId and title to the parent component
+    onVideoSelect(result.id, result.title);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +192,16 @@ const SearchResultCard: React.FC<{
 }> = ({ result, onSelect }) => {
   const [imageError, setImageError] = useState(false);
 
+  // Validate thumbnail URL and provide fallback
+  const getValidThumbnailUrl = (url: string): string => {
+    if (!url || url.trim() === '' || url === 'undefined' || url === 'null') {
+      return `https://img.youtube.com/vi/${result.id}/mqdefault.jpg`;
+    }
+    return url;
+  };
+
+  const validThumbnailUrl = getValidThumbnailUrl(result.thumbnail);
+
   return (
     <div
       className="flex p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 cursor-pointer transition-all duration-200 group"
@@ -198,9 +210,11 @@ const SearchResultCard: React.FC<{
       {/* Thumbnail */}
       <div className="relative flex-shrink-0">
         {!imageError ? (
-          <img
-            src={result.thumbnail}
+          <Image
+            src={validThumbnailUrl}
             alt={result.title}
+            width={160}
+            height={112}
             className="w-40 h-28 object-cover rounded-lg"
             onError={() => setImageError(true)}
           />
@@ -235,15 +249,6 @@ const SearchResultCard: React.FC<{
 
         {/* Stats */}
         <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-          {result.viewCount && (
-            <span className="flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-              </svg>
-              {youtubeUtils.formatViewCount(result.viewCount)}
-            </span>
-          )}
           <span>{new Date(result.publishedAt).toLocaleDateString()}</span>
         </div>
 

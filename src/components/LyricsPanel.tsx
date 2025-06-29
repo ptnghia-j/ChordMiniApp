@@ -29,7 +29,7 @@ interface LyricsPanelProps {
 }
 
 /**
- * Lyrics panel component that displays lyrics from Genius.com
+ * Lyrics panel component that displays synchronized lyrics from LRCLib
  * Uses the same UI pattern as the chatbot interface with right-side panel layout
  */
 const LyricsPanel: React.FC<LyricsPanelProps> = ({
@@ -101,49 +101,23 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
     setLrclibData(null);
 
     try {
-      if (searchForSynced) {
-        // Try LRClib first for synchronized lyrics
-        try {
-          const parsedTitle = parseVideoTitle(query.trim());
-          const lrclibResponse = await searchLRCLibLyrics(parsedTitle);
+      // Use LRCLib for lyrics search
+      const parsedTitle = parseVideoTitle(query.trim());
+      const lrclibResponse = await searchLRCLibLyrics(parsedTitle);
 
-          if (lrclibResponse.success && lrclibResponse.has_synchronized) {
-            setLrclibData(lrclibResponse);
-            setDisplayMode('sync');
-            return; // Success with synchronized lyrics
-          } else if (lrclibResponse.success && lrclibResponse.plain_lyrics) {
-            setLrclibData(lrclibResponse);
-            setDisplayMode('static');
-            return; // Success with plain lyrics from LRClib
-          }
-        } catch (lrclibError) {
-          console.warn('LRClib search failed, falling back to Genius:', lrclibError);
-          console.warn('LRClib error details:', lrclibError instanceof Error ? lrclibError.message : String(lrclibError));
+      if (lrclibResponse.success) {
+        setLrclibData(lrclibResponse);
+
+        if (searchForSynced && lrclibResponse.has_synchronized) {
+          setDisplayMode('sync');
+        } else {
+          setDisplayMode('static');
         }
-      }
-
-      // Fallback to Genius.com or if synchronized search is disabled
-      const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-12071603127.us-central1.run.app'}/api/genius-lyrics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          search_query: query.trim()
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setLyricsData(data);
-        setDisplayMode('static');
       } else {
-        setError(data.error || 'Failed to fetch lyrics');
+        setError('No lyrics found for this search query');
       }
     } catch (error) {
       console.error('Error fetching lyrics:', error);
-      console.error('Error details:', error instanceof Error ? error.message : String(error));
       setError(`Failed to connect to lyrics service: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoading(false);
@@ -514,7 +488,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
               </div>
             )}
 
-            {/* Genius lyrics display */}
+            {/* Legacy lyrics display (kept for compatibility) */}
             {lyricsData && (
               <div className="space-y-4">
                 {/* Song metadata */}
@@ -524,14 +498,9 @@ const LyricsPanel: React.FC<LyricsPanelProps> = ({
                   {lyricsData.metadata.album && (
                     <p className="text-xs text-gray-500 dark:text-gray-500">Album: {lyricsData.metadata.album}</p>
                   )}
-                  <a
-                    href={lyricsData.metadata.genius_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-green-600 dark:text-green-400 hover:underline"
-                  >
-                    View on Genius.com
-                  </a>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Source: LRCLib Database
+                  </p>
                 </div>
 
                 {/* Lyrics content */}

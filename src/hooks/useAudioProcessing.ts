@@ -11,19 +11,20 @@ export const useAudioProcessing = (videoId: string) => {
 
   const service = AudioProcessingService.getInstance();
 
-  const extractAudio = useCallback(async (forceRedownload: boolean = false) => {
+  const extractAudio = useCallback(async (forceRedownload: boolean = false, originalTitle?: string) => {
     setState(prev => service.updateStateForDownloadStart(prev));
 
     try {
-      const { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title, duration } = await service.extractAudioFromYouTube(videoId, forceRedownload);
+      const { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title, duration } = await service.extractAudioFromYouTube(videoId, forceRedownload, true, originalTitle);
       setState(prev => service.updateStateForDownloadSuccess(prev, audioUrl, fromCache, isStreamUrl, streamExpiresAt));
 
-      // Set video title immediately if available from extraction response
-      if (title) {
-        setVideoTitle(title);
+      // Prefer original title from search results, fallback to extracted title
+      const finalTitle = originalTitle || title;
+      if (finalTitle) {
+        setVideoTitle(finalTitle);
       }
 
-      return { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title, duration };
+      return { audioUrl, fromCache, isStreamUrl, streamExpiresAt, title: finalTitle, duration };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       let suggestion: string | undefined;
@@ -42,6 +43,10 @@ export const useAudioProcessing = (videoId: string) => {
     beatDetector: string,
     chordDetector: string
   ) => {
+    // console.log('🚨 DEBUG: analyzeAudio called in useAudioProcessing!');
+    // console.log('🚨 DEBUG: Call stack:', new Error().stack);
+    // console.log('🚨 DEBUG: Parameters:', { audioUrl, beatDetector, chordDetector });
+
     setState(prev => service.updateStateForAnalysisStart(prev));
 
     try {

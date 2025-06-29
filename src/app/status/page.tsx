@@ -26,7 +26,7 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  const baseUrl = 'https://chordmini-backend-full-12071603127.us-central1.run.app';
+  const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
 
 
@@ -115,7 +115,7 @@ export default function StatusPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-12 max-w-4xl">
+      <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Rate Limiting Notification */}
         {rateLimitState.isRateLimited && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-6">
@@ -136,94 +136,101 @@ export default function StatusPage() {
           </div>
         )}
 
-        {/* Status Overview */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 mb-8 border border-gray-200 dark:border-gray-600">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Service Status</h2>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Last updated: {lastUpdate}
-              </span>
-              {isChecking && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
-                  Checking...
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {endpoints.map((endpoint) => (
-              <div
-                key={endpoint.endpoint}
-                className={`border rounded-lg p-4 ${getStatusColor(endpoint.status)}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(endpoint.status)}
-                    <div>
-                      <h3 className="font-semibold">
-                        {baseUrl}{endpoint.endpoint}
-                      </h3>
-                      <p className="text-sm opacity-75">
-                        {endpoint.endpoint === '/' ? 'Health Check' :
-                         endpoint.endpoint === '/api/model-info' ? 'Model Information' :
-                         endpoint.endpoint === '/api/detect-beats' ? 'Beat Detection' :
-                         endpoint.endpoint === '/api/recognize-chords' ? 'Chord Recognition' :
-                         endpoint.endpoint === '/api/genius-lyrics' ? 'Lyrics Fetching' : 
-                         endpoint.endpoint}
-                      </p>
+        {/* Two Column Layout */}
+        <div className="grid lg:grid-cols-5 gap-8">
+          {/* Service Status - 60% width (3/5) */}
+          <div className="lg:col-span-3">
+            <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-600">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Service Status</h2>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Last updated: {lastUpdate}
+                  </span>
+                  {isChecking && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                      Checking...
                     </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    {endpoint.responseTime && (
-                      <div className="text-sm font-medium">
-                        {endpoint.responseTime}ms
-                      </div>
-                    )}
-                    {endpoint.lastChecked && (
-                      <div className="text-xs opacity-75">
-                        {endpoint.lastChecked}
-                      </div>
-                    )}
-                    {endpoint.error && (
-                      <div className="text-xs opacity-75">
-                        {endpoint.error}
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Additional Information */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-600">
-          <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100">Service Information</h3>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Backend Service</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Hosted on Google Cloud Run with auto-scaling capabilities
-              </p>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <li>• 16GB Memory, 4 CPU cores</li>
-                <li>• 600s timeout for processing</li>
-                <li>• Auto-scaling up to 5 instances</li>
-              </ul>
+              <div className="space-y-4">
+                {endpoints.map((endpoint) => (
+                  <div
+                    key={endpoint.endpoint}
+                    className={`border rounded-lg p-4 ${getStatusColor(endpoint.status)}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {getStatusIcon(endpoint.status)}
+                        <div>
+                          <h3 className="font-semibold">
+                            {baseUrl}{endpoint.endpoint}
+                          </h3>
+                          <p className="text-sm opacity-75">
+                            {endpoint.endpoint === '/' ? 'Health Check' :
+                             endpoint.endpoint === '/api/model-info' ? 'Model Information' :
+                             endpoint.endpoint === '/api/detect-beats' ? 'Beat Detection' :
+                             endpoint.endpoint === '/api/recognize-chords' ? 'Chord Recognition' :
+                             endpoint.endpoint === '/api/genius-lyrics' ? 'Lyrics Fetching' :
+                             endpoint.endpoint}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        {endpoint.responseTime && (
+                          <div className="text-sm font-medium">
+                            {endpoint.responseTime}ms
+                          </div>
+                        )}
+                        {endpoint.lastChecked && (
+                          <div className="text-xs opacity-75">
+                            {endpoint.lastChecked}
+                          </div>
+                        )}
+                        {endpoint.error && (
+                          <div className="text-xs opacity-75">
+                            {endpoint.error}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Available Models</h4>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <li>• Beat-Transformer (default)</li>
-                <li>• Madmom (fallback)</li>
-                <li>• Chord-CNN-LSTM (301 labels)</li>
-                <li>• BTC Supervised Learning</li>
-                <li>• BTC Pseudo-Label</li>
-              </ul>
+          </div>
+
+          {/* Service Information - 40% width (2/5) */}
+          <div className="lg:col-span-2">
+            <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-600">
+              <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100">Service Information</h3>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Backend Service</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    Hosted on Google Cloud Run with auto-scaling capabilities
+                  </p>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• 16GB Memory, 4 CPU cores</li>
+                    <li>• 600s timeout for processing</li>
+                    <li>• Auto-scaling up to 5 instances</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Available Models</h4>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• Beat-Transformer (default)</li>
+                    <li>• Madmom (fallback)</li>
+                    <li>• Chord-CNN-LSTM (301 labels)</li>
+                    <li>• BTC Supervised Learning</li>
+                    <li>• BTC Pseudo-Label</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>

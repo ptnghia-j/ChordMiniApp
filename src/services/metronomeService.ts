@@ -34,7 +34,7 @@ export class MetronomeService {
     if (!this.audioContext) return null;
 
     try {
-      console.log(`Loading external audio file: ${url}`);
+
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
@@ -42,7 +42,7 @@ export class MetronomeService {
 
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      console.log(`Successfully loaded external audio file: ${url}`);
+
       return audioBuffer;
     } catch (error) {
       console.error(`Error loading external audio file ${url}:`, error);
@@ -234,7 +234,7 @@ export class MetronomeService {
     this.isLoadingBuffers = true;
 
     try {
-      console.log(`Loading metronome audio buffers for style: ${style}`);
+
 
       let downbeatBuffer: AudioBuffer | null = null;
       let regularBuffer: AudioBuffer | null = null;
@@ -245,7 +245,7 @@ export class MetronomeService {
         const downbeatUrl = `${baseUrl}/${style}_downbeat.wav`;
         const regularUrl = `${baseUrl}/${style}_regular.wav`;
 
-        console.log(`Loading librosa audio files: ${downbeatUrl}, ${regularUrl}`);
+
 
         // Load both files in parallel
         const [downbeatResult, regularResult] = await Promise.all([
@@ -266,7 +266,7 @@ export class MetronomeService {
           downbeat: downbeatBuffer,
           regular: regularBuffer
         });
-        console.log(`Successfully loaded metronome buffers for style: ${style}`);
+
       } else {
         throw new Error(`Failed to load audio buffers for style: ${style}`);
       }
@@ -380,7 +380,7 @@ export class MetronomeService {
         return;
       }
 
-      console.log('Metronome: Buffers ready, creating audio nodes...');
+      // console.log('Metronome: Buffers ready, creating audio nodes...');
 
       // Select appropriate buffer
       const buffer = isDownbeat ? buffers.downbeat : buffers.regular;
@@ -407,19 +407,19 @@ export class MetronomeService {
       // Set up automatic cleanup when source ends
       source.onended = () => {
         this.activeSources = this.activeSources.filter(s => s !== source);
-        console.log('Metronome: Audio source ended and cleaned up');
+        // console.log('Metronome: Audio source ended and cleaned up');
       };
 
       // Schedule the click with precise timing
       source.start(startTime);
       source.stop(startTime + this.clickDuration); // Stop exactly at click duration for better separation
 
-      console.log('Metronome: Click scheduled successfully', {
-        startTime,
-        duration: this.clickDuration,
-        volume: this.volume,
-        soundStyle: this.soundStyle
-      });
+      // console.log('Metronome: Click scheduled successfully', {
+      //   startTime,
+      //   duration: this.clickDuration,
+      //   volume: this.volume,
+      //   soundStyle: this.soundStyle
+      // });
 
     } catch (error) {
       console.error('Error creating metronome click:', error);
@@ -453,7 +453,7 @@ export class MetronomeService {
     if (relativeTime >= -0.01) { // Allow very small negative values for immediate scheduling
       const audioTime = this.audioContext.currentTime + Math.max(0.01, relativeTime);
       this.createClick(isDownbeat, audioTime);
-      console.log(`Metronome: Scheduled ${isDownbeat ? 'downbeat' : 'regular'} click at audio time ${audioTime.toFixed(3)}s (relative time: ${relativeTime.toFixed(3)}s)`);
+      // console.log(`Metronome: Scheduled ${isDownbeat ? 'downbeat' : 'regular'} click at audio time ${audioTime.toFixed(3)}s (relative time: ${relativeTime.toFixed(3)}s)`);
     }
   }
 
@@ -472,7 +472,7 @@ export class MetronomeService {
       this.clearScheduledClicks();
     }
 
-    console.log(`Metronome ${enabled ? 'enabled' : 'disabled'}`);
+    // console.log(`Metronome ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -511,7 +511,7 @@ export class MetronomeService {
     this.activeSources = [];
     this.scheduledClicks.clear(); // Clear the Set
 
-    console.log('Metronome: Cleared all scheduled clicks and active sources');
+    // console.log('Metronome: Cleared all scheduled clicks and active sources');
   }
 
   /**
@@ -591,28 +591,28 @@ export class MetronomeService {
    * Test the metronome with a single click
    */
   public async testClick(isDownbeat: boolean = false): Promise<void> {
-    console.log('Metronome: Testing click...', { isDownbeat, isEnabled: this.isEnabled });
+    // console.log('Metronome: Testing click...', { isDownbeat, isEnabled: this.isEnabled });
 
     if (!await this.ensureAudioContext()) {
-      console.error('Metronome: AudioContext not available for test click');
+      // console.error('Metronome: AudioContext not available for test click');
       return;
     }
 
-    console.log('Metronome: AudioContext ready, state:', this.audioContext?.state);
+    // console.log('Metronome: AudioContext ready, state:', this.audioContext?.state);
 
     // Ensure buffers are loaded for current sound style
     if (!this.audioBuffers.has(this.soundStyle)) {
-      console.log('Metronome: Loading audio buffers for test click...');
+      // console.log('Metronome: Loading audio buffers for test click...');
       await this.loadAudioBuffers(this.soundStyle);
     }
 
     const buffers = this.audioBuffers.get(this.soundStyle);
     if (!buffers) {
-      console.error('Metronome: No audio buffers available for test click');
+      // console.error('Metronome: No audio buffers available for test click');
       return;
     }
 
-    console.log('Metronome: Audio buffers ready, creating test click...');
+    // console.log('Metronome: Audio buffers ready, creating test click...');
 
     const wasEnabled = this.isEnabled;
     this.isEnabled = true;
@@ -621,12 +621,12 @@ export class MetronomeService {
     const currentTime = this.audioContext!.currentTime;
     this.createClick(isDownbeat, currentTime + 0.1); // Schedule 100ms in the future
 
-    console.log('Metronome: Test click scheduled at', currentTime + 0.1);
+    // console.log('Metronome: Test click scheduled at', currentTime + 0.1);
 
     // Restore previous state after a short delay
     setTimeout(() => {
       this.isEnabled = wasEnabled;
-      console.log('Metronome: Restored enabled state to', wasEnabled);
+      // console.log('Metronome: Restored enabled state to', wasEnabled);
     }, 200);
   }
 }

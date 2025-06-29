@@ -31,10 +31,10 @@ class ApiService {
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL ||
-                   'https://chordmini-backend-full-1207160312.us-central1.run.app';
+                   'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
-    // Client-side rate limiter: 8 requests per minute (slightly under server limit)
-    this.clientLimiter = new ClientRateLimiter(8, 60000);
+    // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)
+    this.clientLimiter = new ClientRateLimiter(4, 60000);
   }
 
   /**
@@ -45,7 +45,7 @@ class ApiService {
     options: RequestInit & ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
     const {
-      timeout = 30000,
+      timeout = 120000, // Default 2 minutes, but ML endpoints override to 10 minutes
       retries = true,
       maxAttempts = 3,
       baseDelay = 1000,
@@ -68,9 +68,26 @@ class ApiService {
         };
       }
 
-      // Add timeout to fetch options
+      // Add timeout to fetch options with detailed logging
+      console.log(`🔍 ApiService timeout value: ${timeout} (type: ${typeof timeout}, isInteger: ${Number.isInteger(timeout)})`);
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      let timeoutId: NodeJS.Timeout;
+
+      try {
+        if (!Number.isInteger(timeout) || timeout <= 0) {
+          throw new Error(`Invalid timeout value: ${timeout}. Must be a positive integer.`);
+        }
+        timeoutId = setTimeout(() => {
+          console.log(`⏰ ApiService timeout triggered after ${timeout}ms`);
+          controller.abort();
+        }, timeout);
+        console.log(`✅ ApiService timeout set successfully for ${timeout}ms`);
+      } catch (timeoutError) {
+        console.error(`❌ ApiService timeout setup failed:`, timeoutError);
+        const errorMessage = timeoutError instanceof Error ? timeoutError.message : 'Unknown timeout error';
+        throw new Error(`Failed to set up timeout: ${errorMessage}`);
+      }
 
       const requestOptions: RequestInit = {
         ...fetchOptions,
@@ -159,10 +176,26 @@ class ApiService {
 
       // Handle other errors
       if (error instanceof Error) {
+        console.error(`🚨 ApiService error details:`, {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+
         if (error.name === 'AbortError') {
           return {
             success: false,
-            error: 'Request timeout - the operation took too long to complete. This may be due to a large file or server processing time.'
+            error: 'Request timeout - the operation took too long to complete. Processing can take up to 10 minutes for longer audio files. Please try again or use a shorter audio file.'
+          };
+        }
+
+        // Check for AbortSignal.timeout specific errors
+        if (error.message.includes('string did not match the expected pattern') ||
+            error.message.includes('timeout') && error.message.includes('pattern')) {
+          console.error(`🚨 AbortSignal.timeout pattern error detected:`, error);
+          return {
+            success: false,
+            error: 'Invalid timeout configuration detected. Please refresh the page and try again.'
           };
         }
 
@@ -259,7 +292,7 @@ class ApiService {
     }
 
     return this.postFormData('/api/detect-beats', formData, {
-      timeout: 300000, // 5 minutes for processing (Google Cloud Run timeout is 600s)
+      timeout: 800000, // 13+ minutes for processing (Vercel Pro timeout is 800s)
       maxAttempts: 1, // No retries for heavy operations to avoid double processing
     });
   }
@@ -283,7 +316,7 @@ class ApiService {
                     '/api/recognize-chords';
 
     return this.postFormData(endpoint, formData, {
-      timeout: 400000, // 6.5 minutes for processing (Google Cloud Run timeout is 600s)
+      timeout: 800000, // 13+ minutes for processing (Vercel Pro timeout is 800s)
       maxAttempts: 1, // No retries for heavy operations to avoid double processing
     });
   }

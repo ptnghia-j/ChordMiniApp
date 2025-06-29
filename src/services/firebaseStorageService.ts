@@ -1,8 +1,8 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { db, storage } from '@/config/firebase';
 import { doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 
-// Collection name for audio files
+// Collection name for audio files - must match Firestore rules
 const AUDIO_FILES_COLLECTION = 'audioFiles';
 
 // Interface for audio file data
@@ -10,7 +10,7 @@ export interface AudioFileData {
   videoId: string;
   audioUrl: string;
   videoUrl?: string | null;
-  title?: string; // Video title
+  title?: string; // Clean video title for display (from search results)
   storagePath: string;
   videoStoragePath?: string | null;
   fileSize: number;
@@ -26,6 +26,156 @@ interface CachedAudioFileData extends AudioFileData {
   invalid?: boolean;
   expired?: boolean;
   processedAt?: number;
+}
+
+/**
+ * Find existing Firebase Storage audio file for a video ID
+ * @param videoId YouTube video ID
+ * @returns Object with download URL and storage path if found, null otherwise
+ */
+export async function findExistingAudioFile(
+  videoId: string
+): Promise<{
+  audioUrl: string;
+  storagePath: string;
+  fileSize?: number;
+} | null> {
+  if (!storage) {
+    console.warn('Firebase Storage not initialized');
+    return null;
+  }
+
+  try {
+    console.log(`🔍 Searching Firebase Storage for existing audio file: ${videoId}`);
+
+    // List all files in the audio directory
+    const audioRef = ref(storage, 'audio');
+    const listResult = await listAll(audioRef);
+
+    // Look for files matching the pattern: audio_[videoId]_*.mp3
+    const matchingFiles = listResult.items.filter(item => {
+      const fileName = item.name;
+      return fileName.includes(`[${videoId}]`) && fileName.endsWith('.mp3');
+    });
+
+    if (matchingFiles.length === 0) {
+      console.log(`❌ No existing audio file found in Firebase Storage for ${videoId}`);
+      return null;
+    }
+
+    // Use the most recent file (last in the list)
+    const audioFile = matchingFiles[matchingFiles.length - 1];
+    console.log(`✅ Found existing audio file in Firebase Storage: ${audioFile.name}`);
+
+    // Get the download URL
+    const audioUrl = await getDownloadURL(audioFile);
+
+    // Try to get file size from metadata
+    let fileSize: number | undefined;
+    try {
+      const { getMetadata } = await import('firebase/storage');
+      const metadata = await getMetadata(audioFile);
+      fileSize = metadata.size;
+    } catch (metadataError) {
+      console.warn('Could not get file metadata:', metadataError);
+    }
+
+    console.log(`🎵 Firebase Storage audio URL: ${audioUrl}`);
+    console.log(`📊 File size: ${fileSize ? (fileSize / 1024 / 1024).toFixed(2) + 'MB' : 'unknown'}`);
+
+    return {
+      audioUrl,
+      storagePath: audioFile.fullPath,
+      fileSize
+    };
+
+  } catch (error) {
+    console.error(`❌ Error searching Firebase Storage for ${videoId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Find existing Firebase Storage audio files for multiple video IDs
+ * @param videoIds Array of YouTube video IDs
+ * @returns Map of video IDs to their Firebase Storage audio data
+ */
+export async function findExistingAudioFiles(
+  videoIds: string[]
+): Promise<Map<string, {
+  audioUrl: string;
+  storagePath: string;
+  fileSize?: number;
+}>> {
+  const results = new Map<string, {
+    audioUrl: string;
+    storagePath: string;
+    fileSize?: number;
+  }>();
+
+  if (!storage || videoIds.length === 0) {
+    return results;
+  }
+
+  try {
+    console.log(`🔍 Batch searching Firebase Storage for ${videoIds.length} video IDs`);
+
+    // List all files in the audio directory
+    const audioRef = ref(storage, 'audio');
+    const listResult = await listAll(audioRef);
+
+    // Create a map of video IDs to their matching files
+    const videoIdToFiles = new Map<string, typeof listResult.items[0][]>();
+
+    for (const videoId of videoIds) {
+      const matchingFiles = listResult.items.filter(item => {
+        const fileName = item.name;
+        return fileName.includes(`[${videoId}]`) && fileName.endsWith('.mp3');
+      });
+
+      if (matchingFiles.length > 0) {
+        videoIdToFiles.set(videoId, matchingFiles);
+      }
+    }
+
+    console.log(`✅ Found Firebase Storage files for ${videoIdToFiles.size}/${videoIds.length} videos`);
+
+    // Get download URLs for found files
+    for (const [videoId, files] of videoIdToFiles.entries()) {
+      try {
+        // Use the most recent file (last in the list)
+        const audioFile = files[files.length - 1];
+        const audioUrl = await getDownloadURL(audioFile);
+
+        // Try to get file size from metadata
+        let fileSize: number | undefined;
+        try {
+          const { getMetadata } = await import('firebase/storage');
+          const metadata = await getMetadata(audioFile);
+          fileSize = metadata.size;
+        } catch (metadataError) {
+          console.warn(`Could not get file metadata for ${videoId}:`, metadataError);
+        }
+
+        results.set(videoId, {
+          audioUrl,
+          storagePath: audioFile.fullPath,
+          fileSize
+        });
+
+        console.log(`🎵 Firebase Storage found for ${videoId}: ${audioFile.name}`);
+
+      } catch (urlError) {
+        console.warn(`Failed to get download URL for ${videoId}:`, urlError);
+      }
+    }
+
+    return results;
+
+  } catch (error) {
+    console.error('❌ Error batch searching Firebase Storage:', error);
+    return results;
+  }
 }
 
 /**
@@ -59,9 +209,9 @@ export async function uploadAudioFile(
           : 'unknown'
     } bytes`);
 
-    // Create unique file names
+    // Create unique file names with YouTube ID in brackets to match storage rules
     const timestamp = Date.now();
-    const audioFileName = `${videoId}_${timestamp}.mp3`;
+    const audioFileName = `audio_[${videoId}]_${timestamp}.mp3`;
     const audioStoragePath = `audio/${audioFileName}`;
 
     // Create storage reference
@@ -91,7 +241,7 @@ export async function uploadAudioFile(
 
       // Upload video file if provided
       if (videoFile) {
-        const videoFileName = `${videoId}_${timestamp}.mp4`;
+        const videoFileName = `video_[${videoId}]_${timestamp}.mp4`;
         videoStoragePath = `video/${videoFileName}`;
         const videoStorageRef = ref(storage, videoStoragePath);
 
@@ -125,26 +275,9 @@ export async function uploadAudioFile(
         console.error('Upload error stack:', uploadError.stack);
       }
 
-      // Create fallback URLs for local files
-      const audioUrl = `/audio/${audioFileName}`;
-      const videoUrl = videoFile ? `/audio/${videoId}_${timestamp}.mp4` : undefined;
-
-      // Save the audio file to the local filesystem
-      try {
-        // We're already in the server-side code, so we can't directly save to the filesystem
-        // Instead, we'll return the local URLs and let the caller handle saving the files
-        console.log('Using fallback local storage for audio files');
-
-        return {
-          audioUrl,
-          videoUrl,
-          storagePath: audioStoragePath,
-          videoStoragePath: videoFile ? `video/${videoId}_${timestamp}.mp4` : undefined
-        };
-      } catch (fallbackError) {
-        console.error('Error creating fallback URLs:', fallbackError);
-        return null;
-      }
+      // PRODUCTION FIX: Don't fall back to local storage in production
+      // Instead, throw the error to force proper error handling
+      throw new Error(`Firebase Storage upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
     }
   } catch (error) {
     console.error('Error in uploadAudioFile:', error);
@@ -157,7 +290,7 @@ export async function uploadAudioFile(
 }
 
 /**
- * Save audio file metadata to Firestore
+ * Save audio file metadata to Firestore using video ID as primary key
  * @param audioFileData Audio file data to save
  * @returns True if successful, false otherwise
  */
@@ -170,23 +303,30 @@ export async function saveAudioFileMetadata(
   }
 
   try {
-    console.log('Saving audio file metadata to Firestore:', {
+    console.log('Saving audio file metadata to Firestore (video ID-based):', {
       videoId: audioFileData.videoId,
-      fileSize: audioFileData.fileSize
+      fileSize: audioFileData.fileSize,
+      actualFilename: audioFileData.title // This now contains the actual filename from QuickTube
     });
 
-    // Create a unique document ID based on the video ID
+    // Wait for authentication to complete before making Firestore queries
+    const { waitForAuth } = await import('@/config/firebase');
+    await waitForAuth();
+
+    // Use video ID as the primary key (11-character YouTube ID)
     const docId = audioFileData.videoId;
 
     // Get the document reference
     const docRef = doc(db, AUDIO_FILES_COLLECTION, docId);
 
     // Prepare data for Firestore - sanitize undefined values
+    // Store both the clean title and actual filename for video ID-based retrieval
     const sanitizedData = {
-      videoId: audioFileData.videoId,
+      videoId: audioFileData.videoId, // Primary key: 11-character YouTube ID
       audioUrl: audioFileData.audioUrl,
       videoUrl: audioFileData.videoUrl || null,
-      title: audioFileData.title || null,
+      title: audioFileData.title || null, // Clean title from search results OR actual filename from QuickTube
+      actualFilename: audioFileData.title || null, // Store actual filename for future reference
       storagePath: audioFileData.storagePath,
       videoStoragePath: audioFileData.videoStoragePath || null,
       fileSize: audioFileData.fileSize,
@@ -232,6 +372,10 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
 
   try {
     console.log(`Checking for cached audio file: videoId=${videoId}`);
+
+    // Wait for authentication to complete before making Firestore queries
+    const { waitForAuth } = await import('@/config/firebase');
+    await waitForAuth();
 
     // Get the document reference
     const docRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
@@ -436,6 +580,10 @@ export async function saveStreamUrlMetadata(
       videoId,
       streamExpiresAt: new Date(streamExpiresAt).toISOString()
     });
+
+    // Wait for authentication to complete before making Firestore queries
+    const { waitForAuth } = await import('@/config/firebase');
+    await waitForAuth();
 
     // Create a unique document ID based on the video ID
     const docId = videoId;

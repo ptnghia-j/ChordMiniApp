@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent, useRef, useEffect, useCallback } from 'react';
-import Image from 'next/image';
+import OptimizedImage from '@/components/OptimizedImage';
 import { useRouter } from 'next/navigation';
 import RecentVideos from '@/components/RecentVideos';
 import Navigation from '@/components/Navigation';
@@ -12,6 +12,8 @@ import FeaturesSection from '@/components/FeaturesSection';
 import IntegratedSearchContainer from '@/components/IntegratedSearchContainer';
 import { useTheme } from '@/contexts/ThemeContext';
 import { apiPost } from '@/config/api';
+import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
+import { FaMusic } from 'react-icons/fa';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -196,8 +198,32 @@ export default function Home() {
     }
   };
 
-  const handleVideoSelect = (videoId: string) => {
-    router.push(`/analyze/${videoId}`);
+  const handleVideoSelect = (videoId: string, title?: string, metadata?: YouTubeSearchResult) => {
+    // Build URL parameters from search metadata
+    const params = new URLSearchParams();
+
+    if (title) {
+      params.set('title', title);
+    }
+
+    // Pass duration from search metadata if available
+    if (metadata?.duration_string) {
+      params.set('duration', metadata.duration_string);
+    }
+
+    // Pass other useful metadata
+    if (metadata?.channel) {
+      params.set('channel', metadata.channel);
+    }
+
+    if (metadata?.thumbnail) {
+      params.set('thumbnail', metadata.thumbnail);
+    }
+
+    const queryString = params.toString();
+    const url = queryString ? `/analyze/${videoId}?${queryString}` : `/analyze/${videoId}`;
+
+    router.push(url);
   };
 
   return (
@@ -207,38 +233,26 @@ export default function Home() {
 
       {/* Main content with hero image background - added border-top to prevent margin collapse */}
       <main className="flex-grow relative border-t border-transparent dark:border-gray-700">
-        {/* Hero Image Background - Fixed to prevent stretching */}
+        {/* Hero Image Background - Fixed to prevent stretching, lazy loaded */}
         <div className="fixed inset-0 z-0">
-          <Image
+          <OptimizedImage
             src={theme === 'dark' ? "/hero-image-placeholder-dark.svg" : "/hero-image-placeholder.svg"}
             alt="ChordMini - Chord recognition and analysis application"
-            fill
-            priority
+            width={1920}
+            height={1080}
+            priority={false}
+            quality={60}
             sizes="100vw"
-            className="object-cover opacity-60"
+            className="object-cover opacity-30 w-full h-full"
           />
         </div>
 
         {/* Decorative Music Notes with enhanced contrast */}
-        <svg className="absolute top-4 left-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 18V5l12-2v13"></path>
-          <circle cx="6" cy="18" r="3"></circle>
-          <circle cx="18" cy="16" r="3"></circle>
-        </svg>
+        <IoMusicalNote className="absolute top-4 left-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
 
-        <svg className="absolute top-4 right-4 w-12 h-12 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 18V5l12-2v13"></path>
-          <circle cx="6" cy="18" r="3"></circle>
-          <circle cx="18" cy="16" r="3"></circle>
-        </svg>
+        <IoMusicalNotes className="absolute top-4 right-4 w-12 h-12 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
 
-        <svg className="absolute bottom-4 right-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="5.5" cy="17.5" r="3.5"></circle>
-          <circle cx="18.5" cy="15.5" r="3.5"></circle>
-          <path d="M18.5 5v10.5"></path>
-          <path d="M5.5 7v10.5"></path>
-          <path d="M18.5 5l-13 2"></path>
-        </svg>
+        <FaMusic className="absolute bottom-4 right-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
 
         {/* Content Container */}
         <div className="relative z-10 container mx-auto p-3">
@@ -248,14 +262,14 @@ export default function Home() {
               {/* Left Column: Main content (75% width on desktop) */}
               <div className="lg:col-span-3">
                 {/* App Title and Description - Centered in left column */}
-                <div ref={titleRef} className="pt-4 pb-4 md:py-5 text-center">
+                <div ref={titleRef} className="pt-3 pb-2 md:pt-4 md:pb-3 text-center">
                   <AnimatedTitle text="Chord Mini" className="mb-0.5" />
-                  <div className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300 min-h-[2rem] md:min-h-[2.5rem]">
+                  <div className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300 min-h-[4rem] md:min-h-[5rem] flex items-center justify-center">
                     <TypewriterText
                       text="Open source chord & beat detection application. Get your favorite songs transcribed!"
                       speed={20}
                       delay={1000}
-                      className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light transition-colors duration-300"
+                      className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light transition-colors duration-300 text-center leading-relaxed"
                       showCursor={true}
                       cursorChar="|"
                     />
@@ -277,8 +291,8 @@ export default function Home() {
 
                 {/* Demo Images - Only show when not displaying search results */}
                 {!searchResults.length && !isSearching && (
-                  <div className="mt-3">
-                    <div className="text-center mb-2">
+                  <div className="mt-2">
+                    <div className="text-center mb-1">
                       <AnimatedBorderText>
                         <h3 className="text-base font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
                           See ChordMini in Action
@@ -288,32 +302,36 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-all duration-300 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg group">
                         <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                          <Image
+                          <OptimizedImage
                             src={theme === 'dark' ? "/demo1_dark.png" : "/demo1.png"}
                             alt="ChordMini Beat and Chord Analysis Demo"
                             width={800}
                             height={450}
+                            priority={false}
+                            quality={75}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            priority
                           />
                         </div>
-                        <div className="p-2">
+                        <div className="p-1.5">
                           <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300 text-sm">Beat & Chord Analysis</h4>
                           <p className="text-xs text-gray-600 dark:text-gray-300 transition-colors duration-300">Visualize chord progressions and beat patterns in real-time</p>
                         </div>
                       </div>
                       <div className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden transition-all duration-300 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg group">
                         <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                          <Image
+                          <OptimizedImage
                             src={theme === 'dark' ? "/demo2_dark.png" : "/demo2.png"}
                             alt="ChordMini Lyrics Transcription Demo"
                             width={800}
                             height={450}
+                            priority={false}
+                            quality={75}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            priority
                           />
                         </div>
-                        <div className="p-2">
+                        <div className="p-1.5">
                           <h4 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300 text-sm">Lyrics & Chord Transcription</h4>
                           <p className="text-xs text-gray-600 dark:text-gray-300 transition-colors duration-300">Follow along with synchronized lyrics and chord annotations</p>
                         </div>
@@ -375,19 +393,39 @@ export default function Home() {
                           We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep
                           the backend server running, you can use the donation link below. We really appreciate your support!
                         </p>
-                        <div className="text-center">
-                          <a
-                            href="https://coff.ee/nghiaphan"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
-                          >
-                            <span className="text-lg">☕</span>
-                            <span>Donation</span>
-                          </a>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 transition-colors duration-300">
-                            (Buy Me a Coffee link)
-                          </p>
+                        {/* Contact and Donation Buttons - Same Row */}
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                          {/* Contact Email */}
+                          <div className="text-center">
+                            <a
+                              href="mailto:phantrongnghia510@gmail.com"
+                              className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              <span>Contact Us</span>
+                            </a>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 transition-colors duration-300">
+                              phantrongnghia510@gmail.com
+                            </p>
+                          </div>
+
+                          {/* Donation Link */}
+                          <div className="text-center">
+                            <a
+                              href="https://coff.ee/nghiaphan"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
+                            >
+                              <span className="text-lg">☕</span>
+                              <span>Donation</span>
+                            </a>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 transition-colors duration-300">
+                              (Buy Me a Coffee link)
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>

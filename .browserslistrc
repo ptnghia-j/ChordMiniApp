@@ -1,0 +1,33 @@
+# Modern browsers only - eliminates polyfills for legacy features
+# This targets browsers that support ES2020+ features natively
+
+# Chrome 80+ (supports all modern JS features)
+Chrome >= 80
+
+# Firefox 72+ (supports all modern JS features)
+Firefox >= 72
+
+# Safari 13.1+ (supports most modern JS features)
+Safari >= 13.1
+
+# Edge 80+ (Chromium-based)
+Edge >= 80
+
+# Mobile browsers
+iOS >= 13.4
+Android >= 81
+
+# Exclude legacy browsers to reduce polyfills
+not IE 11
+not IE_Mob 11
+not dead
+not < 0.25%
+
+# This configuration eliminates polyfills for:
+# - Array.prototype.at
+# - Array.prototype.flat
+# - Array.prototype.flatMap
+# - Object.fromEntries
+# - Object.hasOwn
+# - String.prototype.trimStart
+# - String.prototype.trimEnd

@@ -15,7 +15,6 @@ export interface YouTubeSearchResult {
   publishedAt: string;
   url: string;
   duration?: string;
-  viewCount?: number;
 }
 
 export interface YouTubeVideoDetails {
@@ -24,7 +23,6 @@ export interface YouTubeVideoDetails {
   description: string;
   thumbnail: string;
   duration: number;
-  viewCount: number;
   likeCount: number;
   channelTitle: string;
   publishedAt: string;
@@ -209,7 +207,6 @@ export class YouTubeApiService {
         return {
           ...result,
           duration: details ? this.formatDurationString(details.duration) : undefined,
-          viewCount: details?.viewCount,
         };
       });
     } catch (error) {
@@ -244,7 +241,6 @@ export class YouTubeApiService {
       description: item.snippet.description || '',
       thumbnail: this.getBestThumbnail(item.snippet.thumbnails),
       duration: this.parseDuration(item.contentDetails?.duration || 'PT0S'),
-      viewCount: parseInt(item.statistics?.viewCount || '0'),
       likeCount: parseInt(item.statistics?.likeCount || '0'),
       channelTitle: item.snippet.channelTitle || 'Unknown Channel',
       publishedAt: item.snippet.publishedAt || '',
@@ -325,15 +321,7 @@ export const youtubeUtils = {
     return null;
   },
 
-  /**
-   * Format view count for display
-   */
-  formatViewCount(count: number): string {
-    if (count >= 1000000000) return `${(count / 1000000000).toFixed(1)}B`;
-    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
-    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
-    return count.toString();
-  },
+
 
   /**
    * Format duration for display

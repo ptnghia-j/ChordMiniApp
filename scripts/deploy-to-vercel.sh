@@ -88,7 +88,7 @@ if [ -f ".env.example" ]; then
     echo ""
 
     echo "🌐 Service URLs (Client-side):"
-    echo "NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+    echo "NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-191567167632.us-central1.run.app"
     echo "NEXT_PUBLIC_YOUTUBE_API_KEY=***REQUIRED***"
     echo "NEXT_PUBLIC_BASE_URL=https://your-vercel-domain.vercel.app"
     echo ""
@@ -96,7 +96,7 @@ if [ -f ".env.example" ]; then
     echo "⚙️  Optional Configuration:"
     echo "USE_MOCK_MUSIC_AI=false"
     echo "NEXT_DISABLE_DEV_OVERLAY=true"
-    echo "BACKEND_URL=https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+    echo "BACKEND_URL=https://chordmini-backend-full-191567167632.us-central1.run.app"
     echo ""
 
     # Check if running in CI environment
@@ -210,5 +210,5 @@ echo ""
 echo "🔗 Useful Links:"
 echo "- Vercel Dashboard: https://vercel.com/dashboard"
 echo "- Firebase Console: https://console.firebase.google.com/project/chordmini-d29f9"
-echo "- Backend Service: https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+echo "- Backend Service: https://chordmini-backend-full-191567167632.us-central1.run.app"
 echo "- GitHub Repository: https://github.com/ptnghia-j/ChordMiniApp"

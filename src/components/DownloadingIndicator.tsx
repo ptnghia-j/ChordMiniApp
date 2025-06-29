@@ -1,47 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface DownloadingIndicatorProps {
   isVisible: boolean;
-  videoDuration?: number; // Duration in seconds
 }
 
 const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
-  isVisible,
-  videoDuration
+  isVisible
 }) => {
-  // Get progress, stage, and statusMessage from the ProcessingContext
-  const { progress, stage, statusMessage, elapsedTime } = useProcessing();
+  // Get stage and statusMessage from the ProcessingContext
+  const { stage, statusMessage } = useProcessing();
   const { theme } = useTheme();
-  const [estimatedProgress, setEstimatedProgress] = useState(0);
-
-  // Calculate estimated progress based on time elapsed and video duration
-  useEffect(() => {
-    if (!isVisible || !videoDuration) return;
-
-    const elapsedSeconds = elapsedTime / 1000;
-
-    if (stage === 'downloading') {
-      // For downloading: estimate 30 seconds for 5 minutes of video
-      // Formula: 6 seconds per minute of video
-      const estimatedDownloadTime = (videoDuration / 60) * 6;
-      const downloadProgress = Math.min((elapsedSeconds / estimatedDownloadTime) * 100, 95);
-      setEstimatedProgress(downloadProgress);
-    } else if (stage === 'extracting') {
-      // For extraction: estimate 5-10 seconds regardless of video length
-      const estimatedExtractionTime = 8;
-      const extractionProgress = Math.min((elapsedSeconds / estimatedExtractionTime) * 100, 95);
-      setEstimatedProgress(extractionProgress);
-    }
-  }, [elapsedTime, stage, videoDuration, isVisible]);
 
   if (!isVisible) return null;
-
-  // Use estimated progress if available, otherwise fall back to context progress
-  const displayProgress = estimatedProgress > 0 ? estimatedProgress : progress;
 
   return (
     <div className="w-full z-40 transition-all duration-300 ease-in-out mb-4">
@@ -67,20 +41,16 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
                 }`}>
                   {stage === 'downloading' ? 'Downloading YouTube Video...' : 'Extracting Audio...'}
                 </p>
-                <p className={`text-xs ${
-                  theme === 'dark' ? 'text-yellow-300' : 'text-yellow-700'
-                }`}>{Math.round(displayProgress)}%</p>
               </div>
 
-              {/* Progress bar */}
-              <div className={`w-full rounded-full h-1.5 ${
+              {/* Simple loading indicator without progress bar */}
+              <div className={`w-full h-1 ${
                 theme === 'dark' ? 'bg-yellow-800/50' : 'bg-yellow-200'
-              }`}>
-                <div
-                  className={`h-1.5 rounded-full transition-all duration-300 ease-in-out ${
-                    theme === 'dark' ? 'bg-yellow-400' : 'bg-yellow-500'
-                  }`}
-                  style={{ width: `${displayProgress}%` }}
+              } rounded-full overflow-hidden`}>
+                <div className={`h-full ${
+                  theme === 'dark' ? 'bg-yellow-400' : 'bg-yellow-500'
+                } rounded-full animate-pulse`}
+                style={{ width: '100%' }}
                 ></div>
               </div>
 

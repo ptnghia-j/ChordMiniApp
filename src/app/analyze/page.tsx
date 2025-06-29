@@ -1,15 +1,53 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Navigation from '@/components/Navigation';
 import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chordRecognitionService';
-import BeatModelSelector from '@/components/BeatModelSelector';
-import ChordModelSelector from '@/components/ChordModelSelector';
-import ProcessingStatusBanner from '@/components/ProcessingStatusBanner';
-import AnalysisSummary from '@/components/AnalysisSummary';
-import MetronomeControls from '@/components/MetronomeControls';
-import { ChordGridContainer } from '@/components/ChordGridContainer';
+import { ProcessingStatusSkeleton } from '@/components/SkeletonLoaders';
+
+// Dynamic imports for heavy components with better loading states
+const BeatModelSelector = dynamic(() => import('@/components/BeatModelSelector'), {
+  loading: () => (
+    <div className="space-y-2">
+      <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />
+    </div>
+  ),
+  ssr: false
+});
+
+const ChordModelSelector = dynamic(() => import('@/components/ChordModelSelector'), {
+  loading: () => (
+    <div className="space-y-2">
+      <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />
+    </div>
+  ),
+  ssr: false
+});
+
+const ProcessingStatusBanner = dynamic(() => import('@/components/ProcessingStatusBanner'), {
+  loading: () => <ProcessingStatusSkeleton />,
+  ssr: true
+});
+
+const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
+  loading: () => <div className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
+const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
+  loading: () => <div className="h-20 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
+const ChordGridContainer = dynamic(() => import('@/components/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
+  loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
 import { useProcessing } from '@/contexts/ProcessingContext';
+import { FiSkipBack, FiSkipForward } from 'react-icons/fi';
 // import { useTheme } from '@/contexts/ThemeContext';
 
 export default function LocalAudioAnalyzePage() {
@@ -37,8 +75,26 @@ export default function LocalAudioAnalyzePage() {
   type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
   type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
-  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>('beat-transformer');
-  const [chordDetector, setChordDetector] = useState<ChordDetectorType>('chord-cnn-lstm');
+  // Initialize model states with localStorage persistence
+  const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chordmini_beat_detector');
+      if (saved && ['auto', 'madmom', 'beat-transformer'].includes(saved)) {
+        return saved as BeatDetectorType;
+      }
+    }
+    return 'beat-transformer';
+  });
+
+  const [chordDetector, setChordDetector] = useState<ChordDetectorType>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chordmini_chord_detector');
+      if (saved && ['chord-cnn-lstm', 'btc-sl', 'btc-pl'].includes(saved)) {
+        return saved as ChordDetectorType;
+      }
+    }
+    return 'chord-cnn-lstm';
+  });
 
   // Audio processing state
   const [audioProcessingState, setAudioProcessingState] = useState({
@@ -48,6 +104,7 @@ export default function LocalAudioAnalyzePage() {
     isAnalyzed: false,
     error: null as string | null,
     audioBuffer: null as AudioBuffer | null,
+    audioUrl: null as string | null,
   });
 
   // Analysis results state
@@ -81,6 +138,19 @@ export default function LocalAudioAnalyzePage() {
     };
   } | null), []);
 
+  // Persist model preferences to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chordmini_beat_detector', beatDetector);
+    }
+  }, [beatDetector]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chordmini_chord_detector', chordDetector);
+    }
+  }, [chordDetector]);
+
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -97,6 +167,7 @@ export default function LocalAudioAnalyzePage() {
       isAnalyzed: false,
       error: null,
       audioBuffer: null,
+      audioUrl: null,
     });
     setAnalysisResults(null);
 
@@ -120,28 +191,22 @@ export default function LocalAudioAnalyzePage() {
       setProgress(0);
       setStatusMessage('Starting beat detection...');
 
+      // Use existing object URL from audio element or create new one
+      const audioUrl = audioRef.current?.src || URL.createObjectURL(audioFile);
+
       setAudioProcessingState(prev => ({
         ...prev,
         isExtracting: true,
         error: null,
+        audioUrl,
       }));
 
-      // Read the file as ArrayBuffer
-      const arrayBuffer = await audioFile.arrayBuffer();
-
-      // Create AudioContext
-      const audioContext = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-
-      // Decode audio data
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      // Set duration from AudioBuffer IMMEDIATELY for progress calculation
-      if (audioBuffer.duration && duration === 0) {
-        setDuration(audioBuffer.duration);
+      // Get duration from audio element for progress calculation
+      if (audioRef.current && audioRef.current.duration && duration === 0) {
+        setDuration(audioRef.current.duration);
       }
 
-      // Update to chord recognition stage after audio is decoded and duration is set
+      // Update to chord recognition stage after duration is available
       stageTimeout = setTimeout(() => {
         setStage('chord-recognition');
         // Don't set progress here - let ProcessingStatusBanner calculate it
@@ -151,12 +216,13 @@ export default function LocalAudioAnalyzePage() {
       setAudioProcessingState(prev => ({
         ...prev,
         isExtracted: true,
-        audioBuffer,
+        audioBuffer: null, // No longer using AudioBuffer
         isAnalyzing: true
       }));
 
-      // Start chord and beat analysis with selected detectors
-      const results = await analyzeAudioWithRateLimit(audioBuffer, beatDetector, chordDetector);
+      // Start chord and beat analysis with selected detectors using original File object
+      // This avoids the 10x size bloat from AudioBuffer conversion (3.6MB → 41.7MB)
+      const results = await analyzeAudioWithRateLimit(audioFile, beatDetector, chordDetector);
 
       // FIXED: Clear the stage timeout to prevent it from overriding completion
       if (stageTimeout) {
@@ -166,6 +232,12 @@ export default function LocalAudioAnalyzePage() {
 
       // Store results
       setAnalysisResults(results);
+
+      // Update duration from analysis results if available
+      if (results.audioDuration && results.audioDuration > 0) {
+        setDuration(results.audioDuration);
+        console.log(`🎵 Updated duration from analysis results: ${results.audioDuration.toFixed(1)} seconds`);
+      }
 
       setAudioProcessingState(prev => ({
         ...prev,
@@ -334,26 +406,126 @@ export default function LocalAudioAnalyzePage() {
     // Calculate how many padding beats we need to start from 0.0s
     const calculatedPaddingCount = firstBeatTime > 0 ? Math.floor(firstBeatTime / beatDuration) : 0;
 
+    // console.log(`🔧 UPLOAD PAGE PADDING CALCULATION:`, {
+    //   firstBeatTime: firstBeatTime.toFixed(3),
+    //   bpm,
+    //   beatDuration: beatDuration.toFixed(3),
+    //   calculatedPaddingCount,
+    //   backendPaddingCount: analysisResults.beatDetectionResult?.paddingCount,
+    //   backendShiftCount: analysisResults.beatDetectionResult?.shiftCount
+    // });
+
     const paddingCount = analysisResults.beatDetectionResult?.paddingCount || calculatedPaddingCount;
-    const shiftCount = analysisResults.beatDetectionResult?.shiftCount || 0;
+
+    // console.log(`🔧 UPLOAD PAGE FINAL VALUES: paddingCount=${paddingCount}, shiftCount=${shiftCount}, hasPadding=${paddingCount > 0}`);
+
+    // MISSING LOGIC: Add shift calculation for uploaded audio files
+    // The upload page was missing the sophisticated shift calculation that the YouTube page has
+    const calculateOptimalShiftForUpload = (chords: string[], timeSignature: number): number => {
+      if (chords.length === 0) {
+        // console.log('🔧 UPLOAD SHIFT: No chords available, returning shift 0');
+        return 0;
+      }
+
+      // console.log(`🔧 UPLOAD SHIFT CALCULATION DEBUG - Analyzing ${chords.length} chords with ${timeSignature}/4 time signature`);
+      // console.log(`🔧 UPLOAD First 20 chords: [${chords.slice(0, 20).join(', ')}]`);
+
+      let bestShift = 0;
+      let maxChordChanges = 0;
+      const shiftResults: Array<{shift: number, chordChanges: number, downbeatPositions: number[], chordLabels: string[]}> = [];
+
+      // Test each possible shift value (0 to timeSignature-1)
+      // console.log(`🔧 UPLOAD TESTING SHIFT OPTIONS:`);
+      for (let shift = 0; shift < timeSignature; shift++) {
+        // console.log(`\n📊 === UPLOAD SHIFT ${shift} ANALYSIS ===`);
+
+        let chordChangeCount = 0;
+        const downbeatPositions: number[] = [];
+        const chordLabels: string[] = [];
+
+        // Check each beat position after applying the shift
+        for (let i = shift; i < chords.length; i++) {
+          const currentChord = chords[i];
+          const previousChord = i > shift ? chords[i - 1] : '';
+
+          // Detect chord change: current chord differs from previous beat's chord
+          const isChordChange = currentChord && currentChord !== '' &&
+                               currentChord !== previousChord && previousChord !== '' &&
+                               currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N';
+
+          // Calculate beat position in the shifted sequence
+          const beatInMeasure = ((i - shift) % timeSignature) + 1;
+          const isDownbeat = beatInMeasure === 1;
+
+          // if (i < 20) { // Log first 20 for debugging
+          //   console.log(`      🎯 UPLOAD BEAT: pos[${i}] chord="${currentChord}" prev="${previousChord}" valid=${isChordChange} downbeat=${isDownbeat} beat=${beatInMeasure}`);
+          // }
+
+          // Score: chord change that occurs on a downbeat
+          if (isChordChange && isDownbeat) {
+            chordChangeCount++;
+            downbeatPositions.push(i);
+            chordLabels.push(currentChord);
+            // if (i < 20) {
+            //   console.log(`      🎵 UPLOAD CHORD CHANGE ON DOWNBEAT: pos[${i}] "${previousChord}" -> "${currentChord}" beat=${beatInMeasure}`);
+            // }
+          }
+        }
+
+        shiftResults.push({
+          shift,
+          chordChanges: chordChangeCount,
+          downbeatPositions,
+          chordLabels
+        });
+
+        // console.log(`   ✅ UPLOAD SHIFT ${shift} RESULT: ${chordChangeCount} chord changes on downbeats`);
+
+        if (chordChangeCount > maxChordChanges) {
+          maxChordChanges = chordChangeCount;
+          bestShift = shift;
+        }
+      }
+
+      // console.log(`\n✅ UPLOAD BEST SHIFT: ${bestShift} (${maxChordChanges} chord changes on downbeats)`);
+      // console.log(`📊 UPLOAD SHIFT SUMMARY:`);
+      // shiftResults.forEach(result => {
+      //   const marker = result.shift === bestShift ? '🎯' : '  ';
+      //   console.log(`  ${marker} Shift ${result.shift}: ${result.chordChanges} chord changes on downbeats`);
+      // });
+
+      return bestShift;
+    };
 
     // Padding calculation completed
 
     // FIXED: Use YouTube approach - only include chords that actually have timestamps within audio duration
     const filteredSynchronizedChords = analysisResults.synchronizedChords.filter(item => {
-      if (!analysisResults.beatDetectionResult?.beats) return true;
+      // CRITICAL FIX: Check if we have beats data in the correct format
+      if (!analysisResults.beats || !Array.isArray(analysisResults.beats)) return true;
 
       const beatIndex = item.beatIndex;
-      if (beatIndex < 0 || beatIndex >= analysisResults.beatDetectionResult.beats.length) {
+      if (beatIndex < 0 || beatIndex >= analysisResults.beats.length) {
         return false; // Invalid beat index
       }
 
-      const beatTime = analysisResults.beatDetectionResult.beats[beatIndex].time;
-      const animationRangeStart = analysisResults.beatDetectionResult.animationRangeStart || 0;
-      const actualBeatTime = animationRangeStart + beatTime;
+      // CRITICAL FIX: Handle both number array and BeatInfo object array formats
+      const beat = analysisResults.beats[beatIndex];
+      let beatTime: number;
+
+      if (typeof beat === 'number') {
+        // Standard API format: beats is number[]
+        beatTime = beat;
+      } else if (typeof beat === 'object' && beat !== null && 'time' in beat) {
+        // BeatInfo object format: beats is BeatInfo[]
+        beatTime = (beat as { time: number }).time;
+      } else {
+        console.warn(`⚠️ Unexpected beat format at index ${beatIndex}:`, beat);
+        return true; // Include by default if format is unexpected
+      }
 
       // Only include beats that are actually within the audio duration (no buffer)
-      return actualBeatTime < duration;
+      return beatTime < duration;
     });
 
     // CRITICAL: Much more aggressive cell limiting to prevent excessive trailing cells
@@ -393,6 +565,26 @@ export default function LocalAudioAnalyzePage() {
       // Return raw chord name - formatting will be handled by ChordGrid component
       return chord;
     });
+
+    // console.log(`🔧 UPLOAD PAGE CHORD DATA:`, {
+    //   totalChords: processedChords.length,
+    //   first20Chords: processedChords.slice(0, 20),
+    //   timeSignature: analysisResults.beatDetectionResult?.time_signature || 4
+    // });
+
+    // CALCULATE OPTIMAL SHIFT for uploaded audio files
+    const timeSignature = analysisResults.beatDetectionResult?.time_signature || 4;
+    const calculatedShiftCount = calculateOptimalShiftForUpload(processedChords, timeSignature);
+
+    // Update shiftCount with calculated value if not provided by backend
+    const finalShiftCount = analysisResults.beatDetectionResult?.shiftCount || calculatedShiftCount;
+
+    // console.log(`🔧 UPLOAD SHIFT CALCULATION COMPLETE:`, {
+    //   calculatedShiftCount,
+    //   backendShiftCount: analysisResults.beatDetectionResult?.shiftCount,
+    //   finalShiftCount,
+    //   willUseBackendStrategy: paddingCount > 0 || finalShiftCount > 0
+    // });
 
     // Create beats array using actual timestamps instead of beat indices
     const processedBeats = limitedSynchronizedChords.map((item, index) => {
@@ -446,35 +638,66 @@ export default function LocalAudioAnalyzePage() {
       audioIndex: index // Store the original audio index for accurate beat click handling
     }));
 
-    // Add actual padding beats to the beginning of the arrays
+    // COMPREHENSIVE STRATEGY: Apply padding and shifting like YouTube page
     let finalChords = processedChords;
     let finalBeats = processedBeats;
+    let finalOriginalAudioMapping = originalAudioMapping;
 
-    if (paddingCount > 0) {
-      // Create padding beats with calculated timestamps
+    // Apply comprehensive strategy if we have either padding OR shifting
+    if (paddingCount > 0 || finalShiftCount > 0) {
+      // console.log(`🔧 UPLOAD APPLYING COMPREHENSIVE STRATEGY: paddingCount=${paddingCount}, shiftCount=${finalShiftCount}`);
+
+      // Create shift cells (empty strings)
+      const shiftChords = Array.from({ length: finalShiftCount }, () => '');
+      const shiftBeats = Array.from({ length: finalShiftCount }, (_, i) => -1 * (finalShiftCount - i) * beatDuration);
+
+      // Create padding cells (N.C. chords with timestamps)
+      const paddingChords = Array.from({ length: paddingCount }, () => 'N.C.');
+      const paddingBeats = Array.from({ length: paddingCount }, (_, i) => i * beatDuration);
+
+      // Combine: [shift cells] + [padding cells] + [regular chords]
+      finalChords = [...shiftChords, ...paddingChords, ...processedChords];
+      finalBeats = [...shiftBeats, ...paddingBeats, ...processedBeats];
+
+      // console.log(`🔧 UPLOAD COMPREHENSIVE RESULT:`, {
+      //   shiftCells: finalShiftCount,
+      //   paddingCells: paddingCount,
+      //   regularChords: processedChords.length,
+      //   totalCells: finalChords.length,
+      //   firstFewChords: finalChords.slice(0, 10),
+      //   firstFewBeats: finalBeats.slice(0, 10).map(b => b === null ? 'null' : (typeof b === 'number' ? b.toFixed(3) : b))
+      // });
+
+      // Update original audio mapping to account for shift and padding
+      finalOriginalAudioMapping = originalAudioMapping.map((item, index) => ({
+        ...item,
+        visualIndex: finalShiftCount + paddingCount + index // Shift by total offset
+      }));
+
+    } else if (paddingCount > 0) {
+      // Legacy padding-only approach
       const paddingBeats = Array.from({ length: paddingCount }, (_, i) => i * beatDuration);
       const paddingChords = Array.from({ length: paddingCount }, () => ''); // Empty chords for padding
 
-      // Prepend padding to the arrays
       finalChords = [...paddingChords, ...processedChords];
       finalBeats = [...paddingBeats, ...processedBeats];
 
-      console.log(`🎵 Added ${paddingCount} padding beats: ${paddingBeats.map(b => b.toFixed(2)).join(', ')}s`);
+      // console.log(`🎵 UPLOAD Added ${paddingCount} padding beats: ${paddingBeats.map(b => b.toFixed(2)).join(', ')}s`);
     }
 
     const result = {
       chords: finalChords,
       beats: finalBeats,
       beatNumbers: [
-        ...Array.from({ length: paddingCount }, () => 1), // Padding beats are beat 1
+        ...Array.from({ length: finalShiftCount + paddingCount }, () => 1), // Shift + padding beats are beat 1
         ...limitedSynchronizedChords.map(item => item.beatNum || 1)
       ],
-      hasPadding: paddingCount > 0,
+      hasPadding: paddingCount > 0 || finalShiftCount > 0, // Use comprehensive strategy if either is present
       paddingCount,
-      shiftCount,
+      shiftCount: finalShiftCount, // Use calculated shift count
       hasPickupBeats: paddingCount > 0,
       pickupBeatsCount: paddingCount,
-      originalAudioMapping
+      originalAudioMapping: finalOriginalAudioMapping
     };
 
     // DEBUG: Final chord grid summary
@@ -550,6 +773,7 @@ export default function LocalAudioAnalyzePage() {
       <ProcessingStatusBanner
         analysisResults={analysisResults}
         audioDuration={duration}
+        audioUrl={audioProcessingState.audioUrl || undefined}
       />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
@@ -654,22 +878,13 @@ export default function LocalAudioAnalyzePage() {
                 isChatbotOpen={false}
                 isLyricsPanelOpen={false}
                 onBeatClick={handleBeatClick}
+                isUploadPage={true}
                 showCorrectedChords={showCorrectedChords}
                 chordCorrections={chordCorrections}
                 sequenceCorrections={sequenceCorrections}
               />
 
-              {/* DEBUG: Current Beat Index Display */}
-              {analysisResults && (
-                <div className="mt-2 p-2 bg-yellow-100 dark:bg-yellow-900 rounded text-xs">
-                  <strong>DEBUG:</strong> currentBeatIndex = {currentBeatIndex},
-                  beats.length = {chordGridData.beats.length},
-                  isPlaying = {isPlaying.toString()}
-                  {currentBeatIndex >= 0 && currentBeatIndex < chordGridData.beats.length && (
-                    <span>, beatTime = {chordGridData.beats[currentBeatIndex]?.toFixed(2)}s</span>
-                  )}
-                </div>
-              )}
+
 
               {/* Metronome Controls */}
               <MetronomeControls
@@ -706,9 +921,7 @@ export default function LocalAudioAnalyzePage() {
                     }`}
                     title="Skip back 10 seconds"
                   >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M15.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L11.414 9H17a1 1 0 110 2h-5.586l4.293 4.293a1 1 0 010 1.414zM9 2a1 1 0 00-1 1v.586L3.707 8.879a1 1 0 000 1.414L8 14.586V15a1 1 0 002 0V3a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
+                    <FiSkipBack className="w-4 h-4" />
                   </button>
 
                   {/* Play/Pause Button */}
@@ -735,9 +948,7 @@ export default function LocalAudioAnalyzePage() {
                     }`}
                     title="Skip forward 10 seconds"
                   >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L8.586 11H3a1 1 0 110-2h5.586L4.293 5.707a1 1 0 010-1.414zM11 2a1 1 0 011 1v.586l4.293-4.293a1 1 0 111.414 1.414L12 6.414V15a1 1 0 11-2 0V3a1 1 0 011-1z" clipRule="evenodd" />
-                    </svg>
+                    <FiSkipForward className="w-4 h-4" />
                   </button>
                 </div>
 

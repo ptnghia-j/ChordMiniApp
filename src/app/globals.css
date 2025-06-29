@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Optimized bounce animation for ProcessingStatusBanner */
+@keyframes optimized-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.bounce-dot {
+  animation: optimized-bounce 1.4s infinite ease-in-out both;
+}
+
+.bounce-dot-1 {
+  animation-delay: 0ms;
+}
+
+.bounce-dot-2 {
+  animation-delay: 0.16s;
+}
+
+.bounce-dot-3 {
+  animation-delay: 0.32s;
+}
+
 /* Hide all development indicators and overlays */
 #__next-dev-overlay-error-toast,
 #__next-dev-overlay-error-toast *,
@@ -110,6 +136,32 @@
     .quarter-rest-responsive {
       width: 1.1em !important;
       height: 1.1em !important;
+    }
+  }
+
+  /* Mobile landscape optimizations */
+  @media (max-width: 768px) and (orientation: landscape) {
+    /* Reduce vertical padding in landscape mode for better space utilization */
+    .chord-grid-container {
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+
+    /* Optimize lyrics container height for landscape */
+    .lyrics-container {
+      height: calc(50vh - 10px) !important;
+      max-height: 400px !important;
+    }
+
+    /* Reduce header spacing in landscape */
+    .analysis-header {
+      margin-bottom: 0.5rem;
+    }
+
+    /* Compact audio player in landscape */
+    .audio-player-landscape {
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
     }
   }
 }

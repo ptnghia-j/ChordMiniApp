@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 
 /**
  * API route to get information about available models
@@ -7,15 +8,15 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // Try to call the Python backend API first with timeout
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
     try {
       const response = await fetch(`${backendUrl}/api/model-info`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(8000) // 8 second timeout
+        // Add timeout to prevent hanging (increased for cold starts)
+        signal: createSafeTimeoutSignal(15000) // 15 second timeout for cold starts
       });
 
       if (response.ok) {

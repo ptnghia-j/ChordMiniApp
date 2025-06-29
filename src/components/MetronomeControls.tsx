@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { MetronomeService } from '@/services/metronomeService';
+import { FiChevronDown } from 'react-icons/fi';
 
 interface MetronomeControlsProps {
   className?: string;
@@ -12,6 +13,7 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('librosa_short');
   const [isExpanded, setIsExpanded] = useState(false);
   const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
+  const [showSoundStyleDropdown, setShowSoundStyleDropdown] = useState(false);
 
   // Initialize metronome service on client side only
   useEffect(() => {
@@ -29,27 +31,27 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Handle metronome toggle
   const handleToggle = async () => {
-    console.log('MetronomeControls: Toggle clicked', {
-      hasService: !!metronomeService,
-      currentEnabled: isEnabled
-    });
+    // console.log('MetronomeControls: Toggle clicked', {
+    //   hasService: !!metronomeService,
+    //   currentEnabled: isEnabled
+    // });
 
     if (!metronomeService) {
-      console.error('MetronomeControls: No metronome service available');
+      // console.error('MetronomeControls: No metronome service available');
       return;
     }
 
     const newEnabled = !isEnabled;
-    console.log('MetronomeControls: Setting enabled to', newEnabled);
+    // console.log('MetronomeControls: Setting enabled to', newEnabled);
 
     setIsEnabled(newEnabled);
     await metronomeService.setEnabled(newEnabled);
 
     // Test click when enabling
     if (newEnabled) {
-      console.log('MetronomeControls: Scheduling test click...');
+      // console.log('MetronomeControls: Scheduling test click...');
       setTimeout(() => {
-        console.log('MetronomeControls: Executing test click...');
+        // console.log('MetronomeControls: Executing test click...');
         metronomeService.testClick(false);
       }, 100);
     }
@@ -64,18 +66,29 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
   };
 
   // Handle sound style change
-  const handleSoundStyleChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSoundStyleChange = async (newStyle: typeof soundStyle) => {
     if (!metronomeService) return;
-    const newStyle = event.target.value as 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long';
     setSoundStyle(newStyle);
+    setShowSoundStyleDropdown(false);
     await metronomeService.setSoundStyle(newStyle);
   };
 
+  const soundStyleOptions = [
+    { value: 'traditional', label: 'Traditional (Tick-Tock)' },
+    { value: 'digital', label: 'Digital (Clean)' },
+    { value: 'wood', label: 'Wood Block' },
+    { value: 'bell', label: 'Bell' },
+    { value: 'librosa_default', label: 'Librosa Default' },
+    { value: 'librosa_pitched', label: 'Librosa Pitched' },
+    { value: 'librosa_short', label: 'Librosa Short' },
+    { value: 'librosa_long', label: 'Librosa Long' },
+  ] as const;
+
   // Test downbeat click
   const testDownbeat = () => {
-    console.log('MetronomeControls: Test downbeat clicked');
+    // console.log('MetronomeControls: Test downbeat clicked');
     if (!metronomeService) {
-      console.error('MetronomeControls: No metronome service for downbeat test');
+      // console.error('MetronomeControls: No metronome service for downbeat test');
       return;
     }
     metronomeService.testClick(true);
@@ -83,9 +96,9 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
 
   // Test regular beat click
   const testRegularBeat = () => {
-    console.log('MetronomeControls: Test regular beat clicked');
+    // console.log('MetronomeControls: Test regular beat clicked');
     if (!metronomeService) {
-      console.error('MetronomeControls: No metronome service for regular beat test');
+      // console.error('MetronomeControls: No metronome service for regular beat test');
       return;
     }
     metronomeService.testClick(false);
@@ -146,26 +159,35 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
       {isExpanded && (
         <div className="mt-2 p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
           {/* Sound style selector */}
-          <div className="mb-3">
+          <div className="mb-3 relative">
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               Sound Style
             </label>
-            <select
-              value={soundStyle}
-              onChange={handleSoundStyleChange}
-              className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="traditional">Traditional (Tick-Tock)</option>
-              <option value="digital">Digital (Clean)</option>
-              <option value="wood">Wood Block</option>
-              <option value="bell">Bell</option>
-              <optgroup label="Librosa Clicks">
-                <option value="librosa_default">Librosa Default</option>
-                <option value="librosa_pitched">Librosa Pitched</option>
-                <option value="librosa_short">Librosa Short</option>
-                <option value="librosa_long">Librosa Long</option>
-              </optgroup>
-            </select>
+            <div className="relative">
+              <button
+                onClick={() => setShowSoundStyleDropdown(!showSoundStyleDropdown)}
+                className="w-full px-2 py-1 text-xs bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 flex items-center justify-between"
+              >
+                <span>{soundStyleOptions.find(option => option.value === soundStyle)?.label}</span>
+                <FiChevronDown className={`w-3 h-3 transition-transform ${showSoundStyleDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showSoundStyleDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                  {soundStyleOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleSoundStyleChange(option.value)}
+                      className={`w-full px-2 py-1 text-xs text-left hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors ${
+                        soundStyle === option.value ? 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200' : 'text-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Volume control */}

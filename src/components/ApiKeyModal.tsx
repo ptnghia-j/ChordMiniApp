@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ApiKeyModalProps, API_KEY_HELP_URLS } from '@/types/apiKeyTypes';
+import { HiLightBulb, HiGift, HiInformationCircle } from 'react-icons/hi2';
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   isOpen,
@@ -63,7 +64,8 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           helpUrl: API_KEY_HELP_URLS.MUSIC_AI,
           placeholder: 'Enter your Music.ai API key...',
           keyFormat: 'API keys are typically 40+ characters long',
-          freeInfo: '💡 Free to start: $20 credit included with new accounts'
+          freeInfo: 'Free to start: $20 credit included with new accounts',
+          freeIcon: <HiLightBulb className="w-3 h-3 mt-0.5 flex-shrink-0" />
         };
       case 'gemini':
         return {
@@ -73,7 +75,8 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           helpUrl: API_KEY_HELP_URLS.GEMINI,
           placeholder: 'Enter your Gemini API key (AIza...)...',
           keyFormat: 'API keys start with "AIza" and are 39 characters long',
-          freeInfo: '🆓 Free tier available: Generous usage limits for personal projects'
+          freeInfo: 'Free tier available: Generous usage limits for personal projects',
+          freeIcon: <HiGift className="w-3 h-3 mt-0.5 flex-shrink-0" />
         };
       default:
         return {
@@ -83,7 +86,8 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           helpUrl: '#',
           placeholder: 'Enter your API key...',
           keyFormat: '',
-          freeInfo: ''
+          freeInfo: '',
+          freeIcon: null
         };
     }
   };
@@ -131,17 +135,16 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             theme === 'dark' ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'
           }`}>
             <div className="flex items-start space-x-3">
-              <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <HiInformationCircle className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
               <div>
                 <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-blue-800'}`}>
                   {serviceInfo.description}
                 </p>
                 {serviceInfo.freeInfo && (
-                  <p className={`text-sm mt-2 font-medium ${theme === 'dark' ? 'text-green-300' : 'text-green-700'}`}>
-                    {serviceInfo.freeInfo}
-                  </p>
+                  <div className={`text-sm mt-2 font-medium ${theme === 'dark' ? 'text-green-300' : 'text-green-700'} flex items-start gap-2`}>
+                    {serviceInfo.freeIcon}
+                    <span>{serviceInfo.freeInfo}</span>
+                  </div>
                 )}
                 <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>
                   Your key is stored locally and encrypted. It never leaves your browser.

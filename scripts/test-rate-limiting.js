@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 
 // Configuration
-const BASE_URL = 'https://chordmini-backend-full-12071603127.us-central1.run.app';
+const BASE_URL = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 const LOCAL_URL = 'http://localhost:5000';
 
 // Test configuration
@@ -36,9 +36,9 @@ const TESTS = [
     name: 'Beat Detection Rate Limit Test',
     endpoint: '/api/detect-beats',
     method: 'POST',
-    expectedLimit: 10, // 10 requests per minute
-    testCount: 12, // Test with more than the limit
-    description: 'Tests the beat detection endpoint rate limiting (10/min)',
+    expectedLimit: 5, // 5 requests per minute
+    testCount: 7, // Test with more than the limit
+    description: 'Tests the beat detection endpoint rate limiting (5/min)',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}) // Empty body to trigger 400 error (expected)
   },
@@ -46,9 +46,9 @@ const TESTS = [
     name: 'Chord Recognition Rate Limit Test',
     endpoint: '/api/recognize-chords',
     method: 'POST',
-    expectedLimit: 10, // 10 requests per minute
-    testCount: 12, // Test with more than the limit
-    description: 'Tests the chord recognition endpoint rate limiting (10/min)',
+    expectedLimit: 5, // 5 requests per minute
+    testCount: 7, // Test with more than the limit
+    description: 'Tests the chord recognition endpoint rate limiting (5/min)',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}) // Empty body to trigger 400 error (expected)
   },
@@ -56,9 +56,9 @@ const TESTS = [
     name: 'Genius Lyrics Rate Limit Test',
     endpoint: '/api/genius-lyrics',
     method: 'POST',
-    expectedLimit: 15, // 15 requests per minute
-    testCount: 18, // Test with more than the limit
-    description: 'Tests the Genius lyrics endpoint rate limiting (15/min)',
+    expectedLimit: 10, // 10 requests per minute
+    testCount: 12, // Test with more than the limit
+    description: 'Tests the Genius lyrics endpoint rate limiting (10/min)',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ artist: 'test', title: 'test' })
   }
@@ -237,18 +237,9 @@ async function runRateLimitingTests() {
   console.log(`🚀 ChordMini Rate Limiting Test Suite`);
   console.log(`🕒 Started at: ${new Date().toISOString()}`);
   
-  // Determine which URL to test
+  // Force testing against production server
   let testUrl = BASE_URL;
-  
-  // Check if local server is running
-  try {
-    await makeRequest(LOCAL_URL + '/');
-    testUrl = LOCAL_URL;
-    console.log(`🏠 Testing against LOCAL server: ${testUrl}`);
-  } catch (error) {
-    console.log(`🌐 Testing against PRODUCTION server: ${testUrl}`);
-    console.log(`   (Local server not available: ${error.message})`);
-  }
+  console.log(`🌐 Testing against PRODUCTION server: ${testUrl}`);
   
   const testResults = [];
   

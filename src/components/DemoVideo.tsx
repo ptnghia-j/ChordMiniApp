@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
+import OptimizedImage from './OptimizedImage';
 
 interface DemoVideoProps {
   videoSrc: string;
@@ -80,13 +80,13 @@ const DemoVideo: React.FC<DemoVideoProps> = ({
   // If video failed to load or is not supported, show image fallback
   if (hasVideoError) {
     return (
-      <Image
+      <OptimizedImage
         src={currentPosterSrc}
         alt={alt}
         width={width}
         height={height}
         className={className}
-        priority
+        priority={false}
       />
     );
   }
@@ -126,12 +126,13 @@ const DemoVideo: React.FC<DemoVideoProps> = ({
         )}
         
         {/* Fallback message for browsers that don't support video */}
-        <Image
+        <OptimizedImage
           src={currentPosterSrc}
           alt={alt}
           width={width}
           height={height}
           className="w-full h-auto"
+          priority={false}
         />
       </video>
       

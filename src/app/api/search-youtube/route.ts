@@ -1,82 +1,182 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executeYtDlp, isYtDlpAvailable } from '@/utils/ytdlp-utils';
+import { GetListByKeyword } from 'youtube-search-api';
+import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**
- * YouTube Search API Route with Local Fallback
+ * Environment-Aware YouTube Search API Route
  *
- * This route proxies YouTube search requests to the Python backend
- * with local yt-dlp fallback when backend is unavailable.
+ * This route provides YouTube search functionality using:
+ * - yt-dlp for localhost/development (more reliable, no API key needed)
+ * - youtube-search-api for Vercel/production (serverless compatible)
  */
 
 /**
- * Determine if we should use local search or backend
+ * Environment-aware search function
  */
-function shouldUseLocalSearch(): boolean {
-  // Only use local search for true local development
-  const isLocalDevelopment = process.env.NODE_ENV === 'development' &&
-                            process.env.VERCEL === undefined &&
-                            process.env.VERCEL_ENV === undefined;
+async function performEnvironmentAwareSearch(query: string, limit: number = 10): Promise<Record<string, unknown>> {
+  const env = detectEnvironment();
 
-  console.log(`Environment check: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}, VERCEL_ENV=${process.env.VERCEL_ENV}, shouldUseLocal=${isLocalDevelopment}`);
+  console.log(`🔧 Using ${env.strategy} strategy for search`);
 
-  return isLocalDevelopment;
+  if (env.strategy === 'ytdlp' && env.isDevelopment) {
+    // Use yt-dlp for localhost/development
+    return await performYtDlpSearch(query, limit);
+  } else {
+    // Use youtube-search-api for production/Vercel
+    return await performYouTubeSearch(query, limit);
+  }
 }
 
 /**
- * Perform local YouTube search using yt-dlp
+ * Perform YouTube search using yt-dlp (development only)
  */
-async function performLocalSearch(query: string): Promise<Record<string, unknown>> {
+async function performYtDlpSearch(query: string, limit: number = 10): Promise<Record<string, unknown>> {
   try {
-    console.log(`Performing local YouTube search for: "${query}"`);
+    console.log(`Performing yt-dlp search for: "${query}"`);
 
-    // Check if yt-dlp is available
-    if (!await isYtDlpAvailable()) {
-      throw new Error('yt-dlp is not available for local search');
+    // Call the yt-dlp search endpoint
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/ytdlp/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, limit }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`yt-dlp search failed: ${response.status} ${response.statusText}`);
     }
 
-    // Use yt-dlp to search YouTube
-    const searchQuery = `ytsearch10:${query}`;
-    const { stdout } = await executeYtDlp(
-      `--dump-single-json --no-warnings --flat-playlist "${searchQuery}"`,
-      30000 // 30 seconds timeout
-    );
+    const result = await response.json();
 
-    if (!stdout || stdout.trim() === '') {
-      throw new Error('Empty response from yt-dlp search');
+    if (!result.success) {
+      throw new Error(result.error || 'yt-dlp search failed');
     }
 
-    const searchResults = JSON.parse(stdout);
+    // Transform yt-dlp results to match youtube-search-api format
+    const transformedResults = result.results?.map((item: {
+      id: string;
+      title: string;
+      channelTitle: string;
+      duration: string;
+      viewCount: number;
+      publishedAt: string;
+      thumbnail: string;
+      url: string;
+    }) => ({
+      id: item.id,
+      title: item.title,
+      channelTitle: item.channelTitle,
+      channel: item.channelTitle, // Add channel for frontend compatibility
 
-    if (!searchResults || !searchResults.entries) {
-      throw new Error('Invalid search results structure');
+      viewCount: item.viewCount,
+      view_count: item.viewCount, // Add view_count for frontend compatibility
+      publishedAt: item.publishedAt,
+      upload_date: item.publishedAt, // Add upload_date for frontend compatibility
+      thumbnail: item.thumbnail,
+      url: item.url,
+      isLive: false
+    })) || [];
+
+    return {
+      success: true,
+      results: transformedResults,
+      total: transformedResults.length,
+      query,
+      source: 'yt-dlp'
+    };
+
+  } catch (error) {
+    console.error('yt-dlp search failed:', error);
+    // Fallback to youtube-search-api
+    console.log('🔄 Falling back to youtube-search-api...');
+    return await performYouTubeSearch(query, limit);
+  }
+}
+
+/**
+ * Perform YouTube search using youtube-search-api
+ */
+async function performYouTubeSearch(query: string, limit: number = 10): Promise<Record<string, unknown>> {
+  try {
+    console.log(`Performing YouTube search for: "${query}"`);
+
+    // Use youtube-search-api for search
+    const searchResults = await GetListByKeyword(query, false, limit, [{type: 'video'}]);
+
+    if (!searchResults || !searchResults.items) {
+      throw new Error('No search results found');
     }
 
-    // Transform yt-dlp results to match expected format
-    const results = searchResults.entries.map((entry: Record<string, unknown>) => ({
-      id: entry.id,
-      title: entry.title || 'Unknown Title',
-      description: entry.description || '',
-      thumbnail: entry.thumbnail || `https://img.youtube.com/vi/${entry.id}/mqdefault.jpg`,
-      duration: entry.duration || 0,
-      viewCount: entry.view_count || 0,
-      uploader: entry.uploader || entry.channel || 'Unknown',
-      uploadDate: entry.upload_date || '',
-      url: `https://www.youtube.com/watch?v=${entry.id}`
-    }));
+    // Transform youtube-search-api results to match expected format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = searchResults.items.map((item: any) => {
+      // console.log(`🔍 Search result: ${item.title}`);
 
-    console.log(`Local search successful: ${results.length} results`);
+      // Extract channel name from various possible fields
+      const channelName = item.channelTitle ||
+                         item.channel?.name ||
+                         item.channel?.title ||
+                         item.uploader ||
+                         item.uploaderName ||
+                         'Unknown';
+
+
+
+      return {
+        id: item.id,
+        title: item.title || 'Unknown Title',
+        description: item.description || '',
+        // Use YouTube's standard thumbnail URLs to avoid domain configuration issues
+        thumbnail: `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
+
+        uploader: channelName,
+        channel: channelName, // Add channel for frontend compatibility
+        uploadDate: item.publishedTimeText || '',
+        upload_date: item.publishedTimeText || '', // Add upload_date for frontend compatibility
+        url: `https://www.youtube.com/watch?v=${item.id}`
+      };
+    });
+
+    console.log(`YouTube search successful: ${results.length} results`);
 
     return {
       success: true,
       results,
       total: results.length,
       query,
-      source: 'local'
+      source: 'youtube-search-api'
     };
 
   } catch (error) {
-    console.error('Local search failed:', error);
+    console.error('YouTube search failed:', error);
     throw error;
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q')?.trim();
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? Math.min(parseInt(limitParam, 10), 20) : 10; // Cap at 20 results
+
+    if (!query) {
+      return NextResponse.json({ error: 'Query parameter "q" is required' }, { status: 400 });
+    }
+
+    console.log(`YouTube search request: "${query}" (limit: ${limit})`);
+
+    // Use environment-aware search method
+    const result = await performEnvironmentAwareSearch(query, limit);
+    return NextResponse.json(result);
+
+  } catch (error) {
+    console.error('Error in YouTube search endpoint:', error);
+    return NextResponse.json({
+      error: 'YouTube search failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
@@ -93,122 +193,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine search method
-    if (shouldUseLocalSearch()) {
-      // Use local search for development
-      console.log('Using local search for development');
+    console.log(`YouTube search request (POST): "${query}"`);
 
-      try {
-        const result = await performLocalSearch(query);
-        return NextResponse.json(result);
-      } catch (localError) {
-        console.error('Local search failed, falling back to backend:', localError);
-        // Fall through to backend search
-      }
-    }
+    // Use environment-aware search method
+    const result = await performEnvironmentAwareSearch(query, 10);
+    return NextResponse.json(result);
 
-    // Use backend search (production or local fallback)
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
-
-    console.log(`Proxying YouTube search to backend: ${backendUrl}/api/search-youtube`);
-    console.log(`Search query:`, query);
-
-    try {
-      // Create an AbortController for timeout handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-      const response = await fetch(`${backendUrl}/api/search-youtube`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        },
-        body: JSON.stringify({ query }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Backend search failed: ${response.status} ${response.statusText} - ${errorText}`);
-        console.error(`Backend URL used: ${backendUrl}`);
-        console.error(`Full response headers:`, Object.fromEntries(response.headers.entries()));
-
-        // If backend fails with 500, try local search as fallback (only in development)
-        if (response.status === 500 && process.env.NODE_ENV === 'development') {
-          console.log('Backend failed with 500, attempting local search fallback...');
-
-          try {
-            const localResult = await performLocalSearch(query);
-            return NextResponse.json(localResult);
-          } catch (fallbackError) {
-            console.warn('Local search fallback also failed:', fallbackError);
-          }
-        }
-
-        return NextResponse.json(
-          {
-            error: 'Failed to search YouTube',
-            details: `Backend error: ${response.status} ${response.statusText} - ${errorText}`,
-            suggestion: response.status === 500 ?
-              'YouTube search is temporarily unavailable. Please try again later.' :
-              'Please check your search query and try again.',
-            backendUrl: backendUrl // Include backend URL for debugging
-          },
-          { status: response.status }
-        );
-      }
-
-      const result = await response.json();
-      console.log(`Backend search successful: ${result.results?.length || 0} results`);
-
-      return NextResponse.json(result);
-    } catch (fetchError) {
-      console.error('Network error during backend search:', fetchError);
-
-      // Check if it's a timeout error
-      const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
-      const errorMessage = isTimeout ? 'Request timeout (30s)' :
-                          (fetchError instanceof Error ? fetchError.message : String(fetchError));
-
-      // Try local search as fallback for network errors (only in development)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Network error, attempting local search fallback...');
-        try {
-          const localResult = await performLocalSearch(query);
-          return NextResponse.json(localResult);
-        } catch (fallbackError) {
-          console.warn('Local search fallback also failed:', fallbackError);
-        }
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Failed to search YouTube',
-          details: `Network error: ${errorMessage}`,
-          suggestion: isTimeout ?
-            'The search request timed out. Please try again with a shorter query.' :
-            'Please check your internet connection and try again.',
-          backendUrl: backendUrl,
-          isTimeout: isTimeout
-        },
-        { status: 500 }
-      );
-    }
-
-  } catch (error: unknown) {
-    console.error('Error proxying YouTube search:', error);
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    return NextResponse.json(
-      {
-        error: 'Failed to search YouTube',
-        details: errorMessage
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('Error in YouTube search endpoint (POST):', error);
+    return NextResponse.json({
+      error: 'YouTube search failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

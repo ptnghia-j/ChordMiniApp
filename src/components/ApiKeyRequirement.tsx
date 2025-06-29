@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ApiKeyRequirement as ApiKeyRequirementType } from '@/types/apiKeyTypes';
 import ApiKeyModal from './ApiKeyModal';
+import { HiLightBulb, HiGift } from 'react-icons/hi2';
 
 interface ApiKeyRequirementProps {
   requirement: ApiKeyRequirementType;
@@ -99,18 +100,20 @@ const ApiKeyRequirement: React.FC<ApiKeyRequirementProps> = ({
           <strong>Feature:</strong> {requirement.feature}
         </p>
         {requirement.service === 'musicAi' && (
-          <p className={`text-sm mt-2 font-medium ${
+          <div className={`text-sm mt-2 font-medium ${
             theme === 'dark' ? 'text-green-300' : 'text-green-700'
-          }`}>
-            💡 Free to start: $20 credit included with new accounts
-          </p>
+          } flex items-center gap-2`}>
+            <HiLightBulb className="w-4 h-4" />
+            <span>Free to start: $20 credit included with new accounts</span>
+          </div>
         )}
         {requirement.service === 'gemini' && (
-          <p className={`text-sm mt-2 font-medium ${
+          <div className={`text-sm mt-2 font-medium ${
             theme === 'dark' ? 'text-green-300' : 'text-green-700'
-          }`}>
-            🆓 Free tier available: Generous usage limits for personal projects
-          </p>
+          } flex items-center gap-2`}>
+            <HiGift className="w-4 h-4" />
+            <span>Free tier available: Generous usage limits for personal projects</span>
+          </div>
         )}
         {requirement.fallbackAvailable && (
           <p className={`text-xs mt-1 ${

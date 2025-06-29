@@ -17,10 +17,10 @@ node_modules/
 temp/
 cache/
 
-# Documentation
+# Documentation (exclude markdown files but keep API docs page)
 *.md
-docs/
 demo_*.png
+# Note: docs/ directory is NOT ignored - it contains the API documentation page
 
 # Build artifacts
 .tsbuildinfo

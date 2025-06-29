@@ -22,13 +22,13 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Introduction */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Introduction
           </h2>
           <div className="space-y-4 text-gray-700 dark:text-gray-300">
             <p>
-              ChordMini is a research project developed at California State University, Fullerton. 
+              ChordMini is a research project developed at California State University, Fullerton.
               This Privacy Policy explains how we collect, use, and protect your information when you use our service.
             </p>
             <p>
@@ -38,7 +38,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Information We Collect */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Information We Collect
           </h2>
@@ -68,7 +68,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* How We Use Information */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             How We Use Your Information
           </h2>
@@ -84,7 +84,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Data Storage and Security */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Data Storage and Security
           </h2>
@@ -104,7 +104,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Third-Party Services */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Third-Party Services
           </h2>
@@ -122,7 +122,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Your Rights */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8 mb-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Your Rights
           </h2>
@@ -138,7 +138,7 @@ const PrivacyPage: React.FC = () => {
         </div>
 
         {/* Contact Information */}
-        <div className="bg-white dark:bg-content-bg rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-8">
+        <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Contact Us
           </h2>

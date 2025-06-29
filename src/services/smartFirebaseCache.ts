@@ -39,11 +39,12 @@ export class SmartFirebaseCache<T> {
   /**
    * Get cached data or execute query function
    */
-  async get<K>(
+  async get(
     key: string,
     queryFn: () => Promise<T | null>,
     isCompleteCheck?: (data: T) => boolean
   ): Promise<T | null> {
+    const startTime = Date.now();
     const cached = this.cache.get(key);
     const now = Date.now();
 
@@ -55,6 +56,11 @@ export class SmartFirebaseCache<T> {
         // Return cached data (even if null)
         if (cached.data === null && cached.isIncomplete) {
           this.suppressWarning(key, 'Returning cached incomplete record (avoiding repeated queries)');
+          // Track performance: cache hit for incomplete record
+          this.trackPerformance('cache_hit', Date.now() - startTime);
+        } else {
+          // Track performance: cache hit
+          this.trackPerformance('cache_hit', Date.now() - startTime);
         }
         return cached.data;
       }
@@ -62,13 +68,15 @@ export class SmartFirebaseCache<T> {
       // Check if we should skip retry due to too many errors
       if (cached.errorCount >= this.config.maxErrorCount) {
         this.suppressWarning(key, `Skipping query due to ${cached.errorCount} previous errors`);
+        // Track performance: error suppression
+        this.trackPerformance('error_suppressed', Date.now() - startTime);
         return cached.data;
       }
     }
 
     // Execute the query
     try {
-      console.log(`🔍 Executing Firebase query for key: ${key}`);
+      // console.log(`🔍 Executing Firebase query for key: ${key}`);
       const data = await queryFn();
       
       // Check if data is complete
@@ -109,7 +117,7 @@ export class SmartFirebaseCache<T> {
   /**
    * Batch get multiple keys with optimized parallel execution
    */
-  async getBatch<K>(
+  async getBatch(
     keys: string[],
     queryFn: (key: string) => Promise<T | null>,
     isCompleteCheck?: (data: T) => boolean
@@ -136,7 +144,7 @@ export class SmartFirebaseCache<T> {
 
     // Execute queries for uncached keys in parallel
     if (keysToQuery.length > 0) {
-      console.log(`🔍 Batch querying ${keysToQuery.length} keys from Firebase`);
+      // console.log(`🔍 Batch querying ${keysToQuery.length} keys from Firebase`);
       
       const promises = keysToQuery.map(async (key) => {
         try {
@@ -214,6 +222,41 @@ export class SmartFirebaseCache<T> {
     if (!this.warningsSuppressed.has(key)) {
       console.warn(`⚠️ ${message} (key: ${key})`);
       this.warningsSuppressed.add(key);
+      // Track warning suppression
+      this.trackPerformance('warning_suppressed', 0);
+    }
+  }
+
+  /**
+   * Track performance metrics
+   */
+  private async trackPerformance(type: string, responseTime: number): Promise<void> {
+    try {
+      const { performanceMonitor } = await import('@/services/performanceMonitor');
+
+
+
+      switch (type) {
+        case 'cache_hit':
+          performanceMonitor.trackFirebaseQuery('cache_hit', responseTime);
+          performanceMonitor.trackCachePerformance('hit', responseTime);
+          break;
+        case 'cache_miss':
+          performanceMonitor.trackFirebaseQuery('cache_miss', responseTime);
+          performanceMonitor.trackCachePerformance('miss', responseTime);
+          break;
+        case 'error_suppressed':
+          performanceMonitor.trackErrorReduction('warning_suppressed');
+          break;
+        case 'warning_suppressed':
+          performanceMonitor.trackErrorReduction('warning_suppressed');
+          break;
+        case 'incomplete':
+          performanceMonitor.trackCachePerformance('incomplete', responseTime);
+          break;
+      }
+    } catch {
+      // Silently fail to avoid affecting cache performance
     }
   }
 
@@ -244,13 +287,13 @@ export class SmartFirebaseCache<T> {
 }
 
 // Create singleton instances for different data types
-export const audioMetadataCache = new SmartFirebaseCache<any>({
+export const audioMetadataCache = new SmartFirebaseCache<Record<string, unknown>>({
   ttl: 10 * 60 * 1000, // 10 minutes for audio metadata
   incompleteRecordTtl: 60 * 60 * 1000, // 1 hour for incomplete audio records
   maxErrorCount: 5
 });
 
-export const transcriptionCache = new SmartFirebaseCache<any>({
+export const transcriptionCache = new SmartFirebaseCache<Record<string, unknown>>({
   ttl: 30 * 60 * 1000, // 30 minutes for transcriptions
   incompleteRecordTtl: 2 * 60 * 60 * 1000, // 2 hours for incomplete transcriptions
   maxErrorCount: 3

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vercel Blob Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { border-color: #4CAF50; background-color: #f1f8e9; }
+        .error { border-color: #f44336; background-color: #ffebee; }
+        .warning { border-color: #ff9800; background-color: #fff3e0; }
+        .info { border-color: #2196F3; background-color: #e3f2fd; }
+        button {
+            background-color: #1e40af;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #1e3a8a;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Vercel Blob Upload Test</h1>
+        <p>This test verifies that the Vercel Blob bypass logic is working correctly for large audio files (>4.0MB).</p>
+
+        <div class="test-section info">
+            <h3>📋 Test Configuration</h3>
+            <p><strong>File Size Threshold:</strong> 4.0MB (files larger than this should use Vercel Blob bypass)</p>
+            <p><strong>Vercel Timeout:</strong> 800 seconds (13+ minutes)</p>
+            <p><strong>Blob Endpoints:</strong> /api/detect-beats-blob, /api/recognize-chords-blob</p>
+            <p><strong>Upload Endpoint:</strong> /api/blob/upload</p>
+        </div>
+
+        <div class="test-section">
+            <h3>📁 File Upload Test</h3>
+            <input type="file" id="audioFile" accept="audio/*">
+            <div id="fileInfo" class="log"></div>
+            
+            <button onclick="testFileSize()">Test File Size Logic</button>
+            <button onclick="testBlobEndpoints()" id="testBtn" disabled>Test Blob Endpoints</button>
+            <button onclick="testActualUpload()" id="uploadBtn" disabled>Test Actual Upload</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Upload Progress</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">Ready to upload...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="testResults" class="log">No tests run yet...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Debug Information</h3>
+            <div id="debugInfo" class="log">
+                <div>Current URL: <span id="currentUrl"></span></div>
+                <div>User Agent: <span id="userAgent"></span></div>
+                <div>Timestamp: <span id="timestamp"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize debug info
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+
+        let selectedFile = null;
+        const VERCEL_SIZE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB
+
+        function log(message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            resultsDiv.textContent += logEntry;
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+            
+            console.log(`[Vercel Blob Test] ${message}`);
+        }
+
+        function updateProgress(percent, text) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressFill.style.width = `${percent}%`;
+            progressText.textContent = text || `${percent}% complete`;
+        }
+
+        function getFileSizeString(bytes) {
+            const mb = bytes / 1024 / 1024;
+            return `${mb.toFixed(2)}MB`;
+        }
+
+        function shouldUseBlobUpload(fileSize) {
+            return fileSize > VERCEL_SIZE_LIMIT;
+        }
+
+        document.getElementById('audioFile').addEventListener('change', function(e) {
+            selectedFile = e.target.files[0];
+            const fileInfoDiv = document.getElementById('fileInfo');
+            const testBtn = document.getElementById('testBtn');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            if (selectedFile) {
+                const sizeStr = getFileSizeString(selectedFile.size);
+                const shouldBypass = shouldUseBlobUpload(selectedFile.size);
+                
+                fileInfoDiv.innerHTML = `
+                    <strong>File:</strong> ${selectedFile.name}<br>
+                    <strong>Size:</strong> ${sizeStr}<br>
+                    <strong>Type:</strong> ${selectedFile.type}<br>
+                    <strong>Should use Vercel Blob bypass:</strong> ${shouldBypass ? '✅ YES' : '❌ NO'}<br>
+                    <strong>Reason:</strong> ${shouldBypass ? 'File > 4.0MB' : 'File ≤ 4.0MB'}
+                `;
+                
+                testBtn.disabled = false;
+                uploadBtn.disabled = false;
+            } else {
+                fileInfoDiv.textContent = 'No file selected';
+                testBtn.disabled = true;
+                uploadBtn.disabled = true;
+            }
+        });
+
+        function testFileSize() {
+            if (!selectedFile) {
+                log('❌ No file selected for testing', 'error');
+                return;
+            }
+
+            const fileSize = selectedFile.size;
+            const sizeStr = getFileSizeString(fileSize);
+            const shouldBypass = shouldUseBlobUpload(fileSize);
+            
+            log(`📁 Testing file: ${selectedFile.name}`);
+            log(`📏 File size: ${sizeStr} (${fileSize} bytes)`);
+            log(`🔍 Size threshold: ${getFileSizeString(VERCEL_SIZE_LIMIT)}`);
+            log(`🎯 Should use Vercel Blob bypass: ${shouldBypass ? 'YES' : 'NO'}`);
+            
+            if (shouldBypass) {
+                log('✅ File will use Vercel Blob bypass (direct upload to Vercel Blob Storage)', 'success');
+            } else {
+                log('⚠️ File will use standard Vercel proxy (may hit 413 error if actual limit is lower)', 'warning');
+            }
+        }
+
+        async function testBlobEndpoints() {
+            if (!selectedFile) {
+                log('❌ No file selected for testing', 'error');
+                return;
+            }
+
+            const shouldBypass = shouldUseBlobUpload(selectedFile.size);
+            
+            if (!shouldBypass) {
+                log('⚠️ File is small enough for standard upload, but testing Vercel Blob endpoints anyway...', 'warning');
+            }
+
+            log('🔄 Testing Vercel Blob endpoints...');
+            
+            // Test blob endpoints
+            try {
+                log('📡 Testing /api/blob/upload endpoint...');
+                const testResponse = await fetch('/api/blob/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}) // Empty body to test endpoint
+                });
+                
+                if (testResponse.status === 400) {
+                    log('✅ Blob upload endpoint exists (returned 400 for missing data)', 'success');
+                } else {
+                    log(`⚠️ Blob upload endpoint returned: ${testResponse.status}`, 'warning');
+                }
+            } catch (error) {
+                log(`❌ Blob upload endpoint error: ${error.message}`, 'error');
+            }
+
+            // Test other endpoints...
+            const endpoints = [
+                '/api/detect-beats-blob',
+                '/api/recognize-chords-blob'
+            ];
+
+            for (const endpoint of endpoints) {
+                try {
+                    log(`📡 Testing ${endpoint} endpoint...`);
+                    const testResponse = await fetch(endpoint, {
+                        method: 'POST',
+                        body: new FormData() // Empty form data to test endpoint
+                    });
+                    
+                    if (testResponse.status === 400) {
+                        log(`✅ ${endpoint} endpoint exists (returned 400 for missing data)`, 'success');
+                    } else {
+                        log(`⚠️ ${endpoint} endpoint returned: ${testResponse.status}`, 'warning');
+                    }
+                } catch (error) {
+                    log(`❌ ${endpoint} endpoint error: ${error.message}`, 'error');
+                }
+            }
+
+            log('🎯 Vercel Blob endpoints test completed');
+        }
+
+        async function testActualUpload() {
+            if (!selectedFile) {
+                log('❌ No file selected for upload', 'error');
+                return;
+            }
+
+            log('🚀 Starting actual Vercel Blob upload test...');
+            updateProgress(0, 'Starting upload...');
+
+            try {
+                // This would normally be done by the vercelBlobUploadService
+                // For testing, we'll just simulate the process
+                updateProgress(25, 'Preparing upload...');
+                
+                log(`📤 Would upload ${selectedFile.name} (${getFileSizeString(selectedFile.size)}) to Vercel Blob`);
+                updateProgress(50, 'Upload in progress...');
+                
+                // Simulate upload delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                updateProgress(75, 'Processing...');
+                log('✅ Upload simulation completed successfully');
+                
+                updateProgress(100, 'Complete!');
+                log('🎯 Actual upload test completed (simulated)');
+                
+            } catch (error) {
+                log(`❌ Upload test failed: ${error.message}`, 'error');
+                updateProgress(0, 'Upload failed');
+            }
+        }
+    </script>
+</body>
+</html>

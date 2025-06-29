@@ -8,6 +8,7 @@ import { AnalysisResult } from '@/services/chordRecognitionService';
 interface LyricsSectionProps {
   showLyrics: boolean;
   lyrics: LyricsData | null;
+  hasCachedLyrics?: boolean;
   currentTime: number;
   fontSize: number;
   theme: string;
@@ -19,6 +20,7 @@ interface LyricsSectionProps {
 export const LyricsSection: React.FC<LyricsSectionProps> = ({
   showLyrics,
   lyrics,
+  hasCachedLyrics = false,
   currentTime,
   fontSize,
   theme,
@@ -28,8 +30,15 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   if (!showLyrics) {
     return (
       <div className="p-4 bg-blue-100 dark:bg-blue-200 text-blue-700 dark:text-blue-900 rounded-md transition-colors duration-300">
-        <p className="font-medium">Lyrics Not Transcribed</p>
-        <p>Click the &quot;Transcribe Lyrics&quot; button above to analyze the audio for lyrics. Lyrics transcription is now manual to give you control over when to process vocals.</p>
+        <p className="font-medium">
+          {hasCachedLyrics ? "Cached Lyrics Available" : "Lyrics Not Transcribed"}
+        </p>
+        <p>
+          {hasCachedLyrics
+            ? "Click the \"AI Transcribe\" button above to load the cached lyrics for this video."
+            : "Click the \"AI Transcribe\" button above to analyze the audio for lyrics. Lyrics transcription is now manual to give you control over when to process vocals."
+          }
+        </p>
       </div>
     );
   }
@@ -45,7 +54,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
 
   if (lyrics.error) {
     return (
-      <div className="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md transition-colors duration-300">
+      <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-600 text-red-700 dark:text-red-200 rounded-md transition-colors duration-300">
         <p className="font-medium">Lyrics Transcription Error</p>
         <p>{lyrics.error}</p>
       </div>

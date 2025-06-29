@@ -2,16 +2,21 @@
   "name": "chord-mini-app",
   "version": "0.1.0",
   "private": true,
+  "sideEffects": [
+    "*.css",
+    "*.scss",
+    "./src/styles/**/*",
+    "./src/app/globals.css"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "npm run prepare-ytdlp && next build",
+    "dev": "next dev -p 3000",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "export-cookies": "node scripts/export-cookies.js",
-    "prepare-ytdlp": "node scripts/prepare-ytdlp.js",
-    "prepare-ytdlp-shell": "bash scripts/prepare-ytdlp.sh",
-    "prebuild": "npm run prepare-ytdlp",
-    "postinstall": "npm run prepare-ytdlp"
+    "analyze": "ANALYZE=true npm run build",
+    "analyze:server": "BUNDLE_ANALYZE=server npm run build",
+    "analyze:browser": "BUNDLE_ANALYZE=browser npm run build"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.10",
@@ -21,8 +26,9 @@
     "@tanstack/react-query": "^5.28.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
+    "@vercel/blob": "^1.1.1",
     "axios": "^1.9.0",
-    "chart.js": "^4.4.2",
+
     "clsx": "^2.1.0",
     "crypto-browserify": "^3.12.1",
     "dotenv": "^16.5.0",
@@ -33,6 +39,7 @@
     "form-data": "^4.0.2",
     "framer-motion": "^11.0.8",
     "https-browserify": "^1.0.0",
+    "music-metadata": "^11.3.0",
     "next": "15.3.1",
     "play-dl": "^1.9.7",
     "prismjs": "^1.30.0",
@@ -48,14 +55,17 @@
     "tailwind-merge": "^2.2.1",
     "url": "^0.11.4",
     "uuid": "^11.1.0",
+    "youtube-search-api": "^2.0.0",
     "ytdl-core": "^4.11.5",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@next/bundle-analyzer": "^15.3.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",

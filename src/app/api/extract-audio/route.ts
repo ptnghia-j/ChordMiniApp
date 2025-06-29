@@ -1,36 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedAudioFile, saveAudioFileMetadata } from '@/services/firebaseStorageService';
-import { localExtractionService } from '@/services/localExtractionService';
-import { localCacheService } from '@/services/localCacheService';
+import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtractionSimplified';
 
 /**
- * Audio Extraction API Route with Caching Support
+ * Audio Extraction API Route - Simplified QuickTube Integration
  *
- * This route implements a caching layer that:
- * - Checks for cached audio files first (Firebase Storage + Firestore)
- * - Falls back to Python backend for new extractions
- * - Supports both local development and production environments
+ * This route implements a streamlined extraction workflow:
+ * - Uses YouTube search metadata directly (no filename guessing)
+ * - Video ID-based caching and storage
+ * - Direct QuickTube integration without pattern matching
+ * - Leverages existing search results for metadata
  */
 
-/**
- * Determine if we should use local extraction or backend
- */
-function shouldUseLocalExtraction(): boolean {
-  // Only use local extraction for true local development
-  const isLocalDevelopment = process.env.NODE_ENV === 'development' &&
-                            process.env.VERCEL === undefined &&
-                            process.env.VERCEL_ENV === undefined;
-
-  console.log(`Environment check: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}, VERCEL_ENV=${process.env.VERCEL_ENV}, shouldUseLocal=${isLocalDevelopment}`);
-
-  return isLocalDevelopment;
-}
+// Configure Vercel function timeout - Use 300 seconds to match vercel.json
+// This allows time for QuickTube job creation + initial polling attempts
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const data = await request.json();
-    const { videoId, forceRedownload = false, getInfoOnly = false } = data;
+    const {
+      videoId,
+      forceRedownload = false,
+      getInfoOnly = false,
+      originalTitle,
+      // New: Accept YouTube search metadata directly
+      videoMetadata
+    } = data;
 
     if (!videoId) {
       return NextResponse.json(
@@ -39,235 +35,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Audio extraction request: videoId=${videoId}, forceRedownload=${forceRedownload}, getInfoOnly=${getInfoOnly}`);
+    console.log(`🎵 Simplified audio extraction: ${videoId}${originalTitle ? ` ("${originalTitle}")` : ''}`);
 
-    // Check cache first (unless force redownload or info only)
-    if (!forceRedownload && !getInfoOnly) {
-      console.log(`Checking cache for ${videoId}...`);
-
-      // Try local cache first (for development)
-      if (shouldUseLocalExtraction()) {
-        try {
-          const localCached = await localCacheService.getCachedAudio(videoId);
-          if (localCached) {
-            console.log(`Found local cached audio for ${videoId}, returning from cache`);
-
-            return NextResponse.json({
-              success: true,
-              audioUrl: localCached.audioUrl,
-              title: localCached.title,
-              duration: localCached.duration,
-              youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-              fromCache: true,
-              isStreamUrl: false,
-              message: 'Loaded from local cache'
-            });
-          }
-        } catch (localCacheError) {
-          console.warn('Local cache check failed:', localCacheError);
-        }
-      }
-
-      // Try Firebase cache (for production)
-      try {
-        const cachedAudio = await getCachedAudioFile(videoId);
-        if (cachedAudio) {
-          console.log(`Found Firebase cached audio for ${videoId}, returning from cache`);
-
-          return NextResponse.json({
-            success: true,
-            audioUrl: cachedAudio.audioUrl,
-            title: cachedAudio.title || `YouTube Video ${videoId}`, // Include title from cache
-            duration: cachedAudio.duration || 0, // Include duration from cache
-            youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-            fromCache: true,
-            isStreamUrl: cachedAudio.isStreamUrl || false,
-            streamExpiresAt: cachedAudio.streamExpiresAt,
-            message: 'Loaded from Firebase cache'
-          });
-        }
-      } catch (cacheError) {
-        console.warn('Firebase cache check failed, proceeding with extraction:', cacheError);
-      }
+    // If getInfoOnly is true, just return basic video info
+    if (getInfoOnly) {
+      return NextResponse.json({
+        success: true,
+        title: originalTitle || `YouTube Video ${videoId}`,
+        duration: 0,
+        videoId,
+        url: `https://www.youtube.com/watch?v=${videoId}`
+      });
     }
 
-    // Determine extraction method
-    if (shouldUseLocalExtraction()) {
-      // Use local extraction for development
-      console.log('Using local extraction for development');
+    try {
+      let result;
 
-      try {
-        const result = await localExtractionService.extractAudio(videoId, getInfoOnly);
+      // Use simplified extraction with search metadata if available
+      if (videoMetadata) {
+        console.log(`📊 Using provided video metadata for ${videoId}`);
+        result = await audioExtractionServiceSimplified.extractAudio(videoMetadata, forceRedownload);
+      } else {
+        // Fallback: create metadata from available data
+        const fallbackMetadata: YouTubeVideoMetadata = {
+          id: videoId,
+          title: originalTitle || `YouTube Video ${videoId}`,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+          channelTitle: 'Unknown Channel'
+        };
 
-        if (!result.success) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: result.error || 'Local extraction failed',
-              details: 'Local yt-dlp extraction failed'
-            },
-            { status: 500 }
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          audioUrl: result.audioUrl,
-          title: result.title,
-          duration: result.duration,
-          youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-          fromCache: result.fromCache || false,
-          isStreamUrl: false,
-          message: 'Extracted using local yt-dlp'
-        });
-
-      } catch (localError) {
-        console.error('Local extraction failed, falling back to backend:', localError);
-        // Fall through to backend extraction
+        console.log(`🔄 Using fallback metadata for ${videoId}`);
+        result = await audioExtractionServiceSimplified.extractAudio(fallbackMetadata, forceRedownload);
       }
-    }
 
-    // Use backend extraction (production or local fallback)
-    {
-      // Use backend extraction
-      console.log('Using backend extraction');
-      const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
-
-      console.log(`Proxying audio extraction to backend: ${backendUrl}/api/extract-audio`);
-      console.log(`Request data:`, { videoId, forceRedownload, getInfoOnly });
-
-      try {
-        // Create an AbortController for timeout handling
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for audio extraction
-
-        const response = await fetch(`${backendUrl}/api/extract-audio`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          },
-          body: JSON.stringify({
-            ...data,
-            // Add additional parameters to help with bot detection
-            useEnhancedExtraction: true,
-            retryCount: 0
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Backend audio extraction failed: ${response.status} ${response.statusText} - ${errorText}`);
-
-        // If backend fails with 500, try local extraction as fallback (if available)
-        if (response.status === 500 && !getInfoOnly) {
-          console.log('Backend failed with 500, attempting local extraction fallback...');
-
-          try {
-            const localResult = await localExtractionService.extractAudio(videoId, getInfoOnly);
-
-            if (localResult.success) {
-              console.log('Local extraction fallback succeeded');
-              return NextResponse.json({
-                success: true,
-                audioUrl: localResult.audioUrl,
-                title: localResult.title,
-                duration: localResult.duration,
-                youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-                fromCache: false,
-                isStreamUrl: false,
-                message: 'Extracted using local fallback after backend failure'
-              });
-            }
-          } catch (fallbackError) {
-            console.warn('Local extraction fallback also failed:', fallbackError);
-          }
-        }
-
+      if (!result.success) {
+        console.error(`❌ Simplified extraction failed for ${videoId}:`, result.error);
         return NextResponse.json(
           {
             success: false,
-            error: 'Failed to extract audio from YouTube',
-            details: `Backend error: ${response.status} ${response.statusText}`,
-            suggestion: response.status === 500 ?
-              'The video may be restricted or temporarily unavailable. Please try a different video or try again later.' :
-              'Please check the video URL and try again.',
-            backendUrl: backendUrl // Include backend URL for debugging
-          },
-          { status: response.status }
-        );
-      }
-
-        const result = await response.json();
-        console.log(`Backend audio extraction successful`);
-
-        // Cache the result if it's a successful extraction (not info-only)
-        if (result.success && !getInfoOnly && result.audioUrl) {
-          try {
-            await saveAudioFileMetadata({
-              videoId,
-              audioUrl: result.audioUrl,
-              title: result.title || `YouTube Video ${videoId}`, // Include title in cache
-              storagePath: `stream/${videoId}`, // Virtual path for stream URLs
-              fileSize: 0, // Unknown for stream URLs
-              duration: result.duration || 0,
-              isStreamUrl: true,
-              streamExpiresAt: result.streamExpiresAt
-            });
-            console.log(`Cached audio metadata for ${videoId}`);
-          } catch (cacheError) {
-            console.warn('Failed to cache audio metadata:', cacheError);
-          }
-        }
-
-        return NextResponse.json(result);
-      } catch (fetchError) {
-        console.error('Network error during backend extraction:', fetchError);
-
-        // Check if it's a timeout error
-        const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
-        const errorMessage = isTimeout ? 'Request timeout (60s)' :
-                            (fetchError instanceof Error ? fetchError.message : String(fetchError));
-
-        // Try local extraction as fallback for network errors (only in development)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Network error, attempting local extraction fallback...');
-          try {
-            const localResult = await localExtractionService.extractAudio(videoId, getInfoOnly);
-            if (localResult.success) {
-              return NextResponse.json({
-                success: true,
-                audioUrl: localResult.audioUrl,
-                title: localResult.title,
-                duration: localResult.duration,
-                youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-                fromCache: false,
-                isStreamUrl: false,
-                message: 'Extracted using local fallback after network error'
-              });
-            }
-          } catch (fallbackError) {
-            console.warn('Local extraction fallback also failed:', fallbackError);
-          }
-        }
-
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Failed to extract audio from YouTube',
-            details: `Network error: ${errorMessage}`,
-            suggestion: isTimeout ?
-              'The audio extraction request timed out. Please try a shorter video or try again later.' :
-              'Please check your internet connection and try again.',
-            backendUrl: backendUrl,
-            isTimeout: isTimeout
+            error: result.error || 'Audio extraction failed',
+            details: 'QuickTube service is currently unavailable or the video cannot be processed',
+            suggestion: 'The video may be restricted, too long, or temporarily unavailable. Please try a different video or try again later.'
           },
           { status: 500 }
         );
       }
+
+      console.log(`✅ Simplified extraction successful for ${videoId}`);
+
+      return NextResponse.json({
+        success: true,
+        audioUrl: result.audioUrl,
+        title: result.title,
+        duration: result.duration,
+        youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+        fromCache: result.fromCache,
+        isStreamUrl: result.isStreamUrl,
+        streamExpiresAt: result.streamExpiresAt,
+        method: 'quicktube-simplified'
+      });
+
+    } catch (extractionError) {
+      console.error(`❌ Simplified extraction error for ${videoId}:`, extractionError);
+
+      const errorMessage = extractionError instanceof Error ? extractionError.message : 'Unknown error';
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Audio extraction failed',
+          details: errorMessage,
+          suggestion: 'The video may be restricted, too long, or temporarily unavailable. Please try a different video or try again later.'
+        },
+        { status: 500 }
+      );
     }
 
   } catch (error: unknown) {

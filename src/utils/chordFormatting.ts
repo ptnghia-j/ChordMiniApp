@@ -3,6 +3,37 @@
  * Following industry-standard conventions used in professional music notation software
  */
 
+// Inline SVG content for quarter rest symbols (optimized to prevent loading delays and flickering)
+const QUARTER_REST_SVG_LIGHT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125" style="width: 100%; height: 100%;">
+  <path d="M64.803,74.67c-0.98-1.278-7.545-9.942-7.901-10.349c-13.58-17.867-7.955-15.804,4.359-30.901c0,0-19.013-26.224-19.694-27.125c-0.681-0.901-0.86-1.063-1.348-0.708c-0.488,0.354,0.029-0.042-0.689,0.5c-0.718,0.542-0.59,0.445,0,1.25c15.479,21.868,0.753,31.257-3.728,35.5c5.457,6.805,14.635,18.344,17.25,21.708c-17.729-7.792-28.104,16.146-2.542,30.042c1.458-0.667,0,0,1.458-0.667C42.261,84.691,39.846,67.136,64.803,74.67z"/>
+</svg>`;
+
+const QUARTER_REST_SVG_DARK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125" style="width: 100%; height: 100%;">
+  <path fill="#ffffff" d="M64.803,74.67c-0.98-1.278-7.545-9.942-7.901-10.349c-13.58-17.867-7.955-15.804,4.359-30.901c0,0-19.013-26.224-19.694-27.125c-0.681-0.901-0.86-1.063-1.348-0.708c-0.488,0.354,0.029-0.042-0.689,0.5c-0.718,0.542-0.59,0.445,0,1.25c15.479,21.868,0.753,31.257-3.728,35.5c5.457,6.805,14.635,18.344,17.25,21.708c-17.729-7.792-28.104,16.146-2.542,30.042c1.458-0.667,0,0,1.458-0.667C42.261,84.691,39.846,67.136,64.803,74.67z"/>
+</svg>`;
+
+// Memoized rest symbol cache to prevent re-rendering and improve performance
+const restSymbolCache = new Map<string, string>();
+
+/**
+ * Get optimized quarter rest symbol (memoized to prevent re-rendering)
+ * @param isDarkMode Whether dark mode is active
+ * @returns Cached HTML string for the rest symbol
+ */
+function getQuarterRestSymbol(isDarkMode: boolean): string {
+  const cacheKey = isDarkMode ? 'dark' : 'light';
+
+  if (!restSymbolCache.has(cacheKey)) {
+    const svgContent = isDarkMode ? QUARTER_REST_SVG_DARK : QUARTER_REST_SVG_LIGHT;
+    const html = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em;" class="chord-rest-symbol quarter-rest-responsive">
+      ${svgContent}
+    </span>`;
+    restSymbolCache.set(cacheKey, html);
+  }
+
+  return restSymbolCache.get(cacheKey)!;
+}
+
 /**
  * Formats chord names with proper musical notation and standardized chord suffixes
  *
@@ -15,18 +46,9 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
 
   // Handle special cases
   if (chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.' || chordName === 'X') {
-    // Use custom SVG quarter rest symbol for "No Chord" notation instead of "N.C."
+    // Use optimized inline SVG quarter rest symbol for "No Chord" notation
     if (chordName === 'N/C' || chordName === 'N.C.') {
-      // Use theme-appropriate SVG file
-      const svgFile = isDarkMode ? '/quarter_rest_dark.svg' : '/quarter_rest.svg';
-      return `<span style="display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em;">
-        <img
-          src="${svgFile}"
-          alt="No Chord"
-          style="width: 100%; height: 100%; object-fit: contain;"
-          class="chord-rest-symbol quarter-rest-responsive"
-        />
-      </span>`;
+      return getQuarterRestSymbol(isDarkMode);
     }
     return chordName;
   }

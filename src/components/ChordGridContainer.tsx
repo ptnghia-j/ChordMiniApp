@@ -32,6 +32,7 @@ interface ChordGridContainerProps {
   isChatbotOpen: boolean;
   isLyricsPanelOpen: boolean;
   onBeatClick: (beatIndex: number, timestamp: number) => void;
+  isUploadPage?: boolean; // Whether this is the upload audio file page
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean;
   chordCorrections?: Record<string, string> | null;
@@ -56,7 +57,7 @@ interface ChordGridContainerProps {
   } | null;
 }
 
-export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
+export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
   analysisResults,
   chordGridData, // Use the comprehensive chord grid data passed as prop
   currentBeatIndex,
@@ -65,6 +66,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
   isChatbotOpen,
   isLyricsPanelOpen,
   onBeatClick,
+  isUploadPage = false,
   showCorrectedChords = false,
   chordCorrections = null,
   sequenceCorrections = null
@@ -102,6 +104,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
             beatTimeRangeStart={analysisResults?.beatDetectionResult?.beat_time_range_start || 0}
             originalAudioMapping={chordGridData.originalAudioMapping}
             onBeatClick={onBeatClick}
+            isUploadPage={isUploadPage}
             showCorrectedChords={showCorrectedChords}
             chordCorrections={chordCorrections}
             sequenceCorrections={sequenceCorrections}
@@ -110,4 +113,6 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = ({
       })()}
     </div>
   );
-};
+});
+
+ChordGridContainer.displayName = 'ChordGridContainer';

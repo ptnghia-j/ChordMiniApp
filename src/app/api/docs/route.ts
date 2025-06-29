@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 
 /**
  * API route to get API documentation
@@ -7,7 +8,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // Try to call the Python backend API first
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
     
     try {
       const response = await fetch(`${backendUrl}/api/docs`, {
@@ -16,7 +17,7 @@ export async function GET() {
           'Content-Type': 'application/json',
         },
         // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(8000) // 8 second timeout
+        signal: createSafeTimeoutSignal(8000) // 8 second timeout
       });
 
       if (response.ok) {
@@ -145,23 +146,25 @@ export async function GET() {
           }
         },
         {
-          path: "/api/genius-lyrics",
+          path: "/api/lrclib-lyrics",
           method: "POST",
-          summary: "Fetch lyrics from Genius.com",
-          description: "Retrieves song lyrics using artist and title information",
+          summary: "Fetch synchronized lyrics from LRCLib",
+          description: "Retrieves synchronized lyrics with timestamps using artist and title information",
           parameters: {
             artist: "Artist name",
-            title: "Song title"
+            title: "Song title",
+            duration: "Song duration in seconds (optional)"
           },
           responses: {
             "200": {
-              description: "Lyrics retrieval results",
+              description: "Synchronized lyrics retrieval results",
               example: {
                 success: true,
                 artist: "Artist Name",
                 title: "Song Title",
-                lyrics: "Song lyrics here...",
-                url: "https://genius.com/..."
+                has_synchronized: true,
+                synced_lyrics: "[00:12.34] Lyric line with timestamp...",
+                plain_lyrics: "Plain text lyrics without timestamps..."
               }
             }
           }

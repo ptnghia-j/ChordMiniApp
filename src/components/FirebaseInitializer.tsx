@@ -1,24 +1,32 @@
 'use client';
 
 import { useEffect } from 'react';
-import { initTranslationsCollection } from '@/config/firebase';
+import { preloadFirebase } from '@/lib/firebase-lazy';
 
 /**
- * Client component that initializes Firebase collections
- * This component doesn't render anything visible
+ * Client component that preloads Firebase when needed
+ * Uses lazy loading to reduce initial bundle size
  */
 export default function FirebaseInitializer() {
   useEffect(() => {
-    // Initialize Firebase collections
+    // Preload Firebase during idle time
+    preloadFirebase();
+
+    // Initialize Firebase collections lazily
     const initializeCollections = async () => {
       try {
+        // Dynamic import to avoid loading Firebase config in initial bundle
+        const { initTranslationsCollection } = await import('@/config/firebase');
         await initTranslationsCollection();
       } catch (error) {
         console.error('Error initializing Firebase collections:', error);
       }
     };
 
-    initializeCollections();
+    // Delay initialization to not block initial render
+    const timeoutId = setTimeout(initializeCollections, 2000);
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // This component doesn't render anything

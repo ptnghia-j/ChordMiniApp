@@ -10,7 +10,6 @@ interface YouTubeSearchResult {
   title: string;
   thumbnail: string;
   channel: string;
-  duration_string?: string;
   view_count?: number;
   upload_date?: string;
   description?: string;
@@ -27,7 +26,7 @@ interface IntegratedSearchContainerProps {
   setError: (error: string) => void;
   setSearchError: (error: string | null) => void;
   searchResults: YouTubeSearchResult[];
-  handleVideoSelect: (videoId: string) => void;
+  handleVideoSelect: (videoId: string, title?: string, metadata?: YouTubeSearchResult) => void;
 }
 
 const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
@@ -44,11 +43,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
 }) => {
   const [showMoreResults, setShowMoreResults] = useState(false);
 
-  // Format view count with commas
-  const formatViews = (count?: number) => {
-    if (!count) return 'N/A views';
-    return new Intl.NumberFormat('en-US').format(count) + ' views';
-  };
+
 
   // Format upload date from YYYYMMDD to readable format
   const formatDate = (uploadDate?: string) => {
@@ -70,8 +65,8 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   return (
     <div className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
       {/* Header */}
-      <div className="p-3 border-b border-gray-200 dark:border-gray-600">
-        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3 text-center transition-colors duration-300">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-600">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
           Analyze Music
         </h3>
 
@@ -90,7 +85,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                   setSearchError(null);
                 }}
                 placeholder="Search for music or paste YouTube URL..."
-                className="w-full pl-4 pr-12 py-2.5 text-base border-2 border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                className="w-full pl-4 pr-12 py-2 text-base border-2 border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               />
               {/* Search Icon Button */}
               <button
@@ -117,7 +112,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
               </div>
               <Link
                 href="/analyze"
-                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 whitespace-nowrap flex items-center gap-2"
+                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 whitespace-nowrap flex items-center gap-2"
                 aria-label="Upload audio file"
               >
                 <HiUpload className="w-4 h-4" />
@@ -132,7 +127,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
 
       {/* Search Results */}
       {(searchResults.length > 0 || isSearching) && (
-        <div className="p-3">
+        <div className="p-2">
           {isSearching ? (
             <div className="flex flex-col items-center py-6">
               <div className="relative">
@@ -161,7 +156,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                   <div
                     key={result.id}
                     className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
-                    onClick={() => handleVideoSelect(result.id)}
+                    onClick={() => handleVideoSelect(result.id, result.title, result)}
                   >
                     <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
                       <Image
@@ -171,19 +166,13 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                         fill
                         sizes="80px"
                       />
-                      {result.duration_string && (
-                        <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
-                          {result.duration_string}
-                        </div>
-                      )}
+
                     </div>
                     <div className="ml-3 flex-1 min-w-0">
                       <h5 className="font-medium line-clamp-2 text-gray-800 dark:text-gray-100 text-sm leading-tight mb-1">{result.title}</h5>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">{result.channel}</p>
                       <div className="flex items-center text-xs text-gray-500 dark:text-gray-500 mb-1">
                         {result.upload_date && <span>{formatDate(result.upload_date)}</span>}
-                        {result.upload_date && result.view_count && <span className="mx-1">•</span>}
-                        {result.view_count && <span>{formatViews(result.view_count)}</span>}
                       </div>
                       {result.description && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
@@ -216,7 +205,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                           <div
                             key={result.id}
                             className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
-                            onClick={() => handleVideoSelect(result.id)}
+                            onClick={() => handleVideoSelect(result.id, result.title, result)}
                           >
                             <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
                               <Image
@@ -226,19 +215,13 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                                 fill
                                 sizes="80px"
                               />
-                              {result.duration_string && (
-                                <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
-                                  {result.duration_string}
-                                </div>
-                              )}
+
                             </div>
                             <div className="ml-3 flex-1 min-w-0">
                               <h5 className="font-medium line-clamp-2 text-gray-800 dark:text-gray-100 text-sm leading-tight mb-1">{result.title}</h5>
                               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">{result.channel}</p>
                               <div className="flex items-center text-xs text-gray-500 dark:text-gray-500 mb-1">
                                 {result.upload_date && <span>{formatDate(result.upload_date)}</span>}
-                                {result.upload_date && result.view_count && <span className="mx-1">•</span>}
-                                {result.view_count && <span>{formatViews(result.view_count)}</span>}
                               </div>
                               {result.description && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">

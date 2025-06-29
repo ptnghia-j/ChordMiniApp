@@ -1,15 +1,16 @@
 /**
  * API Configuration for ChordMini
- * 
+ *
  * This file centralizes API endpoint configuration and routing logic.
- * YouTube-related endpoints are routed to the Python backend (Google Cloud Run)
+ * ML services (chord recognition, beat detection) are routed to the Python backend (Google Cloud Run)
  * while other endpoints remain on the Vercel frontend.
+ * Audio extraction uses QuickTube directly from the frontend.
  */
 
 // Backend URLs
 export const BACKEND_URLS = {
-  // Google Cloud Run Python backend
-  PYTHON_BACKEND: 'https://chordmini-backend-full-1207160312.us-central1.run.app',
+  // Google Cloud Run Python backend (ML services only)
+  PYTHON_BACKEND: 'https://chordmini-backend-full-191567167632.us-central1.run.app',
 
   // Vercel frontend (current domain)
   VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
@@ -17,14 +18,18 @@ export const BACKEND_URLS = {
 
 // Endpoint routing configuration
 export const API_ROUTES = {
-  // YouTube endpoints - use local API routes with backend fallback
-  SEARCH_YOUTUBE: '/api/search-youtube',
+  // Audio extraction - uses QuickTube directly (no backend)
   EXTRACT_AUDIO: '/api/extract-audio',
 
-  // Other endpoints - remain on Vercel frontend
+  // YouTube search - client-side only (no backend)
+  SEARCH_YOUTUBE: '/api/search-youtube',
+
+  // ML services - proxy to Python backend
   RECOGNIZE_CHORDS: '/api/recognize-chords',
   RECOGNIZE_CHORDS_BTC_PL: '/api/recognize-chords-btc-pl',
   RECOGNIZE_CHORDS_BTC_SL: '/api/recognize-chords-btc-sl',
+
+  // Other services - remain on Vercel frontend
   TRANSCRIBE_LYRICS: '/api/transcribe-lyrics',
   TRANSLATE_LYRICS: '/api/translate-lyrics',
   TRANSLATE_LYRICS_CACHED: '/api/translate-lyrics-cached',

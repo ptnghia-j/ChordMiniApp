@@ -13,7 +13,7 @@ The ChordMini backend is a Flask-based microservice that provides advanced audio
 ## Production Deployment Status
 
 ### ✅ Current Production Service
-- **URL**: `https://chordmini-backend-full-12071603127.us-central1.run.app/`
+- **URL**: `https://chordmini-backend-full-191567167632.us-central1.run.app/`
 - **Platform**: Google Cloud Run
 - **Status**: ✅ Healthy and operational
 - **Features**: All models loaded and functional

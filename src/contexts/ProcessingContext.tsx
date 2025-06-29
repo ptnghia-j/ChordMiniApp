@@ -78,8 +78,6 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
     }, 100); // Update every 100ms for better performance
 
     setTimerInterval(interval);
-
-    console.log('Timer started at:', now);
   };
 
   // Stop the timer and freeze the elapsed time
@@ -94,7 +92,6 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
       if (startTime !== null) {
         const finalElapsedTime = Date.now() - startTime;
         setElapsedTime(finalElapsedTime);
-        console.log(`Timer stopped. Final time: ${finalElapsedTime}ms`);
       }
 
       // Clear the start time to prevent any further updates
@@ -128,8 +125,6 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
     setStage('complete');
     setProgress(100);
     setStatusMessage('Processing complete');
-
-    console.log('Processing completed, timer stopped');
   };
 
   const failProcessing = (errorMessage: string) => {
@@ -143,7 +138,6 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
     return () => {
       if (timerInterval) {
         clearInterval(timerInterval);
-        console.log('Timer cleaned up on unmount');
       }
     };
   }, [timerInterval]);
@@ -159,7 +153,6 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
       if (startTime !== null) {
         const finalElapsedTime = Date.now() - startTime;
         setElapsedTime(finalElapsedTime);
-        console.log(`Timer stopped due to stage change. Final time: ${finalElapsedTime}ms`);
       }
 
       // Clear the start time to prevent any further updates

@@ -36,7 +36,8 @@ export class AudioProcessingService {
   async extractAudioFromYouTube(
     videoId: string,
     forceRedownload: boolean = false,
-    useStreamUrl: boolean = true
+    useStreamUrl: boolean = true,
+    originalTitle?: string
   ): Promise<{ audioUrl: string; fromCache: boolean; isStreamUrl?: boolean; streamExpiresAt?: number; title?: string; duration?: number }> {
     try {
       const response = await fetch('/api/extract-audio', {
@@ -47,7 +48,8 @@ export class AudioProcessingService {
         body: JSON.stringify({
           videoId,
           forceRedownload,
-          useStreamUrl
+          useStreamUrl,
+          originalTitle
         }),
       });
 
@@ -96,10 +98,15 @@ export class AudioProcessingService {
     chordDetector: string
   ): Promise<AnalysisResult> {
     try {
+      // Debug: Log the exact parameters being used for cache lookup
+      console.log(`🔍 AudioProcessingService.analyzeAudioFile called with: beatDetector="${beatDetector}", chordDetector="${chordDetector}"`);
+
       // Check Firestore cache first
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
+        console.log(`✅ Found cached results for ${beatDetector} + ${chordDetector}, loading...`);
+        console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
 
         // Convert cached data to AnalysisResult format
         return {
@@ -110,12 +117,15 @@ export class AudioProcessingService {
           synchronizedChords: cachedData.synchronizedChords,
           beatModel: cachedData.beatModel,
           chordModel: cachedData.chordModel,
+          audioDuration: cachedData.audioDuration,
           beatDetectionResult: {
-            time_signature: cachedData.timeSignature,
-            bpm: cachedData.bpm,
+            time_signature: cachedData.timeSignature ?? undefined,
+            bpm: cachedData.bpm ?? undefined,
             beatShift: cachedData.beatShift
           }
         };
+      } else {
+        console.log(`❌ No cached results found for ${beatDetector} + ${chordDetector}, running new analysis...`);
       }
 
       // Perform analysis with rate limiting
@@ -135,6 +145,7 @@ export class AudioProcessingService {
         timeSignature: analysisResults.beatDetectionResult?.time_signature,
         bpm: analysisResults.beatDetectionResult?.bpm,
         beatShift: analysisResults.beatDetectionResult?.beatShift,
+        audioDuration: analysisResults.audioDuration,
         timestamp: new Date()
       };
 

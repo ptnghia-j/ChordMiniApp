@@ -5,7 +5,9 @@ import { ProcessingProvider } from '../contexts/ProcessingContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
 import FirebaseInitializer from '../components/FirebaseInitializer';
+import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 import Footer from '../components/Footer';
+import PerformanceMonitor from '../components/PerformanceMonitor';
 
 // Initialize only the monospace font for chord labels
 const robotoMono = Roboto_Mono({
@@ -94,11 +96,26 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={robotoMono.variable}>
+      <head>
+        {/* Resource hints for performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://i.ytimg.com" />
+        <link rel="preconnect" href="https://img.youtube.com" />
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+
+        {/* DNS prefetch for external services */}
+        <link rel="dns-prefetch" href="//youtube.com" />
+        <link rel="dns-prefetch" href="//googleapis.com" />
+        <link rel="dns-prefetch" href="//vercel.app" />
+      </head>
       <body className="font-sans min-h-screen flex flex-col">
         <ProcessingProvider>
           <ThemeProvider>
             <ClientErrorBoundary>
+              <ServiceWorkerRegistration />
               <FirebaseInitializer />
+              <PerformanceMonitor />
               <main className="flex-1">
                 {children}
               </main>

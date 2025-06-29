@@ -202,7 +202,6 @@ export async function sendChatMessageWithLyricsRetrieval(
   try {
     // Check if lyrics are missing and try to retrieve them
     if (!songContext.lyrics || songContext.lyrics.lines.length === 0) {
-      console.log('Lyrics not available in context, attempting to retrieve...');
       const retrievedLyrics = await retrieveLyricsForChatbot(songContext.videoId);
 
       if (retrievedLyrics && retrievedLyrics.lines.length > 0) {

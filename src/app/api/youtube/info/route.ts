@@ -7,7 +7,7 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
  * YouTube Video Info API Route - Proxy to Python Backend
  *
  * This route proxies YouTube video info requests to the Python backend
- * which handles yt-dlp functionality in a serverless-compatible environment.
+ * which handles QuickTube audio extraction in a serverless-compatible environment.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     console.log(`Fetching video info for: ${videoId}`);
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-1207160312.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
     console.log(`Proxying YouTube info request to backend: ${backendUrl}/api/extract-audio`);
 

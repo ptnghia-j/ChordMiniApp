@@ -15,7 +15,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 const AUDIO_CACHE_COLLECTION = 'audioFiles';
 
 // Simplified audio file data structure
-export interface SimplifiedAudioData {
+export interface SimplifiedAudioData extends Record<string, unknown> {
   videoId: string; // Primary key: 11-character YouTube ID
   audioUrl: string; // Direct QuickTube download URL
   title: string; // Clean title from YouTube search results
@@ -23,8 +23,8 @@ export interface SimplifiedAudioData {
   channelTitle?: string; // Channel name from YouTube search
   duration?: number; // Duration in seconds
   fileSize?: number; // File size if available
-  isStreamUrl: boolean; // Always true for QuickTube URLs
-  streamExpiresAt: number; // Expiration timestamp
+  isStreamUrl: boolean; // True for QuickTube URLs, false for Firebase Storage URLs
+  streamExpiresAt?: number; // Expiration timestamp (only for stream URLs)
   createdAt: unknown; // Firestore timestamp
 }
 
@@ -75,8 +75,8 @@ export class FirebaseStorageSimplified {
         channelTitle: data.channelTitle || 'Unknown Channel',
         duration: data.duration || 0,
         fileSize: data.fileSize || 0,
-        isStreamUrl: true, // QuickTube URLs are always stream URLs
-        streamExpiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours from now
+        isStreamUrl: data.audioUrl.includes('quicktube.app'), // Detect if it's a stream URL
+        ...(data.audioUrl.includes('quicktube.app') && { streamExpiresAt: Date.now() + (24 * 60 * 60 * 1000) }), // Only include streamExpiresAt for stream URLs
         createdAt: serverTimestamp()
       };
 
@@ -109,13 +109,17 @@ export class FirebaseStorageSimplified {
     // Import smart cache
     const { audioMetadataCache } = await import('@/services/smartFirebaseCache');
 
-    return await audioMetadataCache.get(
+    const result = await audioMetadataCache.get(
       `audio_${videoId}`,
       async () => {
         try {
           // Wait for authentication
           const { waitForAuth } = await import('@/config/firebase');
           await waitForAuth();
+
+          if (!db) {
+            return null;
+          }
 
           // Get document by video ID
           const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
@@ -130,14 +134,60 @@ export class FirebaseStorageSimplified {
           // Check if stream URL has expired
           if (data.isStreamUrl && data.streamExpiresAt && Date.now() > data.streamExpiresAt) {
             console.log(`⏰ Cached stream URL expired for ${videoId}`);
+
+            // Log cache miss due to expiration
+            try {
+              const { storageMonitoringService } = await import('./storageMonitoringService');
+              storageMonitoringService.logStorageOperation({
+                type: 'cache_miss',
+                videoId,
+                success: false,
+                error: 'Stream URL expired'
+              });
+            } catch (monitoringError) {
+              // Don't fail the main operation if monitoring fails
+              console.warn('Monitoring service unavailable:', monitoringError);
+            }
+
             return null;
           }
 
           // Verify the audio URL is still accessible
           if (await this.verifyAudioUrl(data.audioUrl)) {
+            console.log(`✅ Found cached audio for ${videoId} (${data.isStreamUrl ? 'stream' : 'storage'} URL)`);
+
+            // Log cache hit
+            try {
+              const { storageMonitoringService } = await import('./storageMonitoringService');
+              storageMonitoringService.logStorageOperation({
+                type: 'cache_hit',
+                videoId,
+                fileSize: data.fileSize,
+                success: true
+              });
+            } catch (monitoringError) {
+              // Don't fail the main operation if monitoring fails
+              console.warn('Monitoring service unavailable:', monitoringError);
+            }
+
             return data;
           } else {
             console.log(`❌ Cached audio URL no longer accessible for ${videoId}`);
+
+            // Log cache miss due to inaccessible URL
+            try {
+              const { storageMonitoringService } = await import('./storageMonitoringService');
+              storageMonitoringService.logStorageOperation({
+                type: 'cache_miss',
+                videoId,
+                success: false,
+                error: 'Audio URL no longer accessible'
+              });
+            } catch (monitoringError) {
+              // Don't fail the main operation if monitoring fails
+              console.warn('Monitoring service unavailable:', monitoringError);
+            }
+
             return null;
           }
 
@@ -150,10 +200,12 @@ export class FirebaseStorageSimplified {
         }
       },
       // Check if audio metadata is complete
-      (data: SimplifiedAudioData) => {
+      (data: Record<string, unknown>) => {
         return !!(data.audioUrl && data.title && (!data.isStreamUrl || data.streamExpiresAt));
       }
     );
+
+    return result as SimplifiedAudioData | null;
   }
 
   /**
@@ -199,6 +251,10 @@ export class FirebaseStorageSimplified {
           const { waitForAuth } = await import('@/config/firebase');
           await waitForAuth();
 
+          if (!db) {
+            return null;
+          }
+
           // Get document by video ID
           const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
           const docSnap = await getDoc(docRef);
@@ -229,7 +285,7 @@ export class FirebaseStorageSimplified {
         }
       },
       // Check if audio metadata is complete
-      (data: SimplifiedAudioData) => {
+      (data: Record<string, unknown>) => {
         return !!(data.audioUrl && data.title && (!data.isStreamUrl || data.streamExpiresAt));
       }
     );
@@ -238,7 +294,7 @@ export class FirebaseStorageSimplified {
     const results = new Map<string, SimplifiedAudioData>();
     for (const [videoId, data] of cachedResults.entries()) {
       if (data) {
-        results.set(videoId, data);
+        results.set(videoId, data as unknown as SimplifiedAudioData);
       }
     }
 

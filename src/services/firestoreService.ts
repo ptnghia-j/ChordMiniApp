@@ -35,8 +35,8 @@ export interface TranscriptionData {
   audioDuration?: number;
   totalProcessingTime?: number;
   // Add time signature and BPM fields
-  timeSignature?: number;
-  bpm?: number;
+  timeSignature?: number | null;
+  bpm?: number | null;
   // Add beat shift field for synchronization
   beatShift?: number;
   // Add key signature field
@@ -77,7 +77,7 @@ export async function getTranscription(
   }
 
   try {
-    console.log(`Checking for cached transcription: videoId=${videoId}, beatModel=${beatModel}, chordModel=${chordModel}`);
+    // console.log(`Checking for cached transcription: videoId=${videoId}, beatModel=${beatModel}, chordModel=${chordModel}`);
 
     // Create a unique document ID based on the parameters
     const docId = `${videoId}_${beatModel}_${chordModel}`;
@@ -91,17 +91,17 @@ export async function getTranscription(
     // Check if the document exists
     if (docSnap.exists()) {
       const data = docSnap.data() as TranscriptionData;
-      console.log('Found cached transcription in Firestore:', {
-        videoId: data.videoId,
-        timeSignature: data.timeSignature,
-        bpm: data.bpm,
-        hasTimeSignature: data.timeSignature !== undefined,
-        hasBpm: data.bpm !== undefined
-      });
+      // console.log('Found cached transcription in Firestore:', {
+      //   videoId: data.videoId,
+      //   timeSignature: data.timeSignature,
+      //   bpm: data.bpm,
+      //   hasTimeSignature: data.timeSignature !== undefined,
+      //   hasBpm: data.bpm !== undefined
+      // });
       return data;
     }
 
-    console.log('No cached transcription found in Firestore');
+    // console.log('No cached transcription found in Firestore');
     return null;
   } catch (error) {
     console.error('Error getting transcription from Firestore:', error);
@@ -126,16 +126,16 @@ export async function getTranscription(
 export async function saveTranscription(
   transcriptionData: Omit<TranscriptionData, 'createdAt'>
 ): Promise<boolean> {
-  console.log('🚀 STARTING TRANSCRIPTION SAVE PROCESS');
+  // console.log('🚀 STARTING TRANSCRIPTION SAVE PROCESS');
 
   // Check if Firebase is initialized or disabled due to CORS issues
-  console.log('🔍 FIREBASE INITIALIZATION CHECK:', {
-    dbExists: !!db,
-    authExists: !!auth,
-    firestoreDisabled,
-    dbType: typeof db,
-    authType: typeof auth
-  });
+  // console.log('🔍 FIREBASE INITIALIZATION CHECK:', {
+  //   dbExists: !!db,
+  //   authExists: !!auth,
+  //   firestoreDisabled,
+  //   dbType: typeof db,
+  //   authType: typeof auth
+  // });
 
   if (!db || !auth || firestoreDisabled) {
     if (firestoreDisabled) {
@@ -148,21 +148,10 @@ export async function saveTranscription(
     return false;
   }
 
-  console.log('✅ Firebase components initialized, checking authentication...');
-
   // Wait for authentication to be ready
   return new Promise((resolve) => {
-    console.log('🔄 Setting up auth state listener...');
 
     const unsubscribe = onAuthStateChanged(auth!, async (user) => {
-      console.log('🔍 AUTH STATE CHANGED:', {
-        userExists: !!user,
-        userType: typeof user,
-        userId: user?.uid || 'none',
-        userIsAnonymous: user?.isAnonymous || false,
-        userProviderData: user?.providerData?.length || 0
-      });
-
       unsubscribe(); // Clean up the listener
 
       if (!user) {
@@ -171,13 +160,6 @@ export async function saveTranscription(
         resolve(false);
         return;
       }
-
-      console.log('🔐 User authenticated successfully, proceeding with Firestore save');
-      console.log('🔐 User details:', {
-        uid: user.uid,
-        isAnonymous: user.isAnonymous,
-        providerId: user.providerId
-      });
 
       const result = await performFirestoreSave(transcriptionData);
       resolve(result);
@@ -202,37 +184,37 @@ async function performFirestoreSave(
 ): Promise<boolean> {
 
   try {
-    console.log('🔄 Starting authenticated Firestore save process...');
-    console.log('🔍 DETAILED TRANSCRIPTION INPUT DATA:', {
-      videoId: transcriptionData.videoId,
-      videoIdType: typeof transcriptionData.videoId,
-      videoIdLength: transcriptionData.videoId?.length,
-      beatModel: transcriptionData.beatModel,
-      beatModelType: typeof transcriptionData.beatModel,
-      chordModel: transcriptionData.chordModel,
-      chordModelType: typeof transcriptionData.chordModel,
-      beatsCount: transcriptionData.beats?.length,
-      beatsType: typeof transcriptionData.beats,
-      chordsCount: transcriptionData.chords?.length,
-      chordsType: typeof transcriptionData.chords,
-      synchronizedChordsCount: transcriptionData.synchronizedChords?.length,
-      synchronizedChordsType: typeof transcriptionData.synchronizedChords,
-      timeSignature: transcriptionData.timeSignature,
-      timeSignatureType: typeof transcriptionData.timeSignature,
-      bpm: transcriptionData.bpm,
-      bpmType: typeof transcriptionData.bpm,
-      hasDownbeats: !!transcriptionData.downbeats,
-      hasDownbeatsWithMeasures: !!transcriptionData.downbeats_with_measures,
-      hasAudioDuration: !!transcriptionData.audioDuration,
-      hasTotalProcessingTime: !!transcriptionData.totalProcessingTime,
-      hasBeatShift: transcriptionData.beatShift !== undefined,
-      hasKeySignature: transcriptionData.keySignature !== undefined,
-      hasKeyModulation: transcriptionData.keyModulation !== undefined,
-      hasOriginalChords: transcriptionData.originalChords !== undefined,
-      hasCorrectedChords: transcriptionData.correctedChords !== undefined,
-      hasChordCorrections: transcriptionData.chordCorrections !== undefined,
-      totalInputFields: Object.keys(transcriptionData).length
-    });
+    // console.log('🔄 Starting authenticated Firestore save process...');
+    // console.log('🔍 DETAILED TRANSCRIPTION INPUT DATA:', {
+    //   videoId: transcriptionData.videoId,
+    //   videoIdType: typeof transcriptionData.videoId,
+    //   videoIdLength: transcriptionData.videoId?.length,
+    //   beatModel: transcriptionData.beatModel,
+    //   beatModelType: typeof transcriptionData.beatModel,
+    //   chordModel: transcriptionData.chordModel,
+    //   chordModelType: typeof transcriptionData.chordModel,
+    //   beatsCount: transcriptionData.beats?.length,
+    //   beatsType: typeof transcriptionData.beats,
+    //   chordsCount: transcriptionData.chords?.length,
+    //   chordsType: typeof transcriptionData.chords,
+    //   synchronizedChordsCount: transcriptionData.synchronizedChords?.length,
+    //   synchronizedChordsType: typeof transcriptionData.synchronizedChords,
+    //   timeSignature: transcriptionData.timeSignature,
+    //   timeSignatureType: typeof transcriptionData.timeSignature,
+    //   bpm: transcriptionData.bpm,
+    //   bpmType: typeof transcriptionData.bpm,
+    //   hasDownbeats: !!transcriptionData.downbeats,
+    //   hasDownbeatsWithMeasures: !!transcriptionData.downbeats_with_measures,
+    //   hasAudioDuration: !!transcriptionData.audioDuration,
+    //   hasTotalProcessingTime: !!transcriptionData.totalProcessingTime,
+    //   hasBeatShift: transcriptionData.beatShift !== undefined,
+    //   hasKeySignature: transcriptionData.keySignature !== undefined,
+    //   hasKeyModulation: transcriptionData.keyModulation !== undefined,
+    //   hasOriginalChords: transcriptionData.originalChords !== undefined,
+    //   hasCorrectedChords: transcriptionData.correctedChords !== undefined,
+    //   hasChordCorrections: transcriptionData.chordCorrections !== undefined,
+    //   totalInputFields: Object.keys(transcriptionData).length
+    // });
 
     // Create a unique document ID based on the parameters
     const docId = `${transcriptionData.videoId}_${transcriptionData.beatModel}_${transcriptionData.chordModel}`;
@@ -247,12 +229,12 @@ async function performFirestoreSave(
     });
 
     // Get the document reference
-    console.log('📂 Creating document reference for collection:', TRANSCRIPTIONS_COLLECTION);
-    console.log('📂 Firebase db instance:', {
-      dbExists: !!db,
-      dbType: typeof db,
-      collectionName: TRANSCRIPTIONS_COLLECTION
-    });
+    // console.log('📂 Creating document reference for collection:', TRANSCRIPTIONS_COLLECTION);
+    // console.log('📂 Firebase db instance:', {
+    //   dbExists: !!db,
+    //   dbType: typeof db,
+    //   collectionName: TRANSCRIPTIONS_COLLECTION
+    // });
 
     const docRef = doc(db!, TRANSCRIPTIONS_COLLECTION, docId);
     console.log('✅ Document reference created successfully:', {
@@ -262,36 +244,36 @@ async function performFirestoreSave(
     });
 
     // Prepare data for Firestore
-    console.log('🧹 Starting data sanitization process...');
+    // console.log('🧹 Starting data sanitization process...');
 
     // First, let's validate the input arrays
-    console.log('🔍 ARRAY VALIDATION:', {
-      beatsIsArray: Array.isArray(transcriptionData.beats),
-      beatsLength: transcriptionData.beats?.length || 0,
-      chordsIsArray: Array.isArray(transcriptionData.chords),
-      chordsLength: transcriptionData.chords?.length || 0,
-      synchronizedChordsIsArray: Array.isArray(transcriptionData.synchronizedChords),
-      synchronizedChordsLength: transcriptionData.synchronizedChords?.length || 0,
-      firstBeat: transcriptionData.beats?.[0],
-      firstChord: transcriptionData.chords?.[0],
-      firstSyncChord: transcriptionData.synchronizedChords?.[0]
-    });
+    // console.log('🔍 ARRAY VALIDATION:', {
+    //   beatsIsArray: Array.isArray(transcriptionData.beats),
+    //   beatsLength: transcriptionData.beats?.length || 0,
+    //   chordsIsArray: Array.isArray(transcriptionData.chords),
+    //   chordsLength: transcriptionData.chords?.length || 0,
+    //   synchronizedChordsIsArray: Array.isArray(transcriptionData.synchronizedChords),
+    //   synchronizedChordsLength: transcriptionData.synchronizedChords?.length || 0,
+    //   firstBeat: transcriptionData.beats?.[0],
+    //   firstChord: transcriptionData.chords?.[0],
+    //   firstSyncChord: transcriptionData.synchronizedChords?.[0]
+    // });
 
     // Convert any complex objects to a format Firestore can handle
     const sanitizedData = {
       videoId: transcriptionData.videoId,
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
-      beats: transcriptionData.beats.map((beat, index) => {
-        console.log(`🔍 Processing beat ${index}:`, beat);
+      beats: transcriptionData.beats.map((beat) => {
+        // console.log(`🔍 Processing beat ${index}:`, beat);
         return {
           time: beat.time,
           strength: beat.strength || 0,
           beatNum: beat.beatNum || 0
         };
       }),
-      chords: transcriptionData.chords.map((chord, index) => {
-        console.log(`🔍 Processing chord ${index}:`, chord);
+      chords: transcriptionData.chords.map((chord) => {
+        // console.log(`🔍 Processing chord ${index}:`, chord);
         return {
           chord: chord.chord,
           start: chord.start,
@@ -301,16 +283,16 @@ async function performFirestoreSave(
       }),
       downbeats: transcriptionData.downbeats || [],
       downbeats_with_measures: transcriptionData.downbeats_with_measures
-        ? transcriptionData.downbeats_with_measures.map((d, index) => {
-            console.log(`🔍 Processing downbeat with measure ${index}:`, d);
+        ? transcriptionData.downbeats_with_measures.map((d) => {
+            // console.log(`🔍 Processing downbeat with measure ${index}:`, d);
             return {
               time: d.time,
               measureNum: d.measureNum
             };
           })
         : [],
-      synchronizedChords: transcriptionData.synchronizedChords.map((sc, index) => {
-        console.log(`🔍 Processing synchronized chord ${index}:`, sc);
+      synchronizedChords: transcriptionData.synchronizedChords.map((sc) => {
+        // console.log(`🔍 Processing synchronized chord ${index}:`, sc);
         return {
           chord: sc.chord,
           beatIndex: sc.beatIndex,
@@ -320,9 +302,9 @@ async function performFirestoreSave(
       }),
       audioDuration: transcriptionData.audioDuration || 0,
       totalProcessingTime: transcriptionData.totalProcessingTime || 0,
-      // Include time signature and BPM fields - these were missing!
-      timeSignature: transcriptionData.timeSignature,
-      bpm: transcriptionData.bpm,
+      // Include time signature and BPM fields - handle undefined values
+      timeSignature: transcriptionData.timeSignature ?? null,
+      bpm: transcriptionData.bpm ?? null,
       // Include beat shift for synchronization (handle undefined)
       beatShift: transcriptionData.beatShift ?? 0,
       // Include key signature fields (handle undefined)
@@ -334,71 +316,63 @@ async function performFirestoreSave(
       createdAt: Timestamp.now()
     };
 
-    console.log('🔍 SANITIZED DATA STRUCTURE:', {
-      totalFields: Object.keys(sanitizedData).length,
-      fieldNames: Object.keys(sanitizedData),
-      videoId: sanitizedData.videoId,
-      videoIdValid: typeof sanitizedData.videoId === 'string' && sanitizedData.videoId.length === 11,
-      beatModel: sanitizedData.beatModel,
-      beatModelValid: typeof sanitizedData.beatModel === 'string' && sanitizedData.beatModel.length > 0,
-      chordModel: sanitizedData.chordModel,
-      chordModelValid: typeof sanitizedData.chordModel === 'string' && sanitizedData.chordModel.length > 0,
-      beatsCount: sanitizedData.beats.length,
-      beatsValid: Array.isArray(sanitizedData.beats),
-      chordsCount: sanitizedData.chords.length,
-      chordsValid: Array.isArray(sanitizedData.chords),
-      synchronizedChordsCount: sanitizedData.synchronizedChords.length,
-      synchronizedChordsValid: Array.isArray(sanitizedData.synchronizedChords),
-      createdAtType: typeof sanitizedData.createdAt,
-      createdAtValid: sanitizedData.createdAt instanceof Timestamp
-    });
+    // console.log('🔍 SANITIZED DATA STRUCTURE:', {
+    //   totalFields: Object.keys(sanitizedData).length,
+    //   fieldNames: Object.keys(sanitizedData),
+    //   videoId: sanitizedData.videoId,
+    //   videoIdValid: typeof sanitizedData.videoId === 'string' && sanitizedData.videoId.length === 11,
+    //   beatModel: sanitizedData.beatModel,
+    //   beatModelValid: typeof sanitizedData.beatModel === 'string' && sanitizedData.beatModel.length > 0,
+    //   chordModel: sanitizedData.chordModel,
+    //   chordModelValid: typeof sanitizedData.chordModel === 'string' && sanitizedData.chordModel.length > 0,
+    //   beatsCount: sanitizedData.beats.length,
+    //   beatsValid: Array.isArray(sanitizedData.beats),
+    //   chordsCount: sanitizedData.chords.length,
+    //   chordsValid: Array.isArray(sanitizedData.chords),
+    //   synchronizedChordsCount: sanitizedData.synchronizedChords.length,
+    //   synchronizedChordsValid: Array.isArray(sanitizedData.synchronizedChords),
+    //   createdAtType: typeof sanitizedData.createdAt,
+    //   createdAtValid: sanitizedData.createdAt instanceof Timestamp
+    // });
 
     // Final validation before saving
-    const requiredFields = ['videoId', 'beatModel', 'chordModel', 'beats', 'chords', 'synchronizedChords', 'createdAt'];
-    const hasAllRequiredFields = requiredFields.every(field => field in sanitizedData);
-    const missingFields = requiredFields.filter(field => !(field in sanitizedData));
+    // const requiredFields = ['videoId', 'beatModel', 'chordModel', 'beats', 'chords', 'synchronizedChords', 'createdAt'];
+    // const hasAllRequiredFields = requiredFields.every(field => field in sanitizedData);
+    // const missingFields = requiredFields.filter(field => !(field in sanitizedData));
 
-    console.log('🔍 FINAL VALIDATION BEFORE SAVE:', {
-      docId,
-      docIdLength: docId.length,
-      videoId: sanitizedData.videoId,
-      videoIdLength: sanitizedData.videoId.length,
-      videoIdMatches11Chars: sanitizedData.videoId.length === 11,
-      videoIdRegexMatch: /^[a-zA-Z0-9_-]+$/.test(sanitizedData.videoId),
-      beatModel: sanitizedData.beatModel,
-      beatModelLength: sanitizedData.beatModel.length,
-      chordModel: sanitizedData.chordModel,
-      chordModelLength: sanitizedData.chordModel.length,
-      fieldCount: Object.keys(sanitizedData).length,
-      hasAllRequiredFields,
-      missingFields,
-      createdAtType: typeof sanitizedData.createdAt,
-      createdAtValue: sanitizedData.createdAt,
-      createdAtIsTimestamp: sanitizedData.createdAt instanceof Timestamp,
-      // Check if data size is within limits
-      dataSizeCheck: Object.keys(sanitizedData).length <= 50,
-      // Validate each required field type
-      videoIdIsString: typeof sanitizedData.videoId === 'string',
-      beatModelIsString: typeof sanitizedData.beatModel === 'string',
-      chordModelIsString: typeof sanitizedData.chordModel === 'string',
-      beatsIsArray: Array.isArray(sanitizedData.beats),
-      chordsIsArray: Array.isArray(sanitizedData.chords),
-      synchronizedChordsIsArray: Array.isArray(sanitizedData.synchronizedChords)
-    });
-
-    // Log the complete data structure being sent to Firestore
-    console.log('🔍 COMPLETE DATA BEING SENT TO FIRESTORE:', JSON.stringify(sanitizedData, null, 2));
+    // console.log('🔍 FINAL VALIDATION BEFORE SAVE:', {
+    //   docId,
+    //   docIdLength: docId.length,
+    //   videoId: sanitizedData.videoId,
+    //   videoIdLength: sanitizedData.videoId.length,
+    //   videoIdMatches11Chars: sanitizedData.videoId.length === 11,
+    //   videoIdRegexMatch: /^[a-zA-Z0-9_-]+$/.test(sanitizedData.videoId),
+    //   beatModel: sanitizedData.beatModel,
+    //   beatModelLength: sanitizedData.beatModel.length,
+    //   chordModel: sanitizedData.chordModel,
+    //   chordModelLength: sanitizedData.chordModel.length,
+    //   fieldCount: Object.keys(sanitizedData).length,
+    //   hasAllRequiredFields,
+    //   missingFields,
+    //   createdAtType: typeof sanitizedData.createdAt,
+    //   createdAtValue: sanitizedData.createdAt,
+    //   createdAtIsTimestamp: sanitizedData.createdAt instanceof Timestamp,
+    //   // Check if data size is within limits
+    //   dataSizeCheck: Object.keys(sanitizedData).length <= 50,
+    //   // Validate each required field type
+    //   videoIdIsString: typeof sanitizedData.videoId === 'string',
+    //   beatModelIsString: typeof sanitizedData.beatModel === 'string',
+    //   chordModelIsString: typeof sanitizedData.chordModel === 'string',
+    //   beatsIsArray: Array.isArray(sanitizedData.beats),
+    //   chordsIsArray: Array.isArray(sanitizedData.chords),
+    //   synchronizedChordsIsArray: Array.isArray(sanitizedData.synchronizedChords)
+    // });
 
     // Save the document
-    console.log('💾 Attempting to save document to Firestore...');
-    console.log('💾 Collection:', TRANSCRIPTIONS_COLLECTION);
-    console.log('💾 Document ID:', docId);
-    console.log('💾 Document path:', docRef.path);
 
     await setDoc(docRef, sanitizedData);
 
-    console.log('✅ Transcription saved successfully to Firestore');
-    console.log('✅ Document saved at path:', docRef.path);
+
     return true;
   } catch (error) {
     // Enhanced error logging for debugging
@@ -417,8 +391,8 @@ async function performFirestoreSave(
         isQuotaError: error.message.includes('quota'),
         isAuthError: error.message.includes('auth') || error.message.includes('authentication'),
         // Extract error code if available
-        errorCode: (error as any).code || 'unknown',
-        errorDetails: (error as any).details || 'none'
+        errorCode: (error as { code?: string }).code || 'unknown',
+        errorDetails: (error as { details?: string }).details || 'none'
       });
 
       // Check for specific Firebase errors with detailed analysis
@@ -480,7 +454,7 @@ export async function getVideoTranscriptions(
   }
 
   try {
-    console.log(`Getting all transcriptions for video: ${videoId}`);
+    // console.log(`Getting all transcriptions for video: ${videoId}`);
 
     // Create a query to get all transcriptions for the video
     const q = query(
@@ -497,7 +471,7 @@ export async function getVideoTranscriptions(
       transcriptions.push(docSnap.data() as TranscriptionData);
     });
 
-    console.log(`Found ${transcriptions.length} transcriptions for video ${videoId}`);
+    // console.log(`Found ${transcriptions.length} transcriptions for video ${videoId}`);
     return transcriptions;
   } catch (error) {
     console.error('Error getting video transcriptions from Firestore:', error);

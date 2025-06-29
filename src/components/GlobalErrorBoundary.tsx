@@ -55,14 +55,14 @@ class GlobalErrorBoundary extends Component<Props, State> {
 
       // Default fallback UI
       return (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-          <h2 className="text-xl font-bold text-red-700 mb-2">Something went wrong</h2>
-          <p className="text-red-600 mb-4">
+        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-600 rounded-md">
+          <h2 className="text-xl font-bold text-red-700 dark:text-red-200 mb-2">Something went wrong</h2>
+          <p className="text-red-600 dark:text-red-200 mb-4">
             An error occurred in the application. Please try refreshing the page.
           </p>
           {this.state.error && (
-            <div className="bg-white p-3 rounded border border-red-100 mb-3">
-              <p className="font-mono text-sm text-red-800">{this.state.error.toString()}</p>
+            <div className="bg-white dark:bg-gray-800 p-3 rounded border border-red-100 dark:border-red-700 mb-3">
+              <p className="font-mono text-sm text-red-800 dark:text-red-200">{this.state.error.toString()}</p>
             </div>
           )}
           <button

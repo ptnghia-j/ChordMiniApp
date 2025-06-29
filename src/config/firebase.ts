@@ -1,6 +1,13 @@
-// Import the functions you need from the SDKs you need
+// Import only the specific Firebase functions we need for better tree-shaking
 import { initializeApp, FirebaseApp, getApps } from "firebase/app";
-import { getFirestore, Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  getFirestore,
+  Firestore,
+  collection,
+  doc,
+  getDoc,
+  setDoc
+} from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getAuth, Auth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
@@ -16,14 +23,7 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Log Firebase configuration for debugging (without sensitive values)
-console.log('Firebase config:', {
-  authDomain: firebaseConfig.authDomain,
-  projectId: firebaseConfig.projectId,
-  storageBucket: firebaseConfig.storageBucket,
-  apiKeyProvided: !!firebaseConfig.apiKey,
-  appIdProvided: !!firebaseConfig.appId
-});
+// Firebase configuration validated
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -43,11 +43,9 @@ if (hasRequiredConfig) {
     const existingApps = getApps();
     if (existingApps.length > 0) {
       app = existingApps[0];
-      console.log('Using existing Firebase app');
     } else {
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
-      console.log('Firebase initialized successfully');
     }
 
     db = getFirestore(app);
@@ -84,17 +82,10 @@ async function setupAnonymousAuth() {
     // Listen for auth state changes
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log('🔐 User authenticated:', user.isAnonymous ? 'Anonymous' : 'Signed in');
-        console.log('🔐 User UID:', user.uid);
-        console.log('🔐 Auth state ready for Firestore operations');
+        // User authenticated
       } else {
-        console.log('🔓 User not authenticated, signing in anonymously...');
         // Sign in anonymously if not already authenticated
         signInAnonymously(auth!)
-          .then((result) => {
-            console.log('✅ Anonymous authentication successful');
-            console.log('✅ Anonymous user UID:', result.user.uid);
-          })
           .catch((error) => {
             console.error('❌ Anonymous authentication failed:', error);
             console.error('❌ Error code:', error.code);
@@ -139,6 +130,38 @@ export const initTranslationsCollection = async () => {
   } catch (error) {
     console.error('Error initializing translations collection:', error);
   }
+};
+
+// Utility function to wait for authentication
+export const waitForAuth = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!auth) {
+      console.warn('Firebase Auth not initialized');
+      resolve();
+      return;
+    }
+
+    // If user is already authenticated, resolve immediately
+    if (auth.currentUser) {
+      resolve();
+      return;
+    }
+
+    // Wait for auth state change
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        unsubscribe();
+        resolve();
+      }
+    });
+
+    // Timeout after 10 seconds to avoid hanging
+    setTimeout(() => {
+      unsubscribe();
+      console.warn('Authentication timeout, proceeding without auth');
+      resolve();
+    }, 10000);
+  });
 };
 
 export { db, storage, auth };

@@ -19,6 +19,10 @@ interface CachedLyricsData {
  * 3. Cache the results in Firestore
  * 4. Return the transcription results
  */
+
+// Configure Vercel function timeout (up to 800 seconds for Pro plan)
+// Lyrics transcription is moderate ML processing
+export const maxDuration = 300; // 5 minutes for lyrics processing
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body

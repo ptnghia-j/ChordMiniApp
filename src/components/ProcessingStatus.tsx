@@ -130,7 +130,7 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                   <h4 className="text-sm font-medium text-gray-700">Analysis Results</h4>
                   <div className="flex space-x-2">
                     {fromCache && (
-                      <span className="text-xs px-3 py-1 bg-blue-100 text-blue-800 rounded-full flex items-center">
+                      <span className="text-xs px-2 py-1 border-2 border-blue-400 text-blue-700 dark:text-blue-300 dark:border-blue-500 rounded-md flex items-center bg-blue-50 dark:bg-blue-900/20">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                         </svg>
@@ -138,7 +138,7 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                       </span>
                     )}
                     {fromFirestoreCache && (
-                      <span className="text-xs px-3 py-1 bg-green-100 text-green-800 rounded-full flex items-center">
+                      <span className="text-xs px-2 py-1 border-2 border-green-400 text-green-700 dark:text-green-300 dark:border-green-500 rounded-md flex items-center bg-green-50 dark:bg-green-900/20">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                         </svg>

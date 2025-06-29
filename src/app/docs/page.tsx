@@ -1,13 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
 import {
-  FiLock,
   FiActivity,
   FiCpu,
   FiLink,
   FiFileText,
-  FiTool,
   FiCheckCircle,
   FiExternalLink,
   FiCode,
@@ -17,6 +16,51 @@ import {
 } from 'react-icons/fi';
 
 export default function DocsPage() {
+  // Track which section is currently visible to highlight the sidebar navigation
+  const [activeSection, setActiveSection] = useState<string>('welcome');
+
+  useEffect(() => {
+    const sectionIds = [
+      'welcome',
+      'getting-started',
+      'authentication',
+      'rate-limits',
+      'models',
+      'endpoints',
+      'examples',
+      'sample-responses',
+      'troubleshooting',
+      'status'
+    ];
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      {
+        rootMargin: '-50% 0px -50% 0px'
+      }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const navItemClasses = (id: string) =>
+    `flex items-center gap-2 text-sm py-2 px-3 rounded-md transition-colors ${
+      activeSection === id
+        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold'
+        : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+    }`;
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       // Could add a toast notification here
@@ -29,51 +73,6 @@ export default function DocsPage() {
     <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       <Navigation />
 
-      {/* Mintlify-style Header */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-8">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <FiCode className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                    ChordMini API
-                  </h1>
-                  <p className="text-lg text-gray-600 dark:text-gray-400 mt-1">
-                    Powerful Audio Analysis API
-                  </p>
-                </div>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-                Advanced machine learning models for beat detection, chord recognition, and lyrics fetching.
-                Get started with our comprehensive API documentation and examples.
-              </p>
-            </div>
-            
-            {/* Quick Actions */}
-            <div className="flex flex-wrap justify-center gap-3 mt-6">
-              <a
-                href="#getting-started"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                <FiZap className="w-4 h-4" />
-                Get Started
-              </a>
-              <a
-                href="#endpoints"
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-              >
-                <FiLink className="w-4 h-4" />
-                API Reference
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content Layout */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex gap-8">
@@ -81,21 +80,29 @@ export default function DocsPage() {
           <div className="hidden lg:block w-64 flex-shrink-0">
             <div className="sticky top-8 py-8">
               <nav className="space-y-1">
+                {/* Overview / Welcome */}
+                <div className="pb-4">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                    Welcome
+                  </h3>
+                  <div className="space-y-1">
+                    <a href="#welcome" className={navItemClasses('welcome')}>
+                      Overview
+                    </a>
+                  </div>
+                </div>
                 <div className="pb-4">
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                     Getting Started
                   </h3>
                   <div className="space-y-1">
-                    <a href="#getting-started" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiZap className="w-4 h-4" />
+                    <a href="#getting-started" className={navItemClasses('getting-started')}>
                       Quick Start
                     </a>
-                    <a href="#authentication" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiLock className="w-4 h-4" />
+                    <a href="#authentication" className={navItemClasses('authentication')}>
                       Authentication
                     </a>
-                    <a href="#rate-limits" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiActivity className="w-4 h-4" />
+                    <a href="#rate-limits" className={navItemClasses('rate-limits')}>
                       Rate Limits
                     </a>
                   </div>
@@ -106,20 +113,16 @@ export default function DocsPage() {
                     API Reference
                   </h3>
                   <div className="space-y-1">
-                    <a href="#models" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiCpu className="w-4 h-4" />
+                    <a href="#models" className={navItemClasses('models')}>
                       Models
                     </a>
-                    <a href="#endpoints" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiLink className="w-4 h-4" />
+                    <a href="#endpoints" className={navItemClasses('endpoints')}>
                       Endpoints
                     </a>
-                    <a href="#examples" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiCode className="w-4 h-4" />
+                    <a href="#examples" className={navItemClasses('examples')}>
                       Examples
                     </a>
-                    <a href="#sample-responses" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiFileText className="w-4 h-4" />
+                    <a href="#sample-responses" className={navItemClasses('sample-responses')}>
                       Responses
                     </a>
                   </div>
@@ -130,12 +133,10 @@ export default function DocsPage() {
                     Support
                   </h3>
                   <div className="space-y-1">
-                    <a href="#troubleshooting" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiTool className="w-4 h-4" />
+                    <a href="#troubleshooting" className={navItemClasses('troubleshooting')}>
                       Troubleshooting
                     </a>
-                    <a href="#status" className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <FiActivity className="w-4 h-4" />
+                    <a href="#status" className={navItemClasses('status')}>
                       Status
                     </a>
                   </div>
@@ -147,12 +148,43 @@ export default function DocsPage() {
           {/* Main Content Area */}
           <div className="flex-1 min-w-0 py-8">
             <div className="max-w-4xl space-y-12">
+              {/* Welcome / Overview */}
+              <section id="welcome" className="scroll-mt-8">
+                <div className="text-center space-y-6">
+                  <div className="inline-flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <FiCode className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome to ChordMini</h2>
+                  </div>
+                  <p className="text-lg text-gray-600 dark:text-gray-400">
+                    Advanced machine learning models for beat detection, chord recognition, and lyrics fetching.
+                    Get started with our comprehensive API documentation and examples.
+                  </p>
+
+                  {/* Quick Actions */}
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <a
+                      href="#getting-started"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      <FiZap className="w-4 h-4" />
+                      Get Started
+                    </a>
+                    <a
+                      href="#endpoints"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                    >
+                      <FiLink className="w-4 h-4" />
+                      API Reference
+                    </a>
+                  </div>
+                </div>
+              </section>
+
               {/* Getting Started */}
               <section id="getting-started" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <FiZap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Getting Started</h2>
                 </div>
                 
@@ -164,7 +196,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* Feature Cards */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
                   <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-300 dark:hover:border-blue-600 transition-colors">
                     <div className="flex items-center gap-3 mb-2">
                       <FiActivity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -191,7 +223,7 @@ export default function DocsPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-white">Lyrics Fetching</h3>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Retrieve lyrics from Genius.com and LRClib
+                      Retrieve synchronized lyrics from LRClib database
                     </p>
                   </div>
                   
@@ -214,7 +246,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
                       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                         <code className="text-sm text-gray-800 dark:text-gray-200">
-                          https://chordmini-backend-full-pluj3yargq-uc.a.run.app
+                          https://chordmini-backend-full-191567167632.us-central1.run.app
                         </code>
                       </div>
                     </div>
@@ -231,10 +263,7 @@ export default function DocsPage() {
 
               {/* Authentication */}
               <section id="authentication" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                    <FiLock className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Authentication</h2>
                 </div>
 
@@ -310,10 +339,7 @@ export default function DocsPage() {
 
               {/* Rate Limits */}
               <section id="rate-limits" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                    <FiActivity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Rate Limits</h2>
                 </div>
 
@@ -378,7 +404,7 @@ export default function DocsPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">5/minute</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Heavy processing, resource intensive</td>
                         </tr>
                         <tr>
@@ -386,24 +412,17 @@ export default function DocsPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">5/minute</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Heavy processing, ML inference</td>
                         </tr>
-                        <tr>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/genius-lyrics</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">15/minute</td>
-                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">External API calls, moderate limit</td>
-                        </tr>
+
                         <tr>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/lrclib-lyrics</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">15/minute</td>
-                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">External API calls, moderate limit</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
+                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Synchronized lyrics with timestamps</td>
                         </tr>
                       </tbody>
                     </table>
@@ -416,10 +435,7 @@ export default function DocsPage() {
 
               {/* Models */}
               <section id="models" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <FiCpu className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Available Models</h2>
                 </div>
 
@@ -515,10 +531,7 @@ export default function DocsPage() {
 
               {/* API Endpoints */}
               <section id="endpoints" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <FiLink className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">API Endpoints</h2>
                 </div>
 
@@ -526,7 +539,7 @@ export default function DocsPage() {
                   <p className="text-gray-600 dark:text-gray-400">
                     All endpoints are available at the base URL:
                     <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm ml-1">
-                      https://chordmini-backend-full-pluj3yargq-uc.a.run.app
+                      https://chordmini-backend-full-191567167632.us-central1.run.app
                     </code>
                   </p>
                 </div>
@@ -566,14 +579,14 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
-                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/genius-lyrics</code>
+                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/lrclib-lyrics</code>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      Retrieves lyrics and metadata from Genius.com.
+                      Retrieves synchronized lyrics with timestamps from LRClib database.
                     </p>
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Parameters:</strong> artist (string), title (string)
+                        <strong>Parameters:</strong> artist (string), title (string), duration (number, optional)
                       </p>
                     </div>
                   </div>
@@ -597,10 +610,7 @@ export default function DocsPage() {
 
               {/* Examples */}
               <section id="examples" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                    <FiCode className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Usage Examples</h2>
                 </div>
 
@@ -618,7 +628,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Beat Detection</h4>
                       <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
                         <button
-                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/detect-beats" \\
+                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`)}
                           className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
@@ -626,8 +636,8 @@ export default function DocsPage() {
                         >
                           <FiCopy className="w-4 h-4" />
                         </button>
-                        <pre className="text-green-400 text-sm pr-12">
-{`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/detect-beats" \\
+                        <pre className="text-blue-300 text-sm pr-12">
+{`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`}
                         </pre>
@@ -638,7 +648,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Chord Recognition</h4>
                       <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
                         <button
-                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords" \\
+                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`)}
                           className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
@@ -646,8 +656,8 @@ export default function DocsPage() {
                         >
                           <FiCopy className="w-4 h-4" />
                         </button>
-                        <pre className="text-green-400 text-sm pr-12">
-{`curl -X POST "https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords" \\
+                        <pre className="text-blue-300 text-sm pr-12">
+{`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`}
                         </pre>
@@ -666,7 +676,7 @@ formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
 const response = await fetch(
-  'https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords',
+  'https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords',
   {
     method: 'POST',
     body: formData
@@ -680,13 +690,13 @@ console.log(result);`)}
                     >
                       <FiCopy className="w-4 h-4" />
                     </button>
-                    <pre className="text-green-400 text-sm pr-12">
+                    <pre className="text-blue-300 text-sm pr-12">
 {`const formData = new FormData();
 formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
 const response = await fetch(
-  'https://chordmini-backend-full-pluj3yargq-uc.a.run.app/api/recognize-chords',
+  'https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords',
   {
     method: 'POST',
     body: formData
@@ -702,10 +712,7 @@ console.log(result);`}
 
               {/* Troubleshooting */}
               <section id="troubleshooting" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                    <FiTool className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Troubleshooting</h2>
                 </div>
 
@@ -755,10 +762,7 @@ console.log(result);`}
 
               {/* Status Page */}
               <section id="status" className="scroll-mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                    <FiActivity className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
+                <div className="mb-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">API Status</h2>
                 </div>
 

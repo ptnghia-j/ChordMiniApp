@@ -31,6 +31,8 @@ const containsChineseCharacters = (text: string): boolean => {
 
 
 
+
+
 // Define types for the component props and data structure
 interface ChordMarker {
   time: number;
@@ -77,9 +79,9 @@ interface LeadSheetProps {
 }
 
 /**
- * LeadSheetDisplay Component
+ * LeadSheetDisplay Component - Memoized for performance
  */
-const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
+const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   lyrics,
   currentTime,
   fontSize,
@@ -1147,6 +1149,8 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = ({
       </div>
     </div>
   );
-};
+});
+
+LeadSheetDisplay.displayName = 'LeadSheetDisplay';
 
 export default LeadSheetDisplay;

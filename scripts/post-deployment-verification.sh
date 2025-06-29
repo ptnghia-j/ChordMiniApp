@@ -149,7 +149,7 @@ echo ""
 echo "4. 🎵 Backend Service Communication"
 echo "==================================="
 
-BACKEND_URL="https://chordmini-backend-full-pluj3yargq-uc.a.run.app"
+BACKEND_URL="https://chordmini-backend-full-191567167632.us-central1.run.app"
 
 # Test backend health (with extended timeout for cold start)
 echo -n "Testing backend service health... "

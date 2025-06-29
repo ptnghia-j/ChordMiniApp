@@ -47,6 +47,7 @@ export default function RecentVideos() {
     fromCache: boolean;
     fileSize: number;
     streamExpiresAt?: number;
+    title?: string; // Add title from audio files
   }
 
   // Helper function to batch query audio files for video IDs with smart caching
@@ -75,26 +76,27 @@ export default function RecentVideos() {
               isStreamUrl: audioData.isStreamUrl || false,
               fromCache: true,
               fileSize: audioData.fileSize || 0,
-              streamExpiresAt: audioData.streamExpiresAt
+              streamExpiresAt: audioData.streamExpiresAt,
+              title: audioData.title || audioData.actualFilename || null // Include title from audio files
             };
           }
           return null;
-        } catch (error) {
+        } catch {
           // Error handling is done by smart cache
           return null;
         }
       },
       // Check if audio metadata is complete
-      (data: any) => {
-        return !!(data.audioUrl && data.audioFilename);
+      (data: Record<string, unknown>) => {
+        return !!(data.audioUrl && (data.audioFilename || data.title));
       }
     );
 
     // Convert to the expected format
     const resultMap = new Map<string, AudioFileMetadata>();
     for (const [videoId, data] of audioFilesMap.entries()) {
-      if (data) {
-        resultMap.set(videoId, data as AudioFileMetadata);
+      if (data && typeof data === 'object') {
+        resultMap.set(videoId, data as unknown as AudioFileMetadata);
       }
     }
 
@@ -190,6 +192,12 @@ export default function RecentVideos() {
           video.audioUrl = audioData.audioUrl;
           video.isStreamUrl = audioData.isStreamUrl;
           video.fromCache = audioData.fromCache;
+
+          // Update title with the proper song title from audio files if available
+          if (audioData.title && audioData.title !== `Video ${videoId}`) {
+            console.log(`🎵 Updated title for ${videoId}: "${video.title}" → "${audioData.title}"`);
+            video.title = audioData.title;
+          }
         }
       });
 
@@ -361,8 +369,12 @@ export default function RecentVideos() {
               className="block group hover:opacity-90 transition-opacity"
             >
               <div className="flex gap-3">
-                {/* Thumbnail */}
-                <div className="relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-colors duration-300">
+                {/* Thumbnail with cache status border */}
+                <div className={`relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 ${
+                  video.fromCache
+                    ? 'border-2 border-green-400 dark:border-green-500 shadow-green-200 dark:shadow-green-900/30'
+                    : 'border border-gray-200 dark:border-gray-500'
+                }`}>
                   <Image
                     src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
                     alt={video.title || 'Video thumbnail'}
@@ -381,6 +393,10 @@ export default function RecentVideos() {
                     <div className="absolute bottom-0.5 right-0.5 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">
                       {formatDuration(video.duration)}
                     </div>
+                  )}
+                  {/* Cache status indicator */}
+                  {video.fromCache && (
+                    <div className="absolute top-1 left-1 w-2 h-2 bg-green-400 rounded-full border border-white shadow-sm" title="Cached"></div>
                   )}
                 </div>
 
@@ -404,11 +420,7 @@ export default function RecentVideos() {
                             <span title={video.audioFilename || 'Unknown filename'}>
                               {formatAudioFilename(video.audioFilename)}
                             </span>
-                            {video.fromCache && (
-                              <span className="text-green-500 ml-1" title="Loaded from cache">
-                                ⚡
-                              </span>
-                            )}
+
                           </>
                         );
                       })()}

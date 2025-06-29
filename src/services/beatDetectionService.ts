@@ -1,6 +1,24 @@
 // Beat detection service to communicate with the Python backend
 import { config } from '@/config/env';
-import { apiService } from '@/services/apiService';
+import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { vercelBlobUploadService } from './vercelBlobUploadService';
+
+// Interface for Python backend beat detection response
+export interface BeatDetectionBackendResponse {
+  success: boolean;
+  beats: number[];
+  downbeats?: number[];
+  bpm?: number;
+  BPM?: number; // Some responses use uppercase
+  total_beats?: number;
+  duration?: number;
+  time_signature?: number;
+  model?: string;
+  model_used?: string;
+  error?: string;
+}
+
 
 // Base URL for the Python API (full backend with all features)
 const API_BASE_URL = config.pythonApiUrl;
@@ -68,7 +86,8 @@ export interface ModelInfoResult {
  */
 export async function getModelInfo(): Promise<ModelInfoResult> {
   try {
-    const response = await fetch(`${API_BASE_URL}/`);
+    // Use the frontend API proxy to avoid CORS issues
+    const response = await fetch('/api/model-info');
 
     if (response.ok) {
       const data = await response.json();
@@ -135,27 +154,50 @@ export async function detectBeatsWithRateLimit(
       throw new Error('Audio file is too large for beat detection (>100MB)');
     }
 
-    // Use the enhanced API service with rate limiting
-    const response = await apiService.detectBeats(audioFile, {
-      detector,
-      force: detector === 'beat-transformer'
+    // Log audio duration for debugging before sending to ML service
+    try {
+      const duration = await getAudioDurationFromFile(audioFile);
+      console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
+    } catch (durationError) {
+      console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
+    }
+
+    // Use the frontend API route for proper timeout handling
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    formData.append('detector', detector);
+    if (detector === 'beat-transformer') {
+      formData.append('force', 'true');
+    }
+
+    // Create a safe timeout signal that works across environments
+    const timeoutValue = 600000; // 10 minutes timeout
+    console.log(`🔍 Beat detection timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
+
+    const abortSignal = createSafeTimeoutSignal(timeoutValue);
+
+    const response = await fetch('/api/detect-beats', {
+      method: 'POST',
+      body: formData,
+      signal: abortSignal,
     });
 
-    if (!response.success) {
-      if (response.rateLimited) {
-        throw new Error(`Rate limited: ${response.error}`);
-      }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `Beat detection failed: ${response.status}`);
+    }
 
+    const data = await response.json();
+
+    // Validate response structure
+    if (!data || !data.success) {
       // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-      if (detector === 'beat-transformer' && response.error?.includes('500')) {
-
+      if (detector === 'beat-transformer' && data.error?.includes('500')) {
         return detectBeatsWithRateLimit(audioFile, 'madmom');
       }
 
-      throw new Error(response.error || 'Beat detection failed');
+      throw new Error(data.error || 'Beat detection failed');
     }
-
-    const data = response.data as Record<string, unknown>;
 
     // Validate response structure
     if (!data || !Array.isArray(data.beats)) {
@@ -200,6 +242,43 @@ export async function detectBeatsFromFile(
       throw new Error('Invalid audio file for beat detection');
     }
 
+    // Check if file should use Vercel Blob upload (> 4.0MB)
+    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+
+      try {
+        // Use Vercel Blob upload for large files
+        const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, detector, onProgress);
+
+        if (blobResult.success) {
+          console.log(`✅ Vercel Blob beat detection completed successfully`);
+          // The blob result data is already the Python backend response, so we can return it directly
+          const backendResponse = blobResult.data as BeatDetectionBackendResponse;
+          console.log(`🔍 Beat detection backend response structure:`, {
+            hasSuccess: 'success' in backendResponse,
+            hasBeats: 'beats' in backendResponse,
+            beatsIsArray: Array.isArray(backendResponse.beats),
+            beatsLength: backendResponse.beats?.length || 0,
+            modelUsed: backendResponse.model || backendResponse.model_used
+          });
+
+          // Validate that we have a beats array
+          if (!backendResponse.beats || !Array.isArray(backendResponse.beats)) {
+            throw new Error(`Invalid beat detection response: beats array not found or not an array`);
+          }
+
+          return backendResponse as BeatDetectionResult;
+        } else {
+          // If blob upload fails, fall back to direct processing with warning
+          console.warn(`⚠️ Vercel Blob upload failed: ${blobResult.error}, falling back to direct processing`);
+          console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+        }
+      } catch (blobError) {
+        console.warn(`⚠️ Vercel Blob upload error: ${blobError}, falling back to direct processing`);
+        console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+      }
+    }
+
     if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
       throw new Error('Audio file is too large for beat detection (>100MB)');
     }
@@ -228,6 +307,14 @@ export async function detectBeatsFromFile(
           // Will use the best available model on the server side
         }
       }
+    }
+
+    // Log audio duration for debugging before sending to ML service
+    try {
+      const duration = await getAudioDurationFromFile(audioFile);
+      console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
+    } catch (durationError) {
+      console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
     }
 
     const formData = new FormData();
@@ -314,23 +401,31 @@ export async function detectBeatsFromFile(
       });
     }
 
-    // Use the API service for consistent timeout and error handling
+    // Use the frontend API route for consistent timeout and error handling
     try {
-      const response = await apiService.detectBeats(audioFile, {
-        detector,
-        force: detector === 'beat-transformer'
-      });
-
-      if (!response.success) {
-        // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-        if (detector === 'beat-transformer' && !response.rateLimited) {
-
-          return detectBeatsFromFile(audioFile, 'madmom', onProgress);
-        }
-        throw new Error(response.error || 'Beat detection failed');
+      const formData = new FormData();
+      formData.append('file', audioFile);
+      formData.append('detector', detector);
+      if (detector === 'beat-transformer') {
+        formData.append('force', 'true');
       }
 
-      const data = response.data as BeatDetectionResult & Record<string, unknown>;
+      const response = await fetch('/api/detect-beats', {
+        method: 'POST',
+        body: formData,
+        signal: createSafeTimeoutSignal(600000), // 10 minutes timeout
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
+        if (detector === 'beat-transformer') {
+          return detectBeatsFromFile(audioFile, 'madmom', onProgress);
+        }
+        throw new Error(errorData.error || `Beat detection failed: ${response.status}`);
+      }
+
+      const data = await response.json();
 
 
 

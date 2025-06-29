@@ -22,7 +22,7 @@ interface AnalysisResults {
  */
 async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-pluj3yargq-uc.a.run.app'}/api/youtube/info`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app'}/api/youtube/info`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

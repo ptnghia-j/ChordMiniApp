@@ -5,7 +5,6 @@
  * chord generation, and synchronization between lyrics and chords.
  */
 
-import MusicAi from "@music.ai/sdk";
 import { CustomMusicAiClient } from "./customMusicAiClient";
 import { apiKeyStorage } from "./apiKeyStorageService";
 
@@ -128,8 +127,14 @@ class MusicAiService {
   private initialize = async (): Promise<void> => {
     if (!this.initialized) {
       try {
-        // First try to get user-provided API key
-        let apiKey = await apiKeyStorage.getApiKey('musicAi');
+        let apiKey: string | null = null;
+
+        // First try to get user-provided API key (only in browser environment)
+        try {
+          apiKey = await apiKeyStorage.getApiKey('musicAi');
+        } catch {
+          console.log('Could not access user API key (likely server-side), falling back to environment variable');
+        }
 
         // Fallback to environment variable if no user key is provided
         if (!apiKey) {
@@ -149,12 +154,54 @@ class MusicAiService {
           debug: false     // Disable debug mode for production
         };
 
-        // Initialize both the SDK and our custom client
-        this.musicAi = new MusicAi(sdkConfig) as unknown as MusicAiSDK;
-        this.customClient = new CustomMusicAiClient(sdkConfig);
+        // Initialize both the SDK and our custom client using dynamic import with fallback
+        try {
+          const MusicAiModule = await import("@music.ai/sdk");
+          const MusicAi = MusicAiModule.default || MusicAiModule;
+          this.musicAi = new MusicAi(sdkConfig) as unknown as MusicAiSDK;
+          this.customClient = new CustomMusicAiClient(sdkConfig);
 
-        console.log('Music.ai SDK and custom client initialized successfully');
-        this.initialized = true;
+          console.log('Music.ai SDK and custom client initialized successfully');
+          this.initialized = true;
+        } catch (importError) {
+          console.error('Failed to import Music.ai SDK, falling back to custom client only:', importError);
+
+          // Fallback: Use only the custom client if SDK import fails
+          try {
+            this.customClient = new CustomMusicAiClient(sdkConfig);
+            // Create a mock SDK object that delegates to custom client
+            this.musicAi = {
+              transcribe: async (audioUrl: string) => {
+                console.log('Using fallback transcription via custom client');
+                // Use the same logic as the main transcribeLyrics method but simplified
+                const workflowSlug = 'lyric-transcription-and-alignment';
+                const params: Record<string, string | number | boolean | object> = {
+                  audio: audioUrl,
+                  includeLyrics: true,
+                  transcribeLyrics: true,
+                  language: "en",
+                  model: "default",
+                  quality: "high"
+                };
+
+                const jobId = await this.customClient!.addJob(workflowSlug, params);
+                const job = await this.customClient!.waitForJobCompletion(jobId, 300000);
+
+                if (job.status === "SUCCEEDED" && job.result) {
+                  return job.result;
+                } else {
+                  throw new Error(`Transcription job failed: ${job.status}`);
+                }
+              }
+            } as unknown as MusicAiSDK;
+
+            console.log('Fallback to custom client successful');
+            this.initialized = true;
+          } catch (fallbackError) {
+            console.error('Both SDK and custom client initialization failed:', fallbackError);
+            throw new Error(`Music.ai service unavailable: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+          }
+        }
       } catch (error) {
         console.error('Failed to initialize Music.ai SDK:', error);
         throw error;

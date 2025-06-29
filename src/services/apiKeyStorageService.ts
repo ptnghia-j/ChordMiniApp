@@ -23,6 +23,23 @@ class ApiKeyStorageService {
   }
 
   /**
+   * Check if we're running in a browser environment
+   */
+  private isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+  }
+
+  /**
+   * Safe localStorage access that works in both client and server environments
+   */
+  private getLocalStorage(): Storage | null {
+    if (!this.isBrowser()) {
+      return null;
+    }
+    return localStorage;
+  }
+
+  /**
    * Generate or retrieve encryption key for API key storage
    */
   private async getEncryptionKey(): Promise<CryptoKey> {
@@ -30,14 +47,19 @@ class ApiKeyStorageService {
       return this.encryptionKey;
     }
 
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      throw new Error('localStorage not available - API key storage requires browser environment');
+    }
+
     // Check if we have a stored salt
-    let salt = localStorage.getItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT);
-    
+    let salt = storage.getItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT);
+
     if (!salt) {
       // Generate new salt
       const saltArray = crypto.getRandomValues(new Uint8Array(16));
       salt = Array.from(saltArray, byte => byte.toString(16).padStart(2, '0')).join('');
-      localStorage.setItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT, salt);
+      storage.setItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT, salt);
     }
 
     // Convert salt back to Uint8Array
@@ -120,20 +142,25 @@ class ApiKeyStorageService {
    * Store API key securely
    */
   public async storeApiKey(service: 'musicAi' | 'gemini', apiKey: string): Promise<void> {
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      throw new Error('localStorage not available - API key storage requires browser environment');
+    }
+
     try {
       const encryptedData = await this.encryptApiKey(apiKey);
-      const storageKey = service === 'musicAi' 
-        ? API_KEY_STORAGE_KEYS.MUSIC_AI 
+      const storageKey = service === 'musicAi'
+        ? API_KEY_STORAGE_KEYS.MUSIC_AI
         : API_KEY_STORAGE_KEYS.GEMINI;
-      
-      localStorage.setItem(storageKey, JSON.stringify(encryptedData));
-      
+
+      storage.setItem(storageKey, JSON.stringify(encryptedData));
+
       // Store metadata for quick access
-      localStorage.setItem(`${storageKey}_meta`, JSON.stringify({
+      storage.setItem(`${storageKey}_meta`, JSON.stringify({
         hasKey: true,
         storedAt: new Date().toISOString()
       }));
-      
+
       console.log(`API key for ${service} stored securely`);
     } catch (error) {
       console.error(`Failed to store API key for ${service}:`, error);
@@ -145,12 +172,18 @@ class ApiKeyStorageService {
    * Retrieve API key securely
    */
   public async getApiKey(service: 'musicAi' | 'gemini'): Promise<string | null> {
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      // In server environment, return null (will fallback to environment variables)
+      return null;
+    }
+
     try {
-      const storageKey = service === 'musicAi' 
-        ? API_KEY_STORAGE_KEYS.MUSIC_AI 
+      const storageKey = service === 'musicAi'
+        ? API_KEY_STORAGE_KEYS.MUSIC_AI
         : API_KEY_STORAGE_KEYS.GEMINI;
-      
-      const encryptedDataStr = localStorage.getItem(storageKey);
+
+      const encryptedDataStr = storage.getItem(storageKey);
       if (!encryptedDataStr) {
         return null;
       }
@@ -167,13 +200,19 @@ class ApiKeyStorageService {
    * Check if API key exists for service
    */
   public hasApiKey(service: 'musicAi' | 'gemini'): boolean {
-    const storageKey = service === 'musicAi' 
-      ? API_KEY_STORAGE_KEYS.MUSIC_AI 
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      // In server environment, return false (will fallback to environment variables)
+      return false;
+    }
+
+    const storageKey = service === 'musicAi'
+      ? API_KEY_STORAGE_KEYS.MUSIC_AI
       : API_KEY_STORAGE_KEYS.GEMINI;
-    
-    const metaData = localStorage.getItem(`${storageKey}_meta`);
+
+    const metaData = storage.getItem(`${storageKey}_meta`);
     if (!metaData) return false;
-    
+
     try {
       const meta = JSON.parse(metaData);
       return meta.hasKey === true;
@@ -186,13 +225,19 @@ class ApiKeyStorageService {
    * Remove API key
    */
   public removeApiKey(service: 'musicAi' | 'gemini'): void {
-    const storageKey = service === 'musicAi' 
-      ? API_KEY_STORAGE_KEYS.MUSIC_AI 
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      console.warn('localStorage not available - cannot remove API key');
+      return;
+    }
+
+    const storageKey = service === 'musicAi'
+      ? API_KEY_STORAGE_KEYS.MUSIC_AI
       : API_KEY_STORAGE_KEYS.GEMINI;
-    
-    localStorage.removeItem(storageKey);
-    localStorage.removeItem(`${storageKey}_meta`);
-    
+
+    storage.removeItem(storageKey);
+    storage.removeItem(`${storageKey}_meta`);
+
     console.log(`API key for ${service} removed`);
   }
 
@@ -217,11 +262,17 @@ class ApiKeyStorageService {
    * Clear all stored API keys
    */
   public clearAllApiKeys(): void {
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      console.warn('localStorage not available - cannot clear API keys');
+      return;
+    }
+
     this.removeApiKey('musicAi');
     this.removeApiKey('gemini');
-    localStorage.removeItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT);
+    storage.removeItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT);
     this.encryptionKey = null;
-    
+
     console.log('All API keys cleared');
   }
 
@@ -229,7 +280,8 @@ class ApiKeyStorageService {
    * Check if Web Crypto API is available
    */
   public isEncryptionSupported(): boolean {
-    return typeof crypto !== 'undefined' && 
+    return this.isBrowser() &&
+           typeof crypto !== 'undefined' &&
            typeof crypto.subtle !== 'undefined' &&
            typeof crypto.getRandomValues !== 'undefined';
   }

@@ -7,7 +7,7 @@
 export const AUDIO_PROCESSING_CONFIG = {
   // General settings
   sampleRate: 44100, // Sample rate in Hz
-  
+
   // Chord recognition settings
   chordRecognition: {
     windowSize: 4096, // FFT window size
@@ -15,7 +15,7 @@ export const AUDIO_PROCESSING_CONFIG = {
     minFrequency: 60, // Minimum frequency to analyze (Hz)
     maxFrequency: 1000, // Maximum frequency to analyze (Hz)
   },
-  
+
   // Beat detection settings
   beatDetection: {
     windowSize: 1024,
@@ -24,12 +24,36 @@ export const AUDIO_PROCESSING_CONFIG = {
     minTempo: 60, // Minimum tempo to detect (BPM)
     maxTempo: 200, // Maximum tempo to detect (BPM)
   },
-  
+
   // Audio extraction settings
   extraction: {
     quality: 'highestaudio', // Quality of audio to extract from YouTube
     format: 'mp3', // Format to save audio in
     bitrate: '128k', // Bitrate for audio encoding
+  },
+
+  // Improved compression settings for upload audio files
+  compression: {
+    // File size thresholds (in bytes)
+    optimizedCompressionThreshold: 20 * 1024 * 1024, // 20MB
+    ultraCompressionThreshold: 45 * 1024 * 1024, // 45MB
+
+    // Quality settings for different compression levels
+    standard: {
+      sampleRate: 44100, // Standard quality - no compression
+      bitDepth: 16,
+      channels: 2
+    },
+    optimized: {
+      sampleRate: 22050, // Optimized compression for files >=20MB
+      bitDepth: 16,
+      channels: 1 // Mono to reduce size
+    },
+    ultra: {
+      sampleRate: 12000, // Ultra-compression for files >45MB
+      bitDepth: 16,
+      channels: 1 // Mono to reduce size
+    }
   }
 };
 

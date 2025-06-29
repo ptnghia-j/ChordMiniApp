@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ApiKeySettingsProps, API_KEY_HELP_URLS } from '@/types/apiKeyTypes';
 import ApiKeyModal from './ApiKeyModal';
+import { HiLightBulb } from 'react-icons/hi2';
+import { HiGift } from 'react-icons/hi2';
 
 const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   onApiKeyUpdate,
@@ -159,8 +161,9 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             </p>
             <div className={`text-xs mb-2 p-2 rounded-md ${
               theme === 'dark' ? 'bg-green-900/20 text-green-300' : 'bg-green-50 text-green-700'
-            }`}>
-              💡 <strong>Free to start:</strong> Music.ai provides $20 free credit when you sign up for a new account
+            } flex items-start gap-2`}>
+              <HiLightBulb className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span><strong>Free to start:</strong> Music.ai provides $20 free credit when you sign up for a new account</span>
             </div>
             <p className={`text-sm ${
               apiKeyStatus.musicAi.isValid ? 'text-green-600' :
@@ -239,8 +242,9 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             </p>
             <div className={`text-xs mb-2 p-2 rounded-md ${
               theme === 'dark' ? 'bg-blue-900/20 text-blue-300' : 'bg-blue-50 text-blue-700'
-            }`}>
-              🆓 <strong>Free tier available:</strong> Gemini API includes generous free usage limits for personal projects
+            } flex items-start gap-2`}>
+              <HiGift className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span><strong>Free tier available:</strong> Gemini API includes generous free usage limits for personal projects</span>
             </div>
             <p className={`text-sm ${
               apiKeyStatus.gemini.isValid ? 'text-green-600' :

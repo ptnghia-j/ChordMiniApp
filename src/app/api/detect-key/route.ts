@@ -96,38 +96,38 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
     };
 
     // Debug: Log the exact data structure being saved
-    console.log('🔍 KEY DETECTION CACHE DATA:', {
-      keys: Object.keys(cacheData),
-      primaryKey: cacheData.primaryKey,
-      modulation: cacheData.modulation,
-      hasOriginalChords: !!cacheData.originalChords,
-      hasCorrectedChords: !!cacheData.correctedChords,
-      hasCorrections: !!cacheData.corrections,
-      hasSequenceCorrections: !!cacheData.sequenceCorrections,
-      hasRawResponse: !!cacheData.rawResponse,
-      hasCacheKey: !!cacheData.cacheKey,
-      hasTimestamp: !!cacheData.timestamp,
-      dataSize: Object.keys(cacheData).length,
-      primaryKeyType: typeof cacheData.primaryKey,
-      primaryKeyLength: cacheData.primaryKey?.length || 0,
-      // Deep inspection of sequenceCorrections
-      sequenceCorrectionsStructure: cacheData.sequenceCorrections ? {
-        hasOriginalSequence: !!cacheData.sequenceCorrections.originalSequence,
-        hasCorrectSequence: !!cacheData.sequenceCorrections.correctedSequence,
-        hasKeyAnalysis: !!cacheData.sequenceCorrections.keyAnalysis,
-        originalSequenceLength: cacheData.sequenceCorrections.originalSequence?.length || 0,
-        correctedSequenceLength: cacheData.sequenceCorrections.correctedSequence?.length || 0,
-        keyAnalysisStructure: cacheData.sequenceCorrections.keyAnalysis ? {
-          hasSections: !!cacheData.sequenceCorrections.keyAnalysis.sections,
-          hasModulations: !!cacheData.sequenceCorrections.keyAnalysis.modulations,
-          sectionsLength: cacheData.sequenceCorrections.keyAnalysis.sections?.length || 0,
-          modulationsLength: cacheData.sequenceCorrections.keyAnalysis.modulations?.length || 0
-        } : null
-      } : null
-    });
+    // console.log('🔍 KEY DETECTION CACHE DATA:', {
+    //   keys: Object.keys(cacheData),
+    //   primaryKey: cacheData.primaryKey,
+    //   modulation: cacheData.modulation,
+    //   hasOriginalChords: !!cacheData.originalChords,
+    //   hasCorrectedChords: !!cacheData.correctedChords,
+    //   hasCorrections: !!cacheData.corrections,
+    //   hasSequenceCorrections: !!cacheData.sequenceCorrections,
+    //   hasRawResponse: !!cacheData.rawResponse,
+    //   hasCacheKey: !!cacheData.cacheKey,
+    //   hasTimestamp: !!cacheData.timestamp,
+    //   dataSize: Object.keys(cacheData).length,
+    //   primaryKeyType: typeof cacheData.primaryKey,
+    //   primaryKeyLength: cacheData.primaryKey?.length || 0,
+    //   // Deep inspection of sequenceCorrections
+    //   sequenceCorrectionsStructure: cacheData.sequenceCorrections ? {
+    //     hasOriginalSequence: !!cacheData.sequenceCorrections.originalSequence,
+    //     hasCorrectSequence: !!cacheData.sequenceCorrections.correctedSequence,
+    //     hasKeyAnalysis: !!cacheData.sequenceCorrections.keyAnalysis,
+    //     originalSequenceLength: cacheData.sequenceCorrections.originalSequence?.length || 0,
+    //     correctedSequenceLength: cacheData.sequenceCorrections.correctedSequence?.length || 0,
+    //     keyAnalysisStructure: cacheData.sequenceCorrections.keyAnalysis ? {
+    //       hasSections: !!cacheData.sequenceCorrections.keyAnalysis.sections,
+    //       hasModulations: !!cacheData.sequenceCorrections.keyAnalysis.modulations,
+    //       sectionsLength: cacheData.sequenceCorrections.keyAnalysis.sections?.length || 0,
+    //       modulationsLength: cacheData.sequenceCorrections.keyAnalysis.modulations?.length || 0
+    //     } : null
+    //   } : null
+    // });
 
     // Also log the full data structure for debugging
-    console.log('🔍 FULL CACHE DATA STRUCTURE:', JSON.stringify(cacheData, null, 2));
+    // console.log('🔍 FULL CACHE DATA STRUCTURE:', JSON.stringify(cacheData, null, 2));
 
     await setDoc(docRef, cacheData);
     console.log('✅ Key detection saved to cache successfully');
@@ -290,8 +290,6 @@ Do not include any explanations, analysis, or additional text. Just give me the 
 
     // Extract and clean the response text
     const text = response.text?.trim() || '';
-    console.log('🔍 GEMINI API RAW RESPONSE:', text);
-    console.log('🔍 INCLUDE ENHARMONIC CORRECTION:', includeEnharmonicCorrection);
 
     let result: KeyDetectionResult;
 
@@ -307,12 +305,12 @@ Do not include any explanations, analysis, or additional text. Just give me the 
         }
 
         const jsonResponse = JSON.parse(cleanedText);
-        console.log('🔍 PARSED JSON RESPONSE:', {
-          hasSequenceCorrections: !!jsonResponse.sequenceCorrections,
-          hasCorrections: !!jsonResponse.corrections,
-          primaryKey: jsonResponse.primaryKey,
-          sequenceCorrectionsLength: jsonResponse.sequenceCorrections?.correctedSequence?.length || 0
-        });
+        // console.log('🔍 PARSED JSON RESPONSE:', {
+        //   hasSequenceCorrections: !!jsonResponse.sequenceCorrections,
+        //   hasCorrections: !!jsonResponse.corrections,
+        //   primaryKey: jsonResponse.primaryKey,
+        //   sequenceCorrectionsLength: jsonResponse.sequenceCorrections?.correctedSequence?.length || 0
+        // });
 
         // Handle both new sequence-based format and legacy format
         if (jsonResponse.sequenceCorrections) {

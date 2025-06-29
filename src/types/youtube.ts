@@ -16,6 +16,5 @@ export interface YouTubeSearchResult {
   thumbnail: string;
   channel: string;
   duration_string?: string;
-  view_count?: number;
   upload_date?: string;
 }
