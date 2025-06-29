@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { preloadFirebase } from '@/lib/firebase-lazy';
+import { preloadFirebase } from '../lib/firebase-lazy';
 
 /**
  * Client component that preloads Firebase when needed
