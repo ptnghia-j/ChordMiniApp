@@ -13,7 +13,7 @@ module.exports = {
       // Exclude unused modules
       config.plugins.push(
         new webpack.IgnorePlugin({
-          resourceRegExp: /^./locale$/,
+          resourceRegExp: /^\.\/locale$/,
           contextRegExp: /moment$/,
         }),
         new webpack.IgnorePlugin({
