@@ -134,3 +134,33 @@ export const loadOnDemand = {
     loadFirebaseStorage()
   ])
 };
+
+// Advanced dynamic import optimizations
+export const preloadCriticalChunks = () => {
+  if (typeof window !== 'undefined') {
+    // Preload critical chunks during idle time
+    requestIdleCallback(() => {
+      loadFirebaseService();
+      loadChartJS();
+    });
+  }
+};
+
+// Optimized Firebase service loading
+export const loadFirebaseService = () => import(
+  /* webpackChunkName: "firebase-service" */
+  /* webpackPreload: true */
+  '@/lib/firebase-lazy'
+);
+
+// Optimized Chart.js loading with smaller chunks
+export const loadChartJSCore = () => import(
+  /* webpackChunkName: "chartjs-core" */
+  'chart.js/auto'
+);
+
+// Chart.js plugins - only load if needed
+export const loadChartJSPlugins = () => import(
+  /* webpackChunkName: "chartjs-plugins" */
+  'chart.js/helpers'
+);

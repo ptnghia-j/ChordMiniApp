@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const videoId = searchParams.get('videoId') || 'H5BhwFlLON0';
 
-    // console.log(`🔍 Verifying synchronized chords for video: ${videoId}`);
+    // // console.log(`🔍 Verifying synchronized chords for video: ${videoId}`);
 
     // Get fresh data from Firestore
     const transcriptions = await getVideoTranscriptions(videoId);

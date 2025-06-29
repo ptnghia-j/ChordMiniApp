@@ -111,7 +111,7 @@ async function performYouTubeSearch(query: string, limit: number = 10): Promise<
     // Transform youtube-search-api results to match expected format
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = searchResults.items.map((item: any) => {
-      // console.log(`🔍 Search result: ${item.title}`);
+      // // console.log(`🔍 Search result: ${item.title}`);
 
       // Extract channel name from various possible fields
       const channelName = item.channelTitle ||

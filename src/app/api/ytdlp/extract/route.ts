@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // console.log(`🔍 Extracting video info with yt-dlp: ${url}`);
+    // // console.log(`🔍 Extracting video info with yt-dlp: ${url}`);
 
     // Extract video information using yt-dlp
     const videoInfo = await extractVideoInfo(url);

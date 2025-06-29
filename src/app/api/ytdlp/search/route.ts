@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // console.log(`🔍 Searching YouTube with yt-dlp: "${query}" (limit: ${limit})`);
+    // // console.log(`🔍 Searching YouTube with yt-dlp: "${query}" (limit: ${limit})`);
 
     // Search using yt-dlp
     const searchResults = await searchWithYtDlp(query.trim(), Math.min(limit, 20));
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // console.log(`🔍 Searching YouTube with yt-dlp: "${query}" (limit: ${limit})`);
+    // // console.log(`🔍 Searching YouTube with yt-dlp: "${query}" (limit: ${limit})`);
 
     // Search using yt-dlp
     const searchResults = await searchWithYtDlp(query, limit);

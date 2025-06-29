@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 600000; // 10 minutes timeout to match backend
-    // console.log(`🔍 API route timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
+    // // console.log(`🔍 API route timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 

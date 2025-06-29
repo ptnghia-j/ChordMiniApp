@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const videoId = searchParams.get('videoId') || 'H5BhwFlLON0';
 
-    // console.log(`🔍 Debug: Investigating Firestore data for video: ${videoId}`);
+    // // console.log(`🔍 Debug: Investigating Firestore data for video: ${videoId}`);
 
     // Get all transcriptions for this video
     const transcriptions = await getVideoTranscriptions(videoId);

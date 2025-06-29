@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 800000; // 13+ minutes timeout to match backend
-    // console.log(`🔍 Sending to Python backend: ${backendUrl}/api/recognize-chords`);
+    // // console.log(`🔍 Sending to Python backend: ${backendUrl}/api/recognize-chords`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
