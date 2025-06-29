@@ -1,0 +1,77 @@
+{
+  "importReplacements": {
+    "framer-motion": {
+      "replacement": "CSS animations",
+      "imports": [
+        "motion",
+        "AnimatePresence"
+      ],
+      "alternative": "Use CSS transitions and transforms"
+    },
+    "chart.js": {
+      "replacement": "Lightweight charting",
+      "imports": [
+        "Chart",
+        "registerables"
+      ],
+      "alternative": "Use CSS-based charts or SVG"
+    },
+    "lodash": {
+      "replacement": "Native JavaScript",
+      "imports": [
+        "debounce",
+        "throttle",
+        "memoize"
+      ],
+      "alternative": "Use native methods or small utilities"
+    },
+    "moment": {
+      "replacement": "date-fns",
+      "imports": [
+        "format",
+        "parse"
+      ],
+      "alternative": "Use native Date or date-fns"
+    }
+  },
+  "treeShaking": {
+    "firebase": {
+      "include": [
+        "app",
+        "firestore",
+        "auth",
+        "storage"
+      ],
+      "exclude": [
+        "analytics",
+        "performance",
+        "messaging",
+        "remote-config"
+      ]
+    },
+    "react": {
+      "include": [
+        "createElement",
+        "useState",
+        "useEffect",
+        "memo"
+      ],
+      "exclude": [
+        "Suspense",
+        "lazy",
+        "StrictMode"
+      ]
+    },
+    "@headlessui/react": {
+      "include": [
+        "Menu",
+        "Dialog"
+      ],
+      "exclude": [
+        "Listbox",
+        "Combobox",
+        "RadioGroup"
+      ]
+    }
+  }
+}
