@@ -93,7 +93,32 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await response.json();
-    console.log(`✅ Vercel Blob beat detection completed successfully`);
+
+    // CRITICAL DEBUG: Log the exact backend response to identify where beats are lost
+    console.log(`🥁 BLOB BACKEND RESPONSE DEBUG:`, {
+      success: result.success,
+      hasBeats: !!result.beats,
+      beatsType: typeof result.beats,
+      beatsIsArray: Array.isArray(result.beats),
+      beatsLength: result.beats?.length || 0,
+      firstFewBeats: result.beats?.slice(0, 5),
+      bpm: result.BPM || result.bpm,
+      duration: result.duration,
+      timeSignature: result.time_signature,
+      model: result.model_used || result.model
+    });
+
+    // Additional validation to catch the issue
+    if (result.success && result.beats && Array.isArray(result.beats)) {
+      if (result.beats.length === 1) {
+        console.error(`🚨 CRITICAL BUG (BLOB): Backend returned only 1 beat for what should be a longer audio file!`);
+        console.error(`🚨 Expected beats for duration ${result.duration}s at ${result.BPM || result.bpm || 120} BPM: ~${Math.round((result.duration || 0) * (result.BPM || result.bpm || 120) / 60)}`);
+        console.error(`🚨 Actual beats returned: ${result.beats.length}`);
+        console.error(`🚨 Beat data:`, result.beats);
+      } else {
+        console.log(`✅ Vercel Blob beat detection completed successfully - ${result.beats.length} beats detected`);
+      }
+    }
 
     return NextResponse.json(result);
 

@@ -9,11 +9,14 @@ interface OptimizedImageProps {
   width: number;
   height: number;
   priority?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
   className?: string;
   sizes?: string;
   quality?: number;
   placeholder?: 'blur' | 'empty';
   blurDataURL?: string;
+  style?: React.CSSProperties;
+  'data-lcp-image'?: boolean;
   onLoad?: () => void;
   onError?: () => void;
 }
@@ -31,11 +34,14 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   width,
   height,
   priority = false,
+  fetchPriority = 'auto',
   className = '',
   sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
   quality = 85,
   placeholder = 'blur',
   blurDataURL,
+  style,
+  'data-lcp-image': dataLcpImage,
   onLoad,
   onError
 }) => {
@@ -44,8 +50,17 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   const handleLoad = useCallback(() => {
     setIsLoaded(true);
+
+    // Optimize LCP for critical images
+    if (dataLcpImage && priority) {
+      // Mark LCP completion for performance monitoring
+      if (typeof window !== 'undefined' && 'performance' in window && 'mark' in performance) {
+        performance.mark('lcp-image-loaded');
+      }
+    }
+
     onLoad?.();
-  }, [onLoad]);
+  }, [onLoad, dataLcpImage, priority]);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -80,6 +95,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
         width={width}
         height={height}
         priority={priority}
+        fetchPriority={fetchPriority}
         quality={quality}
         sizes={sizes}
         placeholder={placeholder}
@@ -89,10 +105,12 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
         }`}
         onLoad={handleLoad}
         onError={handleError}
+        data-lcp-image={dataLcpImage}
         style={{
           objectFit: 'cover',
           width: '100%',
           height: 'auto',
+          ...style
         }}
       />
       

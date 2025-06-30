@@ -40,6 +40,18 @@ export async function POST(request: NextRequest) {
     // Parse the response
     const data = await response.json();
 
+    // DEBUG: Log chord recognition response for comparison with beat detection
+    console.log(`🎸 CHORD BACKEND RESPONSE DEBUG:`, {
+      success: data.success,
+      hasChords: !!data.chords,
+      chordsType: typeof data.chords,
+      chordsIsArray: Array.isArray(data.chords),
+      chordsLength: data.chords?.length || 0,
+      firstFewChords: data.chords?.slice(0, 3),
+      duration: data.duration,
+      model: data.model_used || data.model
+    });
+
     // Return the response
     return NextResponse.json(data);
   } catch (error) {

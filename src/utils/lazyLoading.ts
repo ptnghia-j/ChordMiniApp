@@ -17,7 +17,7 @@ export const createLazyLoadObserver = (callback: IntersectionObserverCallback) =
 
 // Lazy load components with dynamic imports
 export const lazyLoadComponent = (importFn: () => Promise<{ default: React.ComponentType<unknown> }>) => {
-  return React.lazy(() => 
+  return React.lazy(() =>
     importFn().then(module => ({
       default: module.default || module
     }))

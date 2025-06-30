@@ -198,7 +198,7 @@ const FeaturesSection: React.FC = () => {
               {/* Feature Header - Always Visible */}
               <button
                 onClick={() => toggleFeature(feature.id)}
-                className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
               >
                 <div className="flex items-center space-x-4 flex-1">
                   <div className="flex-shrink-0">
@@ -229,7 +229,7 @@ const FeaturesSection: React.FC = () => {
 
               {/* Expandable Content */}
               {expandedFeature === feature.id && (
-                <div className="px-6 pb-6 bg-gray-50 dark:bg-gray-800 transition-colors duration-300">
+                <div className="px-6 pb-6 bg-white dark:bg-content-bg transition-colors duration-300">
                   <div className="pt-4 space-y-4">
                     {/* Detailed Description */}
                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed">

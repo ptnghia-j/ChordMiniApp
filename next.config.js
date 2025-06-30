@@ -226,6 +226,29 @@ const nextConfig = {
         },
       };
 
+      // Advanced bundle optimization for desktop performance
+      config.optimization.splitChunks.maxSize = 120000; // Reduced from 150000
+      config.optimization.splitChunks.maxInitialSize = 80000; // Reduced from 100000
+
+      // More aggressive chunk splitting for React ecosystem
+      config.optimization.splitChunks.cacheGroups.reactVendor = {
+        test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+        name: 'react-vendor',
+        chunks: 'all',
+        priority: 60,
+        enforce: true,
+        maxSize: 80000,
+      };
+
+      config.optimization.splitChunks.cacheGroups.nextVendor = {
+        test: /[\\/]node_modules[\\/]next[\\/]/,
+        name: 'next-vendor',
+        chunks: 'all',
+        priority: 55,
+        enforce: true,
+        maxSize: 100000,
+      };
+
       // Enhanced tree shaking optimization
       config.optimization.usedExports = true;
       config.optimization.sideEffects = false;
