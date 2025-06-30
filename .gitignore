@@ -108,7 +108,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+python_backend/lib/
 lib64/
 parts/
 sdist/
