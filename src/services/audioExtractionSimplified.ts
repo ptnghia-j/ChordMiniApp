@@ -88,10 +88,28 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
+            // CRITICAL FIX: Verify cached audio sample rate for Beat-Transformer compatibility
+            let verifiedAudioUrl = existingFile.audioUrl;
+            if (existingFile.needsSampleRateCheck && !existingFile.sampleRateVerified) {
+              console.log(`🔧 CRITICAL FIX: Cached audio needs sample rate verification for ${videoId}`);
+              try {
+                const { verifyCachedAudioSampleRate } = await import('./firebaseStorageService');
+                const convertedUrl = await verifyCachedAudioSampleRate(existingFile.audioUrl, videoId);
+                if (convertedUrl) {
+                  verifiedAudioUrl = convertedUrl;
+                  console.log(`✅ CRITICAL FIX: Cached audio verified/converted for Beat-Transformer compatibility`);
+                } else {
+                  console.warn(`⚠️ Cached audio verification failed, using original (may cause beat detection issues)`);
+                }
+              } catch (verificationError) {
+                console.warn(`⚠️ Cached audio verification error:`, verificationError);
+              }
+            }
+
             // Save to simplified cache for faster future access
             await firebaseStorageSimplified.saveAudioMetadata({
               videoId,
-              audioUrl: existingFile.audioUrl,
+              audioUrl: verifiedAudioUrl,
               title: videoMetadata.title,
               duration: this.parseDuration(videoMetadata.duration),
               fileSize: existingFile.fileSize || 0
@@ -99,7 +117,7 @@ export class AudioExtractionServiceSimplified {
 
             return {
               success: true,
-              audioUrl: existingFile.audioUrl,
+              audioUrl: verifiedAudioUrl,
               title: videoMetadata.title,
               duration: this.parseDuration(videoMetadata.duration),
               fromCache: true,
@@ -252,10 +270,28 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
+            // CRITICAL FIX: Verify cached audio sample rate for Beat-Transformer compatibility
+            let verifiedAudioUrl = existingFile.audioUrl;
+            if (existingFile.needsSampleRateCheck && !existingFile.sampleRateVerified) {
+              console.log(`🔧 CRITICAL FIX: Cached audio needs sample rate verification for ${videoId}`);
+              try {
+                const { verifyCachedAudioSampleRate } = await import('./firebaseStorageService');
+                const convertedUrl = await verifyCachedAudioSampleRate(existingFile.audioUrl, videoId);
+                if (convertedUrl) {
+                  verifiedAudioUrl = convertedUrl;
+                  console.log(`✅ CRITICAL FIX: Cached audio verified/converted for Beat-Transformer compatibility`);
+                } else {
+                  console.warn(`⚠️ Cached audio verification failed, using original (may cause beat detection issues)`);
+                }
+              } catch (verificationError) {
+                console.warn(`⚠️ Cached audio verification error:`, verificationError);
+              }
+            }
+
             // Save to simplified cache for faster future access
             await firebaseStorageSimplified.saveAudioMetadata({
               videoId,
-              audioUrl: existingFile.audioUrl,
+              audioUrl: verifiedAudioUrl,
               title: videoMetadata.title,
               duration: this.parseDuration(videoMetadata.duration),
               fileSize: existingFile.fileSize || 0
@@ -263,7 +299,7 @@ export class AudioExtractionServiceSimplified {
 
             return {
               success: true,
-              audioUrl: existingFile.audioUrl,
+              audioUrl: verifiedAudioUrl,
               title: videoMetadata.title,
               duration: this.parseDuration(videoMetadata.duration),
               fromCache: true,

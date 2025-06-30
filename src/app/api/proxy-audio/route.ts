@@ -144,11 +144,30 @@ export async function GET(request: NextRequest) {
 
           if (fallbackBuffer.byteLength > 0) {
             console.log(`✅ Fallback audio data: ${(fallbackBuffer.byteLength / 1024 / 1024).toFixed(2)}MB`);
-            return new NextResponse(fallbackBuffer, {
+
+            // CRITICAL FIX: Convert fallback audio to 44100Hz as well
+            let processedFallbackBuffer = fallbackBuffer;
+            try {
+              const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+              const tempFile = new File([fallbackBuffer], 'fallback_audio.mp3', { type: 'audio/mpeg' });
+              const originalSampleRate = await detectAudioSampleRate(tempFile);
+              console.log(`🔧 CRITICAL FIX: Fallback audio sample rate: ${originalSampleRate}Hz`);
+
+              if (originalSampleRate !== 44100) {
+                console.log(`🔧 CRITICAL FIX: Converting fallback audio ${originalSampleRate}Hz → 44100Hz`);
+                const convertedFile = await convertAudioTo44100Hz(tempFile);
+                processedFallbackBuffer = await convertedFile.arrayBuffer();
+                console.log(`✅ CRITICAL FIX: Fallback audio converted to 44100Hz`);
+              }
+            } catch (conversionError) {
+              console.warn(`⚠️ Fallback audio conversion failed:`, conversionError);
+            }
+
+            return new NextResponse(processedFallbackBuffer, {
               status: 200,
               headers: {
                 'Content-Type': fallbackResponse.headers.get('Content-Type') || 'audio/mpeg',
-                'Content-Length': fallbackBuffer.byteLength.toString(),
+                'Content-Length': processedFallbackBuffer.byteLength.toString(),
                 'Cache-Control': 'public, max-age=3600',
                 'Access-Control-Allow-Origin': '*',
               },
@@ -310,12 +329,37 @@ export async function GET(request: NextRequest) {
 
     console.log(`✅ Successfully proxied audio: ${(audioBuffer.byteLength / 1024 / 1024).toFixed(2)}MB`);
 
-    // Return the audio with appropriate headers
-    return new NextResponse(audioBuffer, {
+    // CRITICAL FIX: Convert proxied audio to 44100Hz for Beat-Transformer compatibility
+    // This ensures all audio served through proxy is standardized for beat detection
+    let processedAudioBuffer = audioBuffer;
+    try {
+      // Dynamic import to avoid SSR issues
+      const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+
+      // Convert ArrayBuffer to File for processing
+      const tempFile = new File([audioBuffer], 'proxied_audio.mp3', { type: 'audio/mpeg' });
+      const originalSampleRate = await detectAudioSampleRate(tempFile);
+      console.log(`🔧 CRITICAL FIX: Proxied audio sample rate: ${originalSampleRate}Hz`);
+
+      if (originalSampleRate !== 44100) {
+        console.log(`🔧 CRITICAL FIX: Converting proxied audio ${originalSampleRate}Hz → 44100Hz for Beat-Transformer compatibility`);
+        const convertedFile = await convertAudioTo44100Hz(tempFile);
+        processedAudioBuffer = await convertedFile.arrayBuffer();
+        console.log(`✅ CRITICAL FIX: Proxied audio converted to 44100Hz - size: ${(processedAudioBuffer.byteLength / 1024 / 1024).toFixed(2)}MB`);
+      } else {
+        console.log(`✅ Proxied audio already at 44100Hz, no conversion needed`);
+      }
+    } catch (conversionError) {
+      console.warn(`⚠️ Proxied audio conversion failed, serving original:`, conversionError);
+      // Continue with original audio - may cause beat detection issues but preserves functionality
+    }
+
+    // Return the processed audio with appropriate headers
+    return new NextResponse(processedAudioBuffer, {
       status: 200,
       headers: {
         'Content-Type': response.headers.get('Content-Type') || 'audio/mpeg',
-        'Content-Length': audioBuffer.byteLength.toString(),
+        'Content-Length': processedAudioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',

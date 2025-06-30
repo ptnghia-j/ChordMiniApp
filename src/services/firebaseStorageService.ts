@@ -19,6 +19,13 @@ export interface AudioFileData {
   createdAt: Timestamp;
   isStreamUrl?: boolean;
   streamExpiresAt?: number;
+  // CRITICAL FIX: Sample rate verification properties for Beat-Transformer compatibility
+  sampleRateVerified?: boolean;
+  sampleRate?: number;
+  needsSampleRateCheck?: boolean;
+  conversionApplied?: boolean;
+  originalSampleRate?: number;
+  lastSampleRateCheck?: Timestamp;
 }
 
 // Extended interface for cached data that may have additional properties
@@ -39,6 +46,8 @@ export async function findExistingAudioFile(
   audioUrl: string;
   storagePath: string;
   fileSize?: number;
+  needsSampleRateCheck?: boolean;
+  sampleRateVerified?: boolean;
 } | null> {
   if (!storage) {
     console.warn('Firebase Storage not initialized');
@@ -83,10 +92,26 @@ export async function findExistingAudioFile(
     console.log(`🎵 Firebase Storage audio URL: ${audioUrl}`);
     console.log(`📊 File size: ${fileSize ? (fileSize / 1024 / 1024).toFixed(2) + 'MB' : 'unknown'}`);
 
+    // Check if we have sample rate metadata from Firestore
+    let needsSampleRateCheck = true;
+    let sampleRateVerified = false;
+
+    try {
+      const metadata = await getAudioFileMetadata(videoId);
+      if (metadata) {
+        needsSampleRateCheck = !metadata.sampleRateVerified;
+        sampleRateVerified = metadata.sampleRateVerified || false;
+      }
+    } catch (metadataError) {
+      console.warn('Could not get sample rate metadata:', metadataError);
+    }
+
     return {
       audioUrl,
       storagePath: audioFile.fullPath,
-      fileSize
+      fileSize,
+      needsSampleRateCheck,
+      sampleRateVerified
     };
 
   } catch (error) {
@@ -106,11 +131,15 @@ export async function findExistingAudioFiles(
   audioUrl: string;
   storagePath: string;
   fileSize?: number;
+  needsSampleRateCheck?: boolean;
+  sampleRateVerified?: boolean;
 }>> {
   const results = new Map<string, {
     audioUrl: string;
     storagePath: string;
     fileSize?: number;
+    needsSampleRateCheck?: boolean;
+    sampleRateVerified?: boolean;
   }>();
 
   if (!storage || videoIds.length === 0) {
@@ -157,10 +186,26 @@ export async function findExistingAudioFiles(
           console.warn(`Could not get file metadata for ${videoId}:`, metadataError);
         }
 
+        // Check sample rate metadata for batch results
+        let needsSampleRateCheck = true;
+        let sampleRateVerified = false;
+
+        try {
+          const metadata = await getAudioFileMetadata(videoId);
+          if (metadata) {
+            needsSampleRateCheck = !metadata.sampleRateVerified;
+            sampleRateVerified = metadata.sampleRateVerified || false;
+          }
+        } catch {
+          // Silently continue for batch operations
+        }
+
         results.set(videoId, {
           audioUrl,
           storagePath: audioFile.fullPath,
-          fileSize
+          fileSize,
+          needsSampleRateCheck,
+          sampleRateVerified
         });
 
         console.log(`🎵 Firebase Storage found for ${videoId}: ${audioFile.name}`);
@@ -218,18 +263,55 @@ export async function uploadAudioFile(
     const audioStorageRef = ref(storage, audioStoragePath);
 
     try {
-      // Convert ArrayBuffer to Blob if needed
-      let audioBlob: Blob;
-      if (audioFile instanceof ArrayBuffer) {
-        audioBlob = new Blob([audioFile], { type: 'audio/mpeg' });
-        console.log('Converted ArrayBuffer to Blob for upload');
-      } else {
-        audioBlob = audioFile as Blob;
+      // CRITICAL FIX: Convert audio to 44100Hz before uploading to Firebase Storage
+      // This ensures all cached audio files are standardized for Beat-Transformer compatibility
+      let processedAudioBlob: Blob;
+
+      try {
+        // Convert to File for audio conversion processing
+        let tempFile: File;
+        if (audioFile instanceof ArrayBuffer) {
+          tempFile = new File([audioFile], `temp_${videoId}.mp3`, { type: 'audio/mpeg' });
+        } else if (audioFile instanceof Blob) {
+          tempFile = new File([audioFile], `temp_${videoId}.mp3`, { type: audioFile.type || 'audio/mpeg' });
+        } else {
+          tempFile = audioFile as File;
+        }
+
+        // Dynamic import to avoid SSR issues
+        const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+
+        const originalSampleRate = await detectAudioSampleRate(tempFile);
+        console.log(`🔧 CRITICAL FIX: Firebase Storage upload - Original audio sample rate: ${originalSampleRate}Hz`);
+
+        if (originalSampleRate !== 44100) {
+          console.log(`🔧 CRITICAL FIX: Converting ${originalSampleRate}Hz → 44100Hz before Firebase Storage upload`);
+          const convertedFile = await convertAudioTo44100Hz(tempFile);
+          processedAudioBlob = new Blob([await convertedFile.arrayBuffer()], { type: 'audio/wav' });
+          console.log(`✅ CRITICAL FIX: Audio converted to 44100Hz for Firebase Storage caching`);
+        } else {
+          console.log(`✅ Audio already at 44100Hz, uploading original to Firebase Storage`);
+          // Convert to Blob if needed
+          if (audioFile instanceof ArrayBuffer) {
+            processedAudioBlob = new Blob([audioFile], { type: 'audio/mpeg' });
+          } else {
+            processedAudioBlob = audioFile as Blob;
+          }
+        }
+      } catch (conversionError) {
+        console.warn(`⚠️ Firebase Storage audio conversion failed, uploading original:`, conversionError);
+        // Fallback to original audio - may cause beat detection issues but preserves functionality
+        if (audioFile instanceof ArrayBuffer) {
+          processedAudioBlob = new Blob([audioFile], { type: 'audio/mpeg' });
+          console.log('Converted ArrayBuffer to Blob for upload (fallback)');
+        } else {
+          processedAudioBlob = audioFile as Blob;
+        }
       }
 
-      // Upload audio file
-      console.log(`Starting upload of audio file to ${audioStoragePath}`);
-      const audioSnapshot = await uploadBytes(audioStorageRef, audioBlob);
+      // Upload processed audio file
+      console.log(`Starting upload of processed audio file to ${audioStoragePath}`);
+      const audioSnapshot = await uploadBytes(audioStorageRef, processedAudioBlob);
       console.log('Audio file uploaded successfully, size:', audioSnapshot.metadata.size);
 
       // Get download URL
@@ -495,13 +577,22 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
               // Update the data with the public URL
               data.audioUrl = publicUrl;
 
+              // CRITICAL FIX: Check if cached audio needs sample rate verification
+              // Add metadata flag to track if file is 44100Hz compliant
+              if (!data.sampleRateVerified) {
+                console.log(`🔧 CRITICAL FIX: Cached audio needs sample rate verification for ${videoId}`);
+                // Mark for potential re-extraction if sample rate verification fails during usage
+                data.needsSampleRateCheck = true;
+              }
+
               // Update the document in Firestore (don't wait for it to complete)
               setDoc(docRef, {
                 ...data,
                 audioUrl: publicUrl,
-                lastUpdated: serverTimestamp()
+                lastUpdated: serverTimestamp(),
+                needsSampleRateCheck: data.needsSampleRateCheck || false
               }).then(() => {
-                console.log('Updated audio file metadata with public URL');
+                console.log('Updated audio file metadata with public URL and sample rate check flag');
               }).catch(err => {
                 console.error('Error updating audio file metadata:', err);
               });
@@ -552,6 +643,88 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
     }
+    return null;
+  }
+}
+
+/**
+ * CRITICAL FIX: Verify and convert cached audio to 44100Hz if needed
+ * @param audioUrl The cached audio URL to verify
+ * @param videoId Video ID for logging and cache updates
+ * @returns Promise<string | null> - Converted audio URL or null if conversion failed
+ */
+export async function verifyCachedAudioSampleRate(audioUrl: string, videoId: string): Promise<string | null> {
+  try {
+    console.log(`🔧 CRITICAL FIX: Verifying cached audio sample rate for ${videoId}`);
+
+    // Download the cached audio file
+    const response = await fetch(audioUrl);
+    if (!response.ok) {
+      console.warn(`⚠️ Failed to fetch cached audio for verification: ${response.status}`);
+      return null;
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const tempFile = new File([audioBuffer], `cached_${videoId}.mp3`, { type: 'audio/mpeg' });
+
+    // Dynamic import to avoid SSR issues
+    const { detectAudioSampleRate, convertAudioTo44100Hz } = await import('@/utils/audioConversion');
+
+    const sampleRate = await detectAudioSampleRate(tempFile);
+    console.log(`🔧 CRITICAL FIX: Cached audio sample rate: ${sampleRate}Hz`);
+
+    if (sampleRate === 44100) {
+      console.log(`✅ Cached audio already at 44100Hz, no conversion needed`);
+
+      // Update metadata to mark as verified
+      if (db) {
+        const docRef = doc(db, 'audioFiles', videoId);
+        setDoc(docRef, {
+          sampleRateVerified: true,
+          sampleRate: 44100,
+          lastSampleRateCheck: serverTimestamp()
+        }, { merge: true }).catch(err => {
+          console.error('Error updating sample rate verification:', err);
+        });
+      }
+
+      return audioUrl;
+    }
+
+    // Convert to 44100Hz
+    console.log(`🔧 CRITICAL FIX: Converting cached audio ${sampleRate}Hz → 44100Hz`);
+    const convertedFile = await convertAudioTo44100Hz(tempFile);
+
+    // Upload converted audio back to Firebase Storage
+    const convertedAudioData = await convertedFile.arrayBuffer();
+    const uploadResult = await uploadAudioFile(videoId, convertedAudioData);
+
+    if (uploadResult) {
+      console.log(`✅ CRITICAL FIX: Cached audio converted and re-uploaded to Firebase Storage`);
+
+      // Update metadata
+      if (db) {
+        const docRef = doc(db, 'audioFiles', videoId);
+        setDoc(docRef, {
+          audioUrl: uploadResult.audioUrl,
+          sampleRateVerified: true,
+          sampleRate: 44100,
+          lastSampleRateCheck: serverTimestamp(),
+          conversionApplied: true,
+          originalSampleRate: sampleRate
+        }, { merge: true }).catch(err => {
+          console.error('Error updating converted audio metadata:', err);
+        });
+      }
+
+      return uploadResult.audioUrl;
+    }
+
+    console.warn(`⚠️ Failed to re-upload converted cached audio`);
+    return null;
+
+  } catch (error) {
+    console.error(`❌ Cached audio sample rate verification failed:`, error);
     return null;
   }
 }
