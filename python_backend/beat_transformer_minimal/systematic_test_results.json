@@ -1,0 +1,42 @@
+[
+  {
+    "success": false,
+    "error": "HTTP 413",
+    "service": "Full Backend",
+    "audio_file": "kf7Dss2gCe0_44100.wav",
+    "processing_time": 8.145007133483887,
+    "raw_response": "\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>413 Request Entity Too Large</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Request Entity Too Large</h1>\n<h2>Your client issued a request that was too large.\n</h2>\n<h2></h2>\n</body></html>\n",
+    "sample_rate": "44100Hz",
+    "expected_fps": 43.06640625
+  },
+  {
+    "success": false,
+    "error": "HTTP 413",
+    "service": "Full Backend",
+    "audio_file": "kf7Dss2gCe0_48000.wav",
+    "processing_time": 9.036561012268066,
+    "raw_response": "\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>413 Request Entity Too Large</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Request Entity Too Large</h1>\n<h2>Your client issued a request that was too large.\n</h2>\n<h2></h2>\n</body></html>\n",
+    "sample_rate": "48000Hz",
+    "expected_fps": 46.875
+  },
+  {
+    "success": false,
+    "error": "HTTP 413",
+    "service": "Minimal Service",
+    "audio_file": "kf7Dss2gCe0_44100.wav",
+    "processing_time": 8.511024951934814,
+    "raw_response": "\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>413 Request Entity Too Large</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Request Entity Too Large</h1>\n<h2>Your client issued a request that was too large.\n</h2>\n<h2></h2>\n</body></html>\n",
+    "sample_rate": "44100Hz",
+    "expected_fps": 43.06640625
+  },
+  {
+    "success": false,
+    "error": "HTTP 413",
+    "service": "Minimal Service",
+    "audio_file": "kf7Dss2gCe0_48000.wav",
+    "processing_time": 9.386101007461548,
+    "raw_response": "\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>413 Request Entity Too Large</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Request Entity Too Large</h1>\n<h2>Your client issued a request that was too large.\n</h2>\n<h2></h2>\n</body></html>\n",
+    "sample_rate": "48000Hz",
+    "expected_fps": 46.875
+  }
+]
