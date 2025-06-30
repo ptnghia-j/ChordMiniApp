@@ -240,7 +240,8 @@ export default function Home() {
             alt="ChordMini - Chord recognition and analysis application"
             width={1920}
             height={1080}
-            priority={false}
+            priority={true}
+            fetchPriority="high"
             quality={60}
             sizes="100vw"
             className="object-cover opacity-30 w-full h-full"

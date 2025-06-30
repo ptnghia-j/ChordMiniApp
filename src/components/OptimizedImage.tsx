@@ -9,6 +9,7 @@ interface OptimizedImageProps {
   width: number;
   height: number;
   priority?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
   className?: string;
   sizes?: string;
   quality?: number;
@@ -31,6 +32,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   width,
   height,
   priority = false,
+  fetchPriority = 'auto',
   className = '',
   sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
   quality = 85,
@@ -80,6 +82,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
         width={width}
         height={height}
         priority={priority}
+        fetchPriority={fetchPriority}
         quality={quality}
         sizes={sizes}
         placeholder={placeholder}

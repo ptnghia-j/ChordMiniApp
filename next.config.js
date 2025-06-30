@@ -226,7 +226,26 @@ const nextConfig = {
         },
       };
 
-      // Advanced bundle optimization for desktop performance
+      
+        // CSS optimization for PageSpeed Insights
+        config.optimization.splitChunks.cacheGroups.styles = {
+          name: 'styles',
+          test: /\.css$/,
+          chunks: 'all',
+          enforce: true,
+          priority: 20,
+        };
+        
+        // Minimize CSS chunks to prevent render blocking
+        config.optimization.splitChunks.cacheGroups.criticalCSS = {
+          name: 'critical-css',
+          test: /\.(css|scss|sass)$/,
+          chunks: 'initial',
+          enforce: true,
+          priority: 30,
+          maxSize: 50000, // 50KB limit for critical CSS
+        };
+        // Advanced bundle optimization for desktop performance
       config.optimization.splitChunks.maxSize = 120000; // Reduced from 150000
       config.optimization.splitChunks.maxInitialSize = 80000; // Reduced from 100000
 

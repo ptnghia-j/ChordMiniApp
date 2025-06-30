@@ -97,6 +97,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={robotoMono.variable}>
       <head>
+        {/* Critical CSS preloading for performance */}
+        <link rel="preload" href="/_next/static/css/app/layout.css" as="style" />
+        <link rel="preload" href="/_next/static/css/app/globals.css" as="style" />
+
         {/* Resource hints for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -108,6 +112,9 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//youtube.com" />
         <link rel="dns-prefetch" href="//googleapis.com" />
         <link rel="dns-prefetch" href="//vercel.app" />
+
+        {/* Optimize font loading */}
+        <link rel="preload" href="https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW4AJi8SJQt.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="font-sans min-h-screen flex flex-col">
         <ProcessingProvider>
