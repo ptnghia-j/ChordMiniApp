@@ -50,8 +50,17 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   const handleLoad = useCallback(() => {
     setIsLoaded(true);
+
+    // Optimize LCP for critical images
+    if (dataLcpImage && priority) {
+      // Mark LCP completion for performance monitoring
+      if (typeof window !== 'undefined' && 'performance' in window && 'mark' in performance) {
+        performance.mark('lcp-image-loaded');
+      }
+    }
+
     onLoad?.();
-  }, [onLoad]);
+  }, [onLoad, dataLcpImage, priority]);
 
   const handleError = useCallback(() => {
     setHasError(true);
