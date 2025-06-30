@@ -18,9 +18,6 @@ const eslintConfig = [
       "dist/**/*",
       "build/**/*",
       "scripts/**/*",
-      "python_backend/**/*",
-      "public/sw.js",
-      "webpack-optimizations.js",
       "*.config.js",
       "*.config.mjs",
       "*.config.ts"

@@ -31,9 +31,8 @@ interface LyricsPanelProps {
 /**
  * Lyrics panel component that displays synchronized lyrics from LRCLib
  * Uses the same UI pattern as the chatbot interface with right-side panel layout
- * Memoized for performance optimization
  */
-const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
+const LyricsPanel: React.FC<LyricsPanelProps> = ({
   isOpen,
   onClose,
   videoTitle = '',
@@ -527,8 +526,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
       )}
     </AnimatePresence>
   );
-});
-
-LyricsPanel.displayName = 'LyricsPanel';
+};
 
 export default LyricsPanel;

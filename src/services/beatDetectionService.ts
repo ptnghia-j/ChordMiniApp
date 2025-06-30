@@ -145,6 +145,9 @@ export async function detectBeatsWithRateLimit(
   detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
 ): Promise<BeatDetectionResult> {
   try {
+    console.log(`🥁 DEBUG: Starting beat detection with detector="${detector}"`);
+    console.log(`🥁 DEBUG: Audio file info: name="${audioFile.name}", size=${audioFile.size} bytes, type="${audioFile.type}"`);
+
     // Enhanced input validation
     if (!audioFile || audioFile.size === 0) {
       throw new Error('Invalid audio file for beat detection');
@@ -168,7 +171,10 @@ export async function detectBeatsWithRateLimit(
     formData.append('detector', detector);
     if (detector === 'beat-transformer') {
       formData.append('force', 'true');
+      console.log(`🥁 DEBUG: Added force=true parameter for Beat-Transformer`);
     }
+
+    console.log(`🥁 DEBUG: FormData prepared with detector="${detector}"`);
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 600000; // 10 minutes timeout
@@ -176,23 +182,31 @@ export async function detectBeatsWithRateLimit(
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
+    console.log(`🥁 DEBUG: Sending request to /api/detect-beats...`);
     const response = await fetch('/api/detect-beats', {
       method: 'POST',
       body: formData,
       signal: abortSignal,
     });
 
+    console.log(`🥁 DEBUG: Response received - status: ${response.status}, ok: ${response.ok}`);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error(`🥁 DEBUG: Beat detection API error:`, errorData);
       throw new Error(errorData.error || `Beat detection failed: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log(`🥁 DEBUG: Beat detection response data:`, data);
 
     // Validate response structure
+    console.log(`🥁 DEBUG: Validating response - success: ${data.success}, has beats: ${!!data.beats}, beats type: ${typeof data.beats}`);
     if (!data || !data.success) {
+      console.error(`🥁 DEBUG: Beat detection failed - data.success: ${data.success}, error: ${data.error}`);
       // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
       if (detector === 'beat-transformer' && data.error?.includes('500')) {
+        console.log(`🥁 DEBUG: Trying fallback to madmom due to Beat-Transformer 500 error`);
         return detectBeatsWithRateLimit(audioFile, 'madmom');
       }
 
@@ -201,11 +215,16 @@ export async function detectBeatsWithRateLimit(
 
     // Validate response structure
     if (!data || !Array.isArray(data.beats)) {
+      console.error(`🥁 DEBUG: Invalid response format - data exists: ${!!data}, beats is array: ${Array.isArray(data.beats)}, beats value:`, data.beats);
       throw new Error('Invalid response format from beat detection API');
     }
 
+    console.log(`🥁 DEBUG: Beat detection successful - found ${data.beats.length} beats`);
+    console.log(`🥁 DEBUG: First few beats:`, data.beats.slice(0, 5));
+    console.log(`🥁 DEBUG: BPM: ${data.BPM || data.bpm}, duration: ${data.duration}, time_signature: ${data.time_signature}`);
+
     // Convert to expected format
-    return {
+    const result = {
       success: true,
       beats: data.beats as number[],
       downbeats: (data.downbeats as number[]) || [],
@@ -215,6 +234,9 @@ export async function detectBeatsWithRateLimit(
       time_signature: (data.time_signature as number) || 4,
       model: (data.model_used as string) || detector
     };
+
+    console.log(`🥁 DEBUG: Returning beat detection result:`, result);
+    return result;
 
   } catch (error) {
     console.error('Error in beat detection with rate limiting:', error);

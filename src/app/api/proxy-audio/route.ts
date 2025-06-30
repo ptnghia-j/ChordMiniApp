@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     // Create a safe timeout signal that works across environments
     // Increased timeout for large audio files (3-4 minute songs can be 5-10MB)
     const timeoutValue = 120000; // 2 minute timeout for audio downloads
-    // // console.log(`🔍 Proxy audio timeout value: ${timeoutValue}ms (${timeoutValue/1000}s)`);
+    // console.log(`🔍 Proxy audio timeout value: ${timeoutValue}ms (${timeoutValue/1000}s)`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
@@ -169,12 +169,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the audio data with detailed logging and manual stream reading
-    // // console.log(`🔍 Response headers:`, Object.fromEntries(response.headers.entries()));
-    // // console.log(`🔍 Content-Length header:`, response.headers.get('content-length'));
-    // // console.log(`🔍 Content-Type header:`, response.headers.get('content-type'));
+    // console.log(`🔍 Response headers:`, Object.fromEntries(response.headers.entries()));
+    // console.log(`🔍 Content-Length header:`, response.headers.get('content-length'));
+    // console.log(`🔍 Content-Type header:`, response.headers.get('content-type'));
 
     const expectedSize = parseInt(response.headers.get('content-length') || '0', 10);
-    // // console.log(`🔍 Expected file size: ${expectedSize} bytes (${(expectedSize / 1024 / 1024).toFixed(2)}MB)`);
+    // console.log(`🔍 Expected file size: ${expectedSize} bytes (${(expectedSize / 1024 / 1024).toFixed(2)}MB)`);
 
     // Try manual stream reading for better control over the download process
     let audioBuffer: ArrayBuffer;
@@ -225,8 +225,8 @@ export async function GET(request: NextRequest) {
       audioBuffer = await response.arrayBuffer();
     }
 
-    // // console.log(`🔍 Final downloaded bytes: ${audioBuffer.byteLength}`);
-    // // console.log(`🔍 Expected bytes: ${expectedSize}`);
+    // console.log(`🔍 Final downloaded bytes: ${audioBuffer.byteLength}`);
+    // console.log(`🔍 Expected bytes: ${expectedSize}`);
 
     if (expectedSize > 0 && audioBuffer.byteLength < expectedSize) {
       console.error(`❌ Incomplete download: got ${audioBuffer.byteLength} bytes, expected ${expectedSize} bytes`);

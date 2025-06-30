@@ -226,48 +226,6 @@ const nextConfig = {
         },
       };
 
-      
-        // CSS optimization for PageSpeed Insights
-        config.optimization.splitChunks.cacheGroups.styles = {
-          name: 'styles',
-          test: /\.css$/,
-          chunks: 'all',
-          enforce: true,
-          priority: 20,
-        };
-        
-        // Minimize CSS chunks to prevent render blocking
-        config.optimization.splitChunks.cacheGroups.criticalCSS = {
-          name: 'critical-css',
-          test: /\.(css|scss|sass)$/,
-          chunks: 'initial',
-          enforce: true,
-          priority: 30,
-          maxSize: 50000, // 50KB limit for critical CSS
-        };
-        // Advanced bundle optimization for desktop performance
-      config.optimization.splitChunks.maxSize = 120000; // Reduced from 150000
-      config.optimization.splitChunks.maxInitialSize = 80000; // Reduced from 100000
-
-      // More aggressive chunk splitting for React ecosystem
-      config.optimization.splitChunks.cacheGroups.reactVendor = {
-        test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
-        name: 'react-vendor',
-        chunks: 'all',
-        priority: 60,
-        enforce: true,
-        maxSize: 80000,
-      };
-
-      config.optimization.splitChunks.cacheGroups.nextVendor = {
-        test: /[\\/]node_modules[\\/]next[\\/]/,
-        name: 'next-vendor',
-        chunks: 'all',
-        priority: 55,
-        enforce: true,
-        maxSize: 100000,
-      };
-
       // Enhanced tree shaking optimization
       config.optimization.usedExports = true;
       config.optimization.sideEffects = false;

@@ -342,20 +342,27 @@ export async function analyzeAudioWithRateLimit(
     let beatResults;
 
     try {
+      console.log(`🥁 DEBUG: Calling detectBeatsWithRateLimit with detector="${beatDetector}"`);
       beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
+      console.log(`🥁 DEBUG: Beat detection completed, result:`, beatResults);
 
       // Validate beat detection results
       if (!beatResults || !beatResults.beats) {
+        console.error(`🥁 DEBUG: Beat detection validation failed - beatResults exists: ${!!beatResults}, beats exists: ${!!beatResults?.beats}`);
         throw new Error('Beat detection failed: missing beats data');
       }
 
       if (!Array.isArray(beatResults.beats)) {
+        console.error(`🥁 DEBUG: Beat detection validation failed - beats is not array, type: ${typeof beatResults.beats}, value:`, beatResults.beats);
         throw new Error('Invalid beat detection results: beats is not an array');
       }
 
       if (beatResults.beats.length === 0) {
+        console.error(`🥁 DEBUG: Beat detection validation failed - no beats detected, beats array length: ${beatResults.beats.length}`);
         throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
       }
+
+      console.log(`🥁 DEBUG: Beat detection validation passed - ${beatResults.beats.length} beats detected`);
 
       // Validate beat timestamps for bounds issues
       const invalidBeats = beatResults.beats.filter((time: number) =>
@@ -427,12 +434,17 @@ export async function analyzeAudioWithRateLimit(
     let chordResults;
 
     try {
+      console.log(`🎸 DEBUG: Calling recognizeChordsWithRateLimit with detector="${chordDetector}"`);
       chordResults = await recognizeChordsWithRateLimit(audioFile, chordDetector);
+      console.log(`🎸 DEBUG: Chord recognition completed, result length: ${chordResults?.length}, first few:`, chordResults?.slice(0, 3));
 
       // Validate chord recognition results
       if (!chordResults || !Array.isArray(chordResults)) {
+        console.error(`🎸 DEBUG: Chord recognition validation failed - chordResults exists: ${!!chordResults}, is array: ${Array.isArray(chordResults)}`);
         throw new Error('Invalid chord recognition results: expected array of chords');
       }
+
+      console.log(`🎸 DEBUG: Chord recognition validation passed - ${chordResults.length} chords detected`);
 
       // Validate chord timestamps for bounds issues
       const invalidChords = chordResults.filter(chord =>
