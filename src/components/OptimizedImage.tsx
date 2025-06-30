@@ -15,6 +15,8 @@ interface OptimizedImageProps {
   quality?: number;
   placeholder?: 'blur' | 'empty';
   blurDataURL?: string;
+  style?: React.CSSProperties;
+  'data-lcp-image'?: boolean;
   onLoad?: () => void;
   onError?: () => void;
 }
@@ -38,6 +40,8 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   quality = 85,
   placeholder = 'blur',
   blurDataURL,
+  style,
+  'data-lcp-image': dataLcpImage,
   onLoad,
   onError
 }) => {
@@ -92,10 +96,12 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
         }`}
         onLoad={handleLoad}
         onError={handleError}
+        data-lcp-image={dataLcpImage}
         style={{
           objectFit: 'cover',
           width: '100%',
           height: 'auto',
+          ...style
         }}
       />
       

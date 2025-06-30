@@ -232,9 +232,9 @@ export default function Home() {
       <Navigation />
 
       {/* Main content with hero image background - added border-top to prevent margin collapse */}
-      <main className="flex-grow relative border-t border-transparent dark:border-gray-700">
-        {/* Hero Image Background - Fixed to prevent stretching, lazy loaded */}
-        <div className="fixed inset-0 z-0">
+      <main className="flex-grow relative border-t border-transparent dark:border-gray-700" data-critical-layout>
+        {/* Hero Image Background - Optimized for LCP and reflow prevention */}
+        <div className="fixed inset-0 z-0" style={{ contain: 'layout style paint' }} data-critical-layout>
           <OptimizedImage
             src={theme === 'dark' ? "/hero-image-placeholder-dark.svg" : "/hero-image-placeholder.svg"}
             alt="ChordMini - Chord recognition and analysis application"
@@ -245,6 +245,12 @@ export default function Home() {
             quality={60}
             sizes="100vw"
             className="object-cover opacity-30 w-full h-full"
+            data-lcp-image
+            style={{
+              willChange: 'auto',
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden'
+            }}
           />
         </div>
 
@@ -256,7 +262,7 @@ export default function Home() {
         <FaMusic className="absolute bottom-4 right-4 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
 
         {/* Content Container */}
-        <div className="relative z-10 container mx-auto p-3">
+        <div className="relative z-10 container mx-auto p-3 hero-container" data-critical-layout>
           {/* Two-column layout: Main Content (75%) + Recent Videos (25%) */}
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

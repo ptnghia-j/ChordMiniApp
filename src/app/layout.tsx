@@ -8,6 +8,7 @@ import FirebaseInitializer from '../components/FirebaseInitializer';
 import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 import Footer from '../components/Footer';
 import PerformanceMonitor from '../components/PerformanceMonitor';
+import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptimizer';
 
 // Initialize only the monospace font for chord labels
 const robotoMono = Roboto_Mono({
@@ -120,6 +121,7 @@ export default function RootLayout({
         <ProcessingProvider>
           <ThemeProvider>
             <ClientErrorBoundary>
+              <CriticalPerformanceOptimizer />
               <ServiceWorkerRegistration />
               <FirebaseInitializer />
               <PerformanceMonitor />

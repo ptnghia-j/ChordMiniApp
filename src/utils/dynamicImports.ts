@@ -150,7 +150,7 @@ export const preloadCriticalChunks = () => {
 export const loadFirebaseService = () => import(
   /* webpackChunkName: "firebase-service" */
   /* webpackPreload: true */
-  '../lib/firebase-lazy'
+  '@/lib/firebase-lazy'
 );
 
 // Optimized Chart.js loading with smaller chunks
