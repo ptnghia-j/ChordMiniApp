@@ -138,9 +138,32 @@ class VercelBlobUploadService {
     try {
       console.log(`🔄 Vercel Blob upload beat detection for file: ${audioFile.name} (${this.getFileSizeString(audioFile.size)})`);
 
-      // Step 1: Upload to Vercel Blob
+      // CRITICAL FIX: Convert audio to 44100Hz before uploading to blob
+      // This ensures cached audio files are standardized for Beat-Transformer compatibility
+      let processedFile = audioFile;
+      try {
+        // Dynamic import to avoid SSR issues
+        const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+
+        if (onProgress) onProgress(5);
+        const originalSampleRate = await detectAudioSampleRate(audioFile);
+        console.log(`🔧 CRITICAL FIX: Original audio sample rate: ${originalSampleRate}Hz`);
+
+        if (originalSampleRate !== 44100) {
+          console.log(`🔧 CRITICAL FIX: Converting ${originalSampleRate}Hz → 44100Hz before blob upload`);
+          processedFile = await convertAudioTo44100Hz(audioFile);
+          console.log(`✅ CRITICAL FIX: Audio converted for blob storage and backend processing`);
+        } else {
+          console.log(`✅ Audio already at 44100Hz, uploading original to blob`);
+        }
+      } catch (conversionError) {
+        console.warn(`⚠️ Audio conversion failed, uploading original:`, conversionError);
+        // Continue with original file - backend will handle it but may have beat detection issues
+      }
+
+      // Step 1: Upload to Vercel Blob (with converted audio)
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToBlob(audioFile);
+      const blobUrl = await this.uploadToBlob(processedFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing

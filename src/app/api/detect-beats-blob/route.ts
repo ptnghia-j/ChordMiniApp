@@ -48,13 +48,40 @@ export async function POST(request: NextRequest) {
     }
 
     const audioBuffer = await blobResponse.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+    let audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
 
     // Extract filename from blob URL or use default
     const urlParts = blobUrl.split('/');
-    const filename = urlParts[urlParts.length - 1] || 'audio.wav';
+    let filename = urlParts[urlParts.length - 1] || 'audio.wav';
 
-    console.log(`📁 Downloaded ${audioBuffer.byteLength} bytes, sending to Python backend as ${filename}`);
+    console.log(`📁 Downloaded ${audioBuffer.byteLength} bytes from Vercel Blob`);
+
+    // CRITICAL FIX: Convert audio to 44100Hz before sending to backend
+    // This prevents frame rate mismatches in Beat-Transformer DBN processors
+    try {
+      // Dynamic import to avoid SSR issues
+      const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+
+      // Convert blob to File for processing
+      const tempFile = new File([audioBlob], filename, { type: audioBlob.type });
+      const originalSampleRate = await detectAudioSampleRate(tempFile);
+      console.log(`🔧 CRITICAL FIX: Blob audio sample rate: ${originalSampleRate}Hz`);
+
+      if (originalSampleRate !== 44100) {
+        console.log(`🔧 CRITICAL FIX: Converting blob audio ${originalSampleRate}Hz → 44100Hz for Beat-Transformer compatibility`);
+        const convertedFile = await convertAudioTo44100Hz(tempFile);
+        audioBlob = new Blob([await convertedFile.arrayBuffer()], { type: 'audio/wav' });
+        filename = convertedFile.name;
+        console.log(`✅ CRITICAL FIX: Blob audio converted successfully for backend processing`);
+      } else {
+        console.log(`✅ Blob audio already at 44100Hz, no conversion needed`);
+      }
+    } catch (conversionError) {
+      console.warn(`⚠️ Blob audio conversion failed, using original:`, conversionError);
+      // Continue with original blob - backend will handle it but may have beat detection issues
+    }
+
+    console.log(`📁 Sending to Python backend as ${filename}`);
 
     // Create new FormData for the Python backend
     const backendFormData = new FormData();

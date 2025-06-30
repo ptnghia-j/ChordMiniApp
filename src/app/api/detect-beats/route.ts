@@ -31,6 +31,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL FIX: Convert audio to 44100Hz before sending to backend
+    // This prevents frame rate mismatches in Beat-Transformer DBN processors
+    let processedFile = file;
+    try {
+      // Dynamic import to avoid SSR issues
+      const { convertAudioTo44100Hz, detectAudioSampleRate } = await import('@/utils/audioConversion');
+
+      const originalSampleRate = await detectAudioSampleRate(file);
+      console.log(`🔧 CRITICAL FIX: Original audio sample rate: ${originalSampleRate}Hz`);
+
+      if (originalSampleRate !== 44100) {
+        console.log(`🔧 CRITICAL FIX: Converting ${originalSampleRate}Hz → 44100Hz for Beat-Transformer compatibility`);
+        processedFile = await convertAudioTo44100Hz(file);
+        console.log(`✅ CRITICAL FIX: Audio converted successfully for backend processing`);
+      } else {
+        console.log(`✅ Audio already at 44100Hz, no conversion needed`);
+      }
+    } catch (conversionError) {
+      console.warn(`⚠️ Audio conversion failed, using original file:`, conversionError);
+      // Continue with original file - backend will handle it but may have beat detection issues
+    }
+
     // Log file info
     const fileSizeMB = file.size / 1024 / 1024;
     console.log(`📁 Processing audio file: ${file.name} (${fileSizeMB.toFixed(2)}MB)`);
@@ -45,8 +67,8 @@ export async function POST(request: NextRequest) {
 
         const detector = formData.get('detector') as string || 'beat-transformer';
 
-        // Use Vercel Blob upload for large files
-        const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(file, detector as 'auto' | 'madmom' | 'beat-transformer');
+        // Use Vercel Blob upload for large files (with converted audio)
+        const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(processedFile, detector as 'auto' | 'madmom' | 'beat-transformer');
 
         if (blobResult.success) {
           console.log(`✅ Vercel Blob beat detection completed successfully`);
@@ -62,14 +84,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`🔄 Using direct processing for file: ${file.name}`);
+    console.log(`🔄 Using direct processing for file: ${processedFile.name}`);
 
     // Log audio duration for debugging before sending to backend ML service
     try {
-      const duration = await getAudioDurationFromFile(file);
+      const duration = await getAudioDurationFromFile(processedFile);
       console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
     } catch (durationError) {
       console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
+    }
+
+    // Create new FormData with the processed (converted) audio file
+    const processedFormData = new FormData();
+    processedFormData.append('file', processedFile);
+
+    // Copy other form data fields
+    const detector = formData.get('detector');
+    if (detector) {
+      processedFormData.append('detector', detector as string);
+    }
+
+    const force = formData.get('force');
+    if (force) {
+      processedFormData.append('force', force as string);
     }
 
     // Create a safe timeout signal that works across environments
@@ -81,7 +118,7 @@ export async function POST(request: NextRequest) {
     // Forward the request to the backend with extended timeout
     const response = await fetch(`${backendUrl}/api/detect-beats`, {
       method: 'POST',
-      body: formData,
+      body: processedFormData,
       headers: {
         // Don't set Content-Type - let the browser set it with boundary for FormData
       },
