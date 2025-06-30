@@ -42,17 +42,25 @@ class BeatTransformerDetector:
             print(f"Error loading checkpoint {checkpoint_path}: {e}")
             raise
 
-        # Initialize DBN processors
+        # Note: DBN processors will be created dynamically with correct fps in detect_beats method
+        # to avoid hardcoded sample rate assumptions
+        self.beat_tracker = None
+        self.downbeat_tracker = None
+
+    def create_dbn_processors(self, sr, hop_length=1024):
+        """Create DBN processors with correct frame rate based on actual sample rate"""
+        correct_fps = sr / hop_length
+        print(f"Creating DBN processors with correct fps={correct_fps:.2f} (sr={sr}, hop_length={hop_length})")
+
         self.beat_tracker = DBNBeatTrackingProcessor(
-            min_bpm=55.0, max_bpm=215.0, fps=44100/1024,
+            min_bpm=55.0, max_bpm=215.0, fps=correct_fps,
             transition_lambda=100, observation_lambda=6,
             num_tempi=None, threshold=0.2
         )
 
-        # Support a wider range of time signatures (2/4, 3/4, 4/4, 5/4, 6/8, 7/8, etc.)
         self.downbeat_tracker = DBNDownBeatTrackingProcessor(
             beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
-            max_bpm=215.0, fps=44100/1024,
+            max_bpm=215.0, fps=correct_fps,
             transition_lambda=100, observation_lambda=6,
             num_tempi=None, threshold=0.2
         )
@@ -132,6 +140,10 @@ class BeatTransformerDetector:
             # Load the audio to get duration and sr
             audio, sr = librosa.load(audio_file, sr=None)
             duration = librosa.get_duration(y=audio, sr=sr)
+            print(f"Loaded audio: duration={duration:.2f}s, sr={sr}Hz")
+
+            # CRITICAL FIX: Create DBN processors with correct fps based on actual sample rate
+            self.create_dbn_processors(sr, hop_length=1024)
 
             # Step 1: Demix audio and create spectrograms
             print(f"Demixing audio and creating spectrograms: {audio_file}")
@@ -172,28 +184,37 @@ class BeatTransformerDetector:
             print(f"Enhanced beat activation stats: min={beat_activation_enhanced.min():.3f}, max={beat_activation_enhanced.max():.3f}")
             print(f"Enhanced downbeat activation stats: min={downbeat_activation_enhanced.min():.3f}, max={downbeat_activation_enhanced.max():.3f}")
 
-            # Use enhanced DBN processors with lower thresholds and better error handling
+            # CRITICAL FIX: Calculate correct frame rate for DBN processors
+            hop_length = 1024  # Beat-Transformer hop length
+            correct_fps = sr / hop_length  # Use actual sample rate, not hardcoded 44100
+            print(f"CRITICAL FIX: Using correct fps={correct_fps:.2f} (sr={sr}, hop_length={hop_length}) instead of hardcoded {44100/1024:.2f}")
+
+            # Use enhanced DBN processors with lower thresholds and CORRECT frame rate
             try:
-                # Create DBN processors with more sensitive parameters
+                # Create DBN processors with more sensitive parameters and CORRECT fps
                 from madmom.features.beats import DBNBeatTrackingProcessor
                 from madmom.features.downbeats import DBNDownBeatTrackingProcessor
 
                 enhanced_beat_tracker = DBNBeatTrackingProcessor(
-                    min_bpm=55.0, max_bpm=215.0, fps=44100/1024,
+                    min_bpm=55.0, max_bpm=215.0, fps=correct_fps,  # FIXED: Use correct fps
                     transition_lambda=100, observation_lambda=1,  # Lower observation_lambda for sensitivity
                     num_tempi=None, threshold=0.05  # Much lower threshold
                 )
 
                 enhanced_downbeat_tracker = DBNDownBeatTrackingProcessor(
                     beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
-                    max_bpm=215.0, fps=44100/1024,
+                    max_bpm=215.0, fps=correct_fps,  # FIXED: Use correct fps
                     transition_lambda=100, observation_lambda=1,  # Lower observation_lambda for sensitivity
                     num_tempi=None, threshold=0.05  # Much lower threshold
                 )
 
                 # Try beat tracking first
                 dbn_beat_times = enhanced_beat_tracker(beat_activation_enhanced)
-                print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
+                print(f"🔧 FIXED: Enhanced DBN beat tracker with correct fps={correct_fps:.2f} returned {len(dbn_beat_times)} beats")
+
+                # Debug: Log beat times if we found some
+                if len(dbn_beat_times) > 0:
+                    print(f"🔧 Beat times found: first={dbn_beat_times[0]:.2f}s, last={dbn_beat_times[-1]:.2f}s, span={dbn_beat_times[-1]-dbn_beat_times[0]:.2f}s")
 
                 # Only attempt downbeat tracking if we have beats
                 if len(dbn_beat_times) > 0:
@@ -237,7 +258,11 @@ class BeatTransformerDetector:
                 # Final fallback to original DBN with even lower thresholds
                 try:
                     dbn_beat_times = self.beat_tracker(beat_activation_enhanced)
-                    print(f"Original DBN beat tracker with enhanced activations returned {len(dbn_beat_times)} beats")
+                    print(f"🔧 FIXED: Fallback DBN beat tracker with correct fps returned {len(dbn_beat_times)} beats")
+
+                    # Debug: Log beat times if we found some
+                    if len(dbn_beat_times) > 0:
+                        print(f"🔧 Fallback beat times: first={dbn_beat_times[0]:.2f}s, last={dbn_beat_times[-1]:.2f}s, span={dbn_beat_times[-1]-dbn_beat_times[0]:.2f}s")
 
                     if len(dbn_beat_times) > 0:
                         try:
