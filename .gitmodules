@@ -7,3 +7,6 @@
 [submodule "python_backend/models/ChordMini"]
 	path = python_backend/models/ChordMini
 	url = https://github.com/ptnghia-j/ChordMini.git
+[submodule "python_backend/beat_transformer_minimal/Beat-Transformer"]
+	path = python_backend/beat_transformer_minimal/Beat-Transformer
+	url = https://github.com/ptnghia-j/beat-transformer-model.git
