@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
@@ -11,12 +10,7 @@ import PerformanceMonitor from '../components/PerformanceMonitor';
 import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptimizer';
 import DesktopPerformanceOptimizer from '../components/DesktopPerformanceOptimizer';
 
-// Initialize only the monospace font for chord labels
-const robotoMono = Roboto_Mono({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-roboto-mono'
-});
+
 
 // Define metadata for the application
 export const metadata: Metadata = {
@@ -97,7 +91,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={robotoMono.variable}>
+    <html lang="en">
       <head>
         {/* Critical CSS inlined for performance - eliminates render blocking */}
         <style dangerouslySetInnerHTML={{
@@ -136,6 +130,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//vercel.app" />
 
         {/* Optimize font loading */}
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preload" href="https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW4AJi8SJQt.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="font-sans min-h-screen flex flex-col">

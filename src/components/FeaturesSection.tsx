@@ -198,14 +198,14 @@ const FeaturesSection: React.FC = () => {
               {/* Feature Header - Always Visible */}
               <button
                 onClick={() => toggleFeature(feature.id)}
-                className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                className="w-full px-6 py-4 text-left flex items-center justify-between transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset group"
               >
                 <div className="flex items-center space-x-4 flex-1">
                   <div className="flex-shrink-0">
                     {feature.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 transition-colors duration-300">
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
                       {feature.title}
                     </h4>
                     <p className="text-gray-600 dark:text-gray-300 text-sm mt-1 transition-colors duration-300">
@@ -229,8 +229,8 @@ const FeaturesSection: React.FC = () => {
 
               {/* Expandable Content */}
               {expandedFeature === feature.id && (
-                <div className="px-6 pb-6 bg-white dark:bg-content-bg transition-colors duration-300">
-                  <div className="pt-4 space-y-4">
+                <div className="bg-white dark:bg-content-bg transition-colors duration-300">
+                  <div className="px-6 py-4 space-y-4">
                     {/* Detailed Description */}
                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                       {feature.detailedDescription}

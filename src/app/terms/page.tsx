@@ -167,24 +167,6 @@ const TermsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Contact Information */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
-            Contact Information
-          </h2>
-          <div className="space-y-4 text-gray-700 dark:text-gray-300">
-            <p>
-              For questions about these Terms of Service, please contact:
-            </p>
-            <div className="space-y-2">
-              <p><strong>Research Team:</strong> Nghia Phan, Dr. Rong Jin</p>
-              <p><strong>Institution:</strong> California State University, Fullerton</p>
-              <p><strong>Department:</strong> Computer Science</p>
-              <p><strong>Email:</strong> [Contact information will be added]</p>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   );

@@ -177,7 +177,14 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
                 </svg>
               )}
             </span>
-            <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{selectedModelOption.name}</span>
+              {selectedModelOption.id === 'beat-transformer' && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-700 transition-colors duration-300">
+                  BETA
+                </span>
+              )}
+            </div>
             {loading && (
               <div className="ml-2">
                 <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -233,7 +240,14 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
                         )}
                       </span>
                       <div>
-                        <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{model.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-800 dark:text-gray-200 transition-colors duration-300">{model.name}</p>
+                          {model.id === 'beat-transformer' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-700 transition-colors duration-300">
+                              BETA
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">{model.description}</p>
                       </div>
                     </div>

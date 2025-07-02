@@ -98,7 +98,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   };
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-black text-gray-800 dark:text-gray-100 shadow-md block z-50 transition-colors duration-300 w-screen ${className}`}>
+    <div className={`sticky top-0 bg-white dark:bg-black bg-opacity-70 dark:bg-opacity-70 backdrop-filter backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
       <div className="w-full px-4 flex justify-between items-center h-12">
         {/* Logo and Brand */}
         <div className="flex items-center">
@@ -109,7 +109,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
               width={40}
               height={40}
               sizes="40px"
-              className="mr-2 transition-transform duration-200 group-hover:scale-105"
+              className="mr-2 transition-transform duration-200 group-hover:scale-105 rounded-lg"
               style={{ width: '40px', height: '40px' }}
               priority
             />
@@ -199,7 +199,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
                   width={32}
                   height={32}
                   sizes="32px"
-                  className="mr-2"
+                  className="mr-2 rounded-lg"
                   style={{ width: '32px', height: '32px' }}
                 />
                 <h2 className="text-lg font-bold text-primary-700 dark:text-primary-300">

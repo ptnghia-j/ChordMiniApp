@@ -917,29 +917,29 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       </div>
 
       {/* Render rows of measures */}
-      <div className="space-y-1 sm:space-y-2">
+      <div className="space-y-1 sm:space-y-2 overflow-x-auto">
         {rows.map((row, rowIdx) => (
-          <div key={`row-${rowIdx}`} className="measure-row">
-            {/* Grid of measures with mobile-optimized responsive layout */}
-            <div className={`grid gap-1 sm:gap-2 ${
-              // Mobile-optimized responsive grid that utilizes more space on mobile
+          <div key={`row-${rowIdx}`} className="measure-row min-w-0">
+            {/* Grid of measures with consistent responsive layout */}
+            <div className={`grid gap-1 sm:gap-2 w-full ${
+              // Consistent grid that maintains complete measures per row across all screen sizes
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
               dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
-              dynamicMeasuresPerRow === 3 ? 'grid-cols-2 sm:grid-cols-3' :
-              dynamicMeasuresPerRow === 4 ? 'grid-cols-2 sm:grid-cols-4' :
-              dynamicMeasuresPerRow === 5 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' :
-              dynamicMeasuresPerRow === 6 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6' :
-              dynamicMeasuresPerRow === 7 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-7' :
-              dynamicMeasuresPerRow === 8 ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-8' :
-              dynamicMeasuresPerRow === 9 ? 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-9' :
-              dynamicMeasuresPerRow === 10 ? 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-10' :
-              'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' // Fallback
+              dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
+              dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
+              dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
+              dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
+              dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
+              dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
+              dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
+              dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
+              'grid-cols-4' // Fallback
             }`}>
               {row.map((measure, measureIdx) => {
                 return (
                 <div
                   key={`measure-${rowIdx}-${measureIdx}`}
-                  className="border-l-[3px] sm:border-l-[4px] border-gray-600 dark:border-gray-300 transition-colors duration-300 rounded-l-md"
+                  className="border-l-[3px] sm:border-l-[4px] border-gray-600 dark:border-gray-300 transition-colors duration-300 rounded-l-md min-w-0 flex-shrink-0"
                   style={{
                     paddingLeft: '2px'
                   }}
