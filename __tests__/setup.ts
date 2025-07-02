@@ -6,11 +6,16 @@
 import '@testing-library/jest-dom';
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
+(global as any).IntersectionObserver = class IntersectionObserver {
+  root = null;
+  rootMargin = '';
+  thresholds = [];
+
   constructor() {}
   disconnect() {}
   observe() {}
   unobserve() {}
+  takeRecords() { return []; }
 };
 
 // Mock ResizeObserver
@@ -182,10 +187,34 @@ const mockAudioContext = {
   suspend: jest.fn(),
   resume: jest.fn(),
   close: jest.fn(),
+  // Add missing AudioContext properties
+  baseLatency: 0,
+  outputLatency: 0,
+  createMediaStreamDestination: jest.fn(),
+  createMediaStreamSource: jest.fn(),
+  createBuffer: jest.fn(),
+  createBufferSource: jest.fn(),
+  createChannelMerger: jest.fn(),
+  createChannelSplitter: jest.fn(),
+  createConstantSource: jest.fn(),
+  createConvolver: jest.fn(),
+  createDelay: jest.fn(),
+  createDynamicsCompressor: jest.fn(),
+  createIIRFilter: jest.fn(),
+  createOscillator: jest.fn(),
+  createPanner: jest.fn(),
+  createPeriodicWave: jest.fn(),
+  createScriptProcessor: jest.fn(),
+  createStereoPanner: jest.fn(),
+  createWaveShaper: jest.fn(),
+  decodeAudioData: jest.fn(),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  dispatchEvent: jest.fn(),
 };
 
-global.AudioContext = jest.fn(() => mockAudioContext);
-global.webkitAudioContext = jest.fn(() => mockAudioContext);
+(global as any).AudioContext = jest.fn(() => mockAudioContext) as any;
+(global as any).webkitAudioContext = jest.fn(() => mockAudioContext);
 
 // Mock requestAnimationFrame
 global.requestAnimationFrame = jest.fn((cb) => setTimeout(cb, 16));
@@ -211,18 +240,23 @@ global.Worker = class MockWorker {
 };
 
 // Mock Blob
-global.Blob = class MockBlob {
+(global as any).Blob = class MockBlob {
   constructor(parts?: BlobPart[], options?: BlobPropertyBag) {}
   size: number = 0;
   type: string = '';
   arrayBuffer(): Promise<ArrayBuffer> { return Promise.resolve(new ArrayBuffer(0)); }
+  bytes(): Promise<Uint8Array> { return Promise.resolve(new Uint8Array(0)); }
   slice(start?: number, end?: number, contentType?: string): Blob { return new MockBlob(); }
   stream(): ReadableStream<Uint8Array> { return new ReadableStream(); }
   text(): Promise<string> { return Promise.resolve(''); }
 };
 
 // Mock FileReader
-global.FileReader = class MockFileReader {
+(global as any).FileReader = class MockFileReader {
+  static readonly EMPTY = 0;
+  static readonly LOADING = 1;
+  static readonly DONE = 2;
+
   readAsArrayBuffer(blob: Blob) {}
   readAsDataURL(blob: Blob) {}
   readAsText(blob: Blob) {}

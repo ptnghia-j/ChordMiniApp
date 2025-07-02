@@ -5,24 +5,40 @@ import { useNavigationHelpers } from '@/hooks/useNavigationHelpers';
 const mockLocation = {
   href: '',
 };
-Object.defineProperty(window, 'location', {
-  value: mockLocation,
-  writable: true,
-});
+
+// Use delete and reassign to avoid redefinition error
+delete (window as any).location;
+(window as any).location = mockLocation;
 
 describe('useNavigationHelpers Hook', () => {
+  // Create proper mock HTMLAudioElement
+  const createMockAudioElement = () => ({
+    muted: false,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    play: jest.fn(),
+    pause: jest.fn(),
+    load: jest.fn(),
+    // Add other required HTMLAudioElement properties as needed
+  } as any);
+
+  // Create proper mock YouTubePlayer
+  const createMockYouTubePlayer = () => ({
+    seekTo: jest.fn(),
+    playVideo: jest.fn(),
+    pauseVideo: jest.fn(),
+    setPlaybackRate: jest.fn(),
+    muted: false,
+  });
+
   const mockDependencies = {
     setIsVideoMinimized: jest.fn(),
     setIsFollowModeEnabled: jest.fn(),
     preferredAudioSource: 'youtube' as const,
     setPreferredAudioSource: jest.fn(),
-    youtubePlayer: {
-      muted: false,
-    },
+    youtubePlayer: createMockYouTubePlayer(),
     audioRef: {
-      current: {
-        muted: false,
-      },
+      current: createMockAudioElement(),
     },
   };
 

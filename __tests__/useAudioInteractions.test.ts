@@ -2,16 +2,32 @@ import { renderHook, act } from '@testing-library/react';
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 
 describe('useAudioInteractions Hook', () => {
+  // Create proper mock HTMLAudioElement
+  const createMockAudioElement = () => ({
+    currentTime: 0,
+    duration: 100,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    play: jest.fn(),
+    pause: jest.fn(),
+    load: jest.fn(),
+    // Add other required HTMLAudioElement properties as needed
+  } as any);
+
+  // Create proper mock YouTubePlayer
+  const createMockYouTubePlayer = () => ({
+    seekTo: jest.fn(),
+    playVideo: jest.fn(),
+    pauseVideo: jest.fn(),
+    setPlaybackRate: jest.fn(),
+    muted: false,
+  });
+
   const mockDependencies = {
     audioRef: {
-      current: {
-        currentTime: 0,
-        duration: 100,
-      },
+      current: createMockAudioElement(),
     },
-    youtubePlayer: {
-      seekTo: jest.fn(),
-    },
+    youtubePlayer: createMockYouTubePlayer(),
     setCurrentTime: jest.fn(),
     setDuration: jest.fn(),
     setIsPlaying: jest.fn(),
@@ -24,6 +40,10 @@ describe('useAudioInteractions Hook', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset audio element currentTime
+    if (mockDependencies.audioRef.current) {
+      mockDependencies.audioRef.current.currentTime = 0;
+    }
   });
 
   it('provides all audio interaction functions', () => {

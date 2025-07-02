@@ -155,7 +155,7 @@ describe('Analyze Page Utility Functions', () => {
         expect(result?.originalAudioMapping).toBeDefined();
         expect(result?.animationMapping).toBeDefined();
         
-        result?.originalAudioMapping?.forEach((mapping) => {
+        result?.originalAudioMapping?.forEach((mapping: any) => {
           expect(mapping.chord).toBeDefined();
           expect(mapping.timestamp).toBeGreaterThanOrEqual(0);
           expect(mapping.visualIndex).toBeGreaterThanOrEqual(0);
