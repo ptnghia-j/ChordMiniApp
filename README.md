@@ -381,50 +381,15 @@ NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_key
 NEXT_PUBLIC_BASE_URL=https://your-vercel-domain.vercel.app
 ```
 
-#### Deployment Documentation
-
-For detailed deployment instructions, see:
-- `VERCEL_DEPLOYMENT_GUIDE.md` - Complete deployment strategy
-- `FIREBASE_ADMIN_ACCESS_GUIDE.md` - Firebase configuration and admin access
-- `scripts/` directory - Automated deployment scripts
-
 ### Tech Stack
 
 - **Frontend**: Next.js 15.3.1, TypeScript, Tailwind CSS, React 19
 - **State Management**: React Query, Zustand
-- **Database**: Firebase Firestore
-- **APIs**: YouTube Data API, Music.ai, Google Gemini
+- **Database**: Firebase Firestore Storage
+- **APIs**: YouTube Data API, Music.ai, Google Gemini, YouTube Search API, QuickTube, yt-dlp
 - **Backend**: Python (Google Cloud Run)
 - **Deployment**: Vercel (frontend), Google Cloud Run (backend)
 
-### Performance Optimizations
-
-ChordMini has undergone comprehensive performance optimization to deliver the best user experience:
-
-#### Bundle Size Optimization (January 2025)
-- **19% reduction** in main analyze page bundle size (337 kB → 336 kB)
-- **Service file cleanup**: Removed 5 deprecated service files (~1,200+ lines of code)
-- **Tree-shaking optimization**: Eliminated unused WebSocket and legacy services
-- **CSS optimization**: Replaced CSS-in-JS with global CSS for better performance
-
-#### Service Architecture Cleanup
-- **Removed deprecated services**:
-  - `quickTubeService.ts` - Unnecessary wrapper layer
-  - `quickTubeServiceNew.ts` - Unused implementation
-  - `clientWebSocketService.ts` - Deprecated WebSocket service
-  - `quickTubeWebSocketService.ts` - Deprecated WebSocket service
-  - `audioService.ts` - Legacy unused service
-- **Active services retained**:
-  - `quickTubeServiceSimplified.ts` - Primary QuickTube integration
-  - `audioExtractionSimplified.ts` - Primary audio extraction
-  - `audioMetaDataService.ts` - Supporting metadata service
-
-#### Production Deployment Status
-- **Frontend**: Successfully deployed on Vercel with optimized bundles
-- **Backend**: Google Cloud Run (8 CPU, 16GB RAM, 600s timeout)
-- **Performance**: 2-3 minute processing time for 2-minute audio files
-- **Caching**: 90% reduction in processing time for cached results
-- **Monitoring**: Real-time performance tracking and error handling
 
 ### Application Flow Architecture
 

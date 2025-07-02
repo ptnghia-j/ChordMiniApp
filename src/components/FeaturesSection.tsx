@@ -184,16 +184,16 @@ const FeaturesSection: React.FC = () => {
 
   return (
     <div id="features" className="mt-6">
-      <div className="bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 rounded-lg p-6 w-full transition-colors duration-300">
+      <div className="bg-white dark:bg-content-bg rounded-lg p-6 w-full transition-colors duration-300 shadow-sm">
         <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center transition-colors duration-300">
           Features
         </h3>
-        
-        <div className="space-y-4">
+
+        <div className="space-y-3">
           {features.map((feature) => (
             <div
               key={feature.id}
-              className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden transition-all duration-300 hover:shadow-md"
+              className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden transition-all duration-300 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500"
             >
               {/* Feature Header - Always Visible */}
               <button

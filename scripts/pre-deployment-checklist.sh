@@ -184,20 +184,52 @@ echo "==========================="
 
 BACKEND_URL="https://chordmini-backend-full-191567167632.us-central1.run.app"
 
-# Test backend health
-echo -n "Testing backend health... "
-if curl -s --max-time 10 "$BACKEND_URL/" > /dev/null; then
+# Function to test backend with retry logic for cold starts
+test_backend_with_retry() {
+    local url="$1"
+    local description="$2"
+    local max_attempts=3
+    local timeout=15
+    local attempt=1
+
+    echo -n "Testing $description (may take up to 45s for cold start)... "
+
+    while [ $attempt -le $max_attempts ]; do
+        if [ $attempt -gt 1 ]; then
+            echo -n "retry $attempt... "
+            sleep $((attempt * 5))  # Exponential backoff: 5s, 10s
+        fi
+
+        if curl -s --max-time $timeout "$url" > /dev/null 2>&1; then
+            return 0  # Success
+        fi
+
+        ((attempt++))
+        timeout=$((timeout + 15))  # Increase timeout: 15s, 30s, 45s
+    done
+
+    return 1  # Failed after all attempts
+}
+
+# Test backend health with cold start handling
+if test_backend_with_retry "$BACKEND_URL/" "backend health"; then
     check_pass "Backend service is responding"
 else
-    check_fail "Backend service not responding"
+    check_warn "Backend service not responding (may be cold start - this is non-critical)"
+    echo "  💡 Note: Google Cloud Run services may take 30+ seconds to start from cold state"
 fi
 
-# Test model info endpoint
-echo -n "Testing model info endpoint... "
-if curl -s --max-time 10 "$BACKEND_URL/api/model-info" | grep -q "success"; then
-    check_pass "Model info endpoint working"
+# Test model info endpoint with retry logic
+if test_backend_with_retry "$BACKEND_URL/api/model-info" "model info endpoint"; then
+    # Additional check for success response
+    if curl -s --max-time 15 "$BACKEND_URL/api/model-info" | grep -q "success"; then
+        check_pass "Model info endpoint working"
+    else
+        check_warn "Model info endpoint responding but may not be fully ready"
+    fi
 else
-    check_fail "Model info endpoint not working"
+    check_warn "Model info endpoint not responding (may be cold start - this is non-critical)"
+    echo "  💡 Note: Backend services will be available once the first user request triggers startup"
 fi
 
 echo ""

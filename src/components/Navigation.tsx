@@ -98,7 +98,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   };
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-black bg-opacity-70 dark:bg-opacity-70 backdrop-filter backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
+    <div className={`sticky top-0 bg-white dark:bg-black bg-opacity-50 dark:bg-opacity-50 backdrop-filter backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
       <div className="w-full px-4 flex justify-between items-center h-12">
         {/* Logo and Brand */}
         <div className="flex items-center">
