@@ -40,11 +40,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Security: Only allow files with safe names and mp3 extension
+    // Security: Only allow files with safe names and audio extensions
     const safeFilename = basename(filename);
-    if (!safeFilename.endsWith('.mp3') || safeFilename.includes('..') || safeFilename.includes('/')) {
+    const allowedExtensions = ['.mp3', '.wav', '.m4a', '.opus', '.webm'];
+    const hasValidExtension = allowedExtensions.some(ext => safeFilename.endsWith(ext));
+
+    if (!hasValidExtension || safeFilename.includes('..') || safeFilename.includes('/')) {
       return NextResponse.json(
-        { error: 'Invalid filename format' },
+        { error: 'Invalid filename format. Only audio files are allowed.' },
         { status: 400 }
       );
     }
@@ -74,11 +77,20 @@ export async function GET(request: NextRequest) {
       // Read the file
       const fileBuffer = await readFile(filePath);
 
+      // Determine content type based on file extension
+      let contentType = 'audio/mpeg'; // default
+      if (safeFilename.endsWith('.wav')) contentType = 'audio/wav';
+      else if (safeFilename.endsWith('.m4a')) contentType = 'audio/mp4';
+      else if (safeFilename.endsWith('.opus')) contentType = 'audio/opus';
+      else if (safeFilename.endsWith('.webm')) contentType = 'audio/webm';
+
+      console.log(`📁 Serving local audio file: ${safeFilename} (${(fileStats.size / 1024 / 1024).toFixed(2)}MB, ${contentType})`);
+
       // Return the audio file with appropriate headers
       return new NextResponse(fileBuffer, {
         status: 200,
         headers: {
-          'Content-Type': 'audio/mpeg',
+          'Content-Type': contentType,
           'Content-Length': fileStats.size.toString(),
           'Accept-Ranges': 'bytes',
           'Cache-Control': 'public, max-age=3600', // Cache for 1 hour

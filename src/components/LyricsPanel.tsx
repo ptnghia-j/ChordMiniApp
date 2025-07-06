@@ -207,7 +207,18 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <>
+          {/* Mobile backdrop overlay */}
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
+
+          <motion.div
           className={`
             fixed z-[9998]
             bg-white dark:bg-content-bg rounded-lg shadow-2xl
@@ -223,17 +234,35 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)]
             sm:h-[calc(100vh-6rem)] sm:max-h-[800px] sm:min-h-[400px]
 
-            /* Mobile full screen */
-            max-sm:bottom-0 max-sm:right-0 max-sm:left-0 max-sm:top-0
-            max-sm:w-full max-sm:h-full max-sm:max-h-none max-sm:min-h-0
-            max-sm:rounded-none
+            /* Mobile slide-up panel - takes 80% of screen height */
+            max-sm:bottom-0 max-sm:right-0 max-sm:left-0
+            max-sm:w-full max-sm:h-[80vh] max-sm:max-h-[80vh] max-sm:min-h-[60vh]
+            max-sm:rounded-t-xl max-sm:rounded-b-none
 
             ${className}
           `}
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          initial={{
+            opacity: 0,
+            scale: 0.9,
+            y: 20
+          }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+            y: 0
+          }}
+          exit={{
+            opacity: 0,
+            scale: 0.9,
+            y: 20
+          }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
+          style={{
+            // Use CSS for responsive animations
+            transform: typeof window !== 'undefined' && window.innerWidth < 640
+              ? 'translateY(0)'
+              : undefined
+          }}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
@@ -524,6 +553,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             )}
           </div>
         </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

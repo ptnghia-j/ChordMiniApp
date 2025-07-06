@@ -5,9 +5,14 @@ import { FiChevronDown } from 'react-icons/fi';
 interface MetronomeControlsProps {
   className?: string;
   isVideoMinimized?: boolean;
+  onToggleWithSync?: () => Promise<boolean>; // ENHANCED: Synchronized toggle function with current time
 }
 
-const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', isVideoMinimized = false }) => {
+const MetronomeControls: React.FC<MetronomeControlsProps> = ({
+  className = '',
+  isVideoMinimized = false,
+  onToggleWithSync
+}) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [volume, setVolume] = useState(0.3);
   const [soundStyle, setSoundStyle] = useState<'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'>('librosa_short');
@@ -29,29 +34,31 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({ className = '', i
     initMetronome();
   }, []);
 
-  // Handle metronome toggle
+  // Handle metronome toggle with synchronization
   const handleToggle = async () => {
-    // console.log('MetronomeControls: Toggle clicked', {
-    //   hasService: !!metronomeService,
-    //   currentEnabled: isEnabled
-    // });
-
     if (!metronomeService) {
-      // console.error('MetronomeControls: No metronome service available');
+      console.error('MetronomeControls: No metronome service available');
       return;
     }
 
-    const newEnabled = !isEnabled;
-    // console.log('MetronomeControls: Setting enabled to', newEnabled);
+    let newEnabled: boolean;
+
+    // ENHANCED: Use synchronized toggle when available for perfect timing
+    if (onToggleWithSync) {
+      // console.log('Using synchronized metronome toggle with current time');
+      newEnabled = await onToggleWithSync();
+    } else {
+      // Fallback to legacy toggle (for upload page compatibility)
+      // console.log('Using legacy metronome toggle (no current time sync)');
+      newEnabled = !isEnabled;
+      await metronomeService.setEnabled(newEnabled, 0); // Default to time 0
+    }
 
     setIsEnabled(newEnabled);
-    await metronomeService.setEnabled(newEnabled);
 
-    // Test click when enabling
+    // Test click when enabling (for AudioContext initialization)
     if (newEnabled) {
-      // console.log('MetronomeControls: Scheduling test click...');
       setTimeout(() => {
-        // console.log('MetronomeControls: Executing test click...');
         metronomeService.testClick(false);
       }, 100);
     }

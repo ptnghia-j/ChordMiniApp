@@ -43,7 +43,6 @@ const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
-// import { apiPost } from '@/config/api'; // ✅ EXTRACTED: Now used in audioProcessingExtracted service
 import { SongContext } from '@/types/chatbotTypes';
 import { LyricsData } from '@/types/musicAiTypes';
 import { useMetronomeSync } from '@/hooks/useMetronomeSync';
@@ -66,8 +65,6 @@ import {
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
 
-// import { timingSyncService } from '@/services/timingSyncService'; // ✅ EXTRACTED: Moved to useScrollAndAnimation hook
-// convertToPrivacyEnhancedUrl removed as it's not used in this component
 // Import skeleton loaders
 import {
   AudioPlayerSkeleton,
@@ -101,6 +98,12 @@ const LyricsSection = dynamic(() => import('@/components/LyricsSection').then(mo
   ssr: false
 });
 
+// Guitar chords tab - load only when tab is active
+const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
+  loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 // Chatbot - load only when user opens the chatbot
 const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(mod => ({ default: mod.ChatbotSection })), {
   loading: () => <ChatbotSkeleton />,
@@ -111,12 +114,12 @@ import dynamic from 'next/dynamic';
 import UserFriendlyErrorDisplay from '@/components/UserFriendlyErrorDisplay';
 
 
-// Dynamically import ReactPlayer to avoid SSR issues
-const ReactPlayer = dynamic(() => import('react-player/youtube'), {
+// Import the new collapsible video player
+const CollapsibleVideoPlayer = dynamic(() => import('@/components/CollapsibleVideoPlayer'), {
   ssr: false,
   loading: () => (
     <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
-      <div className="text-white">Loading YouTube player...</div>
+      <div className="text-white">Loading player...</div>
     </div>
   )
 });
@@ -132,17 +135,6 @@ export default function YouTubeVideoAnalyzePage() {
   const channelFromSearch = searchParams?.get('channel') ? decodeURIComponent(searchParams.get('channel')!) : null;
   const thumbnailFromSearch = searchParams?.get('thumbnail') ? decodeURIComponent(searchParams.get('thumbnail')!) : null;
 
-  // Debug: Log URL parameters only once when component mounts or videoId changes
-  useEffect(() => {
-    // console.log('🔍 URL Search Parameters:', {
-    //   videoId,
-    //   title: titleFromSearch,
-    //   duration: durationFromSearch,
-    //   channel: channelFromSearch,
-    //   thumbnail: thumbnailFromSearch,
-    //   allParams: Object.fromEntries(searchParams?.entries() || [])
-    // });
-  }, [videoId, titleFromSearch, durationFromSearch, channelFromSearch, thumbnailFromSearch, searchParams]);
   const {
     stage,
     progress: _progress, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -160,11 +152,9 @@ export default function YouTubeVideoAnalyzePage() {
     state: audioProcessingState,
     analysisResults,
     videoTitle,
-    extractAudio: _extractAudioFromService, // eslint-disable-line @typescript-eslint/no-unused-vars
-    analyzeAudio: analyzeAudioFromService, // eslint-disable-line @typescript-eslint/no-unused-vars
-    loadVideoInfo: _loadVideoInfo, // eslint-disable-line @typescript-eslint/no-unused-vars
+    analyzeAudio: analyzeAudioFromService,
     setState: setAudioProcessingState,
-    setAnalysisResults, // eslint-disable-line @typescript-eslint/no-unused-vars
+    setAnalysisResults,
     setVideoTitle
   } = useAudioProcessing(videoId);
 
@@ -197,8 +187,8 @@ export default function YouTubeVideoAnalyzePage() {
     beatDetector,
     chordDetector,
     modelsInitialized,
-    beatDetectorRef, // eslint-disable-line @typescript-eslint/no-unused-vars
-    chordDetectorRef, // eslint-disable-line @typescript-eslint/no-unused-vars
+    beatDetectorRef,
+    chordDetectorRef,
     setBeatDetector,
     setChordDetector,
   } = useModelState();
@@ -331,7 +321,6 @@ export default function YouTubeVideoAnalyzePage() {
     // Create dependency object for extracted service with type-compatible wrappers
     const deps = {
       // State setters with type compatibility wrappers
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setAudioProcessingState: (updater: (prev: any) => any) => setAudioProcessingState(updater),
       setAnalysisResults,
       setDuration,
@@ -382,7 +371,6 @@ export default function YouTubeVideoAnalyzePage() {
     };
 
     // Call the extracted service function
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await handleAudioAnalysisService(deps as any); // Type compatibility handled by wrapper
   }, [
     audioProcessingState,
@@ -424,7 +412,7 @@ export default function YouTubeVideoAnalyzePage() {
     };
 
     checkCachedAnalysisAvailabilityService(deps as any);
-  }, [audioProcessingState.isExtracted, audioProcessingState.audioUrl, audioProcessingState.isAnalyzed, audioProcessingState.isAnalyzing, videoId, beatDetector, chordDetector, modelsInitialized]);
+  }, [audioProcessingState, videoId, beatDetector, chordDetector, modelsInitialized]);
 
   // Lyrics transcription state
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
@@ -435,7 +423,7 @@ export default function YouTubeVideoAnalyzePage() {
   const [hasCachedLyrics, setHasCachedLyrics] = useState<boolean>(false);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'lyricsChords'>('beatChordMap');
+  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords' | 'lyricsChords'>('beatChordMap');
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
@@ -601,7 +589,6 @@ export default function YouTubeVideoAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, titleFromSearch]); // Re-run when videoId or titleFromSearch changes
 
-  // ✅ EXTRACTED: Check for cached lyrics using service
   useEffect(() => {
     // Delay slightly to let the component mount fully
     const timer = setTimeout(() => {
@@ -621,16 +608,16 @@ export default function YouTubeVideoAnalyzePage() {
           await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Check if cached analysis exists for current models
-          console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
+          // console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
           const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
           if (cachedData) {
-            console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
-            console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
+            // console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
+            // console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
             setCacheAvailable(true);
           } else {
-            console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
-            console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run new analysis');
+            // console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
+            // console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run new analysis');
             setCacheAvailable(false);
           }
 
@@ -638,7 +625,7 @@ export default function YouTubeVideoAnalyzePage() {
 
         } catch (error) {
           console.error('Error checking cached analysis availability:', error);
-          console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run analysis');
+          // console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run analysis');
         }
       }
     };
@@ -759,7 +746,7 @@ export default function YouTubeVideoAnalyzePage() {
   };
 
   // Extract audio from YouTube using our API endpoint
-  const extractAudioFromYouTube = async (forceRefresh = false) => {
+  const extractAudioFromYouTube = useCallback(async (forceRefresh = false) => {
     // Create dependency object for extracted service
     const deps = {
       // State setters
@@ -814,7 +801,22 @@ export default function YouTubeVideoAnalyzePage() {
 
     // Call the extracted service function
     return await extractAudioFromYouTubeService(deps as any, forceRefresh); // Type compatibility handled by wrapper
-  };
+  }, [
+    videoId,
+    setShowExtractionNotification,
+    audioProcessingState,
+    audioRef,
+    beatDetector,
+    beatDetectorRef,
+    channelFromSearch,
+    chordDetector,
+    chordDetectorRef,
+    durationFromSearch,
+    setAudioProcessingState,
+    thumbnailFromSearch,
+    titleFromSearch,
+    extractionLockRef
+  ]);
 
   // YouTube player event handlers
   const handleYouTubeReady = (player: unknown) => {
@@ -864,9 +866,7 @@ export default function YouTubeVideoAnalyzePage() {
   const chordGridData = useMemo(() => getChordGridDataService(analysisResults as any) as any, [analysisResults]);
 
   // Use extracted scroll and animation hook
-  const {
-    scrollToCurrentBeat, // eslint-disable-line @typescript-eslint/no-unused-vars
-  } = useScrollAndAnimation({
+  useScrollAndAnimation({
     audioRef,
     isPlaying,
     analysisResults,
@@ -882,17 +882,19 @@ export default function YouTubeVideoAnalyzePage() {
     lastClickInfo,
   });
 
-  // Metronome synchronization hook - uses same beat data as chord grid for perfect sync
-  useMetronomeSync({
+  // Metronome synchronization hook - PRE-GENERATED TRACK APPROACH
+  const { toggleMetronomeWithSync } = useMetronomeSync({
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
     isPlaying,
     timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
+    bpm: analysisResults?.beatDetectionResult?.bpm || 120, // Use detected BPM for metronome track generation
     beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
     shiftCount: chordGridData.shiftCount || 0,
     paddingCount: chordGridData.paddingCount || 0,
-    chordGridBeats: chordGridData.beats || [] // Use same processed beats as chord grid
+    chordGridBeats: chordGridData.beats || [], // Use same processed beats as chord grid
+    audioDuration: analysisResults?.audioDuration || 0 // Total audio duration for track generation
   });
 
   // Mute appropriate audio source based on preference
@@ -922,12 +924,12 @@ export default function YouTubeVideoAnalyzePage() {
       <ExtractionNotification
         isVisible={showExtractionNotification}
         fromCache={audioProcessingState.fromCache}
-        onDismiss={() => setShowExtractionNotification(false)}
-        onRefresh={() => extractAudioFromYouTube(true)}
+        onDismiss={useCallback(() => setShowExtractionNotification(false), [])}
+        onRefresh={useCallback(() => extractAudioFromYouTube(true), [extractAudioFromYouTube])}
       />
 
       <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "98%" }}>
-        <div className="bg-white dark:bg-content-bg shadow-md rounded-lg overflow-hidden transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+        <div className="bg-white dark:bg-content-bg transition-colors duration-300">
 
         {/* Processing Status Banner - positioned in content flow */}
         <ProcessingStatusBanner
@@ -984,7 +986,7 @@ export default function YouTubeVideoAnalyzePage() {
             <div className="mt-0 space-y-2">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-3 rounded-lg bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 mb-2 mt-0 transition-colors duration-300">
+              <div className="p-3 rounded-lg bg-white dark:bg-content-bg mb-2 mt-0 transition-colors duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-2">
                   <div className="mb-2 md:mb-0">
                     <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
@@ -1046,6 +1048,21 @@ export default function YouTubeVideoAnalyzePage() {
                       Beat & Chord Map
                     </button>
                     <button
+                      onClick={() => setActiveTab('guitarChords')}
+                      className={`py-2 px-4 text-sm font-medium ${
+                        activeTab === 'guitarChords'
+                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className="flex items-center space-x-1">
+                        <span>Guitar Chords</span>
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
+                          beta
+                        </span>
+                      </span>
+                    </button>
+                    <button
                       onClick={() => setActiveTab('lyricsChords')}
                       disabled={!showLyrics && !hasCachedLyrics}
                       className={`py-2 px-4 text-sm font-medium ${
@@ -1056,7 +1073,12 @@ export default function YouTubeVideoAnalyzePage() {
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
                       }`}
                     >
-                      Lyrics & Chords
+                      <span className="flex items-center space-x-1">
+                        <span>Lyrics & Chords</span>
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
+                          beta
+                        </span>
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1089,6 +1111,24 @@ export default function YouTubeVideoAnalyzePage() {
                         audioDuration={duration}
                       />
                     </div>
+                  )}
+
+                  {/* Guitar Chords Tab */}
+                  {activeTab === 'guitarChords' && (
+                    <GuitarChordsTab
+                      analysisResults={analysisResults}
+                      chordGridData={chordGridData}
+                      currentBeatIndex={currentBeatIndex}
+                      onBeatClick={handleBeatClick}
+                      keySignature={keySignature}
+                      isDetectingKey={isDetectingKey}
+                      isChatbotOpen={isChatbotOpen}
+                      isLyricsPanelOpen={isLyricsPanelOpen}
+                      isUploadPage={false}
+                      showCorrectedChords={showCorrectedChords}
+                      chordCorrections={memoizedChordCorrections}
+                      sequenceCorrections={memoizedSequenceCorrections}
+                    />
                   )}
 
                   {/* Lyrics & Chords Tab */}
@@ -1133,10 +1173,10 @@ export default function YouTubeVideoAnalyzePage() {
                           key={`beat-${index}`}
                           className={`absolute bottom-0 transform -translate-x-1/2 ${
                             index === currentBeatIndex
-                              ? 'bg-blue-600'
+                              ? 'bg-blue-600 dark:bg-blue-400'
                               : isFirstBeat
-                                ? 'bg-blue-500'
-                                : 'bg-gray-500'
+                                ? 'bg-blue-500 dark:bg-blue-300'
+                                : 'bg-gray-500 dark:bg-gray-400'
                           }`}
                           style={{
                             left: `${(beatTime / duration) * 100}%`,
@@ -1284,7 +1324,10 @@ export default function YouTubeVideoAnalyzePage() {
 
                 {/* Metronome controls - only show when analysis results are available */}
                 {analysisResults && (
-                  <MetronomeControls isVideoMinimized={isVideoMinimized} />
+                  <MetronomeControls
+                    isVideoMinimized={isVideoMinimized}
+                    onToggleWithSync={toggleMetronomeWithSync}
+                  />
                 )}
               </div>
               <div className="relative">
@@ -1304,31 +1347,19 @@ export default function YouTubeVideoAnalyzePage() {
                   )}
                 </button>
 
-                {/* Video player */}
-                <div className="aspect-video bg-black rounded-lg overflow-hidden shadow-lg">
-                  {(audioProcessingState.youtubeEmbedUrl || audioProcessingState.videoUrl) && (
-                    <ReactPlayer
-                      url={`https://www.youtube.com/watch?v=${videoId}`}
-                      width="100%"
-                      height="100%"
-                      controls={true}
-                      playing={isPlaying}
-                      playbackRate={playbackRate}
-                      onReady={handleYouTubeReady}
-                      onPlay={handleYouTubePlay}
-                      onPause={handleYouTubePause}
-                      onProgress={handleYouTubeProgress}
-                      progressInterval={100}
-                      muted={preferredAudioSource === 'extracted'}
-                      config={{
-                        playerVars: {
-                          showinfo: 1,
-                          origin: typeof window !== 'undefined' ? window.location.origin : undefined
-                        }
-                      }}
-                    />
-                  )}
-                </div>
+                {/* Video player with mobile collapsible functionality */}
+                {(audioProcessingState.youtubeEmbedUrl || audioProcessingState.videoUrl) && (
+                  <CollapsibleVideoPlayer
+                    videoId={videoId}
+                    isPlaying={isPlaying}
+                    playbackRate={playbackRate}
+                    preferredAudioSource={preferredAudioSource}
+                    onReady={handleYouTubeReady}
+                    onPlay={handleYouTubePlay}
+                    onPause={handleYouTubePause}
+                    onProgress={handleYouTubeProgress}
+                  />
+                )}
               </div>
             </div>
           )}

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     console.log(`Fetching video info for: ${videoId}`);
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
 
     console.log(`Proxying YouTube info request to backend: ${backendUrl}/api/extract-audio`);
 

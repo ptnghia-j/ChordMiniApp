@@ -27,7 +27,7 @@ export interface VercelBlobUploadResult {
 }
 
 class VercelBlobUploadService {
-  private readonly PYTHON_BACKEND_URL = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+  private readonly PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
   private readonly VERCEL_SIZE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB conservative limit
 
   /**
@@ -37,7 +37,11 @@ class VercelBlobUploadService {
     const isLargeFile = fileSize > this.VERCEL_SIZE_LIMIT;
     const isBlobAvailable = this.isBlobConfigured();
 
-    console.log(`🔍 Blob upload check: fileSize=${this.getFileSizeString(fileSize)}, isLarge=${isLargeFile}, blobAvailable=${isBlobAvailable}`);
+    console.log(`🔍 Blob upload check: fileSize=${this.getFileSizeString(fileSize)}, isLarge=${isLargeFile}, blobAvailable=${isBlobAvailable}, limit=${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
+
+    if (isLargeFile && !isBlobAvailable) {
+      console.warn(`⚠️ Large file detected but blob upload not available. File: ${this.getFileSizeString(fileSize)}, Limit: ${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
+    }
 
     return isLargeFile && isBlobAvailable;
   }

@@ -1,0 +1,23 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript"
+  ],
+  "ignorePatterns": [
+    ".next/**/*",
+    "node_modules/**/*",
+    "dist/**/*",
+    "build/**/*",
+    "scripts/**/*",
+    "python_backend/**/*",
+    "public/sw.js",
+    "webpack-optimizations.js",
+    "*.config.js",
+    "*.config.mjs",
+    "*.config.ts",
+    "src/tests/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "__tests__/**/*"
+  ]
+}

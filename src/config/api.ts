@@ -7,10 +7,10 @@
  * Audio extraction uses QuickTube directly from the frontend.
  */
 
-// Backend URLs
+// Backend URLs - Centralized configuration using environment variables
 export const BACKEND_URLS = {
-  // Google Cloud Run Python backend (ML services only)
-  PYTHON_BACKEND: 'https://chordmini-backend-full-191567167632.us-central1.run.app',
+  // Python backend (uses environment variable with fallback for localhost development)
+  PYTHON_BACKEND: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000',
 
   // Vercel frontend (current domain)
   VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
@@ -98,13 +98,17 @@ export async function apiRequest(
   };
   
   try {
-    console.log(`Making API request to: ${url} (external: ${isExternal})`);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Making API request to: ${url} (external: ${isExternal})`);
+    }
+
     const response = await fetch(url, fetchOptions);
-    
+
     if (!response.ok) {
       console.error(`API request failed: ${response.status} ${response.statusText}`);
     }
-    
+
     return response;
   } catch (error) {
     console.error(`API request error for ${url}:`, error);

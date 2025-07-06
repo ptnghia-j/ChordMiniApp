@@ -170,7 +170,7 @@ export function useStatusMonitoring() {
         response = await api.getGeniusLyrics('test', 'test');
       } else {
         // File upload endpoints - test directly against backend
-        const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+        const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
         const testResponse = await fetch(`${baseUrl}${endpoint}`, {
           method: 'POST',
           headers: {

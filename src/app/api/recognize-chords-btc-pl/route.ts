@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
     const response = await fetch(`${backendUrl}/api/recognize-chords-btc-pl`, {
       method: 'POST',
       body: formData,

@@ -105,8 +105,7 @@ export class AudioProcessingService {
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
-        console.log(`✅ Found cached results for ${beatDetector} + ${chordDetector}, loading...`);
-        console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
+        // Cache found - loading cached results
 
         // Convert cached data to AnalysisResult format
         return {

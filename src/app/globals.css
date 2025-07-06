@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&display=swap');
+/* Roboto Mono font is preloaded in layout.tsx for performance */
 
 @tailwind base;
 @tailwind components;
@@ -164,6 +164,63 @@
     .audio-player-landscape {
       padding: 0.75rem;
       margin-bottom: 0.5rem;
+    }
+  }
+
+  /* Mobile portrait optimizations for very small screens */
+  @media (max-width: 568px) {
+    /* Ensure chord cells remain readable on very small screens */
+    .chord-cell {
+      min-height: 2.75rem !important;
+      min-width: 2.75rem !important;
+      font-size: 0.875rem;
+      /* Ensure text doesn't overflow */
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Optimize chord grid for mobile */
+    .chord-grid-optimized .chord-cell,
+    .chord-grid .chord-cell {
+      /* Minimum touch target size */
+      min-height: 44px !important;
+      min-width: 44px !important;
+      /* Better text handling */
+      padding: 0.25rem;
+      box-sizing: border-box;
+    }
+
+    /* Optimize modal panels for mobile */
+    .mobile-panel {
+      border-radius: 1rem 1rem 0 0;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Ensure navigation is always visible */
+    .mobile-nav {
+      background-color: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+
+    .dark .mobile-nav {
+      background-color: rgba(17, 24, 39, 0.95);
+    }
+  }
+
+  /* Mobile landscape optimizations */
+  @media (max-width: 768px) and (orientation: landscape) {
+    .chord-cell {
+      min-height: 2.5rem !important;
+      min-width: 2.5rem !important;
+    }
+  }
+
+  /* Tablet optimizations */
+  @media (min-width: 569px) and (max-width: 1024px) {
+    .chord-cell {
+      min-height: 3rem !important;
+      min-width: 3rem !important;
     }
   }
 }

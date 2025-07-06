@@ -128,13 +128,23 @@ export default function CacheManager() {
 
         {/* Information Icon with Tooltip */}
         <div className="relative group">
-          <div className="rounded-full bg-blue-100 p-1 cursor-help">
-            <svg className="w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <div className="rounded-full bg-blue-100 dark:bg-blue-900/30 p-1 cursor-help hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
           </div>
-          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-[300ms] absolute z-10 bg-gray-800 text-white text-sm rounded p-2 max-w-xs md:left-1/2 md:transform md:-translate-x-1/2 right-0 md:right-auto">
-            Caching helps reduce loading times and YouTube API usage by storing processed audio files locally.
+
+          {/* Modern tooltip with arrow */}
+          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute z-50 -top-2 right-0 transform -translate-y-full">
+            <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 p-3 max-w-xs">
+              <div className="font-medium mb-1">Cache Management</div>
+              <div className="text-xs text-gray-600 dark:text-gray-400">
+                Caching helps reduce loading times and YouTube API usage.
+              </div>
+
+              {/* Arrow pointing down */}
+              <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800"></div>
+            </div>
           </div>
         </div>
       </div>

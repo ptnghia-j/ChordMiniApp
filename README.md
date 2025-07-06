@@ -16,72 +16,66 @@ Clean, intuitive interface for YouTube search, URL input, and recent video acces
 
 Real-time chord progression visualization with synchronized beat detection and grid layout.
 
+### 🎵 Guitar Diagrams
+
+![Guitar Diagrams](guitar_diagrams.png)
+
+Interactive guitar chord diagrams synchronized with the beat chord grid.
+
 ### 🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](leadsheet_with_ai.png)
 
 Synchronized lyrics transcription with AI chatbot for contextual music analysis and translation support.
 
-## 🚀 Local Development Setup
+## 🚀 Quick Setup
 
 ### Prerequisites
+- **Node.js 18+** and **npm**
+- **Python 3.9+** (for backend)
+- **Firebase account** (free tier)
 
-Before starting, ensure you have:
+### Setup Steps
 
-- **Node.js 18+** and **npm** installed
-- **Git** for version control
-- **Firebase account** (free tier sufficient)
-- **API keys** (optional but recommended for full functionality):
-  - YouTube Data API v3
-  - Music.ai API (for lyrics transcription)
-  - Google Gemini API (for AI features)
-
-### Quick Start
-
-1. **Clone the repository**
+1. **Clone and install**
    ```bash
    git clone https://github.com/ptnghia-j/ChordMiniApp.git
    cd ChordMiniApp
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Environment setup**
+2. **Environment setup**
    ```bash
    cp .env.example .env.local
    ```
 
-4. **Configure environment variables**
-
-   Edit `.env.local` with your configuration:
+   Edit `.env.local`:
    ```bash
-   # Backend API (Production service available)
-   NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-191567167632.us-central1.run.app
-
-   # Firebase Configuration
+   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-   # API Keys (Optional)
-   NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_api_key
-   NEXT_PUBLIC_MUSIC_AI_API_KEY=your_music_ai_key
-   NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_key
    ```
 
-5. **Start development server**
+3. **Start Python backend** (Terminal 1)
+   ```bash
+   cd python_backend
+   python -m venv myenv
+   source myenv/bin/activate  # On Windows: myenv\Scripts\activate
+   pip install -r requirements.txt
+   python app.py
+   ```
+
+4. **Start frontend** (Terminal 2)
    ```bash
    npm run dev
    ```
 
-6. **Access the application**
+5. **Open application**
 
-   Open [http://localhost:3000](http://localhost:3000) in your browser
+   Visit [http://localhost:3000](http://localhost:3000)
 
 ### Firebase Setup (Required)
 
@@ -108,9 +102,9 @@ Before starting, ensure you have:
    - `cached-lyrics` - Transcribed lyrics
    - `cached-translations` - Translated content
 
-### API Keys Setup (Optional)
+### API Keys Setup
 
-#### YouTube Data API v3
+#### YouTube Data API v3 (Optional)
 ```bash
 # 1. Go to Google Cloud Console
 # 2. Create/select project
@@ -136,18 +130,21 @@ NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
 NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
 ```
 
-### Production Backend
+## 🏗️ Backend Architecture
 
-**✅ No local Python setup required!**
+ChordMiniApp uses a **hybrid backend architecture**:
 
-The production backend is already deployed and operational:
-- **URL**: `https://chordmini-backend-full-191567167632.us-central1.run.app`
-- **Features**: Beat detection, chord recognition, lyrics processing
-- **Status**: Healthy and auto-scaling
+### 🔧 Local Development Backend (Required)
 
-### Local Backend Setup (Optional)
+For local development, you **must** run the Python backend on `localhost:5000`:
 
-If you want to run the backend locally for development or customization:
+- **URL**: `http://localhost:5000`
+- **Purpose**: Local development and testing
+- **Setup**: Required for local development (see setup instructions below)
+
+### ☁️ Production Backend (your VPS)
+
+Production deployments is configured based on your VPS and url should be set in the `NEXT_PUBLIC_PYTHON_API_URL` environment variable.
 
 #### Prerequisites
 
@@ -180,24 +177,32 @@ If you want to run the backend locally for development or customization:
    pip install -r requirements.txt
    ```
 
-4. **Start local backend**
+4. **Start local backend on port 5000**
    ```bash
    python app.py
    ```
 
-5. **Update frontend configuration**
-
-   Edit your `.env.local` to use local backend:
-   ```bash
-   # Change from production URL to local
-   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
+   The backend will start on `http://localhost:5000` and should display:
+   ```
+   * Running on http://127.0.0.1:5000
+   * Debug mode: on
    ```
 
-6. **Restart frontend development server**
+5. **Verify backend is running**
+
+   Open a new terminal and test the backend:
    ```bash
-   # In the main project directory
+   curl http://localhost:5000/health
+   # Should return: {"status": "healthy"}
+   ```
+
+6. **Start frontend development server**
+   ```bash
+   # In the main project directory (new terminal)
    npm run dev
    ```
+
+   The frontend will automatically connect to `http://localhost:5000` based on your `.env.local` configuration.
 
 #### Backend Features Available Locally
 
@@ -225,6 +230,35 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 #### Troubleshooting Local Backend
 
+**Backend connectivity issues:**
+```bash
+# 1. Verify backend is running
+curl http://localhost:5000/health
+# Expected: {"status": "healthy"}
+
+# 2. Check if port 5000 is in use
+lsof -i :5000  # macOS/Linux
+netstat -ano | findstr :5000  # Windows
+
+# 3. Verify environment configuration
+cat .env.local | grep PYTHON_API_URL
+# Expected: NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
+```
+
+**Frontend connection errors:**
+```bash
+# Check browser console for errors like:
+# "Failed to fetch" or "Network Error"
+# This usually means the backend is not running on port 5000
+
+# Restart both frontend and backend:
+# Terminal 1 (Backend):
+cd python_backend && python app.py
+
+# Terminal 2 (Frontend):
+npm run dev
+```
+
 **Import errors:**
 ```bash
 # Ensure virtual environment is activated
@@ -235,236 +269,195 @@ myenv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-**Model loading issues:**
-```bash
-# Check if model files exist
-ls python_backend/models/
+## 🏗️ Complete Application Flow
 
-# Download missing models (if needed)
-# Models are included in the repository
-```
-
-**Port conflicts:**
-```bash
-# Backend runs on port 5000 by default
-# Kill existing processes
-lsof -ti:5000 | xargs kill -9  # macOS/Linux
-netstat -ano | findstr :5000   # Windows
-
-# Or change port in app.py
-app.run(host='0.0.0.0', port=5001)
-```
-
-**Memory issues:**
-```bash
-# Large audio files may require more memory
-# Use smaller files for testing
-# Or increase system memory allocation
-```
-
-#### Switching Between Local and Production
-
-**Use Production Backend:**
-```bash
-# In .env.local
-NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-191567167632.us-central1.run.app
-```
-
-**Use Local Backend:**
-```bash
-# In .env.local
-NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
-```
-
-**Note**: Restart the frontend development server after changing the backend URL.
-
-### Development Commands
-
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run linting
-npm run lint
-
-# Type checking
-npm run type-check
-```
-
-### Troubleshooting
-
-**Port already in use:**
-```bash
-# Kill process on port 3000
-npx kill-port 3000
-# Or use different port
-npm run dev -- -p 3001
-```
-
-**Firebase connection issues:**
-- Verify all Firebase config values in `.env.local`
-- Check Firebase project permissions
-- Ensure Firestore is enabled
-
-**API key errors:**
-- Verify API keys are correctly set in `.env.local`
-- Check API quotas and billing in respective consoles
-- Restart development server after changing environment variables
-
-## 🚀 Production Deployment
-
-### Vercel Deployment (Recommended)
-
-ChordMini is optimized for deployment on Vercel with automated scripts for a seamless deployment process.
-
-#### Quick Deployment
-
-1. **Run pre-deployment checklist**
-   ```bash
-   ./scripts/pre-deployment-checklist.sh
-   ```
-
-2. **Deploy to Vercel**
-   ```bash
-   ./scripts/deploy-to-vercel.sh
-   ```
-
-3. **Verify deployment**
-   ```bash
-   ./scripts/post-deployment-verification.sh https://your-app.vercel.app
-   ```
-
-#### Manual Deployment
-
-1. **Install Vercel CLI**
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Login and deploy**
-   ```bash
-   vercel login
-   vercel --prod
-   ```
-
-3. **Configure environment variables**
-   - Go to Vercel Dashboard → Project Settings → Environment Variables
-   - Add all variables from your `.env.local` file
-   - See `VERCEL_DEPLOYMENT_GUIDE.md` for complete list
-
-#### Environment Variables for Production
-
-**Required for Vercel deployment:**
-```bash
-# Firebase (Client-side)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_domain
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-# API Keys (Server-side)
-GEMINI_API_KEY=your_gemini_key
-GENIUS_API_KEY=your_genius_key
-MUSIC_AI_API_KEY=your_music_ai_key
-
-# Service URLs
-NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-191567167632.us-central1.run.app
-NEXT_PUBLIC_YOUTUBE_API_KEY=your_youtube_key
-NEXT_PUBLIC_BASE_URL=https://your-vercel-domain.vercel.app
-```
-
-### Tech Stack
-
-- **Frontend**: Next.js 15.3.1, TypeScript, Tailwind CSS, React 19
-- **State Management**: React Query, Zustand
-- **Database**: Firebase Firestore Storage
-- **APIs**: YouTube Data API, Music.ai, Google Gemini, YouTube Search API, QuickTube, yt-dlp
-- **Backend**: Python (Google Cloud Run)
-- **Deployment**: Vercel (frontend), Google Cloud Run (backend)
-
-
-### Application Flow Architecture
+ChordMini provides a comprehensive music analysis workflow from user input to visualization. This diagram shows the complete user journey and data processing pipeline:
 
 ```mermaid
 graph TD
+    %% User Entry Points
     A[User Input] --> B{Input Type}
-    B -->|YouTube URL/Search| C[YouTube API]
-    B -->|Local Audio File| D[File Upload]
+    B -->|YouTube URL/Search| C[YouTube Search Interface]
+    B -->|Direct Audio File| D[File Upload Interface]
 
-    C --> E[Audio Extraction]
-    D --> E
+    %% YouTube Workflow
+    C --> E[YouTube Search API]
+    E --> F[Video Selection]
+    F --> G[Navigate to /analyze/videoId]
 
-    E --> F[Firebase Cache Check]
-    F -->|Cache Hit| G[Load Cached Results]
-    F -->|Cache Miss| H[Audio Processing Pipeline]
+    %% Direct Upload Workflow
+    D --> H[Vercel Blob Upload]
+    H --> I[Navigate to /analyze with blob URL]
 
-    H --> I[Beat Detection]
-    H --> J[Chord Recognition]
-    H --> K[Lyrics Transcription]
+    %% Cache Check Phase
+    G --> J{Firebase Cache Check}
+    J -->|Cache Hit| K[Load Cached Results]
+    J -->|Cache Miss| L[Audio Extraction Pipeline]
 
-    I --> L[Beat-Transformer/Madmom]
-    J --> M[Chord-CNN-LSTM/BTC Models]
-    K --> N[Music.ai API]
+    %% Audio Extraction (Environment-Aware)
+    L --> M{Environment Detection}
+    M -->|Development| N[yt-dlp Service]
+    M -->|Production| O[yt-mp3-go Service]
+    N --> P[Audio URL Generation]
+    O --> P
 
-    L --> O[Analysis Results]
-    M --> O
-    N --> O
+    %% ML Analysis Pipeline
+    P --> Q[Parallel ML Processing]
+    I --> Q
+    Q --> R[Beat Detection]
+    Q --> S[Chord Recognition]
+    Q --> T[Key Detection]
 
-    O --> P[Firebase Caching]
-    O --> Q[UI Visualization]
+    %% ML Backend Processing
+    R --> U[Beat-Transformer/madmom Models]
+    S --> V[Chord-CNN-LSTM/BTC Models]
+    T --> W[Gemini AI Key Analysis]
 
-    Q --> R[Chord Grid Display]
-    Q --> S[Synchronized Lyrics]
-    Q --> T[AI Chatbot Integration]
+    %% Results Processing
+    U --> X[Beat Data]
+    V --> Y[Chord Progression Data]
+    W --> Z[Musical Key & Corrections]
 
-    G --> Q
+    %% Synchronization & Caching
+    X --> AA[Chord-Beat Synchronization]
+    Y --> AA
+    Z --> AA
+    AA --> BB[Firebase Result Caching]
+    AA --> CC[Real-time Visualization]
 
-    T --> U[Gemini AI Assistant]
-    S --> V[Translation Service]
+    %% Visualization Tabs
+    CC --> DD[Beat & Chord Map Tab]
+    CC --> EE[Guitar Chords Tab - Beta]
+    CC --> FF[Lyrics & Chords Tab - Beta]
 
-    style A fill:#e1f5fe
-    style O fill:#c8e6c9
-    style Q fill:#fff3e0
-    style U fill:#f3e5f5
+    %% Beat & Chord Map Features
+    DD --> GG[Interactive Chord Grid]
+    DD --> HH[Synchronized Audio Player]
+    DD --> II[Real-time Beat Highlighting]
+
+    %% Guitar Chords Features
+    EE --> JJ[Animated Chord Progression]
+    EE --> KK[Guitar Chord Diagrams]
+    EE --> LL[Responsive Design 7/5/3/2/1]
+
+    %% Lyrics Features
+    FF --> MM[Lyrics Transcription]
+    FF --> NN[Multi-language Translation]
+    FF --> OO[Word-level Synchronization]
+
+    %% External API Integration
+    MM --> PP[Music.ai Transcription]
+    NN --> QQ[Gemini AI Translation]
+
+    %% Cache Integration
+    K --> CC
+    BB --> RR[Enhanced Metadata Storage]
+
+    %% Error Handling & Fallbacks
+    L --> SS{Extraction Failed?}
+    SS -->|Yes| TT[Fallback Service]
+    SS -->|No| P
+    TT --> P
+
+    %% Styling
+    style A fill:#e1f5fe,stroke:#1976d2,stroke-width:3px
+    style CC fill:#c8e6c9,stroke:#388e3c,stroke-width:3px
+    style EE fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style FF fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Q fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    style AA fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+
+    %% Environment Indicators
+    style N fill:#e3f2fd,stroke:#1976d2
+    style O fill:#e8f5e8,stroke:#4caf50
 ```
 
-## License
+### Key Workflow Features
 
-MIT License
+#### **Dual Input Support**
+- **YouTube Integration**: URL/search → video selection → analysis
+- **Direct Upload**: Audio file → blob storage → immediate analysis
 
-Copyright (c) 2025 ChordMini Project
+#### **Environment-Aware Processing**
+- **Development**: localhost:5000 Python backend with yt-dlp
+- **Production**: Google Cloud Run backend with yt-mp3-go
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+#### **Intelligent Caching**
+- **Firebase Cache**: Analysis results with enhanced metadata
+- **Cache Hit**: Instant loading of previous analyses
+- **Cache Miss**: Full ML processing pipeline
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+#### **Advanced ML Pipeline**
+- **Parallel Processing**: Beat detection + chord recognition + key analysis
+- **Multiple Models**: Beat-Transformer/madmom, Chord-CNN-LSTM/BTC variants
+- **AI Integration**: Gemini AI for key detection and enharmonic corrections
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+#### **Rich Visualization**
+- **Beat & Chord Map**: Interactive grid with synchronized playback
+- **Guitar Chords [Beta]**: Responsive chord diagrams (7/5/3/2/1 layouts)
+- **Lyrics & Chords [Beta]**: Multi-language transcription with word-level sync
 
----
+## 🛠️ Tech Stack
 
-**Contact Information:**
-- Email: phantrongnghia510@gmail.com
-- Project Repository: https://github.com/ptnghia-j/ChordMiniApp
+### Frontend Framework
+- **Next.js 15.3.1** - React framework with App Router
+- **React 19** - UI library with latest features
+- **TypeScript** - Type-safe development
+- **Tailwind CSS** - Utility-first styling
 
-**Attribution:**
-ChordMini is part of research conducted at California State University, Fullerton
+### UI Components & Visualization
+- **Framer Motion** - Smooth animations and transitions
+- **Chart.js** - Data visualization for audio analysis
+- **@tombatossals/react-chords** - Guitar chord diagram visualization
+- **React Player** - Video playback integration
+
+### Backend & ML
+- **Python Flask** - Lightweight backend framework
+- **Google Cloud Run** - Serverless container deployment
+- **Custom ML Models** - Chord recognition and beat detection
+
+### Database & Storage
+- **Firebase Firestore** - NoSQL database for caching
+- **Vercel Blob** - File storage for audio processing
+
+### External APIs & Services
+- **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api)
+- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction
+- **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction
+- **LRClib** - [github.com/tranxuanthang/lrclib](https://github.com/tranxuanthang/lrclib) - Lyrics synchronization
+- **Music.ai SDK** - AI-powered music transcription
+- **Google Gemini API** - AI language model for translations
+
+### Development Tools
+- **ESLint** - Code linting and formatting
+- **Jest** - Testing framework
+- **Bundle Analyzer** - Performance optimization
+
+## 📱 Features
+
+### Core Analysis
+- **Beat Detection** - Automatic tempo and beat tracking
+- **Chord Recognition** - AI-powered chord progression analysis
+- **Key Detection** - Musical key identification with Gemini AI
+
+### Guitar Features [Beta]
+- **Interactive Chord Diagrams** - Visual guitar fingering patterns
+- **Responsive Design** - Adaptive chord count (7/5/3/2/1 for xl/lg/md/sm/xs)
+- **Smooth Animations** - 500ms transitions with optimized scaling
+- **Unicode Notation** - Proper musical symbols (♯, ♭)
+
+### Lyrics & Transcription [Beta]
+- **Synchronized Lyrics** - Time-aligned lyrics display
+- **Multi-language Support** - Translation with Gemini AI
+- **Word-level Timing** - Precise synchronization with Music.ai
+
+### User Experience
+- **Dark/Light Mode** - Automatic theme switching
+- **Responsive Design** - Mobile-first approach
+- **Performance Optimized** - Lazy loading and code splitting
+- **Offline Support** - Service worker for caching
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+

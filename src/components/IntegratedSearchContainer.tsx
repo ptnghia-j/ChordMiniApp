@@ -27,6 +27,7 @@ interface IntegratedSearchContainerProps {
   setSearchError: (error: string | null) => void;
   searchResults: YouTubeSearchResult[];
   handleVideoSelect: (videoId: string, title?: string, metadata?: YouTubeSearchResult) => void;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
@@ -39,7 +40,8 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   setError,
   setSearchError,
   searchResults,
-  handleVideoSelect
+  handleVideoSelect,
+  containerRef
 }) => {
   const [showMoreResults, setShowMoreResults] = useState(false);
 
@@ -63,9 +65,12 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   const hasMoreResults = additionalResults.length > 0;
 
   return (
-    <div className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600">
+    <div
+      ref={containerRef}
+      className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full"
+    >
       {/* Header */}
-      <div className="p-2 border-b border-gray-200 dark:border-gray-600">
+      <div className="p-2">
         <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
           Analyze Music
         </h3>

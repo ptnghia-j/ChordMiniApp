@@ -218,15 +218,8 @@ async function performFirestoreSave(
 
     // Create a unique document ID based on the parameters
     const docId = `${transcriptionData.videoId}_${transcriptionData.beatModel}_${transcriptionData.chordModel}`;
-    console.log('📄 Document ID created:', docId);
-    console.log('📄 Document ID validation:', {
-      docIdLength: docId.length,
-      docIdType: typeof docId,
-      containsUnderscore: docId.includes('_'),
-      videoIdPart: transcriptionData.videoId,
-      beatModelPart: transcriptionData.beatModel,
-      chordModelPart: transcriptionData.chordModel
-    });
+
+    // Document ID created and validated
 
     // Get the document reference
     // console.log('📂 Creating document reference for collection:', TRANSCRIPTIONS_COLLECTION);
@@ -237,11 +230,8 @@ async function performFirestoreSave(
     // });
 
     const docRef = doc(db!, TRANSCRIPTIONS_COLLECTION, docId);
-    console.log('✅ Document reference created successfully:', {
-      docRefExists: !!docRef,
-      docRefType: typeof docRef,
-      docRefPath: docRef.path
-    });
+
+    // Document reference created successfully
 
     // Prepare data for Firestore
     // console.log('🧹 Starting data sanitization process...');

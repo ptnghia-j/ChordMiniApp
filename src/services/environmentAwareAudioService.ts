@@ -9,6 +9,7 @@
 import { detectEnvironment, getAudioProcessingStrategy, logEnvironmentConfig } from '@/utils/environmentDetection';
 import { QuickTubeFilenameGenerator } from './quickTubeFilenameGenerator';
 import { ytDlpService } from './ytDlpService';
+import { ytMp3GoService } from './ytMp3GoService';
 
 export interface AudioProcessingResult {
   success: boolean;
@@ -16,7 +17,7 @@ export interface AudioProcessingResult {
   filename?: string;
   title?: string;
   duration?: number;
-  strategy?: 'quicktube' | 'ytdlp' | 'auto';
+  strategy?: 'quicktube' | 'ytdlp' | 'ytmp3go' | 'auto';
   error?: string;
 }
 
@@ -58,16 +59,19 @@ class EnvironmentAwareAudioService {
     try {
       if (strategy === 'ytdlp') {
         return await this.getAudioUrlWithYtDlp(videoUrl, videoId, title);
+      } else if (strategy === 'ytmp3go') {
+        return await this.getAudioUrlWithYtMp3Go(videoUrl, videoId, title);
       } else {
         return await this.getAudioUrlWithQuickTube(videoUrl, videoId, title);
       }
     } catch (error) {
       console.error(`❌ Audio processing failed with ${strategy}:`, error);
-      
+
       // Try fallback strategy if available
-      const fallbackStrategy = strategy === 'quicktube' ? 'ytdlp' : 'quicktube';
+      const fallbackStrategy = strategy === 'quicktube' ? 'ytdlp' :
+                               strategy === 'ytmp3go' ? 'quicktube' : 'quicktube';
       console.log(`🔄 Attempting fallback to ${fallbackStrategy}...`);
-      
+
       try {
         if (fallbackStrategy === 'ytdlp') {
           return await this.getAudioUrlWithYtDlp(videoUrl, videoId, title);
@@ -189,6 +193,47 @@ class EnvironmentAwareAudioService {
         success: false,
         error: error instanceof Error ? error.message : 'yt-dlp processing failed',
         strategy: 'ytdlp'
+      };
+    }
+  }
+
+  /**
+   * Get audio URL using yt-mp3-go (Vercel production strategy)
+   */
+  private async getAudioUrlWithYtMp3Go(videoUrl: string, videoId?: string, title?: string): Promise<AudioProcessingResult> {
+    try {
+      console.log(`🎵 Processing with yt-mp3-go: ${videoUrl}`);
+
+      // Extract video ID if not provided
+      const extractedVideoId = videoId || this.extractVideoIdFromUrl(videoUrl);
+      if (!extractedVideoId) {
+        throw new Error('Could not extract video ID from URL');
+      }
+
+      // Use yt-mp3-go service for extraction
+      const extractionResult = await ytMp3GoService.extractAudio(extractedVideoId, title);
+
+      if (extractionResult.success) {
+        console.log(`✅ yt-mp3-go extraction successful: ${extractionResult.audioUrl}`);
+
+        return {
+          success: true,
+          audioUrl: extractionResult.audioUrl,
+          filename: extractionResult.filename,
+          title: extractionResult.title || title,
+          duration: extractionResult.duration,
+          strategy: 'ytmp3go'
+        };
+      } else {
+        throw new Error(extractionResult.error || 'yt-mp3-go extraction failed');
+      }
+
+    } catch (error) {
+      console.error('❌ yt-mp3-go processing failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'yt-mp3-go processing failed',
+        strategy: 'ytmp3go'
       };
     }
   }

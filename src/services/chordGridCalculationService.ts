@@ -2,21 +2,28 @@
 // Extracted from src/app/analyze/[videoId]/page.tsx
 // Handles complex chord grid data processing, padding, and shifting calculations
 
-interface AnalysisResult {
-  chords: Array<{chord: string, time: number}>;
-  beats: Array<{time: number, beatNum?: number}>;
-  downbeats: number[];
-  downbeats_with_measures: number[];
+// Import the actual AnalysisResult type from the chord recognition service
+import type { AnalysisResult as ChordRecognitionAnalysisResult } from './chordRecognitionService';
+
+// Create a flexible type that can handle both formats
+type AnalysisResult = ChordRecognitionAnalysisResult | {
+  chords?: Array<{chord: string, time: number}>;
+  beats: Array<{time: number, beatNum?: number}> | number[];
+  downbeats?: number[];
+  downbeats_with_measures?: number[];
   synchronizedChords: Array<{chord: string, beatIndex: number, beatNum?: number}>;
-  beatModel: string;
-  chordModel: string;
-  audioDuration: number;
-  beatDetectionResult: {
+  beatModel?: string;
+  chordModel?: string;
+  audioDuration?: number;
+  beatDetectionResult?: {
     time_signature?: number;
     bpm?: number;
     beatShift?: number;
+    beat_time_range_start?: number;
+    paddingCount?: number;
+    shiftCount?: number;
   };
-}
+};
 
 interface ChordGridData {
   chords: string[];
@@ -29,7 +36,7 @@ interface ChordGridData {
     chord: string;
     timestamp: number;
     visualIndex: number;
-    originalIndex: number;
+    audioIndex: number;
   }>;
 }
 
@@ -170,20 +177,33 @@ export const calculatePaddingAndShift = (
  * Get comprehensive chord grid data with padding and shifting
  */
 export const getChordGridData = (analysisResults: AnalysisResult | null): ChordGridData => {
-  if (!analysisResults || !analysisResults.synchronizedChords) {
-    return { 
-      chords: [], 
-      beats: [], 
-      hasPadding: false, 
-      paddingCount: 0, 
-      shiftCount: 0, 
-      totalPaddingCount: 0 
+  if (!analysisResults || !analysisResults.synchronizedChords || analysisResults.synchronizedChords.length === 0) {
+    return {
+      chords: [],
+      beats: [],
+      hasPadding: false,
+      paddingCount: 0,
+      shiftCount: 0,
+      totalPaddingCount: 0,
+      originalAudioMapping: []
     };
   }
 
   const timeSignature = analysisResults.beatDetectionResult?.time_signature || 4;
   const bpm = analysisResults.beatDetectionResult?.bpm || 120;
-  const firstDetectedBeat = analysisResults.beats.length > 0 ? analysisResults.beats[0].time : 0;
+
+  // Handle both YouTube (object array) and upload (number array) beat formats
+  let firstDetectedBeat = 0;
+  if (analysisResults.beats && analysisResults.beats.length > 0) {
+    const firstBeat = analysisResults.beats[0];
+    if (typeof firstBeat === 'number') {
+      // Upload workflow: beats is number[]
+      firstDetectedBeat = firstBeat;
+    } else if (typeof firstBeat === 'object' && firstBeat?.time) {
+      // YouTube workflow: beats is BeatInfo[]
+      firstDetectedBeat = firstBeat.time;
+    }
+  }
 
   // Extract chord data for optimal shift calculation
   const chordData = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
@@ -191,13 +211,17 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   // Calculate padding and shifting
   const { paddingCount, shiftCount } = calculatePaddingAndShift(firstDetectedBeat, bpm, timeSignature, chordData);
 
+  // Ensure padding and shift counts are non-negative and finite
+  const safePaddingCount = Math.max(0, isFinite(paddingCount) ? Math.floor(paddingCount) : 0);
+  const safeShiftCount = Math.max(0, isFinite(shiftCount) ? Math.floor(shiftCount) : 0);
+
   // Handle comprehensive strategy (Chord-CNN-LSTM and similar models)
-  if (analysisResults.chordModel === 'chord-cnn-lstm' || paddingCount > 0 || shiftCount > 0) {
+  if (analysisResults.chordModel === 'chord-cnn-lstm' || safePaddingCount > 0 || safeShiftCount > 0) {
     // Add padding N.C. chords
-    const paddingChords = Array(paddingCount).fill('N.C.');
-    const paddingTimestamps = Array(paddingCount).fill(0).map((_, i) => {
+    const paddingChords = Array(safePaddingCount).fill('N.C.');
+    const paddingTimestamps = Array(safePaddingCount).fill(0).map((_, i) => {
       const paddingDuration = firstDetectedBeat;
-      const paddingBeatDuration = paddingDuration / paddingCount;
+      const paddingBeatDuration = safePaddingCount > 0 ? paddingDuration / safePaddingCount : 0;
       return i * paddingBeatDuration;
     });
 
@@ -205,42 +229,57 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     const regularChords = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
     const regularBeats = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => {
       const beatIndex = item.beatIndex;
-      if (beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
-        return analysisResults.beats[beatIndex].time;
+      if (analysisResults.beats && beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
+        const beat = analysisResults.beats[beatIndex];
+        if (typeof beat === 'number') {
+          // Upload workflow: beats is number[]
+          return beat;
+        } else if (typeof beat === 'object' && beat?.time) {
+          // YouTube workflow: beats is BeatInfo[]
+          return beat.time;
+        }
       }
       return 0;
     });
 
-    const shiftNullTimestamps = Array(shiftCount).fill(null);
+    const shiftNullTimestamps = Array(safeShiftCount).fill(null);
 
     // Construct final visual grid
-    const finalChords = [...Array(shiftCount).fill(''), ...paddingChords, ...regularChords];
+    const finalChords = [...Array(safeShiftCount).fill(''), ...paddingChords, ...regularChords];
     const finalBeats = [...shiftNullTimestamps, ...paddingTimestamps, ...regularBeats];
 
     // Create original audio mapping for accurate sync
     const originalAudioMapping = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}, index) => {
       const beatIndex = item.beatIndex;
-      const originalTimestamp = beatIndex >= 0 && beatIndex < analysisResults.beats.length 
-        ? analysisResults.beats[beatIndex].time 
-        : 0;
-      
-      const visualIndex = shiftCount + paddingCount + index;
+      let originalTimestamp = 0;
+      if (analysisResults.beats && beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
+        const beat = analysisResults.beats[beatIndex];
+        if (typeof beat === 'number') {
+          // Upload workflow: beats is number[]
+          originalTimestamp = beat;
+        } else if (typeof beat === 'object' && beat?.time) {
+          // YouTube workflow: beats is BeatInfo[]
+          originalTimestamp = beat.time;
+        }
+      }
+
+      const visualIndex = safeShiftCount + safePaddingCount + index;
       
       return {
         chord: item.chord,
         timestamp: originalTimestamp,
         visualIndex: visualIndex,
-        originalIndex: index
+        audioIndex: index
       };
     });
 
     return {
       chords: finalChords,
       beats: finalBeats,
-      hasPadding: paddingCount > 0 || shiftCount > 0,
-      paddingCount,
-      shiftCount,
-      totalPaddingCount: paddingCount + shiftCount,
+      hasPadding: safePaddingCount > 0 || safeShiftCount > 0,
+      paddingCount: safePaddingCount,
+      shiftCount: safeShiftCount,
+      totalPaddingCount: safePaddingCount + safeShiftCount,
       originalAudioMapping
     };
   }
@@ -249,8 +288,15 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   const btcChords = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
   const btcBeats = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => {
     const beatIndex = item.beatIndex;
-    if (beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
-      return analysisResults.beats[beatIndex].time;
+    if (analysisResults.beats && beatIndex >= 0 && beatIndex < analysisResults.beats.length) {
+      const beat = analysisResults.beats[beatIndex];
+      if (typeof beat === 'number') {
+        // Upload workflow: beats is number[]
+        return beat;
+      } else if (typeof beat === 'object' && beat?.time) {
+        // YouTube workflow: beats is BeatInfo[]
+        return beat.time;
+      }
     }
     return 0;
   });
@@ -260,8 +306,8 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   const btcTimeSignature = timeSignature;
 
   const btcPaddingAndShift = calculatePaddingAndShift(btcFirstDetectedBeatTime, btcBpm, btcTimeSignature, btcChords);
-  const btcPaddingCount = btcPaddingAndShift.paddingCount;
-  const btcShiftCount = btcPaddingAndShift.shiftCount;
+  const btcPaddingCount = Math.max(0, isFinite(btcPaddingAndShift.paddingCount) ? Math.floor(btcPaddingAndShift.paddingCount) : 0);
+  const btcShiftCount = Math.max(0, isFinite(btcPaddingAndShift.shiftCount) ? Math.floor(btcPaddingAndShift.shiftCount) : 0);
 
   // Apply padding and shifting to BTC model data
   const btcPaddingCells = Array(btcPaddingCount).fill('');
@@ -283,7 +329,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       chord: chord,
       timestamp: btcBeats[index] || 0,
       visualIndex: visualIndex,
-      originalIndex: index
+      audioIndex: index
     };
   });
 

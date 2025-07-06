@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtractionSimplified';
+import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**
- * Audio Extraction API Route - Simplified QuickTube Integration
+ * Audio Extraction API Route - Environment-Aware Service Integration
  *
  * This route implements a streamlined extraction workflow:
  * - Uses YouTube search metadata directly (no filename guessing)
  * - Video ID-based caching and storage
- * - Direct QuickTube integration without pattern matching
+ * - Environment-aware service selection:
+ *   - Vercel Production: yt-mp3-go (better Unicode support)
+ *   - Local Development: yt-dlp
+ *   - Fallback: QuickTube
  * - Leverages existing search results for metadata
  */
 
 // Configure Vercel function timeout - Use 300 seconds to match vercel.json
-// This allows time for QuickTube job creation + initial polling attempts
+// This allows time for audio extraction job creation + polling attempts
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             error: result.error || 'Audio extraction failed',
-            details: 'QuickTube service is currently unavailable or the video cannot be processed',
+            details: 'Audio extraction service is currently unavailable or the video cannot be processed',
             suggestion: 'The video may be restricted, too long, or temporarily unavailable. Please try a different video or try again later.'
           },
           { status: 500 }
@@ -82,6 +86,11 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`✅ Simplified extraction successful for ${videoId}`);
+
+      // Determine the method based on environment
+      const env = detectEnvironment();
+      const method = env.strategy === 'ytmp3go' ? 'yt-mp3-go' :
+                    env.strategy === 'ytdlp' ? 'yt-dlp' : 'quicktube-simplified';
 
       return NextResponse.json({
         success: true,
@@ -92,7 +101,7 @@ export async function POST(request: NextRequest) {
         fromCache: result.fromCache,
         isStreamUrl: result.isStreamUrl,
         streamExpiresAt: result.streamExpiresAt,
-        method: 'quicktube-simplified'
+        method
       });
 
     } catch (extractionError) {

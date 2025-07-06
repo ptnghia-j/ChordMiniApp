@@ -43,8 +43,18 @@ const ServiceWorkerRegistration: React.FC = () => {
             }
           });
 
-          // Check for existing service worker updates
-          registration.update();
+          // Check for existing service worker updates (with enhanced error handling)
+          try {
+            if (registration && typeof registration.update === 'function') {
+              await registration.update();
+              console.log('🔄 Service worker update check completed');
+            } else {
+              console.warn('⚠️ Service worker registration is null or update method unavailable');
+            }
+          } catch (updateError) {
+            // This error is common and usually harmless - don't log it as an error
+            console.debug('Service worker update check failed (this is usually harmless):', updateError);
+          }
 
         } catch (error) {
           console.error('❌ Service worker registration failed:', error);

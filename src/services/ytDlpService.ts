@@ -19,6 +19,8 @@ export interface YtDlpDownloadResult {
   filename?: string;
   title?: string;
   duration?: number;
+  fileSize?: number;
+  localPath?: string;
   error?: string;
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { timingSyncService } from '@/services/timingSyncService';
 
@@ -74,6 +74,72 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     lastClickInfo,
   } = deps;
 
+  // PERFORMANCE OPTIMIZATION: Binary search for beat tracking
+  // Reduces complexity from O(n) to O(log n) for real-time playback
+  const findCurrentBeatIndex = useCallback((currentTime: number, beats: (number | null)[]): number => {
+    if (!beats || beats.length === 0) return -1;
+
+    // Filter out null beats and create searchable array
+    const validBeats: { time: number; index: number }[] = [];
+    beats.forEach((beat, index) => {
+      if (typeof beat === 'number' && beat >= 0) {
+        validBeats.push({ time: beat, index });
+      }
+    });
+
+    if (validBeats.length === 0) return -1;
+
+    // Binary search for the current beat
+    let left = 0;
+    let right = validBeats.length - 1;
+    let currentBeatIndex = -1;
+
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      const beatTime = validBeats[mid].time;
+
+      // Get next beat time for range checking
+      const nextBeatTime = mid < validBeats.length - 1
+        ? validBeats[mid + 1].time
+        : beatTime + 2.0; // Default 2-second range for last beat
+
+      if (currentTime >= beatTime && currentTime < nextBeatTime) {
+        // Found the current beat
+        currentBeatIndex = validBeats[mid].index;
+        break;
+      } else if (currentTime < beatTime) {
+        right = mid - 1;
+      } else {
+        left = mid + 1;
+      }
+    }
+
+    return currentBeatIndex;
+  }, []);
+
+  // PERFORMANCE OPTIMIZATION: Binary search for audio mapping
+  const findCurrentAudioMappingIndex = useCallback((currentTime: number, audioMapping: Array<{timestamp: number; visualIndex: number}>): number => {
+    if (!audioMapping || audioMapping.length === 0) return -1;
+
+    let left = 0;
+    let right = audioMapping.length - 1;
+    let result = -1;
+
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      const item = audioMapping[mid];
+
+      if (currentTime >= item.timestamp) {
+        result = item.visualIndex;
+        left = mid + 1; // Continue searching for a later match
+      } else {
+        right = mid - 1;
+      }
+    }
+
+    return result;
+  }, []);
+
   // Function to handle auto-scrolling to the current beat
   const scrollToCurrentBeat = useCallback(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
@@ -92,6 +158,9 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     scrollToCurrentBeat();
   }, [currentBeatIndex, scrollToCurrentBeat]);
 
+  // PERFORMANCE OPTIMIZATION: RequestAnimationFrame for smooth 60fps updates
+  const rafRef = useRef<number | undefined>(undefined);
+
   // Update current time and check for current beat
   useEffect(() => {
     if (!audioRef.current || !isPlaying || !analysisResults) {
@@ -99,8 +168,9 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       return;
     }
 
-    // Smooth animation for beat alignment (50ms = 20Hz update rate)
-    const interval = setInterval(() => {
+    // PERFORMANCE OPTIMIZATION: Use RequestAnimationFrame for smoother updates
+    // This provides 60fps updates instead of fixed 20Hz, reducing jitter
+    const updateBeatTracking = () => {
       if (audioRef.current && isPlaying) {
         const time = audioRef.current.currentTime;
         setCurrentTime(time);
@@ -216,6 +286,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
             // Use ChordGrid's beat array for consistency with click handling
 
             // Check if we have smart click positioning active
+            let useClickPosition = false;
             if (lastClickInfo) {
               const timeSinceClick = Date.now() - lastClickInfo.clickTime;
               const timeDifference = Math.abs(time - lastClickInfo.timestamp);
@@ -224,10 +295,15 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               if (timeSinceClick < 200 && timeDifference < 1.0) {
                 currentBeatIndexRef.current = lastClickInfo.visualIndex;
                 setCurrentBeatIndex(lastClickInfo.visualIndex);
-
-                return; // Use click position for initial positioning only
+                useClickPosition = true; // Flag to skip normal beat tracking for this frame
+              } else if (timeSinceClick >= 200) {
+                // DEBUG: Log when animation resumes after click
+                // console.log(`🎯 ANIMATION RESUMED: Resuming normal beat tracking after click (${timeSinceClick}ms elapsed)`);
               }
             }
+
+            // Only proceed with normal beat tracking if not using click position
+            if (!useClickPosition) {
 
             // ENHANCED STRATEGY: Use originalAudioMapping for precise timing when available
             type ChordGridDataWithMapping = ChordGridData & {
@@ -303,52 +379,12 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
                 }
               }
 
-              // STRATEGY 1: Look for range match first
-              let matchedAudioItem = null;
-              for (let i = 0; i < chordGridData.originalAudioMapping.length - 1; i++) {
-                const currentItem = chordGridData.originalAudioMapping[i];
-                const nextItem = chordGridData.originalAudioMapping[i + 1];
+              // PERFORMANCE OPTIMIZATION: Use binary search for audio mapping
+              // This replaces the linear search with O(log n) complexity
+              const audioMappingIndex = findCurrentAudioMappingIndex(time, chordGridData.originalAudioMapping);
 
-                if (time >= currentItem.timestamp && time < nextItem.timestamp) {
-                  matchedAudioItem = currentItem;
-                  break;
-                }
-              }
-
-              // Handle last item
-              if (!matchedAudioItem && chordGridData.originalAudioMapping.length > 0) {
-                const lastItem = chordGridData.originalAudioMapping[chordGridData.originalAudioMapping.length - 1];
-                if (time >= lastItem.timestamp) {
-                  matchedAudioItem = lastItem;
-                }
-              }
-
-              if (matchedAudioItem) {
-                currentBeat = matchedAudioItem.visualIndex;
-              }
-
-              // STRATEGY 2: If no range match, use forward progression logic
-              if (!matchedAudioItem) {
-                const currentBeatRef = currentBeatIndexRef.current;
-
-                // If we have a current position and audio time is moving forward
-                if (currentBeatRef >= 0 && currentBeatRef < chordGridData.originalAudioMapping.length) {
-                  const currentTimestamp = chordGridData.originalAudioMapping[currentBeatRef]?.timestamp || 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-                  // Look for the next beat that should be active
-                  for (let i = currentBeatRef; i < chordGridData.originalAudioMapping.length; i++) {
-                    const item = chordGridData.originalAudioMapping[i];
-                    if (time >= item.timestamp) {
-                      matchedAudioItem = item;
-                    } else {
-                      break;
-                    }
-                  }
-
-                  if (matchedAudioItem) {
-                    currentBeat = matchedAudioItem.visualIndex;
-                  }
-                }
+              if (audioMappingIndex !== -1) {
+                currentBeat = audioMappingIndex;
               }
 
               if (currentBeat === -1) {
@@ -359,40 +395,16 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
                   modelType: analysisResults.chordModel?.includes('btc') ? 'BTC' : 'Chord-CNN-LSTM',
                 });
 
-                // IMPROVED FALLBACK: Use forward progression logic for visual grid too
-                const currentBeatFallback = currentBeatIndexRef.current;
+                // PERFORMANCE OPTIMIZATION: Use binary search instead of linear search
+                // This reduces complexity from O(n) to O(log n) for beat tracking
+                currentBeat = findCurrentBeatIndex(time, chordGridData.beats);
 
-                // STRATEGY 1: Look for range match first
-                for (let visualIndex = 0; visualIndex < chordGridData.beats.length; visualIndex++) {
-                  const visualTimestamp = chordGridData.beats[visualIndex];
-
-                  // Skip null timestamps
-                  if (visualTimestamp === null) continue;
-
-                  const nextVisualTimestamp = visualIndex + 1 < chordGridData.beats.length
-                    ? chordGridData.beats[visualIndex + 1]
-                    : visualTimestamp + 1; // Default 1-second range for last beat
-
-                  const nextTime = nextVisualTimestamp !== null ? nextVisualTimestamp : visualTimestamp + 1;
-                  if (time >= visualTimestamp && time < nextTime) {
-                    currentBeat = visualIndex;
-                    break;
-                  }
-                }
-
-                // STRATEGY 2: Forward progression fallback
-                if (currentBeat === -1 && currentBeatFallback >= 0 && currentBeatFallback < chordGridData.beats.length) {
-                  const currentTimestamp = chordGridData.beats[currentBeatFallback] || 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-                  // Look ahead for the next beat that should be active
-                  for (let i = currentBeatFallback; i < chordGridData.beats.length; i++) {
-                    const beatTimestamp = chordGridData.beats[i];
-                    if (beatTimestamp !== null && time >= beatTimestamp) {
-                      currentBeat = i;
-                    } else {
-                      break;
-                    }
-                  }
+                if (currentBeat === -1) {
+                  console.log(`🎬 ANIMATION MAPPING: Binary search fallback - no beat found`, {
+                    time: time.toFixed(3),
+                    beatsLength: chordGridData.beats.length,
+                    modelType: analysisResults.chordModel?.includes('btc') ? 'BTC' : 'Chord-CNN-LSTM',
+                  });
                 }
               }
             } else {
@@ -436,12 +448,25 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
             }
             setCurrentDownbeatIndex(currentDownbeat);
           }
+            } // End of normal beat tracking (if !useClickPosition)
         }
       }
-    }, 50); // Update at 20Hz for smoother beat tracking
 
-    return () => clearInterval(interval);
-  }, [isPlaying, analysisResults, setCurrentTime, audioRef, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment]);
+      // PERFORMANCE OPTIMIZATION: Schedule next frame for smooth 60fps updates
+      if (isPlaying && audioRef.current) {
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+      }
+    };
+
+    // Start the animation loop
+    rafRef.current = requestAnimationFrame(updateBeatTracking);
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [isPlaying, analysisResults, setCurrentTime, audioRef, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]);
 
   return {
     scrollToCurrentBeat,

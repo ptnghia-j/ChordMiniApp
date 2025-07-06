@@ -54,7 +54,7 @@ const Footer: React.FC = () => {
       icon: <SiNpm className="w-6 h-6" />,
     },
     {
-      name: 'QuickTube',
+      name: 'youtube-downloader',
       icon: <SiGithub className="w-6 h-6" />,
     },
     {
@@ -76,7 +76,7 @@ const Footer: React.FC = () => {
   ];
 
   return (
-    <footer className="bg-white dark:bg-black border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
+    <footer className="relative z-20 bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Top Section - Logo and Navigation */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-8 lg:space-y-0">
@@ -169,7 +169,7 @@ const Footer: React.FC = () => {
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Version 0.1.0
+              Version 0.2.2
             </p>
           </div>
         </div>

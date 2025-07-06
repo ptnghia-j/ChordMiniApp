@@ -11,11 +11,11 @@ import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 
 // Configure Vercel function timeout (up to 800 seconds for Pro plan)
 // Beat detection is heavy ML processing that can take several minutes
-export const maxDuration = 600; // 10 minutes for ML processing
+export const maxDuration = 800; // 13+ minutes for ML processing (matches vercel.json)
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
 
     console.log(`🥁 Processing beat detection request`);
 
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a safe timeout signal that works across environments
-    const timeoutValue = 600000; // 10 minutes timeout to match backend
+    const timeoutValue = 800000; // 13+ minutes timeout to match backend and vercel.json
     // // console.log(`🔍 API route timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Beat detection processing timeout',
-          details: 'The ML processing took longer than the 10-minute limit. This is an internal processing timeout, not an external service issue.',
+          details: 'The ML processing took longer than the 13-minute limit. This is an internal processing timeout, not an external service issue.',
           suggestion: 'Try using a shorter audio clip (under 5 minutes) or use the madmom detector which is faster but slightly less accurate. For very long tracks, consider splitting them into smaller segments.',
-          timeoutLimit: '10 minutes (600 seconds)',
+          timeoutLimit: '13+ minutes (800 seconds)',
           processingType: 'Internal ML Processing'
         },
         { status: 408 }

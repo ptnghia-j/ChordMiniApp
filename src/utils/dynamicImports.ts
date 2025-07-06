@@ -6,21 +6,38 @@
 // Audio processing imports - lazy load heavy services
 export const loadAudioProcessor = () => import(
   /* webpackChunkName: "audio-processor" */
+  /* webpackPreload: true */
   '@/services/audioProcessingService'
 );
 export const loadChordRecognition = () => import(
   /* webpackChunkName: "chord-recognition" */
+  /* webpackPrefetch: true */
   '@/services/chordRecognitionService'
 );
 export const loadBeatDetection = () => import(
   /* webpackChunkName: "beat-detection" */
+  /* webpackPrefetch: true */
   '@/services/beatDetectionService'
 );
 
 // Heavy UI components - split into separate chunks
 export const loadChordGrid = () => import(
   /* webpackChunkName: "chord-grid" */
+  /* webpackPrefetch: true */
   '@/components/ChordGrid'
+);
+
+// Lazy-loaded components for better bundle splitting
+export const loadLazyRecentVideos = () => import(
+  /* webpackChunkName: "recent-videos" */
+  /* webpackPrefetch: true */
+  '@/components/LazyRecentVideos'
+);
+
+export const loadLazySearchContainer = () => import(
+  /* webpackChunkName: "search-container" */
+  /* webpackPrefetch: true */
+  '@/components/LazyIntegratedSearchContainer'
 );
 export const loadLeadSheetDisplay = () => import(
   /* webpackChunkName: "lead-sheet" */

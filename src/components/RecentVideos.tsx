@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, doc, getDoc } from 'firebase/firestore';
-import { FiMusic, FiCloud, FiHardDrive, FiClock } from 'react-icons/fi';
+import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
 
 interface TranscribedVideo {
   videoId: string;
@@ -71,13 +71,13 @@ export default function RecentVideos() {
           if (audioDocSnap.exists()) {
             const audioData = audioDocSnap.data();
             return {
-              audioFilename: audioData.storagePath || audioData.title || 'Unknown',
+              audioFilename: audioData.extractionService || 'cached-audio', // Use extraction service instead of title
               audioUrl: audioData.audioUrl,
               isStreamUrl: audioData.isStreamUrl || false,
               fromCache: true,
               fileSize: audioData.fileSize || 0,
               streamExpiresAt: audioData.streamExpiresAt,
-              title: audioData.title || audioData.actualFilename || null // Include title from audio files
+              title: audioData.title || null // Use proper video title from enhanced metadata
             };
           }
           return null;
@@ -276,19 +276,38 @@ export default function RecentVideos() {
 
     if (video.isStreamUrl) {
       return {
-        type: 'QuickTube',
+        type: 'Stream',
         icon: FiCloud,
         color: 'text-blue-500',
-        tooltip: 'Streamed from QuickTube service'
+        tooltip: 'Streamed from external service'
       };
     }
 
-    if (video.audioFilename?.includes('yt-dlp') || video.audioFilename?.includes('.mp3')) {
+    // Check extraction service from enhanced metadata
+    if (video.audioFilename === 'yt-mp3-go') {
       return {
-        type: 'yt-dlp',
-        icon: FiHardDrive,
+        type: 'Cached',
+        icon: FiClock,
         color: 'text-green-500',
-        tooltip: 'Extracted using yt-dlp'
+        tooltip: 'Cached from yt-mp3-go extraction'
+      };
+    }
+
+    if (video.audioFilename === 'yt-dlp') {
+      return {
+        type: 'Cached',
+        icon: FiClock,
+        color: 'text-green-500',
+        tooltip: 'Cached from yt-dlp extraction'
+      };
+    }
+
+    if (video.audioFilename === 'quicktube') {
+      return {
+        type: 'Cached',
+        icon: FiClock,
+        color: 'text-green-500',
+        tooltip: 'Cached from QuickTube extraction'
       };
     }
 
@@ -300,19 +319,20 @@ export default function RecentVideos() {
     };
   };
 
-  // Helper function to format audio filename for display
-  const formatAudioFilename = (filename?: string): string => {
-    if (!filename) return 'No audio file';
+  // Helper function to format extraction service for display
+  const formatExtractionService = (service?: string): string => {
+    if (!service) return 'Unknown source';
 
-    // Extract just the filename without path
-    const baseName = filename.split('/').pop() || filename;
+    // Map extraction services to user-friendly names
+    const serviceMap: Record<string, string> = {
+      'yt-mp3-go': 'yt-mp3-go',
+      'quicktube': 'QuickTube',
+      'yt-dlp': 'yt-dlp',
+      'firebase-storage-cache': 'Cache',
+      'cached-audio': 'Cached'
+    };
 
-    // Truncate long filenames
-    if (baseName.length > 30) {
-      return baseName.substring(0, 27) + '...';
-    }
-
-    return baseName;
+    return serviceMap[service] || service;
   };
 
   if (loading) {
@@ -417,8 +437,8 @@ export default function RecentVideos() {
                             <IconComponent className={`w-3 h-3 ${sourceInfo.color}`} />
                             <span className={sourceInfo.color}>{sourceInfo.type}</span>
                             <span className="text-gray-500">•</span>
-                            <span title={video.audioFilename || 'Unknown filename'}>
-                              {formatAudioFilename(video.audioFilename)}
+                            <span title={`Extracted using ${video.audioFilename || 'unknown service'}`}>
+                              {formatExtractionService(video.audioFilename)}
                             </span>
 
                           </>

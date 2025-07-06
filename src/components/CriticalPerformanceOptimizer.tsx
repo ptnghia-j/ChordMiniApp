@@ -11,16 +11,10 @@ import { useEffect } from 'react';
  */
 const CriticalPerformanceOptimizer: React.FC = () => {
   useEffect(() => {
-    // 1. Prevent forced reflow by optimizing layout calculations
+    // 1. Prevent forced reflow by optimizing layout calculations (hydration-safe)
     const optimizeLayoutCalculations = () => {
-      // Use CSS containment to prevent layout thrashing
-      const criticalElements = document.querySelectorAll('[data-critical-layout]');
-      criticalElements.forEach(element => {
-        if (element instanceof HTMLElement) {
-          element.style.contain = 'layout style paint';
-          element.style.willChange = 'auto';
-        }
-      });
+      // Skip inline style modifications to prevent hydration mismatches
+      // Layout optimizations are now handled via CSS classes
     };
 
     // 2. Optimize LCP image discovery
@@ -132,48 +126,32 @@ const CriticalPerformanceOptimizer: React.FC = () => {
     };
   }, []);
 
-  // Add critical CSS for performance optimization
+  // Add critical CSS for performance optimization (hydration-safe)
   useEffect(() => {
     const criticalCSS = `
-      /* Critical performance optimizations */
-      [data-critical-layout] {
-        contain: layout style paint;
-        will-change: auto;
-      }
-      
-      [data-lcp-image] {
-        loading: eager !important;
-        fetch-priority: high !important;
-      }
-      
       /* Prevent layout shift */
       img {
         height: auto;
         max-width: 100%;
       }
-      
+
       /* Optimize font rendering */
       body {
         font-display: swap;
       }
-      
+
       /* GPU acceleration for critical elements */
       .hero-container,
       .navigation-container {
         transform: translateZ(0);
         backface-visibility: hidden;
       }
-      
-      /* Reduce paint complexity */
-      .opacity-30 {
-        will-change: auto;
-      }
     `;
 
     const styleElement = document.createElement('style');
     styleElement.textContent = criticalCSS;
     styleElement.id = 'critical-performance-css';
-    
+
     if (!document.getElementById('critical-performance-css')) {
       document.head.appendChild(styleElement);
     }

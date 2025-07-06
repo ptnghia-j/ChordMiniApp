@@ -26,7 +26,7 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
 
 
 
@@ -215,8 +215,8 @@ export default function StatusPage() {
                     Hosted on Google Cloud Run with auto-scaling capabilities
                   </p>
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>• 16GB Memory, 4 CPU cores</li>
-                    <li>• 600s timeout for processing</li>
+                    <li>• 16GB Memory, 8 CPU cores</li>
+                    <li>• 600-800s timeout for processing</li>
                     <li>• Auto-scaling up to 5 instances</li>
                   </ul>
                 </div>
@@ -224,7 +224,7 @@ export default function StatusPage() {
                   <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Available Models</h4>
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <li>• Beat-Transformer (default)</li>
-                    <li>• Madmom (fallback)</li>
+                    <li>• Madmom </li>
                     <li>• Chord-CNN-LSTM (301 labels)</li>
                     <li>• BTC Supervised Learning</li>
                     <li>• BTC Pseudo-Label</li>

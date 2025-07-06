@@ -63,13 +63,19 @@ export default function DesktopPerformanceOptimizer() {
 
     // 3. Implement resource bundling optimization
     const optimizeResourceBundling = () => {
-      // Preload critical resources
-      const criticalResources = [
-        { href: '/hero-image-placeholder.svg', as: 'image', type: 'image/svg+xml' },
-        { href: '/hero-image-placeholder-dark.svg', as: 'image', type: 'image/svg+xml' },
-        { href: '/demo1.png', as: 'image', type: 'image/png' },
-        { href: '/demo2.png', as: 'image', type: 'image/png' }
-      ];
+      // Only preload resources that are actually needed on the current page
+      const isHomePage = typeof window !== 'undefined' && window.location.pathname === '/';
+
+      // Only preload hero images that are immediately visible on homepage
+      const criticalResources = [];
+
+      if (isHomePage) {
+        criticalResources.push(
+          { href: '/hero-image-placeholder.svg', as: 'image', type: 'image/svg+xml' },
+          { href: '/hero-image-placeholder-dark.svg', as: 'image', type: 'image/svg+xml' }
+        );
+        // Demo images are lazy-loaded and don't need preloading
+      }
 
       criticalResources.forEach(resource => {
         const existingPreload = document.querySelector(`link[href="${resource.href}"][rel="preload"]`);

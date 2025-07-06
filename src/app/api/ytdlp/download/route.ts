@@ -80,10 +80,9 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
       const tempDir = path.join(tmpdir(), 'chordmini-ytdlp');
       await fs.mkdir(tempDir, { recursive: true });
 
-      // Generate output filename
-      const outputTemplate = targetFilename 
-        ? path.join(tempDir, targetFilename.replace('.mp3', '.%(ext)s'))
-        : path.join(tempDir, '%(title)s-[%(id)s].%(ext)s');
+      // Use a simpler, more predictable output template
+      // This ensures we can find the file after download
+      const outputTemplate = path.join(tempDir, '%(title)s-[%(id)s].%(ext)s');
 
       const args = [
         '--extract-audio',
@@ -92,16 +91,27 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
         '--output', outputTemplate,
         '--no-warnings',
         '--restrict-filenames', // Use safe filenames
+        '--print', 'after_move:filepath', // Print the final file path
         url
       ];
 
       console.log(`🔧 yt-dlp command: yt-dlp ${args.join(' ')}`);
+      console.log(`📁 Output template: ${outputTemplate}`);
 
       const ytdlp = spawn('yt-dlp', args);
       let stderr = '';
+      let stdout = '';
+      let finalFilePath = '';
 
       ytdlp.stdout.on('data', (data) => {
-        console.log(`yt-dlp stdout: ${data.toString().trim()}`);
+        const output = data.toString().trim();
+        stdout += output + '\n';
+        console.log(`yt-dlp stdout: ${output}`);
+
+        // Capture the final file path from yt-dlp output
+        if (output.includes(tempDir) && (output.endsWith('.mp3') || output.endsWith('.wav') || output.endsWith('.m4a'))) {
+          finalFilePath = output;
+        }
       });
 
       ytdlp.stderr.on('data', (data) => {
@@ -112,24 +122,46 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
       ytdlp.on('close', async (code) => {
         if (code === 0) {
           try {
-            // Find the downloaded file
-            const files = await fs.readdir(tempDir);
-            const audioFile = files.find(file => 
-              file.endsWith('.mp3') || 
-              file.endsWith('.wav') || 
-              file.endsWith('.m4a')
-            );
+            let audioFile = '';
+            let filePath = '';
 
-            if (audioFile) {
-              const filePath = path.join(tempDir, audioFile);
+            // Method 1: Use the captured file path from yt-dlp output
+            if (finalFilePath && await fs.access(finalFilePath).then(() => true).catch(() => false)) {
+              filePath = finalFilePath;
+              audioFile = path.basename(finalFilePath);
+              console.log(`✅ Found file using yt-dlp output: ${audioFile}`);
+            } else {
+              // Method 2: Scan directory for audio files (fallback)
+              console.log(`🔍 Scanning directory for audio files: ${tempDir}`);
+              const files = await fs.readdir(tempDir);
+              console.log(`📁 Files in temp directory: ${files.join(', ')}`);
+
+              audioFile = files.find(file =>
+                file.endsWith('.mp3') ||
+                file.endsWith('.wav') ||
+                file.endsWith('.m4a') ||
+                file.endsWith('.opus') ||
+                file.endsWith('.webm')
+              ) || '';
+
+              if (audioFile) {
+                filePath = path.join(tempDir, audioFile);
+                console.log(`✅ Found file using directory scan: ${audioFile}`);
+              }
+            }
+
+            if (audioFile && filePath) {
               const stats = await fs.stat(filePath);
 
               // Generate URL for local file server endpoint
               const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
               const audioUrl = `${baseUrl}/api/serve-local-audio?filename=${encodeURIComponent(audioFile)}`;
 
-              console.log(`✅ Audio downloaded: ${audioFile}`);
-              console.log(`📁 Audio URL: ${audioUrl}`);
+              console.log(`✅ Audio downloaded successfully:`);
+              console.log(`   📁 File: ${audioFile}`);
+              console.log(`   📍 Path: ${filePath}`);
+              console.log(`   🔗 URL: ${audioUrl}`);
+              console.log(`   📊 Size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
 
               resolve({
                 success: true,
@@ -139,16 +171,28 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
                 localPath: filePath
               });
             } else {
+              console.error(`❌ No audio file found in ${tempDir}`);
+              console.error(`📁 Available files: ${(await fs.readdir(tempDir)).join(', ')}`);
+              console.error(`📝 yt-dlp stdout: ${stdout}`);
+
+              // Run debugging utilities
+              try {
+                const { troubleshootYtdlp } = await import('@/utils/ytdlpDebugger');
+                await troubleshootYtdlp(url, targetFilename, stdout);
+              } catch (debugError) {
+                console.error(`❌ Debug utilities failed: ${debugError}`);
+              }
+
               resolve({
                 success: false,
-                error: 'Downloaded audio file not found'
+                error: 'Downloaded audio file not found. Check yt-dlp output and debug information above.'
               });
             }
           } catch (fileError) {
             console.error('❌ File handling error:', fileError);
             resolve({
               success: false,
-              error: 'Failed to process downloaded file'
+              error: `Failed to process downloaded file: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`
             });
           }
         } else {

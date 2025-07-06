@@ -5,12 +5,12 @@ import { doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firest
 // Collection name for audio files - must match Firestore rules
 const AUDIO_FILES_COLLECTION = 'audioFiles';
 
-// Interface for audio file data
+// Interface for audio file data with enhanced metadata
 export interface AudioFileData {
   videoId: string;
   audioUrl: string;
   videoUrl?: string | null;
-  title?: string; // Clean video title for display (from search results)
+  title: string; // Clean video title for display (from search results) - REQUIRED
   storagePath: string;
   videoStoragePath?: string | null;
   fileSize: number;
@@ -19,6 +19,16 @@ export interface AudioFileData {
   createdAt: Timestamp;
   isStreamUrl?: boolean;
   streamExpiresAt?: number;
+
+  // Enhanced metadata fields
+  channelTitle?: string; // Channel name from YouTube search results
+  thumbnail?: string; // Video thumbnail URL
+  extractionService?: string; // Which service was used (yt-mp3-go, quicktube, yt-dlp)
+  extractionTimestamp?: number; // When the audio was extracted
+  videoDescription?: string; // Video description (optional)
+  videoDuration?: string; // Original duration string from YouTube (e.g., "PT3M33S")
+  videoPublishedAt?: string; // When the video was published
+  videoViewCount?: number; // View count at time of extraction
 }
 
 // Extended interface for cached data that may have additional properties
@@ -320,13 +330,13 @@ export async function saveAudioFileMetadata(
     const docRef = doc(db, AUDIO_FILES_COLLECTION, docId);
 
     // Prepare data for Firestore - sanitize undefined values
-    // Store both the clean title and actual filename for video ID-based retrieval
+    // Store enhanced metadata including video information from YouTube search results
     const sanitizedData = {
       videoId: audioFileData.videoId, // Primary key: 11-character YouTube ID
       audioUrl: audioFileData.audioUrl,
       videoUrl: audioFileData.videoUrl || null,
-      title: audioFileData.title || null, // Clean title from search results OR actual filename from QuickTube
-      actualFilename: audioFileData.title || null, // Store actual filename for future reference
+      title: audioFileData.title || `YouTube Video ${audioFileData.videoId}`, // Clean title from search results OR actual filename from service - REQUIRED
+      actualFilename: audioFileData.title || `YouTube Video ${audioFileData.videoId}`, // Store actual filename for future reference
       storagePath: audioFileData.storagePath,
       videoStoragePath: audioFileData.videoStoragePath || null,
       fileSize: audioFileData.fileSize,
@@ -334,6 +344,17 @@ export async function saveAudioFileMetadata(
       duration: audioFileData.duration || null,
       isStreamUrl: audioFileData.isStreamUrl || false,
       streamExpiresAt: audioFileData.streamExpiresAt || null,
+
+      // Enhanced metadata fields
+      channelTitle: audioFileData.channelTitle || null,
+      thumbnail: audioFileData.thumbnail || null,
+      extractionService: audioFileData.extractionService || null,
+      extractionTimestamp: audioFileData.extractionTimestamp || Date.now(),
+      videoDescription: audioFileData.videoDescription || null,
+      videoDuration: audioFileData.videoDuration || null,
+      videoPublishedAt: audioFileData.videoPublishedAt || null,
+      videoViewCount: audioFileData.videoViewCount || null,
+
       createdAt: serverTimestamp()
     };
 

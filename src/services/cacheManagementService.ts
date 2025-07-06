@@ -64,16 +64,16 @@ export const checkCachedAnalysisAvailability = async (deps: CacheCheckDependenci
       setCacheCheckCompleted(false);
 
       // Check if cached analysis exists for current models
-      console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
+      // console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
-        console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
-        console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
+        // console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
+        // console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
         // console.log('🔍 NOTE: Cached results are available but require manual "Start Analysis" to load');
         setCacheAvailable(true);
       } else {
-        console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
+        // console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
         setCacheAvailable(false);
       }
 
@@ -105,7 +105,7 @@ export const checkCachedEnharmonicData = async (
       if (cachedTranscription && (cachedTranscription as any).chordCorrections) {
         // Loading cached chord corrections (new format)
         setChordCorrections((cachedTranscription as any).chordCorrections);
-        console.log('✅ Loaded cached chord corrections');
+        // console.log('✅ Loaded cached chord corrections');
       }
 
       // Check for sequence corrections (enhanced format)
@@ -148,7 +148,7 @@ export const checkCachedLyrics = async (
 
       if (response.ok && data.success && data.lyrics) {
         if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
-          console.log(`Found ${data.lyrics.lines.length} lines of cached lyrics (not auto-loading)`);
+          // console.log(`Found ${data.lyrics.lines.length} lines of cached lyrics (not auto-loading)`);
           // Set cached lyrics state to update UI
           setHasCachedLyrics(true);
           // Don't auto-load, just update UI state that cached lyrics are available
@@ -181,7 +181,7 @@ export const updateTranscriptionWithKey = async (
         chordCorrections: keyResult.chordCorrections,
         sequenceCorrections: keyResult.sequenceCorrections
       });
-      console.log('✅ Updated transcription cache with key signature and enharmonic corrections');
+      // console.log('✅ Updated transcription cache with key signature and enharmonic corrections');
     }
   } catch (error) {
     console.error('Error updating transcription cache with key data:', error);

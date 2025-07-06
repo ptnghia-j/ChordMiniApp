@@ -1,10 +1,10 @@
 // Environment configuration
 
 export const config = {
-  // Python backend API URL - Production Google Cloud Run endpoint
-  pythonApiUrl: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app',
+  // Python backend API URL - Uses environment variable with localhost fallback for development
+  pythonApiUrl: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000',
 
-  // Local development fallback
+  // Local development URL (for reference)
   localApiUrl: 'http://localhost:5000',
 
   // Other environment variables

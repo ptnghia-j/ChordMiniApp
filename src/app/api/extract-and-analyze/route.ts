@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎵 Extract and analyze request: videoId=${videoId}, beatDetector=${beatDetector}, chordDetector=${chordDetector}`);
 
-    // Forward the complete request to Google Cloud Run backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    // Forward the complete request to Python backend (environment-configured)
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
     
     console.log(`🚀 Forwarding complete extraction and analysis to backend: ${backendUrl}`);
 

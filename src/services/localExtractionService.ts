@@ -1,10 +1,14 @@
 import { quickTubeServiceSimplified } from './quickTubeServiceSimplified';
+import { ytMp3GoService } from './ytMp3GoService';
 import { getCachedAudioFile, saveAudioFileMetadata } from './firebaseStorageService';
+import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**
- * Audio Extraction Service - QuickTube Only
+ * Local Audio Extraction Service - Environment-Aware
  *
- * This service provides audio extraction using QuickTube exclusively.
+ * This service provides audio extraction using environment-appropriate services:
+ * - Vercel Production: yt-mp3-go (better Unicode support)
+ * - Local Development: QuickTube or yt-dlp
  */
 
 export interface LocalExtractionResult {
@@ -24,6 +28,14 @@ export class LocalExtractionService {
       LocalExtractionService.instance = new LocalExtractionService();
     }
     return LocalExtractionService.instance;
+  }
+
+  /**
+   * Get the current audio extraction strategy
+   */
+  private getExtractionStrategy(): string {
+    const env = detectEnvironment();
+    return env.strategy;
   }
 
   /**
@@ -85,58 +97,74 @@ export class LocalExtractionService {
         }
       }
 
-      // Use QuickTube for audio extraction
-      console.log('🔄 Attempting QuickTube extraction...');
-      let quickTubeResult;
+      // Use appropriate service for audio extraction based on environment
+      const strategy = this.getExtractionStrategy();
+      let extractionResult;
 
-      try {
-        quickTubeResult = await quickTubeServiceSimplified.extractAudio(videoId);
-      } catch (quickTubeError) {
-        console.error('❌ QuickTube extraction failed:', quickTubeError);
-
-        // For now, we'll throw the error, but in the future we could implement
-        // alternative extraction methods here (e.g., yt-dlp, other services)
-        throw new Error(`Audio extraction failed: ${quickTubeError instanceof Error ? quickTubeError.message : 'Unknown error'}. Please try uploading the audio file directly or try again later.`);
+      if (strategy === 'ytmp3go') {
+        console.log('🔄 Attempting yt-mp3-go extraction...');
+        try {
+          extractionResult = await ytMp3GoService.extractAudio(videoId);
+        } catch (ytMp3GoError) {
+          console.error('❌ yt-mp3-go extraction failed:', ytMp3GoError);
+          throw new Error(`Audio extraction failed: ${ytMp3GoError instanceof Error ? ytMp3GoError.message : 'Unknown error'}. Please try uploading the audio file directly or try again later.`);
+        }
+      } else {
+        console.log('🔄 Attempting QuickTube extraction...');
+        try {
+          extractionResult = await quickTubeServiceSimplified.extractAudio(videoId);
+        } catch (quickTubeError) {
+          console.error('❌ QuickTube extraction failed:', quickTubeError);
+          throw new Error(`Audio extraction failed: ${quickTubeError instanceof Error ? quickTubeError.message : 'Unknown error'}. Please try uploading the audio file directly or try again later.`);
+        }
       }
 
-      if (quickTubeResult.success) {
-        console.log('✅ QuickTube extraction successful');
+      if (extractionResult.success) {
+        const serviceName = strategy === 'ytmp3go' ? 'yt-mp3-go' : 'QuickTube';
+        console.log(`✅ ${serviceName} extraction successful`);
 
         // Cache the successful result (video ID-based)
         // Use original title from search results, fallback to generic title
-        const finalTitle = originalTitle || quickTubeResult.title || `YouTube Video ${videoId}`;
+        const finalTitle = originalTitle || extractionResult.title || `YouTube Video ${videoId}`;
 
         try {
+          const storagePrefix = strategy === 'ytmp3go' ? 'ytmp3go' : 'quicktube';
           await saveAudioFileMetadata({
             videoId, // Primary key: 11-character YouTube ID
-            audioUrl: quickTubeResult.audioUrl!,
+            audioUrl: extractionResult.audioUrl!,
             title: finalTitle, // Clean title from search results
-            storagePath: `quicktube/${videoId}`, // Store using video ID
-            fileSize: 0, // Unknown for QuickTube URLs
-            duration: quickTubeResult.duration || 0,
+            storagePath: `${storagePrefix}/${videoId}`, // Store using video ID with service prefix
+            fileSize: 0, // Unknown for external URLs
+            duration: extractionResult.duration || 0,
             isStreamUrl: true,
-            streamExpiresAt: Date.now() + 24 * 60 * 60 * 1000 // 24 hours from now
+            streamExpiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
+
+            // Enhanced metadata
+            extractionService: strategy === 'ytmp3go' ? 'yt-mp3-go' : 'quicktube',
+            extractionTimestamp: Date.now(),
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` // Default thumbnail
           });
-          console.log(`💾 Cached QuickTube result for ${videoId} with title: "${finalTitle}"`);
+          console.log(`💾 Cached ${serviceName} result for ${videoId} with enhanced metadata: "${finalTitle}"`);
         } catch (cacheError) {
-          console.warn('⚠️ Failed to cache QuickTube result:', cacheError);
+          console.warn(`⚠️ Failed to cache ${serviceName} result:`, cacheError);
         }
 
         return {
           success: true,
-          audioUrl: quickTubeResult.audioUrl!,
+          audioUrl: extractionResult.audioUrl!,
           title: finalTitle,
-          duration: quickTubeResult.duration || 0,
+          duration: extractionResult.duration || 0,
           fromCache: false
         };
       }
 
-      // QuickTube failed
-      console.error('❌ QuickTube extraction failed:', quickTubeResult.error);
+      // Extraction failed
+      const serviceName = strategy === 'ytmp3go' ? 'yt-mp3-go' : 'QuickTube';
+      console.error(`❌ ${serviceName} extraction failed:`, extractionResult.error);
       return {
         success: false,
         audioUrl: '',
-        error: quickTubeResult.error || 'QuickTube extraction failed'
+        error: extractionResult.error || `${serviceName} extraction failed`
       };
 
     } catch (error) {

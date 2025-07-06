@@ -12,7 +12,7 @@ export const maxDuration = 800; // 13+ minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
 
     console.log(`🎵 Processing Vercel Blob chord recognition request`);
 
@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${backendUrl}/api/recognize-chords`, {
       method: 'POST',
       body: backendFormData,
+      headers: {
+        // Don't set Content-Type - let the browser set it with boundary for FormData
+      },
       signal: abortSignal,
     });
 

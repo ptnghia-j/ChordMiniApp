@@ -6,9 +6,11 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import { useTheme } from '@/contexts/ThemeContext';
+import StickySearchBar from './StickySearchBar';
 
 interface NavigationProps {
   className?: string;
+  showStickySearch?: boolean;
 }
 
 interface NavigationItem {
@@ -17,13 +19,13 @@ interface NavigationItem {
   isScroll?: boolean;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
+const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearch = false }) => {
   const { theme } = useTheme();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Use the appropriate logo based on the current theme
-  const logoSrc = theme === 'dark' ? '/chordMiniLogo_dark.png' : '/chordMiniLogo.png';
+  const logoSrc = theme === 'dark' ? '/chordMiniLogo-dark.png' : '/chordMiniLogo.png';
 
   // Navigation items configuration
   const navigationItems: NavigationItem[] = [
@@ -98,7 +100,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   };
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-black bg-opacity-50 dark:bg-opacity-50 backdrop-filter backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
+    <div className={`sticky top-0 bg-white dark:bg-gray-900 lg:bg-opacity-50 lg:dark:bg-opacity-50 lg:backdrop-filter lg:backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
       <div className="w-full px-4 flex justify-between items-center h-12">
         {/* Logo and Brand */}
         <div className="flex items-center">
@@ -114,42 +116,52 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
               priority
             />
             <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-              Chord Mini
+              ChordMini
             </h1>
           </Link>
         </div>
 
         {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center space-x-6">
-          <nav>
-            <ul className="flex space-x-6">
+        <div className="hidden lg:flex items-center space-x-2 xl:space-x-4">
+          {/* Sticky Search Bar - only show on homepage when original search is out of view */}
+          {pathname === '/' && (
+            <div className="mr-2 xl:mr-4">
+              <StickySearchBar
+                isVisible={showStickySearch}
+                className="max-w-xs xl:max-w-md"
+              />
+            </div>
+          )}
+
+          <nav className="flex-shrink-0">
+            <ul className="flex space-x-2 xl:space-x-4">
               {navigationItems.map((item) => (
                 <li key={item.href}>
                   {item.isScroll ? (
                     <button
                       onClick={() => handleNavClick(item.href, item.isScroll)}
-                      className={`relative transition-all duration-300 font-medium px-3 py-2 group inline-flex items-center ${
+                      className={`relative transition-all duration-300 font-medium px-2 xl:px-3 py-2 group inline-flex items-center text-sm xl:text-base whitespace-nowrap ${
                         isActiveRoute(item.href)
                           ? 'text-blue-600 dark:text-blue-400'
                           : 'text-primary-700 dark:text-primary-300 hover:text-blue-600 dark:hover:text-blue-400'
                       }`}
                     >
                       <span className="relative z-10">{item.label}</span>
-                      <span className={`absolute bottom-0 left-3 right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
+                      <span className={`absolute bottom-0 left-2 right-2 xl:left-3 xl:right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
                         isActiveRoute(item.href) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                       }`}></span>
                     </button>
                   ) : (
                     <Link
                       href={item.href}
-                      className={`relative transition-all duration-300 font-medium px-3 py-2 group inline-flex items-center ${
+                      className={`relative transition-all duration-300 font-medium px-2 xl:px-3 py-2 group inline-flex items-center text-sm xl:text-base whitespace-nowrap ${
                         isActiveRoute(item.href)
                           ? 'text-blue-600 dark:text-blue-400'
                           : 'text-primary-700 dark:text-primary-300 hover:text-blue-600 dark:hover:text-blue-400'
                       }`}
                     >
                       <span className="relative z-10">{item.label}</span>
-                      <span className={`absolute bottom-0 left-3 right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
+                      <span className={`absolute bottom-0 left-2 right-2 xl:left-3 xl:right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
                         isActiveRoute(item.href) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                       }`}></span>
                     </Link>
@@ -163,6 +175,16 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
 
         {/* Mobile Navigation Controls */}
         <div className="lg:hidden flex items-center space-x-3">
+          {/* Mobile Sticky Search Bar - only show on homepage when original search is out of view */}
+          {pathname === '/' && (
+            <div className="flex-1 max-w-xs">
+              <StickySearchBar
+                isVisible={showStickySearch}
+                className="w-full"
+              />
+            </div>
+          )}
+
           <ThemeToggle />
           <button
             onClick={toggleMobileMenu}

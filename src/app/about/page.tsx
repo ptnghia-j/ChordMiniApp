@@ -133,6 +133,160 @@ const AboutPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Credits & Acknowledgments Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
+            Credits & Acknowledgments
+          </h2>
+          <div className="space-y-6 text-gray-700 dark:text-gray-300">
+            <p>
+              ChordMini is built upon the excellent work of many open-source projects and services.
+              We gratefully acknowledge the following third-party libraries and services:
+            </p>
+
+            {/* Third-party Libraries */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Third-Party Libraries & Services
+              </h3>
+              <div className="space-y-4">
+
+                {/* Guitar Chord Diagrams */}
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://github.com/tombatossals/react-chords"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      @tombatossals/react-chords
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Guitar chord diagram visualization component used in the Guitar Chords tab for displaying interactive chord fingering patterns.
+                  </p>
+                </div>
+
+                {/* LRClib */}
+                <div className="border-l-4 border-green-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://lrclib.net/"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      LRClib
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Lyrics synchronization service providing time-synced lyrics data for the Lyrics & Chords feature.
+                  </p>
+                </div>
+
+                {/* YouTube Search API */}
+                <div className="border-l-4 border-red-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://github.com/h4r5h1t/youtube-search-api"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      youtube-search-api
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    YouTube search functionality for finding and analyzing music videos directly from the platform.
+                  </p>
+                </div>
+
+                {/* yt-dlp */}
+                <div className="border-l-4 border-purple-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://github.com/yt-dlp/yt-dlp"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      yt-dlp
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    YouTube audio extraction tool used for downloading and processing audio content for chord analysis.
+                  </p>
+                </div>
+
+                {/* Genius API */}
+                <div className="border-l-4 border-yellow-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://docs.genius.com/"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      Genius API
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Lyrics and song metadata service providing comprehensive song information and lyrics data.
+                  </p>
+                </div>
+
+                {/* Music.AI */}
+                <div className="border-l-4 border-indigo-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://music.ai/"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      Music.AI
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    AI-powered music transcription service for word-level lyrics synchronization and audio analysis.
+                  </p>
+                </div>
+
+                {/* Google Gemini API */}
+                <div className="border-l-4 border-orange-500 pl-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    <a href="https://ai.google.dev/"
+                       className="text-blue-600 dark:text-blue-400 hover:underline"
+                       target="_blank" rel="noopener noreferrer">
+                      Google Gemini API
+                    </a>
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    AI language model used for lyrics translation, enharmonic chord corrections, and intelligent music analysis.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Framework & Infrastructure */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Framework & Infrastructure
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white">Frontend</h4>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• Next.js 15 (React Framework)</li>
+                    <li>• TypeScript</li>
+                    <li>• Tailwind CSS</li>
+                    <li>• Framer Motion</li>
+                    <li>• Chart.js & D3.js</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white">Backend & ML</h4>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• Python Flask (Google Cloud Run)</li>
+                    <li>• Firebase Firestore</li>
+                    <li>• Vercel Blob Storage</li>
+                    <li>• Custom ML Models</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+              We extend our sincere gratitude to all the developers and maintainers of these projects
+              for making their work available to the open-source community.
+            </p>
+          </div>
+        </div>
+
         {/* Contact Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">

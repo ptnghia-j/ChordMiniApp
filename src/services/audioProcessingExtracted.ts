@@ -118,15 +118,15 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
   const currentChordDetector = chordDetectorRef.current;
 
   // Debug: Verify we're using the correct models
-  console.log(`🎯 Analysis starting: Using ${currentBeatDetector} + ${currentChordDetector} models`);
-  console.log(`🔍 Model state verification: state beatDetector="${deps.beatDetector}", state chordDetector="${deps.chordDetector}"`);
-  console.log(`🔍 Model ref verification: ref beatDetector="${beatDetectorRef.current}", ref chordDetector="${chordDetectorRef.current}"`);
+  // console.log(`🎯 Analysis starting: Using ${currentBeatDetector} + ${currentChordDetector} models`);
+  // console.log(`🔍 Model state verification: state beatDetector="${deps.beatDetector}", state chordDetector="${deps.chordDetector}"`);
+  // console.log(`🔍 Model ref verification: ref beatDetector="${beatDetectorRef.current}", ref chordDetector="${chordDetectorRef.current}"`);
 
   try {
     const cachedData = await getTranscription(videoId, currentBeatDetector, currentChordDetector);
 
     if (cachedData) {
-      console.log(`✅ Found cached results for ${currentBeatDetector} + ${currentChordDetector}, loading...`);
+      // Found cached results, loading...
 
       // Start processing context for loading cached data
       processingContext.startProcessing();
@@ -169,7 +169,7 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
       // Update duration if available
       if (cachedData.audioDuration && cachedData.audioDuration > 0) {
         setDuration(cachedData.audioDuration);
-        console.log(`🎵 Updated duration from cached analysis: ${cachedData.audioDuration.toFixed(1)} seconds`);
+        // console.log(`🎵 Updated duration from cached analysis: ${cachedData.audioDuration.toFixed(1)} seconds`);
       }
 
       // Complete processing context
@@ -180,14 +180,14 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
 
       return analysisResult;
     } else {
-      console.log(`❌ No cached results found for ${currentBeatDetector} + ${currentChordDetector}, running new analysis...`);
+      // console.log(`❌ No cached results found for ${currentBeatDetector} + ${currentChordDetector}, running new analysis...`);
     }
   } catch (cacheError) {
     console.warn('Cache check failed, proceeding with new analysis:', cacheError);
   }
 
   // No cached results found, proceed with new analysis
-  console.log('🔄 Starting new audio analysis...');
+  // console.log('🔄 Starting new audio analysis...');
 
   let stageTimeout: NodeJS.Timeout | null = null;
 
@@ -211,7 +211,7 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
     // Update duration from analysis results if available
     if (results.audioDuration && results.audioDuration > 0) {
       setDuration(results.audioDuration);
-      console.log(`🎵 Updated duration from analysis results: ${results.audioDuration.toFixed(1)} seconds`);
+      // console.log(`🎵 Updated duration from analysis results: ${results.audioDuration.toFixed(1)} seconds`);
     }
 
     // FIXED: Clear the stage timeout to prevent it from overriding completion
@@ -324,8 +324,8 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
   extractionLockRef.current = true;
 
   try {
-    console.log(`🎵 Starting audio extraction for video: ${videoId}`);
-    console.log(`📊 Search metadata: title="${titleFromSearch}", duration="${durationFromSearch}", channel="${channelFromSearch}"`);
+    // console.log(`🎵 Starting audio extraction for video: ${videoId}`);
+    // console.log(`📊 Search metadata: title="${titleFromSearch}", duration="${durationFromSearch}", channel="${channelFromSearch}"`);
 
     // Update state to show extraction is starting
     setAudioProcessingState(prev => ({
@@ -373,8 +373,8 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
       const data = await response.json();
 
       if (data.success) {
-        console.log(`✅ Audio extraction successful: ${data.audioUrl}`);
-        console.log(`📊 Extraction metadata: fromCache=${data.fromCache}, title="${data.title}", duration=${data.duration}`);
+        // console.log(`✅ Audio extraction successful: ${data.audioUrl}`);
+        // console.log(`📊 Extraction metadata: fromCache=${data.fromCache}, title="${data.title}", duration=${data.duration}`);
 
         // Update state with successful extraction
         setAudioProcessingState(prev => ({

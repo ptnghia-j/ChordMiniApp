@@ -19,6 +19,9 @@ export default function DocsPage() {
   // Track which section is currently visible to highlight the sidebar navigation
   const [activeSection, setActiveSection] = useState<string>('welcome');
 
+  // Get the backend URL for documentation examples
+  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+
   useEffect(() => {
     const sectionIds = [
       'welcome',
@@ -246,7 +249,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
                       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                         <code className="text-sm text-gray-800 dark:text-gray-200">
-                          https://chordmini-backend-full-191567167632.us-central1.run.app
+                          {backendUrl}
                         </code>
                       </div>
                     </div>
@@ -539,7 +542,7 @@ export default function DocsPage() {
                   <p className="text-gray-600 dark:text-gray-400">
                     All endpoints are available at the base URL:
                     <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm ml-1">
-                      https://chordmini-backend-full-191567167632.us-central1.run.app
+                      {backendUrl}
                     </code>
                   </p>
                 </div>
@@ -628,7 +631,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Beat Detection</h4>
                       <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
                         <button
-                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/detect-beats" \\
+                          onClick={() => copyToClipboard(`curl -X POST "${backendUrl}/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`)}
                           className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
@@ -637,7 +640,7 @@ export default function DocsPage() {
                           <FiCopy className="w-4 h-4" />
                         </button>
                         <pre className="text-blue-300 text-sm pr-12">
-{`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/detect-beats" \\
+{`curl -X POST "${backendUrl}/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`}
                         </pre>
@@ -648,7 +651,7 @@ export default function DocsPage() {
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Chord Recognition</h4>
                       <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
                         <button
-                          onClick={() => copyToClipboard(`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords" \\
+                          onClick={() => copyToClipboard(`curl -X POST "${backendUrl}/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`)}
                           className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
@@ -657,7 +660,7 @@ export default function DocsPage() {
                           <FiCopy className="w-4 h-4" />
                         </button>
                         <pre className="text-blue-300 text-sm pr-12">
-{`curl -X POST "https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords" \\
+{`curl -X POST "${backendUrl}/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`}
                         </pre>
@@ -676,7 +679,7 @@ formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
 const response = await fetch(
-  'https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords',
+  '${backendUrl}/api/recognize-chords',
   {
     method: 'POST',
     body: formData
@@ -696,7 +699,7 @@ formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
 const response = await fetch(
-  'https://chordmini-backend-full-191567167632.us-central1.run.app/api/recognize-chords',
+  '${backendUrl}/api/recognize-chords',
   {
     method: 'POST',
     body: formData

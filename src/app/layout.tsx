@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
@@ -10,10 +11,18 @@ import PerformanceMonitor from '../components/PerformanceMonitor';
 import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptimizer';
 import DesktopPerformanceOptimizer from '../components/DesktopPerformanceOptimizer';
 
+// Configure Google Fonts
+const robotoMono = Roboto_Mono({
+  subsets: ['latin'],
+  variable: '--font-roboto-mono',
+  display: 'swap',
+});
+
 
 
 // Define metadata for the application
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NODE_ENV === 'production' ? 'https://chordmini.com' : 'http://localhost:3000'),
   title: {
     default: 'ChordMini - AI-Powered Music Analysis & Chord Recognition',
     template: '%s | ChordMini'
@@ -91,7 +100,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={robotoMono.variable}>
       <head>
         {/* Critical CSS inlined for performance - eliminates render blocking */}
         <style dangerouslySetInnerHTML={{
@@ -109,17 +118,11 @@ export default function RootLayout({
           `
         }} />
 
-        {/* LCP Image preloading for faster discovery */}
-        <link rel="preload" href="/hero-image-placeholder.svg" as="image" fetchPriority="high" />
-        <link rel="preload" href="/hero-image-placeholder-dark.svg" as="image" fetchPriority="high" />
-
-        {/* Critical CSS preloading for performance */}
-        <link rel="preload" href="/_next/static/css/app/layout.css" as="style" />
-        <link rel="preload" href="/_next/static/css/app/globals.css" as="style" />
+        {/* Only preload truly critical resources that are used immediately */}
+        {/* Removed CSS preloads as Next.js handles CSS loading automatically */}
+        {/* Removed demo image preloads as they're only used on specific pages */}
 
         {/* Resource hints for performance */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://i.ytimg.com" />
         <link rel="preconnect" href="https://img.youtube.com" />
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
@@ -128,10 +131,6 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//youtube.com" />
         <link rel="dns-prefetch" href="//googleapis.com" />
         <link rel="dns-prefetch" href="//vercel.app" />
-
-        {/* Optimize font loading */}
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preload" href="https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW4AJi8SJQt.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="font-sans min-h-screen flex flex-col">
         <ProcessingProvider>

@@ -9,15 +9,16 @@ interface AudioMappingItem {
   chord: string;
   timestamp: number;
   visualIndex: number;
-  audioIndex: number; // Original audio index for accurate beat click handling
+  audioIndex: number; // Updated to match ChordGrid component format
 }
 
 interface ChordGridData {
   chords: string[];
-  beats: number[];
+  beats: (number | null)[]; // Updated to match service type
   hasPadding: boolean;
   paddingCount: number;
   shiftCount: number;
+  totalPaddingCount?: number; // Added to match service type
   hasPickupBeats?: boolean;
   pickupBeatsCount?: number;
   originalAudioMapping?: AudioMappingItem[]; // NEW: Original timestamp-to-chord mapping for audio sync
@@ -71,43 +72,65 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   chordCorrections = null,
   sequenceCorrections = null
 }) => {
+  // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
+  // Only recalculate when the actual data changes, not on every render
+  const stableProps = React.useMemo(() => {
+    const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
 
+    return {
+      chords: chordGridData.chords,
+      beats: chordGridData.beats,
+      timeSignature,
+      keySignature: keySignature || undefined,
+      isDetectingKey,
+      hasPickupBeats: chordGridData.hasPickupBeats,
+      pickupBeatsCount: chordGridData.pickupBeatsCount,
+      hasPadding: chordGridData.hasPadding,
+      paddingCount: chordGridData.paddingCount,
+      shiftCount: chordGridData.shiftCount,
+      beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
+      originalAudioMapping: chordGridData.originalAudioMapping,
+      isUploadPage,
+      showCorrectedChords,
+      chordCorrections,
+      sequenceCorrections
+    };
+  }, [
+    chordGridData.chords,
+    chordGridData.beats,
+    chordGridData.hasPickupBeats,
+    chordGridData.pickupBeatsCount,
+    chordGridData.hasPadding,
+    chordGridData.paddingCount,
+    chordGridData.shiftCount,
+    chordGridData.originalAudioMapping,
+    analysisResults?.beatDetectionResult?.time_signature,
+    analysisResults?.beatDetectionResult?.beat_time_range_start,
+    keySignature,
+    isDetectingKey,
+    isUploadPage,
+    showCorrectedChords,
+    chordCorrections,
+    sequenceCorrections
+  ]);
 
-  // Use the comprehensive chord grid data passed as prop - no need to generate our own
+  // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
+  const memoizedOnBeatClick = React.useCallback((beatIndex: number, timestamp: number) => {
+    onBeatClick(beatIndex, timestamp);
+  }, [onBeatClick]);
 
   return (
     <div>
       {(() => {
-        // Debug time signature passing
-        const timeSignature = analysisResults?.beatDetectionResult?.time_signature;
-        // console.log('=== CHORD GRID CONTAINER TIME SIGNATURE DEBUG ===');
-        // console.log('analysisResults?.beatDetectionResult:', analysisResults?.beatDetectionResult);
-        // console.log('time_signature value:', timeSignature);
-        // console.log('time_signature type:', typeof timeSignature);
-        // console.log('=== END CHORD GRID CONTAINER DEBUG ===');
-
         return (
           <ChordGrid
-            chords={chordGridData.chords}
-            beats={chordGridData.beats}
+            // PERFORMANCE OPTIMIZATION: Use memoized stable props
+            {...stableProps}
+            // Only frequently changing props passed directly
             currentBeatIndex={currentBeatIndex}
-            timeSignature={timeSignature}
-            keySignature={keySignature || undefined}
-            isDetectingKey={isDetectingKey}
             isChatbotOpen={isChatbotOpen}
             isLyricsPanelOpen={isLyricsPanelOpen}
-            hasPickupBeats={chordGridData.hasPickupBeats}
-            pickupBeatsCount={chordGridData.pickupBeatsCount}
-            hasPadding={chordGridData.hasPadding}
-            paddingCount={chordGridData.paddingCount}
-            shiftCount={chordGridData.shiftCount}
-            beatTimeRangeStart={analysisResults?.beatDetectionResult?.beat_time_range_start || 0}
-            originalAudioMapping={chordGridData.originalAudioMapping}
-            onBeatClick={onBeatClick}
-            isUploadPage={isUploadPage}
-            showCorrectedChords={showCorrectedChords}
-            chordCorrections={chordCorrections}
-            sequenceCorrections={sequenceCorrections}
+            onBeatClick={memoizedOnBeatClick}
           />
         );
       })()}

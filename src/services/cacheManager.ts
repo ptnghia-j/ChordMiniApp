@@ -171,14 +171,10 @@ export const checkCachedAnalysisAvailability = async (deps: CacheManagerDependen
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
-        console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
-        console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
-        // console.log('🔍 NOTE: Cached results are available but require manual "Start Analysis" to load');
-        // console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to load cached results or run new analysis');
+        // Found cached analysis (not auto-loading)
         setCacheAvailable(true);
       } else {
-        console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
-        console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run new analysis');
+        // No cached analysis found - user action required
         setCacheAvailable(false);
       }
 

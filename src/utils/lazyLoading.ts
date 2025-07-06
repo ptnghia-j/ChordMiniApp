@@ -24,23 +24,15 @@ export const lazyLoadComponent = (importFn: () => Promise<{ default: React.Compo
   );
 };
 
-// Preload critical resources
+// Preload critical resources (removed CSS preloading as Next.js handles this automatically)
 export const preloadCriticalResources = () => {
   if (typeof window === 'undefined') return;
-  
-  // Preload critical CSS
-  const criticalCSS = document.createElement('link');
-  criticalCSS.rel = 'preload';
-  criticalCSS.href = '/_next/static/css/app/layout.css';
-  criticalCSS.as = 'style';
-  document.head.appendChild(criticalCSS);
-  
-  // Preload critical JavaScript
-  const criticalJS = document.createElement('link');
-  criticalJS.rel = 'preload';
-  criticalJS.href = '/_next/static/chunks/main.js';
-  criticalJS.as = 'script';
-  document.head.appendChild(criticalJS);
+
+  // Next.js automatically handles CSS and JavaScript preloading
+  // Manual preloading can cause "unused preload" warnings
+  // Only preload resources that are truly critical and not handled by Next.js
+
+  console.debug('Critical resources are handled automatically by Next.js');
 };
 
 // Defer non-critical resources

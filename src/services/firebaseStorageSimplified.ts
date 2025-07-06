@@ -17,15 +17,23 @@ const AUDIO_CACHE_COLLECTION = 'audioFiles';
 // Simplified audio file data structure
 export interface SimplifiedAudioData extends Record<string, unknown> {
   videoId: string; // Primary key: 11-character YouTube ID
-  audioUrl: string; // Direct QuickTube download URL
+  audioUrl: string; // Direct download URL from extraction service
   title: string; // Clean title from YouTube search results
   thumbnail?: string; // Thumbnail URL from YouTube search
   channelTitle?: string; // Channel name from YouTube search
   duration?: number; // Duration in seconds
   fileSize?: number; // File size if available
-  isStreamUrl: boolean; // True for QuickTube URLs, false for Firebase Storage URLs
+  isStreamUrl: boolean; // True for external URLs, false for Firebase Storage URLs
   streamExpiresAt?: number; // Expiration timestamp (only for stream URLs)
   createdAt: unknown; // Firestore timestamp
+
+  // Enhanced metadata fields
+  extractionService?: string; // Which service was used (yt-mp3-go, quicktube, yt-dlp)
+  extractionTimestamp?: number; // When the audio was extracted
+  videoDuration?: string; // Original duration string from YouTube (e.g., "PT3M33S")
+  videoDescription?: string; // Video description (optional)
+  videoPublishedAt?: string; // When the video was published
+  videoViewCount?: number; // View count at time of extraction
 }
 
 export class FirebaseStorageSimplified {
@@ -49,6 +57,16 @@ export class FirebaseStorageSimplified {
     channelTitle?: string;
     duration?: number;
     fileSize?: number;
+    isStreamUrl?: boolean;
+    streamExpiresAt?: number;
+
+    // Enhanced metadata fields
+    extractionService?: string;
+    extractionTimestamp?: number;
+    videoDuration?: string;
+    videoDescription?: string;
+    videoPublishedAt?: string;
+    videoViewCount?: number;
   }): Promise<boolean> {
     if (!db) {
       console.warn('Firebase not initialized, skipping save');
@@ -67,6 +85,9 @@ export class FirebaseStorageSimplified {
       const docRef = doc(db, AUDIO_CACHE_COLLECTION, data.videoId);
 
       // Prepare simplified data structure
+      const isStreamUrl = data.isStreamUrl !== undefined ? data.isStreamUrl :
+                         (data.audioUrl.includes('quicktube.app') || data.audioUrl.includes('lukavukanovic.xyz'));
+
       const audioData: SimplifiedAudioData = {
         videoId: data.videoId,
         audioUrl: data.audioUrl,
@@ -75,8 +96,19 @@ export class FirebaseStorageSimplified {
         channelTitle: data.channelTitle || 'Unknown Channel',
         duration: data.duration || 0,
         fileSize: data.fileSize || 0,
-        isStreamUrl: data.audioUrl.includes('quicktube.app'), // Detect if it's a stream URL
-        ...(data.audioUrl.includes('quicktube.app') && { streamExpiresAt: Date.now() + (24 * 60 * 60 * 1000) }), // Only include streamExpiresAt for stream URLs
+        isStreamUrl,
+        ...(isStreamUrl && {
+          streamExpiresAt: data.streamExpiresAt || (Date.now() + (24 * 60 * 60 * 1000))
+        }), // Only include streamExpiresAt for stream URLs
+
+        // Enhanced metadata fields (filter out undefined values for Firebase)
+        ...(data.extractionService && { extractionService: data.extractionService }),
+        extractionTimestamp: data.extractionTimestamp || Date.now(),
+        ...(data.videoDuration && { videoDuration: data.videoDuration }),
+        ...(data.videoDescription && { videoDescription: data.videoDescription }),
+        ...(data.videoPublishedAt && { videoPublishedAt: data.videoPublishedAt }),
+        ...(data.videoViewCount && { videoViewCount: data.videoViewCount }),
+
         createdAt: serverTimestamp()
       };
 

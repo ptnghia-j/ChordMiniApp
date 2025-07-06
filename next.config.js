@@ -106,7 +106,7 @@ const nextConfig = {
     return [
       {
         source: '/api/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'https://chordmini-backend-full-191567167632.us-central1.run.app'}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000'}/:path*`,
       },
     ];
   },
@@ -314,8 +314,8 @@ const nextConfig = {
     return config;
   },
 
-  // Output configuration for static export (if needed)
-  output: 'standalone',
+  // Output configuration for Vercel deployment
+  // output: 'standalone', // Commented out for standard Vercel deployment
 
   // Disable x-powered-by header
   poweredByHeader: false,

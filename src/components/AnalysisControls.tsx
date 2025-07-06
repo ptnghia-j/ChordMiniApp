@@ -43,7 +43,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   }
 
   return (
-    <div className="w-full p-4 rounded-lg bg-white dark:bg-content-bg overflow-visible transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+    <div className="w-full p-4 rounded-lg bg-white dark:bg-content-bg overflow-visible transition-colors duration-300">
       <div className="flex flex-col h-full">
         <div className="mb-2">
           <h3 className="font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">

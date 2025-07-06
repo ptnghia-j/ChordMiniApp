@@ -91,7 +91,7 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
 
     if (response.ok) {
       const data = await response.json();
-      console.log('🔍 Backend health check response:', data);
+      // console.log('🔍 Backend health check response:', data);
 
       // Convert health check response to model info format
       const result = {
@@ -115,7 +115,7 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
         }
       };
 
-      console.log('🔍 Processed model info result:', result);
+      // console.log('🔍 Processed model info result:', result);
       return result;
     }
   } catch (error) {
@@ -156,10 +156,10 @@ export async function detectBeatsWithRateLimit(
 
     // Log audio duration for debugging before sending to ML service
     try {
-      const duration = await getAudioDurationFromFile(audioFile);
-      console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
-    } catch (durationError) {
-      console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
+      await getAudioDurationFromFile(audioFile);
+      // console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
+    } catch {
+      // console.warn(`⚠️ Could not detect audio duration for debugging: ${error}`);
     }
 
     // Use the frontend API route for proper timeout handling
@@ -171,7 +171,7 @@ export async function detectBeatsWithRateLimit(
     }
 
     // Create a safe timeout signal that works across environments
-    const timeoutValue = 600000; // 10 minutes timeout
+    const timeoutValue = 800000; // 13+ minutes timeout to match API routes
     console.log(`🔍 Beat detection timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
@@ -269,13 +269,16 @@ export async function detectBeatsFromFile(
 
           return backendResponse as BeatDetectionResult;
         } else {
-          // If blob upload fails, fall back to direct processing with warning
-          console.warn(`⚠️ Vercel Blob upload failed: ${blobResult.error}, falling back to direct processing`);
-          console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+          // For large files, don't fall back to direct processing - throw error instead
+          const errorMsg = blobResult.error || 'Unknown blob upload error';
+          console.error(`❌ Vercel Blob upload failed for large file: ${errorMsg}`);
+          throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
         }
       } catch (blobError) {
-        console.warn(`⚠️ Vercel Blob upload error: ${blobError}, falling back to direct processing`);
-        console.warn(`⚠️ This may hit Vercel's 4.5MB request body limit`);
+        // For large files, don't fall back to direct processing - throw error instead
+        const errorMsg = blobError instanceof Error ? blobError.message : String(blobError) || 'Unknown error';
+        console.error(`❌ Vercel Blob upload error for large file: ${errorMsg}`);
+        throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
       }
     }
 
@@ -311,10 +314,10 @@ export async function detectBeatsFromFile(
 
     // Log audio duration for debugging before sending to ML service
     try {
-      const duration = await getAudioDurationFromFile(audioFile);
-      console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
-    } catch (durationError) {
-      console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
+      await getAudioDurationFromFile(audioFile);
+      // console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
+    } catch {
+      // console.warn(`⚠️ Could not detect audio duration for debugging: ${error}`);
     }
 
     const formData = new FormData();
@@ -324,7 +327,7 @@ export async function detectBeatsFromFile(
     // Add force=true parameter if Beat-Transformer is explicitly requested for large files
     if (detector === 'beat-transformer' && fileSizeMB > 30) {
       formData.append('force', 'true');
-      console.log(`Added force=true parameter for ${detector} with large file`);
+      // console.log(`Added force=true parameter for ${detector} with large file`);
     }
 
     // Use XMLHttpRequest to track upload progress
@@ -363,7 +366,7 @@ export async function detectBeatsFromFile(
                 if (errorData.error?.includes('No beat detection model available')) {
                   // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
                   if (detector === 'beat-transformer') {
-                    console.log('Beat-Transformer failed, trying madmom as fallback...');
+                    // console.log('Beat-Transformer failed, trying madmom as fallback...');
                     resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
                     return;
                   }
@@ -413,7 +416,7 @@ export async function detectBeatsFromFile(
       const response = await fetch('/api/detect-beats', {
         method: 'POST',
         body: formData,
-        signal: createSafeTimeoutSignal(600000), // 10 minutes timeout
+        signal: createSafeTimeoutSignal(800000), // 13+ minutes timeout to match API routes
       });
 
       if (!response.ok) {
@@ -435,7 +438,7 @@ export async function detectBeatsFromFile(
       }
 
       // Add model identification for debugging
-      console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
+      // console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
 
       // Validate response data structure
       if (!data.beats || !Array.isArray(data.beats)) {
@@ -654,7 +657,7 @@ export async function detectBeatsFromPath(
       const data = await response.json();
 
       // Add model identification for debugging
-      console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
+      // console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
 
       return data;
     } catch (parseError) {

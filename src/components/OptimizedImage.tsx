@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import Image from 'next/image';
 
 interface OptimizedImageProps {
@@ -9,7 +9,6 @@ interface OptimizedImageProps {
   width: number;
   height: number;
   priority?: boolean;
-  fetchPriority?: 'high' | 'low' | 'auto';
   className?: string;
   sizes?: string;
   quality?: number;
@@ -34,7 +33,6 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   width,
   height,
   priority = false,
-  fetchPriority = 'auto',
   className = '',
   sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
   quality = 85,
@@ -45,12 +43,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   onLoad,
   onError
 }) => {
-  const [hasError, setHasError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-
   const handleLoad = useCallback(() => {
-    setIsLoaded(true);
-
     // Optimize LCP for critical images
     if (dataLcpImage && priority) {
       // Mark LCP completion for performance monitoring
@@ -63,7 +56,6 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   }, [onLoad, dataLcpImage, priority]);
 
   const handleError = useCallback(() => {
-    setHasError(true);
     onError?.();
   }, [onError]);
 
@@ -75,18 +67,6 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
       </svg>`
     )}`;
 
-  // Error fallback
-  if (hasError) {
-    return (
-      <div 
-        className={`bg-gray-200 dark:bg-gray-700 flex items-center justify-center ${className}`}
-        style={{ width, height }}
-      >
-        <span className="text-gray-500 text-sm">Image unavailable</span>
-      </div>
-    );
-  }
-
   return (
     <div className={`relative overflow-hidden ${className}`}>
       <Image
@@ -95,32 +75,15 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
         width={width}
         height={height}
         priority={priority}
-        fetchPriority={fetchPriority}
         quality={quality}
         sizes={sizes}
         placeholder={placeholder}
         blurDataURL={defaultBlurDataURL}
-        className={`transition-opacity duration-300 ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
+        className="w-full h-auto object-cover"
         onLoad={handleLoad}
         onError={handleError}
-        data-lcp-image={dataLcpImage}
-        style={{
-          objectFit: 'cover',
-          width: '100%',
-          height: 'auto',
-          ...style
-        }}
+        style={style}
       />
-      
-      {/* Loading skeleton */}
-      {!isLoaded && !hasError && (
-        <div 
-          className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse"
-          style={{ width, height }}
-        />
-      )}
     </div>
   );
 };

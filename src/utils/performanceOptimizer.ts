@@ -83,24 +83,36 @@ export const createIntersectionObserver = (
 
 /**
  * Preload critical resources during idle time
+ * Only preload resources that are actually used immediately on page load
  */
 export const preloadCriticalResources = (): void => {
   deferUntilIdle(() => {
-    // Preload critical images
-    const criticalImages = [
-      '/demo1.png',
-      '/demo1_dark.png',
-      '/demo2.png',
-      '/demo2_dark.png'
-    ];
+    // Only preload hero images that are immediately visible on homepage
+    if (typeof window !== 'undefined' && window.location.pathname === '/') {
+      // Hero images are handled by Next.js Image component with priority
+      // No need for manual preloading as they have priority={true}
 
-    criticalImages.forEach(src => {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = src;
-      document.head.appendChild(link);
-    });
+      // Only preload if not already loaded by Next.js
+      const existingPreloads = document.querySelectorAll('link[rel="preload"][as="image"]');
+      const alreadyPreloaded = Array.from(existingPreloads).some(link =>
+        (link as HTMLLinkElement).href.includes('hero-image-placeholder')
+      );
+
+      if (!alreadyPreloaded) {
+        const criticalImages = [
+          '/hero-image-placeholder.svg',
+          '/hero-image-placeholder-dark.svg'
+        ];
+
+        criticalImages.forEach(src => {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = src;
+          document.head.appendChild(link);
+        });
+      }
+    }
   });
 };
 

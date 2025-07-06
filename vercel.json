@@ -30,6 +30,18 @@
       "maxDuration": 60,
       "memory": 512
     },
+    "src/app/api/extract-and-analyze/route.ts": {
+      "maxDuration": 60,
+      "memory": 512
+    },
+    "src/app/api/ytdlp/extract/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
+    },
+    "src/app/api/ytdlp/download/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
+    },
     "src/app/api/transcribe-lyrics/route.ts": {
       "maxDuration": 300,
       "memory": 512
@@ -49,7 +61,16 @@
   },
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/((?!_next/static|favicon.ico|robots.txt|sitemap.xml).*)",
       "headers": [
         {
           "key": "X-Frame-Options",

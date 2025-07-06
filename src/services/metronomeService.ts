@@ -13,13 +13,18 @@ export class MetronomeService {
   private audioContext: AudioContext | null = null;
   private isInitialized = false;
   private isEnabled = false;
-  private volume = 0.3;
+  private volume = 1.0; // Base volume (will be multiplied by gain boost)
+  private volumeBoost = 3.0; // VOLUME BOOST: 3x gain multiplication for clear audibility over background music
   private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'librosa_short';
   private clickDuration = 0.06; // 60ms clicks for better separation
-  private scheduledClicks: Set<string> = new Set(); // Store scheduled beat IDs to prevent duplicates
-  private activeSources: AudioBufferSourceNode[] = []; // Track active audio sources for cleanup
 
-  // Audio buffers for different sound styles
+  // PRE-GENERATED TRACK APPROACH: Store complete metronome audio tracks
+  private metronomeTrack: AudioBuffer | null = null;
+  private metronomeAudioElement: HTMLAudioElement | null = null;
+  private metronomeSource: AudioBufferSourceNode | null = null;
+  private metronomeGainNode: GainNode | null = null;
+
+  // Audio buffers for different sound styles (for click generation)
   private audioBuffers: Map<string, { downbeat: AudioBuffer; regular: AudioBuffer }> = new Map();
   private isLoadingBuffers = false;
 
@@ -117,7 +122,7 @@ export class MetronomeService {
         envelope = Math.exp(-t * 25); // Quick exponential decay
       }
 
-      data[i] = sample * envelope * 0.7;
+      data[i] = sample * envelope * 0.9; // Increased from 0.7 to 0.9 for better audibility
     }
   }
 
@@ -314,22 +319,17 @@ export class MetronomeService {
    * Ensure AudioContext is ready for use
    */
   private async ensureAudioContext(): Promise<boolean> {
-    console.log('Metronome: ensureAudioContext called', {
-      hasAudioContext: !!this.audioContext,
-      isInitialized: this.isInitialized,
-      audioContextState: this.audioContext?.state
-    });
+    // Debug logging removed for cleaner console output
 
     if (!this.audioContext) {
-      console.log('Metronome: No AudioContext, initializing...');
+      // Initialize AudioContext if not available
       await this.initializeAudioContext();
     }
 
     if (this.audioContext && this.audioContext.state === 'suspended') {
-      console.log('Metronome: AudioContext suspended, resuming...');
+      // Resume suspended AudioContext
       try {
         await this.audioContext.resume();
-        console.log('Metronome: AudioContext resumed successfully');
       } catch (error) {
         console.error('Failed to resume AudioContext:', error);
         return false;
@@ -337,12 +337,7 @@ export class MetronomeService {
     }
 
     const result = this.isInitialized && this.audioContext !== null;
-    console.log('Metronome: ensureAudioContext result', {
-      result,
-      isInitialized: this.isInitialized,
-      hasAudioContext: !!this.audioContext,
-      audioContextState: this.audioContext?.state
-    });
+    // Return AudioContext readiness status
 
     return result;
   }
@@ -351,13 +346,7 @@ export class MetronomeService {
    * Create a click sound using pre-generated audio buffers
    */
   private async createClick(isDownbeat: boolean, startTime: number): Promise<void> {
-    console.log('Metronome: createClick called', {
-      isDownbeat,
-      startTime,
-      currentTime: this.audioContext?.currentTime,
-      isEnabled: this.isEnabled,
-      hasAudioContext: !!this.audioContext
-    });
+    // Create metronome click sound
 
     if (!this.audioContext || !this.isEnabled) {
       console.log('Metronome: createClick early return', {
@@ -380,7 +369,7 @@ export class MetronomeService {
         return;
       }
 
-      // console.log('Metronome: Buffers ready, creating audio nodes...');
+      // Create audio nodes for click playback
 
       // Select appropriate buffer
       const buffer = isDownbeat ? buffers.downbeat : buffers.regular;
@@ -401,25 +390,16 @@ export class MetronomeService {
       source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
-      // Track active source for cleanup
-      this.activeSources.push(source);
-
       // Set up automatic cleanup when source ends
       source.onended = () => {
-        this.activeSources = this.activeSources.filter(s => s !== source);
-        // console.log('Metronome: Audio source ended and cleaned up');
+        // Clean up completed audio source
       };
 
       // Schedule the click with precise timing
       source.start(startTime);
       source.stop(startTime + this.clickDuration); // Stop exactly at click duration for better separation
 
-      // console.log('Metronome: Click scheduled successfully', {
-      //   startTime,
-      //   duration: this.clickDuration,
-      //   volume: this.volume,
-      //   soundStyle: this.soundStyle
-      // });
+      // Click scheduled successfully
 
     } catch (error) {
       console.error('Error creating metronome click:', error);
@@ -427,59 +407,137 @@ export class MetronomeService {
   }
 
   /**
-   * Schedule a click at a specific time with duplicate prevention
-   * @param relativeTime - Time relative to current playback time when the click should occur (in seconds)
-   * @param isDownbeat - Whether this is a downbeat click
-   * @param beatId - Unique identifier to prevent duplicate scheduling
+   * PRE-GENERATED TRACK APPROACH: Generate complete metronome audio track
+   * @param duration - Total duration of the track in seconds
+   * @param bpm - Beats per minute for click spacing
+   * @param timeSignature - Time signature for downbeat emphasis (default: 4)
+   * @returns Promise<AudioBuffer> - Complete metronome track
    */
-  public scheduleClick(relativeTime: number, isDownbeat: boolean = false, beatId?: string): void {
-    if (!this.audioContext || !this.isEnabled) return;
-
-    // Prevent duplicate scheduling for the same beat
-    if (beatId) {
-      if (this.scheduledClicks.has(beatId)) {
-        return; // Already scheduled
-      }
-      this.scheduledClicks.add(beatId);
-
-      // Clean up the beat ID after the click duration with extra buffer
-      setTimeout(() => {
-        this.scheduledClicks.delete(beatId);
-      }, (this.clickDuration + 0.2) * 1000); // Increased buffer to 200ms
+  public async generateMetronomeTrack(duration: number, bpm: number, timeSignature: number = 4): Promise<AudioBuffer | null> {
+    if (!await this.ensureAudioContext()) {
+      console.error('Cannot generate metronome track: AudioContext not available');
+      return null;
     }
 
-    // Schedule the click relative to current AudioContext time
-    // Only schedule if the relative time is in the future (with small buffer for immediate scheduling)
-    if (relativeTime >= -0.01) { // Allow very small negative values for immediate scheduling
-      const audioTime = this.audioContext.currentTime + Math.max(0.01, relativeTime);
-      this.createClick(isDownbeat, audioTime);
-      // console.log(`Metronome: Scheduled ${isDownbeat ? 'downbeat' : 'regular'} click at audio time ${audioTime.toFixed(3)}s (relative time: ${relativeTime.toFixed(3)}s)`);
+    // Generating metronome track
+
+    // Load audio buffers for the current sound style
+    await this.loadAudioBuffers(this.soundStyle);
+    const buffers = this.audioBuffers.get(this.soundStyle);
+    if (!buffers) {
+      console.error('Failed to load audio buffers for metronome track generation');
+      return null;
+    }
+
+    // Create offline audio context for rendering the complete track
+    const sampleRate = this.audioContext!.sampleRate;
+    const offlineContext = new OfflineAudioContext(1, Math.ceil(duration * sampleRate), sampleRate);
+
+    // Calculate beat interval and total beats
+    const beatInterval = 60 / bpm; // seconds per beat
+    const totalBeats = Math.floor(duration / beatInterval);
+
+    // Calculate beats and intervals
+
+    // Generate clicks for each beat
+    for (let beatIndex = 0; beatIndex < totalBeats; beatIndex++) {
+      const beatTime = beatIndex * beatInterval;
+
+      // Skip beats that would extend beyond the track duration
+      if (beatTime >= duration) break;
+
+      // Determine if this is a downbeat (first beat of measure)
+      const isDownbeat = (beatIndex % timeSignature) === 0;
+      const bufferToUse = isDownbeat ? buffers.downbeat : buffers.regular;
+
+      // Create audio source for this click
+      const source = offlineContext.createBufferSource();
+      const gainNode = offlineContext.createGain();
+
+      source.buffer = bufferToUse;
+
+      // Apply volume with boost and slight emphasis for downbeats
+      const baseVolume = this.volume * this.volumeBoost;
+      const clickVolume = isDownbeat ? baseVolume * 1.2 : baseVolume;
+      gainNode.gain.setValueAtTime(0, beatTime);
+      gainNode.gain.linearRampToValueAtTime(clickVolume, beatTime + 0.002); // 2ms attack
+      gainNode.gain.exponentialRampToValueAtTime(0.001, beatTime + this.clickDuration * 0.8); // Decay
+
+      // Connect and schedule
+      source.connect(gainNode);
+      gainNode.connect(offlineContext.destination);
+      source.start(beatTime);
+    }
+
+    try {
+      // Render the complete track
+      const renderedBuffer = await offlineContext.startRendering();
+      // Track generated successfully
+
+      // Store the generated track
+      this.metronomeTrack = renderedBuffer;
+      return renderedBuffer;
+    } catch (error) {
+      console.error('Failed to render metronome track:', error);
+      return null;
     }
   }
 
   /**
-   * Enable/disable the metronome
+   * DEPRECATED: Legacy scheduling method - replaced by pre-generated track approach
+   * @param relativeTime - Time relative to current playback time when the click should occur (in seconds)
+   * @param isDownbeat - Whether this is a downbeat click
+   * @param beatId - Unique identifier to prevent duplicate scheduling
    */
-  public async setEnabled(enabled: boolean): Promise<void> {
+  public scheduleClick(relativeTime: number, isDownbeat: boolean = false, _beatId?: string): void { // eslint-disable-line @typescript-eslint/no-unused-vars
+    // DEPRECATED: This method is no longer used with the pre-generated track approach
+    console.log('scheduleClick called - deprecated in favor of pre-generated track approach');
+
+    // For compatibility, we could still create a single click if needed
+    if (!this.audioContext || !this.isEnabled) {
+      return;
+    }
+
+    if (relativeTime >= -0.01) {
+      const audioTime = this.audioContext.currentTime + Math.max(0.01, relativeTime);
+      this.createClick(isDownbeat, audioTime);
+    }
+  }
+
+  /**
+   * Enable/disable the metronome (PRE-GENERATED TRACK APPROACH)
+   * @param enabled - Whether to enable or disable the metronome
+   * @param currentTime - Current playback time for synchronization (CRITICAL for proper sync)
+   */
+  public async setEnabled(enabled: boolean, currentTime: number = 0): Promise<void> {
     if (enabled && !await this.ensureAudioContext()) {
       console.error('Cannot enable metronome: AudioContext not available');
       return;
     }
 
+    const wasEnabled = this.isEnabled;
     this.isEnabled = enabled;
 
-    if (!enabled) {
-      this.clearScheduledClicks();
+    if (enabled && !wasEnabled && this.metronomeTrack) {
+      // FIXED: Start metronome track from current playback position for perfect sync
+      // console.log(`Starting metronome track from ${currentTime.toFixed(3)}s for perfect sync`);
+      this.startMetronomeTrack(currentTime);
+    } else if (!enabled && wasEnabled) {
+      // Stop metronome track playback
+      // console.log('Stopping metronome track');
+      this.stopMetronomeTrack();
     }
 
-    // console.log(`Metronome ${enabled ? 'enabled' : 'disabled'}`);
+    // Metronome state updated
   }
 
   /**
-   * Set metronome volume (0.0 to 1.0)
+   * Set metronome volume (0.0 to 1.0) - PRE-GENERATED TRACK APPROACH
    */
   public setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume));
+    // Update volume of currently playing track
+    this.updateMetronomeVolume();
   }
 
   /**
@@ -497,19 +555,136 @@ export class MetronomeService {
   }
 
   /**
-   * Clear all scheduled clicks and stop active audio sources
+   * ENHANCED: Toggle metronome with current time for perfect synchronization
+   * This method should be used instead of setEnabled when toggling from UI
+   * @param currentTime - Current playback time for synchronization
    */
-  private clearScheduledClicks(): void {
-    // Stop all active audio sources to prevent overlap
-    this.activeSources.forEach(source => {
-      try {
-        source.stop();
-      } catch {
-        // Source may already be stopped, ignore error
+  public async toggleMetronome(currentTime: number = 0): Promise<boolean> {
+    const newEnabled = !this.isEnabled;
+    await this.setEnabled(newEnabled, currentTime);
+    return newEnabled;
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Start metronome track playback
+   * @param currentTime - Current playback time to sync with main audio
+   */
+  public startMetronomeTrack(currentTime: number = 0): void {
+    if (!this.metronomeTrack || !this.audioContext || !this.isEnabled) {
+      return;
+    }
+
+    // Stop any existing playback
+    this.stopMetronomeTrack();
+
+    try {
+      // Create new source and gain nodes
+      this.metronomeSource = this.audioContext.createBufferSource();
+      this.metronomeGainNode = this.audioContext.createGain();
+
+      // Configure the source
+      this.metronomeSource.buffer = this.metronomeTrack;
+      this.metronomeSource.loop = false;
+
+      // Set volume with boost for clear audibility over background music
+      const effectiveVolume = this.volume * this.volumeBoost;
+      this.metronomeGainNode.gain.setValueAtTime(effectiveVolume, this.audioContext.currentTime);
+      // console.log(`Metronome volume set to ${effectiveVolume.toFixed(1)} (${this.volume} × ${this.volumeBoost} boost)`);
+
+      // Connect audio graph
+      this.metronomeSource.connect(this.metronomeGainNode);
+      this.metronomeGainNode.connect(this.audioContext.destination);
+
+      // Start playback from the specified time
+      const startTime = Math.max(0, currentTime);
+      const when = this.audioContext.currentTime;
+
+      if (startTime > 0 && startTime < this.metronomeTrack.duration) {
+        // Start from specific position
+        this.metronomeSource.start(when, startTime);
+      } else {
+        // Start from beginning
+        this.metronomeSource.start(when);
       }
-    });
-    this.activeSources = [];
-    this.scheduledClicks.clear(); // Clear the Set
+
+      // Track started
+
+      // Handle track end
+      this.metronomeSource.onended = () => {
+        this.metronomeSource = null;
+        this.metronomeGainNode = null;
+      };
+
+    } catch (error) {
+      console.error('Failed to start metronome track:', error);
+      this.metronomeSource = null;
+      this.metronomeGainNode = null;
+    }
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Stop metronome track playback
+   */
+  public stopMetronomeTrack(): void {
+    if (this.metronomeSource) {
+      try {
+        this.metronomeSource.stop();
+      } catch {
+        // Source may already be stopped
+      }
+      this.metronomeSource = null;
+    }
+
+    if (this.metronomeGainNode) {
+      this.metronomeGainNode.disconnect();
+      this.metronomeGainNode = null;
+    }
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Seek metronome track to specific time
+   * @param currentTime - Time to seek to in seconds
+   */
+  public seekMetronomeTrack(currentTime: number): void {
+    if (!this.metronomeTrack || !this.isEnabled) {
+      return;
+    }
+
+    // Restart playback from the new position
+    this.startMetronomeTrack(currentTime);
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Update metronome track volume with boost
+   */
+  public updateMetronomeVolume(): void {
+    if (this.metronomeGainNode && this.audioContext) {
+      const effectiveVolume = this.volume * this.volumeBoost;
+      this.metronomeGainNode.gain.setValueAtTime(effectiveVolume, this.audioContext.currentTime);
+      // console.log(`Metronome volume updated to ${effectiveVolume.toFixed(1)} (${this.volume} × ${this.volumeBoost} boost)`);
+    }
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Check if metronome track is available
+   */
+  public hasMetronomeTrack(): boolean {
+    return this.metronomeTrack !== null;
+  }
+
+  /**
+   * PRE-GENERATED TRACK: Get metronome track duration
+   */
+  public getMetronomeTrackDuration(): number {
+    return this.metronomeTrack?.duration || 0;
+  }
+
+  /**
+   * DEPRECATED: Clear all scheduled clicks (legacy method for compatibility)
+   */
+  public clearScheduledClicks(): void {
+    // Legacy method - no longer needed with pre-generated track approach
+    console.log('clearScheduledClicks called - deprecated in track-based approach');
 
     // console.log('Metronome: Cleared all scheduled clicks and active sources');
   }
@@ -526,7 +701,7 @@ export class MetronomeService {
       await this.loadAudioBuffers(style);
     }
 
-    console.log(`Metronome sound style changed to: ${style}`);
+    // Sound style updated
   }
 
   /**
@@ -570,11 +745,21 @@ export class MetronomeService {
   }
 
   /**
-   * Cleanup resources
+   * Cleanup resources - PRE-GENERATED TRACK APPROACH
    */
   public dispose(): void {
     this.setEnabled(false);
-    this.clearScheduledClicks();
+
+    // Stop and clean up metronome track
+    this.stopMetronomeTrack();
+    this.metronomeTrack = null;
+
+    // Clean up HTML audio element if used
+    if (this.metronomeAudioElement) {
+      this.metronomeAudioElement.pause();
+      this.metronomeAudioElement.src = '';
+      this.metronomeAudioElement = null;
+    }
 
     // Clear audio buffers
     this.audioBuffers.clear();
@@ -591,14 +776,14 @@ export class MetronomeService {
    * Test the metronome with a single click
    */
   public async testClick(isDownbeat: boolean = false): Promise<void> {
-    // console.log('Metronome: Testing click...', { isDownbeat, isEnabled: this.isEnabled });
+    // Test metronome click functionality
 
     if (!await this.ensureAudioContext()) {
-      // console.error('Metronome: AudioContext not available for test click');
+      console.error('Metronome: AudioContext not available for test click');
       return;
     }
 
-    // console.log('Metronome: AudioContext ready, state:', this.audioContext?.state);
+    // AudioContext ready for test click
 
     // Ensure buffers are loaded for current sound style
     if (!this.audioBuffers.has(this.soundStyle)) {
