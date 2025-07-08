@@ -106,7 +106,7 @@ const nextConfig = {
     return [
       {
         source: '/api/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000'}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001'}/:path*`,
       },
     ];
   },
@@ -334,6 +334,9 @@ const nextConfig = {
 
   // React strict mode
   reactStrictMode: true,
+
+  // Source map configuration
+  productionBrowserSourceMaps: true, // Enable source maps in production for better debugging
 
 
 

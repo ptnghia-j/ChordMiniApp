@@ -12,7 +12,7 @@ const http = require('http');
 
 // Configuration
 const BASE_URL = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
-const LOCAL_URL = 'http://localhost:5000';
+const LOCAL_URL = 'http://localhost:5001';
 
 // Test configuration
 const TESTS = [

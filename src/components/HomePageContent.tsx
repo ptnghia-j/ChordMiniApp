@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, FormEvent, useRef, useEffect, useCallback, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import OptimizedImage from '@/components/OptimizedImage';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import TypewriterText from '@/components/TypewriterText';
 import AnimatedTitle from '@/components/AnimatedTitle';
 import { useTheme } from '@/contexts/ThemeContext';
-import { apiPost } from '@/config/api';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
 import { FaMusic } from 'react-icons/fa';
 import { useSearchBoxVisibility } from '@/hooks/useSearchBoxVisibility';
+import { useSharedSearchState } from '@/hooks/useSharedSearchState';
 
 // Dynamic imports for heavy components - using lazy-loaded version
 const RecentVideos = dynamic(() => import('@/components/LazyRecentVideos'), {
@@ -34,180 +34,40 @@ const IntegratedSearchContainer = dynamic(() => import('@/components/LazyIntegra
   ssr: false
 });
 
-// YouTube search result interface
-interface YouTubeSearchResult {
-  id: string;
-  title: string;
-  thumbnail: string;
-  channel: string;
-  duration_string?: string;
-  view_count?: number;
-  upload_date?: string;
-}
+
 
 function HomePageContentInner() {
-  const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState('');
-  const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const titleRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { theme } = useTheme();
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+
+  // Use shared search state for synchronization between main and sticky search
+  const {
+    searchQuery,
+    searchResults,
+    isSearching,
+    searchError,
+    updateSearchQuery,
+    handleSearch,
+    handleVideoSelect,
+    setSearchError
+  } = useSharedSearchState();
+
   // Search box visibility detection for sticky search bar
   const { elementRef: searchBoxRef, shouldShowStickySearch } = useSearchBoxVisibility();
 
 
 
-  const extractVideoId = (url: string): string | null => {
-    // Regular expressions to match different YouTube URL formats
-    const regexPatterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/watch\?.*v=)([^&?/]+)/,
-      /youtube\.com\/watch\?.*v=([^&]+)/,
-      /youtube\.com\/shorts\/([^?&/]+)/
-    ];
 
-    for (const regex of regexPatterns) {
-      const match = url.match(regex);
-      if (match && match[1]) {
-        return match[1];
-      }
-    }
-
-    // If it's already just a video ID (11 characters)
-    if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
-      return url;
-    }
-
-    return null;
-  };
-
-  // Debounced search function for continuous searching
-  const performSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setSearchError(null);
-      return;
-    }
-
-    // Check if it's a direct YouTube URL or video ID
-    const videoId = extractVideoId(query);
-    if (videoId) {
-      // Don't auto-navigate for URLs during typing, just clear results
-      setSearchResults([]);
-      setSearchError(null);
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchError(null);
-
-    // Clear previous debounce timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Set up new debounced search
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        const searchTimeout = setTimeout(() => {
-          throw new Error('Search request timed out after 30 seconds');
-        }, 30000);
-
-        const response = await apiPost('SEARCH_YOUTUBE', {
-          query: query.trim(),
-          maxResults: 10
-        });
-
-        clearTimeout(searchTimeout);
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to search YouTube');
-        }
-
-        const data = await response.json();
-
-        if (data.success && data.results) {
-          setSearchResults(data.results);
-          setSearchError(null);
-        } else {
-          setSearchResults([]);
-          setSearchError('No results found for your search.');
-        }
-      } catch (error: unknown) {
-        console.error('Error searching YouTube:', error);
-
-        // Check if it's a timeout error
-        const errorMessage = error instanceof Error ? error.message : 'Failed to search for videos';
-        if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
-          setSearchError(
-            'Search timed out. Please try again. First searches may take longer to complete.'
-          );
-        } else {
-          setSearchError(errorMessage);
-        }
-      } finally {
-        setIsSearching(false);
-      }
-    }, 500); // 500ms debounce delay
-  }, []);
-
-  const handleSearch = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    // Check if it's a direct YouTube URL or video ID
-    const videoId = extractVideoId(searchQuery);
-    if (videoId) {
-      router.push(`/analyze/${videoId}`);
-      return;
-    }
-
-    // For search queries, perform the search
-    await performSearch(searchQuery);
-  };
-
-  const handleVideoSelect = (videoId: string, title?: string, metadata?: YouTubeSearchResult) => {
-    // Build URL parameters from search metadata
-    const params = new URLSearchParams();
-
-    if (title) {
-      params.set('title', title);
-    }
-
-    // Pass duration from search metadata if available
-    if (metadata?.duration_string) {
-      params.set('duration', metadata.duration_string);
-    }
-
-    // Pass other useful metadata
-    if (metadata?.channel) {
-      params.set('channel', metadata.channel);
-    }
-
-    if (metadata?.thumbnail) {
-      params.set('thumbnail', metadata.thumbnail);
-    }
-
-    const queryString = params.toString();
-    const url = queryString ? `/analyze/${videoId}?${queryString}` : `/analyze/${videoId}`;
-
-    router.push(url);
-  };
 
   // Handle URL query parameters for search
   useEffect(() => {
     const query = searchParams.get('q');
     if (query && query !== searchQuery) {
-      setSearchQuery(query);
-      // Trigger search automatically
-      performSearch(query);
+      updateSearchQuery(query);
     }
-  }, [searchParams, searchQuery, performSearch]);
+  }, [searchParams, searchQuery, updateSearchQuery]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-dark-bg transition-colors duration-300">
@@ -262,7 +122,7 @@ function HomePageContentInner() {
                 {/* Integrated Search Container */}
                 <IntegratedSearchContainer
                   searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
+                  setSearchQuery={updateSearchQuery}
                   handleSearch={handleSearch}
                   isSearching={isSearching}
                   searchError={searchError}

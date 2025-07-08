@@ -63,6 +63,11 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -117,6 +122,9 @@ export default function RootLayout({
             @font-face { font-display: swap; }
           `
         }} />
+
+        <meta name="description" content="Recognize chords from audio using AI" />
+        <link rel="icon" href="/favicon.ico" />
 
         {/* Only preload truly critical resources that are used immediately */}
         {/* Removed CSS preloads as Next.js handles CSS loading automatically */}

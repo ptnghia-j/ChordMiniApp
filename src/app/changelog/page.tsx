@@ -7,8 +7,86 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.2.5',
+      date: 'July 8, 2025',
+      title: 'Search UI Enhancements & Backend Port Update',
+      description: 'Enhanced search functionality with improved dropdown width, simplified result display, and backend port configuration update for macOS compatibility',
+      features: [
+        'UI: Expanded sticky search bar dropdown width to span full width of search input and upload button combined',
+        'UI: Simplified search results display by removing view count and duration metadata',
+        'UI: Fixed search results clearing bug when search input is emptied',
+        'UI: Enhanced beat timeline visualization with improved proportional downbeat bars',
+        'UI: Improved mini search box functionality in navigation bar with dropdown results and state synchronization',
+        'BACKEND: Updated localhost backend URL from port 5000 to 5001 to avoid conflict with macOS AirDrop/AirTunes',
+        'BACKEND: Centralized backend URL configuration through environment variables for better maintainability'
+      ],
+      technical: [
+        'Moved search dropdown positioning from form-relative to parent container-relative for full width spanning',
+        'Removed duration and view count display from SearchResults ThumbnailImage component',
+        'Enhanced search state synchronization between main and sticky search components',
+        'Updated all backend URL references to use port 5001 instead of 5000',
+        'Maintained 400ms debouncing for optimal search performance and YouTube API quota management'
+      ],
+      breaking: [
+        'Backend port changed from 5000 to 5001 - update local development environment accordingly'
+      ]
+    },
+    {
+      version: 'v0.2.4',
+      date: 'July 7, 2025',
+      title: 'Critical Stability & UI Fixes',
+      description: 'Essential fixes for React infinite loops, layout spacing issues, and production build optimizations',
+      features: [
+        'STABILITY: Fixed React "Maximum update depth exceeded" infinite loop errors in Lyrics & Chords tab',
+        'STABILITY: Resolved circular dependencies in useScrollAndAnimation and LeadSheetDisplay components',
+        'STABILITY: Eliminated duplicate beat tracking that caused state conflicts and crashes',
+        'UI: Fixed excessive white space above "Analysis Results" title for better visual layout',
+        'UI: Improved guitar chord diagram animation smoothness with reduced scale differences',
+        'UI: Fixed musicAI.png image aspect ratio warning for proper rendering',
+        'CLEANUP: Removed all console logging statements from guitar chord diagram functionality',
+        'CLEANUP: Eliminated debug logs from chord parsing and pattern suffix mapping',
+        'BUILD: Fixed TypeScript compilation errors and unused variable warnings'
+      ],
+      technical: [
+        'useEffect dependency arrays optimized to prevent infinite re-renders',
+        'Removed setCurrentTime from useScrollAndAnimation hook dependencies',
+        'Fixed memoizedChords usage in LeadSheetDisplay component',
+        'Eliminated redundant beat tracking in analyze page',
+        'Reduced container padding from p-4 to px-4 pt-2 pb-1 for better spacing',
+        'Image component aspect ratio properly maintained without style overrides'
+      ],
+      breaking: []
+    },
+    {
+      version: 'v0.2.3',
+      date: 'July 7, 2025',
+      title: 'Music.AI Caching & UI Polish',
+      description: 'Critical fixes for Music.AI lyrics caching, React performance optimizations, and enhanced user interface with globe icon for translations',
+      features: [
+        'CACHING: Fixed Music.AI lyrics caching to Firestore - no more expensive repeated API calls',
+        'CACHING: Implemented unauthenticated public caching for ML model outputs (lyrics transcriptions)',
+        'CACHING: Updated Firestore security rules to support safe public caching of transcription results',
+        'PERFORMANCE: Fixed React "Maximum update depth exceeded" errors in lyrics & chord tab',
+        'PERFORMANCE: Added proper memoization with useMemo and useCallback to prevent infinite re-renders',
+        'PERFORMANCE: Optimized useEffect dependency arrays to eliminate unnecessary component updates',
+        'UI: Added professional globe icon (🌐) to translate lyrics button with light/dark mode support',
+        'UI: Enhanced visual consistency with custom SVG icon integration',
+        'CLEANUP: Removed all remaining console logs with emoji prefixes for production-ready code',
+        'CLEANUP: Eliminated debug logs from AnalyzePage, AudioProcessing, Metronome, and Auth services',
+        'STABILITY: Fixed build issues with dynamic imports and improved error handling in cache routes'
+      ],
+      technical: [
+        'Firebase authentication issue resolved for server-side API routes',
+        'Firestore security rules updated to allow unauthenticated writes to lyrics collection',
+        'React hooks optimized with proper dependency management',
+        'LeadSheetDisplay component performance significantly improved',
+        'Source map errors eliminated from production builds'
+      ],
+      breaking: []
+    },
+    {
       version: 'v0.2.2',
-      date: 'January 6, 2025',
+      date: 'July 6, 2025',
       title: 'Performance Revolution & Metronome Redesign',
       description: 'Major performance optimizations with 90%+ improvements and complete metronome system redesign for professional-grade functionality',
       features: [
@@ -58,7 +136,7 @@ export default function ChangelogPage() {
         'Improved performance and stability for production deployments'
       ],
       breaking: [
-        'Local development now requires Python backend running on localhost:5000'
+        'Local development now requires Python backend running on localhost:5001 (avoiding macOS AirTunes port 5000 conflict)'
       ]
     },
     {

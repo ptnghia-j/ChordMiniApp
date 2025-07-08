@@ -66,6 +66,7 @@ export interface ChatbotRequest {
   message: string;
   conversationHistory: ChatMessage[];
   songContext: SongContext;
+  geminiApiKey?: string; // Optional user-provided Gemini API key (BYOK)
 }
 
 /**

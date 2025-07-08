@@ -16,13 +16,15 @@ import { v4 as uuidv4 } from 'uuid';
 export async function sendChatMessage(
   message: string,
   conversationHistory: ChatMessage[],
-  songContext: SongContext
+  songContext: SongContext,
+  geminiApiKey?: string
 ): Promise<ChatbotResponse> {
   try {
     const request: ChatbotRequest = {
       message,
       conversationHistory,
-      songContext
+      songContext,
+      geminiApiKey
     };
 
     const response = await axios.post('/api/chatbot', request, {
@@ -197,7 +199,8 @@ export async function retrieveLyricsForChatbot(videoId: string): Promise<LyricsD
 export async function sendChatMessageWithLyricsRetrieval(
   message: string,
   conversationHistory: ChatMessage[],
-  songContext: SongContext
+  songContext: SongContext,
+  geminiApiKey?: string
 ): Promise<ChatbotResponse> {
   try {
     // Check if lyrics are missing and try to retrieve them
@@ -215,11 +218,11 @@ export async function sendChatMessageWithLyricsRetrieval(
     }
 
     // Send the message with the enhanced context
-    return await sendChatMessage(message, conversationHistory, songContext);
+    return await sendChatMessage(message, conversationHistory, songContext, geminiApiKey);
   } catch (error) {
     console.error('Error in enhanced chat message sending:', error);
     // Fallback to regular message sending without lyrics
-    return await sendChatMessage(message, conversationHistory, songContext);
+    return await sendChatMessage(message, conversationHistory, songContext, geminiApiKey);
   }
 }
 

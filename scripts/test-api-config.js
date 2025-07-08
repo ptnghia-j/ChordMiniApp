@@ -127,7 +127,7 @@ async function runTests() {
     console.log('   Use backend service: NEXT_PUBLIC_PYTHON_API_URL=https://chordmini-backend-full-191567167632.us-central1.run.app');
   } else {
     console.log('❌ No services are available. Check your deployment or use local development:');
-    console.log('   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000');
+    console.log('   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5001');
   }
   
   console.log('\n📚 For more information, see:');

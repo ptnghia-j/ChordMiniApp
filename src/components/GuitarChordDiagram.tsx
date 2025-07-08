@@ -27,6 +27,7 @@ interface GuitarChordDiagramProps {
   showChordName?: boolean;
   lite?: boolean; // Simplified rendering
   displayName?: string; // Override chord name display (for enharmonic corrections)
+  isFocused?: boolean; // Whether this chord diagram is currently focused/active
 }
 
 // Standard guitar instrument configuration
@@ -47,7 +48,8 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   className = '',
   showChordName = true,
   lite = false,
-  displayName
+  displayName,
+  isFocused = false
 }) => {
   // Size configurations - responsive sizing
   const sizeConfig = {
@@ -83,7 +85,11 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
-          } text-gray-500 dark:text-gray-400`}>
+          } ${
+            isFocused
+              ? 'text-gray-600 dark:text-gray-300' // Focused: slightly darker
+              : 'text-gray-500 dark:text-gray-400' // Unfocused: lighter
+          } transition-colors duration-200`}>
             No Chord
           </span>
         )}
@@ -153,7 +159,11 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           size === 'small' ? 'text-xs' :
           size === 'medium' ? 'text-sm' :
           'text-base'
-        } text-gray-700 dark:text-gray-300 transition-colors duration-200`}>
+        } ${
+          isFocused
+            ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
+            : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
+        } transition-colors duration-200`}>
           {chordName}
         </span>
       )}

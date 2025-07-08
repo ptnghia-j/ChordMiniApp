@@ -136,8 +136,8 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
       </div>
 
       {/* Music.ai API Key */}
-      <div className={`p-4 rounded-lg border ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-gray-50 border-gray-200'
+      <div className={`p-4 rounded-lg border-l-4 ${
+        theme === 'dark' ? 'bg-gray-800/30 border-l-blue-500 border-r border-t border-b border-gray-600' : 'bg-gray-50 border-l-blue-500 border-r border-t border-b border-gray-200'
       }`}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -148,8 +148,8 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
               }`}>
                 Music.ai API Key
               </h4>
-              <span className={`px-2 py-1 text-xs rounded-full ${
-                theme === 'dark' ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-800'
+              <span className={`px-2 py-1 text-xs rounded ${
+                theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
               }`}>
                 Required
               </span>
@@ -159,8 +159,33 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             }`}>
               Required for lyrics transcription and chord generation features.
             </p>
-            <div className={`text-xs mb-2 p-2 rounded-md ${
-              theme === 'dark' ? 'bg-green-900/20 text-green-300' : 'bg-green-50 text-green-700'
+
+            {/* CRITICAL: Workflow Setup Warning - Only show if API key is not validated */}
+            {!apiKeyStatus.musicAi.isValid && (
+              <div className={`text-sm mb-3 p-3 rounded-md border-2 ${
+                theme === 'dark' ? 'bg-red-900/20 border-red-500 text-red-300' : 'bg-red-50 border-red-300 text-red-700'
+              }`}>
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <div className="font-semibold mb-1">IMPORTANT: Workflow Setup Required</div>
+                    <div className="space-y-1">
+                      <p><strong>Your API key alone is not sufficient!</strong> You must also:</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>Create a <strong>&ldquo;Lyrics Transcription and Alignment&rdquo;</strong> workflow in your Music.AI workspace</li>
+                        <li>Ensure the workflow is properly configured and active</li>
+                        <li>Without this workflow, you&apos;ll get &ldquo;No workflows available&rdquo; errors</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className={`text-xs mb-2 p-2 rounded ${
+              theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600'
             } flex items-start gap-2`}>
               <HiLightBulb className="w-3 h-3 mt-0.5 flex-shrink-0" />
               <span><strong>Free to start:</strong> Music.ai provides $20 free credit when you sign up for a new account</span>
@@ -202,23 +227,40 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             )}
           </div>
         </div>
-        <div className="mt-3">
-          <a
-            href={API_KEY_HELP_URLS.MUSIC_AI}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`text-sm hover:underline ${
-              theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-            }`}
-          >
-            Get Music.ai API key →
-          </a>
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap gap-4">
+            <a
+              href={API_KEY_HELP_URLS.MUSIC_AI}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-sm hover:underline ${
+                theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+              }`}
+            >
+              Get Music.ai API key →
+            </a>
+            <a
+              href="https://music.ai/workflows/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-sm hover:underline font-medium ${
+                theme === 'dark' ? 'text-orange-400' : 'text-orange-600'
+              }`}
+            >
+              Setup Workflow Guide →
+            </a>
+          </div>
+          <p className={`text-xs ${
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+          }`}>
+            💡 <strong>Pro tip:</strong> Create your workflow first, then add your API key here for seamless integration.
+          </p>
         </div>
       </div>
 
       {/* Gemini API Key */}
-      <div className={`p-4 rounded-lg border ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-gray-50 border-gray-200'
+      <div className={`p-4 rounded-lg border-l-4 ${
+        theme === 'dark' ? 'bg-gray-800/30 border-l-gray-500 border-r border-t border-b border-gray-600' : 'bg-gray-50 border-l-gray-400 border-r border-t border-b border-gray-200'
       }`}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -229,8 +271,8 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
               }`}>
                 Gemini API Key
               </h4>
-              <span className={`px-2 py-1 text-xs rounded-full ${
-                theme === 'dark' ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'
+              <span className={`px-2 py-1 text-xs rounded ${
+                theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
               }`}>
                 Optional
               </span>

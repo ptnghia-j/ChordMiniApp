@@ -23,6 +23,7 @@ interface TranslationRequest {
   sourceLanguage?: string; // Optional source language
   targetLanguage?: string; // Target language (default is English)
   videoId?: string; // Optional video ID for better caching
+  geminiApiKey?: string; // Optional user-provided Gemini API key (BYOK)
 }
 
 interface TranslationResponse {
@@ -112,7 +113,7 @@ async function cacheTranslation(cacheKey: string, data: TranslationResponse): Pr
 /**
  * Detects the language of the lyrics using Gemini API
  */
-async function detectLanguage(lyrics: string): Promise<string> {
+async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI = ai): Promise<string> {
   try {
     // Check for Chinese characters using regex
     const chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff\ufe30-\ufe4f\uf900-\ufaff\u2f800-\u2fa1f]/;
@@ -127,7 +128,7 @@ async function detectLanguage(lyrics: string): Promise<string> {
     ${lyrics.substring(0, 500)}`;
 
     // Generate content using the Gemini model
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });
@@ -145,7 +146,7 @@ async function detectLanguage(lyrics: string): Promise<string> {
 /**
  * Translates lyrics using Gemini API
  */
-async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English'): Promise<string> {
+async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI = ai): Promise<string> {
   try {
     // Special handling for Chinese to English translation
     let prompt = '';
@@ -171,7 +172,7 @@ async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLa
     console.log(`Translating from ${sourceLanguage || 'unknown language'} to ${targetLanguage}`);
 
     // Generate content using the Gemini model
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });
@@ -195,13 +196,14 @@ export async function POST(request: NextRequest) {
 
     // Parse the request body
     const body: TranslationRequest = await request.json();
-    const { lyrics, sourceLanguage, targetLanguage = 'English', videoId } = body;
+    const { lyrics, sourceLanguage, targetLanguage = 'English', videoId, geminiApiKey } = body;
 
     console.log('Translation request details:', {
       lyricsLength: lyrics?.length || 0,
       sourceLanguage,
       targetLanguage,
-      videoIdProvided: !!videoId
+      videoIdProvided: !!videoId,
+      userApiKeyProvided: !!geminiApiKey
     });
 
     if (!lyrics || lyrics.trim() === '') {
@@ -212,14 +214,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine which API key to use (user-provided key takes precedence)
+    const finalApiKey = geminiApiKey || apiKey;
+
     // Check if Gemini API key is available
-    if (!apiKey) {
+    if (!finalApiKey) {
       console.error('Gemini API key is missing');
       return NextResponse.json(
-        { error: 'Translation service is not configured properly' },
+        { error: 'Translation service is not configured properly. Please provide a Gemini API key.' },
         { status: 500 }
       );
     }
+
+    // Create a Gemini AI instance with the appropriate API key
+    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
 
     // Generate a cache key for this translation request
     const cacheKey = generateCacheKey(lyrics, sourceLanguage, targetLanguage, videoId);
@@ -239,7 +247,7 @@ export async function POST(request: NextRequest) {
 
     if (!sourceLanguage) {
       console.log('Source language not provided, detecting language');
-      detectedLanguage = await detectLanguage(lyrics);
+      detectedLanguage = await detectLanguage(lyrics, geminiAI);
       finalSourceLanguage = detectedLanguage;
       console.log(`Language detected as: ${detectedLanguage}`);
     }
@@ -264,7 +272,7 @@ export async function POST(request: NextRequest) {
 
     // Translate the lyrics
     console.log(`Translating from ${finalSourceLanguage} to ${targetLanguage}`);
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage);
+    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
 
     if (!translatedLyrics || translatedLyrics.trim() === '') {
       console.error('Translation returned empty result');

@@ -21,6 +21,7 @@ interface TranslationRequest {
   sourceLanguage?: string;
   targetLanguage?: string;
   videoId?: string;
+  geminiApiKey?: string; // Optional user-provided Gemini API key (BYOK)
 }
 
 interface TranslationResponse {
@@ -117,7 +118,7 @@ async function cacheTranslation(cacheKey: string, data: TranslationResponse): Pr
 /**
  * Detects the language of the lyrics using Gemini API
  */
-async function detectLanguage(lyrics: string): Promise<string> {
+async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI = ai): Promise<string> {
   try {
     // Check for Chinese characters using regex
     const chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff\ufe30-\ufe4f\uf900-\ufaff\u2f800-\u2fa1f]/;
@@ -130,7 +131,7 @@ async function detectLanguage(lyrics: string): Promise<string> {
 
     ${lyrics.substring(0, 500)}`;
 
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });
@@ -147,7 +148,7 @@ async function detectLanguage(lyrics: string): Promise<string> {
 /**
  * Translates lyrics using Gemini API
  */
-async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English'): Promise<string> {
+async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI = ai): Promise<string> {
   try {
     let prompt = '';
     if (sourceLanguage === 'Chinese' && targetLanguage.toLowerCase() === 'english') {
@@ -169,7 +170,7 @@ async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLa
 
     console.log(`Translating from ${sourceLanguage || 'unknown language'} to ${targetLanguage}`);
 
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });
@@ -191,7 +192,8 @@ async function performBackgroundTranslation(
   cacheKey: string,
   lyrics: string,
   sourceLanguage?: string,
-  targetLanguage: string = 'English'
+  targetLanguage: string = 'English',
+  geminiAI: GoogleGenAI = ai
 ): Promise<void> {
   try {
     console.log('Starting background translation update');
@@ -204,7 +206,7 @@ async function performBackgroundTranslation(
     let finalSourceLanguage = sourceLanguage;
 
     if (!sourceLanguage) {
-      detectedLanguage = await detectLanguage(lyrics);
+      detectedLanguage = await detectLanguage(lyrics, geminiAI);
       finalSourceLanguage = detectedLanguage;
     }
 
@@ -225,7 +227,7 @@ async function performBackgroundTranslation(
     }
 
     // Perform the translation
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage);
+    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
 
     if (translatedLyrics && translatedLyrics.trim() !== '') {
       const response: TranslationResponse = {
@@ -254,13 +256,14 @@ export async function POST(request: NextRequest) {
     console.log('Cache-first translation API called');
 
     const body: TranslationRequest = await request.json();
-    const { lyrics, sourceLanguage, targetLanguage = 'English', videoId } = body;
+    const { lyrics, sourceLanguage, targetLanguage = 'English', videoId, geminiApiKey } = body;
 
     console.log('Translation request details:', {
       lyricsLength: lyrics?.length || 0,
       sourceLanguage,
       targetLanguage,
-      videoIdProvided: !!videoId
+      videoIdProvided: !!videoId,
+      userApiKeyProvided: !!geminiApiKey
     });
 
     if (!lyrics || lyrics.trim() === '') {
@@ -270,12 +273,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!apiKey) {
+    // Determine which API key to use (user-provided key takes precedence)
+    const finalApiKey = geminiApiKey || apiKey;
+
+    if (!finalApiKey) {
       return NextResponse.json(
-        { error: 'Translation service is not configured properly' },
+        { error: 'Translation service is not configured properly. Please provide a Gemini API key.' },
         { status: 500 }
       );
     }
+
+    // Create a Gemini AI instance with the appropriate API key
+    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
 
     const cacheKey = generateCacheKey(lyrics, sourceLanguage, targetLanguage, videoId);
 
@@ -292,7 +301,7 @@ export async function POST(request: NextRequest) {
       if (!isBackgroundUpdateInProgress) {
         console.log('Starting new background update');
         setImmediate(() => {
-          performBackgroundTranslation(cacheKey, lyrics, sourceLanguage, targetLanguage)
+          performBackgroundTranslation(cacheKey, lyrics, sourceLanguage, targetLanguage, geminiAI)
             .catch(error => {
               console.error('Background translation failed:', error);
               // Background failures are non-critical since we already returned cached data
@@ -317,7 +326,7 @@ export async function POST(request: NextRequest) {
     let finalSourceLanguage = sourceLanguage;
 
     if (!sourceLanguage) {
-      detectedLanguage = await detectLanguage(lyrics);
+      detectedLanguage = await detectLanguage(lyrics, geminiAI);
       finalSourceLanguage = detectedLanguage;
     }
 
@@ -337,7 +346,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform fresh translation
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage);
+    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
 
     if (!translatedLyrics || translatedLyrics.trim() === '') {
       return NextResponse.json(

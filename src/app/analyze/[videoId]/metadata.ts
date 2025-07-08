@@ -22,7 +22,7 @@ interface AnalysisResults {
  */
 async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000'}/api/youtube/info`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001'}/api/youtube/info`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

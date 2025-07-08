@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try the Python backend first
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
     try {
       console.log('🔄 Trying Python backend for Genius lyrics...');

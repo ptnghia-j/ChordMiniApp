@@ -20,7 +20,7 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>('welcome');
 
   // Get the backend URL for documentation examples
-  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
   useEffect(() => {
     const sectionIds = [
@@ -242,22 +242,27 @@ export default function DocsPage() {
                 </div>
 
                 {/* Quick Start */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Start</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
-                      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                        <code className="text-sm text-gray-800 dark:text-gray-200">
-                          {backendUrl}
-                        </code>
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Authentication</h4>
-                      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                        <FiCheckCircle className="w-4 h-4" />
-                        No API key required
+                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg p-6 mb-6">
+                  <div className="flex items-start gap-3">
+                    <FiZap className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-4">Quick Start</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
+                          <div className="bg-gray-100 dark:bg-gray-700/50 rounded-lg p-3">
+                            <code className="text-sm text-gray-800 dark:text-gray-200">
+                              {backendUrl}
+                            </code>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-2">Authentication</h4>
+                          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                            <FiCheckCircle className="w-4 h-4" />
+                            No API key required
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -278,15 +283,15 @@ export default function DocsPage() {
                 </div>
 
                 {/* No Auth Required Card */}
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-6 mb-6">
+                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-green-500 dark:border-green-400 rounded-r-lg p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <FiCheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
                     <div>
                       <h3 className="font-semibold text-green-900 dark:text-green-100 mb-2">No API Key Required</h3>
-                      <p className="text-green-800 dark:text-green-200 text-sm mb-3">
+                      <p className="text-gray-700 dark:text-gray-300 text-sm mb-3">
                         Start making requests immediately without any setup or registration process.
                       </p>
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg p-3">
                         <div className="flex items-start gap-2">
                           <div className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5">⚠️</div>
                           <div>
@@ -354,12 +359,12 @@ export default function DocsPage() {
                 </div>
 
                 {/* Overview Card */}
-                <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg p-6 mb-8">
+                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-orange-500 dark:border-orange-400 rounded-r-lg p-6 mb-8">
                   <div className="flex items-start gap-3">
                     <FiActivity className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                     <div>
                       <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">Rate Limiting Overview</h3>
-                      <p className="text-orange-800 dark:text-orange-200 text-sm mb-3">
+                      <p className="text-gray-700 dark:text-gray-300 text-sm mb-3">
                         IP-based rate limiting ensures fair usage and maintains service quality.
                         Limits vary by endpoint based on computational requirements.
                       </p>

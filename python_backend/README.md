@@ -22,7 +22,7 @@ source venv/bin/activate
 python app.py
 ```
 
-The server will start on http://localhost:5000 by default.
+The server will start on http://localhost:5001 by default (avoiding macOS AirTunes port conflict on 5000).
 
 ## API Endpoints
 

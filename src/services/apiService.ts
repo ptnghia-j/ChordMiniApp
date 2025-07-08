@@ -31,7 +31,7 @@ class ApiService {
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL ||
-                   'http://localhost:5000';
+                   'http://localhost:5001';
 
     // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)
     this.clientLimiter = new ClientRateLimiter(4, 60000);

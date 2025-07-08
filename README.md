@@ -50,7 +50,7 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
    Edit `.env.local`:
    ```bash
-   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
+   NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5001
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
@@ -136,11 +136,12 @@ ChordMiniApp uses a **hybrid backend architecture**:
 
 ### 🔧 Local Development Backend (Required)
 
-For local development, you **must** run the Python backend on `localhost:5000`:
+For local development, you **must** run the Python backend on `localhost:5001`:
 
-- **URL**: `http://localhost:5000`
+- **URL**: `http://localhost:5001`
 - **Purpose**: Local development and testing
 - **Setup**: Required for local development (see setup instructions below)
+- **Port Note**: Uses port 5001 to avoid conflict with macOS AirPlay/AirTunes service on port 5000
 
 ### ☁️ Production Backend (your VPS)
 
@@ -177,22 +178,23 @@ Production deployments is configured based on your VPS and url should be set in 
    pip install -r requirements.txt
    ```
 
-4. **Start local backend on port 5000**
+4. **Start local backend on port 5001**
    ```bash
    python app.py
    ```
 
-   The backend will start on `http://localhost:5000` and should display:
+   The backend will start on `http://localhost:5001` and should display:
    ```
-   * Running on http://127.0.0.1:5000
-   * Debug mode: on
+   Starting Flask app on port 5001
+   App is ready to serve requests
+   Note: Using port 5001 to avoid conflict with macOS AirPlay/AirTunes on port 5000
    ```
 
 5. **Verify backend is running**
 
    Open a new terminal and test the backend:
    ```bash
-   curl http://localhost:5000/health
+   curl http://localhost:5001/health
    # Should return: {"status": "healthy"}
    ```
 
@@ -202,7 +204,7 @@ Production deployments is configured based on your VPS and url should be set in 
    npm run dev
    ```
 
-   The frontend will automatically connect to `http://localhost:5000` based on your `.env.local` configuration.
+   The frontend will automatically connect to `http://localhost:5001` based on your `.env.local` configuration.
 
 #### Backend Features Available Locally
 
@@ -228,28 +230,45 @@ FLASK_MAX_CONTENT_LENGTH_MB=150
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
+#### macOS AirTunes Port Conflict
+
+**Important for macOS users**: Port 5000 is used by Apple's AirPlay/AirTunes service, which can cause conflicts with local development. This is why ChordMiniApp uses port 5001 for the Python backend.
+
+**Symptoms of port conflict:**
+- 403 Forbidden errors when connecting to backend
+- Response headers showing `Server: AirTunes/xxx.x.x`
+- Backend appears unreachable despite being started
+
+**Solution:**
+- Always use port 5001 for local development (default in current setup)
+- If you need to use a different port, update both the Python backend and `NEXT_PUBLIC_PYTHON_API_URL`
+
 #### Troubleshooting Local Backend
 
 **Backend connectivity issues:**
 ```bash
 # 1. Verify backend is running
-curl http://localhost:5000/health
+curl http://localhost:5001/health
 # Expected: {"status": "healthy"}
 
-# 2. Check if port 5000 is in use
-lsof -i :5000  # macOS/Linux
-netstat -ano | findstr :5000  # Windows
+# 2. Check if port 5001 is in use
+lsof -i :5001  # macOS/Linux
+netstat -ano | findstr :5001  # Windows
 
 # 3. Verify environment configuration
 cat .env.local | grep PYTHON_API_URL
-# Expected: NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5000
+# Expected: NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5001
+
+# 4. Check for macOS AirTunes conflict (if using port 5000)
+curl -I http://localhost:5000/health
+# If you see "Server: AirTunes", that's the conflict we're avoiding
 ```
 
 **Frontend connection errors:**
 ```bash
 # Check browser console for errors like:
 # "Failed to fetch" or "Network Error"
-# This usually means the backend is not running on port 5000
+# This usually means the backend is not running on port 5001
 
 # Restart both frontend and backend:
 # Terminal 1 (Backend):
@@ -379,7 +398,7 @@ graph TD
 - **Direct Upload**: Audio file → blob storage → immediate analysis
 
 #### **Environment-Aware Processing**
-- **Development**: localhost:5000 Python backend with yt-dlp
+- **Development**: localhost:5001 Python backend with yt-dlp (avoiding macOS AirTunes port conflict)
 - **Production**: Google Cloud Run backend with yt-mp3-go
 
 #### **Intelligent Caching**

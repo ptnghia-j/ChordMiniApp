@@ -26,7 +26,7 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
 
 

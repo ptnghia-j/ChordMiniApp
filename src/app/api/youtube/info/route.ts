@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     console.log(`Fetching video info for: ${videoId}`);
 
     // Forward the request to the Python backend
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
     console.log(`Proxying YouTube info request to backend: ${backendUrl}/api/extract-audio`);
 

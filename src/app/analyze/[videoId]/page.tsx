@@ -59,11 +59,11 @@ import {
   getChordGridData as getChordGridDataService
 } from '@/services/chordGridCalculationService';
 import {
-  checkCachedAnalysisAvailability as checkCachedAnalysisAvailabilityService,
-  checkCachedLyrics as checkCachedLyricsService
+  checkCachedAnalysisAvailability as checkCachedAnalysisAvailabilityService
 } from '@/services/cacheManagementService';
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
+import { useApiKeys } from '@/hooks/useApiKeys';
 
 // Import skeleton loaders
 import {
@@ -112,6 +112,7 @@ const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(
 import { YouTubePlayer } from '@/types/youtube';
 import dynamic from 'next/dynamic';
 import UserFriendlyErrorDisplay from '@/components/UserFriendlyErrorDisplay';
+import BeatTimeline from '@/components/BeatTimeline';
 
 
 // Import the new collapsible video player
@@ -146,6 +147,7 @@ export default function YouTubeVideoAnalyzePage() {
     failProcessing
   } = useProcessing();
   const { theme } = useTheme();
+  const { isServiceAvailable, getServiceMessage } = useApiKeys();
 
   // Use custom hooks for audio processing and player
   const {
@@ -568,7 +570,6 @@ export default function YouTubeVideoAnalyzePage() {
   // Load video info and extract audio on component mount
   useEffect(() => {
     if (videoId && !audioProcessingState.isExtracting && !extractionLockRef.current) {
-      // console.log('Loading video info and extracting audio for videoId:', videoId);
 
       // Reset processing context for new video
       setStage('idle');
@@ -589,13 +590,56 @@ export default function YouTubeVideoAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, titleFromSearch]); // Re-run when videoId or titleFromSearch changes
 
+
+
   useEffect(() => {
-    // Delay slightly to let the component mount fully
-    const timer = setTimeout(() => {
-      checkCachedLyricsService(videoId, params, lyrics as any, setHasCachedLyrics);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [videoId, params, lyrics]); // Re-run when videoId changes or lyrics state changes
+    // Auto-load cached lyrics AFTER audio extraction is complete
+    // This replaces the old checkCachedLyricsService with auto-loading logic from LyricsManager
+    const autoLoadCachedLyrics = async () => {
+      // Only check for cached lyrics if we have an audio URL and no existing lyrics
+      if ((!lyrics || !lyrics.lines || lyrics.lines.length === 0) && audioProcessingState.audioUrl) {
+        try {
+          const response = await fetch('/api/transcribe-lyrics', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              videoId: params?.videoId || videoId,
+              audioPath: audioProcessingState.audioUrl,
+              forceRefresh: false,
+              checkCacheOnly: true // Only check cache without processing
+            }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.success && data.lyrics) {
+            if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
+              // Auto-load cached lyrics for Music.AI transcription (no user choices needed)
+              setLyrics(data.lyrics);
+              setShowLyrics(true);
+              setHasCachedLyrics(false); // Don't show "Cached Lyrics Available" when lyrics are auto-loaded
+              // Don't auto-switch to lyrics tab, let user choose
+
+            }
+          } else {
+            // No cached lyrics found, set hasCachedLyrics to false
+            setHasCachedLyrics(false);
+          }
+        } catch (error) {
+          // Silently handle cache check errors
+          console.log('Cache check failed:', error);
+          setHasCachedLyrics(false);
+        }
+      }
+    };
+
+    if (audioProcessingState.isExtracted && audioProcessingState.audioUrl) {
+      const timer = setTimeout(autoLoadCachedLyrics, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [videoId, params, lyrics, audioProcessingState.isExtracted, audioProcessingState.audioUrl, setLyrics, setShowLyrics, setHasCachedLyrics, setActiveTab]); // Re-run when audio extraction completes
 
   // Check for cached analysis availability (but don't auto-load) when audio is extracted AND models are initialized
   useEffect(() => {
@@ -689,6 +733,11 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Function to transcribe lyrics using Music.AI (word-level transcription)
   const transcribeLyricsWithAI = async () => {
+    // Check if Music.AI service is available (user has valid API key)
+    if (!isServiceAvailable('musicAi')) {
+      setLyricsError(getServiceMessage('musicAi'));
+      return;
+    }
     // Create dependency object for extracted service
     const deps = {
       // State setters
@@ -738,7 +787,8 @@ export default function YouTubeVideoAnalyzePage() {
       },
       beatDetector,
       chordDetector,
-      progress: 0
+      progress: 0,
+      lyrics
     };
 
     // Call the extracted service function
@@ -928,7 +978,7 @@ export default function YouTubeVideoAnalyzePage() {
         onRefresh={useCallback(() => extractAudioFromYouTube(true), [extractAudioFromYouTube])}
       />
 
-      <div className="container mx-auto px-1 sm:px-2 md:px-3 py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "98%" }}>
+      <div className="container py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "100%" }}>
         <div className="bg-white dark:bg-content-bg transition-colors duration-300">
 
         {/* Processing Status Banner - positioned in content flow */}
@@ -949,7 +999,7 @@ export default function YouTubeVideoAnalyzePage() {
             {/* Audio player is now handled by the AudioPlayer component */}
 
             {/* Processing Status and Model Selection in a single row */}
-            <div className="mb-2">
+            <div className="mb-2 px-4 pt-2 pb-1">
               {/* Error message */}
               {audioProcessingState.error && (
                 <UserFriendlyErrorDisplay
@@ -960,8 +1010,6 @@ export default function YouTubeVideoAnalyzePage() {
                   className="mb-2"
                 />
               )}
-
-
 
               {/* Analysis Controls Component */}
               <AnalysisControls
@@ -983,10 +1031,10 @@ export default function YouTubeVideoAnalyzePage() {
 
             {/* Analysis results */}
             {analysisResults && audioProcessingState.isAnalyzed && (
-            <div className="mt-0 space-y-2">
+            <div className="mt-0 space-y-2 px-4">
 
               {/* Tabbed interface for analysis results */}
-              <div className="p-3 rounded-lg bg-white dark:bg-content-bg mb-2 mt-0 transition-colors duration-300">
+              <div className="rounded-lg bg-white dark:bg-content-bg mb-2 mt-0 transition-colors duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-2">
                   <div className="mb-2 md:mb-0">
                     <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
@@ -1014,12 +1062,35 @@ export default function YouTubeVideoAnalyzePage() {
 
                     {/* Music.AI Transcription Button */}
                     <button
-                      onClick={transcribeLyricsWithAI}
-                      disabled={isTranscribingLyrics || !audioProcessingState.audioUrl}
-                      className="bg-purple-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 w-full md:w-auto"
-                      title="AI transcription from audio (word-level sync)"
+                      onClick={() => {
+                        transcribeLyricsWithAI();
+                      }}
+                      disabled={
+                        isTranscribingLyrics ||
+                        !audioProcessingState.audioUrl ||
+                        !isServiceAvailable('musicAi')
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors w-full md:w-auto ${
+                        isServiceAvailable('musicAi')
+                          ? 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
+                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      }`}
+                      title={
+                        !isServiceAvailable('musicAi')
+                          ? "Add your Music.AI API key in Settings to enable lyrics transcription"
+                          : !audioProcessingState.audioUrl
+                          ? "Extract audio first to enable lyrics transcription"
+                          : isTranscribingLyrics
+                          ? "Transcription in progress..."
+                          : "AI transcription from audio (word-level sync)"
+                      }
                     >
-                      {isTranscribingLyrics ? "Transcribing..." : (hasCachedLyrics ? "Re-transcribe" : "AI Transcribe")}
+                      {isTranscribingLyrics
+                        ? "Transcribing..."
+                        : !isServiceAvailable('musicAi')
+                        ? "API Key Required"
+                        : (hasCachedLyrics ? "Re-transcribe" : "AI Transcribe")
+                      }
                     </button>
 
                     {lyricsError && (
@@ -1148,104 +1219,14 @@ export default function YouTubeVideoAnalyzePage() {
               </div>
 
 
-              {/* Beats visualization */}
-              <div className="p-4 rounded-lg bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 transition-colors duration-300">
-                <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100 transition-colors duration-300">Beat Timeline</h3>
-                <div className="relative h-16 bg-gray-50 dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-md overflow-hidden transition-colors duration-300">
-                  {/* Beat markers */}
-                  {analysisResults && analysisResults.beats && analysisResults.beats.map ? (
-                    analysisResults.beats.map((beat: {time: number, beatNum?: number} | number, index: number) => {
-                      // Handle both old format (objects with .time) and new format (direct numbers)
-                      const beatTime = typeof beat === 'object' ? beat.time : beat;
-
-                      // Get beat number from beat info if available
-                      // Use the detected time signature or default to 4
-                      const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
-                      const beatNum = (typeof beat === 'object' ? beat.beatNum : undefined) ||
-                                    (analysisResults.synchronizedChords && analysisResults.synchronizedChords[index]?.beatNum) ||
-                                    (index % timeSignature) + 1;
-
-                      // Make first beat of measure more prominent
-                      const isFirstBeat = beatNum === 1;
-
-                      return (
-                        <div
-                          key={`beat-${index}`}
-                          className={`absolute bottom-0 transform -translate-x-1/2 ${
-                            index === currentBeatIndex
-                              ? 'bg-blue-600 dark:bg-blue-400'
-                              : isFirstBeat
-                                ? 'bg-blue-500 dark:bg-blue-300'
-                                : 'bg-gray-500 dark:bg-gray-400'
-                          }`}
-                          style={{
-                            left: `${(beatTime / duration) * 100}%`,
-                            width: isFirstBeat ? '0.5px' : '0.25px',
-                            height: index === currentBeatIndex ? '14px' : isFirstBeat ? '10px' : '8px'
-                          }}
-                        >
-                          {/* Show beat number above */}
-                          <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 text-[0.6rem] ${
-                            isFirstBeat ? 'text-blue-700 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-300'
-                          }`}>
-                            {beatNum}
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">
-                      No beat data available
-                    </div>
-                  )}
-
-                  {/* Downbeat markers (if available) - simplified */}
-                  {analysisResults && analysisResults.downbeats && analysisResults.downbeats.map &&
-                   analysisResults.downbeats.map((beatTime: number, index: number) => (
-                    <div
-                      key={`downbeat-${index}`}
-                      className={`absolute bottom-0 w-1 h-14 transform -translate-x-1/2 ${
-                        index === currentDownbeatIndex ? 'bg-red-800' : 'bg-red-700'
-                      }`}
-                      style={{ left: `${(beatTime / duration) * 100}%` }}
-                    >
-                      <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-800">
-                        {index + 1}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Playhead */}
-                  <div
-                    className="absolute top-0 bottom-0 w-px bg-red-600 z-10"
-                    style={{ left: `${(currentTime / duration) * 100}%` }}
-                  ></div>
-                </div>
-
-                {/* Beat type legend */}
-                <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-700">
-                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                    <div className="w-3 h-3 bg-blue-500"></div>
-                    <span>First beat (1)</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                    <div className="w-3 h-3 bg-gray-500"></div>
-                    <span>Regular beats {analysisResults?.beatDetectionResult?.time_signature === 3 ? '(2,3)' :
-                      analysisResults?.beatDetectionResult?.time_signature === 5 ? '(2,3,4,5)' :
-                      analysisResults?.beatDetectionResult?.time_signature === 6 ? '(2,3,4,5,6)' :
-                      analysisResults?.beatDetectionResult?.time_signature === 7 ? '(2,3,4,5,6,7)' :
-                      '(2,3,4)'}</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                    <div className="w-3 h-3 bg-red-500"></div>
-                    <span>Measure start (downbeat)</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                    <div className="w-3 h-3 bg-blue-600"></div>
-                    <span>Current beat</span>
-                  </div>
-                </div>
-              </div>
+              {/* Beats visualization - New optimized component */}
+              <BeatTimeline
+                beats={analysisResults?.beats || []}
+                downbeats={analysisResults?.downbeats || []}
+                currentBeatIndex={currentBeatIndex}
+                currentDownbeatIndex={currentDownbeatIndex}
+                duration={duration}
+              />
             </div>
           )}
           </div>

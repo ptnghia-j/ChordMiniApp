@@ -9,13 +9,13 @@
  * Get the Python backend URL from environment variables
  * 
  * Environment Strategy:
- * - Development: Uses localhost:5000 (requires local Python backend)
+ * - Development: Uses localhost:5001 (requires local Python backend, avoiding macOS AirTunes port 5000)
  * - Production: Uses Google Cloud Run endpoint (set in Vercel environment variables)
  * 
  * @returns The backend URL to use for API calls
  */
 export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+  return process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 }
 
 /**

@@ -245,6 +245,14 @@ export class FirebaseStorageSimplified {
    */
   private async verifyAudioUrl(audioUrl: string): Promise<boolean> {
     try {
+      // For Firebase Storage URLs, skip verification to avoid CORS issues
+      // Firebase Storage URLs are generally reliable and don't need HEAD request verification
+      if (audioUrl.includes('firebasestorage.googleapis.com')) {
+        console.log(`🔥 Skipping verification for Firebase Storage URL (CORS-safe)`);
+        return true;
+      }
+
+      // For other URLs (stream URLs, etc.), perform HEAD request verification
       const response = await fetch(audioUrl, {
         method: 'HEAD',
         signal: AbortSignal.timeout(5000)

@@ -6,7 +6,7 @@
  * as the song plays, with unplayed lyrics in gray and played lyrics in blue.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   formatChordWithMusicalSymbols,
@@ -18,7 +18,36 @@ import {
   EnhancedLyricsData,
   EnhancedLyricLine
 } from '@/utils/lyricsTimingUtils';
+import { useApiKeys } from '@/hooks/useApiKeys';
 
+
+/**
+ * Globe Icon Component for light and dark modes
+ */
+const GlobeIcon: React.FC<{ className?: string; darkMode?: boolean }> = ({ className = "h-4 w-4", darkMode = false }) => {
+  return (
+    <svg
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      className={className}
+    >
+      <g clipPath="url(#a)">
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1"
+          fill={darkMode ? "#ffffff" : "currentColor"}
+        />
+      </g>
+      <defs>
+        <clipPath id="a">
+          <path fill="#fff" d="M0 0h16v16H0z"/>
+        </clipPath>
+      </defs>
+    </svg>
+  );
+};
 
 /**
  * Utility function to detect if text contains Chinese characters
@@ -92,6 +121,9 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   // State to track the currently active line
   const [activeLine, setActiveLine] = useState<number>(-1);
 
+  // API keys hook for accessing user's Gemini API key
+  const { getApiKey } = useApiKeys();
+
   // State to store processed lyrics with chords and character-level timing
   const [processedLyrics, setProcessedLyrics] = useState<EnhancedLyricsData>(
     enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics)
@@ -120,23 +152,27 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   // Ref for the container element (used for auto-scrolling)
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Memoize chords array to prevent unnecessary re-renders
+  const memoizedChords = useMemo(() => chords || [], [chords]);
+
   // Colors based on dark/light mode
-  const textColors = {
+  const textColors = useMemo(() => ({
     unplayed: darkMode ? '#9CA3AF' : '#6B7280', // Gray
     played: darkMode ? '#60A5FA' : '#3B82F6',   // Blue (keeping blue instead of purple)
     chord: darkMode ? '#93C5FD' : '#2563EB',    // Chord color
     background: darkMode ? '#1F2937' : '#FFFFFF' // Background
-  };
+  }), [darkMode]);
 
   // Process lyrics and integrate chord data when either changes
   useEffect(() => {
+
     if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
       setProcessedLyrics(enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics));
       return;
     }
 
     // If no chord data is provided, use the lyrics as is
-    if (!chords || chords.length === 0) {
+    if (!memoizedChords || memoizedChords.length === 0) {
       setProcessedLyrics(enhanceLyricsWithCharacterTiming(lyrics as SynchronizedLyrics));
       return;
     }
@@ -150,7 +186,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
     // Map chords to lyrics lines and words
     newLyrics.lines.forEach((line, lineIndex) => {
       // Find chords that occur during this line's time range
-      const lineChords = chords.filter(chord =>
+      const lineChords = memoizedChords.filter(chord =>
         chord.time >= line.startTime && chord.time <= line.endTime
       );
 
@@ -199,12 +235,12 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
 
     // Enhance the lyrics with character-level timing
     setProcessedLyrics(enhanceLyricsWithCharacterTiming(newLyrics));
-  }, [lyrics, chords]);
+  }, [lyrics, memoizedChords]); // memoizedChords already handles chords dependency
 
 
 
   // Function to translate lyrics to a specific language with cache-first approach
-  const translateLyrics = async (targetLanguage: string) => {
+  const translateLyrics = useCallback(async (targetLanguage: string) => {
     if (!processedLyrics || !processedLyrics.lines || processedLyrics.lines.length === 0) {
       setTranslationError('No lyrics available to translate');
       return;
@@ -226,12 +262,16 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
       // Import the translation service dynamically to avoid SSR issues
       const { translateLyricsWithCache } = await import('@/services/translationService');
 
+      // Get user's Gemini API key if available
+      const geminiApiKey = await getApiKey('gemini');
+
       // Call the cache-first translation service
       const translationResponse = await translateLyricsWithCache(
         {
           lyrics: lyricsText,
           targetLanguage,
-          videoId
+          videoId,
+          geminiApiKey: geminiApiKey || undefined
         },
         // Background update callback
         (updatedTranslation) => {
@@ -281,7 +321,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
     } finally {
       setIsTranslating(false);
     }
-  };
+  }, [processedLyrics, getApiKey]);
 
   // Track the last scroll time to prevent too frequent scrolling
   const lastScrollTimeRef = useRef<number>(0);
@@ -326,9 +366,9 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
     let shouldShowLyrics = true;
 
     // If we have chord data, find the first non-"N" chord to determine music start time
-    if (chords && chords.length > 0) {
+    if (memoizedChords && memoizedChords.length > 0) {
       // Find the first actual chord (not "N" which represents no chord/silence)
-      const firstActualChord = chords.find(chord =>
+      const firstActualChord = memoizedChords.find(chord =>
         chord.chord && chord.chord !== 'N' && chord.chord.trim() !== ''
       );
 
@@ -447,7 +487,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
         }
       }
     }
-  }, [currentTime, processedLyrics, activeLine, chords]);
+  }, [currentTime, processedLyrics, activeLine, memoizedChords]);
 
   /**
    * Find word boundaries in a string
@@ -1060,6 +1100,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
                 </span>
               ) : (
                 <>
+                  <GlobeIcon className="mr-2 h-4 w-4" darkMode={darkMode} />
                   Translate Lyrics
                   <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>

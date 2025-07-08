@@ -26,7 +26,7 @@ const firestoreDb = getFirestore(firebaseApp);
 const firebaseStorage = getStorage(firebaseApp);
 
 /**
- * Save lyrics data to Firestore
+ * Save lyrics data to Firestore (unauthenticated for public caching)
  * @param videoId YouTube video ID
  * @param lyricsData Lyrics data to save
  * @returns Promise that resolves when the data is saved
@@ -37,17 +37,20 @@ export async function saveLyricsToFirestore(videoId: string, lyricsData: LyricsD
     await setDoc(lyricsRef, {
       ...lyricsData,
       videoId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      // Add metadata for public cache
+      cached: true,
+      source: 'music-ai-transcription'
     });
-    console.log(`Saved lyrics for video ID ${videoId} to Firestore`);
+    console.log(`✅ Saved lyrics for video ID ${videoId} to Firestore (public cache)`);
   } catch (error) {
-    console.error('Error saving lyrics to Firestore:', error);
+    console.error('❌ Error saving lyrics to Firestore:', error);
     throw error;
   }
 }
 
 /**
- * Get lyrics data from Firestore
+ * Get lyrics data from Firestore (unauthenticated for public caching)
  * @param videoId YouTube video ID
  * @returns Promise that resolves with the lyrics data or null if not found
  */
@@ -55,14 +58,15 @@ export async function getLyricsFromFirestore(videoId: string): Promise<LyricsDat
   try {
     const lyricsRef = doc(firestoreDb, 'lyrics', videoId);
     const lyricsDoc = await getDoc(lyricsRef);
-    
+
     if (lyricsDoc.exists()) {
+      console.log(`✅ Retrieved lyrics for video ID ${videoId} from Firestore (public cache)`);
       return lyricsDoc.data() as LyricsData;
     }
-    
+
     return null;
   } catch (error) {
-    console.error('Error getting lyrics from Firestore:', error);
+    console.error('❌ Error getting lyrics from Firestore:', error);
     return null;
   }
 }

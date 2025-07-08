@@ -289,7 +289,6 @@ export class MetronomeService {
     try {
       // Check if we're in a browser environment
       if (typeof window === 'undefined') {
-        console.log('Metronome: Skipping AudioContext initialization (SSR environment)');
         return;
       }
 
@@ -305,7 +304,6 @@ export class MetronomeService {
       }
 
       this.isInitialized = true;
-      console.log('Metronome AudioContext initialized successfully');
 
       // Load default sound style buffers
       await this.loadAudioBuffers(this.soundStyle);
@@ -349,17 +347,12 @@ export class MetronomeService {
     // Create metronome click sound
 
     if (!this.audioContext || !this.isEnabled) {
-      console.log('Metronome: createClick early return', {
-        hasAudioContext: !!this.audioContext,
-        isEnabled: this.isEnabled
-      });
       return;
     }
 
     try {
       // Ensure buffers are loaded for current sound style
       if (!this.audioBuffers.has(this.soundStyle)) {
-        console.log('Metronome: Loading buffers for createClick...');
         await this.loadAudioBuffers(this.soundStyle);
       }
 
@@ -520,11 +513,9 @@ export class MetronomeService {
 
     if (enabled && !wasEnabled && this.metronomeTrack) {
       // FIXED: Start metronome track from current playback position for perfect sync
-      // console.log(`Starting metronome track from ${currentTime.toFixed(3)}s for perfect sync`);
       this.startMetronomeTrack(currentTime);
     } else if (!enabled && wasEnabled) {
       // Stop metronome track playback
-      // console.log('Stopping metronome track');
       this.stopMetronomeTrack();
     }
 
@@ -589,7 +580,6 @@ export class MetronomeService {
       // Set volume with boost for clear audibility over background music
       const effectiveVolume = this.volume * this.volumeBoost;
       this.metronomeGainNode.gain.setValueAtTime(effectiveVolume, this.audioContext.currentTime);
-      // console.log(`Metronome volume set to ${effectiveVolume.toFixed(1)} (${this.volume} × ${this.volumeBoost} boost)`);
 
       // Connect audio graph
       this.metronomeSource.connect(this.metronomeGainNode);
@@ -661,7 +651,6 @@ export class MetronomeService {
     if (this.metronomeGainNode && this.audioContext) {
       const effectiveVolume = this.volume * this.volumeBoost;
       this.metronomeGainNode.gain.setValueAtTime(effectiveVolume, this.audioContext.currentTime);
-      // console.log(`Metronome volume updated to ${effectiveVolume.toFixed(1)} (${this.volume} × ${this.volumeBoost} boost)`);
     }
   }
 
@@ -684,9 +673,6 @@ export class MetronomeService {
    */
   public clearScheduledClicks(): void {
     // Legacy method - no longer needed with pre-generated track approach
-    console.log('clearScheduledClicks called - deprecated in track-based approach');
-
-    // console.log('Metronome: Cleared all scheduled clicks and active sources');
   }
 
   /**
@@ -787,17 +773,13 @@ export class MetronomeService {
 
     // Ensure buffers are loaded for current sound style
     if (!this.audioBuffers.has(this.soundStyle)) {
-      // console.log('Metronome: Loading audio buffers for test click...');
       await this.loadAudioBuffers(this.soundStyle);
     }
 
     const buffers = this.audioBuffers.get(this.soundStyle);
     if (!buffers) {
-      // console.error('Metronome: No audio buffers available for test click');
       return;
     }
-
-    // console.log('Metronome: Audio buffers ready, creating test click...');
 
     const wasEnabled = this.isEnabled;
     this.isEnabled = true;
@@ -806,12 +788,9 @@ export class MetronomeService {
     const currentTime = this.audioContext!.currentTime;
     this.createClick(isDownbeat, currentTime + 0.1); // Schedule 100ms in the future
 
-    // console.log('Metronome: Test click scheduled at', currentTime + 0.1);
-
     // Restore previous state after a short delay
     setTimeout(() => {
       this.isEnabled = wasEnabled;
-      // console.log('Metronome: Restored enabled state to', wasEnabled);
     }, 200);
   }
 }

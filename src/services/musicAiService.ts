@@ -213,20 +213,35 @@ class MusicAiService {
    * Transcribe lyrics from an audio file
    * @param audioUrl URL of the audio file to transcribe
    * @param workflowSlug Optional workflow slug to use for transcription
+   * @param customApiKey Optional custom API key to use instead of stored key
    * @returns Transcribed lyrics data or empty lyrics with error message
    */
-  transcribeLyrics = async (audioUrl: string, workflowSlug?: string): Promise<LyricsData> => {
+  transcribeLyrics = async (audioUrl: string, workflowSlug?: string, customApiKey?: string): Promise<LyricsData> => {
     // We only use Music.ai API for lyrics transcription, never for chord or beat detection
     try {
-      // Initialize with user-provided or environment API key
-      await this.initialize();
+      // Initialize with custom API key if provided, otherwise use stored key
+      if (customApiKey) {
+        // Create a temporary custom client with the provided API key
+        const tempClient = new CustomMusicAiClient({
+          apiKey: customApiKey,
+          timeout: 300000, // 5 minutes timeout
+          retries: 3
+        });
+        this.customClient = tempClient;
+      } else {
+        // Initialize with user-provided or environment API key
+        await this.initialize();
+      }
       console.log(`Transcribing lyrics from: ${audioUrl}`);
 
-      // Handle local file paths
+      // Handle local file paths vs URLs
       let inputUrl = audioUrl;
 
-      // Check if the URL is a local path (starts with / or file://)
-      if (audioUrl.startsWith('/') || audioUrl.startsWith('file://')) {
+      // Check if the URL is a Firebase Storage URL or other HTTP URL
+      if (audioUrl.startsWith('https://') || audioUrl.startsWith('http://')) {
+        console.log(`✅ Using external URL directly: ${audioUrl}`);
+        // URL is already ready for Music.ai API - no upload needed
+      } else if (audioUrl.startsWith('/') || audioUrl.startsWith('file://')) {
         console.log('Local file path detected. Music.ai API requires file upload.');
 
         try {
@@ -238,11 +253,24 @@ class MusicAiService {
           } else if (audioUrl.startsWith('/audio/')) {
             // For paths like /audio/sample.mp3, look in the public directory
             filePath = `${process.cwd()}/public${audioUrl}`;
+          } else if (audioUrl.startsWith('/')) {
+            // For absolute paths starting with /, assume they're relative to public
+            filePath = `${process.cwd()}/public${audioUrl}`;
           } else {
             filePath = `${process.cwd()}${audioUrl}`;
           }
 
           console.log(`Using file path: ${filePath}`);
+
+          // Check if file exists before attempting upload
+          try {
+            const fs = await import('fs/promises');
+            await fs.access(filePath);
+            console.log(`✅ File exists: ${filePath}`);
+          } catch {
+            console.error(`❌ File not found: ${filePath}`);
+            throw new Error(`Audio file not found at path: ${filePath}. Please ensure the audio file exists.`);
+          }
 
           // Upload the file to Music.ai API using our custom client
           if (this.customClient) {
@@ -491,11 +519,24 @@ class MusicAiService {
           } else if (audioUrl.startsWith('/audio/')) {
             // For paths like /audio/sample.mp3, look in the public directory
             filePath = `${process.cwd()}/public${audioUrl}`;
+          } else if (audioUrl.startsWith('/')) {
+            // For absolute paths starting with /, assume they're relative to public
+            filePath = `${process.cwd()}/public${audioUrl}`;
           } else {
             filePath = `${process.cwd()}${audioUrl}`;
           }
 
           console.log(`Using file path: ${filePath}`);
+
+          // Check if file exists before attempting upload
+          try {
+            const fs = await import('fs/promises');
+            await fs.access(filePath);
+            console.log(`✅ File exists: ${filePath}`);
+          } catch {
+            console.error(`❌ File not found: ${filePath}`);
+            throw new Error(`Audio file not found at path: ${filePath}. Please ensure the audio file exists.`);
+          }
 
           // Upload the file to Music.ai API using our custom client
           if (this.customClient) {

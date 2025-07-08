@@ -31,8 +31,7 @@ export default function LyricsPage() {
         // Only check for cached lyrics, don't auto-transcribe
         const transcribeResponse = await axios.post('/api/transcribe-lyrics', {
           videoId,
-          audioPath: null,
-          checkCacheOnly: true // Only check cache, don't process
+          checkCacheOnly: true // Only check cache, don't process - audioPath not needed for cache-only
         });
 
         if (transcribeResponse.data.success && transcribeResponse.data.lyrics) {

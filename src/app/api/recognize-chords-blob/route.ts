@@ -12,7 +12,7 @@ export const maxDuration = 800; // 13+ minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
     console.log(`🎵 Processing Vercel Blob chord recognition request`);
 

@@ -13,10 +13,15 @@
  * 2. Blob URL is sent to Python backend for processing
  * 3. Python backend downloads from Vercel Blob and processes the audio
  * 4. Results are returned to the client
+ *
+ * Environment Handling:
+ * - Production: Uses Vercel Blob for file size management
+ * - Localhost Development: Bypasses blob upload, sends files directly to Python backend
  */
 
 import { upload } from '@vercel/blob/client';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { isLocalBackend } from '@/utils/backendConfig';
 
 export interface VercelBlobUploadResult {
   success: boolean;
@@ -27,17 +32,33 @@ export interface VercelBlobUploadResult {
 }
 
 class VercelBlobUploadService {
-  private readonly PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+  private readonly PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
   private readonly VERCEL_SIZE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB conservative limit
 
   /**
-   * Check if file should use blob upload (larger than Vercel limit)
+   * Check if we're running in localhost development mode
+   */
+  private isLocalhostDevelopment(): boolean {
+    return isLocalBackend();
+  }
+
+  /**
+   * Check if file should use blob upload based on environment and file size
+   * - Localhost development: Never use blob upload (send directly to Python backend)
+   * - Production: Use blob upload for files > 4.0MB if blob is configured
    */
   shouldUseBlobUpload(fileSize: number): boolean {
+    // Skip blob upload entirely in localhost development
+    if (this.isLocalhostDevelopment()) {
+      console.log('🏠 Localhost development detected - skipping Vercel Blob upload, will send directly to Python backend');
+      return false;
+    }
+
+    // In production, check file size and blob availability
     const isLargeFile = fileSize > this.VERCEL_SIZE_LIMIT;
     const isBlobAvailable = this.isBlobConfigured();
 
-    console.log(`🔍 Blob upload check: fileSize=${this.getFileSizeString(fileSize)}, isLarge=${isLargeFile}, blobAvailable=${isBlobAvailable}, limit=${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
+    console.log(`🔍 Production blob upload check: fileSize=${this.getFileSizeString(fileSize)}, isLarge=${isLargeFile}, blobAvailable=${isBlobAvailable}, limit=${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
 
     if (isLargeFile && !isBlobAvailable) {
       console.warn(`⚠️ Large file detected but blob upload not available. File: ${this.getFileSizeString(fileSize)}, Limit: ${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
@@ -246,9 +267,10 @@ class VercelBlobUploadService {
   }
 
   /**
-   * Process audio file with automatic routing based on file size
-   * Small files (<4.0MB) use direct Vercel proxy
-   * Large files (>4.0MB) use Vercel Blob upload
+   * Process audio file with automatic routing based on environment and file size
+   * - Localhost development: Always use direct Python backend (no blob upload)
+   * - Production small files (<4.0MB): Use standard Vercel proxy
+   * - Production large files (>4.0MB): Use Vercel Blob upload
    */
   async processAudioFile(
     audioFile: File,
@@ -260,19 +282,25 @@ class VercelBlobUploadService {
     } = {}
   ): Promise<VercelBlobUploadResult> {
     const { detector = 'beat-transformer', model = 'chord-cnn-lstm', onProgress } = options;
-    
+
+    // Check if we should use blob upload (considers both environment and file size)
     if (this.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 File size ${this.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
-      
+      console.log(`🔄 Using Vercel Blob upload for ${this.getFileSizeString(audioFile.size)} file`);
+
       if (operation === 'detect-beats') {
         return this.detectBeatsBlobUpload(audioFile, detector, onProgress);
       } else {
         return this.recognizeChordsBlobUpload(audioFile, model, onProgress);
       }
     } else {
-      console.log(`🔄 File size ${this.getFileSizeString(audioFile.size)} <= 4.0MB, using standard Vercel proxy`);
-      
-      // For small files, we'll return a special result indicating to use the standard flow
+      // Either localhost development or small file in production
+      if (this.isLocalhostDevelopment()) {
+        console.log(`🏠 Localhost development - using direct Python backend for ${this.getFileSizeString(audioFile.size)} file`);
+      } else {
+        console.log(`🔄 Production small file (${this.getFileSizeString(audioFile.size)} <= 4.0MB) - using standard Vercel proxy`);
+      }
+
+      // Return special result indicating to use the standard flow
       return {
         success: false,
         error: 'USE_STANDARD_FLOW' // Special error code to indicate fallback to standard flow

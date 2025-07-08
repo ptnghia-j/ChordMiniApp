@@ -242,8 +242,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
 
   if (!isVisible) return null;
 
-  // Don't render during idle, downloading, and extracting stages
-  if (stage === 'idle' || stage === 'downloading' || stage === 'extracting') {
+  // Don't render during idle, downloading, and extracting stages, or when not visible
+  if (stage === 'idle' || stage === 'downloading' || stage === 'extracting' || !isVisible) {
     return null;
   }
 

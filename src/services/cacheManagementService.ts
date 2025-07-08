@@ -126,7 +126,8 @@ export const checkCachedLyrics = async (
   videoId: string,
   params: any,
   lyrics: LyricsData | null,
-  setHasCachedLyrics: (hasCached: boolean) => void
+  setHasCachedLyrics: (hasCached: boolean) => void,
+  audioUrl?: string // Add optional audioUrl parameter
 ): Promise<void> => {
   if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) {
     try {
@@ -137,7 +138,7 @@ export const checkCachedLyrics = async (
         },
         body: JSON.stringify({
           videoId: params?.videoId || videoId,
-          audioUrl: null, // We don't have audio URL yet, but API should check cache first
+          audioPath: audioUrl || null, // Use provided audioUrl if available
           forceRefresh: false,
           checkCacheOnly: true // New flag to only check cache without processing
         }),

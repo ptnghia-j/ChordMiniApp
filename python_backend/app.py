@@ -3722,8 +3722,9 @@ def recognize_chords_firebase():
 
 
 if __name__ == '__main__':
-    # Get port from environment variable or default to 5000
-    port = int(os.environ.get('PORT', 5000))
+    # Get port from environment variable or default to 5001 (avoiding macOS AirTunes port 5000)
+    port = int(os.environ.get('PORT', 5001))
     print(f"Starting Flask app on port {port}")
     print("App is ready to serve requests")
+    print("Note: Using port 5001 to avoid conflict with macOS AirPlay/AirTunes on port 5000")
     app.run(host='0.0.0.0', port=port, debug=False)  # Disable debug for production

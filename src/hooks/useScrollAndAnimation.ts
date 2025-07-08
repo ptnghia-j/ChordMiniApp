@@ -156,7 +156,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // Auto-scroll when current beat changes
   useEffect(() => {
     scrollToCurrentBeat();
-  }, [currentBeatIndex, scrollToCurrentBeat]);
+  }, [currentBeatIndex, scrollToCurrentBeat, isFollowModeEnabled]); // Include isFollowModeEnabled dependency
 
   // PERFORMANCE OPTIMIZATION: RequestAnimationFrame for smooth 60fps updates
   const rafRef = useRef<number | undefined>(undefined);
@@ -164,7 +164,6 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // Update current time and check for current beat
   useEffect(() => {
     if (!audioRef.current || !isPlaying || !analysisResults) {
-      // console.log(`🔄 ANIMATION BLOCKED: audioRef=${!!audioRef.current}, isPlaying=${isPlaying}, analysisResults=${!!analysisResults}`);
       return;
     }
 
@@ -466,7 +465,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isPlaying, analysisResults, setCurrentTime, audioRef, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, analysisResults, audioRef, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]); // Removed setCurrentTime to prevent infinite loop
 
   return {
     scrollToCurrentBeat,

@@ -81,16 +81,34 @@ export const usePlaybackState = ({
 }: UsePlaybackStateProps): UsePlaybackStateReturn => {
 
   // Current state for playback (lines 319-329)
-  const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
+  const [currentBeatIndexState, setCurrentBeatIndexState] = useState(-1);
   const currentBeatIndexRef = useRef(-1);
-  const [currentDownbeatIndex, setCurrentDownbeatIndex] = useState(-1);
-  
+  const [currentDownbeatIndexState, setCurrentDownbeatIndexState] = useState(-1);
+
   // Track recent user clicks for smart animation positioning
   const [lastClickInfo, setLastClickInfo] = useState<ClickInfo | null>(null);
-  const [globalSpeedAdjustment, setGlobalSpeedAdjustment] = useState<number | null>(null); // Store calculated speed adjustment
+  const [globalSpeedAdjustmentState, setGlobalSpeedAdjustmentState] = useState<number | null>(null); // Store calculated speed adjustment
+
+  // Create stable setter functions with useCallback to prevent infinite loops
+  const setCurrentBeatIndex = useCallback((index: number) => {
+    setCurrentBeatIndexState(index);
+  }, []);
+
+  const setCurrentDownbeatIndex = useCallback((index: number) => {
+    setCurrentDownbeatIndexState(index);
+  }, []);
+
+  const setGlobalSpeedAdjustment = useCallback((adjustment: number | null) => {
+    setGlobalSpeedAdjustmentState(adjustment);
+  }, []);
 
   // Extract state from audio player hook (lines 262-263)
   const { isPlaying, currentTime, duration, playbackRate, preferredAudioSource } = audioPlayerState;
+
+  // Use the state values for return
+  const currentBeatIndex = currentBeatIndexState;
+  const currentDownbeatIndex = currentDownbeatIndexState;
+  const globalSpeedAdjustment = globalSpeedAdjustmentState;
 
   // Create setters for individual state properties (lines 265-272)
   const setIsPlaying = useCallback((playing: boolean) => {
@@ -125,7 +143,7 @@ export const usePlaybackState = ({
       timestamp: timestamp,
       clickTime: Date.now()
     });
-  }, [audioRef, youtubePlayer, setCurrentTime]);
+  }, [audioRef, youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
 
   // YouTube player event handlers (lines 1150-1191): Comprehensive player integration
   const handleYouTubeReady = useCallback((player: unknown) => {

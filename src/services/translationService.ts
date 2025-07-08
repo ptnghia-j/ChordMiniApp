@@ -25,6 +25,7 @@ export interface TranslationRequest {
   sourceLanguage?: string;
   targetLanguage?: string;
   videoId?: string;
+  geminiApiKey?: string; // Optional user-provided Gemini API key (BYOK)
 }
 
 export interface TranslationUpdateCallback {

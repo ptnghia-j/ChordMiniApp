@@ -184,6 +184,22 @@ export async function detectBeatsWithRateLimit(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+      // Handle 403 Forbidden errors - likely port conflict or backend unavailable
+      if (response.status === 403) {
+        console.error(`❌ Beat detection API returned 403 Forbidden`);
+        const responseText = await response.text().catch(() => 'Unable to read response');
+        console.error(`📄 Error response: ${responseText}`);
+
+        // Check if this is Apple AirTunes intercepting port 5000
+        const serverHeader = response.headers.get('server');
+        if (serverHeader && serverHeader.includes('AirTunes')) {
+          throw new Error('Port conflict: Port 5000 is being used by Apple AirTunes. Change Python backend to use a different port (e.g., 5001, 8000)');
+        }
+
+        throw new Error(`Beat detection failed: Backend returned 403 Forbidden. Ensure Python backend is running and accessible.`);
+      }
+
       throw new Error(errorData.error || `Beat detection failed: ${response.status}`);
     }
 
@@ -421,6 +437,22 @@ export async function detectBeatsFromFile(
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+        // Handle 403 Forbidden errors - likely port conflict or backend unavailable
+        if (response.status === 403) {
+          console.error(`❌ Beat detection API returned 403 Forbidden`);
+          const responseText = await response.text().catch(() => 'Unable to read response');
+          console.error(`📄 Error response: ${responseText}`);
+
+          // Check if this is Apple AirTunes intercepting port 5000
+          const serverHeader = response.headers.get('server');
+          if (serverHeader && serverHeader.includes('AirTunes')) {
+            throw new Error('Port conflict: Port 5000 is being used by Apple AirTunes. Change Python backend to use a different port (e.g., 5001, 8000)');
+          }
+
+          throw new Error(`Beat detection failed: Backend returned 403 Forbidden. Ensure Python backend is running and accessible.`);
+        }
+
         // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
         if (detector === 'beat-transformer') {
           return detectBeatsFromFile(audioFile, 'madmom', onProgress);
@@ -587,6 +619,82 @@ export async function detectBeatsFromFile(
     };
   }
 }
+
+/**
+ * Detects beats from a Firebase Storage URL by downloading the file first and then processing it
+ * This bypasses CSP issues by using our existing API infrastructure
+ *
+ * @param firebaseUrl - Firebase Storage URL of the audio file
+ * @param detector - Which beat detector to use ('auto', 'madmom', or 'beat-transformer')
+ * @returns Promise with beat detection results
+ */
+export async function detectBeatsFromFirebaseUrl(
+  firebaseUrl: string,
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
+): Promise<BeatDetectionResult> {
+  try {
+    console.log(`🔥 Processing Firebase URL for beat detection (localhost-safe approach)`);
+
+    // Step 1: Download the Firebase Storage file using our proxy service
+    const encodedUrl = encodeURIComponent(firebaseUrl);
+    const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
+    console.log(`🔧 Downloading Firebase audio via proxy: ${proxyUrl}`);
+
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audio from Firebase URL: ${response.status} ${response.statusText}`);
+    }
+
+    const audioBlob = await response.blob();
+
+    // Validate audio blob
+    if (audioBlob.size === 0) {
+      throw new Error('Downloaded audio file is empty');
+    }
+
+    console.log(`✅ Downloaded Firebase audio: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Step 2: Create a File object from the blob
+    const audioFile = new File([audioBlob], "firebase_audio.wav", { type: "audio/wav" });
+
+    // Step 3: Use our existing beat detection service with the downloaded file
+    console.log(`🥁 Processing downloaded audio file with ${detector} detector`);
+
+    // Use the vercel blob upload service which has our environment-aware logic
+    const blobResult = await vercelBlobUploadService.processAudioFile(audioFile, 'detect-beats', {
+      detector: detector
+    });
+
+    if (blobResult.success) {
+      // Convert blob service response to beat detection format
+      const backendResponse = blobResult.data as BeatDetectionBackendResponse;
+      console.log(`✅ Firebase URL beat detection successful: ${(backendResponse.beats || []).length} beats detected`);
+
+      return {
+        success: true,
+        beats: backendResponse.beats || [],
+        downbeats: backendResponse.downbeats || [],
+        bpm: backendResponse.BPM || backendResponse.bpm || 120,
+        total_beats: (backendResponse.beats || []).length,
+        duration: backendResponse.duration || 0,
+        time_signature: backendResponse.time_signature || 4,
+        model: backendResponse.model_used || detector
+      };
+    } else if (blobResult.error === 'USE_STANDARD_FLOW') {
+      // Fallback to standard beat detection flow
+      console.log(`🔄 Using standard beat detection flow for downloaded file`);
+      return await detectBeatsFromFile(audioFile, detector);
+    } else {
+      throw new Error(`Beat detection failed: ${blobResult.error}`);
+    }
+
+  } catch (error) {
+    console.error('Error in Firebase URL beat detection:', error);
+    throw error;
+  }
+}
+
+
 
 /**
  * Detects beats in an audio file already on the server

@@ -89,6 +89,7 @@ interface AudioProcessingServiceDependencies {
   beatDetector: BeatDetectorType;
   chordDetector: ChordDetectorType;
   progress: number;
+  lyrics: LyricsData | null; // Current lyrics state for confirmation check
 }
 
 /**
@@ -254,7 +255,8 @@ export const transcribeLyricsWithAI = async (deps: AudioProcessingServiceDepende
     setHasCachedLyrics,
     setActiveTab,
     setIsTranscribingLyrics,
-    setLyricsError
+    setLyricsError,
+    lyrics
   } = deps;
 
   if (!audioProcessingState.audioUrl) {
@@ -262,24 +264,43 @@ export const transcribeLyricsWithAI = async (deps: AudioProcessingServiceDepende
     return;
   }
 
+  // If lyrics already exist, show confirmation popup for re-transcription
+  if (lyrics && lyrics.lines && lyrics.lines.length > 0) {
+    const confirmed = window.confirm(
+      'Re-transcription will overwrite existing lyrics and consume API credits. Are you sure you want to continue?'
+    );
+    if (!confirmed) {
+      return;
+    }
+  }
+
   try {
     setIsTranscribingLyrics(true);
     setLyricsError(null);
 
-    // Note: Lyrics caching is handled separately from beat/chord transcriptions
-    console.log('🎤 No cached lyrics found, proceeding with transcription...');
+    // Get the user's Music.AI API key
+    const { getMusicAiApiKeyWithValidation } = await import('@/utils/apiKeyUtils');
+    const keyValidation = await getMusicAiApiKeyWithValidation();
 
-    console.log('🎤 Starting lyrics transcription with Music.AI...');
+    if (!keyValidation.isValid || !keyValidation.apiKey) {
+      setLyricsError(keyValidation.error || 'Music.AI API key not found. Please add your API key in settings.');
+      setIsTranscribingLyrics(false);
+      return;
+    }
+
+    const musicAiApiKey = keyValidation.apiKey;
 
     const response = await apiPost('TRANSCRIBE_LYRICS', {
       videoId,
-      audioUrl: audioProcessingState.audioUrl
+      audioPath: audioProcessingState.audioUrl, // Fixed: use audioPath instead of audioUrl
+      checkCacheOnly: false, // Explicit: this is a transcription request, not cache-only
+      forceRefresh: false,
+      musicAiApiKey: musicAiApiKey // Add the API key to the request
     });
 
     const data = await response.json();
 
     if (data && data.lyrics) {
-      console.log('✅ Lyrics transcription completed successfully');
       setLyrics(data.lyrics);
       setShowLyrics(true);
       setHasCachedLyrics(false);

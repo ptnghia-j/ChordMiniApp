@@ -158,7 +158,6 @@ export const waitForAuth = (): Promise<void> => {
     // Timeout after 10 seconds to avoid hanging
     setTimeout(() => {
       unsubscribe();
-      console.warn('Authentication timeout, proceeding without auth');
       resolve();
     }, 10000);
   });

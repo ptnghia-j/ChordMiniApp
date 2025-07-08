@@ -10,7 +10,7 @@
 // Backend URLs - Centralized configuration using environment variables
 export const BACKEND_URLS = {
   // Python backend (uses environment variable with fallback for localhost development)
-  PYTHON_BACKEND: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000',
+  PYTHON_BACKEND: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001',
 
   // Vercel frontend (current domain)
   VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
@@ -98,10 +98,7 @@ export async function apiRequest(
   };
   
   try {
-    // Only log in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Making API request to: ${url} (external: ${isExternal})`);
-    }
+
 
     const response = await fetch(url, fetchOptions);
 

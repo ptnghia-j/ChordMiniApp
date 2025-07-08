@@ -145,7 +145,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
 
 export async function POST(request: NextRequest) {
   try {
-    const { chords, includeEnharmonicCorrection = false, bypassCache = false } = await request.json();
+    const { chords, includeEnharmonicCorrection = false, bypassCache = false, geminiApiKey } = await request.json();
 
     if (!chords || !Array.isArray(chords) || chords.length === 0) {
       return NextResponse.json(
@@ -154,14 +154,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine which API key to use (user-provided key takes precedence)
+    const finalApiKey = geminiApiKey || apiKey;
+
     // Check if Gemini API key is available
-    if (!apiKey) {
+    if (!finalApiKey) {
       console.error('Gemini API key is missing');
       return NextResponse.json(
-        { error: 'Key detection service is not configured properly' },
+        { error: 'Key detection service is not configured properly. Please provide a Gemini API key.' },
         { status: 500 }
       );
     }
+
+    // Create a Gemini AI instance with the appropriate API key
+    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
 
     // Generate cache key (include enharmonic flag in cache key)
     const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection);
@@ -283,7 +289,7 @@ Do not include any explanations, analysis, or additional text. Just give me the 
     console.log('Sending key detection request to Gemini API');
 
     // Generate content using the Gemini model
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });

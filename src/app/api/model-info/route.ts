@@ -8,7 +8,7 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 export async function GET() {
   try {
     // Try to call the Python backend API first with timeout
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
+    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
     try {
       const response = await fetch(`${backendUrl}/api/model-info`, {
         method: 'GET',

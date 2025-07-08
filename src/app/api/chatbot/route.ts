@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body: ChatbotRequest = await request.json();
-    const { message, conversationHistory, songContext } = body;
+    const { message, conversationHistory, songContext, geminiApiKey } = body;
 
     // Validate input
     if (!message || message.trim() === '') {
@@ -95,14 +95,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine which API key to use (user-provided key takes precedence)
+    const finalApiKey = geminiApiKey || apiKey;
+
     // Check if Gemini API key is available
-    if (!apiKey) {
+    if (!finalApiKey) {
       console.error('Gemini API key is missing');
       return NextResponse.json(
-        { error: 'Chatbot service is not configured properly' },
+        { error: 'Chatbot service is not configured properly. Please provide a Gemini API key.' },
         { status: 500 }
       );
     }
+
+    // Create a Gemini AI instance with the appropriate API key
+    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
 
     // Format song context for AI
     const songContextSummary = formatSongContextForAI(songContext);
@@ -121,7 +127,7 @@ export async function POST(request: NextRequest) {
     console.log('Sending request to Gemini API');
 
     // Generate content using the Gemini model
-    const response = await ai.models.generateContent({
+    const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: fullPrompt
     });

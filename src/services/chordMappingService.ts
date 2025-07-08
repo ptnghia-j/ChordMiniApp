@@ -248,8 +248,6 @@ export class ChordMappingService {
     const inversionMatch = chordName.match(/^([^/]+)\/(.+)$/);
     if (inversionMatch) {
       const rootChord = inversionMatch[1].trim();
-      // Log the inversion preprocessing for debugging
-      console.log(`🎸 Chord inversion preprocessed: "${chordName}" → "${rootChord}"`);
       return rootChord;
     }
 
@@ -275,15 +273,11 @@ export class ChordMappingService {
     const match = cleanChord.match(chordPattern);
 
     if (!match) {
-      console.warn(`🎸 Failed to parse chord: "${chordName}"`);
       return null;
     }
 
     const [, rootNote, accidental, suffix] = match;
     const root = rootNote + accidental; // Combine root note with accidental
-
-    // Debug logging for chord parsing
-    console.log(`🎸 Parsed chord "${chordName}": root="${root}", suffix="${suffix}"`);
 
     return { root, suffix };
   }
@@ -312,7 +306,6 @@ export class ChordMappingService {
 
     // Direct mapping first
     if (this.suffixMap[suffix]) {
-      console.log(`🎸 Direct suffix mapping: "${suffix}" → "${this.suffixMap[suffix]}"`);
       return this.suffixMap[suffix];
     }
 
@@ -324,13 +317,11 @@ export class ChordMappingService {
 
     for (const [pattern, dbSuffix] of sortedPatterns) {
       if (suffix.includes(pattern)) {
-        console.log(`🎸 Pattern suffix mapping: "${suffix}" contains "${pattern}" → "${dbSuffix}"`);
         return dbSuffix;
       }
     }
 
     // If no pattern matches, return the original suffix
-    console.warn(`🎸 No suffix mapping found for: "${suffix}", using as-is`);
     return suffix;
   }
 

@@ -89,19 +89,21 @@ export const useApiKeys = () => {
   // Check if service is available (has valid key or fallback available)
   const isServiceAvailable = useCallback((service: 'musicAi' | 'gemini'): boolean => {
     const status = apiKeyStatus[service];
-    
+
     if (service === 'musicAi') {
       // Music.ai requires user API key
       return status.hasKey && status.isValid;
     }
-    
+
     if (service === 'gemini') {
       // Gemini has fallback to app key
       return true; // Always available with fallback
     }
-    
+
     return false;
   }, [apiKeyStatus]);
+
+
 
   // Get service availability message
   const getServiceMessage = useCallback((service: 'musicAi' | 'gemini'): string => {

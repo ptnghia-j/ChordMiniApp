@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatMessage, SongContext } from '@/types/chatbotTypes';
 import { sendChatMessageWithLyricsRetrieval, createChatMessage, truncateConversationHistory } from '@/services/chatbotService';
+import { useApiKeys } from '@/hooks/useApiKeys';
 import MarkdownRenderer from './MarkdownRenderer';
 
 interface ChatbotInterfaceProps {
@@ -29,6 +30,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { getApiKey } = useApiKeys();
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -71,10 +73,14 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
         throw new Error("No song context available. Please make sure a song is loaded.");
       }
 
+      // Get user's Gemini API key if available
+      const geminiApiKey = await getApiKey('gemini');
+
       const response = await sendChatMessageWithLyricsRetrieval(
         userMessage.content,
         truncatedHistory,
-        songContext
+        songContext,
+        geminiApiKey || undefined
       );
 
       const assistantMessage = createChatMessage('assistant', response.message);

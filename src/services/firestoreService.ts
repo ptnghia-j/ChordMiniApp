@@ -167,7 +167,6 @@ export async function saveTranscription(
 
     // Add a timeout to prevent hanging
     setTimeout(() => {
-      console.warn('⏰ Auth state check timeout after 10 seconds');
       unsubscribe();
       resolve(false);
     }, 10000);

@@ -8,6 +8,7 @@
 import {
   detectBeatsFromFile,
   detectBeatsWithRateLimit,
+  detectBeatsFromFirebaseUrl,
   BeatInfo,
   BeatPosition,
   DownbeatInfo,
@@ -83,6 +84,12 @@ export async function analyzeAudioWithRateLimit(
 ): Promise<AnalysisResult> {
   try {
     console.log('Starting audio analysis with rate limiting...');
+
+    // Log environment detection for debugging
+    const { isLocalBackend } = await import('@/utils/backendConfig');
+    const isLocalhost = isLocalBackend();
+    console.log(`🌍 Environment: ${isLocalhost ? 'Localhost Development' : 'Production'} - Blob upload ${isLocalhost ? 'disabled' : 'enabled for large files'}`);
+
     console.log('Audio input type:', typeof audioInput);
 
     // Enhanced input validation and bounds checking
@@ -491,7 +498,13 @@ export async function analyzeAudioWithRateLimit(
     let beatResults;
 
     try {
-      beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
+      // Special handling for localhost development with Firebase Storage URLs
+      if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+        console.log(`🏠 Localhost development + Firebase Storage URL detected - using hybrid approach (analyzeAudio)`);
+        beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+      } else {
+        beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
+      }
 
       // Validate beat detection results
       if (!beatResults || !beatResults.beats) {
@@ -707,6 +720,12 @@ export async function analyzeAudio(
 ): Promise<AnalysisResult> {
   try {
     console.log('Starting audio analysis...');
+
+    // Log environment detection for debugging
+    const { isLocalBackend } = await import('@/utils/backendConfig');
+    const isLocalhost = isLocalBackend();
+    console.log(`🌍 Environment: ${isLocalhost ? 'Localhost Development' : 'Production'} - Blob upload ${isLocalhost ? 'disabled' : 'enabled for large files'}`);
+
     console.log('Audio input type:', typeof audioInput);
 
     // Enhanced input validation and bounds checking
@@ -810,7 +829,13 @@ export async function analyzeAudio(
     let beatResults;
 
     try {
-      beatResults = await detectBeatsFromFile(audioFile, beatDetector);
+      // Special handling for localhost development with Firebase Storage URLs
+      if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+        console.log(`🏠 Localhost development + Firebase Storage URL detected - using hybrid approach`);
+        beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+      } else {
+        beatResults = await detectBeatsFromFile(audioFile, beatDetector);
+      }
 
       // Validate beat detection results
       if (!beatResults || !beatResults.success) {
@@ -1138,6 +1163,22 @@ async function recognizeChordsWithRateLimit(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+      // Handle 403 Forbidden errors - likely port conflict or backend unavailable
+      if (response.status === 403) {
+        console.error(`❌ Chord recognition API returned 403 Forbidden`);
+        const responseText = await response.text().catch(() => 'Unable to read response');
+        console.error(`📄 Error response: ${responseText}`);
+
+        // Check if this is Apple AirTunes intercepting port 5000
+        const serverHeader = response.headers.get('server');
+        if (serverHeader && serverHeader.includes('AirTunes')) {
+          throw new Error('Port conflict: Port 5000 is being used by Apple AirTunes. Change Python backend to use a different port (e.g., 5001, 8000)');
+        }
+
+        throw new Error(`Chord recognition failed: Backend returned 403 Forbidden. Ensure Python backend is running and accessible.`);
+      }
+
       throw new Error(errorData.error || `Chord recognition failed: ${response.status}`);
     }
 
@@ -1203,6 +1244,8 @@ async function recognizeChordsWithRateLimit(
 }
 
 // Removed unused recognizeChords function - now using recognizeChordsWithRateLimit everywhere
+
+
 
 // Removed frontend padding function - using pure model outputs only
 

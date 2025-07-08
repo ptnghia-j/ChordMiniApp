@@ -261,46 +261,7 @@ export const performKeyDetectionWithCache = async (deps: CacheManagerDependencie
   }
 };
 
-/**
- * Check for cached lyrics without auto-loading
- * Extracted from lyrics cache checking functionality
- */
-export const checkCachedLyrics = async (
-  videoId: string,
-  params?: { videoId?: string }
-): Promise<{ hasCachedLyrics: boolean; lyricsCount?: number }> => {
-  try {
-    const response = await fetch('/api/transcribe-lyrics', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        videoId: params?.videoId || videoId,
-        audioUrl: null, // We don't have audio URL yet, but API should check cache first
-        forceRefresh: false,
-        checkCacheOnly: true // New flag to only check cache without processing
-      }),
-    });
 
-    const data = await response.json();
-
-    if (response.ok && data.success && data.lyrics) {
-      if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
-        console.log(`Found ${data.lyrics.lines.length} lines of cached lyrics (not auto-loading)`);
-        return {
-          hasCachedLyrics: true,
-          lyricsCount: data.lyrics.lines.length
-        };
-      }
-    }
-
-    return { hasCachedLyrics: false };
-  } catch (error) {
-    console.log('No cached lyrics found or error checking:', error);
-    return { hasCachedLyrics: false };
-  }
-};
 
 /**
  * Generate cache key for model combination

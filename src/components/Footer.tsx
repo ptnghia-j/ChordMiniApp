@@ -63,7 +63,7 @@ const Footer: React.FC = () => {
     },
     {
       name: 'Music.AI',
-      icon: <Image src="/musicAI.png" alt="Music.AI Logo" width={24} height={24} sizes="24px" className="w-6 h-6 object-contain" style={{ width: 'auto', height: 'auto' }} />,
+      icon: <Image src="/musicAI.png" alt="Music.AI Logo" width={24} height={24} sizes="24px" className="w-6 h-6 object-contain" />,
     },
     {
       name: 'LRClib',
@@ -84,7 +84,7 @@ const Footer: React.FC = () => {
           {/* Left Section - Logo and Title */}
           <div className="flex items-center space-x-4">
             <Image
-              src={theme === 'dark' ? "/chordMiniLogo_dark.png" : "/chordMiniLogo.png"}
+              src={theme === 'dark' ? "/chordMiniLogo-dark.png" : "/chordMiniLogo.png"}
               alt="ChordMini Logo"
               width={48}
               height={48}
@@ -169,7 +169,7 @@ const Footer: React.FC = () => {
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Version 0.2.2
+              Version 0.2.5
             </p>
           </div>
         </div>

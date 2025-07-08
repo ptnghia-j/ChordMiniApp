@@ -119,7 +119,7 @@ export default function LocalAudioAnalyzePage() {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult | null>(null);
 
   // Current state for playback
-  const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
+  const [currentBeatIndex] = useState(-1);
   const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
   // Tab state
@@ -394,47 +394,7 @@ export default function LocalAudioAnalyzePage() {
     return getChordGridDataService(analysisResults);
   }, [analysisResults]);
 
-  // Beat animation tracking
-  useEffect(() => {
-    if (!audioRef.current || !isPlaying || !chordGridData.beats.length) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      if (audioRef.current && isPlaying) {
-        const time = audioRef.current.currentTime;
-        setCurrentTime(time);
-
-        let currentBeat = -1;
-
-        // Find current beat based on time ranges
-        for (let i = 0; i < chordGridData.beats.length; i++) {
-          const beatTime = chordGridData.beats[i];
-          if (typeof beatTime !== 'number' || beatTime < 0) continue;
-
-          // Get next beat time for range checking
-          let nextBeatTime = beatTime + 2.0; // Default 2 second range
-          for (let j = i + 1; j < chordGridData.beats.length; j++) {
-            const nextBeat = chordGridData.beats[j];
-            if (typeof nextBeat === 'number' && nextBeat >= 0) {
-              nextBeatTime = nextBeat;
-              break;
-            }
-          }
-
-          // Check if current time falls within this beat's range
-          if (time >= beatTime && time < nextBeatTime && currentBeat === -1) {
-            currentBeat = i;
-            break;
-          }
-        }
-
-        setCurrentBeatIndex(currentBeat);
-      }
-    }, 100); // 10Hz update rate
-
-    return () => clearInterval(interval);
-  }, [isPlaying, chordGridData.beats]);
+  // Beat animation tracking is now handled by useScrollAndAnimation hook
 
   // FIXED: Simplified beat click handler using chord grid data timestamps
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
