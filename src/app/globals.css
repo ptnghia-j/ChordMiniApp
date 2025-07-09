@@ -4,6 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Radix Accordion Styles */
+[data-radix-accordion-content] {
+  overflow: hidden;
+}
+
+[data-radix-accordion-content][data-state="open"] {
+  animation: slideDown 300ms cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+[data-radix-accordion-content][data-state="closed"] {
+  animation: slideUp 300ms cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+@keyframes slideDown {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
 /* Optimized bounce animation for ProcessingStatusBanner */
 @keyframes optimized-bounce {
   0%, 80%, 100% {
@@ -197,7 +228,7 @@
       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
     }
 
-    /* Ensure navigation is always visible */
+    /* Ensure navigation is always visible with performance optimizations */
     .mobile-nav {
       background-color: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
@@ -205,6 +236,36 @@
 
     .dark .mobile-nav {
       background-color: rgba(17, 24, 39, 0.95);
+    }
+
+    /* Navigation backdrop-blur performance fixes for mobile Safari */
+    @supports (backdrop-filter: blur(12px)) {
+      .navbar-backdrop-blur {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background-color: rgba(255, 255, 255, 0.95);
+      }
+
+      .dark .navbar-backdrop-blur {
+        background-color: rgba(17, 24, 39, 0.95);
+      }
+    }
+
+    @supports not (backdrop-filter: blur(12px)) {
+      .navbar-backdrop-blur {
+        background-color: rgba(255, 255, 255, 1);
+      }
+
+      .dark .navbar-backdrop-blur {
+        background-color: rgba(17, 24, 39, 1);
+      }
+    }
+
+    /* Force hardware acceleration for smooth scrolling */
+    .navbar-optimized {
+      transform: translateZ(0);
+      will-change: transform;
+      -webkit-transform: translateZ(0);
     }
   }
 

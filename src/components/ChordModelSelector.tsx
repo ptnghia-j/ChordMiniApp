@@ -208,7 +208,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading || disabled}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-content-bg border border-blue-800 dark:border-blue-300 rounded-lg shadow-sm text-left text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 dark:hover:border-blue-200 transition-colors duration-300"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-content-bg border border-blue-800 dark:border-blue-300 rounded-lg shadow-sm text-left text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-600 dark:hover:border-blue-200 transition-colors duration-300"
         >
           <div className="flex items-center">
             {/* Model icon */}

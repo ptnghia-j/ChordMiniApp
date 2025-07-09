@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import OptimizedImage from '@/components/OptimizedImage';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
-import TypewriterText from '@/components/TypewriterText';
+import FramerTypewriter from '@/components/FramerTypewriter';
 import AnimatedTitle from '@/components/AnimatedTitle';
 import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
@@ -26,6 +26,11 @@ const AnimatedBorderText = dynamic(() => import('@/components/AnimatedBorderText
 
 const FeaturesSection = dynamic(() => import('@/components/FeaturesSection'), {
   loading: () => <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-48"></div>,
+  ssr: false
+});
+
+const SupportChordMini = dynamic(() => import('@/components/SupportChordMini'), {
+  loading: () => <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-32"></div>,
   ssr: false
 });
 
@@ -109,7 +114,7 @@ function HomePageContentInner() {
                 <div ref={titleRef} className="pt-3 pb-2 md:pt-4 md:pb-3 text-center">
                   <AnimatedTitle text="Chord Mini" className="mb-0.5" />
                   <div className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 font-light mb-2 transition-colors duration-300 min-h-[4rem] md:min-h-[5rem] flex items-center justify-center">
-                    <TypewriterText
+                    <FramerTypewriter
                       text="Open source chord & beat detection application. Get your favorite songs transcribed!"
                       speed={20}
                       delay={1000}
@@ -190,10 +195,15 @@ function HomePageContentInner() {
                 <div id="features" className="mt-4">
                   <FeaturesSection />
                 </div>
+
+                {/* Support Section */}
+                <div className="mt-6">
+                  <SupportChordMini />
+                </div>
               </div>
 
               {/* Right Column: Recent Videos (25% width on desktop) */}
-              <div className="lg:col-span-1 mt-8 lg:mt-24">
+              <div className="lg:col-span-1 mt-8 lg:mt-24 space-y-6">
                 <RecentVideos />
               </div>
             </div>

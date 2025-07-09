@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import { useTheme } from '@/contexts/ThemeContext';
 import StickySearchBar from './StickySearchBar';
+import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem, Button } from '@heroui/react';
 
 interface NavigationProps {
   className?: string;
@@ -23,9 +24,24 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
   const { theme } = useTheme();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [currentHash, setCurrentHash] = useState('');
+  const [isClient, setIsClient] = useState(false);
 
   // Use the appropriate logo based on the current theme
   const logoSrc = theme === 'dark' ? '/chordMiniLogo-dark.png' : '/chordMiniLogo.png';
+
+  // Handle client-side hydration and hash detection
+  useEffect(() => {
+    setIsClient(true);
+    setCurrentHash(window.location.hash);
+
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash);
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Navigation items configuration
   const navigationItems: NavigationItem[] = [
@@ -67,17 +83,15 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
     };
   }, [isMobileMenuOpen]);
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+
 
   const isActiveRoute = (href: string) => {
     if (!pathname) return false;
     if (href === '/') {
-      return pathname === '/' && (typeof window === 'undefined' || !window.location.hash);
+      return pathname === '/' && (!isClient || !currentHash);
     }
     if (href === '/#features') {
-      return pathname === '/' && (typeof window !== 'undefined' && window.location.hash === '#features');
+      return pathname === '/' && isClient && currentHash === '#features';
     }
     return pathname.startsWith(href);
   };
@@ -86,7 +100,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
     if (isScroll && href === '/#features') {
       // If we're not on the home page, navigate there first
       if (pathname !== '/') {
-        if (typeof window !== 'undefined') {
+        if (isClient) {
           window.location.href = '/#features';
         }
         return;
@@ -100,10 +114,19 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
   };
 
   return (
-    <div className={`sticky top-0 bg-white dark:bg-gray-900 lg:bg-opacity-50 lg:dark:bg-opacity-50 lg:backdrop-filter lg:backdrop-blur-md text-gray-800 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 block z-50 transition-colors duration-300 w-screen ${className}`}>
-      <div className="w-full px-4 flex justify-between items-center h-12">
-        {/* Logo and Brand */}
-        <div className="flex items-center">
+    <Navbar
+      maxWidth="full"
+      position="sticky"
+      className={`
+        navbar-backdrop-blur navbar-optimized border-b border-divider
+        ${className}
+      `}
+      height="3rem"
+      isBordered
+    >
+      <NavbarContent>
+        <NavbarMenuToggle className="sm:hidden" />
+        <NavbarBrand>
           <Link href="/" className="flex items-center group">
             <Image
               src={logoSrc}
@@ -115,175 +138,121 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               style={{ width: '40px', height: '40px' }}
               priority
             />
-            <h1 className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+            <h1 className="text-xl font-bold text-primary transition-colors duration-300 group-hover:text-primary-600">
               ChordMini
             </h1>
           </Link>
-        </div>
+        </NavbarBrand>
+      </NavbarContent>
 
-        {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center space-x-2 xl:space-x-4">
-          {/* Sticky Search Bar - only show on homepage when original search is out of view */}
-          {pathname === '/' && (
-            <div className="mr-2 xl:mr-4">
-              <StickySearchBar
-                isVisible={showStickySearch}
-                className="max-w-xs xl:max-w-md"
-              />
-            </div>
-          )}
+      <NavbarContent justify="end" className="gap-1 sm:gap-2">
+        {/* Sticky Search Bar - only show on homepage when original search is out of view */}
+        {pathname === '/' && (
+          <NavbarItem className="hidden md:flex">
+            <StickySearchBar
+              isVisible={showStickySearch}
+              className="max-w-[200px] lg:max-w-xs xl:max-w-md"
+            />
+          </NavbarItem>
+        )}
 
-          <nav className="flex-shrink-0">
-            <ul className="flex space-x-2 xl:space-x-4">
-              {navigationItems.map((item) => (
-                <li key={item.href}>
-                  {item.isScroll ? (
-                    <button
-                      onClick={() => handleNavClick(item.href, item.isScroll)}
-                      className={`relative transition-all duration-300 font-medium px-2 xl:px-3 py-2 group inline-flex items-center text-sm xl:text-base whitespace-nowrap ${
-                        isActiveRoute(item.href)
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-primary-700 dark:text-primary-300 hover:text-blue-600 dark:hover:text-blue-400'
-                      }`}
-                    >
-                      <span className="relative z-10">{item.label}</span>
-                      <span className={`absolute bottom-0 left-2 right-2 xl:left-3 xl:right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
-                        isActiveRoute(item.href) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                      }`}></span>
-                    </button>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      className={`relative transition-all duration-300 font-medium px-2 xl:px-3 py-2 group inline-flex items-center text-sm xl:text-base whitespace-nowrap ${
-                        isActiveRoute(item.href)
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-primary-700 dark:text-primary-300 hover:text-blue-600 dark:hover:text-blue-400'
-                      }`}
-                    >
-                      <span className="relative z-10">{item.label}</span>
-                      <span className={`absolute bottom-0 left-2 right-2 xl:left-3 xl:right-3 h-0.5 bg-blue-600 dark:bg-blue-400 transform transition-transform duration-300 origin-left ${
-                        isActiveRoute(item.href) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                      }`}></span>
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <ThemeToggle />
-        </div>
-
-        {/* Mobile Navigation Controls */}
-        <div className="lg:hidden flex items-center space-x-3">
-          {/* Mobile Sticky Search Bar - only show on homepage when original search is out of view */}
-          {pathname === '/' && (
-            <div className="flex-1 max-w-xs">
-              <StickySearchBar
-                isVisible={showStickySearch}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          <ThemeToggle />
-          <button
-            onClick={toggleMobileMenu}
-            className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-            aria-label="Toggle mobile menu"
-            aria-expanded={isMobileMenuOpen}
-          >
-            <svg
-              className={`w-6 h-6 transition-transform duration-200 ${isMobileMenuOpen ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              {isMobileMenuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        {/* Navigation Items - Hide on small screens where mobile menu is available */}
+        <div className="hidden sm:flex gap-2">
+          {navigationItems.map((item) => (
+            <NavbarItem key={item.href}>
+              {item.isScroll ? (
+                <Button
+                  variant={isActiveRoute(item.href) ? "solid" : "ghost"}
+                  color={isActiveRoute(item.href) ? "primary" : "default"}
+                  onClick={() => handleNavClick(item.href, item.isScroll)}
+                  className={`font-medium text-sm transition-all duration-200 ${
+                    isActiveRoute(item.href)
+                      ? 'bg-primary text-black dark:text-primary-foreground shadow-lg border border-primary'
+                      : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
+                  }`}
+                  size="sm"
+                  radius="md"
+                >
+                  {item.label}
+                </Button>
               ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <Button
+                  as={Link}
+                  href={item.href}
+                  variant={isActiveRoute(item.href) ? "solid" : "ghost"}
+                  color={isActiveRoute(item.href) ? "primary" : "default"}
+                  className={`font-medium text-sm transition-all duration-200 ${
+                    isActiveRoute(item.href)
+                      ? 'bg-primary text-black dark:text-primary-foreground border border-blue-500 dark:border-blue-300'
+                      : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
+                  }`}
+                  size="sm"
+                  radius="md"
+                >
+                  {item.label}
+                </Button>
               )}
-            </svg>
-          </button>
+            </NavbarItem>
+          ))}
         </div>
-      </div>
+        
 
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50 transition-opacity duration-300">
-          <div className="mobile-menu-container fixed top-0 right-0 h-full w-80 max-w-full bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out">
-            {/* Mobile Menu Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center">
-                <Image
-                  src={logoSrc}
-                  alt="ChordMini Logo"
-                  width={32}
-                  height={32}
-                  sizes="32px"
-                  className="mr-2 rounded-lg"
-                  style={{ width: '32px', height: '32px' }}
-                />
-                <h2 className="text-lg font-bold text-primary-700 dark:text-primary-300">
-                  Chord Mini
-                </h2>
-              </div>
-              <button
-                onClick={toggleMobileMenu}
-                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                aria-label="Close mobile menu"
+        <NavbarItem>
+          <ThemeToggle />
+        </NavbarItem>
+      </NavbarContent>
+
+      <NavbarMenu>
+        {/* Mobile Sticky Search Bar - only show on homepage when original search is out of view AND mobile menu is open */}
+        {pathname === '/' && showStickySearch && isMobileMenuOpen && (
+          <NavbarMenuItem>
+            <StickySearchBar
+              isVisible={true}
+              className="w-full mb-4"
+            />
+          </NavbarMenuItem>
+        )}
+
+        {navigationItems.map((item) => (
+          <NavbarMenuItem key={item.href}>
+            {item.isScroll ? (
+              <Button
+                variant={isActiveRoute(item.href) ? "solid" : "flat"}
+                color={isActiveRoute(item.href) ? "primary" : "default"}
+                onClick={() => {
+                  handleNavClick(item.href, item.isScroll);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full justify-start font-medium text-base transition-all duration-200 ${
+                  isActiveRoute(item.href)
+                    ? 'bg-blue-600 text-white border border-blue-600'
+                    : 'text-gray-900 dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+                size="lg"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Mobile Menu Navigation */}
-            <nav className="flex-1 px-4 py-6 space-y-2">
-              {navigationItems.map((item) => (
-                item.isScroll ? (
-                  <button
-                    key={item.href}
-                    onClick={() => {
-                      handleNavClick(item.href, item.isScroll);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`block w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-all duration-200 ${
-                      isActiveRoute(item.href)
-                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-blue-600 dark:hover:text-blue-400'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ) : (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`block px-4 py-3 rounded-lg text-base font-medium transition-all duration-200 ${
-                      isActiveRoute(item.href)
-                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-blue-600 dark:hover:text-blue-400'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              ))}
-            </nav>
-
-            {/* Mobile Menu Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                ChordMini v0.1.0
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                {item.label}
+              </Button>
+            ) : (
+              <Button
+                as={Link}
+                href={item.href}
+                variant={isActiveRoute(item.href) ? "solid" : "flat"}
+                color={isActiveRoute(item.href) ? "primary" : "default"}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full justify-start font-medium text-base transition-all duration-200 ${
+                  isActiveRoute(item.href)
+                    ? 'bg-blue-600 text-white border border-blue-600'
+                    : 'text-gray-900 dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+                size="lg"
+              >
+                {item.label}
+              </Button>
+            )}
+          </NavbarMenuItem>
+        ))}
+      </NavbarMenu>
+    </Navbar>
   );
 };
 

@@ -7,6 +7,31 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.2.6',
+      date: 'July 9, 2025',
+      title: 'UI Revamp & Model Selection Improvements',
+      description: 'Major UI improvements with HeroUI component migration, streamlined model selection workflow, and enhanced user experience',
+      features: [
+        'UI: Migrated to HeroUI component library for better consistency and maintainability',
+        'UI: Streamlined model selection workflow by removing redundant standalone model selection page',
+        'UI: Enhanced embedded model selectors with improved accessibility (aria-labels and textValue props)',
+        'UI: Fixed upload audio button styling with proper contrast and blue accent theme (#1e40af)',
+        'UI: Improved API key management instructions with more concise Music.AI workflow setup guidance',
+        'BACKEND: Fixed model selection API endpoint routing from direct backend calls to Next.js API routes',
+        'BACKEND: Resolved status page localhost endpoint configuration issues'
+      ],
+      technical: [
+        'Removed standalone /model-selection page and ModelSelectionInterface component to eliminate code duplication',
+        'Fixed HeroUIChordModelSelector API endpoint from ${backendUrl}/chord-model-info to /api/model-info',
+        'Added proper accessibility attributes to HeroUI Select components (textValue, aria-label)',
+        'Enhanced button styling with explicit background colors and hover states for better contrast',
+        'Simplified Music.AI API key setup instructions while maintaining essential workflow information'
+      ],
+      breaking: [
+        'Removed /model-selection route - model selection is now embedded in analyze pages only'
+      ]
+    },
+    {
       version: 'v0.2.5',
       date: 'July 8, 2025',
       title: 'Search UI Enhancements & Backend Port Update',

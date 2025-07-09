@@ -52,7 +52,7 @@ export class AudioMetadataService {
       const audioBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(audioBuffer);
 
-      console.log(`📊 Audio file size: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
+
 
       // Parse metadata using music-metadata
       const metadata = await parseBuffer(buffer);
@@ -68,12 +68,7 @@ export class AudioMetadataService {
         album: metadata.common.album
       };
 
-      console.log(`✅ Audio metadata extracted successfully:`);
-      console.log(`   Duration: ${result.duration}s (${this.formatDuration(result.duration)})`);
-      console.log(`   Format: ${result.format}`);
-      console.log(`   Bitrate: ${result.bitrate} kbps`);
-      console.log(`   Sample Rate: ${result.sampleRate} Hz`);
-      console.log(`   Channels: ${result.channels}`);
+
 
       return result;
 
@@ -88,7 +83,7 @@ export class AudioMetadataService {
    */
   async extractMetadataFromPartialDownload(audioUrl: string, maxBytes: number = 2 * 1024 * 1024): Promise<AudioMetadata | null> {
     try {
-      console.log(`🎵 Extracting audio metadata from partial download: ${audioUrl} (max ${maxBytes} bytes)`);
+
 
       // Download only the first part of the file
       const response = await fetch(audioUrl, {
@@ -110,7 +105,7 @@ export class AudioMetadataService {
       const audioBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(audioBuffer);
 
-      console.log(`📊 Partial audio data size: ${(buffer.length / 1024).toFixed(2)} KB`);
+
 
       // Parse metadata using music-metadata
       const metadata = await parseBuffer(buffer);
@@ -126,16 +121,14 @@ export class AudioMetadataService {
         album: metadata.common.album
       };
 
-      console.log(`✅ Audio metadata extracted from partial download:`);
-      console.log(`   Duration: ${result.duration}s (${this.formatDuration(result.duration)})`);
-      console.log(`   Format: ${result.format}`);
+
 
       return result;
 
     } catch (error) {
       console.error('❌ Failed to extract audio metadata from partial download:', error);
       // Fall back to full download if partial fails
-      console.log('🔄 Falling back to full download...');
+
       return await this.extractMetadataFromUrl(audioUrl);
     }
   }

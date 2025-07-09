@@ -88,10 +88,10 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
               />
             </div>
 
-            {/* Play/pause button */}
+            {/* Play/pause button - larger and more accessible for mobile */}
             <button
               onClick={isPlaying ? onPause : onPlay}
-              className="text-gray-700 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+              className="bg-blue-600 dark:bg-blue-700 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-300 flex-shrink-0 shadow-lg"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
@@ -105,8 +105,8 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
               )}
             </button>
 
-            {/* Video title/info */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Video title/info - hidden on mobile for cleaner UI */}
+            <div className="hidden sm:flex items-center gap-2 min-w-0 flex-1">
               <span className="text-gray-800 dark:text-white text-sm font-medium truncate">
                 Video Player
               </span>

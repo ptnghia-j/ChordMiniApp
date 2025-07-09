@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
-import { ProcessingProvider } from '../contexts/ProcessingContext';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { Providers } from './providers';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
 import FirebaseInitializer from '../components/FirebaseInitializer';
 import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
@@ -141,21 +140,19 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//vercel.app" />
       </head>
       <body className="font-sans min-h-screen flex flex-col">
-        <ProcessingProvider>
-          <ThemeProvider>
-            <ClientErrorBoundary>
-              <CriticalPerformanceOptimizer />
-              <DesktopPerformanceOptimizer />
-              <ServiceWorkerRegistration />
-              <FirebaseInitializer />
-              <PerformanceMonitor />
-              <main className="flex-1">
-                {children}
-              </main>
-              <Footer />
-            </ClientErrorBoundary>
-          </ThemeProvider>
-        </ProcessingProvider>
+        <Providers>
+          <ClientErrorBoundary>
+            <CriticalPerformanceOptimizer />
+            <DesktopPerformanceOptimizer />
+            <ServiceWorkerRegistration />
+            <FirebaseInitializer />
+            <PerformanceMonitor />
+            <main className="flex-1">
+              {children}
+            </main>
+            <Footer />
+          </ClientErrorBoundary>
+        </Providers>
       </body>
     </html>
   );

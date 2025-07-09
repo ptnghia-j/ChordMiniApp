@@ -83,14 +83,9 @@ export async function analyzeAudioWithRateLimit(
   chordDetector: ChordDetectorType = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
   try {
-    console.log('Starting audio analysis with rate limiting...');
-
     // Log environment detection for debugging
     const { isLocalBackend } = await import('@/utils/backendConfig');
     const isLocalhost = isLocalBackend();
-    console.log(`🌍 Environment: ${isLocalhost ? 'Localhost Development' : 'Production'} - Blob upload ${isLocalhost ? 'disabled' : 'enabled for large files'}`);
-
-    console.log('Audio input type:', typeof audioInput);
 
     // Enhanced input validation and bounds checking
     let audioFile: File;
@@ -98,7 +93,6 @@ export async function analyzeAudioWithRateLimit(
 
     if (audioInput instanceof File) {
       // Handle File input directly - no conversion needed!
-      console.log('Processing File input directly (no AudioBuffer conversion)');
 
       // Validate file size and format
       if (audioInput.size === 0) {
@@ -110,12 +104,10 @@ export async function analyzeAudioWithRateLimit(
       }
 
       audioFile = audioInput;
-      console.log(`Using original File object: ${(audioInput.size / 1024 / 1024).toFixed(2)}MB`);
 
       // Capture audio duration for File input
       try {
         audioDuration = await getAudioDurationFromFile(audioFile);
-        console.log(`🎵 Audio duration detected: ${audioDuration.toFixed(1)} seconds`);
       } catch (durationError) {
         console.warn(`⚠️ Could not detect audio duration: ${durationError}`);
         audioDuration = undefined;
@@ -124,23 +116,15 @@ export async function analyzeAudioWithRateLimit(
       // CRITICAL FIX: Check if this file should use Vercel Blob upload due to size
       // This was missing for File input, causing 413 errors for large files
       if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-        console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+
 
         try {
           // Use Vercel Blob upload for large files
           const blobResult = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, chordDetector);
 
           if (blobResult.success) {
-            console.log(`✅ Vercel Blob chord recognition completed successfully`);
             // Extract chords array from the Python backend response
             const backendResponse = blobResult.data as ChordRecognitionBackendResponse;
-            console.log(`🔍 Backend response structure:`, {
-              hasSuccess: 'success' in backendResponse,
-              hasChords: 'chords' in backendResponse,
-              chordsIsArray: Array.isArray(backendResponse.chords),
-              chordsLength: backendResponse.chords?.length || 0,
-              modelUsed: backendResponse.model_used
-            });
 
             // Validate that we have a chords array
             if (!backendResponse.chords || !Array.isArray(backendResponse.chords)) {
@@ -150,16 +134,13 @@ export async function analyzeAudioWithRateLimit(
             const chordResults = backendResponse.chords as ChordDetectionResult[];
 
             // Now also run beat detection for blob uploads using Vercel Blob approach
-            console.log(`🥁 Running beat detection for blob upload using ${beatDetector} model...`);
             let beatResults;
 
             try {
               // Use Vercel Blob upload for beat detection as well (since file is > 4.0MB)
-              console.log(`🔄 Using Vercel Blob upload for beat detection (file size: ${vercelBlobUploadService.getFileSizeString(audioFile.size)})`);
               const beatBlobResult = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, beatDetector);
 
               if (beatBlobResult.success) {
-                console.log(`✅ Vercel Blob beat detection completed successfully`);
                 const beatBackendResponse = beatBlobResult.data as BeatDetectionBackendResponse;
 
                 // Validate that we have a beats array
@@ -283,7 +264,7 @@ export async function analyzeAudioWithRateLimit(
           encodedUrl = encodeURIComponent(audioInput);
         }
         const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
-        console.log(`🔧 Proxy URL for audio: ${proxyUrl}`);
+
         const response = await fetch(proxyUrl);
         if (!response.ok) {
           // If proxy fails, it might be due to backend issues
@@ -309,12 +290,10 @@ export async function analyzeAudioWithRateLimit(
         }
 
         audioFile = new File([audioBlob], "audio.wav", { type: "audio/wav" });
-        console.log(`Audio file created from URL: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
 
         // Capture audio duration for URL input
         try {
           audioDuration = await getAudioDurationFromFile(audioFile);
-          console.log(`🎵 Audio duration detected: ${audioDuration.toFixed(1)} seconds`);
         } catch (durationError) {
           console.warn(`⚠️ Could not detect audio duration: ${durationError}`);
           audioDuration = undefined;
@@ -494,13 +473,13 @@ export async function analyzeAudioWithRateLimit(
     }
 
     // Detect beats using the enhanced API service with rate limiting
-    console.log(`Detecting beats using ${beatDetector} model with rate limiting...`);
+
     let beatResults;
 
     try {
       // Special handling for localhost development with Firebase Storage URLs
       if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
-        console.log(`🏠 Localhost development + Firebase Storage URL detected - using hybrid approach (analyzeAudio)`);
+
         beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
       } else {
         beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
@@ -663,7 +642,7 @@ export async function analyzeAudioWithRateLimit(
       console.error('Error in chord synchronization:', syncError);
 
       // Provide fallback synchronization if main sync fails
-      console.log('Attempting fallback synchronization...');
+
       synchronizedChords = beats.map((_, index) => ({
         chord: 'N/C', // No chord fallback
         beatIndex: index
@@ -719,14 +698,9 @@ export async function analyzeAudio(
   chordDetector: ChordDetectorType = 'chord-cnn-lstm'
 ): Promise<AnalysisResult> {
   try {
-    console.log('Starting audio analysis...');
-
     // Log environment detection for debugging
     const { isLocalBackend } = await import('@/utils/backendConfig');
     const isLocalhost = isLocalBackend();
-    console.log(`🌍 Environment: ${isLocalhost ? 'Localhost Development' : 'Production'} - Blob upload ${isLocalhost ? 'disabled' : 'enabled for large files'}`);
-
-    console.log('Audio input type:', typeof audioInput);
 
     // Enhanced input validation and bounds checking
     let audioFile: File;
@@ -734,7 +708,7 @@ export async function analyzeAudio(
 
     if (typeof audioInput === 'string') {
       // Handle URL input - fetch through proxy to avoid CORS issues
-      console.log('Processing audio from URL:', audioInput);
+
 
       try {
         // Use our proxy endpoint to avoid CORS issues
@@ -1024,7 +998,7 @@ export async function analyzeAudio(
       console.error('Error in chord synchronization:', syncError);
 
       // Provide fallback synchronization if main sync fails
-      console.log('Attempting fallback synchronization...');
+
       synchronizedChords = beats.map((_, index) => ({
         chord: 'N/C', // No chord fallback
         beatIndex: index
@@ -1234,7 +1208,7 @@ async function recognizeChordsWithRateLimit(
       });
     }
 
-    console.log(`Successfully recognized ${chords.length} chords using ${model} model`);
+
     return chords;
 
   } catch (error) {

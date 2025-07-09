@@ -953,7 +953,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   return (
     <div ref={gridContainerRef} className="chord-grid-container mx-auto px-0.5 sm:px-1 relative" style={{ maxWidth: "99%" }}>
       {/* Clean card container with minimal styling */}
-      <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+      <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
 
         {/* Header section with clean layout */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1 p-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">

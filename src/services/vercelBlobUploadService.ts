@@ -50,7 +50,7 @@ class VercelBlobUploadService {
   shouldUseBlobUpload(fileSize: number): boolean {
     // Skip blob upload entirely in localhost development
     if (this.isLocalhostDevelopment()) {
-      console.log('🏠 Localhost development detected - skipping Vercel Blob upload, will send directly to Python backend');
+
       return false;
     }
 
@@ -58,7 +58,7 @@ class VercelBlobUploadService {
     const isLargeFile = fileSize > this.VERCEL_SIZE_LIMIT;
     const isBlobAvailable = this.isBlobConfigured();
 
-    console.log(`🔍 Production blob upload check: fileSize=${this.getFileSizeString(fileSize)}, isLarge=${isLargeFile}, blobAvailable=${isBlobAvailable}, limit=${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
+
 
     if (isLargeFile && !isBlobAvailable) {
       console.warn(`⚠️ Large file detected but blob upload not available. File: ${this.getFileSizeString(fileSize)}, Limit: ${this.getFileSizeString(this.VERCEL_SIZE_LIMIT)}`);
@@ -92,7 +92,7 @@ class VercelBlobUploadService {
     // 2. The /api/blob/upload endpoint exists
     // 3. BLOB_READ_WRITE_TOKEN is configured in Vercel environment
     if (typeof window !== 'undefined') {
-      console.log('🔍 Client-side blob configuration check: Available');
+
       return true;
     }
 
@@ -101,7 +101,7 @@ class VercelBlobUploadService {
                      process.env &&
                      !!process.env.BLOB_READ_WRITE_TOKEN;
 
-    console.log(`🔍 Server-side blob configuration check: ${hasToken ? 'Available' : 'Missing token'}`);
+
     return hasToken;
   }
 
@@ -110,7 +110,7 @@ class VercelBlobUploadService {
    * Uses store_TRGSq1xmFVErVvno for storage
    */
   async uploadToBlob(audioFile: File): Promise<string> {
-    console.log(`📤 Uploading file to Vercel Blob (store_TRGSq1xmFVErVvno): ${audioFile.name} (${this.getFileSizeString(audioFile.size)})`);
+
 
     try {
       // Generate unique filename with timestamp and original name
@@ -118,7 +118,7 @@ class VercelBlobUploadService {
       const sanitizedName = audioFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filename = `audio/${timestamp}-${sanitizedName}`;
 
-      console.log(`📤 Uploading as: ${filename}`);
+
 
       // Upload directly to Vercel Blob using client upload
       // This uses the configured BLOB_READ_WRITE_TOKEN for store_TRGSq1xmFVErVvno
@@ -128,8 +128,7 @@ class VercelBlobUploadService {
         multipart: true, // Enable multipart upload for large files
       });
 
-      console.log(`✅ File uploaded to Vercel Blob: ${blob.url}`);
-      console.log(`📊 Blob details: pathname=${blob.pathname}`);
+
 
       return blob.url;
 
@@ -161,7 +160,7 @@ class VercelBlobUploadService {
     const startTime = Date.now();
     
     try {
-      console.log(`🔄 Vercel Blob upload beat detection for file: ${audioFile.name} (${this.getFileSizeString(audioFile.size)})`);
+
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
@@ -169,7 +168,7 @@ class VercelBlobUploadService {
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
-      console.log('🔄 Sending Blob URL to Python backend for beat detection...');
+
       
       const formData = new FormData();
       formData.append('blob_url', blobUrl);
@@ -189,7 +188,7 @@ class VercelBlobUploadService {
       const result = await response.json();
       const processingTime = Date.now() - startTime;
       
-      console.log(`✅ Blob beat detection completed in ${(processingTime / 1000).toFixed(1)}s`);
+
       if (onProgress) onProgress(100);
 
       return {
@@ -219,7 +218,7 @@ class VercelBlobUploadService {
     const startTime = Date.now();
     
     try {
-      console.log(`🔄 Vercel Blob upload chord recognition for file: ${audioFile.name} (${this.getFileSizeString(audioFile.size)})`);
+
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
@@ -227,7 +226,7 @@ class VercelBlobUploadService {
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
-      console.log('🔄 Sending Blob URL to Python backend for chord recognition...');
+
       
       const formData = new FormData();
       formData.append('blob_url', blobUrl);
@@ -247,7 +246,7 @@ class VercelBlobUploadService {
       const result = await response.json();
       const processingTime = Date.now() - startTime;
       
-      console.log(`✅ Blob chord recognition completed in ${(processingTime / 1000).toFixed(1)}s`);
+
       if (onProgress) onProgress(100);
 
       return {
@@ -285,7 +284,7 @@ class VercelBlobUploadService {
 
     // Check if we should use blob upload (considers both environment and file size)
     if (this.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 Using Vercel Blob upload for ${this.getFileSizeString(audioFile.size)} file`);
+
 
       if (operation === 'detect-beats') {
         return this.detectBeatsBlobUpload(audioFile, detector, onProgress);
@@ -295,9 +294,9 @@ class VercelBlobUploadService {
     } else {
       // Either localhost development or small file in production
       if (this.isLocalhostDevelopment()) {
-        console.log(`🏠 Localhost development - using direct Python backend for ${this.getFileSizeString(audioFile.size)} file`);
+
       } else {
-        console.log(`🔄 Production small file (${this.getFileSizeString(audioFile.size)} <= 4.0MB) - using standard Vercel proxy`);
+
       }
 
       // Return special result indicating to use the standard flow

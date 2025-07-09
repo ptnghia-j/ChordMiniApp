@@ -160,7 +160,7 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
               Required for lyrics transcription and chord generation features.
             </p>
 
-            {/* CRITICAL: Workflow Setup Warning - Only show if API key is not validated */}
+            {/* Workflow Setup Warning - Only show if API key is not validated */}
             {!apiKeyStatus.musicAi.isValid && (
               <div className={`text-sm mb-3 p-3 rounded-md border-2 ${
                 theme === 'dark' ? 'bg-red-900/20 border-red-500 text-red-300' : 'bg-red-50 border-red-300 text-red-700'
@@ -170,15 +170,8 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <div>
-                    <div className="font-semibold mb-1">IMPORTANT: Workflow Setup Required</div>
-                    <div className="space-y-1">
-                      <p><strong>Your API key alone is not sufficient!</strong> You must also:</p>
-                      <ol className="list-decimal list-inside space-y-1 ml-2">
-                        <li>Create a <strong>&ldquo;Lyrics Transcription and Alignment&rdquo;</strong> workflow in your Music.AI workspace</li>
-                        <li>Ensure the workflow is properly configured and active</li>
-                        <li>Without this workflow, you&apos;ll get &ldquo;No workflows available&rdquo; errors</li>
-                      </ol>
-                    </div>
+                    <div className="font-semibold mb-1">Setup Required</div>
+                    <p>Create a <strong>&ldquo;Lyrics Transcription and Alignment&rdquo;</strong> workflow in your Music.AI workspace. <a href="https://music.ai/workflows/" target="_blank" rel="noopener noreferrer" className="underline">Setup guide →</a></p>
                   </div>
                 </div>
               </div>

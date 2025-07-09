@@ -24,6 +24,7 @@ interface ExtendedSynchronizedChord {
 // Define the transcription data structure
 export interface TranscriptionData {
   videoId: string;
+  title?: string; // Add video title field for proper display in RecentVideos
   beatModel: string;
   chordModel: string;
   beats: BeatInfo[];
@@ -251,6 +252,7 @@ async function performFirestoreSave(
     // Convert any complex objects to a format Firestore can handle
     const sanitizedData = {
       videoId: transcriptionData.videoId,
+      title: transcriptionData.title || null, // Include video title for proper display
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
       beats: transcriptionData.beats.map((beat) => {

@@ -30,8 +30,7 @@ class ApiService {
   private clientLimiter: ClientRateLimiter;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL ||
-                   'http://localhost:5001';
+    this.baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
     // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)
     this.clientLimiter = new ClientRateLimiter(4, 60000);

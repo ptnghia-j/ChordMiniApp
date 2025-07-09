@@ -156,51 +156,121 @@ export function useStatusMonitoring() {
 
   const checkEndpoint = useCallback(async (endpoint: string) => {
     const startTime = Date.now();
-    
+
+    // Define timeout thresholds based on endpoint type
+    const getTimeoutForEndpoint = (endpoint: string): number => {
+      if (endpoint === '/' || endpoint === '/api/model-info') {
+        return 10000; // 10 seconds for quick endpoints
+      } else if (endpoint === '/api/detect-beats' || endpoint === '/api/recognize-chords') {
+        return 60000; // 60 seconds for ML processing endpoints (cold start consideration)
+      } else if (endpoint === '/api/genius-lyrics') {
+        return 15000; // 15 seconds for external API endpoints
+      }
+      return 10000; // Default 10 seconds
+    };
+
+    const timeoutMs = getTimeoutForEndpoint(endpoint);
+
     try {
       let response: ApiResponse;
-      
+
       if (endpoint === '/' || endpoint === '/api/model-info') {
-        // GET endpoints
-        response = endpoint === '/' 
+        // GET endpoints with timeout
+        response = endpoint === '/'
           ? await api.healthCheck()
           : await api.getModelInfo();
       } else if (endpoint === '/api/genius-lyrics') {
         // POST endpoint with JSON body
         response = await api.getGeniusLyrics('test', 'test');
       } else {
-        // File upload endpoints - test directly against backend
-        const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
-        const testResponse = await fetch(`${baseUrl}${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
+        // File upload endpoints - test directly against backend with proper timeout
+        // For status monitoring, always use the production backend URL
+        const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
-        const responseText = await testResponse.text();
-        let responseData;
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
-          responseData = JSON.parse(responseText);
-        } catch {
-          responseData = { error: responseText };
-        }
+          const testResponse = await fetch(`${baseUrl}${endpoint}`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal,
+          });
 
-        response = {
-          success: testResponse.ok,
-          error: responseData.error || `HTTP ${testResponse.status}`,
-          data: responseData,
-          rateLimited: false
-        };
+          clearTimeout(timeoutId);
+
+          const responseText = await testResponse.text();
+          let responseData;
+          try {
+            responseData = JSON.parse(responseText);
+          } catch {
+            responseData = { error: responseText };
+          }
+
+          response = {
+            success: testResponse.ok,
+            error: responseData.error || `HTTP ${testResponse.status}`,
+            data: responseData,
+            rateLimited: false
+          };
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+
+          // Handle timeout and other fetch errors
+          if (fetchError instanceof Error) {
+            if (fetchError.name === 'AbortError') {
+              response = {
+                success: false,
+                error: `Timeout after ${timeoutMs / 1000}s (may be cold starting)`,
+                rateLimited: false
+              };
+            } else {
+              response = {
+                success: false,
+                error: fetchError.message,
+                rateLimited: false
+              };
+            }
+          } else {
+            response = {
+              success: false,
+              error: 'Unknown fetch error',
+              rateLimited: false
+            };
+          }
+        }
       }
 
       const responseTime = Date.now() - startTime;
       
       // Determine status based on endpoint type and expected responses
-      let status: 'online' | 'offline';
+      let status: 'online' | 'offline' | 'checking';
+
+      // Check for cold start indicators
+      const isColdStart = response.error?.includes('cold starting') ||
+                         response.error?.includes('may be cold starting') ||
+                         (responseTime > 30000 && response.error?.includes('Timeout'));
+
       if (endpoint === '/api/detect-beats' || endpoint === '/api/recognize-chords') {
         // These endpoints should return 400 (Bad Request) when no file is provided
-        status = (!response.success && response.error?.includes('file')) ? 'online' : 'offline';
+        const isExpectedFileError = !response.success &&
+          (response.error?.includes('file') ||
+           response.error?.includes('No file') ||
+           response.error?.includes('path provided') ||
+           response.error?.includes('HTTP 400'));
+
+
+
+        if (isExpectedFileError) {
+          status = 'online';
+        } else if (isColdStart) {
+          status = 'checking'; // Show as warming up instead of offline
+        } else {
+          status = 'offline';
+        }
       } else if (endpoint === '/api/genius-lyrics') {
         // Genius endpoint returns 500 when API key is not configured, but endpoint is responsive
         // Also check for service availability errors and API key issues
@@ -217,11 +287,24 @@ export function useStatusMonitoring() {
                               response.error?.includes('lyricsgenius library');
 
         // If it's an API key issue or service issue, the endpoint is still "online" but misconfigured
-        status = (!response.success && (isApiKeyIssue || isServiceIssue)) ? 'online' :
-                 response.success ? 'online' : 'offline';
+        if (!response.success && (isApiKeyIssue || isServiceIssue)) {
+          status = 'online';
+        } else if (response.success) {
+          status = 'online';
+        } else if (isColdStart) {
+          status = 'checking';
+        } else {
+          status = 'offline';
+        }
       } else {
         // Other endpoints should return success
-        status = response.success ? 'online' : 'offline';
+        if (response.success) {
+          status = 'online';
+        } else if (isColdStart) {
+          status = 'checking';
+        } else {
+          status = 'offline';
+        }
       }
       
       return {

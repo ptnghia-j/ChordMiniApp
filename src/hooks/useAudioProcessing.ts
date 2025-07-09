@@ -50,16 +50,16 @@ export const useAudioProcessing = (videoId: string) => {
     setState(prev => service.updateStateForAnalysisStart(prev));
 
     try {
-      const results = await service.analyzeAudioFile(audioUrl, videoId, beatDetector, chordDetector);
+      const results = await service.analyzeAudioFile(audioUrl, videoId, beatDetector, chordDetector, videoTitle);
       const fromFirestoreCache = false; // This would be determined by the service
-      
+
       setState(prev => service.updateStateForAnalysisSuccess(prev, fromFirestoreCache));
       setAnalysisResults(results);
       return results;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       let suggestion: string | undefined;
-      
+
       if (error instanceof Error && 'suggestion' in error) {
         suggestion = (error as ErrorWithSuggestion).suggestion;
       }
@@ -67,7 +67,7 @@ export const useAudioProcessing = (videoId: string) => {
       setState(prev => service.updateStateForAnalysisError(prev, errorMessage, suggestion));
       throw error;
     }
-  }, [videoId, service]);
+  }, [videoId, videoTitle, service]);
 
   const loadVideoInfo = useCallback(async () => {
     try {

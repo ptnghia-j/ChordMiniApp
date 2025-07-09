@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 import Navigation from '@/components/Navigation';
 import { useStatusMonitoring } from '@/hooks/useRateLimiting';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Tooltip } from '@heroui/react';
 import { FiActivity, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
 
 interface EndpointStatus {
@@ -15,7 +15,6 @@ interface EndpointStatus {
 }
 
 export default function StatusPage() {
-  const { theme } = useTheme();
   const [endpoints, setEndpoints] = useState<EndpointStatus[]>([
     { endpoint: '/', status: 'checking' },
     { endpoint: '/api/model-info', status: 'checking' },
@@ -26,7 +25,7 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
 
 
@@ -49,22 +48,7 @@ export default function StatusPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array to run only once on mount
 
-  const getStatusColor = (status: EndpointStatus['status']) => {
-    switch (status) {
-      case 'online':
-        return theme === 'dark' 
-          ? 'text-green-400 bg-green-900/20 border-green-500'
-          : 'text-green-700 bg-green-50 border-green-300';
-      case 'offline':
-        return theme === 'dark'
-          ? 'text-red-400 bg-red-900/20 border-red-500'
-          : 'text-red-700 bg-red-50 border-red-300';
-      case 'checking':
-        return theme === 'dark'
-          ? 'text-yellow-400 bg-yellow-900/20 border-yellow-500'
-          : 'text-yellow-700 bg-yellow-50 border-yellow-300';
-    }
-  };
+
 
   const getStatusIcon = (status: EndpointStatus['status']) => {
     switch (status) {
@@ -136,103 +120,120 @@ export default function StatusPage() {
           </div>
         )}
 
-        {/* Two Column Layout */}
-        <div className="grid lg:grid-cols-5 gap-8">
-          {/* Service Status - 60% width (3/5) */}
-          <div className="lg:col-span-3">
-            <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-600">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Service Status</h2>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Last updated: {lastUpdate}
-                  </span>
-                  {isChecking && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
-                      Checking...
+        {/* Service Status - Full Width */}
+        <div className="w-full">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Service Status</h2>
+              <Tooltip
+                content={
+                  <div className="p-3 max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg">
+                    <div className="mb-3">
+                      <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Backend Service</h4>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        Hosted on Google Cloud Run with auto-scaling capabilities
+                      </p>
+                      <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                        <li>• 16GB Memory, 8 CPU cores</li>
+                        <li>• 600-800s timeout for processing</li>
+                        <li>• Auto-scaling up to 5 instances</li>
+                      </ul>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {endpoints.map((endpoint) => (
-                  <div
-                    key={endpoint.endpoint}
-                    className={`border rounded-lg p-4 ${getStatusColor(endpoint.status)}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {getStatusIcon(endpoint.status)}
-                        <div>
-                          <h3 className="font-semibold">
-                            {baseUrl}{endpoint.endpoint}
-                          </h3>
-                          <p className="text-sm opacity-75">
-                            {endpoint.endpoint === '/' ? 'Health Check' :
-                             endpoint.endpoint === '/api/model-info' ? 'Model Information' :
-                             endpoint.endpoint === '/api/detect-beats' ? 'Beat Detection' :
-                             endpoint.endpoint === '/api/recognize-chords' ? 'Chord Recognition' :
-                             endpoint.endpoint === '/api/genius-lyrics' ? 'Lyrics Fetching' :
-                             endpoint.endpoint}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        {endpoint.responseTime && (
-                          <div className="text-sm font-medium">
-                            {endpoint.responseTime}ms
-                          </div>
-                        )}
-                        {endpoint.lastChecked && (
-                          <div className="text-xs opacity-75">
-                            {endpoint.lastChecked}
-                          </div>
-                        )}
-                        {endpoint.error && (
-                          <div className="text-xs opacity-75">
-                            {endpoint.error}
-                          </div>
-                        )}
-                      </div>
+                    <div>
+                      <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Available Models</h4>
+                      <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                        <li>• Beat-Transformer (default)</li>
+                        <li>• Madmom</li>
+                        <li>• Chord-CNN-LSTM (301 labels)</li>
+                        <li>• BTC Supervised Learning</li>
+                        <li>• BTC Pseudo-Label</li>
+                      </ul>
                     </div>
                   </div>
-                ))}
-              </div>
+                }
+                placement="bottom"
+                color="default"
+              >
+                <FiActivity className="w-5 h-5 text-blue-600 dark:text-blue-400 cursor-help" />
+              </Tooltip>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Last updated: {lastUpdate}
+              </span>
+              {isChecking && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                  Checking...
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Service Information - 40% width (2/5) */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-content-bg rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-600">
-              <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-100">Service Information</h3>
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Backend Service</h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    Hosted on Google Cloud Run with auto-scaling capabilities
-                  </p>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>• 16GB Memory, 8 CPU cores</li>
-                    <li>• 600-800s timeout for processing</li>
-                    <li>• Auto-scaling up to 5 instances</li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">Available Models</h4>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>• Beat-Transformer (default)</li>
-                    <li>• Madmom </li>
-                    <li>• Chord-CNN-LSTM (301 labels)</li>
-                    <li>• BTC Supervised Learning</li>
-                    <li>• BTC Pseudo-Label</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
+              <Table
+                aria-label="API Endpoints Status"
+                className="w-full"
+                color="primary"
+                selectionMode="none"
+              >
+                <TableHeader>
+                  <TableColumn className="dark:bg-blue-100 text-gray-900 dark:text-black">ENDPOINT</TableColumn>
+                  <TableColumn className="dark:bg-blue-100 text-gray-900 dark:text-black">SERVICE</TableColumn>
+                  <TableColumn className="dark:bg-blue-100 text-gray-900 dark:text-black">STATUS</TableColumn>
+                  <TableColumn className="dark:bg-blue-100 text-gray-900 dark:text-black">RESPONSE TIME</TableColumn>
+                  <TableColumn className="dark:bg-blue-100 text-gray-900 dark:text-black">LAST CHECKED</TableColumn>
+                </TableHeader>
+                <TableBody>
+                  {endpoints.map((endpoint) => (
+                    <TableRow key={endpoint.endpoint}>
+                      <TableCell>
+                        <div className="font-mono text-sm text-gray-900 dark:text-gray-100">
+                          {baseUrl}{endpoint.endpoint}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">
+                          {endpoint.endpoint === '/' ? 'Health Check' :
+                           endpoint.endpoint === '/api/model-info' ? 'Model Information' :
+                           endpoint.endpoint === '/api/detect-beats' ? 'Beat Detection' :
+                           endpoint.endpoint === '/api/recognize-chords' ? 'Chord Recognition' :
+                           endpoint.endpoint === '/api/genius-lyrics' ? 'Lyrics Fetching' :
+                           endpoint.endpoint}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          color={
+                            endpoint.status === 'online' ? 'success' :
+                            endpoint.status === 'offline' ? 'danger' : 'warning'
+                          }
+                          variant="flat"
+                          startContent={getStatusIcon(endpoint.status)}
+                          size="sm"
+                        >
+                          {endpoint.status === 'online' ? 'Online' :
+                           endpoint.status === 'offline' ? 'Offline' : 'Checking'}
+                        </Chip>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                          {endpoint.responseTime ? `${endpoint.responseTime}ms` : '-'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {endpoint.lastChecked || '-'}
+                          {endpoint.error && (
+                            <div className="text-xs text-red-500 mt-1">
+                              {endpoint.error}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
         </div>
       </div>
     </div>

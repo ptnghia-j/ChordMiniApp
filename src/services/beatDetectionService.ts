@@ -172,7 +172,7 @@ export async function detectBeatsWithRateLimit(
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 800000; // 13+ minutes timeout to match API routes
-    console.log(`🔍 Beat detection timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
+
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
@@ -260,23 +260,17 @@ export async function detectBeatsFromFile(
 
     // Check if file should use Vercel Blob upload (> 4.0MB)
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+
 
       try {
         // Use Vercel Blob upload for large files
         const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, detector, onProgress);
 
         if (blobResult.success) {
-          console.log(`✅ Vercel Blob beat detection completed successfully`);
+
           // The blob result data is already the Python backend response, so we can return it directly
           const backendResponse = blobResult.data as BeatDetectionBackendResponse;
-          console.log(`🔍 Beat detection backend response structure:`, {
-            hasSuccess: 'success' in backendResponse,
-            hasBeats: 'beats' in backendResponse,
-            beatsIsArray: Array.isArray(backendResponse.beats),
-            beatsLength: backendResponse.beats?.length || 0,
-            modelUsed: backendResponse.model || backendResponse.model_used
-          });
+
 
           // Validate that we have a beats array
           if (!backendResponse.beats || !Array.isArray(backendResponse.beats)) {
@@ -394,7 +388,7 @@ export async function detectBeatsFromFile(
                 if (xhr.status === 500) {
                   // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
                   if (detector === 'beat-transformer') {
-                    console.log('Beat-Transformer failed with 500 error, trying madmom as fallback...');
+
                     resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
                     return;
                   }
@@ -577,7 +571,7 @@ export async function detectBeatsFromFile(
 
       // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
       if (detector === 'beat-transformer') {
-        console.log('Beat-Transformer failed, trying madmom as fallback...');
+
         return detectBeatsFromFile(audioFile, 'madmom', onProgress);
       }
 
@@ -633,12 +627,12 @@ export async function detectBeatsFromFirebaseUrl(
   detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
 ): Promise<BeatDetectionResult> {
   try {
-    console.log(`🔥 Processing Firebase URL for beat detection (localhost-safe approach)`);
+
 
     // Step 1: Download the Firebase Storage file using our proxy service
     const encodedUrl = encodeURIComponent(firebaseUrl);
     const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
-    console.log(`🔧 Downloading Firebase audio via proxy: ${proxyUrl}`);
+
 
     const response = await fetch(proxyUrl);
     if (!response.ok) {
@@ -652,13 +646,13 @@ export async function detectBeatsFromFirebaseUrl(
       throw new Error('Downloaded audio file is empty');
     }
 
-    console.log(`✅ Downloaded Firebase audio: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
 
     // Step 2: Create a File object from the blob
     const audioFile = new File([audioBlob], "firebase_audio.wav", { type: "audio/wav" });
 
     // Step 3: Use our existing beat detection service with the downloaded file
-    console.log(`🥁 Processing downloaded audio file with ${detector} detector`);
+
 
     // Use the vercel blob upload service which has our environment-aware logic
     const blobResult = await vercelBlobUploadService.processAudioFile(audioFile, 'detect-beats', {
@@ -668,7 +662,7 @@ export async function detectBeatsFromFirebaseUrl(
     if (blobResult.success) {
       // Convert blob service response to beat detection format
       const backendResponse = blobResult.data as BeatDetectionBackendResponse;
-      console.log(`✅ Firebase URL beat detection successful: ${(backendResponse.beats || []).length} beats detected`);
+
 
       return {
         success: true,
@@ -682,7 +676,7 @@ export async function detectBeatsFromFirebaseUrl(
       };
     } else if (blobResult.error === 'USE_STANDARD_FLOW') {
       // Fallback to standard beat detection flow
-      console.log(`🔄 Using standard beat detection flow for downloaded file`);
+
       return await detectBeatsFromFile(audioFile, detector);
     } else {
       throw new Error(`Beat detection failed: ${blobResult.error}`);
@@ -716,7 +710,7 @@ export async function detectBeatsFromPath(
     // This is needed for large files
     if (detector === 'beat-transformer') {
       formData.append('force', 'true');
-      console.log('Added force=true parameter for Beat-Transformer with audio_path');
+
     }
 
     const response = await fetch(`${API_BASE_URL}/api/detect-beats`, {
@@ -741,7 +735,7 @@ export async function detectBeatsFromPath(
         if (errorData.error?.includes('No beat detection model available')) {
           // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
           if (detector === 'beat-transformer') {
-            console.log('Beat-Transformer failed, trying madmom as fallback...');
+
             return detectBeatsFromPath(audioPath, 'madmom');
           }
           throw new Error('Beat detection service is temporarily unavailable. Please try again in a few moments or contact support.');

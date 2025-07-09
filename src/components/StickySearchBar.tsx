@@ -67,7 +67,7 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
               value={searchQuery}
               onChange={(e) => updateSearchQuery(e.target.value)}
               placeholder="Search music or paste URL..."
-              className="w-full pl-2 xl:pl-3 pr-8 xl:pr-10 py-1 xl:py-1.5 text-xs xl:text-sm border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full min-w-[200px] xl:min-w-[300px] pl-2 xl:pl-3 pr-8 xl:pr-10 py-1 xl:py-1.5 text-xs xl:text-sm border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
             />
             <button
               type="submit"
@@ -90,7 +90,7 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
 
         <Link
           href="/analyze"
-          className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2"
+          className="font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
           aria-label="Upload audio file"
         >
           <HiUpload className="w-3 h-3 xl:w-4 xl:h-4" />

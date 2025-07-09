@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { Button } from '@heroui/react';
 import Navigation from '@/components/Navigation';
 import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chordRecognitionService';
 import { ProcessingStatusSkeleton } from '@/components/SkeletonLoaders';
@@ -10,7 +11,7 @@ import {
 } from '@/services/chordGridCalculationService';
 
 // Dynamic imports for heavy components with better loading states
-const BeatModelSelector = dynamic(() => import('@/components/BeatModelSelector'), {
+const HeroUIBeatModelSelector = dynamic(() => import('@/components/HeroUIBeatModelSelector'), {
   loading: () => (
     <div className="space-y-2">
       <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -20,7 +21,7 @@ const BeatModelSelector = dynamic(() => import('@/components/BeatModelSelector')
   ssr: false
 });
 
-const ChordModelSelector = dynamic(() => import('@/components/ChordModelSelector'), {
+const HeroUIChordModelSelector = dynamic(() => import('@/components/HeroUIChordModelSelector'), {
   loading: () => (
     <div className="space-y-2">
       <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -452,29 +453,28 @@ export default function LocalAudioAnalyzePage() {
                     </label>
                   </div>
 
-                  <button
+                  <Button
                     onClick={processAudioFile}
                     disabled={!audioFile || audioProcessingState.isExtracting || audioProcessingState.isAnalyzing}
-                    className={`bg-primary-600 text-white font-medium py-2 px-4 rounded-md transition-colors ${
-                      !audioFile || audioProcessingState.isExtracting || audioProcessingState.isAnalyzing
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'hover:bg-primary-700'
-                    }`}
+                    color="primary"
+                    variant="solid"
+                    size="md"
+                    className="font-medium bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 disabled:bg-gray-400 disabled:border-gray-400 disabled:text-gray-200"
                   >
                     {audioProcessingState.isExtracting ? 'Processing...' : 'Analyze Audio'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               {/* Model Selectors - Hide when analysis is complete */}
               {!analysisResults && (
                 <div className="flex flex-col md:flex-row gap-4 mb-4">
-                  <BeatModelSelector
+                  <HeroUIBeatModelSelector
                     onChange={setBeatDetector}
                     defaultValue={beatDetector}
                     className={audioProcessingState.isAnalyzing ? 'opacity-50 pointer-events-none' : ''}
                   />
-                  <ChordModelSelector
+                  <HeroUIChordModelSelector
                     selectedModel={chordDetector}
                     onModelChange={setChordDetector}
                     disabled={audioProcessingState.isAnalyzing}

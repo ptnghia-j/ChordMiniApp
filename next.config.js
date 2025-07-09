@@ -275,6 +275,22 @@ const nextConfig = {
 
       // Module concatenation for better performance
       config.optimization.concatenateModules = true;
+
+      // Fix source map generation issues for production
+      config.devtool = 'hidden-source-map'; // Use hidden source maps to avoid browser warnings
+
+      // Ensure proper source map handling for webpack chunks
+      config.output = config.output || {};
+      config.output.devtoolModuleFilenameTemplate = function (info) {
+        const rel = info.resourcePath.replace(process.cwd(), '.');
+        return `webpack://chordmini/${rel}`;
+      };
+      config.output.devtoolFallbackModuleFilenameTemplate = function (info) {
+        return `webpack://chordmini/${info.resourcePath}?${info.hash}`;
+      };
+    } else {
+      // Development source maps
+      config.devtool = 'eval-source-map';
     }
 
     // Handle audio files
@@ -335,7 +351,7 @@ const nextConfig = {
   // React strict mode
   reactStrictMode: true,
 
-  // Source map configuration
+  // Source map configuration - Fixed for production deployment
   productionBrowserSourceMaps: true, // Enable source maps in production for better debugging
 
 

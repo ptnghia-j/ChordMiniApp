@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
+
 import {
   FiActivity,
   FiCpu,
@@ -11,8 +12,7 @@ import {
   FiExternalLink,
   FiCode,
   FiServer,
-  FiZap,
-  FiCopy
+  FiZap
 } from 'react-icons/fi';
 
 export default function DocsPage() {
@@ -20,7 +20,7 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>('welcome');
 
   // Get the backend URL for documentation examples
-  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  const backendUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
 
   useEffect(() => {
     const sectionIds = [
@@ -64,13 +64,7 @@ export default function DocsPage() {
         : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
     }`;
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      // Could add a toast notification here
-    }).catch(err => {
-      console.error('Failed to copy text: ', err);
-    });
-  };
+
 
   return (
     <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
@@ -250,10 +244,19 @@ export default function DocsPage() {
                       <div className="space-y-4">
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
-                          <div className="bg-gray-100 dark:bg-gray-700/50 rounded-lg p-3">
-                            <code className="text-sm text-gray-800 dark:text-gray-200">
+                          <div className="relative group">
+                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                               {backendUrl}
-                            </code>
+                            </div>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(backendUrl)}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                              title="Copy this snippet"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                         <div>
@@ -316,10 +319,19 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
                       Cross-Origin Resource Sharing (CORS) is enabled for all origins, allowing browser-based requests.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded p-3">
-                      <code className="text-xs text-gray-700 dark:text-gray-300">
+                    <div className="relative group">
+                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                         Access-Control-Allow-Origin: *
-                      </code>
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText('Access-Control-Allow-Origin: *')}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Copy this snippet"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
 
@@ -332,13 +344,39 @@ export default function DocsPage() {
                       Supports multiple content types for different use cases.
                     </p>
                     <div className="space-y-2">
-                      <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
-                        <code className="text-xs text-gray-700 dark:text-gray-300">multipart/form-data</code>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">for file uploads</span>
+                      <div className="flex items-center gap-2">
+                        <div className="relative group">
+                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                            multipart/form-data
+                          </div>
+                          <button
+                            onClick={() => navigator.clipboard.writeText('multipart/form-data')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy this snippet"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">for file uploads</span>
                       </div>
-                      <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
-                        <code className="text-xs text-gray-700 dark:text-gray-300">application/json</code>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">for data requests</span>
+                      <div className="flex items-center gap-2">
+                        <div className="relative group">
+                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                            application/json
+                          </div>
+                          <button
+                            onClick={() => navigator.clipboard.writeText('application/json')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy this snippet"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">for data requests</span>
                       </div>
                     </div>
                   </div>
@@ -435,9 +473,38 @@ export default function DocsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                    * Includes <code>/api/recognize-chords-btc-sl</code> and <code>/api/recognize-chords-btc-pl</code>
-                  </p>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-3 flex items-center gap-2 flex-wrap">
+                    <span>* Includes</span>
+                    <div className="relative group">
+                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        /api/recognize-chords-btc-sl
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-sl')}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Copy this snippet"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span>and</span>
+                    <div className="relative group">
+                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        /api/recognize-chords-btc-pl
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-pl')}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Copy this snippet"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -544,12 +611,23 @@ export default function DocsPage() {
                 </div>
 
                 <div className="prose prose-gray dark:prose-invert max-w-none mb-8">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    All endpoints are available at the base URL:
-                    <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm ml-1">
-                      {backendUrl}
-                    </code>
-                  </p>
+                  <div className="text-gray-600 dark:text-gray-400 flex items-center gap-2 flex-wrap">
+                    <span>All endpoints are available at the base URL:</span>
+                    <div className="relative group">
+                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                        {backendUrl}
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(backendUrl)}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Copy this snippet"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Endpoints Grid */}
@@ -557,7 +635,20 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
-                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/detect-beats</code>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          /api/detect-beats
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText('/api/detect-beats')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns beat timestamps, BPM, and time signature.
@@ -572,7 +663,20 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
-                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/recognize-chords</code>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          /api/recognize-chords
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText('/api/recognize-chords')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns chord progression with timestamps.
@@ -587,7 +691,20 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
-                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/lrclib-lyrics</code>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          /api/lrclib-lyrics
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText('/api/lrclib-lyrics')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Retrieves synchronized lyrics with timestamps from LRClib database.
@@ -602,7 +719,20 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">GET</span>
-                      <code className="text-lg font-mono text-gray-900 dark:text-gray-100">/api/model-info</code>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          /api/model-info
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText('/api/model-info')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Returns information about available models and their capabilities.
@@ -634,41 +764,49 @@ export default function DocsPage() {
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Beat Detection</h4>
-                      <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
-                        <button
-                          onClick={() => copyToClipboard(`curl -X POST "${backendUrl}/api/detect-beats" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=beat-transformer"`)}
-                          className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
-                          title="Copy to clipboard"
-                        >
-                          <FiCopy className="w-4 h-4" />
-                        </button>
-                        <pre className="text-blue-300 text-sm pr-12">
-{`curl -X POST "${backendUrl}/api/detect-beats" \\
+                      <div className="relative group w-full">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`curl -X POST "${backendUrl}/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`}
-                        </pre>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/detect-beats" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=beat-transformer"`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
 
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Chord Recognition</h4>
-                      <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
-                        <button
-                          onClick={() => copyToClipboard(`curl -X POST "${backendUrl}/api/recognize-chords" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=chord-cnn-lstm"`)}
-                          className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
-                          title="Copy to clipboard"
-                        >
-                          <FiCopy className="w-4 h-4" />
-                        </button>
-                        <pre className="text-blue-300 text-sm pr-12">
-{`curl -X POST "${backendUrl}/api/recognize-chords" \\
+                      <div className="relative group w-full">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`curl -X POST "${backendUrl}/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`}
-                        </pre>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/recognize-chords" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=chord-cnn-lstm"`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -677,29 +815,10 @@ export default function DocsPage() {
                 {/* JavaScript Example */}
                 <div className="mb-8">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">JavaScript Example</h3>
-                  <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto border border-gray-700 relative">
-                    <button
-                      onClick={() => copyToClipboard(`const formData = new FormData();
-formData.append('file', audioFile);
-formData.append('model', 'chord-cnn-lstm');
-
-const response = await fetch(
-  '${backendUrl}/api/recognize-chords',
-  {
-    method: 'POST',
-    body: formData
-  }
-);
-
-const result = await response.json();
-console.log(result);`)}
-                      className="absolute top-3 right-3 p-2 text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 rounded"
-                      title="Copy to clipboard"
-                    >
-                      <FiCopy className="w-4 h-4" />
-                    </button>
-                    <pre className="text-blue-300 text-sm pr-12">
-{`const formData = new FormData();
+                  <div className="relative group w-full">
+                    <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                      <div className="whitespace-pre-wrap break-all">
+                        {`const formData = new FormData();
 formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
@@ -713,7 +832,30 @@ const response = await fetch(
 
 const result = await response.json();
 console.log(result);`}
-                    </pre>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(`const formData = new FormData();
+formData.append('file', audioFile);
+formData.append('model', 'chord-cnn-lstm');
+
+const response = await fetch(
+  '${backendUrl}/api/recognize-chords',
+  {
+    method: 'POST',
+    body: formData
+  }
+);
+
+const result = await response.json();
+console.log(result);`)}
+                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                      title="Copy this snippet"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </section>
@@ -733,10 +875,19 @@ console.log(result);`}
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
                           You&apos;ve exceeded the rate limit for the endpoint. Wait for the time specified in the Retry-After header.
                         </p>
-                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-3">
-                          <code className="text-xs text-gray-700 dark:text-gray-300">
+                        <div className="relative group">
+                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Implement exponential backoff and respect rate limit headers
-                          </code>
+                          </div>
+                          <button
+                            onClick={() => navigator.clipboard.writeText('Solution: Implement exponential backoff and respect rate limit headers')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy this snippet"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
 
@@ -745,10 +896,19 @@ console.log(result);`}
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
                           The API supports common audio formats: MP3, WAV, FLAC, M4A, OGG.
                         </p>
-                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-3">
-                          <code className="text-xs text-gray-700 dark:text-gray-300">
+                        <div className="relative group">
+                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Convert your audio file to a supported format
-                          </code>
+                          </div>
+                          <button
+                            onClick={() => navigator.clipboard.writeText('Solution: Convert your audio file to a supported format')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy this snippet"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
 
@@ -757,10 +917,19 @@ console.log(result);`}
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
                           Large audio files may take longer to process. The API has a 10-minute timeout.
                         </p>
-                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-3">
-                          <code className="text-xs text-gray-700 dark:text-gray-300">
+                        <div className="relative group">
+                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Use shorter audio clips or compress your audio file
-                          </code>
+                          </div>
+                          <button
+                            onClick={() => navigator.clipboard.writeText('Solution: Use shorter audio clips or compress your audio file')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy this snippet"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>

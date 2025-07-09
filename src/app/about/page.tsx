@@ -26,7 +26,7 @@ const AboutPage: React.FC = () => {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Research Project
           </h2>
-          <div className="space-y-4 text-gray-700 dark:text-gray-300">
+          <div className="space-y-4 text-gray-700 dark:text-white">
             <p>
               ChordMini is developed as part of a master&apos;s research project at <strong>California State University, Fullerton</strong>,
               focusing on advanced machine learning techniques for automatic chord recognition and music analysis.
@@ -92,7 +92,7 @@ const AboutPage: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
                 Machine Learning Models
               </h3>
-              <ul className="space-y-2 text-gray-700 dark:text-gray-300">
+              <ul className="space-y-2 text-gray-700 dark:text-white">
                 <li>• Beat-Transformer for beat detection</li>
                 <li>• Chord-CNN-LSTM for chord recognition</li>
                 <li>• BTC models for enhanced accuracy</li>
@@ -103,7 +103,7 @@ const AboutPage: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
                 Platform Features
               </h3>
-              <ul className="space-y-2 text-gray-700 dark:text-gray-300">
+              <ul className="space-y-2 text-gray-700 dark:text-white">
                 <li>• YouTube integration</li>
                 <li>• Synchronized lyrics display</li>
                 <li>• Lead sheet generation</li>
@@ -119,7 +119,7 @@ const AboutPage: React.FC = () => {
             Academic Citation
           </h2>
           <div className="space-y-4">
-            <p className="text-gray-700 dark:text-gray-300">
+            <p className="text-gray-700 dark:text-white">
               If you use ChordMini in your research or academic work, please cite our publication:
             </p>
             <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -138,7 +138,7 @@ const AboutPage: React.FC = () => {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Credits & Acknowledgments
           </h2>
-          <div className="space-y-6 text-gray-700 dark:text-gray-300">
+          <div className="space-y-6 text-gray-700 dark:text-white">
             <p>
               ChordMini is built upon the excellent work of many open-source projects and services.
               We gratefully acknowledge the following third-party libraries and services:
@@ -260,7 +260,7 @@ const AboutPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-medium text-gray-900 dark:text-white">Frontend</h4>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                  <ul className="text-sm text-gray-600 dark:text-white space-y-1">
                     <li>• Next.js 15 (React Framework)</li>
                     <li>• TypeScript</li>
                     <li>• Tailwind CSS</li>
@@ -270,7 +270,7 @@ const AboutPage: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="font-medium text-gray-900 dark:text-white">Backend & ML</h4>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                  <ul className="text-sm text-gray-600 dark:text-white space-y-1">
                     <li>• Python Flask (Google Cloud Run)</li>
                     <li>• Firebase Firestore</li>
                     <li>• Vercel Blob Storage</li>
@@ -280,7 +280,7 @@ const AboutPage: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+            <p className="text-sm text-gray-600 dark:text-white italic">
               We extend our sincere gratitude to all the developers and maintainers of these projects
               for making their work available to the open-source community.
             </p>
@@ -292,7 +292,7 @@ const AboutPage: React.FC = () => {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
             Contact & Collaboration
           </h2>
-          <div className="space-y-4 text-gray-700 dark:text-gray-300">
+          <div className="space-y-4 text-gray-700 dark:text-white">
             <p>
               For research inquiries, collaboration opportunities, or technical questions, please contact:
             </p>

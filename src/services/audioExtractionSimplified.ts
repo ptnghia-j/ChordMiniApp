@@ -531,10 +531,10 @@ export class AudioExtractionServiceSimplified {
         }
       }
 
-      // Step 3: Extract using yt-mp3-go service
+      // Step 3: Extract using yt-mp3-go service with medium quality (default)
       const searchDuration = this.parseDuration(videoMetadata.duration);
-      console.log('🎵 Using yt-mp3-go service for audio extraction');
-      const extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration);
+      console.log('🎵 Using yt-mp3-go service for audio extraction with medium quality');
+      const extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'medium');
 
       if (!extractionResult.success) {
         return {
@@ -726,8 +726,8 @@ export class AudioExtractionServiceSimplified {
 
       switch (env.strategy) {
         case 'ytmp3go':
-          console.log('🎵 Using yt-mp3-go service for audio extraction (by ID)');
-          extractionResult = await ytMp3GoService.extractAudio(videoId);
+          console.log('🎵 Using yt-mp3-go service for audio extraction (by ID) with medium quality');
+          extractionResult = await ytMp3GoService.extractAudio(videoId, undefined, undefined, 'medium');
           break;
 
         case 'ytdlp':

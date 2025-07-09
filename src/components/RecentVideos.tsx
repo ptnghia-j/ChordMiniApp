@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { db } from '@/config/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, doc, getDoc } from 'firebase/firestore';
 import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
+import { Card, CardBody, CardHeader, Button, Chip, Skeleton } from '@heroui/react';
 
 interface TranscribedVideo {
   videoId: string;
@@ -193,9 +194,8 @@ export default function RecentVideos() {
           video.isStreamUrl = audioData.isStreamUrl;
           video.fromCache = audioData.fromCache;
 
-          // Update title with the proper song title from audio files if available
-          if (audioData.title && audioData.title !== `Video ${videoId}`) {
-            console.log(`🎵 Updated title for ${videoId}: "${video.title}" → "${audioData.title}"`);
+          // Update title with the proper song title from audio files if transcription title is missing
+          if (audioData.title && audioData.title !== `Video ${videoId}` && video.title === `Video ${videoId}`) {
             video.title = audioData.title;
           }
         }
@@ -337,30 +337,31 @@ export default function RecentVideos() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-content-bg rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-600 overflow-hidden">
-        {/* Minimal banner header - loading state - spans full width */}
-        <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">Recently Transcribed Songs</span>
-            <span className="text-gray-500 dark:text-gray-400 text-xs">Loading...</span>
+      <Card className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+        <CardHeader className="flex justify-between items-center pb-2">
+          <h3 className="text-xl font-medium">Recently Transcribed Songs</h3>
+          <Chip size="md" variant="flat" color="default">Loading...</Chip>
+        </CardHeader>
+        <CardBody className="p-0">
+          <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
+            <div className="space-y-3 pr-2">
+              {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
+                <Card key={index} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
+                  <CardBody className="p-3">
+                    <div className="flex gap-3">
+                      <Skeleton className="w-20 h-12 rounded-md" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4 rounded" />
+                        <Skeleton className="h-3 w-1/2 rounded" />
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
           </div>
-        </div>
-        {/* Scrollable container with dynamic height for loading skeleton */}
-        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
-          {/* Sidebar loading skeleton */}
-          <div className="space-y-3 pr-2">
-            {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
-              <div key={index} className="animate-pulse flex gap-3">
-                <div className="w-20 h-12 bg-gray-200 dark:bg-gray-600 rounded-md transition-colors duration-300"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
-                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+        </CardBody>
+      </Card>
     );
   }
 
@@ -369,26 +370,27 @@ export default function RecentVideos() {
   }
 
   return (
-    <div className="bg-white dark:bg-content-bg rounded-lg shadow-card transition-colors duration-300 border border-gray-200 dark:border-gray-600 overflow-hidden">
-      {/* Minimal banner header - spans full width */}
-      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">Recently Transcribed Songs</span>
-          <span className="text-gray-500 dark:text-gray-400 text-xs">{videos.length} song{videos.length !== 1 ? 's' : ''}</span>
-        </div>
-      </div>
+    <Card className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+      <CardHeader className="flex justify-between items-center pb-2">
+        <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
+        <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
+          {videos.length} song{videos.length !== 1 ? 's' : ''}
+        </Chip>
+      </CardHeader>
 
-      {/* Scrollable container with dynamic height */}
-      <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
-        {/* Sidebar layout: Single column for compact display */}
-        <div className="space-y-3 pr-2">
+      <CardBody className="p-0">
+        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
+          <div className="space-y-3 pr-2">
           {videos.map((video) => (
-            <Link
-              href={`/analyze/${video.videoId}`}
+            <Card
               key={video.videoId}
-              className="block group hover:opacity-90 transition-opacity"
+              as={Link}
+              href={`/analyze/${video.videoId}`}
+              isPressable
+              className="group hover:scale-[1.02] transition-transform duration-200 bg-content2 dark:bg-content2 border border-divider dark:border-divider"
             >
-              <div className="flex gap-3">
+              <CardBody className="p-3">
+                <div className="flex gap-3">
                 {/* Thumbnail with cache status border */}
                 <div className={`relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 ${
                   video.fromCache
@@ -422,7 +424,7 @@ export default function RecentVideos() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
+                  <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">
                     {video.title}
                   </h4>
 
@@ -473,60 +475,56 @@ export default function RecentVideos() {
                   </div>
                 </div>
               </div>
-            </Link>
+              </CardBody>
+            </Card>
           ))}
 
           {/* Loading more indicator inside scrollable area */}
           {loadingMore && (
             <div className="space-y-3 mt-3">
               {[...Array(LOAD_MORE_COUNT)].map((_, index) => (
-                <div key={`loading-${index}`} className="animate-pulse flex gap-3">
-                  <div className="w-20 h-12 bg-gray-200 dark:bg-gray-600 rounded-md transition-colors duration-300"></div>
-                  <div className="flex-1">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-1 transition-colors duration-300"></div>
-                    <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 transition-colors duration-300"></div>
-                  </div>
-                </div>
+                <Card key={`loading-${index}`} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
+                  <CardBody className="p-3">
+                    <div className="flex gap-3">
+                      <Skeleton className="w-20 h-12 rounded-md" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4 rounded" />
+                        <Skeleton className="h-3 w-1/2 rounded" />
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Show More / Show Less Button outside scrollable area */}
-      {videos.length > 0 && (
-        <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-600">
-          <div className="pt-3 text-center">
-            {isExpanded ? (
-              <button
-                onClick={handleShowLess}
-                className="bg-gray-600 dark:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors duration-200 text-sm w-full"
-              >
-                <div className="flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                  Show Less
-                </div>
-              </button>
-            ) : (
-              <button
-                onClick={handleShowMore}
-                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 text-sm w-full"
-              >
-                <div className="flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  Show More
-                </div>
-              </button>
-            )}
+        {/* Show More / Show Less Button */}
+        {videos.length > 0 && (
+          <div className="p-4 border-t border-divider">
+            <Button
+              onPress={isExpanded ? handleShowLess : handleShowMore}
+              color="default"
+              variant="bordered"
+              size="md"
+              className="w-full transition-all duration-200 bg-default-100 dark:bg-default-200/20 border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
+              startContent={
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d={isExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}
+                  />
+                </svg>
+              }
+            >
+              {isExpanded ? "Show Less" : "Show More"}
+            </Button>
           </div>
-        </div>
-      )}
-
-
-    </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }

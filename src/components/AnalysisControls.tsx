@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import BeatModelSelector from '@/components/BeatModelSelector';
-import ChordModelSelector from '@/components/ChordModelSelector';
+import HeroUIBeatModelSelector from '@/components/HeroUIBeatModelSelector';
+import HeroUIChordModelSelector from '@/components/HeroUIChordModelSelector';
+import { Button, Chip } from '@heroui/react';
 
 // Define the detector types to match the main page
 type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
@@ -55,55 +56,54 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
 
           {/* Cache availability indicator */}
           {cacheCheckCompleted && (
-            <div className={`mt-2 p-2 rounded-md border-2 ${
-              cacheAvailable
-                ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-500'
-                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-400 dark:border-orange-500'
-            }`}>
-              {cacheAvailable ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 bg-green-500 rounded-full border border-green-600"></span>
-                  <span className="text-green-700 dark:text-green-300">
-                    Cached results available for {beatDetector} + {chordDetector}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full border border-orange-600"></span>
-                  <span className="text-orange-700 dark:text-orange-300">
-                    No cached results for {beatDetector} + {chordDetector} - will run new analysis
-                  </span>
-                </div>
-              )}
+            <div className="mt-2">
+              <Chip
+                color={cacheAvailable ? "success" : "warning"}
+                variant="flat"
+                size="sm"
+                startContent={
+                  <span className={`w-2 h-2 rounded-full ${
+                    cacheAvailable ? 'bg-success-500' : 'bg-warning-500'
+                  }`} />
+                }
+              >
+                {cacheAvailable
+                  ? `Cached results available for ${beatDetector} + ${chordDetector}`
+                  : `No cached results for ${beatDetector} + ${chordDetector} - will run new analysis`
+                }
+              </Chip>
             </div>
           )}
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-start overflow-visible">
           <div className="w-full md:w-1/3 relative z-40">
-            <BeatModelSelector
+            <HeroUIBeatModelSelector
               onChange={onBeatDetectorChange}
               defaultValue={beatDetector}
             />
           </div>
 
           <div className="w-full md:w-1/3 relative z-30">
-            <ChordModelSelector
+            <HeroUIChordModelSelector
               selectedModel={chordDetector}
               onModelChange={onChordDetectorChange}
             />
           </div>
 
           <div className="w-full md:w-1/3 flex items-center justify-center mt-4 md:mt-0">
-            <button
+            <Button
               onClick={onStartAnalysis}
-              className="w-full px-4 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors font-medium"
+              color="primary"
+              size="lg"
+              className="w-full font-medium bg-blue-600 text-white"
+              variant="solid"
             >
               {cacheCheckCompleted && cacheAvailable
                 ? 'Load Cached Results'
                 : 'Start Audio Analysis'
               }
-            </button>
+            </Button>
           </div>
         </div>
       </div>

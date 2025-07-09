@@ -95,12 +95,10 @@ export class AudioProcessingService {
     audioUrl: string,
     videoId: string,
     beatDetector: string,
-    chordDetector: string
+    chordDetector: string,
+    title?: string
   ): Promise<AnalysisResult> {
     try {
-      // Debug: Log the exact parameters being used for cache lookup
-      console.log(`🔍 AudioProcessingService.analyzeAudioFile called with: beatDetector="${beatDetector}", chordDetector="${chordDetector}"`);
-
       // Check Firestore cache first
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
@@ -123,8 +121,6 @@ export class AudioProcessingService {
             beatShift: cachedData.beatShift
           }
         };
-      } else {
-        console.log(`❌ No cached results found for ${beatDetector} + ${chordDetector}, running new analysis...`);
       }
 
       // Perform analysis with rate limiting
@@ -133,6 +129,7 @@ export class AudioProcessingService {
       // Cache the results (note: enharmonic correction data will be added later via updateTranscriptionWithKey)
       const transcriptionData = {
         videoId,
+        title, // Include video title for proper display in RecentVideos
         audioUrl,
         beats: analysisResults.beats,
         chords: analysisResults.chords,

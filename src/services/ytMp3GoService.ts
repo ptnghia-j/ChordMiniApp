@@ -1,17 +1,19 @@
 /**
- * yt-mp3-go Service - Direct Integration
+ * yt-mp3-go Service - Updated API Integration (v1.0.29+)
  *
  * This service provides audio extraction using the yt-mp3-go service
- * which supports Unicode filenames natively (unlike QuickTube).
- * 
- * API Structure:
- * 1. POST /yt-downloader/download - Submit URL for processing
- * 2. GET /yt-downloader/events?id={jobID} - Server-Sent Events for status
- * 3. GET /yt-downloader/downloads/{filename} - Download processed file
- * 
- * Key Advantages over QuickTube:
+ * which supports Unicode filenames natively and quality selection.
+ *
+ * Updated API Structure (v1.0.29+):
+ * 1. POST /yt-downloader/info - Get video metadata first
+ * 2. POST /yt-downloader/download - Submit videoID and quality for processing
+ * 3. GET /yt-downloader/events?id={jobID} - Server-Sent Events for status
+ * 4. GET /yt-downloader/downloads/{filename} - Download processed file
+ *
+ * Key Features:
+ * - Quality selection: low, medium, high
  * - Native Unicode filename support
- * - No filename matching issues
+ * - Two-step process for better reliability
  * - Reliable job status monitoring via SSE
  * - Better error handling
  */
@@ -29,10 +31,14 @@ export interface YtMp3GoResult {
   jobId?: string;
 }
 
-interface YtMp3GoJobResponse {
-  jobID: string;
+interface YtMp3GoInfoResponse {
+  id: string;
   title: string;
   thumbnail?: string;
+}
+
+interface YtMp3GoJobResponse {
+  jobID: string;
 }
 
 interface YtMp3GoJobStatus {
@@ -46,13 +52,23 @@ export class YtMp3GoService {
   private static instance: YtMp3GoService;
   private readonly YT_MP3_GO_BASE_URL = 'https://lukavukanovic.xyz';
   private readonly API_PATH = '/yt-downloader';
-  
+
+  // Quality options for the new API
+  private readonly QUALITY_OPTIONS = {
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high'
+  } as const;
+
+  // Default quality setting (medium for balanced file size and quality)
+  private readonly DEFAULT_QUALITY = this.QUALITY_OPTIONS.MEDIUM;
+
   // Optimized timing for Vercel constraints (300s max)
   private readonly MAX_POLL_ATTEMPTS = 50; // 50 attempts = 250 seconds max (within 300s limit)
   private readonly POLL_INTERVAL = 5000; // 5 seconds between polls
   private readonly JOB_TIMEOUT = 15000; // 15 seconds for job creation
   private readonly STATUS_TIMEOUT = 60000; // 60 seconds for status monitoring
-  
+
   // Simple job tracking by video ID
   private readonly activeJobs = new Map<string, Promise<YtMp3GoResult>>();
 
@@ -64,9 +80,9 @@ export class YtMp3GoService {
   }
 
   /**
-   * Extract audio using yt-mp3-go service
+   * Extract audio using yt-mp3-go service with quality selection
    */
-  async extractAudio(videoId: string, title?: string, duration?: number): Promise<YtMp3GoResult> {
+  async extractAudio(videoId: string, title?: string, duration?: number, quality?: string): Promise<YtMp3GoResult> {
     // Validate video ID
     if (!videoId || videoId.length !== 11) {
       return {
@@ -78,6 +94,9 @@ export class YtMp3GoService {
       };
     }
 
+    // Validate and set quality
+    const selectedQuality = this.validateQuality(quality);
+
     // Check for existing job
     if (this.activeJobs.has(videoId)) {
       if (process.env.NODE_ENV === 'development') {
@@ -87,7 +106,7 @@ export class YtMp3GoService {
     }
 
     // Create new job
-    const jobPromise = this.performExtraction(videoId, title, duration);
+    const jobPromise = this.performExtraction(videoId, title, duration, selectedQuality);
     this.activeJobs.set(videoId, jobPromise);
 
     try {
@@ -98,25 +117,28 @@ export class YtMp3GoService {
   }
 
   /**
-   * Perform audio extraction using yt-mp3-go
+   * Perform audio extraction using yt-mp3-go with new two-step API
    */
-  private async performExtraction(videoId: string, title?: string, duration?: number): Promise<YtMp3GoResult> {
+  private async performExtraction(videoId: string, title?: string, duration?: number, quality?: string): Promise<YtMp3GoResult> {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🎵 yt-mp3-go extraction: ${videoId}${title ? ` ("${title}")` : ''}${duration ? ` (${duration}s)` : ''}`);
+      console.log(`🎵 yt-mp3-go extraction: ${videoId}${title ? ` ("${title}")` : ''}${duration ? ` (${duration}s)` : ''} [quality: ${quality}]`);
     }
 
     try {
-      // Step 1: Create extraction job
-      const jobData = await this.createJob(videoId);
-      
-      // Step 2: Monitor job status via polling (SSE alternative)
-      const result = await this.monitorJobStatus(jobData.jobID, videoId, title, duration);
-      
+      // Step 1: Get video info
+      const videoInfo = await this.getVideoInfo(videoId);
+
+      // Step 2: Create extraction job with quality
+      const jobData = await this.createJob(videoInfo.id, quality || this.DEFAULT_QUALITY);
+
+      // Step 3: Monitor job status via polling (SSE alternative)
+      const result = await this.monitorJobStatus(jobData.jobID, videoId, title || videoInfo.title, duration);
+
       return result;
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       return {
         success: false,
         error: `yt-mp3-go extraction failed: ${errorMessage}`,
@@ -128,20 +150,20 @@ export class YtMp3GoService {
   }
 
   /**
-   * Create a new extraction job
+   * Get video information using the new /info endpoint
    */
-  private async createJob(videoId: string): Promise<YtMp3GoJobResponse> {
+  private async getVideoInfo(videoId: string): Promise<YtMp3GoInfoResponse> {
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    
+
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🔧 Creating yt-mp3-go job for: ${youtubeUrl}`);
+      console.log(`🔍 Getting video info for: ${youtubeUrl}`);
     }
-    
+
     try {
       const formData = new FormData();
       formData.append('url', youtubeUrl);
 
-      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/download`, {
+      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/info`, {
         method: 'POST',
         headers: {
           'User-Agent': 'ChordMiniApp/1.0',
@@ -153,20 +175,67 @@ export class YtMp3GoService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        throw new Error(`yt-mp3-go info request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const videoInfo: YtMp3GoInfoResponse = await response.json();
+
+      if (!videoInfo.id) {
+        throw new Error('yt-mp3-go info request failed: No video ID returned');
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ Video info retrieved: ${videoInfo.title}`);
+      }
+
+      return videoInfo;
+
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('yt-mp3-go info request timed out. Service may be busy.');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new extraction job with quality selection
+   */
+  private async createJob(videoId: string, quality: string): Promise<YtMp3GoJobResponse> {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔧 Creating yt-mp3-go job for: ${videoId} [quality: ${quality}]`);
+    }
+
+    try {
+      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/download`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ChordMiniApp/1.0',
+          'Referer': `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/`
+        },
+        body: JSON.stringify({
+          videoID: videoId,
+          quality: quality
+        }),
+        signal: createSafeTimeoutSignal(this.JOB_TIMEOUT)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(`yt-mp3-go job creation failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const jobData: YtMp3GoJobResponse = await response.json();
-      
+
       if (!jobData.jobID) {
         throw new Error('yt-mp3-go job creation failed: No job ID returned');
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ yt-mp3-go job created: ${jobData.jobID}`);
-        console.log(`📹 Video title: ${jobData.title}`);
+        console.log(`✅ yt-mp3-go job created: ${jobData.jobID} [quality: ${quality}]`);
       }
-      
+
       return jobData;
 
     } catch (error) {
@@ -365,6 +434,42 @@ export class YtMp3GoService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Validate and normalize quality parameter
+   */
+  private validateQuality(quality?: string): string {
+    if (!quality) {
+      return this.DEFAULT_QUALITY;
+    }
+
+    const normalizedQuality = quality.toLowerCase();
+    const validQualities: string[] = Object.values(this.QUALITY_OPTIONS);
+
+    if (validQualities.includes(normalizedQuality)) {
+      return normalizedQuality;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`⚠️ Invalid quality "${quality}", using default: ${this.DEFAULT_QUALITY}`);
+    }
+
+    return this.DEFAULT_QUALITY;
+  }
+
+  /**
+   * Get available quality options
+   */
+  getQualityOptions(): typeof this.QUALITY_OPTIONS {
+    return this.QUALITY_OPTIONS;
+  }
+
+  /**
+   * Get default quality setting
+   */
+  getDefaultQuality(): string {
+    return this.DEFAULT_QUALITY;
   }
 
   /**

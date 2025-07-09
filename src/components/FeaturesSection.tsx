@@ -2,6 +2,9 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import { Card, CardBody, CardHeader } from '@heroui/react';
+import * as Accordion from '@radix-ui/react-accordion';
+
 
 
 interface FeatureItem {
@@ -17,10 +20,6 @@ interface FeatureItem {
 const FeaturesSection: React.FC = () => {
 
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
-
-  const toggleFeature = (featureId: string) => {
-    setExpandedFeature(expandedFeature === featureId ? null : featureId);
-  };
 
   const features: FeatureItem[] = [
     {
@@ -184,61 +183,65 @@ const FeaturesSection: React.FC = () => {
 
   return (
     <div id="features" className="mt-6">
-      <div className="bg-white dark:bg-content-bg rounded-lg p-6 w-full transition-colors duration-300 shadow-sm">
-        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center transition-colors duration-300">
-          Features
-        </h3>
-
-        <div className="space-y-3">
-          {features.map((feature) => (
-            <div
-              key={feature.id}
-              className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden transition-all duration-300 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500"
-            >
-              {/* Feature Header - Always Visible */}
-              <button
-                onClick={() => toggleFeature(feature.id)}
-                className="w-full px-6 py-4 text-left flex items-center justify-between transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset group"
+      <Card className="w-full">
+        <CardHeader className="pb-2">
+          <h3 className="text-3xl font-bold text-center w-full">
+            Features
+          </h3>
+        </CardHeader>
+        <CardBody>
+          <Accordion.Root
+            type="single"
+            collapsible
+            className="space-y-3"
+            value={expandedFeature || undefined}
+            onValueChange={(value) => setExpandedFeature(value || null)}
+          >
+            {features.map((feature) => (
+              <Accordion.Item
+                key={feature.id}
+                value={feature.id}
+                className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500"
               >
-                <div className="flex items-center space-x-4 flex-1">
-                  <div className="flex-shrink-0">
-                    {feature.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
-                      {feature.title}
-                    </h4>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm mt-1 transition-colors duration-300">
-                      {feature.shortDescription}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex-shrink-0 ml-4">
-                  <svg
-                    className={`w-5 h-5 text-gray-500 transform transition-transform duration-200 ${
-                      expandedFeature === feature.id ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
+                <Accordion.Header>
+                  <Accordion.Trigger className="w-full px-6 py-4 text-left flex items-center justify-between transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset group hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div className="flex items-center space-x-4 flex-1">
+                      <div className="flex-shrink-0">
+                        {feature.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
+                          {feature.title}
+                        </h4>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mt-1 transition-colors duration-300">
+                          {feature.shortDescription}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 ml-4">
+                      <svg
+                        className="w-5 h-5 text-gray-500 transition-transform duration-300 group-data-[state=open]:rotate-180"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </Accordion.Trigger>
+                </Accordion.Header>
 
-              {/* Expandable Content */}
-              {expandedFeature === feature.id && (
-                <div className="bg-white dark:bg-content-bg transition-colors duration-300">
-                  <div className="px-6 py-4 space-y-4">
+                <Accordion.Content className="overflow-hidden data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
+                  <div className="bg-white dark:bg-gray-800/30">
+                    <div className="px-6 py-4 space-y-4">
                     {/* Detailed Description */}
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                       {feature.detailedDescription}
                     </p>
 
                     {/* Key Highlights */}
                     <div>
-                      <h5 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-3">
+                      <h5 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">
                         Key Features:
                       </h5>
                       <ul className="space-y-2">
@@ -262,8 +265,8 @@ const FeaturesSection: React.FC = () => {
                         <ul className="space-y-2">
                           {feature.technicalDetails.map((detail, index) => (
                             <li key={index} className="flex items-start space-x-3">
-                              <span className="text-green-500 mt-1.5 text-xs">▸</span>
-                              <span className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                              <span className="text-blue-500 mt-1.5 text-xs">▸</span>
+                              <span className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed font-mono px-2 py-1 rounded">
                                 {detail}
                               </span>
                             </li>
@@ -271,12 +274,12 @@ const FeaturesSection: React.FC = () => {
                         </ul>
                       </div>
                     )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                </Accordion.Content>
+              </Accordion.Item>
+            ))}
+          </Accordion.Root>
 
         {/* Additional Features Section */}
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-600">
@@ -284,7 +287,7 @@ const FeaturesSection: React.FC = () => {
             Additional Capabilities
           </h4>
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700 transition-colors duration-300">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-700 transition-all duration-300 ease-in-out hover:shadow-md hover:bg-blue-100/50 dark:hover:bg-blue-800/30">
               <h5 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">
                 Audio Format Support
               </h5>
@@ -293,7 +296,7 @@ const FeaturesSection: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700 transition-colors duration-300">
+            <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 p-4 rounded-xl border border-green-200 dark:border-green-700 transition-all duration-300 ease-in-out hover:shadow-md hover:bg-green-100/50 dark:hover:bg-green-800/30">
               <h5 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2 transition-colors duration-300">
                 Open Source
               </h5>
@@ -303,7 +306,8 @@ const FeaturesSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+        </CardBody>
+      </Card>
     </div>
   );
 };

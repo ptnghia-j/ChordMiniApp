@@ -4,6 +4,7 @@ import React, { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { HiUpload } from 'react-icons/hi';
+import { Tooltip } from '@heroui/react';
 
 interface YouTubeSearchResult {
   id: string;
@@ -67,11 +68,11 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full"
+      className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 group"
     >
       {/* Header */}
-      <div className="p-2">
-        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 text-center transition-colors duration-300">
+      <div className="p-4 pb-2">
+        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1 text-center transition-colors duration-300">
           Analyze Music
         </h3>
 
@@ -112,19 +113,29 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
 
             {/* Upload Song Button */}
             <div className="relative group">
-              <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute bottom-full right-0 bg-gray-600 text-white text-sm rounded p-2 max-w-xs z-20 pointer-events-none mb-2">
-                Upload audio files (MP3, WAV, FLAC) up to 20MB
-              </div>
-              <Link
-                href="/analyze"
-                className="bg-blue-600 dark:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-200 whitespace-nowrap flex items-center gap-2"
-                aria-label="Upload audio file"
+              <Tooltip
+                content={
+                  <div className="px-1 py-2">
+                    <div className="text-sm">Upload audio files (MP3, WAV, FLAC) up to 20MB</div>
+                  </div>
+                }
               >
-                <HiUpload className="w-4 h-4" />
-                Upload Song
-              </Link>
+                <Link
+                href="/analyze"
+                className="font-medium py-2 px-4 rounded-lg whitespace-nowrap flex items-center gap-2 transition-all duration-200 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
+                aria-label="Upload audio file"
+                >
+                  <HiUpload className="w-4 h-4" />
+                  Upload Song
+                </Link>
+              </Tooltip>
+              
             </div>
           </div>
+
+
+
+
         </form>
 
         {searchError && <p className="text-red-500 text-sm mt-2">{searchError}</p>}
