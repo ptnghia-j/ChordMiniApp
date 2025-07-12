@@ -3,6 +3,10 @@ import json
 import subprocess
 import re
 import time
+
+# Import compatibility patches FIRST, before any other packages that use numpy
+import scipy_patch
+
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -158,13 +162,20 @@ print(f"Audio directory path: {AUDIO_DIR}")
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
 sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
-# Import the run_beat_tracking function from the demo script
+# Import the unified beat transformer implementation
 try:
-    from beat_tracking_fix import run_beat_tracking_wrapper
-    print("Using beat_tracking_fix wrapper for improved reliability")
-except ImportError:
-    print("Warning: beat_tracking_fix not found, falling back to original implementation")
-    from beat_tracking_demo import run_beat_tracking
+    from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
+    print("Using unified beat_transformer implementation")
+
+    # Create a simple wrapper function for the detect_beats endpoint
+    def run_beat_tracking(audio_file):
+        detector = BeatTransformerDetector()
+        return detector.detect_beats(audio_file)
+
+except ImportError as e:
+    print(f"Warning: beat_transformer not found: {e}, beat tracking will be disabled")
+    def run_beat_tracking(audio_file):
+        return {"beats": [], "downbeats": [], "bpm": 120.0, "time_signature": 4}
     run_beat_tracking_wrapper = None
 
 app = Flask(__name__, template_folder='templates')
@@ -261,16 +272,10 @@ def check_spleeter_availability():
 def check_beat_transformer_availability():
     """Check if Beat-Transformer is available without loading it"""
     try:
-        checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
-        if checkpoint_path.exists():
-            # Check if PyTorch is available
-            try:
-                import torch
-                return True
-            except ImportError:
-                return False
-        return False
-    except Exception:
+        from models.beat_transformer import is_beat_transformer_available
+        return is_beat_transformer_available()
+    except Exception as e:
+        print(f"Beat-Transformer availability check failed: {e}")
         return False
 
 def check_chord_cnn_lstm_availability():
@@ -336,7 +341,7 @@ def health():
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/api/detect-beats', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def detect_beats():
     """
     Detect beats in an audio file
@@ -911,7 +916,7 @@ def detect_beats():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/recognize-chords', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def recognize_chords():
     """
     Recognize chords in an audio file using the Chord-CNN-LSTM model
@@ -1181,13 +1186,20 @@ def _recognize_chords_btc(model_variant):
             print(f"🔄 Falling back to Chord-CNN-LSTM for {file_path}")
             try:
                 # Use the existing chord recognition function as fallback
-                from chord_recognition import chord_recognition
-                success = chord_recognition(file_path, lab_path)
-                if success:
-                    fallback_used = True
-                    print("✅ Fallback to Chord-CNN-LSTM successful")
-                else:
-                    print("❌ Fallback to Chord-CNN-LSTM also failed")
+                # Need to change working directory for relative path imports
+                original_dir = os.getcwd()
+                try:
+                    sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+                    os.chdir(str(CHORD_CNN_LSTM_DIR))
+                    from chord_recognition import chord_recognition
+                    success = chord_recognition(file_path, lab_path)
+                    if success:
+                        fallback_used = True
+                        print("✅ Fallback to Chord-CNN-LSTM successful")
+                    else:
+                        print("❌ Fallback to Chord-CNN-LSTM also failed")
+                finally:
+                    os.chdir(original_dir)
             except Exception as fallback_e:
                 print(f"❌ Fallback to Chord-CNN-LSTM failed: {fallback_e}")
                 traceback.print_exc()
@@ -1207,8 +1219,11 @@ def _recognize_chords_btc(model_variant):
                 for line in f:
                     line = line.strip()
                     if line:
-                        # All models now use unified tab-separated format: start_time\tend_time\tchord_name
+                        # BTC models use space-separated format: start_time end_time chord_name
+                        # Try tab-separated first for compatibility, then space-separated
                         parts = line.split('\t')
+                        if len(parts) < 3:
+                            parts = line.split()  # Fall back to space-separated
 
                         if len(parts) >= 3:
                             start_time = float(parts[0])
@@ -1284,7 +1299,7 @@ def _recognize_chords_btc(model_variant):
         }), 500
 
 @app.route('/api/recognize-chords-btc-sl', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def recognize_chords_btc_sl():
     """
     Recognize chords in an audio file using the BTC Supervised Learning model
@@ -1299,7 +1314,7 @@ def recognize_chords_btc_sl():
     return _recognize_chords_btc('sl')
 
 @app.route('/api/recognize-chords-btc-pl', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def recognize_chords_btc_pl():
     """
     Recognize chords in an audio file using the BTC Pseudo-Label model
@@ -1961,7 +1976,60 @@ def api_docs_json():
                     }
                 }
             }
-        ]
+        ],
+        "rate_limits": {
+            "description": "Production-grade rate limiting is enforced to ensure fair usage and system stability",
+            "storage": "Redis-based in production, in-memory for development",
+            "categories": {
+                "heavy_processing": {
+                    "limit": "2 requests per minute",
+                    "endpoints": [
+                        "/api/detect-beats",
+                        "/api/recognize-chords",
+                        "/api/recognize-chords-btc-sl",
+                        "/api/recognize-chords-btc-pl",
+                        "/api/detect-beats-firebase",
+                        "/api/recognize-chords-firebase"
+                    ],
+                    "description": "CPU-intensive ML model inference endpoints"
+                },
+                "moderate_processing": {
+                    "limit": "10 requests per minute",
+                    "endpoints": [
+                        "/api/genius-lyrics",
+                        "/api/lrclib-lyrics",
+                        "/api/search-youtube",
+                        "/api/search-piped"
+                    ],
+                    "description": "External API calls and moderate processing"
+                },
+                "light_processing": {
+                    "limit": "20-50 requests per minute",
+                    "endpoints": [
+                        "/api/model-info (20/min)",
+                        "/ (30/min)",
+                        "/docs, /api/docs (50/min)"
+                    ],
+                    "description": "Information and documentation endpoints"
+                },
+                "test_endpoints": {
+                    "limit": "3-5 requests per minute",
+                    "endpoints": [
+                        "/api/test-*",
+                        "/api/debug-*"
+                    ],
+                    "description": "Diagnostic and testing endpoints"
+                }
+            },
+            "error_response": {
+                "status_code": 429,
+                "body": {
+                    "error": "Rate limit exceeded",
+                    "message": "Too many requests. Please wait before trying again.",
+                    "retry_after": "seconds_to_wait"
+                }
+            }
+        }
     }
     return jsonify(docs)
 
@@ -2411,16 +2479,22 @@ def test_chord_cnn_lstm():
             }), 404
 
         # Try to import the chord recognition module
-        sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
-        from chord_recognition import ChordRecognition
+        # Need to change working directory for relative path imports
+        original_dir = os.getcwd()
+        try:
+            sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+            os.chdir(str(CHORD_CNN_LSTM_DIR))
+            from chord_recognition import chord_recognition
 
-        return jsonify({
-            "success": True,
-            "model": "Chord-CNN-LSTM",
-            "status": "available",
-            "model_dir": str(CHORD_CNN_LSTM_DIR),
-            "message": "Chord-CNN-LSTM model is ready for use"
-        })
+            return jsonify({
+                "success": True,
+                "model": "Chord-CNN-LSTM",
+                "status": "available",
+                "model_dir": str(CHORD_CNN_LSTM_DIR),
+                "message": "Chord-CNN-LSTM model is ready for use"
+            })
+        finally:
+            os.chdir(original_dir)
 
     except Exception as e:
         return jsonify({
@@ -2430,6 +2504,84 @@ def test_chord_cnn_lstm():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+@app.route('/api/debug-chord-cnn-lstm', methods=['GET'])
+@limiter.limit("5 per minute")
+def debug_chord_cnn_lstm():
+    """Debug Chord-CNN-LSTM import issues"""
+    debug_info = {}
+    original_dir = os.getcwd()
+
+    try:
+        debug_info["original_dir"] = original_dir
+        debug_info["chord_cnn_lstm_dir"] = str(CHORD_CNN_LSTM_DIR)
+        debug_info["dir_exists"] = CHORD_CNN_LSTM_DIR.exists()
+
+        # Check key files
+        key_files = ["chord_recognition.py", "mir/__init__.py", "mir/settings.py", "mir/common.py"]
+        debug_info["files"] = {}
+        for file in key_files:
+            file_path = CHORD_CNN_LSTM_DIR / file
+            debug_info["files"][file] = file_path.exists()
+
+        # Check Python path
+        debug_info["python_path_before"] = sys.path[:5]  # First 5 entries
+
+        # Add to path and change directory
+        sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+        os.chdir(str(CHORD_CNN_LSTM_DIR))
+
+        debug_info["working_dir_after"] = os.getcwd()
+        debug_info["python_path_after"] = sys.path[:5]  # First 5 entries
+
+        # Test imports step by step
+        try:
+            import mir.settings
+            debug_info["mir_settings_import"] = "success"
+            debug_info["mir_settings_content"] = {
+                "DEFAULT_DATA_STORAGE_PATH": getattr(mir.settings, 'DEFAULT_DATA_STORAGE_PATH', 'not found')
+            }
+        except Exception as e:
+            debug_info["mir_settings_import"] = f"failed: {str(e)}"
+
+        try:
+            import mir.common
+            debug_info["mir_common_import"] = "success"
+        except Exception as e:
+            debug_info["mir_common_import"] = f"failed: {str(e)}"
+
+        try:
+            import mir
+            debug_info["mir_import"] = "success"
+        except Exception as e:
+            debug_info["mir_import"] = f"failed: {str(e)}"
+
+        # List actual files in mir directory
+        mir_dir = CHORD_CNN_LSTM_DIR / "mir"
+        if mir_dir.exists():
+            debug_info["mir_directory_contents"] = []
+            for item in mir_dir.iterdir():
+                debug_info["mir_directory_contents"].append({
+                    "name": item.name,
+                    "is_file": item.is_file(),
+                    "is_dir": item.is_dir(),
+                    "size": item.stat().st_size if item.is_file() else None
+                })
+
+        return jsonify({
+            "success": True,
+            "debug_info": debug_info
+        })
+
+    except Exception as e:
+        debug_info["error"] = str(e)
+        debug_info["traceback"] = traceback.format_exc()
+        return jsonify({
+            "success": False,
+            "debug_info": debug_info
+        }), 500
+    finally:
+        os.chdir(original_dir)
 
 @app.route('/api/test-btc-pl', methods=['GET'])
 @limiter.limit("5 per minute")
@@ -3508,7 +3660,7 @@ def extract_audio_piped():
         }), 500
 
 @app.route('/api/detect-beats-firebase', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def detect_beats_firebase():
     """
     Detect beats in an audio file from Firebase Storage URL
@@ -3602,7 +3754,7 @@ def detect_beats_firebase():
 
 
 @app.route('/api/recognize-chords-firebase', methods=['POST'])
-@limiter.limit("5 per minute")  # Heavy processing endpoint
+@limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
 def recognize_chords_firebase():
     """
     Recognize chords in an audio file from Firebase Storage URL
@@ -3647,13 +3799,20 @@ def recognize_chords_firebase():
         # Use existing chord recognition logic
         if model == 'chord-cnn-lstm':
             # Use the existing chord recognition function
-            from chord_recognition import chord_recognition
+            # Need to change working directory for relative path imports
+            original_dir = os.getcwd()
+            try:
+                sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
+                os.chdir(str(CHORD_CNN_LSTM_DIR))
+                from chord_recognition import chord_recognition
 
-            # Create output file path
-            lab_path = file_path.replace('.mp3', '.lab')
+                # Create output file path
+                lab_path = file_path.replace('.mp3', '.lab')
 
-            # Process chord recognition
-            success = chord_recognition(file_path, lab_path)
+                # Process chord recognition
+                success = chord_recognition(file_path, lab_path)
+            finally:
+                os.chdir(original_dir)
 
             if success and os.path.exists(lab_path):
                 # Read the results
@@ -3722,9 +3881,9 @@ def recognize_chords_firebase():
 
 
 if __name__ == '__main__':
-    # Get port from environment variable or default to 5001 (avoiding macOS AirTunes port 5000)
+    # Get port from environment variable or default to 5001 for localhost to avoid macOS AirTunes/AirPlay conflicts
+    # Production deployments (Cloud Run) will override this with PORT environment variable
     port = int(os.environ.get('PORT', 5001))
     print(f"Starting Flask app on port {port}")
     print("App is ready to serve requests")
-    print("Note: Using port 5001 to avoid conflict with macOS AirPlay/AirTunes on port 5000")
     app.run(host='0.0.0.0', port=port, debug=False)  # Disable debug for production

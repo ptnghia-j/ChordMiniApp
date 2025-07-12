@@ -114,8 +114,13 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# Model files and large data
-models/
+# Model files and large data (exclude specific large files but keep essential models)
+# models/ - COMMENTED OUT to allow essential models for production
+models/ChordMini/
+# models/Beat-Transformer/checkpoint/ - KEEP: contains only fold_4_trf_param.pt (35MB)
+models/Beat-Transformer/save/
+models/Beat-Transformer/data/
+models/Beat-Transformer/test_audio/
 *.h5
 *.pkl
 *.joblib
@@ -138,8 +143,16 @@ models/
 *.mov
 *.mkv
 
-# Large datasets
+# Large datasets - exclude data directories but keep essential Chord-CNN-LSTM files
 data/
+!models/Chord-CNN-LSTM/data/
+models/Chord-CNN-LSTM/data/*
+!models/Chord-CNN-LSTM/data/submission_chord_list.txt
+!models/Chord-CNN-LSTM/data/extended_chord_list.txt
+!models/Chord-CNN-LSTM/data/full_chord_list.txt
+!models/Chord-CNN-LSTM/data/ismir2017_chord_list.txt
+!models/Chord-CNN-LSTM/data/cross_subpart_weight*.pkl
+!models/Chord-CNN-LSTM/data/cross_weight*.pkl
 datasets/
 *.csv
 *.json
@@ -275,7 +288,6 @@ README*
 *.ini
 *.cfg
 config.py
-settings.py
 
 # Exclude any local development files
 local/
