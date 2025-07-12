@@ -1,5 +1,5 @@
 # Core dependencies - install in order to avoid conflicts
-# Cython, numpy, and madmom installed separately in Dockerfile for compilation
+# Cython, numpy, and madmom installed separately (e.g in Dockerfile) for compilation
 scipy>=1.11.0
 
 # Core Flask application
