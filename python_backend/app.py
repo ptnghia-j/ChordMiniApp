@@ -162,15 +162,6 @@ print(f"Audio directory path: {AUDIO_DIR}")
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
 sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
-# Import GPU acceleration utilities
-try:
-    from gpu_acceleration import get_gpu_manager, log_device_status
-    print("🚀 GPU acceleration available")
-    # Log initial device status
-    log_device_status()
-except ImportError as e:
-    print(f"⚠️  GPU acceleration not available: {e}")
-
 # Import the unified beat transformer implementation
 try:
     from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
@@ -186,15 +177,6 @@ except ImportError as e:
     def run_beat_tracking(audio_file):
         return {"beats": [], "downbeats": [], "bpm": 120.0, "time_signature": 4}
     run_beat_tracking_wrapper = None
-
-# Import GPU-accelerated chord recognition models
-try:
-    from models.chord_cnn_lstm_gpu import get_chord_cnn_lstm_model, recognize_chords_gpu
-    print("✅ GPU-accelerated Chord-CNN-LSTM available")
-    CHORD_CNN_LSTM_GPU_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️  GPU-accelerated Chord-CNN-LSTM not available: {e}")
-    CHORD_CNN_LSTM_GPU_AVAILABLE = False
 
 app = Flask(__name__, template_folder='templates')
 
@@ -1016,48 +998,18 @@ def recognize_chords():
         lab_path = temp_lab_file.name
         temp_lab_file.close()
 
-        print(f"🔄 Running chord recognition on {file_path} with chord_dict={chord_dict}")
+        print(f"Running chord recognition on {file_path} with chord_dict={chord_dict}")
 
-        # Run chord recognition with GPU acceleration if available
-        if CHORD_CNN_LSTM_GPU_AVAILABLE:
-            try:
-                print("🚀 Using GPU-accelerated Chord-CNN-LSTM")
-                result = recognize_chords_gpu(file_path, chord_dict)
-
-                if result["success"]:
-                    # Return the GPU-accelerated result directly
-                    return jsonify({
-                        "success": True,
-                        "chords": result["chords"],
-                        "total_chords": result["total_chords"],
-                        "model_used": result["model_used"],
-                        "chord_dict": result["chord_dict"],
-                        "device_info": result["device_info"]
-                    })
-                else:
-                    return jsonify({
-                        "error": f"GPU-accelerated chord recognition failed: {result['error']}"
-                    }), 500
-
-            except Exception as e:
-                print(f"⚠️  GPU-accelerated chord recognition failed, falling back to CPU: {e}")
-                # Fall through to original implementation
-
-        # Fallback to original CPU implementation
+        # Run chord recognition
         try:
-            # Create a temporary file for the lab output
-            temp_lab_file = tempfile.NamedTemporaryFile(delete=False, suffix='.lab')
-            lab_path = temp_lab_file.name
-            temp_lab_file.close()
-
             # Change the working directory temporarily to run the model
             original_dir = os.getcwd()
             os.chdir(str(CHORD_CNN_LSTM_DIR))
 
             try:
-                # Use the original chord recognition module
+                # Use the real chord recognition module
                 from chord_recognition import chord_recognition
-                print(f"🖥️  Running fallback CPU chord recognition on {file_path}")
+                print(f"Running real chord recognition on {file_path} with chord_dict={chord_dict}")
                 success = chord_recognition(file_path, lab_path, chord_dict)
                 if not success:
                     return jsonify({
@@ -1067,7 +1019,7 @@ def recognize_chords():
                 # Change back to the original directory
                 os.chdir(original_dir)
         except Exception as e:
-            print(f"❌ Error in fallback chord recognition: {e}")
+            print(f"Error in chord_recognition: {e}")
             traceback.print_exc()
             return jsonify({
                 "error": f"Chord recognition failed: {str(e)}"
@@ -1122,18 +1074,13 @@ def recognize_chords():
         except Exception as e:
             print(f"Warning: Failed to clean up temporary files: {e}")
 
-        # Prepare response with device information
+        # Prepare response
         response_data = {
             "success": True,
             "chords": chord_data,
             "total_chords": len(chord_data),
-            "model_used": "chord-cnn-lstm",
-            "chord_dict": chord_dict,
-            "device_info": {
-                "device_type": "cpu",
-                "device_name": "CPU (Fallback)",
-                "gpu_accelerated": False
-            }
+            "model": "chord-cnn-lstm",
+            "chord_dict": chord_dict
         }
 
         return jsonify(response_data)
@@ -1425,67 +1372,6 @@ def check_btc_availability():
 BTC_AVAILABILITY = check_btc_availability()
 USE_BTC_SL = BTC_AVAILABILITY['sl_available']
 USE_BTC_PL = BTC_AVAILABILITY['pl_available']
-
-@app.route('/api/device-info', methods=['GET'])
-@limiter.limit("20 per minute")  # Information endpoint, allow more requests
-def device_info():
-    """
-    Get information about GPU acceleration and device status
-
-    Returns:
-    - JSON with device information and GPU acceleration status
-    """
-    try:
-        # Get GPU manager information
-        try:
-            from gpu_acceleration import get_gpu_manager
-            gpu_manager = get_gpu_manager()
-
-            device_info_data = gpu_manager.device_info
-            memory_info = gpu_manager.get_memory_info() if gpu_manager.is_cuda else {}
-
-            return jsonify({
-                "success": True,
-                "device": {
-                    "type": device_info_data['type'],
-                    "name": device_info_data['name'],
-                    "gpu_accelerated": gpu_manager.is_gpu_accelerated,
-                    "is_cuda": gpu_manager.is_cuda,
-                    "is_mps": gpu_manager.is_mps,
-                    "is_cpu": gpu_manager.is_cpu
-                },
-                "memory": memory_info,
-                "models": {
-                    "beat_transformer_gpu": True,  # Beat transformer supports GPU
-                    "chord_cnn_lstm_gpu": CHORD_CNN_LSTM_GPU_AVAILABLE,
-                    "btc_models_gpu": True  # BTC models now support GPU
-                }
-            })
-
-        except ImportError:
-            return jsonify({
-                "success": True,
-                "device": {
-                    "type": "cpu",
-                    "name": "CPU (No GPU acceleration)",
-                    "gpu_accelerated": False,
-                    "is_cuda": False,
-                    "is_mps": False,
-                    "is_cpu": True
-                },
-                "memory": {},
-                "models": {
-                    "beat_transformer_gpu": False,
-                    "chord_cnn_lstm_gpu": False,
-                    "btc_models_gpu": False
-                }
-            })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 @app.route('/api/model-info', methods=['GET'])
 @limiter.limit("20 per minute")  # Information endpoint, allow more requests

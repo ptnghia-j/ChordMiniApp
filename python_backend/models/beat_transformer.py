@@ -1,7 +1,6 @@
 """
 Unified Beat Transformer implementation for beat and downbeat detection.
 Consolidates all Beat-Transformer functionality into a single module.
-Enhanced with GPU acceleration support.
 """
 import os
 import sys
@@ -13,24 +12,6 @@ import soundfile as sf
 import warnings
 import collections
 import collections.abc
-
-# Import GPU acceleration utilities
-try:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from gpu_acceleration import get_gpu_manager, get_device, log_device_status
-    GPU_ACCELERATION_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: GPU acceleration not available: {e}")
-    GPU_ACCELERATION_AVAILABLE = False
-
-# Import GPU audio processing
-try:
-    from gpu_audio_processing import get_gpu_audio_processor
-    GPU_AUDIO_PROCESSING_AVAILABLE = True
-    print("✅ GPU audio processing available")
-except ImportError as e:
-    print(f"⚠️  GPU audio processing not available: {e}")
-    GPU_AUDIO_PROCESSING_AVAILABLE = False
 
 # Fix for Python 3.10+ compatibility with madmom
 # MUST come before any madmom imports
@@ -113,14 +94,7 @@ class BeatTransformerDetector:
         if not DILATED_TRANSFORMER_AVAILABLE:
             raise ImportError("DilatedTransformer model not available - missing dependencies")
 
-        # Use centralized GPU acceleration
-        if GPU_ACCELERATION_AVAILABLE:
-            self.gpu_manager = get_gpu_manager()
-            self.device = self.gpu_manager.device
-            print(f"🚀 Beat Transformer using device: {self.device} ({self.gpu_manager.device_info['name']})")
-        else:
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            print(f"⚠️  Using fallback device detection: {self.device}")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # Default to fold 4 if no checkpoint specified
         if checkpoint_path is None:
@@ -137,30 +111,14 @@ class BeatTransformerDetector:
             nlayers=9, norm_first=True
         )
 
-        # Load checkpoint with GPU acceleration
+        # Load checkpoint
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            self.model.load_state_dict(checkpoint['state_dict'])
-
-            # Move model to optimal device
-            if GPU_ACCELERATION_AVAILABLE:
-                self.model = self.gpu_manager.move_to_device(self.model)
-            else:
-                self.model.to(self.device)
-
+            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device)['state_dict'])
+            self.model.to(self.device)
             self.model.eval()
-
-            # Log successful loading with device info
-            device_name = self.gpu_manager.device_info['name'] if GPU_ACCELERATION_AVAILABLE else str(self.device)
-            print(f"✅ Beat Transformer loaded successfully on {device_name}")
-
-            # Log memory usage if GPU
-            if GPU_ACCELERATION_AVAILABLE and self.gpu_manager.is_cuda:
-                memory_info = self.gpu_manager.get_memory_info()
-                print(f"📊 GPU Memory: {memory_info['allocated_gb']:.1f}GB allocated")
-
+            print(f"Successfully loaded Beat Transformer checkpoint: {checkpoint_path}")
         except Exception as e:
-            print(f"❌ Error loading Beat Transformer checkpoint {checkpoint_path}: {e}")
+            print(f"Error loading checkpoint {checkpoint_path}: {e}")
             raise
 
         # Note: DBN processors will be initialized with actual fps in detect_beats method
@@ -169,39 +127,15 @@ class BeatTransformerDetector:
     def demix_audio_to_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
         """Create multi-channel spectrograms from audio without demixing
 
-        This function automatically chooses between GPU-accelerated and CPU processing
-        based on available hardware and libraries.
+        This simplified version creates multiple spectrograms from the same audio
+        with different processing to simulate multi-channel input for Beat-Transformer.
         """
-        # Try GPU-accelerated processing first
-        if GPU_AUDIO_PROCESSING_AVAILABLE and GPU_ACCELERATION_AVAILABLE:
-            try:
-                print("🚀 Using GPU-accelerated audio processing")
-                gpu_processor = get_gpu_audio_processor()
-                return gpu_processor.create_multi_channel_spectrograms_gpu(
-                    audio_file, sr, n_fft, n_mels, fmin, fmax
-                )
-            except Exception as e:
-                print(f"⚠️  GPU audio processing failed, falling back to CPU: {e}")
-                # Fall through to CPU implementation
-
-        # CPU implementation (original librosa-based)
-        print("📱 Using CPU-based audio processing (librosa)")
-        return self._demix_audio_to_spectrogram_cpu(audio_file, sr, n_fft, n_mels, fmin, fmax)
-
-    def _demix_audio_to_spectrogram_cpu(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
-        """CPU-based spectrogram generation using librosa (original implementation)"""
-        import time
-        start_time = time.time()
-
         # Load audio using librosa
         y, _ = librosa.load(audio_file, sr=sr, mono=True)
-        load_time = time.time() - start_time
 
         # Create Mel filter bank
         mel_f = librosa.filters.mel(sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax).T
         spectrograms = []
-
-        cpu_start = time.time()
 
         # Create 5 different spectrograms to simulate 5-stem separation
         # Each with different processing to emphasize different aspects
@@ -249,11 +183,6 @@ class BeatTransformerDetector:
         spec_db = librosa.power_to_db(spec, ref=np.max)
         spectrograms.append(spec_db)
 
-        cpu_time = time.time() - cpu_start
-        total_time = time.time() - start_time
-
-        print(f"📱 CPU Audio Processing: {load_time:.2f}s load + {cpu_time:.2f}s CPU = {total_time:.2f}s total")
-
         # Stack all channel spectrograms (shape: num_channels x time x mel_bins)
         return np.stack(spectrograms, axis=0)
 
@@ -283,31 +212,15 @@ class BeatTransformerDetector:
             print(f"Demixing audio and creating spectrograms: {audio_file}")
             demixed_spec = self.demix_audio_to_spectrogram(audio_file, sr=sr)
 
-            # Step 2: Prepare input for the model with GPU acceleration
-            model_input = torch.from_numpy(demixed_spec).unsqueeze(0).float()
+            # Step 2: Prepare input for the model
+            model_input = torch.from_numpy(demixed_spec).unsqueeze(0).float().to(self.device)
 
-            # Move input to optimal device
-            if GPU_ACCELERATION_AVAILABLE:
-                model_input = self.gpu_manager.move_to_device(model_input)
-            else:
-                model_input = model_input.to(self.device)
-
-            # Step 3: Run inference with GPU acceleration
-            device_name = self.gpu_manager.device_info['name'] if GPU_ACCELERATION_AVAILABLE else str(self.device)
-            print(f"🔄 Running Beat Transformer inference on {device_name}")
-
+            # Step 3: Run inference
+            print("Running Beat Transformer inference")
             with torch.no_grad():
-                # Clear cache before inference if using CUDA
-                if GPU_ACCELERATION_AVAILABLE and self.gpu_manager.is_cuda:
-                    self.gpu_manager.clear_cache()
-
                 activation, _ = self.model(model_input)
                 beat_activation = torch.sigmoid(activation[0, :, 0]).detach().cpu().numpy()
                 downbeat_activation = torch.sigmoid(activation[0, :, 1]).detach().cpu().numpy()
-
-                # Clear cache after inference
-                if GPU_ACCELERATION_AVAILABLE and self.gpu_manager.is_cuda:
-                    self.gpu_manager.clear_cache()
 
             # Step 4: Process with DBN (enhanced for low activations)
             print("Post-processing with enhanced DBN processors")
@@ -475,23 +388,6 @@ class BeatTransformerDetector:
                     time_signature = Counter(time_signatures).most_common(1)[0][0]
                     print(f"Detected time signature: {time_signature}/4")
 
-            # Add device information to response
-            device_info = {}
-            if GPU_ACCELERATION_AVAILABLE:
-                device_info = {
-                    "device_type": self.gpu_manager.device_info['type'],
-                    "device_name": self.gpu_manager.device_info['name'],
-                    "gpu_accelerated": self.gpu_manager.is_gpu_accelerated
-                }
-                if self.gpu_manager.is_cuda:
-                    memory_info = self.gpu_manager.get_memory_info()
-                    device_info["gpu_memory_used_gb"] = round(memory_info['allocated_gb'], 2)
-            else:
-                device_info = {
-                    "device_type": self.device.type,
-                    "gpu_accelerated": False
-                }
-
             return {
                 "success": True,
                 "beats": dbn_beat_times.tolist(),
@@ -502,8 +398,7 @@ class BeatTransformerDetector:
                 "total_downbeats": len(dbn_downbeat_times),
                 "duration": float(duration),
                 "time_signature": f"{int(time_signature)}/4",
-                "model_used": "beat_transformer",
-                "device_info": device_info
+                "model_used": "beat_transformer"
             }
 
         except Exception as e:
