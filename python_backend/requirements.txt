@@ -1,5 +1,6 @@
-# Core dependencies - install in order to avoid conflicts
-# Cython, numpy, and madmom installed separately (e.g in Dockerfile) for compilation
+# Core dependencies with resolved versions for production
+numpy>=1.24.0,<2.0.0
+numba>=0.55.0,<0.60.0
 scipy>=1.11.0
 
 # Core Flask application

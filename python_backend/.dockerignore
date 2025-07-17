@@ -52,8 +52,8 @@ output_with_clicks.wav
 beats_with_positions.txt
 downbeats_measures.txt
 
-# Exclude BTC models (development-only)
-models/ChordMini
+# Include BTC models for production (they have working checkpoints)
+# models/ChordMini - KEEP: contains working BTC-SL and BTC-PL checkpoints
 
 # Exclude large Beat-Transformer model files but keep the Python code and essential checkpoint
 # models/Beat-Transformer/checkpoint - KEEP: contains only fold_4_trf_param.pt (35MB)
@@ -61,6 +61,10 @@ models/Beat-Transformer/save
 models/Beat-Transformer/data
 models/Beat-Transformer/test_audio
 models/Beat-Transformer/__pycache__
+
+# Explicitly include essential model files
+!models/Beat-Transformer/checkpoint/
+!models/Beat-Transformer/checkpoint/fold_4_trf_param.pt
 
 # Development scripts
 setup.sh

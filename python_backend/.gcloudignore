@@ -121,13 +121,17 @@ models/ChordMini/
 models/Beat-Transformer/save/
 models/Beat-Transformer/data/
 models/Beat-Transformer/test_audio/
+
+# Explicitly include essential Beat-Transformer checkpoint
+!models/Beat-Transformer/checkpoint/
+!models/Beat-Transformer/checkpoint/fold_4_trf_param.pt
 *.h5
 *.pkl
 *.joblib
 *.model
 *.bin
-*.pt
-*.pth
+# *.pt - COMMENTED OUT to allow Beat-Transformer checkpoint
+# *.pth - COMMENTED OUT to allow Beat-Transformer checkpoint
 *.onnx
 
 # Audio files

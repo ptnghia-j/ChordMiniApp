@@ -1,7 +1,3 @@
-"""
-Unified Beat Transformer implementation for beat and downbeat detection.
-Consolidates all Beat-Transformer functionality into a single module.
-"""
 import os
 import sys
 import numpy as np
@@ -9,18 +5,6 @@ import torch
 import librosa
 from pathlib import Path
 import soundfile as sf
-import warnings
-import collections
-import collections.abc
-
-# Fix for Python 3.10+ compatibility with madmom
-# MUST come before any madmom imports
-try:
-    collections.MutableSequence = collections.abc.MutableSequence
-    print("Applied madmom compatibility fix")
-except Exception as e:
-    print(f"Warning: Failed to apply madmom compatibility fix: {e}")
-
 # Import madmom with error handling
 try:
     from madmom.features.beats import DBNBeatTrackingProcessor
@@ -30,7 +14,8 @@ try:
 except ImportError as e:
     print(f"Warning: Madmom import failed: {e}")
     MADMOM_AVAILABLE = False
-    # Create dummy classes for when madmom is not available
+
+    # Create dummy classes when madmom is not available
     class DBNBeatTrackingProcessor:
         def __init__(self, *args, **kwargs):
             pass
@@ -43,66 +28,154 @@ except ImportError as e:
         def __call__(self, *args, **kwargs):
             return []
 
-# Fix for NumPy 1.20+ compatibility
-try:
-    np.float = float
-    np.int = int
-except Exception:
-    pass
+"""
+Simple Beat Transformer handler for the minimal deployment
+"""
+import os
+import sys
+from pathlib import Path
 
-# Add the Beat-Transformer code directory to path
-BEAT_TRANSFORMER_DIR = Path(__file__).parent / "Beat-Transformer"
-BEAT_TRANSFORMER_CODE_DIR = BEAT_TRANSFORMER_DIR / "code"
-sys.path.insert(0, str(BEAT_TRANSFORMER_CODE_DIR))
+class BeatTransformerHandler:
+    def __init__(self):
+        """Initialize the Beat Transformer handler"""
+        self.detector = None
+        self.available = False
+        
+        try:
+            # Import the detector
+            from beat_transformer_detector import BeatTransformerDetector
+            
+            # Check if checkpoint exists
+            beat_transformer_dir = Path(__file__).parent / "Beat-Transformer"
+            checkpoint_path = beat_transformer_dir / "checkpoint" / "fold_4_trf_param.pt"
+            
+            if checkpoint_path.exists():
+                self.detector = BeatTransformerDetector(str(checkpoint_path))
+                self.available = True
+                print("Beat Transformer handler initialized successfully")
+            else:
+                print(f"Beat Transformer checkpoint not found: {checkpoint_path}")
+                
+        except Exception as e:
+            print(f"Failed to initialize Beat Transformer: {e}")
+            self.available = False
+    
+    def is_available(self):
+        """Check if the model is available"""
+        return self.available
+    
+    def analyze(self, audio_path):
+        """Analyze audio file for beat detection
+        
+        Args:
+            audio_path (str): Path to the audio file
+            
+        Returns:
+            dict: Analysis results with beats, downbeats, BPM, etc.
+        """
+        if not self.available:
+            return {
+                "success": False,
+                "error": "Beat Transformer model is not available",
+                "beats": [],
+                "downbeats": [],
+                "bpm": 0
+            }
+        
+        try:
+            # Use the detector to analyze the audio
+            result = self.detector.detect_beats(audio_path)
+            return result
+            
+        except Exception as e:
+            print(f"Error analyzing audio with Beat Transformer: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "beats": [],
+                "downbeats": [],
+                "bpm": 0
+            }
 
-# Import the model with error handling
-try:
-    from DilatedTransformer import Demixed_DilatedTransformerModel
-    DILATED_TRANSFORMER_AVAILABLE = True
-    print("DilatedTransformer imported successfully")
-except ImportError as e:
-    print(f"Warning: DilatedTransformer import failed: {e}")
-    DILATED_TRANSFORMER_AVAILABLE = False
-    # Create a dummy class for when the model is not available
-    class Demixed_DilatedTransformerModel:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("DilatedTransformer model not available")
-        def load_state_dict(self, *args, **kwargs):
-            pass
-        def eval(self):
-            pass
-        def to(self, device):
-            return self
-
-# Filter warnings
-warnings.filterwarnings('ignore', category=RuntimeWarning, message='divide by zero encountered in log')
+# Import the model with proper path
+import sys
+import os
+beat_transformer_path = os.path.join(os.path.dirname(__file__), "Beat-Transformer", "code")
+sys.path.append(beat_transformer_path)
+from DilatedTransformer import Demixed_DilatedTransformerModel
 
 def is_beat_transformer_available():
-    """Check if Beat-Transformer model and dependencies are available"""
-    checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
-    return (DILATED_TRANSFORMER_AVAILABLE and
-            BEAT_TRANSFORMER_DIR.exists() and
-            checkpoint_path.exists())
+    """
+    Check if Beat Transformer is available for use.
+    This function is called by the API to determine model availability.
+
+    Returns:
+        bool: True if Beat Transformer can be used, False otherwise
+    """
+    try:
+        # Check if PyTorch is available
+        import torch
+
+        # Check if the model checkpoint exists
+        BEAT_TRANSFORMER_DIR = Path(__file__).parent / "Beat-Transformer"
+        checkpoint_path = BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt"
+
+        if not checkpoint_path.exists():
+            print(f"Beat Transformer checkpoint not found: {checkpoint_path}")
+            return False
+
+        # Check if we can import the model
+        beat_transformer_path = os.path.join(os.path.dirname(__file__), "Beat-Transformer", "code")
+        if beat_transformer_path not in sys.path:
+            sys.path.append(beat_transformer_path)
+
+        from DilatedTransformer import Demixed_DilatedTransformerModel
+
+        print("Beat Transformer is available")
+        return True
+
+    except Exception as e:
+        print(f"Beat Transformer availability check failed: {e}")
+        return False
+
+
+def run_beat_tracking_wrapper(audio_file):
+    """
+    Wrapper function for API compatibility.
+    This function is called by the Flask API to perform beat detection.
+
+    Args:
+        audio_file (str): Path to the audio file
+
+    Returns:
+        dict: Beat detection results
+    """
+    try:
+        detector = BeatTransformerDetector()
+        return detector.detect_beats(audio_file)
+    except Exception as e:
+        print(f"Beat tracking wrapper failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "beats": [],
+            "downbeats": [],
+            "bpm": 120.0,
+            "time_signature": "4/4"
+        }
 
 
 class BeatTransformerDetector:
-    """Unified Beat Transformer detector for beat and downbeat detection"""
-
     def __init__(self, checkpoint_path=None):
         """Initialize the Beat Transformer detector with a checkpoint file"""
-        # Check if dependencies are available
-        if not DILATED_TRANSFORMER_AVAILABLE:
-            raise ImportError("DilatedTransformer model not available - missing dependencies")
-
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        # Define Beat Transformer directory
+        BEAT_TRANSFORMER_DIR = Path(__file__).parent / "Beat-Transformer"
 
         # Default to fold 4 if no checkpoint specified
         if checkpoint_path is None:
             checkpoint_path = str(BEAT_TRANSFORMER_DIR / "checkpoint" / "fold_4_trf_param.pt")
-
-        # Check if checkpoint file exists
-        if not Path(checkpoint_path).exists():
-            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
         # Initialize model
         self.model = Demixed_DilatedTransformerModel(
@@ -121,8 +194,20 @@ class BeatTransformerDetector:
             print(f"Error loading checkpoint {checkpoint_path}: {e}")
             raise
 
-        # Note: DBN processors will be initialized with actual fps in detect_beats method
-        # based on the audio file's sample rate
+        # Initialize DBN processors
+        self.beat_tracker = DBNBeatTrackingProcessor(
+            min_bpm=55.0, max_bpm=215.0, fps=44100/1024,
+            transition_lambda=100, observation_lambda=6,
+            num_tempi=None, threshold=0.2
+        )
+
+        # Support a wider range of time signatures (2/4, 3/4, 4/4, 5/4, 6/8, 7/8, etc.)
+        self.downbeat_tracker = DBNDownBeatTrackingProcessor(
+            beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
+            max_bpm=215.0, fps=44100/1024,
+            transition_lambda=100, observation_lambda=6,
+            num_tempi=None, threshold=0.2
+        )
 
     def demix_audio_to_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
         """Create multi-channel spectrograms from audio without demixing
@@ -200,17 +285,9 @@ class BeatTransformerDetector:
             audio, sr = librosa.load(audio_file, sr=None)
             duration = librosa.get_duration(y=audio, sr=sr)
 
-            # Calculate hop length and frame rate based on actual sample rate
-            # Beat-Transformer typically uses hop_length = n_fft // 4
-            n_fft = 4096  # This should match the n_fft used in demix_audio_to_spectrogram
-            hop_length = n_fft // 4  # 1024 for n_fft=4096
-            frame_rate = sr / hop_length
-
-            print(f"Audio info: sr={sr}, duration={duration:.2f}s, hop_length={hop_length}, frame_rate={frame_rate:.2f}")
-
-            # Step 1: Demix audio and create spectrograms (using actual sample rate)
+            # Step 1: Demix audio and create spectrograms
             print(f"Demixing audio and creating spectrograms: {audio_file}")
-            demixed_spec = self.demix_audio_to_spectrogram(audio_file, sr=sr)
+            demixed_spec = self.demix_audio_to_spectrogram(audio_file)
 
             # Step 2: Prepare input for the model
             model_input = torch.from_numpy(demixed_spec).unsqueeze(0).float().to(self.device)
@@ -226,13 +303,15 @@ class BeatTransformerDetector:
             print("Post-processing with enhanced DBN processors")
 
             # Log activation statistics for debugging
-            print(f"Beat activation stats: min={beat_activation.min():.3f}, max={beat_activation.max():.3f}, mean={beat_activation.mean():.3f}")
-            print(f"Downbeat activation stats: min={downbeat_activation.min():.3f}, max={downbeat_activation.max():.3f}")
+            print(f"Beat activation stats: min={beat_activation.min():.3f}, max={beat_activation.max():.3f}, mean={beat_activation.mean():.3f}, std={beat_activation.std():.3f}")
+            print(f"Downbeat activation stats: min={downbeat_activation.min():.3f}, max={downbeat_activation.max():.3f}, mean={downbeat_activation.mean():.3f}, std={downbeat_activation.std():.3f}")
 
             # Enhance activations for DBN compatibility
+            # Scale and normalize activations to work better with DBN processors
             if beat_activation.max() > 0:
+                # Normalize to 0-1 range and apply power scaling to enhance peaks
                 beat_activation_enhanced = (beat_activation - beat_activation.min()) / (beat_activation.max() - beat_activation.min())
-                beat_activation_enhanced = np.power(beat_activation_enhanced, 0.5)
+                beat_activation_enhanced = np.power(beat_activation_enhanced, 0.5)  # Square root to enhance small values
             else:
                 beat_activation_enhanced = beat_activation
 
@@ -242,113 +321,139 @@ class BeatTransformerDetector:
             else:
                 downbeat_activation_enhanced = downbeat_activation
 
-            # Use enhanced DBN processors with lower thresholds and actual frame rate
-            try:
-                enhanced_beat_tracker = DBNBeatTrackingProcessor(
-                    min_bpm=55.0, max_bpm=215.0, fps=frame_rate,
-                    transition_lambda=100, observation_lambda=1,
-                    num_tempi=None, threshold=0.05
+            print(f"Enhanced beat activation stats: min={beat_activation_enhanced.min():.3f}, max={beat_activation_enhanced.max():.3f}")
+            print(f"Enhanced downbeat activation stats: min={downbeat_activation_enhanced.min():.3f}, max={downbeat_activation_enhanced.max():.3f}")
+
+            # Use enhanced DBN processors or peak-picking algorithm
+            if not MADMOM_AVAILABLE:
+                print("Madmom not available, using peak-picking algorithm")
+                # Simple peak-picking algorithm as fallback
+                from scipy import signal as scipy_signal
+
+                # Find peaks in beat activation with detailed analysis
+                frame_rate = 44100 / 1024  # ~43.066 Hz
+                min_distance = int(frame_rate * 60 / 200)  # Minimum 200 BPM
+
+                print(f"Peak-picking parameters: frame_rate={frame_rate:.3f}Hz, min_distance={min_distance} frames")
+
+                beat_peaks, beat_properties = scipy_signal.find_peaks(
+                    beat_activation_enhanced,
+                    height=0.3,  # Minimum height threshold
+                    distance=min_distance,
+                    prominence=0.1  # Add prominence to avoid spurious peaks
                 )
+                dbn_beat_times = beat_peaks / frame_rate
+                print(f"Beat detection: {len(beat_peaks)} peaks found, heights: min={beat_activation_enhanced[beat_peaks].min():.3f}, max={beat_activation_enhanced[beat_peaks].max():.3f}")
 
-                enhanced_downbeat_tracker = DBNDownBeatTrackingProcessor(
-                    beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
-                    max_bpm=215.0, fps=frame_rate,
-                    transition_lambda=100, observation_lambda=1,
-                    num_tempi=None, threshold=0.05
+                # Find peaks in downbeat activation with much more conservative parameters
+                # Downbeats should be much less frequent than beats (typically every 3-4 beats)
+                downbeat_min_distance = int(frame_rate * 60 / 60)  # Minimum 60 BPM for downbeats (very conservative)
+
+                downbeat_peaks, downbeat_properties = scipy_signal.find_peaks(
+                    downbeat_activation_enhanced,
+                    height=0.4,  # Much higher threshold for downbeats - only strong peaks
+                    distance=downbeat_min_distance,
+                    prominence=0.2  # Much higher prominence for downbeats
                 )
+                dbn_downbeat_times_raw = downbeat_peaks / frame_rate
+                print(f"Downbeat detection: {len(downbeat_peaks)} peaks found, heights: min={downbeat_activation_enhanced[downbeat_peaks].min():.3f}, max={downbeat_activation_enhanced[downbeat_peaks].max():.3f}")
+                print(f"Downbeat min_distance: {downbeat_min_distance} frames ({60*frame_rate/downbeat_min_distance:.1f} max BPM)")
 
-                # Try beat tracking first
-                dbn_beat_times = enhanced_beat_tracker(beat_activation_enhanced)
-                print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
+                # Calculate expected beats per measure
+                if len(downbeat_peaks) > 0:
+                    expected_beats_per_measure = len(beat_peaks) / len(downbeat_peaks)
+                    print(f"Expected beats per measure: {expected_beats_per_measure:.2f}")
 
-                # Only attempt downbeat tracking if we have beats
-                if len(dbn_beat_times) > 0:
-                    try:
-                        beat_only = np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))
-                        combined_act = np.column_stack([beat_only, downbeat_activation_enhanced])
-                        combined_act = np.ascontiguousarray(combined_act, dtype=np.float64)
-
-                        dbn_downbeat_results = enhanced_downbeat_tracker(combined_act)
-
-                        if len(dbn_downbeat_results) > 0 and dbn_downbeat_results.shape[1] >= 2:
-                            downbeat_mask = dbn_downbeat_results[:, 1] == 1
-                            if np.any(downbeat_mask):
-                                dbn_downbeat_times_raw = dbn_downbeat_results[downbeat_mask, 0]
-                            else:
-                                dbn_downbeat_times_raw = np.array([])
-                        else:
-                            dbn_downbeat_times_raw = np.array([])
-
-                    except Exception as downbeat_error:
-                        print(f"Enhanced downbeat tracking failed: {downbeat_error}")
-                        dbn_downbeat_times_raw = dbn_beat_times[::4] if len(dbn_beat_times) >= 4 else np.array([dbn_beat_times[0]]) if len(dbn_beat_times) > 0 else np.array([])
-                else:
-                    print("No beats detected, cannot perform downbeat tracking")
-                    dbn_downbeat_times_raw = np.array([])
-
-            except Exception as e:
-                print(f"Enhanced DBN processors failed: {e}")
-                # Fallback to original DBN with actual frame rate
+            else:
+                # Use madmom DBN processors
                 try:
-                    # Create fallback DBN processors with actual frame rate
-                    fallback_beat_tracker = DBNBeatTrackingProcessor(
-                        min_bpm=55.0, max_bpm=215.0, fps=frame_rate,
-                        transition_lambda=100, observation_lambda=6,
-                        num_tempi=None, threshold=0.2
+                    # Create DBN processors with more sensitive parameters
+                    enhanced_beat_tracker = DBNBeatTrackingProcessor(
+                        min_bpm=55.0, max_bpm=215.0, fps=44100/1024,
+                        transition_lambda=100, observation_lambda=1,  # Lower observation_lambda for sensitivity
+                        num_tempi=None, threshold=0.05  # Much lower threshold
                     )
 
-                    fallback_downbeat_tracker = DBNDownBeatTrackingProcessor(
+                    enhanced_downbeat_tracker = DBNDownBeatTrackingProcessor(
                         beats_per_bar=[2, 3, 4, 5, 6, 7, 8, 9, 12], min_bpm=55.0,
-                        max_bpm=215.0, fps=frame_rate,
-                        transition_lambda=100, observation_lambda=6,
-                        num_tempi=None, threshold=0.2
+                        max_bpm=215.0, fps=44100/1024,
+                        transition_lambda=100, observation_lambda=1,  # Lower observation_lambda for sensitivity
+                        num_tempi=None, threshold=0.05  # Much lower threshold
                     )
 
-                    dbn_beat_times = fallback_beat_tracker(beat_activation_enhanced)
-                    print(f"Fallback DBN beat tracker returned {len(dbn_beat_times)} beats")
+                    dbn_beat_times = enhanced_beat_tracker(beat_activation_enhanced)
+                    print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
 
-                    if len(dbn_beat_times) > 0:
-                        try:
-                            beat_only = np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))
-                            combined_act = np.column_stack([beat_only, downbeat_activation_enhanced])
-                            combined_act = np.ascontiguousarray(combined_act, dtype=np.float64)
+                    # Combined activation for downbeat tracking
+                    combined_act = np.concatenate((
+                        np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))[:, np.newaxis],
+                        downbeat_activation_enhanced[:, np.newaxis]
+                    ), axis=-1)
 
-                            dbn_downbeat_results = fallback_downbeat_tracker(combined_act)
+                    dbn_downbeat_results = enhanced_downbeat_tracker(combined_act)
+                    dbn_downbeat_times_raw = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
+                    print(f"Enhanced DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
 
-                            if len(dbn_downbeat_results) > 0 and dbn_downbeat_results.shape[1] >= 2:
-                                downbeat_mask = dbn_downbeat_results[:, 1] == 1
-                                if np.any(downbeat_mask):
-                                    dbn_downbeat_times_raw = dbn_downbeat_results[downbeat_mask, 0]
-                                else:
-                                    dbn_downbeat_times_raw = np.array([])
-                            else:
-                                dbn_downbeat_times_raw = np.array([])
+                except Exception as e:
+                    print(f"Enhanced DBN processors failed: {e}")
+                    # Fallback to original DBN with even lower thresholds
+                    try:
+                        dbn_beat_times = self.beat_tracker(beat_activation_enhanced)
+                        print(f"Original DBN beat tracker with enhanced activations returned {len(dbn_beat_times)} beats")
 
-                        except Exception as downbeat_error2:
-                            print(f"Fallback downbeat tracking also failed: {downbeat_error2}")
-                            dbn_downbeat_times_raw = dbn_beat_times[::4] if len(dbn_beat_times) >= 4 else np.array([dbn_beat_times[0]]) if len(dbn_beat_times) > 0 else np.array([])
-                    else:
-                        dbn_downbeat_times_raw = np.array([])
+                        combined_act = np.concatenate((
+                            np.maximum(beat_activation_enhanced - downbeat_activation_enhanced, np.zeros_like(beat_activation_enhanced))[:, np.newaxis],
+                            downbeat_activation_enhanced[:, np.newaxis]
+                        ), axis=-1)
 
-                except Exception as e2:
-                    print(f"All DBN approaches failed: {e2}")
-                    # Create dummy beats as absolute fallback
-                    print("Creating dummy beats at 120 BPM as fallback")
-                    beat_interval = 60.0 / 120.0
-                    dbn_beat_times = np.arange(0, duration, beat_interval)
-                    dbn_downbeat_times_raw = np.arange(0, duration, beat_interval * 4)
+                        dbn_downbeat_results = self.downbeat_tracker(combined_act)
+                        dbn_downbeat_times_raw = dbn_downbeat_results[dbn_downbeat_results[:, 1]==1][:, 0]
+                        print(f"Original DBN downbeat tracker with enhanced activations returned {len(dbn_downbeat_times_raw)} downbeats")
 
-            # Use the raw downbeats directly
+                    except Exception as e2:
+                        print(f"All madmom DBN approaches failed: {e2}")
+                        print("Falling back to peak-picking algorithm")
+                        # Fallback to peak-picking when madmom fails
+                        from scipy import signal as scipy_signal
+
+                        frame_rate = 44100 / 1024
+                        min_distance = int(frame_rate * 60 / 200)
+                        downbeat_min_distance = int(frame_rate * 60 / 60)  # Conservative downbeat distance
+
+                        beat_peaks, _ = scipy_signal.find_peaks(
+                            beat_activation_enhanced,
+                            height=0.3,
+                            distance=min_distance,
+                            prominence=0.1
+                        )
+                        dbn_beat_times = beat_peaks / frame_rate
+                        print(f"Fallback peak-picking beat tracker found {len(dbn_beat_times)} beats")
+
+                        downbeat_peaks, _ = scipy_signal.find_peaks(
+                            downbeat_activation_enhanced,
+                            height=0.4,  # Higher threshold
+                            distance=downbeat_min_distance,
+                            prominence=0.2  # Higher prominence
+                        )
+                        dbn_downbeat_times_raw = downbeat_peaks / frame_rate
+                        print(f"Fallback peak-picking downbeat tracker found {len(dbn_downbeat_times_raw)} downbeats")
+
+            # Use the raw downbeats directly (simplified approach)
             dbn_downbeat_times = dbn_downbeat_times_raw
+            print(f"Using {len(dbn_downbeat_times)} downbeats directly")
 
             # Step 5: Process beats - determine their strength based on activation
-            # Use the frame_rate calculated earlier based on actual sample rate
+            # For each beat time, find nearest frame in the beat activation
+            hop_length = 1024  # Default hop length used in Beat-Transformer
+            frame_rate = sr / hop_length  # Correct frame rate calculation
             beat_info = []
 
             for beat_time in dbn_beat_times:
                 frame_idx = int(beat_time * frame_rate)
                 if frame_idx < len(beat_activation):
+                    # Get activation at this frame as strength
                     strength = float(beat_activation[frame_idx])
+                    # Check if this beat is also a downbeat
                     is_downbeat = bool(np.any(np.abs(dbn_downbeat_times - beat_time) < 0.05)) if len(dbn_downbeat_times) > 0 else False
                     beat_info.append({
                         "time": float(beat_time),
@@ -356,37 +461,48 @@ class BeatTransformerDetector:
                         "is_downbeat": is_downbeat
                     })
                 else:
+                    # Fallback if frame_idx is out of bounds
                     is_downbeat = bool(np.any(np.abs(dbn_downbeat_times - beat_time) < 0.05)) if len(dbn_downbeat_times) > 0 else False
                     beat_info.append({
                         "time": float(beat_time),
-                        "strength": 0.5,
+                        "strength": 0.5,  # Default strength
                         "is_downbeat": is_downbeat
                     })
 
             # Calculate BPM from beat times
             if len(dbn_beat_times) > 1:
+                # Calculate intervals between beats
                 intervals = np.diff(dbn_beat_times)
+                # Calculate median interval in seconds
                 median_interval = np.median(intervals)
+                # Convert to BPM
                 bpm = 60.0 / median_interval if median_interval > 0 else 120.0
             else:
-                bpm = 120.0
+                bpm = 120.0  # Default BPM if not enough beats
 
             # Determine time signature by analyzing beats between downbeats
-            time_signature = 4
-            time_signatures = []
+            time_signature = 4  # Default to 4/4
+            time_signatures = []  # Store time signatures for each measure
 
             if len(dbn_downbeat_times) >= 2:
                 for i in range(len(dbn_downbeat_times) - 1):
                     curr_downbeat = dbn_downbeat_times[i]
                     next_downbeat = dbn_downbeat_times[i + 1]
+
+                    # Count beats in this measure
                     beats_in_measure = sum(1 for b in dbn_beat_times if curr_downbeat <= b < next_downbeat)
+
+                    # Only consider reasonable time signatures
                     if 2 <= beats_in_measure <= 12:
                         time_signatures.append(beats_in_measure)
 
+                # Use the most common time signature if we have enough data
                 if time_signatures:
                     from collections import Counter
                     time_signature = Counter(time_signatures).most_common(1)[0][0]
                     print(f"Detected time signature: {time_signature}/4")
+                    print(f"Time signatures found in measures: {time_signatures}")
+                    print(f"Most common time signature: {time_signature}/4")
 
             return {
                 "success": True,
@@ -397,7 +513,7 @@ class BeatTransformerDetector:
                 "total_beats": len(dbn_beat_times),
                 "total_downbeats": len(dbn_downbeat_times),
                 "duration": float(duration),
-                "time_signature": f"{int(time_signature)}/4",
+                "time_signature": f"{int(time_signature)}/4",  # Format as string like "4/4"
                 "model_used": "beat_transformer"
             }
 
@@ -417,117 +533,3 @@ class BeatTransformerDetector:
                 "time_signature": "4/4",
                 "model_used": "beat_transformer"
             }
-
-
-class BeatTransformerHandler:
-    """Legacy wrapper for backward compatibility"""
-
-    def __init__(self):
-        """Initialize the Beat Transformer handler"""
-        self.detector = None
-        self.available = False
-
-        try:
-            # Check if checkpoint exists
-            beat_transformer_dir = Path(__file__).parent / "Beat-Transformer"
-            checkpoint_path = beat_transformer_dir / "checkpoint" / "fold_4_trf_param.pt"
-
-            if checkpoint_path.exists():
-                self.detector = BeatTransformerDetector(str(checkpoint_path))
-                self.available = True
-                print("Beat Transformer handler initialized successfully")
-            else:
-                print(f"Beat Transformer checkpoint not found: {checkpoint_path}")
-
-        except Exception as e:
-            print(f"Failed to initialize Beat Transformer: {e}")
-            self.available = False
-
-    def is_available(self):
-        """Check if the model is available"""
-        return self.available
-
-    def analyze(self, audio_path):
-        """Analyze audio file for beat detection
-
-        Args:
-            audio_path (str): Path to the audio file
-
-        Returns:
-            dict: Analysis results with beats, downbeats, BPM, etc.
-        """
-        if not self.available:
-            return {
-                "success": False,
-                "error": "Beat Transformer model is not available",
-                "beats": [],
-                "downbeats": [],
-                "bpm": 0
-            }
-
-        try:
-            # Use the detector to analyze the audio
-            result = self.detector.detect_beats(audio_path)
-            return result
-
-        except Exception as e:
-            print(f"Error analyzing audio with Beat Transformer: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "beats": [],
-                "downbeats": [],
-                "bpm": 0
-            }
-
-
-# Wrapper functions for compatibility with the original demo interface
-def run_beat_tracking_wrapper(demixed_spec_file, audio_file, param_path=None):
-    """
-    Wrapper function for compatibility with beat_tracking_fix.py
-
-    Args:
-        demixed_spec_file: Path to the demixed spectrogram file (ignored, we create our own)
-        audio_file: Path to the audio file
-        param_path: Path to the model checkpoint (optional)
-
-    Returns:
-        Tuple of (beat_times, downbeat_times, beats_with_positions, downbeats_with_measures)
-    """
-    try:
-        # Create detector instance
-        detector = BeatTransformerDetector(param_path)
-
-        # Run detection
-        result = detector.detect_beats(audio_file)
-
-        if result["success"]:
-            beat_times = np.array(result["beats"])
-            downbeat_times = np.array(result["downbeats"])
-
-            # Create beats_with_positions format
-            beats_with_positions = []
-            for i, beat_info in enumerate(result["beat_info"]):
-                beats_with_positions.append({
-                    "time": beat_info["time"],
-                    "beatNum": ((i % 4) + 1)  # Simple 4/4 beat numbering
-                })
-
-            # Create downbeats_with_measures format
-            downbeats_with_measures = []
-            for i, downbeat_time in enumerate(downbeat_times):
-                downbeats_with_measures.append({
-                    "time": float(downbeat_time),
-                    "measure": i + 1
-                })
-
-            return beat_times, downbeat_times, beats_with_positions, downbeats_with_measures
-        else:
-            print(f"Beat detection failed: {result.get('error', 'Unknown error')}")
-            return np.array([]), np.array([]), [], []
-
-    except Exception as e:
-        print(f"Error in run_beat_tracking_wrapper: {e}")
-        import traceback
-        traceback.print_exc()
-        return np.array([]), np.array([]), [], []

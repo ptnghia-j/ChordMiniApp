@@ -17,7 +17,7 @@ steps:
       - '--memory'
       - '16Gi'
       - '--cpu'
-      - '4'
+      - '8'
       - '--timeout'
       - '600'
       - '--max-instances'

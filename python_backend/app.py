@@ -3,6 +3,7 @@ import json
 import subprocess
 import re
 import time
+import logging
 
 # Import compatibility patches FIRST, before any other packages that use numpy
 import scipy_patch
@@ -19,6 +20,35 @@ import sys
 from pathlib import Path
 import requests
 import random
+
+# Configure logging for production
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Set production mode based on environment
+PRODUCTION_MODE = os.environ.get('FLASK_ENV', 'production') == 'production' or os.environ.get('PORT') is not None
+
+def log_info(message):
+    """Log info message - use logger in production, print in development"""
+    if PRODUCTION_MODE:
+        logger.info(message)
+    else:
+        print(message)
+
+def log_error(message):
+    """Log error message - use logger in production, print in development"""
+    if PRODUCTION_MODE:
+        logger.error(message)
+    else:
+        print(message)
+
+def log_debug(message):
+    """Log debug message - only in development mode"""
+    if not PRODUCTION_MODE:
+        print(f"DEBUG: {message}")
 # import aiotube  # Removed - not needed for cloud deployment
 # import quicktube  # Removed - QuickTube is a Ruby web app, not a Python package
 
@@ -26,9 +56,9 @@ import random
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    print("Loaded environment variables from .env file")
+    log_info("Loaded environment variables from .env file")
 except ImportError:
-    print("python-dotenv not available, using system environment variables only")
+    log_info("python-dotenv not available, using system environment variables only")
 
 def trim_silence_from_audio(audio_path, output_path=None, top_db=20, frame_length=2048, hop_length=512):
     """
@@ -158,14 +188,14 @@ def lazy_import_librosa():
 BEAT_TRANSFORMER_DIR = Path(__file__).parent / "models" / "Beat-Transformer"
 CHORD_CNN_LSTM_DIR = Path(__file__).parent / "models" / "Chord-CNN-LSTM"
 AUDIO_DIR = Path(__file__).parent.parent / "public" / "audio"
-print(f"Audio directory path: {AUDIO_DIR}")
+log_info(f"Audio directory path: {AUDIO_DIR}")
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
 sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
 # Import the unified beat transformer implementation
 try:
     from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
-    print("Using unified beat_transformer implementation")
+    log_info("Using unified beat_transformer implementation")
 
     # Create a simple wrapper function for the detect_beats endpoint
     def run_beat_tracking(audio_file):
@@ -173,7 +203,7 @@ try:
         return detector.detect_beats(audio_file)
 
 except ImportError as e:
-    print(f"Warning: beat_transformer not found: {e}, beat tracking will be disabled")
+    log_error(f"Warning: beat_transformer not found: {e}, beat tracking will be disabled")
     def run_beat_tracking(audio_file):
         return {"beats": [], "downbeats": [], "bpm": 120.0, "time_signature": 4}
     run_beat_tracking_wrapper = None
@@ -190,14 +220,14 @@ if redis_url:
         storage_uri=redis_url,
         default_limits=["100 per hour"]
     )
-    print(f"Rate limiting configured with Redis: {redis_url}")
+    log_info(f"Rate limiting configured with Redis: {redis_url}")
 else:
     limiter = Limiter(
         key_func=get_remote_address,
         app=app,
         default_limits=["100 per hour"]
     )
-    print("Rate limiting configured with in-memory storage")
+    log_info("Rate limiting configured with in-memory storage")
 
 # Configure CORS for production deployment
 # Allow requests from Vercel frontend and localhost for development
@@ -220,7 +250,7 @@ CORS(app, origins=cors_origins, supports_credentials=True)
 # Configure maximum content length from environment variable or default to 150MB
 max_content_mb = int(os.environ.get('FLASK_MAX_CONTENT_LENGTH_MB', 150))
 app.config['MAX_CONTENT_LENGTH'] = max_content_mb * 1024 * 1024
-print(f"Setting maximum upload size to {max_content_mb}MB")
+log_info(f"Setting maximum upload size to {max_content_mb}MB")
 
 # Rate limiting error handler
 @app.errorhandler(429)
@@ -238,9 +268,9 @@ try:
     import collections
     import collections.abc
     collections.MutableSequence = collections.abc.MutableSequence
-    print("Applied collections.MutableSequence patch for madmom compatibility")
+    log_info("Applied collections.MutableSequence patch for madmom compatibility")
 except Exception as e:
-    print(f"Failed to apply madmom compatibility patch: {e}")
+    log_error(f"Failed to apply madmom compatibility patch: {e}")
 
 # Fix for NumPy 1.20+ compatibility
 # These attributes are deprecated in newer NumPy versions
@@ -248,9 +278,9 @@ try:
     import numpy as np
     np.float = float  # Use built-in float instead
     np.int = int      # Use built-in int instead
-    print("Applied NumPy compatibility fixes for np.float and np.int")
+    log_info("Applied NumPy compatibility fixes for np.float and np.int")
 except Exception as e:
-    print(f"Note: NumPy compatibility patch not needed: {e}")
+    log_info(f"Note: NumPy compatibility patch not needed: {e}")
 
 # Defer all heavy checks to runtime - just assume everything is available for startup
 SPLEETER_AVAILABLE = True  # Will check at runtime
@@ -258,7 +288,7 @@ USE_BEAT_TRANSFORMER = True  # Will check at runtime
 USE_CHORD_CNN_LSTM = True  # Will check at runtime
 GENIUS_AVAILABLE = True  # Will check at runtime
 
-print("Deferred model availability checks to runtime for faster startup")
+log_info("Deferred model availability checks to runtime for faster startup")
 
 # Runtime model availability checks
 def check_spleeter_availability():
@@ -313,6 +343,8 @@ def index():
 @app.route('/debug/files')
 def debug_files():
     """Debug endpoint to check if essential files exist"""
+    if PRODUCTION_MODE:
+        return jsonify({"error": "Debug endpoints disabled in production"}), 404
     import os
     files_to_check = [
         '/app/models/ChordMini/test_btc.py',
@@ -2199,6 +2231,8 @@ def parse_lrc_format(lrc_content):
 @app.route('/api/debug-btc', methods=['POST'])
 def debug_btc():
     """Debug endpoint to test BTC model components individually"""
+    if PRODUCTION_MODE:
+        return jsonify({"error": "Debug endpoints disabled in production"}), 404
     try:
         data = request.get_json() or {}
         results = {}
@@ -3884,6 +3918,6 @@ if __name__ == '__main__':
     # Get port from environment variable or default to 5001 for localhost to avoid macOS AirTunes/AirPlay conflicts
     # Production deployments (Cloud Run) will override this with PORT environment variable
     port = int(os.environ.get('PORT', 5001))
-    print(f"Starting Flask app on port {port}")
-    print("App is ready to serve requests")
+    log_info(f"Starting Flask app on port {port}")
+    log_info("App is ready to serve requests")
     app.run(host='0.0.0.0', port=port, debug=False)  # Disable debug for production
