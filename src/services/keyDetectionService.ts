@@ -68,6 +68,8 @@ export function formatKeyInfo(keyResult: KeyDetectionResult): string {
     return 'Key: Unknown';
   }
 
+  // Reformat b and # to Unicode musical symbols
+  // let keyInfo = `Key: ${keyResult.primaryKey.replace(/b/g, '♭').replace(/#/g, '♯')}`;
   let keyInfo = `Key: ${keyResult.primaryKey}`;
   
   if (keyResult.modulation && keyResult.modulation !== 'None') {

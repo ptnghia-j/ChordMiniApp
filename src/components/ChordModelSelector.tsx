@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import '@/styles/dropdown.css';
-
-// Import the type from the service
-type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
+import {
+  ChordDetectorType,
+  getAvailableChordModels,
+  filterChordModels
+} from '@/utils/modelFiltering';
 
 interface ChordModelOption {
   id: ChordDetectorType;
@@ -43,7 +45,7 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
   fallbackInfo = null
 }) => {
   const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
-  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(getAvailableChordModels());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -81,11 +83,15 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
     }
   }, [isOpen]);
 
-  // Fetch available models from the API
+  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
+    // Set immediate fallback data to unblock UI rendering
+    setAvailableModels(getAvailableChordModels());
+    setLoading(false); // Immediately show UI
+
     const fetchModelInfo = async () => {
       try {
-        setLoading(true);
+        // Fetch model info in background without blocking UI
         const response = await fetch('/api/model-info');
 
         if (!response.ok) {
@@ -121,20 +127,22 @@ const ChordModelSelector: React.FC<ChordModelSelectorProps> = ({
           });
 
           setModelInfo(modelInfoMap);
-          setAvailableModels(modelIds.length > 0 ? modelIds : ['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+          // Filter models based on environment
+          const filteredModels = filterChordModels(modelIds.length > 0 ? modelIds : getAvailableChordModels());
+          setAvailableModels(filteredModels);
         } else {
-          // Fallback to default models
-          setAvailableModels(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+          // Fallback to environment-filtered models
+          setAvailableModels(getAvailableChordModels());
         }
         setError(null);
       } catch (err) {
-        console.error('Error fetching model info:', err);
+        console.error('Error fetching model info (non-blocking):', err);
         setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
+        // Keep using fallback data on error - UI already rendered
       }
     };
 
+    // Fetch model info asynchronously without blocking UI
     fetchModelInfo();
   }, []);
 

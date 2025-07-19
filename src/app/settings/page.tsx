@@ -59,7 +59,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-main-bg">
+    <div className="min-h-screen dark:bg-dark-bg">
       <Navigation />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -67,7 +67,7 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-bold mb-2 text-foreground">
             Settings
           </h1>
-          <p className="text-default-600">
+          <p className="text-black dark:text-white">
             Manage your application preferences and API configurations
           </p>
         </div>
@@ -80,8 +80,8 @@ export default function SettingsPage() {
             classNames={{
               tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
               cursor: "w-full bg-primary",
-              tab: "max-w-fit px-0 h-12",
-              tabContent: "group-data-[selected=true]:text-primary"
+              tab: "max-w-fit px-0 h-12 group",
+              tabContent: "text-black dark:text-white group-data-[selected=true]:text-primary group-data-[selected=true]:font-semibold group-data-[selected=true]:text-blue-500"
             }}
           >
             <Tab
@@ -103,7 +103,7 @@ export default function SettingsPage() {
                       <label className="text-sm font-medium text-foreground">
                         Dark Mode
                       </label>
-                      <p className="text-sm text-default-600">
+                      <p className="text-sm text-black dark:text-white">
                         Toggle between light and dark themes
                       </p>
                     </div>
@@ -131,7 +131,7 @@ export default function SettingsPage() {
                   <CardBody>
                     <div className="flex items-center justify-center py-8">
                       <Spinner color="primary" />
-                      <span className="ml-3 text-default-600">
+                      <span className="ml-3 text-black dark:text-white">
                         Loading API key status...
                       </span>
                     </div>
@@ -164,7 +164,7 @@ export default function SettingsPage() {
                       <h4 className="font-medium text-foreground">
                         API Key Storage
                       </h4>
-                      <p className="text-sm text-default-600">
+                      <p className="text-sm text-black dark:text-white">
                         API keys are encrypted and stored locally in your browser using the Web Crypto API.
                         They never leave your device and are not sent to our servers.
                       </p>
@@ -173,7 +173,7 @@ export default function SettingsPage() {
                       <h4 className="font-medium text-foreground">
                         Cache Data
                       </h4>
-                      <p className="text-sm text-default-600">
+                      <p className="text-sm text-black dark:text-white">
                         Analysis results and transcriptions are cached in Firebase to improve performance.
                         No personal information is stored.
                       </p>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
                       <h4 className="font-medium text-foreground">
                         Analytics
                       </h4>
-                      <p className="text-sm text-default-600">
+                      <p className="text-sm text-black dark:text-white">
                         We collect anonymous usage statistics to improve the application.
                         No personal data or API keys are included in analytics.
                       </p>

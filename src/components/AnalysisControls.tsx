@@ -6,7 +6,7 @@ import HeroUIChordModelSelector from '@/components/HeroUIChordModelSelector';
 import { Button, Chip } from '@heroui/react';
 
 // Define the detector types to match the main page
-type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
+type BeatDetectorType = 'madmom' | 'beat-transformer';
 type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
 interface AnalysisControlsProps {
@@ -39,7 +39,9 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   cacheCheckCompleted = false
 }) => {
   // Only show when audio is extracted but not yet analyzed
-  if (!isExtracted || isAnalyzed || isAnalyzing || hasError || stage === 'complete') {
+  // Allow model selection to show after extraction completes, even if stage is 'complete'
+  // Only hide when analysis is actually complete (isAnalyzed is true)
+  if (!isExtracted || isAnalyzed || isAnalyzing || hasError || (stage === 'complete' && isAnalyzed)) {
     return null;
   }
 

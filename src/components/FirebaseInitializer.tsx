@@ -9,24 +9,31 @@ import { preloadFirebase } from '@/lib/firebase-lazy';
  */
 export default function FirebaseInitializer() {
   useEffect(() => {
-    // Preload Firebase during idle time
-    preloadFirebase();
-
-    // Initialize Firebase collections lazily
-    const initializeCollections = async () => {
-      try {
-        // Dynamic import to avoid loading Firebase config in initial bundle
-        const { initTranslationsCollection } = await import('@/config/firebase');
-        await initTranslationsCollection();
-      } catch (error) {
-        console.error('Error initializing Firebase collections:', error);
-      }
+    // Define a function to handle all our non-critical Firebase setup
+    const setupFirebase = () => {
+      preloadFirebase();
+      
+      const initializeCollections = async () => {
+        try {
+          const { initTranslationsCollection } = await import('@/config/firebase');
+          await initTranslationsCollection();
+        } catch (error) {
+          console.error('Error initializing Firebase collections:', error);
+        }
+      };
+      initializeCollections();
     };
 
-    // Delay initialization to not block initial render
-    const timeoutId = setTimeout(initializeCollections, 2000);
-
-    return () => clearTimeout(timeoutId);
+    // Use requestIdleCallback to run our setup function only when the browser is idle
+    // This is a much better approach than a fixed setTimeout
+    if ('requestIdleCallback' in window) {
+      const idleCallbackId = window.requestIdleCallback(setupFirebase);
+      return () => window.cancelIdleCallback(idleCallbackId);
+    } else {
+      // Fallback for older browsers
+      const timeoutId = setTimeout(setupFirebase, 2000);
+      return () => clearTimeout(timeoutId);
+    }
   }, []);
 
   // This component doesn't render anything

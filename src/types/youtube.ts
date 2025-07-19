@@ -6,6 +6,7 @@ export interface YouTubePlayer {
   playVideo: () => void;
   pauseVideo: () => void;
   setPlaybackRate: (rate: number) => void;
+  getCurrentTime: () => number;
   muted: boolean;
 }
 

@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<{ videoId: 
         siteName: 'ChordMini',
         images: [
           {
-            url: '/chordMiniLogo.png',
+            url: '/chordMiniLogo.webp',
             width: 1200,
             height: 630,
             alt: `Music analysis for ${videoId}`,
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: { params: Promise<{ videoId: 
         card: 'summary_large_image',
         title: `Music Analysis ${videoId} | ChordMini`,
         description: `AI-powered chord recognition and beat detection analysis. Discover chord progressions, beats, and musical structure.`,
-        images: ['/chordMiniLogo.png'],
+        images: ['/chordMiniLogo.webp'],
       },
     };
   }

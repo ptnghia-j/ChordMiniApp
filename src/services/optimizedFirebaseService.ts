@@ -4,7 +4,7 @@
  */
 
 // Core Firebase app (always needed)
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import {initializeApp, getApps, FirebaseApp} from 'firebase/app';
 
 // Firebase configuration
 const firebaseConfig = {

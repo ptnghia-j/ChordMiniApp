@@ -1,0 +1,46 @@
+{
+  "name": "ChordMini - AI-Powered Music Analysis",
+  "short_name": "ChordMini",
+  "description": "Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111720",
+  "theme_color": "#1e40af",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["music", "entertainment", "productivity"],
+  "icons": [
+    {
+      "src": "/chordMiniLogo.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/chordMiniLogo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Analyze Music",
+      "short_name": "Analyze",
+      "description": "Start analyzing music with AI",
+      "url": "/analyze",
+      "icons": [
+        {
+          "src": "/chordMiniLogo.webp",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

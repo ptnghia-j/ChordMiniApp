@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { apiService, type ApiResponse } from '@/services/apiService';
+import {apiService, ApiResponse} from '@/services/apiService';
 
 export interface RateLimitState {
   isRateLimited: boolean;
@@ -157,91 +157,50 @@ export function useStatusMonitoring() {
   const checkEndpoint = useCallback(async (endpoint: string) => {
     const startTime = Date.now();
 
-    // Define timeout thresholds based on endpoint type
-    const getTimeoutForEndpoint = (endpoint: string): number => {
-      if (endpoint === '/' || endpoint === '/api/model-info') {
-        return 10000; // 10 seconds for quick endpoints
-      } else if (endpoint === '/api/detect-beats' || endpoint === '/api/recognize-chords') {
-        return 60000; // 60 seconds for ML processing endpoints (cold start consideration)
-      } else if (endpoint === '/api/genius-lyrics') {
-        return 15000; // 15 seconds for external API endpoints
-      }
-      return 10000; // Default 10 seconds
-    };
-
-    const timeoutMs = getTimeoutForEndpoint(endpoint);
-
     try {
       let response: ApiResponse;
 
-      if (endpoint === '/' || endpoint === '/api/model-info') {
-        // GET endpoints with timeout
-        response = endpoint === '/'
-          ? await api.healthCheck()
-          : await api.getModelInfo();
+      if (endpoint === '/') {
+        // FIXED: Use frontend health check route to avoid CORS issues
+        const healthResponse = await fetch('/api/health', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const healthData = await healthResponse.json();
+        response = {
+          success: healthResponse.ok && healthData.success,
+          error: healthData.error,
+          data: healthData.data,
+          rateLimited: false
+        };
+
+      } else if (endpoint === '/api/model-info') {
+        // Use existing model-info API route
+        response = await api.getModelInfo();
       } else if (endpoint === '/api/genius-lyrics') {
         // POST endpoint with JSON body
         response = await api.getGeniusLyrics('test', 'test');
       } else {
-        // File upload endpoints - test directly against backend with proper timeout
-        // For status monitoring, always use the production backend URL
-        const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+        // FIXED: Use frontend status-check route to avoid CORS issues
+        // This route acts as a proxy and can make server-to-server requests
+        const statusResponse = await fetch('/api/status-check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ endpoint }),
+        });
 
-        // Create AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-        try {
-          const testResponse = await fetch(`${baseUrl}${endpoint}`, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-            },
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeoutId);
-
-          const responseText = await testResponse.text();
-          let responseData;
-          try {
-            responseData = JSON.parse(responseText);
-          } catch {
-            responseData = { error: responseText };
-          }
-
-          response = {
-            success: testResponse.ok,
-            error: responseData.error || `HTTP ${testResponse.status}`,
-            data: responseData,
-            rateLimited: false
-          };
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-
-          // Handle timeout and other fetch errors
-          if (fetchError instanceof Error) {
-            if (fetchError.name === 'AbortError') {
-              response = {
-                success: false,
-                error: `Timeout after ${timeoutMs / 1000}s (may be cold starting)`,
-                rateLimited: false
-              };
-            } else {
-              response = {
-                success: false,
-                error: fetchError.message,
-                rateLimited: false
-              };
-            }
-          } else {
-            response = {
-              success: false,
-              error: 'Unknown fetch error',
-              rateLimited: false
-            };
-          }
-        }
+        const statusData = await statusResponse.json();
+        response = {
+          success: statusResponse.ok && statusData.success,
+          error: statusData.error,
+          data: statusData.data,
+          rateLimited: false
+        };
       }
 
       const responseTime = Date.now() - startTime;
@@ -249,10 +208,12 @@ export function useStatusMonitoring() {
       // Determine status based on endpoint type and expected responses
       let status: 'online' | 'offline' | 'checking';
 
-      // Check for cold start indicators
+      // IMPROVED: Check for cold start indicators with better detection
       const isColdStart = response.error?.includes('cold starting') ||
                          response.error?.includes('may be cold starting') ||
-                         (responseTime > 30000 && response.error?.includes('Timeout'));
+                         response.error?.includes('Timeout after') ||
+                         (responseTime > 15000 && response.error?.includes('Timeout')) ||
+                         (responseTime > 20000 && !response.success); // Long response time likely indicates cold start
 
       if (endpoint === '/api/detect-beats' || endpoint === '/api/recognize-chords') {
         // These endpoints should return 400 (Bad Request) when no file is provided
@@ -312,7 +273,8 @@ export function useStatusMonitoring() {
         status,
         responseTime,
         lastChecked: new Date().toLocaleTimeString(),
-        error: status === 'offline' ? response.error : undefined,
+        error: status === 'offline' ? response.error :
+               status === 'checking' ? 'Backend is warming up (cold start)' : undefined,
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;

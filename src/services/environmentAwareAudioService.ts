@@ -1,15 +1,17 @@
 /**
  * Environment-Aware Audio Processing Service
- * 
- * This service automatically switches between QuickTube (production) and yt-dlp (development)
- * based on the current environment, while maintaining the same interface and filename
- * generation algorithm for both approaches.
+ *
+ * Simplified URL-based strategy selection:
+ * - Localhost Development: Uses yt-dlp for local development flexibility
+ * - Production: Uses YT2MP3 Magic for reliable audio extraction
+ * - Automatic fallback between strategies for maximum reliability
  */
 
 import { detectEnvironment, getAudioProcessingStrategy, logEnvironmentConfig } from '@/utils/environmentDetection';
+import { yt2mp3MagicService } from './yt2mp3MagicService';
 import { QuickTubeFilenameGenerator } from './quickTubeFilenameGenerator';
 import { ytDlpService } from './ytDlpService';
-import { ytMp3GoService } from './ytMp3GoService';
+// PRESERVED FOR REFERENCE: import { ytMp3GoService } from './ytMp3GoService';
 
 export interface AudioProcessingResult {
   success: boolean;
@@ -17,7 +19,7 @@ export interface AudioProcessingResult {
   filename?: string;
   title?: string;
   duration?: number;
-  strategy?: 'quicktube' | 'ytdlp' | 'ytmp3go' | 'auto';
+  strategy?: 'yt2mp3magic' | 'ytdlp';
   error?: string;
 }
 
@@ -57,26 +59,40 @@ class EnvironmentAwareAudioService {
     console.log(`🔧 Using ${strategy} strategy for audio processing`);
 
     try {
-      if (strategy === 'ytdlp') {
+      if (strategy === 'yt2mp3magic') {
+        return await this.getAudioUrlWithYt2mp3Magic(videoUrl, videoId, title);
+      } else if (strategy === 'ytdlp') {
         return await this.getAudioUrlWithYtDlp(videoUrl, videoId, title);
-      } else if (strategy === 'ytmp3go') {
-        return await this.getAudioUrlWithYtMp3Go(videoUrl, videoId, title);
       } else {
-        return await this.getAudioUrlWithQuickTube(videoUrl, videoId, title);
+        // PRESERVED FOR REFERENCE - other strategies
+        // } else if (strategy === 'ytmp3go') {
+        //   return await this.getAudioUrlWithYtMp3Go(videoUrl, videoId, title);
+        // } else {
+        //   return await this.getAudioUrlWithQuickTube(videoUrl, videoId, title);
+        // }
+
+        // Fallback to YT2MP3 Magic for unknown strategies
+        console.log(`⚠️ Unknown strategy ${strategy}, falling back to YT2MP3 Magic`);
+        return await this.getAudioUrlWithYt2mp3Magic(videoUrl, videoId, title);
       }
     } catch (error) {
       console.error(`❌ Audio processing failed with ${strategy}:`, error);
 
-      // Try fallback strategy if available
-      const fallbackStrategy = strategy === 'quicktube' ? 'ytdlp' :
-                               strategy === 'ytmp3go' ? 'quicktube' : 'quicktube';
+      // Try YT2MP3 Magic as fallback for all strategies
+      const fallbackStrategy = 'yt2mp3magic';
       console.log(`🔄 Attempting fallback to ${fallbackStrategy}...`);
 
       try {
-        if (fallbackStrategy === 'ytdlp') {
+        if (fallbackStrategy === 'yt2mp3magic') {
+          return await this.getAudioUrlWithYt2mp3Magic(videoUrl, videoId, title);
+        } else if (fallbackStrategy === 'ytdlp') {
           return await this.getAudioUrlWithYtDlp(videoUrl, videoId, title);
         } else {
-          return await this.getAudioUrlWithQuickTube(videoUrl, videoId, title);
+          // PRESERVED FOR REFERENCE - QuickTube fallback
+          // return await this.getAudioUrlWithQuickTube(videoUrl, videoId, title);
+
+          // Default to YT2MP3 Magic for unknown fallback strategies
+          return await this.getAudioUrlWithYt2mp3Magic(videoUrl, videoId, title);
         }
       } catch (fallbackError) {
         console.error(`❌ Fallback strategy also failed:`, fallbackError);
@@ -90,8 +106,55 @@ class EnvironmentAwareAudioService {
   }
 
   /**
-   * Get audio URL using QuickTube (production strategy)
+   * Get audio URL using YT2MP3 Magic (primary strategy)
    */
+  private async getAudioUrlWithYt2mp3Magic(videoUrl: string, videoId?: string, title?: string): Promise<AudioProcessingResult> {
+    try {
+      // Extract video ID if not provided
+      const extractedVideoId = videoId || this.extractVideoIdFromUrl(videoUrl);
+
+      if (!extractedVideoId) {
+        throw new Error('Could not extract video ID from URL');
+      }
+
+      // Use provided title or default
+      const videoTitle = title || 'Unknown Title';
+
+      console.log(`🎵 YT2MP3 Magic processing: ${extractedVideoId} ("${videoTitle}")`);
+
+      // Extract audio using YT2MP3 Magic service
+      const extractionResult = await yt2mp3MagicService.extractAudio(extractedVideoId, videoTitle);
+
+      if (extractionResult.success && extractionResult.audioStream) {
+        // For this service, we return the stream info
+        // The actual Firebase upload would be handled by the calling service
+        return {
+          success: true,
+          audioUrl: 'stream://yt2mp3magic', // Placeholder - actual upload handled elsewhere
+          filename: extractionResult.filename,
+          title: extractionResult.title || videoTitle,
+          duration: extractionResult.duration,
+          strategy: 'yt2mp3magic'
+        };
+      } else {
+        throw new Error(extractionResult.error || 'YT2MP3 Magic extraction failed');
+      }
+
+    } catch (error) {
+      console.error('❌ YT2MP3 Magic processing failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'YT2MP3 Magic processing failed',
+        strategy: 'yt2mp3magic'
+      };
+    }
+  }
+
+  /**
+   * PRESERVED FOR REFERENCE - Get audio URL using QuickTube (production strategy)
+   * This method has been replaced by YT2MP3 Magic service
+   */
+  /*
   private async getAudioUrlWithQuickTube(videoUrl: string, videoId?: string, title?: string): Promise<AudioProcessingResult> {
     try {
       // Extract video ID if not provided
@@ -140,6 +203,7 @@ class EnvironmentAwareAudioService {
       };
     }
   }
+  */
 
   /**
    * Get audio URL using yt-dlp (development strategy)
@@ -198,8 +262,10 @@ class EnvironmentAwareAudioService {
   }
 
   /**
-   * Get audio URL using yt-mp3-go (Vercel production strategy)
+   * PRESERVED FOR REFERENCE - Get audio URL using yt-mp3-go (Vercel production strategy)
+   * This method has been replaced by YT2MP3 Magic service
    */
+  /*
   private async getAudioUrlWithYtMp3Go(videoUrl: string, videoId?: string, title?: string): Promise<AudioProcessingResult> {
     try {
       console.log(`🎵 Processing with yt-mp3-go: ${videoUrl}`);
@@ -237,6 +303,7 @@ class EnvironmentAwareAudioService {
       };
     }
   }
+  */
 
   /**
    * Extract video ID from YouTube URL
@@ -303,8 +370,8 @@ class EnvironmentAwareAudioService {
       if (strategy === 'ytdlp') {
         return await ytDlpService.testService();
       } else {
-        // Test QuickTube with a known video
-        const testResult = await this.getAudioUrlWithQuickTube(
+        // Test YT2MP3 Magic with a known video
+        const testResult = await this.getAudioUrlWithYt2mp3Magic(
           'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           'dQw4w9WgXcQ',
           'Rick Astley - Never Gonna Give You Up'

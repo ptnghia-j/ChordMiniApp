@@ -89,8 +89,7 @@ export async function POST(request: NextRequest) {
 
       // Determine the method based on environment
       const env = detectEnvironment();
-      const method = env.strategy === 'ytmp3go' ? 'yt-mp3-go' :
-                    env.strategy === 'ytdlp' ? 'yt-dlp' : 'quicktube-simplified';
+      const method = env.strategy === 'ytdlp' ? 'yt-dlp' : 'yt2mp3-magic';
 
       return NextResponse.json({
         success: true,

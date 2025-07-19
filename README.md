@@ -175,7 +175,9 @@ Production deployments is configured based on your VPS and url should be set in 
 
 3. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
+   pip install --no-cache-dir Cython>=0.29.0 numpy==1.22.4
+   pip install --no-cache-dir madmom>=0.16.1
+   pip install --no-cache-dir -r requirements.txt
    ```
 
 4. **Start local backend on port 5001**

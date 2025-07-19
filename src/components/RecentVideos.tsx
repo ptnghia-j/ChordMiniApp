@@ -344,7 +344,7 @@ export default function RecentVideos() {
         </CardHeader>
         <CardBody className="p-0">
           <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
-            <div className="space-y-3 pr-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
               {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
                 <Card key={index} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
                   <CardBody className="p-3">
@@ -380,12 +380,12 @@ export default function RecentVideos() {
 
       <CardBody className="p-0">
         <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
-          <div className="space-y-3 pr-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
           {videos.map((video) => (
             <Card
               key={video.videoId}
               as={Link}
-              href={`/analyze/${video.videoId}`}
+              href={`/analyze/${video.videoId}?title=${encodeURIComponent(video.title || `Video ${video.videoId}`)}`}
               isPressable
               className="group hover:scale-[1.02] transition-transform duration-200 bg-content2 dark:bg-content2 border border-divider dark:border-divider"
             >
@@ -481,7 +481,7 @@ export default function RecentVideos() {
 
           {/* Loading more indicator inside scrollable area */}
           {loadingMore && (
-            <div className="space-y-3 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
               {[...Array(LOAD_MORE_COUNT)].map((_, index) => (
                 <Card key={`loading-${index}`} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
                   <CardBody className="p-3">

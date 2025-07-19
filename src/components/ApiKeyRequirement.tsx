@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ApiKeyRequirement as ApiKeyRequirementType } from '@/types/apiKeyTypes';
 import ApiKeyModal from './ApiKeyModal';
 import { HiLightBulb, HiGift } from 'react-icons/hi2';
+import type { ApiKeyRequirement } from '@/types/apiKeyTypes';
 
 interface ApiKeyRequirementProps {
-  requirement: ApiKeyRequirementType;
+  requirement: ApiKeyRequirement;
   onApiKeyProvided: (service: 'musicAi' | 'gemini', key: string) => Promise<void>;
   onSkip?: () => void;
 }

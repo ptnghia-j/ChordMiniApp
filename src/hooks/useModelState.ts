@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { getSafeChordModel } from '@/utils/modelFiltering';
 
 // Define detector types
-export type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
+export type BeatDetectorType = 'madmom' | 'beat-transformer';
 export type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
 export interface ModelState {
@@ -23,8 +24,12 @@ export const useModelState = (): ModelState => {
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_beat_detector');
-      if (saved && ['auto', 'madmom', 'beat-transformer'].includes(saved)) {
+      if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
         return saved as BeatDetectorType;
+      }
+      // If saved value was 'auto', default to 'beat-transformer'
+      if (saved === 'auto') {
+        localStorage.setItem('chordmini_beat_detector', 'beat-transformer');
       }
     }
     return 'beat-transformer';
@@ -34,7 +39,8 @@ export const useModelState = (): ModelState => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_chord_detector');
       if (saved && ['chord-cnn-lstm', 'btc-sl', 'btc-pl'].includes(saved)) {
-        return saved as ChordDetectorType;
+        // Ensure the saved model is available in the current environment
+        return getSafeChordModel(saved as ChordDetectorType);
       }
     }
     return 'chord-cnn-lstm';
@@ -73,7 +79,7 @@ export const useModelState = (): ModelState => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setModelsInitialized(true);
-    }, 1000); // Give user 1 second to see and potentially change model selection
+    }, 100); // Minimal delay to prevent flash, allow immediate cache checking
 
     return () => clearTimeout(timer);
   }, []);

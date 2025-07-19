@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getModelInfo, ModelInfoResult } from '@/services/beatDetectionService';
 import '@/styles/dropdown.css';
 
-type ModelType = 'auto' | 'madmom' | 'beat-transformer' | 'librosa';
+type ModelType = 'madmom' | 'beat-transformer' | 'librosa';
 
 interface BeatModelSelectorProps {
   onChange: (model: Exclude<ModelType, 'librosa'>) => void;
@@ -85,12 +85,6 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
   // Define model options with descriptions
   const getModelOptions = (): ModelOption[] => [
     {
-      id: 'auto',
-      name: 'Auto',
-      description: 'Automatically selects the best available model for your audio',
-      available: true
-    },
-    {
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
@@ -154,11 +148,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
           <div className="flex items-center">
             {/* Model icon based on type */}
             <span className="w-6 h-6 flex items-center justify-center mr-2 rounded-full bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800 transition-colors duration-300">
-              {selectedModelOption.id === 'auto' && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                </svg>
-              )}
+
               {selectedModelOption.id === 'beat-transformer' && (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M13 7H7v6h6V7z" />
@@ -216,11 +206,7 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
                     <div className="flex items-start">
                       {/* Model icon */}
                       <span className={`w-6 h-6 flex items-center justify-center mr-2 rounded-full transition-colors duration-300 ${selectedModel === model.id ? 'bg-blue-100 dark:bg-blue-200 text-blue-600 dark:text-blue-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
-                        {model.id === 'auto' && (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                          </svg>
-                        )}
+
                         {model.id === 'beat-transformer' && (
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13 7H7v6h6V7z" />

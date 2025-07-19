@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { YouTubePlayer } from '@/types/youtube';
 
 // Types for playback state management
 interface ClickInfo {
@@ -7,21 +8,15 @@ interface ClickInfo {
   clickTime: number;
 }
 
-interface YouTubePlayer {
-  seekTo: (seconds: number, allowSeekAhead?: boolean | string) => void;
-  muted: boolean;
-}
-
 interface AudioPlayerState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
   playbackRate: number;
-  preferredAudioSource: 'youtube' | 'extracted';
 }
 
 interface UsePlaybackStateProps {
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   youtubePlayer: YouTubePlayer | null;
   setYoutubePlayer: (player: YouTubePlayer | null) => void;
   audioPlayerState: AudioPlayerState;
@@ -51,7 +46,6 @@ interface UsePlaybackStateReturn {
   currentTime: number;
   duration: number;
   playbackRate: number;
-  preferredAudioSource: 'youtube' | 'extracted';
   
   // Audio player state setters
   setIsPlaying: (playing: boolean) => void;
@@ -103,7 +97,7 @@ export const usePlaybackState = ({
   }, []);
 
   // Extract state from audio player hook (lines 262-263)
-  const { isPlaying, currentTime, duration, playbackRate, preferredAudioSource } = audioPlayerState;
+  const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
 
   // Use the state values for return
   const currentBeatIndex = currentBeatIndexState;
@@ -119,17 +113,12 @@ export const usePlaybackState = ({
     setAudioPlayerState(prev => ({ ...prev, currentTime: time }));
   }, [setAudioPlayerState]);
 
-  // Beat click navigation (lines 1122-1144): Dual audio seeking with click tracking
+  // Beat click navigation: YouTube-only seeking with click tracking
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
-    // Seek audio element
-    if (audioRef.current) {
-      audioRef.current.currentTime = timestamp;
-      setCurrentTime(timestamp);
-    }
-
-    // Seek YouTube player if available
+    // Seek YouTube player (primary audio source)
     if (youtubePlayer && youtubePlayer.seekTo) {
       youtubePlayer.seekTo(timestamp, 'seconds');
+      setCurrentTime(timestamp);
     }
 
     // FIXED: Direct state update without override mechanism
@@ -143,7 +132,7 @@ export const usePlaybackState = ({
       timestamp: timestamp,
       clickTime: Date.now()
     });
-  }, [audioRef, youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
+  }, [youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
 
   // YouTube player event handlers (lines 1150-1191): Comprehensive player integration
   const handleYouTubeReady = useCallback((player: unknown) => {
@@ -156,38 +145,22 @@ export const usePlaybackState = ({
 
     // We can't directly call YouTube player methods here
     // ReactPlayer handles playback rate through its props
-
-    // If audio is already playing, sync the YouTube video
-    if (isPlaying && audioRef.current) {
-      // Use ReactPlayer's seekTo method
-      (player as YouTubePlayer).seekTo(audioRef.current.currentTime, 'seconds');
-    }
-  }, [setYoutubePlayer, isPlaying, audioRef]);
+  }, [setYoutubePlayer]);
 
   const handleYouTubePlay = useCallback(() => {
-    // If audio is not playing, start it
-    if (!isPlaying && audioRef.current) {
-      audioRef.current.play();
-      // Update state directly without toggling
-      setIsPlaying(true);
-    }
-  }, [isPlaying, audioRef, setIsPlaying]);
+    // Update state when YouTube starts playing
+    setIsPlaying(true);
+  }, [setIsPlaying]);
 
   const handleYouTubePause = useCallback(() => {
-    // If audio is playing, pause it
-    if (isPlaying && audioRef.current) {
-      audioRef.current.pause();
-      // Update state directly without toggling
-      setIsPlaying(false);
-    }
-  }, [isPlaying, audioRef, setIsPlaying]);
+    // Update state when YouTube pauses
+    setIsPlaying(false);
+  }, [setIsPlaying]);
 
   const handleYouTubeProgress = useCallback((state: { played: number; playedSeconds: number }) => {
-    // Sync audio with YouTube if they get out of sync by more than 0.5 seconds
-    if (audioRef.current && Math.abs(audioRef.current.currentTime - state.playedSeconds) > 0.5) {
-      audioRef.current.currentTime = state.playedSeconds;
-    }
-  }, [audioRef]);
+    // Update current time from YouTube player progress
+    setCurrentTime(state.playedSeconds);
+  }, [setCurrentTime]);
 
   // Auto-scroll implementation (lines 2561-2576): Smooth scrolling to current beat
   const scrollToCurrentBeat = useCallback(() => {
@@ -247,18 +220,15 @@ export const usePlaybackState = ({
     };
   }, [audioRef, setCurrentTime, setDuration, setIsPlaying]);
 
-  // Audio source management (lines 2578-2589): Dual-source muting logic
+  // Audio source management: Ensure YouTube is unmuted and extracted audio is muted
   useEffect(() => {
-    if (youtubePlayer && audioRef.current) {
-      if (preferredAudioSource === 'youtube') {
-        youtubePlayer.muted = false;
-        audioRef.current.muted = true;
-      } else {
-        youtubePlayer.muted = true;
-        audioRef.current.muted = false;
-      }
+    if (youtubePlayer) {
+      youtubePlayer.muted = false;
     }
-  }, [preferredAudioSource, youtubePlayer, audioRef]);
+    if (audioRef.current) {
+      audioRef.current.muted = true;
+    }
+  }, [youtubePlayer, audioRef]);
 
   return {
     // Beat tracking state
@@ -281,7 +251,6 @@ export const usePlaybackState = ({
     currentTime,
     duration,
     playbackRate,
-    preferredAudioSource,
     
     // Audio player state setters
     setIsPlaying,

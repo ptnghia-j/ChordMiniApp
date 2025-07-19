@@ -26,9 +26,7 @@ export default function StatusPage() {
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
   const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
-
-
-
+  
   useEffect(() => {
     // Check immediately on page load
     const performInitialCheck = async () => {

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
-import { useTheme } from '@/contexts/ThemeContext';
+
 import StickySearchBar from './StickySearchBar';
 import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem, Button } from '@heroui/react';
 
@@ -21,14 +21,12 @@ interface NavigationItem {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearch = false }) => {
-  const { theme } = useTheme();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentHash, setCurrentHash] = useState('');
   const [isClient, setIsClient] = useState(false);
 
-  // Use the appropriate logo based on the current theme
-  const logoSrc = theme === 'dark' ? '/chordMiniLogo-dark.png' : '/chordMiniLogo.png';
+  // Use CSS-based theme switching for logos to prevent hydration mismatch
 
   // Handle client-side hydration and hash detection
   useEffect(() => {
@@ -118,7 +116,8 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
       maxWidth="full"
       position="sticky"
       className={`
-        navbar-backdrop-blur navbar-optimized border-b border-divider
+        navbar-backdrop-sm navbar-optimized border-b border-divider
+        bg-white/50 dark:bg-dark-bg/50 backdrop-blur-sm
         ${className}
       `}
       height="3rem"
@@ -128,13 +127,25 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
         <NavbarMenuToggle className="sm:hidden" />
         <NavbarBrand>
           <Link href="/" className="flex items-center group">
+            {/* Light theme logo - hidden in dark mode */}
             <Image
-              src={logoSrc}
+              src="/chordMiniLogo.webp"
               alt="ChordMini Logo"
               width={40}
               height={40}
               sizes="40px"
-              className="mr-2 transition-transform duration-200 group-hover:scale-105 rounded-lg"
+              className="mr-2 transition-transform duration-200 group-hover:scale-105 rounded-lg block dark:hidden"
+              style={{ width: '40px', height: '40px' }}
+              priority
+            />
+            {/* Dark theme logo - hidden in light mode */}
+            <Image
+              src="/chordMiniLogo-dark.webp"
+              alt="ChordMini Logo"
+              width={40}
+              height={40}
+              sizes="40px"
+              className="mr-2 transition-transform duration-200 group-hover:scale-105 rounded-lg hidden dark:block"
               style={{ width: '40px', height: '40px' }}
               priority
             />
@@ -157,44 +168,42 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
         )}
 
         {/* Navigation Items - Hide on small screens where mobile menu is available */}
-        <div className="hidden sm:flex gap-2">
-          {navigationItems.map((item) => (
-            <NavbarItem key={item.href}>
-              {item.isScroll ? (
-                <Button
-                  variant={isActiveRoute(item.href) ? "solid" : "ghost"}
-                  color={isActiveRoute(item.href) ? "primary" : "default"}
-                  onClick={() => handleNavClick(item.href, item.isScroll)}
-                  className={`font-medium text-sm transition-all duration-200 ${
-                    isActiveRoute(item.href)
-                      ? 'bg-primary text-black dark:text-primary-foreground shadow-lg border border-primary'
-                      : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
-                  }`}
-                  size="sm"
-                  radius="md"
-                >
-                  {item.label}
-                </Button>
-              ) : (
-                <Button
-                  as={Link}
-                  href={item.href}
-                  variant={isActiveRoute(item.href) ? "solid" : "ghost"}
-                  color={isActiveRoute(item.href) ? "primary" : "default"}
-                  className={`font-medium text-sm transition-all duration-200 ${
-                    isActiveRoute(item.href)
-                      ? 'bg-primary text-black dark:text-primary-foreground border border-blue-500 dark:border-blue-300'
-                      : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
-                  }`}
-                  size="sm"
-                  radius="md"
-                >
-                  {item.label}
-                </Button>
-              )}
-            </NavbarItem>
-          ))}
-        </div>
+        {navigationItems.map((item) => (
+          <NavbarItem key={item.href} className="hidden sm:flex" suppressHydrationWarning>
+            {item.isScroll ? (
+              <Button
+                variant={isActiveRoute(item.href) ? "solid" : "ghost"}
+                color={isActiveRoute(item.href) ? "primary" : "default"}
+                onPress={() => handleNavClick(item.href, item.isScroll)}
+                className={`font-medium text-sm transition-all duration-200 ${
+                  isActiveRoute(item.href)
+                    ? 'bg-primary text-black dark:text-primary-foreground shadow-lg border border-primary'
+                    : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
+                }`}
+                size="sm"
+                radius="md"
+              >
+                {item.label}
+              </Button>
+            ) : (
+              <Button
+                as={Link}
+                href={item.href}
+                variant={isActiveRoute(item.href) ? "solid" : "ghost"}
+                color={isActiveRoute(item.href) ? "primary" : "default"}
+                className={`font-medium text-sm transition-all duration-200 ${
+                  isActiveRoute(item.href)
+                    ? 'bg-primary text-black dark:text-primary-foreground border border-blue-500 dark:border-blue-300'
+                    : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
+                }`}
+                size="sm"
+                radius="md"
+              >
+                {item.label}
+              </Button>
+            )}
+          </NavbarItem>
+        ))}
         
 
         <NavbarItem>
@@ -214,12 +223,12 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
         )}
 
         {navigationItems.map((item) => (
-          <NavbarMenuItem key={item.href}>
+          <NavbarMenuItem key={item.href} suppressHydrationWarning>
             {item.isScroll ? (
               <Button
                 variant={isActiveRoute(item.href) ? "solid" : "flat"}
                 color={isActiveRoute(item.href) ? "primary" : "default"}
-                onClick={() => {
+                onPress={() => {
                   handleNavClick(item.href, item.isScroll);
                   setIsMobileMenuOpen(false);
                 }}
@@ -238,7 +247,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
                 href={item.href}
                 variant={isActiveRoute(item.href) ? "solid" : "flat"}
                 color={isActiveRoute(item.href) ? "primary" : "default"}
-                onClick={() => setIsMobileMenuOpen(false)}
+                onPress={() => setIsMobileMenuOpen(false)}
                 className={`w-full justify-start font-medium text-base transition-all duration-200 ${
                   isActiveRoute(item.href)
                     ? 'bg-blue-600 text-white border border-blue-600'

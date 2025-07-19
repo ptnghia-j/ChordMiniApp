@@ -57,6 +57,7 @@ const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { FiSkipBack, FiSkipForward } from 'react-icons/fi';
+import { useMetronomeSync } from '@/hooks/useMetronomeSync';
 // import { useTheme } from '@/contexts/ThemeContext';
 
 export default function LocalAudioAnalyzePage() {
@@ -81,15 +82,19 @@ export default function LocalAudioAnalyzePage() {
   // const { theme } = useTheme();
 
   // Define detector types
-  type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
+  type BeatDetectorType = 'madmom' | 'beat-transformer';
   type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 
   // Initialize model states with localStorage persistence
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_beat_detector');
-      if (saved && ['auto', 'madmom', 'beat-transformer'].includes(saved)) {
+      if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
         return saved as BeatDetectorType;
+      }
+      // If saved value was 'auto', default to 'beat-transformer'
+      if (saved === 'auto') {
+        localStorage.setItem('chordmini_beat_detector', 'beat-transformer');
       }
     }
     return 'beat-transformer';
@@ -119,8 +124,12 @@ export default function LocalAudioAnalyzePage() {
   // Analysis results state
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult | null>(null);
 
-  // Current state for playback
-  const [currentBeatIndex] = useState(-1);
+
+
+  // Current state for playback - FIXED: Add missing state variables for beat animation
+  const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
+  const currentBeatIndexRef = useRef(-1);
+  const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
   const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
   // Tab state
@@ -248,7 +257,6 @@ export default function LocalAudioAnalyzePage() {
       // Update duration from analysis results if available
       if (results.audioDuration && results.audioDuration > 0) {
         setDuration(results.audioDuration);
-        console.log(`🎵 Updated duration from analysis results: ${results.audioDuration.toFixed(1)} seconds`);
       }
 
       setAudioProcessingState(prev => ({
@@ -326,23 +334,9 @@ export default function LocalAudioAnalyzePage() {
     setCurrentTime(newTime);
   };
 
-  const seekToTime = (time: number) => {
-    if (!audioRef.current) return;
-    const clampedTime = Math.max(0, Math.min(time, duration));
-    audioRef.current.currentTime = clampedTime;
-    setCurrentTime(clampedTime);
-  };
 
-  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
 
-    seekToTime(newTime);
-  };
 
   // Set up audio element event listeners
   useEffect(() => {
@@ -355,8 +349,12 @@ export default function LocalAudioAnalyzePage() {
       }
     };
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
     const handleTimeUpdate = () => {
       if (audioElement) {
         setCurrentTime(audioElement.currentTime);
@@ -395,9 +393,85 @@ export default function LocalAudioAnalyzePage() {
     return getChordGridDataService(analysisResults);
   }, [analysisResults]);
 
-  // Beat animation tracking is now handled by useScrollAndAnimation hook
+  // Beat animation tracking for HTML audio elements
+  useEffect(() => {
+    if (!analysisResults || !chordGridData || chordGridData.chords.length === 0) {
+      return;
+    }
 
-  // FIXED: Simplified beat click handler using chord grid data timestamps
+    const rafRef = { current: undefined as number | undefined };
+
+    const updateBeatTracking = () => {
+      // Continue animation loop even when not playing to maintain state
+      if (!audioRef.current) {
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+        return;
+      }
+
+      // Use audio element's currentTime directly for most accurate timing
+      const time = audioRef.current.currentTime;
+
+      // Only update beat index when playing
+      if (isPlaying) {
+        // Find current beat index based on time
+        let newBeatIndex = -1;
+
+        if (chordGridData.beats && chordGridData.beats.length > 0) {
+          // FIXED: Handle (number | null)[] format correctly
+          for (let i = 0; i < chordGridData.beats.length; i++) {
+            const beatTime = chordGridData.beats[i];
+
+            // Skip null entries (padding/shift beats)
+            if (beatTime === null) {
+              continue;
+            }
+
+            if (typeof beatTime === 'number' && time >= beatTime) {
+              newBeatIndex = i;
+            } else if (typeof beatTime === 'number') {
+              // Stop when we find a beat time that's greater than current time
+              break;
+            }
+          }
+
+
+        }
+
+        // Update beat index if it changed
+        if (newBeatIndex !== currentBeatIndexRef.current && newBeatIndex >= 0) {
+          currentBeatIndexRef.current = newBeatIndex;
+          setCurrentBeatIndex(newBeatIndex);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(updateBeatTracking);
+    };
+
+    // Start the animation loop
+    rafRef.current = requestAnimationFrame(updateBeatTracking);
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, analysisResults]); // CRITICAL FIX: Intentionally limited dependencies to prevent animation loop restarts
+
+  // Auto-scroll to current beat when follow mode is enabled
+  useEffect(() => {
+    if (!isFollowModeEnabled || currentBeatIndex === -1) return;
+
+    const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
+    if (beatElement) {
+      beatElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [currentBeatIndex, isFollowModeEnabled]);
+
+  // Beat click handler
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
     if (!audioRef.current) return;
 
@@ -414,8 +488,29 @@ export default function LocalAudioAnalyzePage() {
     if (targetTime >= 0) {
       audioRef.current.currentTime = targetTime;
       setCurrentTime(targetTime);
+
+      // Update beat index immediately for responsive animation
+      currentBeatIndexRef.current = beatIndex;
+      setCurrentBeatIndex(beatIndex);
     }
   }, [chordGridData.beats]);
+
+  // Metronome synchronization hook - use duration from audio element
+  const { toggleMetronomeWithSync } = useMetronomeSync({
+    beats: analysisResults?.beats || [],
+    downbeats: analysisResults?.downbeats,
+    currentTime,
+    isPlaying,
+    timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
+    bpm: analysisResults?.beatDetectionResult?.bpm || 120,
+    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
+    shiftCount: chordGridData.shiftCount || 0,
+    paddingCount: chordGridData.paddingCount || 0,
+    chordGridBeats: chordGridData.beats || [],
+    audioDuration: duration // Use duration from audio element instead of analysisResults
+  });
+
+
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
@@ -597,10 +692,7 @@ export default function LocalAudioAnalyzePage() {
 
 
 
-              {/* Metronome Controls */}
-              <MetronomeControls
-                className="mt-4"
-              />
+
 
               {/* Advanced Analysis Summary */}
               {analysisResults && (
@@ -612,159 +704,10 @@ export default function LocalAudioAnalyzePage() {
             </div>
           </div>
 
-          {/* Right side - Audio player section (20% width) */}
+          {/* Right side - Instructions section (20% width) */}
           <div className="lg:w-1/5">
-            {/* Audio Player */}
-            <div className="bg-white dark:bg-content-bg p-4 rounded-lg shadow-card mb-6 transition-colors duration-300">
-              <audio ref={audioRef} className="w-full mb-4" controls={false} />
-
-              <div className="flex flex-col space-y-2">
-                {/* Transport Controls */}
-                <div className="flex items-center justify-center space-x-2">
-                  {/* Skip Backward */}
-                  <button
-                    onClick={() => skipBackward(10)}
-                    disabled={!audioFile}
-                    className={`p-2 rounded-full transition-colors ${
-                      !audioFile
-                        ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                    }`}
-                    title="Skip back 10 seconds"
-                  >
-                    <FiSkipBack className="w-4 h-4" />
-                  </button>
-
-                  {/* Play/Pause Button */}
-                  <button
-                    onClick={playPause}
-                    disabled={!audioFile}
-                    className={`font-medium py-2 px-6 rounded-full shadow-button transition-colors ${
-                      !audioFile
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-primary-600 hover:bg-primary-700 text-white'
-                    }`}
-                  >
-                    {isPlaying ? "Pause" : "Play"}
-                  </button>
-
-                  {/* Skip Forward */}
-                  <button
-                    onClick={() => skipForward(10)}
-                    disabled={!audioFile}
-                    className={`p-2 rounded-full transition-colors ${
-                      !audioFile
-                        ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                    }`}
-                    title="Skip forward 10 seconds"
-                  >
-                    <FiSkipForward className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Playback Position */}
-                <div className="text-gray-700 dark:text-gray-300 font-medium text-center text-sm transition-colors duration-300">
-                  {Math.floor(currentTime / 60)}:
-                  {String(Math.floor(currentTime % 60)).padStart(2, '0')} /
-                  {Math.floor(duration / 60)}:
-                  {String(Math.floor(duration % 60)).padStart(2, '0')}
-                </div>
-
-                {/* Current Chord Display */}
-                {chordGridData.chords.length > 0 && currentBeatIndex >= 0 && currentBeatIndex < chordGridData.chords.length && (
-                  <div className="text-center bg-primary-50 dark:bg-primary-900 py-2 px-4 rounded-lg transition-colors duration-300">
-                    <span className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">Current Chord</span>
-                    <div className="text-2xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">
-                      {chordGridData.chords[currentBeatIndex]}
-                    </div>
-                  </div>
-                )}
-
-                {/* Playback Speed */}
-                <div className="flex flex-col items-center">
-                  <span className="text-gray-600 dark:text-gray-300 text-sm mb-1 transition-colors duration-300">Speed:</span>
-                  <div className="flex flex-wrap justify-center gap-1">
-                    {playbackRates.map(rate => (
-                      <button
-                        key={rate}
-                        onClick={() => changePlaybackRate(rate)}
-                        disabled={!audioFile}
-                        className={`px-2 py-1 text-xs rounded-full transition-colors ${
-                          !audioFile
-                            ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                            : playbackRate === rate
-                              ? 'bg-primary-600 text-white font-medium shadow-button'
-                              : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                        }`}
-                      >
-                        {rate}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Clickable Progress Bar */}
-              <div
-                className="mt-3 bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden transition-colors duration-300 cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-500"
-                onClick={handleProgressBarClick}
-                title="Click to seek"
-              >
-                <div
-                  className="bg-primary-600 h-full transition-all duration-100 ease-out pointer-events-none"
-                  style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                />
-              </div>
-
-              {/* Quick Skip Buttons */}
-              <div className="flex justify-center space-x-2 mt-2">
-                <button
-                  onClick={() => skipBackward(30)}
-                  disabled={!audioFile}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    !audioFile
-                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  -30s
-                </button>
-                <button
-                  onClick={() => skipBackward(5)}
-                  disabled={!audioFile}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    !audioFile
-                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  -5s
-                </button>
-                <button
-                  onClick={() => skipForward(5)}
-                  disabled={!audioFile}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    !audioFile
-                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  +5s
-                </button>
-                <button
-                  onClick={() => skipForward(30)}
-                  disabled={!audioFile}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    !audioFile
-                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  +30s
-                </button>
-              </div>
-            </div>
+            {/* Hidden audio element */}
+            <audio ref={audioRef} className="hidden" controls={false} />
 
             {/* Instructions */}
             <div className="bg-white dark:bg-content-bg p-4 rounded-lg shadow-card transition-colors duration-300">
@@ -784,6 +727,171 @@ export default function LocalAudioAnalyzePage() {
         </div>
       </main>
 
+      {/* Fixed Bottom-Right Audio Controls */}
+      {audioFile && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-content-bg p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 transition-colors duration-300 max-w-sm">
+          {/* Transport Controls */}
+          <div className="flex items-center justify-center space-x-2 mb-3">
+            {/* Skip Backward */}
+            <button
+              onClick={() => skipBackward(10)}
+              disabled={!audioFile}
+              className={`p-2 rounded-full transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+              title="Skip back 10 seconds"
+            >
+              <FiSkipBack className="w-4 h-4" />
+            </button>
+
+            {/* Play/Pause Button */}
+            <button
+              onClick={playPause}
+              disabled={!audioFile}
+              className={`font-medium py-2 px-6 rounded-full shadow-button transition-colors ${
+                !audioFile
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700 text-white'
+              }`}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+
+            {/* Skip Forward */}
+            <button
+              onClick={() => skipForward(10)}
+              disabled={!audioFile}
+              className={`p-2 rounded-full transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+              title="Skip forward 10 seconds"
+            >
+              <FiSkipForward className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Playback Position */}
+          <div className="text-gray-700 dark:text-gray-300 font-medium text-center text-sm mb-3 transition-colors duration-300">
+            {Math.floor(currentTime / 60)}:
+            {String(Math.floor(currentTime % 60)).padStart(2, '0')} /
+            {Math.floor(duration / 60)}:
+            {String(Math.floor(duration % 60)).padStart(2, '0')}
+          </div>
+
+          {/* Current Chord Display */}
+          {chordGridData.chords.length > 0 && currentBeatIndex >= 0 && currentBeatIndex < chordGridData.chords.length && (
+            <div className="text-center bg-primary-50 dark:bg-primary-900 py-2 px-4 rounded-lg mb-3 transition-colors duration-300">
+              <span className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">Current Chord</span>
+              <div className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">
+                {chordGridData.chords[currentBeatIndex]}
+              </div>
+            </div>
+          )}
+
+          {/* Playback Speed */}
+          <div className="flex flex-col items-center mb-3">
+            <span className="text-gray-600 dark:text-gray-300 text-xs mb-1 transition-colors duration-300">Speed:</span>
+            <div className="flex flex-wrap justify-center gap-1">
+              {playbackRates.map(rate => (
+                <button
+                  key={rate}
+                  onClick={() => changePlaybackRate(rate)}
+                  disabled={!audioFile}
+                  className={`px-2 py-1 text-xs rounded-full transition-colors ${
+                    !audioFile
+                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                      : playbackRate === rate
+                        ? 'bg-primary-600 text-white font-medium shadow-button'
+                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+                  }`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Auto-scroll Toggle */}
+          <div className="flex items-center justify-center space-x-2 mb-3">
+            <span className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Auto-scroll:</span>
+            <button
+              onClick={() => setIsFollowModeEnabled(!isFollowModeEnabled)}
+              disabled={!audioFile}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : isFollowModeEnabled
+                    ? 'bg-primary-600 text-white font-medium shadow-button'
+                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+              title={isFollowModeEnabled ? 'Disable auto-scroll to current beat' : 'Enable auto-scroll to current beat'}
+            >
+              {isFollowModeEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          {/* Metronome Controls */}
+          {analysisResults && (
+            <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
+              <MetronomeControls
+                onToggleWithSync={toggleMetronomeWithSync}
+              />
+            </div>
+          )}
+
+          {/* Quick Skip Buttons */}
+          <div className="flex justify-center space-x-1 mt-3">
+            <button
+              onClick={() => skipBackward(30)}
+              disabled={!audioFile}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+            >
+              -30s
+            </button>
+            <button
+              onClick={() => skipBackward(5)}
+              disabled={!audioFile}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+            >
+              -5s
+            </button>
+            <button
+              onClick={() => skipForward(5)}
+              disabled={!audioFile}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+            >
+              +5s
+            </button>
+            <button
+              onClick={() => skipForward(30)}
+              disabled={!audioFile}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                !audioFile
+                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
+              }`}
+            >
+              +30s
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

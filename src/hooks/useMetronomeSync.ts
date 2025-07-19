@@ -55,18 +55,15 @@ export const useMetronomeSync = ({
         lastParams.timeSignature === currentParams.timeSignature &&
         lastParams.duration === currentParams.duration &&
         metronomeService.hasMetronomeTrack()) {
-      // Track already exists with same parameters
       return;
     }
 
     isGeneratingTrack.current = true;
-    // Generate metronome track
 
     try {
       const track = await metronomeService.generateMetronomeTrack(audioDuration, bpm, timeSignature);
       if (track) {
         trackGenerationParams.current = currentParams;
-        // Track generated successfully
       } else {
         console.error('Failed to generate metronome track');
       }
@@ -153,9 +150,11 @@ export const useMetronomeSync = ({
    * This function has access to the current playback time for perfect sync
    */
   const toggleMetronomeWithSync = useCallback(async (): Promise<boolean> => {
-    // console.log(`Toggling metronome at current time: ${currentTime.toFixed(3)}s`);
+    // Ensure track is generated before toggling
+    await generateMetronomeTrack();
+
     return await metronomeService.toggleMetronome(currentTime);
-  }, [currentTime]);
+  }, [currentTime, generateMetronomeTrack]);
 
   return {
     generateMetronomeTrack,

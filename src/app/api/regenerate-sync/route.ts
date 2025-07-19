@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVideoTranscriptions, saveTranscription } from '@/services/firestoreService';
 import { synchronizeChords } from '@/services/chordRecognitionService';
-// import type { TranscriptionData } from '@/services/firestoreService';
 import { auth } from '@/config/firebase';
 import { signInAnonymously } from 'firebase/auth';
 

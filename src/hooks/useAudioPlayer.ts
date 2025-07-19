@@ -6,7 +6,6 @@ export interface AudioPlayerState {
   currentTime: number;
   duration: number;
   playbackRate: number;
-  preferredAudioSource: 'youtube' | 'extracted';
 }
 
 export const useAudioPlayer = () => {
@@ -15,7 +14,6 @@ export const useAudioPlayer = () => {
     currentTime: 0,
     duration: 0,
     playbackRate: 1,
-    preferredAudioSource: 'extracted'
   });
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -23,47 +21,33 @@ export const useAudioPlayer = () => {
 
   const play = useCallback(() => {
     setState(prev => ({ ...prev, isPlaying: true }));
-    if (audioRef.current && state.preferredAudioSource === 'extracted') {
-      audioRef.current.play().catch(console.error);
-    }
-    if (youtubePlayer && state.preferredAudioSource === 'youtube') {
+    if (youtubePlayer) {
       youtubePlayer.playVideo();
     }
-  }, [state.preferredAudioSource, youtubePlayer]);
+  }, [youtubePlayer]);
 
   const pause = useCallback(() => {
     setState(prev => ({ ...prev, isPlaying: false }));
-    if (audioRef.current && state.preferredAudioSource === 'extracted') {
-      audioRef.current.pause();
-    }
-    if (youtubePlayer && state.preferredAudioSource === 'youtube') {
+    if (youtubePlayer) {
       youtubePlayer.pauseVideo();
     }
-  }, [state.preferredAudioSource, youtubePlayer]);
+  }, [youtubePlayer]);
 
   const seek = useCallback((time: number) => {
     setState(prev => ({ ...prev, currentTime: time }));
-    if (audioRef.current && state.preferredAudioSource === 'extracted') {
-      audioRef.current.currentTime = time;
-    }
-    if (youtubePlayer && state.preferredAudioSource === 'youtube') {
+    if (youtubePlayer) {
       youtubePlayer.seekTo(time, 'seconds');
     }
-  }, [state.preferredAudioSource, youtubePlayer]);
+  }, [youtubePlayer]);
 
   const setPlaybackRate = useCallback((rate: number) => {
     setState(prev => ({ ...prev, playbackRate: rate }));
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
     if (youtubePlayer) {
       youtubePlayer.setPlaybackRate(rate);
     }
   }, [youtubePlayer]);
 
-  const setPreferredAudioSource = useCallback((source: 'youtube' | 'extracted') => {
-    setState(prev => ({ ...prev, preferredAudioSource: source }));
-  }, []);
+
 
   const handleTimeUpdate = useCallback((time: number) => {
     setState(prev => ({ ...prev, currentTime: time }));
@@ -77,18 +61,15 @@ export const useAudioPlayer = () => {
     setYoutubePlayer(player);
   }, []);
 
-  // Sync audio sources based on preference
+  // Ensure YouTube player is unmuted and extracted audio is muted
   useEffect(() => {
-    if (youtubePlayer && audioRef.current) {
-      if (state.preferredAudioSource === 'youtube') {
-        youtubePlayer.muted = false;
-        audioRef.current.muted = true;
-      } else {
-        youtubePlayer.muted = true;
-        audioRef.current.muted = false;
-      }
+    if (youtubePlayer) {
+      youtubePlayer.muted = false;
     }
-  }, [state.preferredAudioSource, youtubePlayer]);
+    if (audioRef.current) {
+      audioRef.current.muted = true;
+    }
+  }, [youtubePlayer]);
 
   const setDuration = useCallback((duration: number) => {
     setState(prev => ({ ...prev, duration }));
@@ -102,7 +83,6 @@ export const useAudioPlayer = () => {
     pause,
     seek,
     setPlaybackRate,
-    setPreferredAudioSource,
     handleTimeUpdate,
     handleLoadedMetadata,
     handleYouTubePlayerReady,

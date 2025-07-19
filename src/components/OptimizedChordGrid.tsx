@@ -80,30 +80,38 @@ const OptimizedChordGrid: React.FC<OptimizedChordGridProps> = memo(({
     const isMobilePortrait = screenWidth < 568; // Very small screens
     const isMobileLandscape = screenWidth >= 568 && screenWidth < 768;
     const isTablet = screenWidth >= 768 && screenWidth < 1024;
+    const isDesktop = screenWidth >= 1024 && screenWidth < 1440;
 
-    let idealMeasuresPerRow: number;
+    // IMPROVED RESPONSIVE ALGORITHM: Target 16-20 cells per row
+    let targetCellsPerRow: number;
 
     if (isMobilePortrait) {
-      // Very small screens (< 568px): Maximum 2 measures per row for readability
-      // For complex time signatures (6/8, 7/8), use only 1 measure per row
-      if (timeSignature >= 6) {
-        idealMeasuresPerRow = 1; // 1 measure only for complex time signatures
-      } else {
-        idealMeasuresPerRow = 2; // 2 measures for 4/4 or 3/4
-      }
+      // Mobile portrait: 8-12 cells per row
+      targetCellsPerRow = 12;
     } else if (isMobileLandscape) {
-      // Mobile landscape: optimize for wider screen
-      if (timeSignature >= 6) {
-        idealMeasuresPerRow = 2; // 2 measures for complex time signatures
-      } else {
-        idealMeasuresPerRow = 4; // 4 measures for simple time signatures
-      }
+      // Mobile landscape: 12-16 cells per row
+      targetCellsPerRow = 16;
     } else if (isTablet) {
-      // Tablet: 3-4 measures per row
-      idealMeasuresPerRow = timeSignature >= 6 ? 3 : 4;
-    } else {
-      // Desktop: 4-5 measures per row
-      idealMeasuresPerRow = timeSignature >= 6 ? 4 : 5;
+      // Tablet: 16-20 cells per row
+      targetCellsPerRow = 20;
+    } else if (isDesktop) {
+      // Desktop: 16-20 cells per row
+      targetCellsPerRow = 20;
+    } else { // Large desktop
+      // Large desktop: 20-24 cells per row
+      targetCellsPerRow = 24;
+    }
+
+    // Calculate measures per row based on target cells
+    let idealMeasuresPerRow = Math.max(1, Math.floor(targetCellsPerRow / timeSignature));
+
+    // Apply time signature complexity limits
+    if (timeSignature >= 7) {
+      // Very complex: max 2-3 measures per row
+      idealMeasuresPerRow = Math.min(idealMeasuresPerRow, 3);
+    } else if (timeSignature >= 5) {
+      // Moderately complex: max 3-4 measures per row
+      idealMeasuresPerRow = Math.min(idealMeasuresPerRow, 4);
     }
 
     // Apply minimum cell size constraint: reduce measures if cells would be too small
@@ -157,14 +165,32 @@ const OptimizedChordGrid: React.FC<OptimizedChordGridProps> = memo(({
     return `${baseClasses} bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100`;
   }, [currentBeatIndex]);
 
-  // Memoized grid columns class
+  // PERFORMANCE OPTIMIZATION: Memoized grid columns class generators
   const getGridColumns = useCallback((beatsPerMeasure: number) => {
     switch (beatsPerMeasure) {
       case 2: return 'grid-cols-2';
       case 3: return 'grid-cols-3';
       case 4: return 'grid-cols-4';
+      case 5: return 'grid-cols-5';
       case 6: return 'grid-cols-6';
-      case 8: return 'grid-cols-4'; // Display 8/8 as 2 rows of 4
+      case 7: return 'grid-cols-7';
+      case 8: return 'grid-cols-8';
+      case 9: return 'grid-cols-9';
+      case 10: return 'grid-cols-10';
+      case 11: return 'grid-cols-11';
+      case 12: return 'grid-cols-12';
+      default: return 'grid-cols-4';
+    }
+  }, []);
+
+  const getMeasuresGridClass = useCallback((measuresPerRow: number) => {
+    switch (measuresPerRow) {
+      case 1: return 'grid-cols-1';
+      case 2: return 'grid-cols-2';
+      case 3: return 'grid-cols-3';
+      case 4: return 'grid-cols-4';
+      case 5: return 'grid-cols-5';
+      case 6: return 'grid-cols-6';
       default: return 'grid-cols-4';
     }
   }, []);
@@ -194,14 +220,7 @@ const OptimizedChordGrid: React.FC<OptimizedChordGridProps> = memo(({
         {rows.map((row, rowIndex) => (
           <div key={rowIndex} className="row-container">
             {/* Row of measures */}
-            <div className={`grid gap-3 ${
-              getMeasuresPerRow === 1 ? 'grid-cols-1' :
-              getMeasuresPerRow === 2 ? 'grid-cols-2' :
-              getMeasuresPerRow === 3 ? 'grid-cols-3' :
-              getMeasuresPerRow === 4 ? 'grid-cols-4' :
-              getMeasuresPerRow === 5 ? 'grid-cols-5' :
-              'grid-cols-4' // fallback
-            }`}>
+            <div className={`grid gap-3 ${getMeasuresGridClass(getMeasuresPerRow)}`}>
               {row.map((measure, measureIndexInRow) => {
                 const measureIndex = rowIndex * getMeasuresPerRow + measureIndexInRow;
 

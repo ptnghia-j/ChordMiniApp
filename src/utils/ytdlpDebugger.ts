@@ -5,9 +5,9 @@
  * It helps diagnose file path mismatches, naming issues, and Firebase integration problems.
  */
 
-import { promises as fs } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
+import { promises as fs } from 'fs';
 
 export interface DebugInfo {
   tempDir: string;

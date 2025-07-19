@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AnalysisResult } from '@/services/chordRecognitionService';
+import { YouTubePlayer } from '@/types/youtube';
 import { timingSyncService } from '@/services/timingSyncService';
 
 // Define ChordGridData type based on the analyze page implementation
@@ -24,7 +25,7 @@ export interface ChordGridData {
 
 export interface ScrollAndAnimationDependencies {
   // Audio and playback state
-  audioRef: React.RefObject<HTMLAudioElement | null>;
+  youtubePlayer: YouTubePlayer | null; // YouTube player for timing
   isPlaying: boolean;
   analysisResults: AnalysisResult | null;
   
@@ -59,7 +60,7 @@ export interface ScrollAndAnimationHelpers {
  */
 export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): ScrollAndAnimationHelpers => {
   const {
-    audioRef,
+    youtubePlayer,
     isPlaying,
     analysisResults,
     currentBeatIndex,
@@ -163,16 +164,24 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
   // Update current time and check for current beat
   useEffect(() => {
-    if (!audioRef.current || !isPlaying || !analysisResults) {
+    // CRITICAL FIX: Always set up the animation loop, but only run when conditions are met
+    // This ensures the loop starts when isPlaying becomes true
+    if (!youtubePlayer || !analysisResults) {
       return;
     }
 
     // PERFORMANCE OPTIMIZATION: Use RequestAnimationFrame for smoother updates
     // This provides 60fps updates instead of fixed 20Hz, reducing jitter
     const updateBeatTracking = () => {
-      if (audioRef.current && isPlaying) {
-        const time = audioRef.current.currentTime;
-        setCurrentTime(time);
+      // CRITICAL FIX: Check current playing state dynamically
+      // This allows the animation to respond to play/pause without restarting the entire loop
+      if (!youtubePlayer || !youtubePlayer.getCurrentTime || !isPlaying) {
+        // If not playing, schedule next frame to check again
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+        return;
+      }
+      const time = youtubePlayer.getCurrentTime();
+      setCurrentTime(time);
 
         // DEBUG: Log animation interval execution every 5 seconds
         // if (Math.floor(time) % 5 === 0 && Math.floor(time * 10) % 10 === 0) {
@@ -447,14 +456,12 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
             }
             setCurrentDownbeatIndex(currentDownbeat);
           }
-            } // End of normal beat tracking (if !useClickPosition)
-        }
+        } // End of normal beat tracking (if !useClickPosition)
       }
 
       // PERFORMANCE OPTIMIZATION: Schedule next frame for smooth 60fps updates
-      if (isPlaying && audioRef.current) {
-        rafRef.current = requestAnimationFrame(updateBeatTracking);
-      }
+      // Always schedule next frame - the loop will check isPlaying state dynamically
+      rafRef.current = requestAnimationFrame(updateBeatTracking);
     };
 
     // Start the animation loop
@@ -465,8 +472,10 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         cancelAnimationFrame(rafRef.current);
       }
     };
+  // CRITICAL FIX: Include isPlaying to ensure animation starts when YouTube playback begins
+  // The animation loop handles play/pause gracefully by checking state dynamically
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, analysisResults, audioRef, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]); // Removed setCurrentTime to prevent infinite loop
+  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]); // Added isPlaying back to ensure animation starts on YouTube play
 
   return {
     scrollToCurrentBeat,

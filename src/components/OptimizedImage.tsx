@@ -9,6 +9,7 @@ interface OptimizedImageProps {
   width: number;
   height: number;
   priority?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
   className?: string;
   sizes?: string;
   quality?: number;
@@ -22,7 +23,7 @@ interface OptimizedImageProps {
 
 /**
  * Optimized Image component with performance enhancements
- * - WebP format support with fallback
+ * - WebP format support with PNG fallback
  * - Responsive sizing
  * - Lazy loading optimization
  * - Error handling with fallback
@@ -33,6 +34,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   width,
   height,
   priority = false,
+  fetchPriority = 'auto',
   className = '',
   sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
   quality = 85,
@@ -43,6 +45,18 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
   onLoad,
   onError
 }) => {
+  // Auto-convert PNG sources to WebP with fallback
+  const getOptimizedSrc = useCallback((originalSrc: string) => {
+    // Only convert PNG files to WebP, leave SVG and other formats as-is
+    if (originalSrc.endsWith('.png')) {
+      return originalSrc.replace('.png', '.webp');
+    }
+    return originalSrc;
+  }, []);
+
+  const optimizedSrc = getOptimizedSrc(src);
+  const fallbackSrc = src; // Original PNG as fallback
+
   const handleLoad = useCallback(() => {
     // Optimize LCP for critical images
     if (dataLcpImage && priority) {
@@ -69,21 +83,27 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      <Image
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        priority={priority}
-        quality={quality}
-        sizes={sizes}
-        placeholder={placeholder}
-        blurDataURL={defaultBlurDataURL}
-        className="w-full h-auto object-cover"
-        onLoad={handleLoad}
-        onError={handleError}
-        style={style}
-      />
+      <picture>
+        {/* WebP source for modern browsers */}
+        <source srcSet={optimizedSrc} type="image/webp" />
+        {/* PNG fallback for older browsers */}
+        <Image
+          src={fallbackSrc}
+          alt={alt}
+          width={width}
+          height={height}
+          priority={priority}
+          fetchPriority={fetchPriority}
+          quality={quality}
+          sizes={sizes}
+          placeholder={placeholder}
+          blurDataURL={defaultBlurDataURL}
+          className="w-full h-auto object-cover"
+          onLoad={handleLoad}
+          onError={handleError}
+          style={style}
+        />
+      </picture>
     </div>
   );
 };

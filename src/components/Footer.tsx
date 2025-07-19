@@ -84,7 +84,7 @@ const Footer: React.FC = () => {
           {/* Left Section - Logo and Title */}
           <div className="flex items-center space-x-4">
             <Image
-              src={theme === 'dark' ? "/chordMiniLogo-dark.png" : "/chordMiniLogo.png"}
+              src={theme === 'dark' ? "/chordMiniLogo-dark.webp" : "/chordMiniLogo.webp"}
               alt="ChordMini Logo"
               width={48}
               height={48}
@@ -96,7 +96,7 @@ const Footer: React.FC = () => {
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 ChordMini
               </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
                 AI-Powered Chord Recognition
               </p>
             </div>
@@ -155,21 +155,21 @@ const Footer: React.FC = () => {
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
                 © 2025 ChordMini App
               </p>
               <div className="flex items-center space-x-2">
-                <HiMail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                <HiMail className="w-4 h-4 text-gray-700 dark:text-gray-300" />
                 <a
                   href="mailto:phantrongnghia510@gmail.com"
-                  className="text-xs text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200"
+                  className="text-xs text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200"
                 >
                   phantrongnghia510@gmail.com
                 </a>
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Version 0.2.6
+            <p className="text-xs text-gray-700 dark:text-gray-300">
+              Version 0.3.2
             </p>
           </div>
         </div>

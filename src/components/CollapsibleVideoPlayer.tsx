@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FaExpand, FaCompress } from 'react-icons/fa';
+import { Slider } from '@heroui/react';
 
 // Dynamically import ReactPlayer to avoid SSR issues
 const ReactPlayer = dynamic(() => import('react-player/youtube'), {
@@ -18,22 +19,26 @@ interface CollapsibleVideoPlayerProps {
   videoId: string;
   isPlaying: boolean;
   playbackRate: number;
-  preferredAudioSource: 'youtube' | 'extracted';
+  currentTime?: number;
+  duration?: number;
   onReady?: (player: unknown) => void;
   onPlay?: () => void;
   onPause?: () => void;
   onProgress?: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
+  onSeek?: (time: number) => void;
 }
 
 export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
   videoId,
   isPlaying,
   playbackRate,
-  preferredAudioSource,
+  currentTime = 0,
+  duration = 0,
   onReady,
   onPlay,
   onPause,
-  onProgress
+  onProgress,
+  onSeek
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -75,7 +80,7 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
                 onPause={onPause}
                 onProgress={onProgress}
                 progressInterval={100}
-                muted={preferredAudioSource === 'extracted'}
+                muted={false}
                 config={{
                   playerVars: {
                     showinfo: 0,
@@ -91,25 +96,45 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
             {/* Play/pause button - larger and more accessible for mobile */}
             <button
               onClick={isPlaying ? onPause : onPlay}
-              className="bg-blue-600 dark:bg-blue-700 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors duration-300 flex-shrink-0 shadow-lg"
+              className="bg-gray-800 dark:bg-white text-white dark:text-gray-800 rounded-full w-12 h-12 flex items-center justify-center hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors duration-300 flex-shrink-0 shadow-lg"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
                 </svg>
               )}
             </button>
 
-            {/* Video title/info - hidden on mobile for cleaner UI */}
-            <div className="hidden sm:flex items-center gap-2 min-w-0 flex-1">
-              <span className="text-gray-800 dark:text-white text-sm font-medium truncate">
-                Video Player
-              </span>
+            {/* Video progress slider */}
+            <div className="flex-1 min-w-0 flex items-center">
+              <Slider
+                color="foreground"
+                renderThumb={(props) => (
+                  <div
+                    {...props}
+                    className="h-5 w-5 rounded-full bg-blue-400 dark:bg-blue-200"
+                  />
+                )}
+                size="sm"
+                step={0.1}
+                minValue={0}
+                maxValue={duration || 100}
+                value={currentTime}
+                onChange={(value) => onSeek && onSeek(Array.isArray(value) ? value[0] : value)}
+                className="w-5/6"
+                classNames={{
+                  base: "max-w-md",
+                  track: "border-s-secondary-100",
+                  filler: "bg-gradient-to-r from-primary-100 to-primary-500",
+                }}
+                formatOptions={{style: "unit", unit: "second"}}
+                aria-label="Video progress"
+              />
             </div>
           </div>
 
@@ -158,7 +183,7 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
           onPause={onPause}
           onProgress={onProgress}
           progressInterval={100}
-          muted={preferredAudioSource === 'extracted'}
+          muted={false}
           config={{
             playerVars: {
               showinfo: 1,

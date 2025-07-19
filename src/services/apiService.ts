@@ -259,17 +259,17 @@ class ApiService {
   }
 
   /**
-   * Health check
+   * Health check - FIXED: Increased timeout for Google Cloud Run cold starts
    */
   async healthCheck(): Promise<ApiResponse> {
-    return this.get('/', { timeout: 10000, retries: false });
+    return this.get('/', { timeout: 25000, retries: false });
   }
 
   /**
-   * Get model information
+   * Get model information - FIXED: Increased timeout for Google Cloud Run cold starts
    */
   async getModelInfo(): Promise<ApiResponse> {
-    return this.get('/api/model-info', { timeout: 15000 });
+    return this.get('/api/model-info', { timeout: 25000 });
   }
 
   /**

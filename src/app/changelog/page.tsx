@@ -7,6 +7,66 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.3.2',
+      date: 'July 19, 2025',
+      title: 'Enhanced Lyrics & Chords Display System',
+      description: 'Core implementation improvements focusing on comprehensive chord display and intelligent section handling in the lyrics and chords tab',
+      features: [
+        'ENHANCED: Complete chord coverage in lyrics and chords tab - all chords now display even when outside lyrical sections',
+        'NEW: Intelligent instrumental section placeholders with visual indicators ([Intro], [Outro], [Instrumental]) that support chord positioning',
+        'NEW: AI chatbot segment label integration - section labels automatically appear above corresponding lyrics when segmentation data is available',
+        'IMPROVED: Synchronized section visualization between beat/chord grid and lyrics display for better song structure understanding'
+      ],
+      technical: [
+        'Implemented comprehensive chord timeline merging algorithm that identifies gaps between lyrical sections',
+        'Added intelligent grouping of consecutive chords into chord-only sections with configurable gap threshold (4 seconds)',
+        'Enhanced LeadSheetDisplay component with segmentation data integration and section label rendering',
+        'Optimized chord positioning logic to handle instrumental placeholders, chord-only sections, and regular lyrics uniformly',
+        'Improved component architecture with proper TypeScript typing and memoization for performance'
+      ],
+      breaking: []
+    },
+    {
+      version: 'v0.3.1',
+      date: 'July 16, 2025',
+      title: 'UI Performance Optimization',
+      description: 'Release focused on addressing some UI performance issues',
+      features: [
+        'PERFORMANCE: reduced re-renders in ChatbotSection by optimizing buildSongContext with memoization',
+        'PERFORMANCE: decreased font size recalculation by memoizing',
+        'PERFORMANCE: optimized chord shift logic by caching shift calculation to prevent redundant calculations',
+        'PERFORMANCE: memoized row grouping to avoid repeated array operatons during render',
+        'PERFORMANCE: reduced DOM operations, cached active line arrays, optimized deep cloning'
+      ],
+      technical: [
+        'Memoized calculateOptimalShift and shifted chords array to avoid recomputation on every render',
+        'Throttled high-frequency useEffect tied to currentTime to prevent excessive DOM reads and layout reflows',
+        'Cached character arrays and memoized color interpolation in active lyric lines to reduce render-time CPU load',
+        'Memoized buildSongContext to avoid object recreation and reduce ChatbotSection re-renders'
+      ],
+      breaking: []
+    },
+    {
+      version: 'v0.3.0',
+      date: 'July 15, 2025',
+      title: 'Song Segmentation & UI Revamp',
+      description: 'Major feature release introducing AI-powered song segmentation visualization and temporary edit capabilities for enhanced music analysis workflow',
+      features: [
+        'NEW: Song segmentation visualization with color-coded beat/chord grid sections (verse, chorus, bridge, etc.)',
+        'NEW: Temporary edit mode for song titles and individual chord labels with intuitive UI controls',
+        'UI: New UI for guitar chord diagrams under segmentation',
+        'UI: Homepage UI revamp with new layout and structure',
+      ],
+      technical: [
+        'Segmentation features supported by LLM learning the context of chords and lyrics transcription',
+        'Edit mode support temporary editing from users',
+        'Synchronize beat chord grid between chord grid and guitar chord diagrams'
+      ],
+      breaking: [
+        'Segmentation feature is in experimental mode - expect changes to the feature and its implementation'
+      ]
+    },
+    {
       version: 'v0.2.6',
       date: 'July 9, 2025',
       title: 'UI Revamp & Model Selection Improvements',

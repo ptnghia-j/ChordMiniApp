@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
 import path from 'path';
+import { promises as fs } from 'fs';
 import { convertToPrivacyEnhancedUrl } from '@/utils/youtubeUtils';
 
 // Check if we're in a serverless environment (Vercel)

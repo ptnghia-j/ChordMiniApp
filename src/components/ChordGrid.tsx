@@ -1,10 +1,21 @@
+'use client';
+
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { Varela_Round } from 'next/font/google'; // Import the new font
 import {
   formatChordWithMusicalSymbols,
   getChordLabelStyles,
   getChordContainerStyles
 } from '@/utils/chordFormatting';
 import { useTheme } from '@/contexts/ThemeContext';
+import { SegmentationResult } from '@/types/chatbotTypes';
+import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
+
+// Instantiate the Varela Round font
+const varelaRound = Varela_Round({
+  subsets: ['latin'],
+  weight: '400', // Varela Round is designed for a single weight
+});
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -26,9 +37,13 @@ interface ChordCellProps {
   isEmpty: boolean;
   displayChord: string;
   wasCorrected: boolean;
+  segmentationColor?: string;
   onBeatClick: (globalIndex: number) => void;
   getChordStyle: (chord: string, isCurrentBeat: boolean, globalIndex: number, isClickable: boolean) => string;
   getDynamicFontSize: (cellSize: number, chordLength: number) => string;
+  isEditMode?: boolean;
+  editedChord?: string;
+  onChordEdit?: (index: number, newChord: string) => void;
 }
 
 const ChordCell = React.memo<ChordCellProps>(({
@@ -42,29 +57,71 @@ const ChordCell = React.memo<ChordCellProps>(({
   isEmpty,
   displayChord,
   wasCorrected,
+  segmentationColor,
   onBeatClick,
   getChordStyle,
-  getDynamicFontSize
+  getDynamicFontSize,
+  isEditMode = false,
+  editedChord,
+  onChordEdit
 }) => {
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(editedChord || displayChord);
+
+  // Update edit value when editedChord changes
+  useEffect(() => {
+    setEditValue(editedChord || displayChord);
+  }, [editedChord, displayChord]);
+
   // Memoize click handler to prevent recreation on every render
   const handleClick = useCallback(() => {
-    if (isClickable) {
+    if (isEditMode && !isEmpty) {
+      setIsEditing(true);
+    } else if (isClickable) {
       onBeatClick(globalIndex);
     }
-  }, [isClickable, onBeatClick, globalIndex]);
+  }, [isEditMode, isEmpty, isClickable, onBeatClick, globalIndex]);
+
+  // Handle edit save
+  const handleEditSave = useCallback(() => {
+    if (onChordEdit && editValue.trim()) {
+      onChordEdit(globalIndex, editValue.trim());
+    }
+    setIsEditing(false);
+  }, [onChordEdit, globalIndex, editValue]);
+
+  // Handle edit cancel
+  const handleEditCancel = useCallback(() => {
+    setEditValue(editedChord || displayChord);
+    setIsEditing(false);
+  }, [editedChord, displayChord]);
 
   // Memoize keyboard handler
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
+    if (isEditing) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEditSave();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleEditCancel();
+      }
+    } else if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       onBeatClick(globalIndex);
     }
-  }, [isClickable, onBeatClick, globalIndex]);
+  }, [isEditing, handleEditSave, handleEditCancel, isClickable, onBeatClick, globalIndex]);
 
   return (
     <div
       id={`chord-${globalIndex}`}
       className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2.75rem] sm:min-h-[3.5rem] chord-cell`}
+      style={
+        // Only apply segmentation color if this is NOT the current beat
+        // Current beat styling takes priority over segmentation colors
+        !isCurrentBeat && segmentationColor ? { backgroundColor: segmentationColor } : undefined
+      }
       onClick={handleClick}
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}
@@ -74,18 +131,41 @@ const ChordCell = React.memo<ChordCellProps>(({
       {/* Enhanced chord display with pickup beat support */}
       <div style={getChordContainerStyles()}>
         {!isEmpty && showChordLabel && chord ? (
-          <div
-            className={`${getDynamicFontSize(cellSize, displayChord.length)} font-medium leading-tight ${
-              wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
-            } overflow-hidden text-ellipsis whitespace-nowrap max-w-full`}
-            style={{
-              ...getChordLabelStyles(),
-              maxWidth: '100%',
-              textOverflow: 'ellipsis',
-            }}
-            title={displayChord}
-            dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(displayChord, isDarkMode) }}
-          />
+          isEditing ? (
+            <input
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleEditSave}
+              onKeyDown={handleKeyDown}
+              className={`${varelaRound.className} ${getDynamicFontSize(cellSize, editValue.length)} leading-tight bg-transparent border-none outline-none text-center w-full`}
+              style={{
+                ...getChordLabelStyles(),
+                maxWidth: '100%',
+              }}
+              autoFocus
+            />
+          ) : (
+            <div
+              // ✅ APPLY FONT: Add the varelaRound class and remove font-medium
+              className={`${varelaRound.className} ${getDynamicFontSize(cellSize, (editedChord || displayChord).length)} leading-tight ${
+                wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
+              } overflow-hidden text-ellipsis whitespace-nowrap max-w-full ${
+                isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
+              }`}
+              style={{
+                ...getChordLabelStyles(),
+                maxWidth: '100%',
+                textOverflow: 'ellipsis',
+              }}
+              title={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}
+              dangerouslySetInnerHTML={{
+                __html: editedChord
+                  ? editedChord // Show raw edited value without formatting
+                  : formatChordWithMusicalSymbols(displayChord, isDarkMode)
+              }}
+            />
+          )
         ) : isEmpty ? (
           <div className="opacity-0" style={getChordLabelStyles()}>·</div>
         ) : (
@@ -146,6 +226,13 @@ interface ChordGridProps {
       }>;
     };
   } | null;
+  // NEW: Song segmentation data for color-coding
+  segmentationData?: SegmentationResult | null; // Segmentation analysis results
+  showSegmentation?: boolean; // Whether to show segmentation colors
+  // Edit mode props
+  isEditMode?: boolean; // Whether edit mode is active
+  editedChords?: Record<number, string>; // Temporarily edited chord values
+  onChordEdit?: (index: number, newChord: string) => void; // Callback for chord edits
 }
 
 const ChordGrid: React.FC<ChordGridProps> = React.memo(({
@@ -168,7 +255,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   isUploadPage = false,
   showCorrectedChords = false,
   chordCorrections = null,
-  sequenceCorrections = null
+  sequenceCorrections = null,
+  segmentationData = null,
+  showSegmentation = false,
+  isEditMode = false,
+  editedChords = {},
+  onChordEdit
 }) => {
 
 
@@ -178,6 +270,29 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const isDarkMode = theme === 'dark';
   // Use simple time signature - no complex beat source logic
   const actualBeatsPerMeasure = timeSignature;
+
+  // Function to get segmentation color for a specific beat index using shared utility
+  const getSegmentationColorForBeatIndex = (beatIndex: number): string | undefined => {
+    // Try to get timestamp from originalAudioMapping first for accuracy
+    let timestamp: number | null = null;
+
+    if (originalAudioMapping) {
+      const mappingEntry = originalAudioMapping.find(item => item.visualIndex === beatIndex);
+      if (mappingEntry) {
+        timestamp = mappingEntry.timestamp;
+      }
+    }
+
+    // Fallback to beats array if no mapping found
+    if (timestamp === null) {
+      timestamp = beats[beatIndex];
+    }
+
+    // Use the enhanced segmentation function with direct timestamp
+    return getSegmentationColorForBeat(beatIndex, beats, segmentationData, showSegmentation, timestamp);
+  };
+
+
 
   // Function to apply chord corrections at display time
   const getDisplayChord = (originalChord: string, visualIndex?: number): { chord: string; wasCorrected: boolean } => {
@@ -277,7 +392,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   };
 
   // UPDATED: Optimal beat shift calculation - detect chord changes from previous beat, score if on downbeat
-  const calculateOptimalShift = (chords: string[], timeSignature: number): number => {
+  // PERFORMANCE OPTIMIZATION: Memoized to prevent useMemo dependency issues
+  const calculateOptimalShift = useCallback((chords: string[], timeSignature: number): number => {
     // Use the shift count from backend if available, otherwise calculate
     if (hasPadding && shiftCount !== undefined) {
       // console.log(`🔧 Using backend shift count: ${shiftCount}`);
@@ -355,6 +471,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       if (chordChangeCount > maxChordChanges) {
         maxChordChanges = chordChangeCount;
         bestShift = shift;
+      } else if (chordChangeCount === maxChordChanges && shift < bestShift) {
+        // When tied, prefer the smaller shift value (earliest alignment)
+        bestShift = shift;
       }
     }
 
@@ -382,35 +501,38 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     // }
 
     return bestShift;
-  };
+  }, [hasPadding, shiftCount]); // Dependencies: hasPadding and shiftCount affect the calculation
 
-  // COMPREHENSIVE STRATEGY: Use backend-provided padding/shift data
-  let shiftedChords: string[];
-  let optimalShift: number;
+  // PERFORMANCE OPTIMIZATION: Memoized chord shift calculation
+  // This prevents expensive recalculation of optimal shift on every render
+  const shiftedChords = useMemo(() => {
+    let computedShiftedChords: string[];
 
-  if (hasPadding) {
-    // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
-    // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
-    // console.log(`🔧 USING BACKEND STRATEGY: hasPadding=true, shiftCount=${shiftCount}, chords already include padding/shift`);
-    shiftedChords = chords; // Use as-is, no additional shifting needed
-    optimalShift = 0; // No additional shift needed
-  } else {
-    // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
-    // console.log(`🔧 USING FRONTEND STRATEGY: hasPadding=false, calculating own shift`);
-    optimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
-    shiftedChords = chords.length > 0 ? [
-      ...Array(optimalShift).fill(''), // Add k empty greyed-out cells at the beginning
-      ...chords // Original chords follow after the shift
-    ] : chords;
-    // console.log(`🔧 FRONTEND APPLIED SHIFT: ${optimalShift}, shiftedChords length: ${shiftedChords.length}`);
-  }
+    if (hasPadding) {
+      // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
+      // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
+      // console.log(`🔧 USING BACKEND STRATEGY: hasPadding=true, shiftCount=${shiftCount}, chords already include padding/shift`);
+      computedShiftedChords = chords; // Use as-is, no additional shifting needed
+    } else {
+      // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
+      // console.log(`🔧 USING FRONTEND STRATEGY: hasPadding=false, calculating own shift`);
+      const computedOptimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
+      computedShiftedChords = chords.length > 0 ? [
+        ...Array(computedOptimalShift).fill(''), // Add k empty greyed-out cells at the beginning
+        ...chords // Original chords follow after the shift
+      ] : chords;
+      // console.log(`🔧 FRONTEND APPLIED SHIFT: ${computedOptimalShift}, shiftedChords length: ${computedShiftedChords.length}`);
+    }
+
+    return computedShiftedChords;
+  }, [chords, hasPadding, actualBeatsPerMeasure, calculateOptimalShift]);
 
 
 
 
 
-  // Helper to get the appropriate CSS grid columns class based on time signature
-  const getGridColumnsClass = (beatsPerMeasure: number): string => {
+  // PERFORMANCE OPTIMIZATION: Memoized CSS grid columns class generator
+  const getGridColumnsClass = useCallback((beatsPerMeasure: number): string => {
     switch (beatsPerMeasure) {
       case 2:
         return 'grid-cols-2';
@@ -439,7 +561,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         // console.warn(`Unusual time signature: ${beatsPerMeasure}/4, using flexible grid`);
         return 'grid-cols-4'; // Default fallback
     }
-  };
+  }, []);
 
 
   // Reference to the grid container for measuring cell size
@@ -449,8 +571,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
 
 
-  // FIX 4: Dynamic font sizing system based on cell size
-  const getDynamicFontSize = (cellSize: number, chordLength: number = 1): string => {
+  // FIX 4: Dynamic font sizing system based on cell size - Memoized for performance
+  const getDynamicFontSize = useCallback((cellSize: number, chordLength: number = 1): string => {
     if (cellSize === 0) return 'text-sm'; // Default fallback
 
     // Base font size calculation: scale with cell size
@@ -483,7 +605,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     if (baseFontSize <= 13) return 'text-base';
     if (baseFontSize <= 15) return 'text-lg';
     return 'text-xl';
-  };
+  }, []); // No dependencies needed as function is pure
 
   // Set up resize observer to track cell size changes and screen width
   useEffect(() => {
@@ -687,57 +809,43 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     // Check if any panel is open
     const anyPanelOpen = isChatbotOpen || isLyricsPanelOpen;
 
-    // Base calculation targeting optimal cell count per screen size
+    // IMPROVED RESPONSIVE ALGORITHM: Consistent 16-20 cells per row target
+    // This provides better visual balance across all time signatures
     let targetCellsPerRow: number;
-    let maxMeasuresPerRow: number;
 
     if (isMobilePortrait) {
-      // Very small screens (< 568px): Maximum 2 measures per row for readability
-      // For complex time signatures (6/8, 7/8), use only 1 measure per row
-      if (timeSignature >= 6) {
-        targetCellsPerRow = timeSignature; // 1 measure only
-        maxMeasuresPerRow = 1;
-      } else {
-        targetCellsPerRow = 8; // 2 measures of 4/4 or 3/4
-        maxMeasuresPerRow = 2;
-      }
+      // Mobile portrait: 8-12 cells per row
+      targetCellsPerRow = anyPanelOpen ? 8 : 12;
     } else if (isMobileLandscape) {
-      // Mobile landscape: optimize for wider screen with better space utilization
-      if (timeSignature >= 6) {
-        targetCellsPerRow = anyPanelOpen ? timeSignature : timeSignature * 2; // 1-2 measures
-        maxMeasuresPerRow = anyPanelOpen ? 1 : 2;
-      } else {
-        targetCellsPerRow = anyPanelOpen ? 12 : 16; // 3-4 measures
-        maxMeasuresPerRow = anyPanelOpen ? 3 : 4;
-      }
+      // Mobile landscape: 12-16 cells per row
+      targetCellsPerRow = anyPanelOpen ? 12 : 16;
     } else if (isTablet) {
-      targetCellsPerRow = anyPanelOpen ? 12 : 16; // Moderate for tablet
-      maxMeasuresPerRow = anyPanelOpen ? 3 : 4; // Reduced from 4:5 to 3:4
+      // Tablet: 16-20 cells per row
+      targetCellsPerRow = anyPanelOpen ? 16 : 20;
     } else if (isDesktop) {
-      targetCellsPerRow = anyPanelOpen ? 16 : 20; // Reduced from 16:24 to 16:20
-      maxMeasuresPerRow = anyPanelOpen ? 4 : 5; // Reduced from 6:8 to 4:5
+      // Desktop: 16-20 cells per row (consistent with tablet)
+      targetCellsPerRow = anyPanelOpen ? 16 : 20;
     } else { // Large desktop
-      targetCellsPerRow = anyPanelOpen ? 20 : 24; // Reduced from 20:32 to 20:24
-      maxMeasuresPerRow = anyPanelOpen ? 5 : 6; // Reduced from 8:10 to 5:6
+      // Large desktop: 20-24 cells per row
+      targetCellsPerRow = anyPanelOpen ? 20 : 24;
     }
 
-    // Calculate base measures per row
+    // CORE ALGORITHM: Calculate measures per row based on target cells
+    // This ensures consistent visual density across different time signatures
     let measuresPerRow = Math.max(1, Math.floor(targetCellsPerRow / timeSignature));
 
-    // Apply additional reduction if panels are open (more aggressive than before)
-    if (anyPanelOpen) {
-      measuresPerRow = Math.max(1, Math.floor(measuresPerRow * 0.8)); // Slightly less aggressive than before
-    }
-
-    // Apply time signature complexity limits
+    // Apply time signature complexity limits for readability
+    // Complex time signatures need fewer measures per row for clarity
     if (timeSignature >= 7) {
-      maxMeasuresPerRow = Math.min(maxMeasuresPerRow, anyPanelOpen ? 2 : 3); // Very complex: max 2-3 measures
+      // Very complex (7/8, 9/8, etc.): max 2-3 measures per row
+      const maxMeasures = anyPanelOpen ? 2 : 3;
+      measuresPerRow = Math.min(measuresPerRow, maxMeasures);
     } else if (timeSignature >= 5) {
-      maxMeasuresPerRow = Math.min(maxMeasuresPerRow, anyPanelOpen ? 3 : 4); // Moderate: max 3-4 measures
+      // Moderately complex (5/4, 6/8): max 3-4 measures per row
+      const maxMeasures = anyPanelOpen ? 3 : 4;
+      measuresPerRow = Math.min(measuresPerRow, maxMeasures);
     }
-
-    // Ensure we don't exceed screen-appropriate maximums
-    measuresPerRow = Math.min(measuresPerRow, maxMeasuresPerRow);
+    // Simple time signatures (2/4, 3/4, 4/4) can use the full calculated amount
 
     // MINIMUM CELL SIZE CONSTRAINT: Never shrink below 70% of desktop size
     const DESKTOP_CELL_SIZE = 80; // Base desktop cell size in pixels
@@ -779,7 +887,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // This prevents recreation of the styling function on every render
   const getChordStyle = useCallback((chord: string, isCurrentBeat: boolean, beatIndex: number, isClickable: boolean = true) => {
     // Clean base classes with minimal styling
-    const baseClasses = `flex flex-col items-start justify-center aspect-square transition-colors duration-150 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden ${
+    const baseClasses = `flex flex-col items-start justify-center aspect-square transition-colors duration-150 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden ${
       isClickable ? 'cursor-pointer hover:border-gray-400 dark:hover:border-gray-500' : ''
     }`;
 
@@ -787,14 +895,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     const isEmpty = chord === '';
     const isPickupBeat = hasPickupBeats && beatIndex < timeSignature && beatIndex >= (timeSignature - pickupBeatsCount);
 
-    // COMMENTED OUT: Complex padding/shift styling logic
-    // const isShiftBeat = hasPadding && chord === '' && beatIndex < shiftCount;
-    // const isPaddingBeat = hasPadding && chord === 'N.C.' && beatIndex >= shiftCount && beatIndex < (shiftCount + paddingCount);
-
-
-    // Clean default styling with solid colors
-    let classes = `${baseClasses} bg-white dark:bg-content-bg`;
+    // Clean default styling
+    let classes = `${baseClasses}`;
     let textColor = "text-gray-800 dark:text-gray-100";
+
+    // Note: Segmentation colors are now applied via inline styles in ChordCell component
+    // Default colors
+    classes += " bg-white dark:bg-content-bg";
 
     // Subtle hover effects for clickable cells
     if (isClickable) {
@@ -805,7 +912,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     // Clean empty cell styling with solid colors
     if (isEmpty) {
       classes = `${baseClasses} bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600`;
-      textColor = "text-gray-400 dark:text-gray-500";
+      textColor = "text-gray-600 dark:text-gray-300";
 
       if (isClickable) {
         classes += " hover:bg-gray-150 dark:hover:bg-gray-650";
@@ -830,7 +937,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       } else {
         // Clean current beat highlighting without animations
         classes = `${baseClasses} bg-blue-200/70 dark:bg-blue-700/70 border-2 border-blue-400 dark:border-blue-400 relative z-10`;
-        textColor = "text-blue-900 dark:text-blue-100 font-medium";
+        textColor = "text-blue-900 dark:text-blue-100";
       }
 
       // Subtle hover effects for current beat cells
@@ -890,11 +997,21 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return measures;
   }, [shiftedChords, beats, actualBeatsPerMeasure, chords.length]);
 
+  // PERFORMANCE OPTIMIZATION: Memoized rows calculation
+  // Group measures into rows using the dynamic measures per row
+  const rows = useMemo(() => {
+    const calculatedRows: Array<typeof groupedByMeasure> = [];
+    for (let i = 0; i < groupedByMeasure.length; i += dynamicMeasuresPerRow) {
+      calculatedRows.push(groupedByMeasure.slice(i, i + dynamicMeasuresPerRow));
+    }
+    return calculatedRows;
+  }, [groupedByMeasure, dynamicMeasuresPerRow]);
+
   // Early return if no chords available
   if (chords.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-content-bg rounded-lg border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
+        <p className="text-gray-700 dark:text-gray-200 text-center p-4 bg-white dark:bg-content-bg rounded-md border border-gray-200 dark:border-gray-600 w-full transition-colors duration-300">
           No chord data available for this song yet.
         </p>
       </div>
@@ -944,12 +1061,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     }
   }
 
-  // Group measures into rows using the dynamic measures per row
-  const rows: Array<typeof groupedByMeasure> = [];
-  for (let i = 0; i < groupedByMeasure.length; i += dynamicMeasuresPerRow) {
-    rows.push(groupedByMeasure.slice(i, i + dynamicMeasuresPerRow));
-  }
-
   return (
     <div ref={gridContainerRef} className="chord-grid-container mx-auto px-0.5 sm:px-1 relative" style={{ maxWidth: "99%" }}>
       {/* Clean card container with minimal styling */}
@@ -992,7 +1103,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
           {keySignature && (
             <div className="bg-green-50 dark:bg-green-200 border border-green-200 dark:border-green-300 rounded-lg px-3 py-1">
               <span className="text-sm font-medium text-green-800 dark:text-green-900">
-                Key: {keySignature}
+                Key: {keySignature.replace(/b/g, '♭').replace(/#/g, '♯')}
               </span>
             </div>
           )}
@@ -1018,16 +1129,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       </div>
 
         {/* Clean grid area with minimal background */}
-        <div className="p-4">
+        <div className="px-0 dark:bg-dark-bg bg-gray-50">
           {/* Render rows of measures */}
-          <div className="space-y-2 overflow-x-auto">
+          <div className="space-y-0.5 overflow-x-auto">
         {rows.map((row, rowIdx) => (
           <div
             key={`row-${rowIdx}`}
             className="measure-row min-w-0"
           >
             {/* Grid of measures with consistent responsive layout */}
-            <div className={`grid gap-1 sm:gap-2 w-full ${
+            <div className={`grid gap-1 sm:gap-1 w-full ${
               // Consistent grid that maintains complete measures per row across all screen sizes
               dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
               dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
@@ -1051,7 +1162,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                   }}
                 >
                   {/* Chord cells for this measure - consistent grid based on time signature */}
-                  <div className={`grid gap-0.5 sm:gap-1 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
+                  <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass(actualBeatsPerMeasure)}`}>
                     {measure.chords.map((chord, beatIdx) => {
                       // Calculate global index with consistent measure layout
                       // Each measure always has exactly actualBeatsPerMeasure cells
@@ -1095,6 +1206,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       // This prevents unnecessary re-renders when only currentBeatIndex changes
                       const { chord: displayChord, wasCorrected } = getDisplayChord(chord, globalIndex);
 
+                      // Get segmentation color for this beat
+                      const segmentationColor = getSegmentationColorForBeatIndex(globalIndex);
+
                       return (
                         <ChordCell
                           key={`chord-${globalIndex}`}
@@ -1108,9 +1222,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           isEmpty={isEmpty}
                           displayChord={displayChord}
                           wasCorrected={wasCorrected}
+                          segmentationColor={segmentationColor}
                           onBeatClick={handleBeatClick}
                           getChordStyle={getChordStyle}
                           getDynamicFontSize={getDynamicFontSize}
+                          isEditMode={isEditMode}
+                          editedChord={editedChords?.[globalIndex]}
+                          onChordEdit={onChordEdit}
                         />
                       );
                     })}

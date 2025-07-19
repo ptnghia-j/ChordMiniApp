@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { db, TRANSLATIONS_COLLECTION } from '@/config/firebase';
-import { collection, doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 
 // Get the API key from environment variables
@@ -88,7 +88,7 @@ async function checkCache(cacheKey: string): Promise<TranslationResponse | null>
 /**
  * Stores a translation in the cache
  */
-async function cacheTranslation(cacheKey: string, data: TranslationResponse): Promise<void> {
+async function cacheTranslation(cacheKey: string, data: TranslationResponse, videoId?: string): Promise<void> {
   try {
     if (!db) {
       console.warn('Firebase not initialized, skipping cache storage');
@@ -98,7 +98,12 @@ async function cacheTranslation(cacheKey: string, data: TranslationResponse): Pr
     try {
       const translationsRef = collection(db as Firestore, TRANSLATIONS_COLLECTION);
       const docRef = doc(translationsRef, cacheKey);
-      await setDoc(docRef, data);
+      const dataWithTimestamp = {
+        ...data,
+        videoId: videoId || 'unknown', // Add videoId required by Firestore rules
+        createdAt: serverTimestamp(), // Use Firestore serverTimestamp instead of Date.now()
+      };
+      await setDoc(docRef, dataWithTimestamp);
       console.log('Successfully cached translation data');
     } catch (firestoreError) {
       console.warn('Firestore access error, unable to cache translation:', firestoreError);
@@ -108,6 +113,69 @@ async function cacheTranslation(cacheKey: string, data: TranslationResponse): Pr
     console.error('Error caching translation:', error);
     // Non-critical error, continue execution
   }
+}
+
+/**
+ * Cleans the translation response to ensure only translated content is returned
+ */
+function cleanTranslationResponse(translatedText: string, originalLyrics: string, targetLanguage: string): string {
+  // Remove common prefixes that Gemini might add
+  const prefixesToRemove = [
+    `Here is the ${targetLanguage} translation:`,
+    `Here's the ${targetLanguage} translation:`,
+    `${targetLanguage} translation:`,
+    'Translation:',
+    'Here is the translation:',
+    'Here\'s the translation:',
+    'The translation is:',
+    'Translated lyrics:',
+    'English translation:',
+    'English lyrics:',
+  ];
+
+  let cleaned = translatedText;
+
+  // Remove prefixes (case insensitive)
+  for (const prefix of prefixesToRemove) {
+    const regex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i');
+    cleaned = cleaned.replace(regex, '');
+  }
+
+  // UPDATED: More conservative line filtering to preserve vocal expressions and complete structure
+  const originalLines = originalLyrics.split('\n').map(line => line.trim());
+  const translatedLines = cleaned.split('\n');
+
+  // Define patterns for vocal expressions that should be preserved even if they match original
+  const vocalExpressions = /^(la\s*)+$|^(oh\s*)+$|^(ah\s*)+$|^(na\s*)+$|^(hey\s*)+$|^(yeah\s*)+$|^(wo\s*)+$|^(da\s*)+$|^(ba\s*)+$|^(mm\s*)+$|^(hm\s*)+$|^(uh\s*)+$/i;
+
+  const filteredLines = translatedLines.filter(translatedLine => {
+    const trimmedTranslated = translatedLine.trim();
+
+    // Always keep empty lines and very short lines (formatting)
+    if (trimmedTranslated.length <= 1) return true;
+
+    // Always keep vocal expressions, even if they match original
+    if (vocalExpressions.test(trimmedTranslated)) return true;
+
+    // For longer lines, only filter if they're exact duplicates of original AND not vocal expressions
+    if (trimmedTranslated.length > 10) {
+      return !originalLines.some(originalLine => {
+        // Only remove if it's an exact match and longer than 10 characters (likely actual duplication)
+        return originalLine === trimmedTranslated && originalLine.length > 10 && !vocalExpressions.test(originalLine);
+      });
+    }
+
+    // Keep all other lines (short phrases, partial matches, etc.)
+    return true;
+  });
+
+  // Rejoin the filtered lines
+  cleaned = filteredLines.join('\n');
+
+  // Final cleanup - remove extra whitespace and empty lines at start/end
+  cleaned = cleaned.trim();
+
+  return cleaned;
 }
 
 /**
@@ -148,25 +216,60 @@ async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI = ai): Promi
  */
 async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI = ai): Promise<string> {
   try {
-    // Special handling for Chinese to English translation
+    // Create comprehensive prompt to ensure complete line-by-line translation
     let prompt = '';
     if (sourceLanguage === 'Chinese' && targetLanguage.toLowerCase() === 'english') {
-      prompt = `Translate the following Chinese lyrics to English. Maintain the original line breaks and structure.
-      Provide a natural, fluent translation that captures the meaning and emotion of the lyrics:
+      prompt = `You are a professional translator. Translate the following Chinese lyrics to English.
 
-      ${lyrics}`;
+CRITICAL REQUIREMENTS - MUST FOLLOW EXACTLY:
+1. COMPLETE TRANSLATION: Include ALL lines from the original lyrics in your response
+2. LINE-BY-LINE MATCHING: Your output must have the EXACT same number of lines as the input
+3. NON-TRANSLATABLE ELEMENTS: Keep vocal expressions like "la la la", "oh oh oh", "na na na", "ah ah ah", "hey hey hey", "yeah yeah yeah" EXACTLY as they are
+4. EMPTY LINES: Preserve all empty lines and spacing exactly as in the original
+5. STRUCTURE: Maintain identical line breaks, verse structure, and formatting
+6. NO OMISSIONS: Do not skip any lines, even if they seem repetitive or non-meaningful
+7. RESPONSE FORMAT: Return ONLY the translated lyrics, no explanations or additional text
+
+Chinese lyrics to translate:
+${lyrics}
+
+Respond with the complete English translation (same line count as original):`;
 
       console.log('Using specialized Chinese to English translation prompt');
     }
     else if (sourceLanguage && sourceLanguage !== 'Unknown') {
-      prompt = `Translate the following ${sourceLanguage} lyrics to ${targetLanguage}. Maintain the original line breaks and structure:
+      prompt = `You are a professional translator. Translate the following ${sourceLanguage} lyrics to ${targetLanguage}.
 
-      ${lyrics}`;
+CRITICAL REQUIREMENTS - MUST FOLLOW EXACTLY:
+1. COMPLETE TRANSLATION: Include ALL lines from the original lyrics in your response
+2. LINE-BY-LINE MATCHING: Your output must have the EXACT same number of lines as the input
+3. NON-TRANSLATABLE ELEMENTS: Keep vocal expressions like "la la la", "oh oh oh", "na na na", "ah ah ah", "hey hey hey", "yeah yeah yeah" EXACTLY as they are
+4. EMPTY LINES: Preserve all empty lines and spacing exactly as in the original
+5. STRUCTURE: Maintain identical line breaks, verse structure, and formatting
+6. NO OMISSIONS: Do not skip any lines, even if they seem repetitive or non-meaningful
+7. RESPONSE FORMAT: Return ONLY the translated lyrics, no explanations or additional text
+
+${sourceLanguage} lyrics to translate:
+${lyrics}
+
+Respond with the complete ${targetLanguage} translation (same line count as original):`;
     }
     else {
-      prompt = `Translate the following lyrics to ${targetLanguage}. Maintain the original line breaks and structure:
+      prompt = `You are a professional translator. Translate the following lyrics to ${targetLanguage}.
 
-      ${lyrics}`;
+CRITICAL REQUIREMENTS - MUST FOLLOW EXACTLY:
+1. COMPLETE TRANSLATION: Include ALL lines from the original lyrics in your response
+2. LINE-BY-LINE MATCHING: Your output must have the EXACT same number of lines as the input
+3. NON-TRANSLATABLE ELEMENTS: Keep vocal expressions like "la la la", "oh oh oh", "na na na", "ah ah ah", "hey hey hey", "yeah yeah yeah" EXACTLY as they are
+4. EMPTY LINES: Preserve all empty lines and spacing exactly as in the original
+5. STRUCTURE: Maintain identical line breaks, verse structure, and formatting
+6. NO OMISSIONS: Do not skip any lines, even if they seem repetitive or non-meaningful
+7. RESPONSE FORMAT: Return ONLY the translated lyrics, no explanations or additional text
+
+Lyrics to translate:
+${lyrics}
+
+Respond with the complete ${targetLanguage} translation (same line count as original):`;
     }
 
     console.log(`Translating from ${sourceLanguage || 'unknown language'} to ${targetLanguage}`);
@@ -178,7 +281,10 @@ async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLa
     });
 
     // Extract and clean the response text
-    const translatedText = response.text?.trim() || '';
+    let translatedText = response.text?.trim() || '';
+
+    // Post-process the response to ensure we only have the translation
+    translatedText = cleanTranslationResponse(translatedText, lyrics, targetLanguage);
 
     // Log a sample of the translation for debugging
     console.log('Translation sample (first 100 chars):', translatedText.substring(0, 100));
@@ -264,7 +370,7 @@ export async function POST(request: NextRequest) {
       };
 
       // Cache the result
-      await cacheTranslation(cacheKey, response);
+      await cacheTranslation(cacheKey, response, videoId);
       console.log('Cached the same-language response');
 
       return NextResponse.json(response);
@@ -291,9 +397,14 @@ export async function POST(request: NextRequest) {
       detectedLanguage
     };
 
-    // Cache the result
+    // Cache the result in the background - don't let caching failures block the response
     console.log('Caching translation result');
-    await cacheTranslation(cacheKey, response);
+    try {
+      await cacheTranslation(cacheKey, response, videoId);
+    } catch (cachingError) {
+      console.warn('Failed to cache translation, but returning successful translation to user:', cachingError);
+      // Continue execution - caching failure should not prevent successful translation from reaching user
+    }
 
     return NextResponse.json(response);
   } catch (error) {

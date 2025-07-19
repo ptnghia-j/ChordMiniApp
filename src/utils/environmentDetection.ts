@@ -1,13 +1,13 @@
 /**
  * Environment Detection Utility for ChordMini
  *
- * Determines the appropriate audio processing strategy based on the environment:
- * - Vercel Production: Use yt-mp3-go (better Unicode support, more reliable)
- * - Local Development: Use yt-dlp for local development flexibility
- * - Fallback: Use QuickTube for other environments
+ * Simplified URL-based strategy detection:
+ * - Localhost Development: Use yt-dlp when both NEXT_PUBLIC_BASE_URL and NEXT_PUBLIC_PYTHON_API_URL contain "localhost"
+ * - Production: Use yt2mp3magic for all other environments
+ * - Automatic fallback between strategies for reliability
  */
 
-export type AudioProcessingStrategy = 'quicktube' | 'ytdlp' | 'ytmp3go' | 'auto';
+export type AudioProcessingStrategy = 'yt2mp3magic' | 'ytdlp';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -19,63 +19,38 @@ export interface EnvironmentConfig {
 
 /**
  * Detect the current environment and return appropriate configuration
+ * Uses URL-based detection for simplified strategy selection
  */
 export function detectEnvironment(): EnvironmentConfig {
   // Check if we're in a browser environment
   const isBrowser = typeof window !== 'undefined';
-  
-  // Get environment variables
+
+  // Get environment variables for URL-based detection
   const nodeEnv = process.env.NODE_ENV;
-  const vercelEnv = process.env.VERCEL_ENV;
-  const vercelUrl = process.env.VERCEL_URL;
-  
-  // Determine if we're on Vercel
-  const isVercel = !!(vercelEnv || vercelUrl || process.env.VERCEL);
-  
-  // Determine if we're in production
-  const isProduction = nodeEnv === 'production' || isVercel;
-  
-  // Determine if we're in development
-  const isDevelopment = nodeEnv === 'development' || (!isProduction && !isVercel);
-  
-  // Get base URL
+  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const envPythonApiUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+
+  // URL-based environment detection
+  const isLocalhost = envBaseUrl.includes('localhost') && envPythonApiUrl.includes('localhost');
+
+  // Determine environment based on URL detection
+  const isDevelopment = isLocalhost || nodeEnv === 'development';
+  const isProduction = !isDevelopment;
+  const isVercel = isProduction && !isLocalhost; // Simplified Vercel detection
+
+  // Get base URL for response
   let baseUrl = '';
   if (isBrowser) {
     baseUrl = window.location.origin;
-  } else if (vercelUrl) {
-    baseUrl = `https://${vercelUrl}`;
-  } else if (process.env.NEXT_PUBLIC_BASE_URL) {
-    baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  } else if (envBaseUrl) {
+    baseUrl = envBaseUrl;
   } else {
-    baseUrl = 'http://localhost:3000';
+    baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://chordmini.com';
   }
-  
-  // Determine strategy based on environment
-  let strategy: AudioProcessingStrategy;
 
-  // Special handling for localhost development (override NODE_ENV if needed)
-  const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
-
-  if (isVercel && isProduction) {
-    // Vercel Production: Use yt-mp3-go for better Unicode support and reliability
-    strategy = 'ytmp3go';
-  } else if (isLocalhost || nodeEnv === 'development') {
-    // Local Development: Use yt-dlp for local development flexibility
-    strategy = 'ytdlp';
-  } else if (isProduction && !isVercel) {
-    // Non-Vercel Production: Use QuickTube as fallback
-    strategy = 'quicktube';
-  } else {
-    // Default fallback to QuickTube
-    strategy = 'quicktube';
-  }
-  
-  // Allow manual override via environment variable (but not for 'auto')
-  const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY as AudioProcessingStrategy;
-  if (manualStrategy && manualStrategy !== 'auto' &&
-      (manualStrategy === 'quicktube' || manualStrategy === 'ytdlp' || manualStrategy === 'ytmp3go')) {
-    strategy = manualStrategy;
-  }
+  // Determine strategy based on URL detection
+  // Use ytdlp for localhost development, yt2mp3magic for production
+  const strategy: AudioProcessingStrategy = isLocalhost ? 'ytdlp' : 'yt2mp3magic';
   
   return {
     strategy,
@@ -94,24 +69,17 @@ export function getAudioProcessingStrategy(): AudioProcessingStrategy {
 }
 
 /**
- * Check if we should use QuickTube integration
- */
-export function shouldUseQuickTube(): boolean {
-  return getAudioProcessingStrategy() === 'quicktube';
-}
-
-/**
- * Check if we should use yt-dlp integration
+ * Check if we should use yt-dlp integration (localhost development)
  */
 export function shouldUseYtDlp(): boolean {
   return getAudioProcessingStrategy() === 'ytdlp';
 }
 
 /**
- * Check if we should use yt-mp3-go integration
+ * Check if we should use YT2MP3 Magic integration (production)
  */
-export function shouldUseYtMp3Go(): boolean {
-  return getAudioProcessingStrategy() === 'ytmp3go';
+export function shouldUseYt2mp3Magic(): boolean {
+  return getAudioProcessingStrategy() === 'yt2mp3magic';
 }
 
 /**
@@ -123,30 +91,22 @@ export function getAudioProcessingConfig() {
   return {
     strategy: env.strategy,
     endpoints: {
-      quicktube: {
-        baseUrl: 'https://quicktube.app',
-        downloadPath: '/dl/',
-        searchEnabled: true
+      yt2mp3magic: {
+        baseUrl: 'https://yt2mp3-magic.onrender.com',
+        convertPath: '/convert-mp3',
+        searchEnabled: false
       },
       ytdlp: {
         baseUrl: env.baseUrl,
         downloadPath: '/api/ytdlp/download',
         extractPath: '/api/ytdlp/extract',
         searchEnabled: true
-      },
-      ytmp3go: {
-        baseUrl: 'https://lukavukanovic.xyz',
-        apiPath: '/yt-downloader',
-        downloadPath: '/download',
-        eventsPath: '/events',
-        filesPath: '/downloads',
-        searchEnabled: false
       }
     },
     features: {
-      filenameGeneration: env.strategy !== 'ytmp3go', // yt-mp3-go handles filenames natively
+      filenameGeneration: env.strategy === 'ytdlp', // Only yt-dlp requires filename generation
       caching: env.isProduction, // Enable caching in production
-      fallback: env.isProduction ? (env.isVercel ? 'ytmp3go' : 'quicktube') : 'ytdlp' // Fallback strategy
+      fallback: env.strategy === 'ytdlp' ? 'yt2mp3magic' : 'ytdlp' // Automatic fallback between strategies
     }
   };
 }

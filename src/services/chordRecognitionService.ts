@@ -1119,9 +1119,10 @@ async function recognizeChordsWithRateLimit(
       formData.append('chord_dict', 'full'); // CNN-LSTM uses full
     }
 
-    const endpoint = model === 'btc-sl' ? '/api/recognize-chords-btc-sl' :
-                    model === 'btc-pl' ? '/api/recognize-chords-btc-pl' :
-                    '/api/recognize-chords';
+    // Use environment-aware endpoint selection
+    const { getChordRecognitionEndpoint, getSafeChordModel } = await import('@/utils/modelFiltering');
+    const safeModel = getSafeChordModel(model);
+    const endpoint = getChordRecognitionEndpoint(safeModel);
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 800000; // 13+ minutes timeout to match API routes

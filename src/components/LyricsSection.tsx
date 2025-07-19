@@ -1,10 +1,17 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import LeadSheetDisplay from '@/components/LeadSheetDisplay';
+import dynamic from 'next/dynamic';
 import { LyricsData } from '@/types/musicAiTypes';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { useApiKeys } from '@/hooks/useApiKeys';
+import { SegmentationResult } from '@/types/chatbotTypes';
+
+// Lazy load heavy lead sheet display component
+const LeadSheetDisplay = dynamic(() => import('@/components/LeadSheetDisplay'), {
+  loading: () => <div className="w-full h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
 
 interface LyricsSectionProps {
   showLyrics: boolean;
@@ -15,7 +22,7 @@ interface LyricsSectionProps {
   theme: string;
   analysisResults: AnalysisResult | null;
   onFontSizeChange: (size: number) => void;
-
+  segmentationData?: SegmentationResult | null;
 }
 
 export const LyricsSection: React.FC<LyricsSectionProps> = ({
@@ -26,7 +33,8 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   fontSize,
   theme,
   analysisResults,
-  onFontSizeChange
+  onFontSizeChange,
+  segmentationData = null
 }) => {
   const { isServiceAvailable, getServiceMessage } = useApiKeys();
 
@@ -113,6 +121,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
         onFontSizeChange={onFontSizeChange}
         darkMode={theme === 'dark'}
         chords={memoizedChords}
+        segmentationData={segmentationData}
       />
     </div>
   );

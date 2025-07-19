@@ -3,7 +3,7 @@
 // Handles complex chord grid data processing, padding, and shifting calculations
 
 // Import the actual AnalysisResult type from the chord recognition service
-import type { AnalysisResult as ChordRecognitionAnalysisResult } from './chordRecognitionService';
+import { AnalysisResult as ChordRecognitionAnalysisResult } from '@/services/chordRecognitionService';
 
 // Create a flexible type that can handle both formats
 type AnalysisResult = ChordRecognitionAnalysisResult | {

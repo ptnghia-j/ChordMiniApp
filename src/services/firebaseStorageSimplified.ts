@@ -77,9 +77,8 @@ export class FirebaseStorageSimplified {
       console.log(`💾 Saving audio metadata for video ID: ${data.videoId}`);
       console.log(`📝 Title: "${data.title}"`);
 
-      // Wait for authentication
-      const { waitForAuth } = await import('@/config/firebase');
-      await waitForAuth();
+      // Skip authentication - Firebase security rules allow public access for caching
+      // This eliminates the 20-second timeout when anonymous auth fails
 
       // Use video ID as document ID
       const docRef = doc(db, AUDIO_CACHE_COLLECTION, data.videoId);
@@ -145,9 +144,8 @@ export class FirebaseStorageSimplified {
       `audio_${videoId}`,
       async () => {
         try {
-          // Wait for authentication
-          const { waitForAuth } = await import('@/config/firebase');
-          await waitForAuth();
+          // Skip authentication - Firebase security rules allow public access for caching
+          // This eliminates the 20-second timeout when anonymous auth fails
 
           if (!db) {
             return null;
@@ -228,6 +226,11 @@ export class FirebaseStorageSimplified {
             // This is expected in development - don't spam logs
             return null;
           }
+          if (error instanceof Error && error.message.includes('Could not load the default credentials')) {
+            // Firebase Admin SDK authentication failed - this is expected without service account
+            console.warn('⚠️ Firebase Admin authentication failed (service account not configured)');
+            return null;
+          }
           throw error; // Let smart cache handle other errors
         }
       },
@@ -253,12 +256,19 @@ export class FirebaseStorageSimplified {
       }
 
       // For other URLs (stream URLs, etc.), perform HEAD request verification
+      // In production, be more lenient with timeouts and errors
+      const timeoutMs = process.env.NODE_ENV === 'production' ? 10000 : 5000;
       const response = await fetch(audioUrl, {
         method: 'HEAD',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(timeoutMs)
       });
       return response.ok;
-    } catch {
+    } catch (error) {
+      // In production, log the error but don't fail cache verification for network issues
+      if (process.env.NODE_ENV === 'production') {
+        console.warn(`⚠️ URL verification failed in production (treating as valid):`, error instanceof Error ? error.message : error);
+        return true; // Be more lenient in production
+      }
       return false;
     }
   }
@@ -287,9 +297,8 @@ export class FirebaseStorageSimplified {
       videoIds,
       async (videoId: string) => {
         try {
-          // Wait for authentication
-          const { waitForAuth } = await import('@/config/firebase');
-          await waitForAuth();
+          // Skip authentication - Firebase security rules allow public access for caching
+          // This eliminates the 20-second timeout when anonymous auth fails
 
           if (!db) {
             return null;
@@ -351,9 +360,8 @@ export class FirebaseStorageSimplified {
     }
 
     try {
-      // Wait for authentication
-      const { waitForAuth } = await import('@/config/firebase');
-      await waitForAuth();
+      // Skip authentication - Firebase security rules allow public access for caching
+      // This eliminates the 20-second timeout when anonymous auth fails
 
       const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
       const docSnap = await getDoc(docRef);
@@ -391,9 +399,8 @@ export class FirebaseStorageSimplified {
     }
 
     try {
-      // Wait for authentication
-      const { waitForAuth } = await import('@/config/firebase');
-      await waitForAuth();
+      // Skip authentication - Firebase security rules allow public access for caching
+      // This eliminates the 20-second timeout when anonymous auth fails
 
       const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
       await setDoc(docRef, { deleted: true, deletedAt: serverTimestamp() });

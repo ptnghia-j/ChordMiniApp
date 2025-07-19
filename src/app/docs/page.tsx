@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
+import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 
 import {
   FiActivity,
@@ -74,9 +75,9 @@ export default function DocsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex gap-8">
           {/* Sidebar Navigation */}
-          <div className="hidden lg:block w-64 flex-shrink-0">
-            <div className="sticky top-8 py-8">
-              <nav className="space-y-1">
+          <div className="hidden lg:block w-64 flex-shrink-0 bg-gray-50 dark:bg-dark-bg border-r border-gray-200 dark:border-gray-700">
+            <div className="sticky top-8 py-8 dark:bg-dark-bg">
+              <nav className="space-y-1 dark:bg-dark-bg">
                 {/* Overview / Welcome */}
                 <div className="pb-4">
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
@@ -391,8 +392,8 @@ export default function DocsPage() {
 
                 <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
                   <p className="text-gray-600 dark:text-gray-400">
-                    The ChordMini API implements IP-based rate limiting to ensure fair usage and maintain service quality.
-                    Rate limits vary by endpoint based on computational requirements.
+                    The ChordMini API implements production-grade rate limiting to ensure fair usage and system stability.
+                    Rate limits vary by endpoint based on computational requirements and are enforced using Redis-based storage.
                   </p>
                 </div>
 
@@ -401,14 +402,14 @@ export default function DocsPage() {
                   <div className="flex items-start gap-3">
                     <FiActivity className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                     <div>
-                      <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">Rate Limiting Overview</h3>
+                      <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">Production-Grade Rate Limiting</h3>
                       <p className="text-gray-700 dark:text-gray-300 text-sm mb-3">
-                        IP-based rate limiting ensures fair usage and maintains service quality.
-                        Limits vary by endpoint based on computational requirements.
+                        Redis-based rate limiting with sliding window ensures fair usage and maintains service quality.
+                        Heavy processing endpoints have stricter limits to prevent resource exhaustion.
                       </p>
                       <div className="bg-orange-100 dark:bg-orange-800/30 rounded-lg p-3">
                         <p className="text-orange-800 dark:text-orange-200 text-sm">
-                          <strong>Method:</strong> IP Address-based limiting with sliding window
+                          <strong>Method:</strong> IP Address-based limiting with Redis storage • <strong>Window:</strong> Sliding window algorithm
                         </p>
                       </div>
                     </div>
@@ -448,20 +449,19 @@ export default function DocsPage() {
                         <tr>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/detect-beats</td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">POST</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">5/minute</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 dark:text-red-400">2/minute</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Heavy processing, resource intensive</td>
                         </tr>
                         <tr>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/recognize-chords*</td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">POST</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">5/minute</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 dark:text-red-400">2/minute</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Heavy processing, ML inference</td>
                         </tr>
-
                         <tr>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/lrclib-lyrics</td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -470,42 +470,25 @@ export default function DocsPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Synchronized lyrics with timestamps</td>
                         </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/genius-lyrics</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
+                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Genius.com lyrics fetching</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-3 flex items-center gap-2 flex-wrap">
-                    <span>* Includes</span>
-                    <div className="relative group">
-                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
-                        /api/recognize-chords-btc-sl
-                      </div>
-                      <button
-                        onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-sl')}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                        title="Copy this snippet"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                    <span>and</span>
-                    <div className="relative group">
-                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
-                        /api/recognize-chords-btc-pl
-                      </div>
-                      <button
-                        onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-pl')}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                        title="Copy this snippet"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                    </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+                    <span>* Includes Firebase-based endpoints for cached processing</span>
                   </div>
                 </div>
+
+
+
+
               </section>
 
               {/* Models */}
@@ -573,33 +556,41 @@ export default function DocsPage() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white">BTC Supervised Learning</h4>
+                    {/* BTC Models - Development Only */}
+                    {isDevelopmentEnvironment() && (
+                      <>
+                        <div className="border border-orange-200 dark:border-orange-700 rounded-lg p-6 bg-orange-50 dark:bg-orange-900/20">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-900 dark:text-white">BTC SL (Supervised Learning)</h4>
+                            <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+                            Transformer model with 170 chord labels, supervised learning approach.
+                            <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
+                          </p>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development
+                          </div>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                          Beat-synchronized chord recognition with supervised learning approach.
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          <strong>Best for:</strong> Rhythmically aligned chord analysis
-                        </div>
-                      </div>
 
-                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white">BTC Pseudo-Label</h4>
+                        <div className="border border-orange-200 dark:border-orange-700 rounded-lg p-6 bg-orange-50 dark:bg-orange-900/20">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-900 dark:text-white">BTC PL (Pseudo-Label)</h4>
+                            <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+                            Transformer model with 170 chord labels, pseudo-label training approach.
+                            <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
+                          </p>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development
+                          </div>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                          Beat-synchronized chord recognition with pseudo-labeling technique.
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          <strong>Best for:</strong> Enhanced accuracy with beat alignment
-                        </div>
-                      </div>
-                    </div>
+                      </>
+                    )}
+
                   </div>
                 </div>
               </section>
@@ -683,10 +674,73 @@ export default function DocsPage() {
                     </p>
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Parameters:</strong> file (audio file), model (optional: chord-cnn-lstm, btc-sl, btc-pl)
+                        <strong>Parameters:</strong> file (audio file), model (optional: chord-cnn-lstm)
                       </p>
                     </div>
                   </div>
+
+                  {/* BTC Endpoints - Development Only */}
+                  {isDevelopmentEnvironment() && (
+                    <>
+                      <div className="border border-orange-200 dark:border-orange-700 rounded-lg p-6 bg-orange-50 dark:bg-orange-900/20">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">POST</span>
+                          <div className="relative group">
+                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                              /api/recognize-chords-btc-sl
+                            </div>
+                            <button
+                              onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-sl')}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                              title="Copy this snippet"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                          <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          BTC Supervised Learning chord recognition model. <strong className="text-orange-600 dark:text-orange-400">Development environment only.</strong>
+                        </p>
+                        <div className="bg-orange-50 dark:bg-orange-800/50 rounded p-3">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <strong>Parameters:</strong> file (audio file), chord_dict (optional: large_voca)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="border border-orange-200 dark:border-orange-700 rounded-lg p-6 bg-orange-50 dark:bg-orange-900/20">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">POST</span>
+                          <div className="relative group">
+                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                              /api/recognize-chords-btc-pl
+                            </div>
+                            <button
+                              onClick={() => navigator.clipboard.writeText('/api/recognize-chords-btc-pl')}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                              title="Copy this snippet"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                          <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          BTC Pseudo-Label chord recognition model. <strong className="text-orange-600 dark:text-orange-400">Development environment only.</strong>
+                        </p>
+                        <div className="bg-orange-50 dark:bg-orange-800/50 rounded p-3">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <strong>Parameters:</strong> file (audio file), chord_dict (optional: large_voca)
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
@@ -754,62 +808,8 @@ export default function DocsPage() {
 
                 <div className="prose prose-gray dark:prose-invert max-w-none mb-8">
                   <p className="text-gray-600 dark:text-gray-400">
-                    Here are some practical examples of how to use the ChordMini API with different programming languages and tools.
+                    Here are some practical examples of how to use the ChordMini API using Javascript and cURL.
                   </p>
-                </div>
-
-                {/* cURL Example */}
-                <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">cURL Examples</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Beat Detection</h4>
-                      <div className="relative group w-full">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
-                          <div className="whitespace-pre-wrap break-all">
-                            {`curl -X POST "${backendUrl}/api/detect-beats" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=beat-transformer"`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/detect-beats" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=beat-transformer"`)}
-                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                          title="Copy this snippet"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Chord Recognition</h4>
-                      <div className="relative group w-full">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
-                          <div className="whitespace-pre-wrap break-all">
-                            {`curl -X POST "${backendUrl}/api/recognize-chords" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=chord-cnn-lstm"`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/recognize-chords" \\
-  -F "file=@your-audio-file.mp3" \\
-  -F "model=chord-cnn-lstm"`)}
-                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                          title="Copy this snippet"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* JavaScript Example */}
@@ -858,7 +858,205 @@ console.log(result);`)}
                     </button>
                   </div>
                 </div>
+
+                {/* Beat Detection Example */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Beat Detection</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request</h4>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`curl -X POST "${backendUrl}/api/detect-beats" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=beat-transformer"`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/detect-beats" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=beat-transformer"`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Response</h4>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`{
+  "success": true,
+  "beats": [0.5, 1.0, 1.5, 2.0, 2.5],
+  "total_beats": 5,
+  "model": "beat-transformer",
+  "processing_time": 2.3
+}`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`{
+  "success": true,
+  "beats": [0.5, 1.0, 1.5, 2.0, 2.5],
+  "total_beats": 5,
+  "model": "beat-transformer",
+  "processing_time": 2.3
+}`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chord Recognition Example */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Chord Recognition</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request</h4>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`curl -X POST "${backendUrl}/api/recognize-chords" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=chord-cnn-lstm"`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`curl -X POST "${backendUrl}/api/recognize-chords" \\
+  -F "file=@your-audio-file.mp3" \\
+  -F "model=chord-cnn-lstm"`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Response</h4>
+                      <div className="relative group">
+                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`{
+  "success": true,
+  "chords": [
+    {"start": 0.0, "end": 2.0, "chord": "C", "confidence": 0.95},
+    {"start": 2.0, "end": 4.0, "chord": "Am", "confidence": 0.87},
+    {"start": 4.0, "end": 6.0, "chord": "F", "confidence": 0.92}
+  ],
+  "total_chords": 3,
+  "model": "chord-cnn-lstm",
+  "processing_time": 3.1
+}`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`{
+  "success": true,
+  "chords": [
+    {"start": 0.0, "end": 2.0, "chord": "C", "confidence": 0.95},
+    {"start": 2.0, "end": 4.0, "chord": "Am", "confidence": 0.87},
+    {"start": 4.0, "end": 6.0, "chord": "F", "confidence": 0.92}
+  ],
+  "total_chords": 3,
+  "model": "chord-cnn-lstm",
+  "processing_time": 3.1
+}`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Response Examples */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Error Response Examples</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Rate Limit Exceeded (429)</h4>
+                      <div className="relative group">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please wait before trying again.",
+  "retry_after": null
+}`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please wait before trying again.",
+  "retry_after": null
+}`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Invalid File Format (400)</h4>
+                      <div className="relative group">
+                        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                          <div className="whitespace-pre-wrap break-all">
+                            {`{
+  "error": "Invalid file format",
+  "message": "Supported formats: MP3, WAV, FLAC, M4A, OGG",
+  "supported_formats": ["mp3", "wav", "flac", "m4a", "ogg"]
+}`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`{
+  "error": "Invalid file format",
+  "message": "Supported formats: MP3, WAV, FLAC, M4A, OGG",
+  "supported_formats": ["mp3", "wav", "flac", "m4a", "ogg"]
+}`)}
+                          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Copy this snippet"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </section>
+
+
+
+
+
+
+
 
               {/* Troubleshooting */}
               <section id="troubleshooting" className="scroll-mt-8">

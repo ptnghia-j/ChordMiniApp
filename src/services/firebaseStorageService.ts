@@ -319,9 +319,8 @@ export async function saveAudioFileMetadata(
       actualFilename: audioFileData.title // This now contains the actual filename from QuickTube
     });
 
-    // Wait for authentication to complete before making Firestore queries
-    const { waitForAuth } = await import('@/config/firebase');
-    await waitForAuth();
+    // Skip authentication - Firebase security rules allow public access for caching
+    // This eliminates the 20-second timeout when anonymous auth fails
 
     // Use video ID as the primary key (11-character YouTube ID)
     const docId = audioFileData.videoId;
@@ -394,9 +393,8 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
   try {
     console.log(`Checking for cached audio file: videoId=${videoId}`);
 
-    // Wait for authentication to complete before making Firestore queries
-    const { waitForAuth } = await import('@/config/firebase');
-    await waitForAuth();
+    // Skip authentication - Firebase security rules allow public access for caching
+    // This eliminates the 20-second timeout when anonymous auth fails
 
     // Get the document reference
     const docRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
@@ -602,9 +600,8 @@ export async function saveStreamUrlMetadata(
       streamExpiresAt: new Date(streamExpiresAt).toISOString()
     });
 
-    // Wait for authentication to complete before making Firestore queries
-    const { waitForAuth } = await import('@/config/firebase');
-    await waitForAuth();
+    // Skip authentication - Firebase security rules allow public access for caching
+    // This eliminates the 20-second timeout when anonymous auth fails
 
     // Create a unique document ID based on the video ID
     const docId = videoId;

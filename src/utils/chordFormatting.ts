@@ -136,10 +136,11 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     bassNote = bassNote.replace(/#/g, '♯');
   }
 
-  // Replace flat (b) with proper Unicode flat symbol (♭)
-  root = root.replace(/b(?![a-zA-Z]{2,})/g, '♭');
+  // Replace flat (b) with proper Unicode flat symbol (♭) in root and bass notes
+  // More precise pattern: only replace 'b' when it's part of a note name (after A-G)
+  root = root.replace(/([A-G])b/g, '$1♭');
   if (bassNote) {
-    bassNote = bassNote.replace(/b(?![a-zA-Z]{2,})/g, '♭');
+    bassNote = bassNote.replace(/([A-G])b/g, '$1♭');
   }
 
   // Apply professional chord quality notation with uniform font weight
@@ -153,8 +154,10 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     // Use 'm' instead of 'min' for minor chords (industry standard)
     quality = '<span style="font-weight: 400;">m</span>';
   } else if (quality.includes('sus')) {
-    // Format suspension with proper superscript - entire "sus" suffix should be in superscript
+    // Format suspension with proper superscript - handle both sus4 and sus(extensions)
     quality = quality.replace(/sus(\d)/, '<sup style="font-weight: 300; font-size: 0.75em;">sus$1</sup>');
+    // Handle sus followed by parentheses (e.g., "sus(b7)")
+    quality = quality.replace(/sus(?=\()/g, '<span style="font-weight: 400;">sus</span>');
   } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
     // Half-diminished 7th chords: use slashed circle (ø) with superscript 7
     quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
@@ -193,7 +196,18 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     quality = quality.replace(/add(\d+)/g, '<span style="font-weight: 400;">add</span><sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
   }
 
-  if (quality.includes('b5') || quality.includes('b9') || quality.includes('b13')) {
+  // Handle parentheses around chord extensions first (e.g., "(b7)" -> "⁽♭⁷⁾")
+  if (quality.includes('(') && quality.includes(')')) {
+    // Handle flat extensions in parentheses: (b5), (b7), (b9), (b13)
+    quality = quality.replace(/\(b(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽♭$1⁾</sup>');
+    // Handle sharp extensions in parentheses: (#5), (#9), (#11)
+    quality = quality.replace(/\(#(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽♯$1⁾</sup>');
+    // Handle numeric extensions in parentheses: (7), (9), (11), (13)
+    quality = quality.replace(/\((\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽$1⁾</sup>');
+  }
+
+  // Handle non-parenthesized extensions
+  if (quality.includes('b5') || quality.includes('b7') || quality.includes('b9') || quality.includes('b13')) {
     quality = quality.replace(/b(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">♭$1</sup>');
   }
 

@@ -2,9 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
-
-// Import the type from the service
-type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
+import {
+  ChordDetectorType,
+  getAvailableChordModels,
+  filterChordModels,
+  getModelDescription,
+  isDevelopmentEnvironment
+} from '@/utils/modelFiltering';
 
 interface ChordModelOption {
   id: ChordDetectorType;
@@ -43,17 +47,19 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
   fallbackInfo = null
 }) => {
   const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
-  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(getAvailableChordModels());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch model information
+  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
+    // Set immediate fallback data to unblock UI rendering
+    setAvailableModels(getAvailableChordModels());
+    setLoading(false); // Immediately show UI
+
     const fetchModelInfo = async () => {
       try {
-        setLoading(true);
-
-        // Use the Next.js API route instead of direct backend call
+        // Fetch model info in background without blocking UI
         const response = await fetch('/api/model-info', {
           method: 'GET',
           headers: {
@@ -78,31 +84,29 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
               description: (value as ModelInfoResponse).description || 'Chord recognition model',
               performance: (value as ModelInfoResponse).performance || 'Unknown performance',
               available_chord_dicts: (value as ModelInfoResponse).available_chord_dicts || [],
-              available: (value as ModelInfoResponse).available !== false // Default to true if not specified
+              available: (value as ModelInfoResponse).available !== false
             };
 
             modelInfoMap[key] = modelOption;
-            // Include all available models
             if (modelOption.available) {
               modelIds.push(key as ChordDetectorType);
             }
           });
 
+          // Update model info without blocking UI (already rendered with fallback)
           setModelInfo(modelInfoMap);
-          setAvailableModels(modelIds.length > 0 ? modelIds : ['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
-        } else {
-          // Fallback to default models
-          setAvailableModels(['chord-cnn-lstm', 'btc-sl', 'btc-pl']);
+          const filteredModels = filterChordModels(modelIds.length > 0 ? modelIds : getAvailableChordModels());
+          setAvailableModels(filteredModels);
         }
         setError(null);
       } catch (err) {
-        console.error('Error fetching model info:', err);
+        console.error('Error fetching model info (non-blocking):', err);
         setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
+        // Keep using fallback data on error - UI already rendered
       }
     };
 
+    // Fetch model info asynchronously without blocking UI
     fetchModelInfo();
   }, []);
 
@@ -115,33 +119,34 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
     }
   };
 
-  // Default model options
   const defaultModelOptions: Record<ChordDetectorType, ChordModelOption> = {
     'chord-cnn-lstm': {
       id: 'chord-cnn-lstm',
       name: 'Chord-CNN-LSTM',
-      description: 'CNN+LSTM model with 301 chord labels for comprehensive chord recognition',
-      performance: 'High accuracy, medium processing speed (~25s)',
+      description: getModelDescription('chord-cnn-lstm'),
+      performance: 'High accuracy, supporting 7th chords and inversion labels, medium processing speed',
       available: true
     },
     'btc-sl': {
       id: 'btc-sl',
       name: 'BTC SL (Supervised Learning)',
-      description: 'Transformer model with 170 chord labels, supervised training (with fallback)',
+      description: getModelDescription('btc-sl'),
       performance: 'High accuracy with transformer architecture (auto-fallback to CNN-LSTM if needed)',
       available: true
     },
     'btc-pl': {
       id: 'btc-pl',
       name: 'BTC PL (Pseudo-Label)',
-      description: 'Transformer model with 170 chord labels, pseudo-label training (with fallback)',
-      performance: 'Enhanced accuracy through pseudo-labeling (auto-fallback to CNN-LSTM if needed)',
+      description: getModelDescription('btc-pl'),
+      performance: 'Moderate accuracy with pseudo-labeling training (auto-fallback to CNN-LSTM if needed)',
       available: true
     }
   };
 
-  // Get the currently selected model details
   const selectedModelOption = modelInfo[selectedModel] || defaultModelOptions[selectedModel];
+  const enhancedDescription = loading
+    ? `${selectedModelOption?.performance || "Choose the chord recognition model for audio analysis"} (Loading detailed info...)`
+    : selectedModelOption?.performance || "Choose the chord recognition model for audio analysis";
 
   const getModelIcon = (modelId: ChordDetectorType) => {
     switch (modelId) {
@@ -175,13 +180,10 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
             </svg>
             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-              CNN+LSTM model with 301 chord labels for comprehensive chord recognition
+              {selectedModelOption?.description}
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400 transition-colors duration-300">
-          CNN+LSTM model with 301 chord labels for comprehensive chord recognition
-        </p>
       </div>
 
       <Select
@@ -192,9 +194,9 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
         variant="bordered"
         color="primary"
         isLoading={loading}
-        isDisabled={loading || disabled}
+        isDisabled={disabled}
         startContent={getModelIcon(selectedModel)}
-        description={selectedModelOption?.performance || "Choose the chord recognition model for audio analysis"}
+        description={enhancedDescription}
         aria-label="Chord recognition model selector"
       >
         {availableModels.map((model) => {
@@ -209,9 +211,9 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
             >
               <div className="flex items-center justify-between w-full">
                 <span className="font-medium">{modelOption.name}</span>
-                {model.startsWith('btc-') && (
-                  <Chip size="sm" color="secondary" variant="flat">
-                    Transformer
+                {model.startsWith('btc-') && isDevelopmentEnvironment() && (
+                  <Chip size="sm" color="warning" variant="flat">
+                    DEV
                   </Chip>
                 )}
               </div>
@@ -220,7 +222,6 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
         })}
       </Select>
 
-      {/* Fallback info */}
       {fallbackInfo && (
         <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm transition-colors duration-300">
           <p className="font-medium text-yellow-800 dark:text-yellow-200 transition-colors duration-300">Model Fallback:</p>
@@ -230,15 +231,35 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
         </div>
       )}
 
-      {/* Upcoming models box */}
-      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm transition-colors duration-300">
-        <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">Upcoming Model:</p>
-        <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-300 transition-colors duration-300">
-          <li>2E1D model - lighter model for 170 chord vocabulary</li>
-        </ul>
-      </div>
+      {/* Conditionally render the "Upcoming models" box */}
+      {!isDevelopmentEnvironment() && (
+        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm transition-colors duration-300">
+          <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">For other experimental models</p>
+          <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-300 transition-colors duration-300">
+            <li>Please consider cloning the repo and building from source.</li>
+          </ul>
+        </div>
+      )}
 
-      {/* Error message */}
+      {loading && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 transition-colors duration-300">
+          <div className="animate-spin h-3 w-3 border border-blue-600 dark:border-blue-400 border-t-transparent rounded-full"></div>
+          <span>Loading detailed model information from backend...</span>
+        </div>
+      )}
+
+      {!loading && Object.keys(modelInfo).length > 0 && !error && (
+        <div className="mt-2 text-xs text-green-600 dark:text-green-400 transition-colors duration-300">
+          ✓ Backend model information loaded
+        </div>
+      )}
+
+      {!loading && Object.keys(modelInfo).length === 0 && !error && (
+        <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 transition-colors duration-300">
+          ⚠ Using default model options (backend unavailable)
+        </div>
+      )}
+
       {error && (
         <div className="mt-2 text-sm text-red-500 dark:text-red-400 transition-colors duration-300">
           Error: {error}

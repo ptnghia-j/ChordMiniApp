@@ -2,8 +2,8 @@
 // Optimized image configuration for demo images
 export const demoImageConfig = {
   demo1: {
-    src: "/demo1.png",
-    srcDark: "/demo1_dark.png",
+    src: "/demo1.webp",
+    srcDark: "/demo1_dark.webp",
     alt: "ChordMini Beat and Chord Analysis Demo",
     width: 800,
     height: 450,
@@ -15,8 +15,8 @@ export const demoImageConfig = {
     blurDataURL: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
   },
   demo2: {
-    src: "/demo2.png", 
-    srcDark: "/demo2_dark.png",
+    src: "/demo2.webp",
+    srcDark: "/demo2_dark.webp",
     alt: "ChordMini Lyrics and Chord Synchronization Demo",
     width: 800,
     height: 450,

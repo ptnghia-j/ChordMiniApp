@@ -29,17 +29,20 @@ export class MetronomeService {
   private isLoadingBuffers = false;
 
   constructor() {
-    this.initializeAudioContext();
+    // Defer AudioContext initialization until first use to avoid autoplay policy issues
+    // this.initializeAudioContext();
   }
 
   /**
    * Load external audio file and convert to AudioBuffer
    */
   private async loadExternalAudioFile(url: string): Promise<AudioBuffer | null> {
-    if (!this.audioContext) return null;
+    if (!this.audioContext) {
+      console.error('AudioContext not available for loading external audio file:', url);
+      return null;
+    }
 
     try {
-
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
@@ -239,8 +242,6 @@ export class MetronomeService {
     this.isLoadingBuffers = true;
 
     try {
-
-
       let downbeatBuffer: AudioBuffer | null = null;
       let regularBuffer: AudioBuffer | null = null;
 
@@ -250,8 +251,6 @@ export class MetronomeService {
         const downbeatUrl = `${baseUrl}/${style}_downbeat.wav`;
         const regularUrl = `${baseUrl}/${style}_regular.wav`;
 
-
-
         // Load both files in parallel
         const [downbeatResult, regularResult] = await Promise.all([
           this.loadExternalAudioFile(downbeatUrl),
@@ -260,6 +259,13 @@ export class MetronomeService {
 
         downbeatBuffer = downbeatResult;
         regularBuffer = regularResult;
+
+        // Fallback to traditional generation if external files failed
+        if (!downbeatBuffer || !regularBuffer) {
+          console.warn(`External audio files failed for ${style}, falling back to traditional generation`);
+          downbeatBuffer = this.generateClickBuffer(true, 'traditional');
+          regularBuffer = this.generateClickBuffer(false, 'traditional');
+        }
       } else {
         // Generate buffers for traditional styles
         downbeatBuffer = this.generateClickBuffer(true, style);
@@ -271,7 +277,6 @@ export class MetronomeService {
           downbeat: downbeatBuffer,
           regular: regularBuffer
         });
-
       } else {
         throw new Error(`Failed to load audio buffers for style: ${style}`);
       }
@@ -317,8 +322,6 @@ export class MetronomeService {
    * Ensure AudioContext is ready for use
    */
   private async ensureAudioContext(): Promise<boolean> {
-    // Debug logging removed for cleaner console output
-
     if (!this.audioContext) {
       // Initialize AudioContext if not available
       await this.initializeAudioContext();
@@ -334,10 +337,7 @@ export class MetronomeService {
       }
     }
 
-    const result = this.isInitialized && this.audioContext !== null;
-    // Return AudioContext readiness status
-
-    return result;
+    return this.isInitialized && this.audioContext !== null;
   }
 
   /**
@@ -364,8 +364,8 @@ export class MetronomeService {
 
       // Create audio nodes for click playback
 
-      // Select appropriate buffer
-      const buffer = isDownbeat ? buffers.downbeat : buffers.regular;
+      // Use regular buffer for all beats (no downbeat emphasis)
+      const buffer = buffers.regular;
 
       // Create buffer source node
       const source = this.audioContext.createBufferSource();
@@ -406,13 +406,11 @@ export class MetronomeService {
    * @param timeSignature - Time signature for downbeat emphasis (default: 4)
    * @returns Promise<AudioBuffer> - Complete metronome track
    */
-  public async generateMetronomeTrack(duration: number, bpm: number, timeSignature: number = 4): Promise<AudioBuffer | null> {
+  public async generateMetronomeTrack(duration: number, bpm: number, _timeSignature: number = 4): Promise<AudioBuffer | null> { // eslint-disable-line @typescript-eslint/no-unused-vars
     if (!await this.ensureAudioContext()) {
       console.error('Cannot generate metronome track: AudioContext not available');
       return null;
     }
-
-    // Generating metronome track
 
     // Load audio buffers for the current sound style
     await this.loadAudioBuffers(this.soundStyle);
@@ -439,9 +437,8 @@ export class MetronomeService {
       // Skip beats that would extend beyond the track duration
       if (beatTime >= duration) break;
 
-      // Determine if this is a downbeat (first beat of measure)
-      const isDownbeat = (beatIndex % timeSignature) === 0;
-      const bufferToUse = isDownbeat ? buffers.downbeat : buffers.regular;
+      // Use regular beat sound for all beats (no downbeat emphasis)
+      const bufferToUse = buffers.regular;
 
       // Create audio source for this click
       const source = offlineContext.createBufferSource();
@@ -449,9 +446,9 @@ export class MetronomeService {
 
       source.buffer = bufferToUse;
 
-      // Apply volume with boost and slight emphasis for downbeats
+      // Apply uniform volume for all beats (no downbeat emphasis)
       const baseVolume = this.volume * this.volumeBoost;
-      const clickVolume = isDownbeat ? baseVolume * 1.2 : baseVolume;
+      const clickVolume = baseVolume;
       gainNode.gain.setValueAtTime(0, beatTime);
       gainNode.gain.linearRampToValueAtTime(clickVolume, beatTime + 0.002); // 2ms attack
       gainNode.gain.exponentialRampToValueAtTime(0.001, beatTime + this.clickDuration * 0.8); // Decay

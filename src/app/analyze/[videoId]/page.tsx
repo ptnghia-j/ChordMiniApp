@@ -1,15 +1,18 @@
 "use client";
 
-// ✅ TEMPORARY: Type compatibility issues with extracted services will be resolved in future iteration
+// TEMPORARY: Type compatibility issues with extracted services will be resolved in future iteration
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { FaExpand, FaCompress } from 'react-icons/fa';
+import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
 
 import { useParams, useSearchParams } from 'next/navigation';
 // Import types are used in type annotations and interfaces
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import Navigation from '@/components/Navigation';
 import LyricsToggleButton from '@/components/LyricsToggleButton';
+import SegmentationToggleButton from '@/components/SegmentationToggleButton';
 
 // Dynamic imports for heavy components to improve initial bundle size
 const ProcessingStatusBanner = dynamic(() => import('@/components/ProcessingStatusBanner'), {
@@ -43,7 +46,7 @@ const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { SongContext } from '@/types/chatbotTypes';
+import { SongContext, SegmentationResult } from '@/types/chatbotTypes';
 import { LyricsData } from '@/types/musicAiTypes';
 import { useMetronomeSync } from '@/hooks/useMetronomeSync';
 import { useAudioProcessing } from '@/hooks/useAudioProcessing';
@@ -63,6 +66,7 @@ import {
 } from '@/services/cacheManagementService';
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
+import { usePlaybackState } from '@/hooks/usePlaybackState';
 import { useApiKeys } from '@/hooks/useApiKeys';
 
 // Import skeleton loaders
@@ -109,7 +113,7 @@ const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(
   loading: () => <ChatbotSkeleton />,
   ssr: false
 });
-import { YouTubePlayer } from '@/types/youtube';
+
 import dynamic from 'next/dynamic';
 import UserFriendlyErrorDisplay from '@/components/UserFriendlyErrorDisplay';
 import BeatTimeline from '@/components/BeatTimeline';
@@ -168,7 +172,6 @@ export default function YouTubeVideoAnalyzePage() {
     pause,
     seek,
     setPlaybackRate: setPlayerPlaybackRate,
-    setPreferredAudioSource,
     handleTimeUpdate: _handleTimeUpdate, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleLoadedMetadata: _handleLoadedMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleYouTubePlayerReady,
@@ -213,7 +216,7 @@ export default function YouTubeVideoAnalyzePage() {
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
 
   // Extract state from audio player hook
-  const { isPlaying, currentTime, duration, playbackRate, preferredAudioSource } = audioPlayerState;
+  const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
 
   // Create setters for individual state properties
   const setIsPlaying = useCallback((playing: boolean) => {
@@ -227,6 +230,17 @@ export default function YouTubeVideoAnalyzePage() {
   // Key signature state
   const [keySignature, setKeySignature] = useState<string | null>(null);
   const [isDetectingKey, setIsDetectingKey] = useState(false);
+
+  // Song segmentation state
+  const [segmentationData, setSegmentationData] = useState<SegmentationResult | null>(null);
+  const [showSegmentation, setShowSegmentation] = useState(false);
+
+  // Handle segmentation results from chatbot
+  const handleSegmentationResult = useCallback((result: SegmentationResult) => {
+    console.log('Received segmentation result:', result);
+    setSegmentationData(result);
+    setShowSegmentation(true);
+  }, []);
 
   // Enharmonic correction state
   const [chordCorrections, setChordCorrections] = useState<Record<string, string> | null>(null);
@@ -289,22 +303,16 @@ export default function YouTubeVideoAnalyzePage() {
     handleTryAnotherVideo,
     toggleVideoMinimization,
     toggleFollowMode,
-    toggleAudioSource,
   } = useNavigationHelpers({
     setIsVideoMinimized,
     setIsFollowModeEnabled,
-    preferredAudioSource,
-    setPreferredAudioSource,
-    youtubePlayer,
-    audioRef,
   });
 
   // Use extracted audio interactions hook
   const {
     handleBeatClick,
     toggleEnharmonicCorrection,
-    handleLoadedMetadata,
-    handleTimeUpdate,
+
   } = useAudioInteractions({
     audioRef,
     youtubePlayer,
@@ -316,6 +324,22 @@ export default function YouTubeVideoAnalyzePage() {
     setLastClickInfo,
     showCorrectedChords,
     setShowCorrectedChords,
+  });
+
+  // Use playback state hook for YouTube event handlers
+  const {
+    handleYouTubeReady,
+    handleYouTubePlay,
+    handleYouTubePause,
+    handleYouTubeProgress,
+  } = usePlaybackState({
+    audioRef,
+    youtubePlayer,
+    setYoutubePlayer,
+    audioPlayerState,
+    setAudioPlayerState,
+    setDuration,
+    isFollowModeEnabled
   });
 
   // Enhanced audio analysis function that integrates with processing context
@@ -438,6 +462,40 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Lyrics panel state
   const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
+
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedChords, setEditedChords] = useState<Record<number, string>>({});
+
+  // Edit mode handlers
+  const handleEditModeToggle = useCallback(() => {
+    if (!isEditMode) {
+      // Entering edit mode - initialize with current values
+      setEditedTitle(videoTitle || '');
+      setEditedChords({});
+    }
+    setIsEditMode(!isEditMode);
+  }, [isEditMode, videoTitle]);
+
+  const handleTitleSave = useCallback(() => {
+    if (editedTitle.trim()) {
+      setVideoTitle(editedTitle.trim());
+    }
+    setIsEditMode(false);
+  }, [editedTitle, setVideoTitle]);
+
+  const handleTitleCancel = useCallback(() => {
+    setEditedTitle(videoTitle || '');
+    setIsEditMode(false);
+  }, [videoTitle]);
+
+  const handleChordEdit = useCallback((index: number, newChord: string) => {
+    setEditedChords(prev => ({
+      ...prev,
+      [index]: newChord
+    }));
+  }, []);
 
   // Check for cached enharmonic correction data when analysis results are loaded
   useEffect(() => {
@@ -679,8 +737,9 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Video title is now handled by the useAudioProcessing hook
 
-  // Function to build song context for chatbot
-  const buildSongContext = (): SongContext => {
+  // PERFORMANCE OPTIMIZATION: Memoized song context for chatbot
+  // Prevents object recreation on every render, reducing ChatbotSection re-renders
+  const buildSongContext = useMemo((): SongContext => {
     return {
       videoId,
       title: videoTitle, // Use the fetched video title
@@ -704,7 +763,7 @@ export default function YouTubeVideoAnalyzePage() {
       lyrics: lyrics || undefined,
       translatedLyrics: translatedLyrics
     };
-  };
+  }, [videoId, videoTitle, duration, analysisResults, lyrics, translatedLyrics]);
 
   // Function to handle chatbot toggle
   const toggleChatbot = () => {
@@ -868,56 +927,14 @@ export default function YouTubeVideoAnalyzePage() {
     extractionLockRef
   ]);
 
-  // YouTube player event handlers
-  const handleYouTubeReady = (player: unknown) => {
-    // console.log('YouTube player ready');
-
-    // ReactPlayer doesn't directly expose the YouTube player instance
-    // Instead, it provides a ref to the player object which has its own API
-    // Type assertion to our YouTubePlayer interface
-    setYoutubePlayer(player as YouTubePlayer);
-
-    // We can't directly call YouTube player methods here
-    // ReactPlayer handles playback rate through its props
-
-    // If audio is already playing, sync the YouTube video
-    if (isPlaying && audioRef.current) {
-      // Use ReactPlayer's seekTo method
-      (player as YouTubePlayer).seekTo(audioRef.current.currentTime, 'seconds');
-    }
-  };
-
-  const handleYouTubePlay = () => {
-    // If audio is not playing, start it
-    if (!isPlaying && audioRef.current) {
-      audioRef.current.play();
-      // Update state directly without toggling
-      setIsPlaying(true);
-    }
-  };
-
-  const handleYouTubePause = () => {
-    // If audio is playing, pause it
-    if (isPlaying && audioRef.current) {
-      audioRef.current.pause();
-      // Update state directly without toggling
-      setIsPlaying(false);
-    }
-  };
-
-  const handleYouTubeProgress = (state: { played: number; playedSeconds: number }) => {
-    // Sync audio with YouTube if they get out of sync by more than 0.5 seconds
-    if (audioRef.current && Math.abs(audioRef.current.currentTime - state.playedSeconds) > 0.5) {
-      audioRef.current.currentTime = state.playedSeconds;
-    }
-  };
+  // Use YouTube handlers from usePlaybackState hook instead of duplicating logic
 
 
   const chordGridData = useMemo(() => getChordGridDataService(analysisResults as any) as any, [analysisResults]);
 
   // Use extracted scroll and animation hook
   useScrollAndAnimation({
-    audioRef,
+    youtubePlayer,
     isPlaying,
     analysisResults,
     currentBeatIndex,
@@ -947,18 +964,16 @@ export default function YouTubeVideoAnalyzePage() {
     audioDuration: analysisResults?.audioDuration || 0 // Total audio duration for track generation
   });
 
-  // Mute appropriate audio source based on preference
+  // Ensure YouTube player is unmuted for playback
   useEffect(() => {
-    if (youtubePlayer && audioRef.current) {
-      if (preferredAudioSource === 'youtube') {
-        youtubePlayer.muted = false;
-        audioRef.current.muted = true;
-      } else {
-        youtubePlayer.muted = true;
-        audioRef.current.muted = false;
-      }
+    if (youtubePlayer) {
+      youtubePlayer.muted = false;
     }
-  }, [preferredAudioSource, youtubePlayer, audioRef]);
+    // Mute extracted audio element since we only use YouTube for playback
+    if (audioRef.current) {
+      audioRef.current.muted = true;
+    }
+  }, [youtubePlayer, audioRef]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
@@ -979,7 +994,7 @@ export default function YouTubeVideoAnalyzePage() {
       />
 
       <div className="container py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "100%" }}>
-        <div className="bg-white dark:bg-content-bg transition-colors duration-300">
+        <div className="bg-white dark:bg-dark-bg transition-colors duration-300">
 
         {/* Processing Status Banner - positioned in content flow */}
         <ProcessingStatusBanner
@@ -1034,24 +1049,126 @@ export default function YouTubeVideoAnalyzePage() {
             <div className="mt-0 space-y-2 px-4">
 
               {/* Tabbed interface for analysis results */}
-              <div className="rounded-lg bg-white dark:bg-content-bg mb-2 mt-0 transition-colors duration-300">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-2">
-                  <div className="mb-2 md:mb-0">
-                    <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300 mt-1 truncate max-w-md">
-                      {videoTitle}
-                    </p>
+              <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
+                {/* Mobile: buttons next to title, Desktop: buttons on right side */}
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-2">
+                  {/* Title section */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full md:w-auto gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        {isEditMode ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editedTitle}
+                              onChange={(e) => setEditedTitle(e.target.value)}
+                              className="flex-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-800 dark:text-gray-100"
+                              placeholder="Enter song title..."
+                              autoFocus
+                            />
+                            <button
+                              onClick={handleTitleSave}
+                              className="p-1 text-green-600 hover:text-green-700 transition-colors"
+                              title="Save title"
+                            >
+                              <HiCheck className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={handleTitleCancel}
+                              className="p-1 text-red-600 hover:text-red-700 transition-colors"
+                              title="Cancel edit"
+                            >
+                              <HiXMark className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300 truncate flex-1">
+                              {videoTitle}
+                            </p>
+                            <button
+                              onClick={handleEditModeToggle}
+                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+                              title="Edit song title and chords"
+                            >
+                              <HiPencil className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Buttons row - next to title on mobile, separate on desktop */}
+                    <div className="flex gap-2 flex-shrink-0 md:hidden">
+                      {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
+                      {((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
+                        (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0)) && (
+                        <button
+                          onClick={toggleEnharmonicCorrection}
+                          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg border font-medium transition-colors duration-200 whitespace-nowrap ${
+                            showCorrectedChords
+                              ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
+                              : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
+                          }`}
+                          title={showCorrectedChords ? 'Show original chord spellings' : 'Show corrected enharmonic spellings'}
+                        >
+                          {showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'}
+                        </button>
+                      )}
+
+                      {/* Music.AI Transcription Button */}
+                      <button
+                        onClick={() => {
+                          transcribeLyricsWithAI();
+                        }}
+                        disabled={
+                          isTranscribingLyrics ||
+                          !audioProcessingState.audioUrl ||
+                          !isServiceAvailable('musicAi')
+                        }
+                        className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors whitespace-nowrap ${
+                          isServiceAvailable('musicAi')
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
+                            : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        }`}
+                        title={
+                          !isServiceAvailable('musicAi')
+                            ? "Add your Music.AI API key in Settings to enable lyrics transcription"
+                            : !audioProcessingState.audioUrl
+                            ? "Extract audio first to enable lyrics transcription"
+                            : isTranscribingLyrics
+                            ? "Transcription in progress..."
+                            : "AI transcription from audio (word-level sync)"
+                        }
+                      >
+                        {isTranscribingLyrics
+                          ? "Transcribing..."
+                          : !isServiceAvailable('musicAi')
+                          ? "API Key Required"
+                          : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
+                        }
+                      </button>
+
+                      {/* Segmentation Toggle Button */}
+                      <SegmentationToggleButton
+                        isEnabled={showSegmentation}
+                        onClick={() => setShowSegmentation(!showSegmentation)}
+                        hasSegmentationData={!!segmentationData}
+                      />
+                    </div>
                   </div>
-                  <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                    
+
+                  {/* Desktop buttons - separate section on right side */}
+                  <div className="hidden md:flex gap-2 flex-shrink-0">
                     {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
                     {((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
                       (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0)) && (
                       <button
                         onClick={toggleEnharmonicCorrection}
-                        className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors duration-200 ${
+                        className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors duration-200 whitespace-nowrap ${
                           showCorrectedChords
-                            ? 'bg-purple-100 dark:bg-purple-200 border-purple-300 dark:border-purple-400 text-purple-800 dark:text-purple-900 hover:bg-purple-200 dark:hover:bg-purple-300'
+                            ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
                             : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
                         }`}
                         title={showCorrectedChords ? 'Show original chord spellings' : 'Show corrected enharmonic spellings'}
@@ -1070,9 +1187,9 @@ export default function YouTubeVideoAnalyzePage() {
                         !audioProcessingState.audioUrl ||
                         !isServiceAvailable('musicAi')
                       }
-                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors w-full md:w-auto ${
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
                         isServiceAvailable('musicAi')
-                          ? 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
                           : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                       }`}
                       title={
@@ -1089,9 +1206,18 @@ export default function YouTubeVideoAnalyzePage() {
                         ? "Transcribing..."
                         : !isServiceAvailable('musicAi')
                         ? "API Key Required"
-                        : (hasCachedLyrics ? "Re-transcribe" : "AI Transcribe")
+                        : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
                       }
                     </button>
+
+                    {/* Segmentation Toggle Button */}
+                    <SegmentationToggleButton
+                      isEnabled={showSegmentation}
+                      onClick={() => setShowSegmentation(!showSegmentation)}
+                      hasSegmentationData={!!segmentationData}
+                    />
+                  </div>
+                </div>
 
                     {lyricsError && (
                       <div className={`mt-2 md:col-span-2 ${
@@ -1102,8 +1228,6 @@ export default function YouTubeVideoAnalyzePage() {
                         {lyricsError}
                       </div>
                     )}
-                  </div>
-                </div>
 
                 {/* Tabs */}
                 <div className="border-b border-gray-200 mb-4">
@@ -1172,6 +1296,11 @@ export default function YouTubeVideoAnalyzePage() {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={memoizedChordCorrections}
                         sequenceCorrections={memoizedSequenceCorrections}
+                        segmentationData={segmentationData}
+                        showSegmentation={showSegmentation}
+                        isEditMode={isEditMode}
+                        editedChords={editedChords}
+                        onChordEdit={handleChordEdit}
                       />
 
                       {/* Control buttons moved to the component level */}
@@ -1199,6 +1328,8 @@ export default function YouTubeVideoAnalyzePage() {
                       showCorrectedChords={showCorrectedChords}
                       chordCorrections={memoizedChordCorrections}
                       sequenceCorrections={memoizedSequenceCorrections}
+                      segmentationData={segmentationData}
+                      showSegmentation={showSegmentation}
                     />
                   )}
 
@@ -1213,6 +1344,7 @@ export default function YouTubeVideoAnalyzePage() {
                       onFontSizeChange={setFontSize}
                       theme={theme}
                       analysisResults={analysisResults}
+                      segmentationData={segmentationData}
                     />
                   )}
                 </div>
@@ -1233,22 +1365,16 @@ export default function YouTubeVideoAnalyzePage() {
 
           {/* Audio Player Component */}
           <AudioPlayer
-            audioUrl={audioProcessingState.audioUrl}
             youtubeVideoId={videoId}
             isPlaying={isPlaying}
             currentTime={currentTime}
             duration={duration}
             playbackRate={playbackRate}
-            preferredAudioSource={preferredAudioSource}
             onPlay={play}
             onPause={pause}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
             onSeek={seek}
             onPlaybackRateChange={setPlayerPlaybackRate}
-            onPreferredAudioSourceChange={setPreferredAudioSource}
             onYouTubePlayerReady={handleYouTubePlayerReady}
-            audioRef={audioRef}
           />
 
           {/* Floating video player for all screens - fixed position */}
@@ -1268,7 +1394,10 @@ export default function YouTubeVideoAnalyzePage() {
               }}
             >
               {/* Floating control buttons - fixed to top of the YouTube player */}
-              <div className="absolute -top-10 left-0 right-0 z-60 flex flex-wrap justify-end gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300">
+              <div className="absolute -top-10 left-0 z-60 flex flex-wrap justify-end gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+                   style={{
+                     right: '48px' // Leave space for minimize/maximize button (40px width + 8px margin)
+                   }}>
                 <button
                   onClick={toggleFollowMode}
                   className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap ${
@@ -1286,22 +1415,7 @@ export default function YouTubeVideoAnalyzePage() {
                   </span>
                 </button>
 
-                <button
-                  onClick={toggleAudioSource}
-                  className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap ${
-                    preferredAudioSource === 'extracted'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-purple-600 text-white'
-                  }`}
-                  title="Switch audio source"
-                >
-                  <span className={`${isVideoMinimized ? 'hidden' : ''}`}>
-                    {preferredAudioSource === 'extracted' ? "Audio: Extracted" : "Audio: YouTube"}
-                  </span>
-                  <span className={`${isVideoMinimized ? 'inline' : 'hidden'}`}>
-                    {preferredAudioSource === 'extracted' ? "Ext" : "YT"}
-                  </span>
-                </button>
+
 
                 {/* Metronome controls - only show when analysis results are available */}
                 {analysisResults && (
@@ -1315,16 +1429,13 @@ export default function YouTubeVideoAnalyzePage() {
                 {/* Minimize/Maximize button */}
                 <button
                   onClick={toggleVideoMinimization}
-                  className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10"
+                  className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10 w-10 h-6 flex items-center justify-center hover:bg-gray-700 transition-colors"
+                  title={isVideoMinimized ? "Expand video player" : "Minimize video player"}
                 >
                   {isVideoMinimized ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12z" clipRule="evenodd" />
-                    </svg>
+                    <FaExpand className="h-3 w-3" />
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M5 10a1 1 0 011-1h4a1 1 0 110 2H8.414l2.293 2.293a1 1 0 01-1.414 1.414L7 12.414V14a1 1 0 11-2 0v-4zm9-1a1 1 0 110 2h1.586l-2.293 2.293a1 1 0 001.414 1.414L17 12.414V14a1 1 0 102 0v-4a1 1 0 00-1-1h-4z" clipRule="evenodd" />
-                    </svg>
+                    <FaCompress className="h-3 w-3" />
                   )}
                 </button>
 
@@ -1334,11 +1445,13 @@ export default function YouTubeVideoAnalyzePage() {
                     videoId={videoId}
                     isPlaying={isPlaying}
                     playbackRate={playbackRate}
-                    preferredAudioSource={preferredAudioSource}
+                    currentTime={currentTime}
+                    duration={duration}
                     onReady={handleYouTubeReady}
                     onPlay={handleYouTubePlay}
                     onPause={handleYouTubePause}
                     onProgress={handleYouTubeProgress}
+                    onSeek={seek}
                   />
                 )}
               </div>
@@ -1351,7 +1464,8 @@ export default function YouTubeVideoAnalyzePage() {
             isOpen={isChatbotOpen}
             onToggle={toggleChatbot}
             onClose={() => setIsChatbotOpen(false)}
-            songContext={buildSongContext()}
+            songContext={buildSongContext}
+            onSegmentationResult={handleSegmentationResult}
           />
 
           {/* Lyrics Panel Components */}

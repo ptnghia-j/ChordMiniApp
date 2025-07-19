@@ -28,6 +28,7 @@ interface GuitarChordDiagramProps {
   lite?: boolean; // Simplified rendering
   displayName?: string; // Override chord name display (for enharmonic corrections)
   isFocused?: boolean; // Whether this chord diagram is currently focused/active
+  segmentationColor?: string; // Segmentation color for border styling
 }
 
 // Standard guitar instrument configuration
@@ -49,7 +50,8 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   showChordName = true,
   lite = false,
   displayName,
-  isFocused = false
+  isFocused = false,
+  segmentationColor
 }) => {
   // Size configurations - responsive sizing
   const sizeConfig = {
@@ -66,8 +68,13 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     return (
       <div className={`flex flex-col items-center justify-center ${className}`}>
         <div
-          className="bg-white rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center transition-colors duration-200 shadow-sm"
-          style={{ width: `${width}px`, height: `${height}px` }}
+          className="bg-white rounded-lg border flex items-center justify-center transition-colors duration-200 shadow-sm"
+          style={{
+            width: `${width}px`,
+            height: `${height}px`,
+            borderColor: segmentationColor || '#d1d5db', // Use segmentation color or default gray
+            borderWidth: segmentationColor ? '3px' : '1px' // Thicker border for segmentation
+          }}
         >
           <Image
             src="/quarter_rest.svg"
@@ -116,7 +123,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     // Convert ASCII sharp/flat symbols to Unicode musical symbols
     const displayName = key
       .replace(/#/g, '♯')  // Sharp (#) → ♯ (U+266F)
-      .replace(/b/g, '♭'); // Flat (b) → ♭ (U+266D)
+      .replace(/([A-G])b/g, '$1♭'); // Flat (b) → ♭ (U+266D) only after note names
 
     // Add suffix formatting
     if (suffix === 'major') {
@@ -141,10 +148,15 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
-      {/* Chord diagram - Force light background for better visibility */}
+      {/* Chord diagram - White background for better readability */}
       <div
-        className="chord-diagram-container relative bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-600 transition-colors duration-200"
-        style={{ width: `${width}px`, height: `${height}px` }}
+        className="chord-diagram-container relative bg-white rounded-lg overflow-hidden shadow-sm border transition-colors duration-200"
+        style={{
+          width: `${width}px`,
+          height: `${height}px`,
+          borderColor: segmentationColor || '#d1d5db', // Use segmentation color or default gray
+          borderWidth: segmentationColor ? '3px' : '1px' // Thicker border for segmentation
+        }}
       >
         <Chord
           chord={chordForDiagram}

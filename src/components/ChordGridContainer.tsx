@@ -4,6 +4,7 @@ import React from 'react';
 import ChordGrid from '@/components/ChordGrid';
 // import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
+import { SegmentationResult } from '@/types/chatbotTypes';
 
 interface AudioMappingItem {
   chord: string;
@@ -56,6 +57,13 @@ interface ChordGridContainerProps {
       }>;
     };
   } | null;
+  // NEW: Song segmentation data for color-coding
+  segmentationData?: SegmentationResult | null;
+  showSegmentation?: boolean;
+  // Edit mode props
+  isEditMode?: boolean;
+  editedChords?: Record<number, string>;
+  onChordEdit?: (index: number, newChord: string) => void;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
@@ -70,7 +78,12 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   isUploadPage = false,
   showCorrectedChords = false,
   chordCorrections = null,
-  sequenceCorrections = null
+  sequenceCorrections = null,
+  segmentationData = null,
+  showSegmentation = false,
+  isEditMode = false,
+  editedChords = {},
+  onChordEdit
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
@@ -93,7 +106,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       isUploadPage,
       showCorrectedChords,
       chordCorrections,
-      sequenceCorrections
+      sequenceCorrections,
+      segmentationData,
+      showSegmentation
     };
   }, [
     chordGridData.chords,
@@ -111,7 +126,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     isUploadPage,
     showCorrectedChords,
     chordCorrections,
-    sequenceCorrections
+    sequenceCorrections,
+    segmentationData,
+    showSegmentation
   ]);
 
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
@@ -131,6 +148,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
             isChatbotOpen={isChatbotOpen}
             isLyricsPanelOpen={isLyricsPanelOpen}
             onBeatClick={memoizedOnBeatClick}
+            isEditMode={isEditMode}
+            editedChords={editedChords}
+            onChordEdit={onChordEdit}
           />
         );
       })()}

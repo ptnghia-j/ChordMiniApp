@@ -133,6 +133,8 @@ export const initTranslationsCollection = async () => {
 };
 
 // Utility function to wait for authentication
+// NOTE: This function is deprecated for caching operations since Firebase security rules
+// allow public access without authentication. Use only for admin operations that require auth.
 export const waitForAuth = (): Promise<void> => {
   return new Promise((resolve) => {
     if (!auth) {
@@ -155,11 +157,13 @@ export const waitForAuth = (): Promise<void> => {
       }
     });
 
-    // Timeout after 10 seconds to avoid hanging
+    // In production, use longer timeout to account for slower network conditions
+    const timeoutMs = process.env.NODE_ENV === 'production' ? 20000 : 10000;
     setTimeout(() => {
       unsubscribe();
+      console.warn(`⚠️ Firebase auth timeout after ${timeoutMs}ms, proceeding without authentication`);
       resolve();
-    }, 10000);
+    }, timeoutMs);
   });
 };
 

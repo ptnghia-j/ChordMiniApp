@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { HiUpload } from 'react-icons/hi';
@@ -44,9 +44,49 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   handleVideoSelect,
   containerRef
 }) => {
-  const [showMoreResults, setShowMoreResults] = useState(false);
+  const [visibleResults, setVisibleResults] = useState(5);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const resultsEndRef = useRef<HTMLDivElement>(null);
 
+  // Reset visible results when search results change
+  useEffect(() => {
+    setVisibleResults(5);
+  }, [searchResults]);
 
+  // Infinite scroll implementation
+  const loadMoreResults = useCallback(() => {
+    if (visibleResults >= searchResults.length || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    // Simulate loading delay for smooth UX
+    setTimeout(() => {
+      setVisibleResults(prev => Math.min(prev + 5, searchResults.length));
+      setIsLoadingMore(false);
+    }, 300);
+  }, [visibleResults, searchResults.length, isLoadingMore]);
+
+  // Intersection Observer for infinite scroll within container
+  useEffect(() => {
+    const scrollContainer = resultsEndRef.current?.closest('.overflow-y-auto');
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleResults < searchResults.length) {
+          loadMoreResults();
+        }
+      },
+      {
+        threshold: 0.1,
+        root: scrollContainer // Use the scrollable container as root
+      }
+    );
+
+    if (resultsEndRef.current) {
+      observer.observe(resultsEndRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [loadMoreResults, visibleResults, searchResults.length]);
 
   // Format upload date from YYYYMMDD to readable format
   const formatDate = (uploadDate?: string) => {
@@ -60,10 +100,9 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  // Split results into initial 5 and additional 5
-  const initialResults = searchResults.slice(0, 5);
-  const additionalResults = searchResults.slice(5, 10);
-  const hasMoreResults = additionalResults.length > 0;
+  // Get currently visible results
+  const displayedResults = searchResults.slice(0, visibleResults);
+  const hasMoreResults = visibleResults < searchResults.length;
 
   return (
     <div
@@ -166,9 +205,10 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                 </span>
               </div>
 
-              {/* Initial 5 Results */}
-              <div className="space-y-3">
-                {initialResults.map((result) => (
+              {/* All Results with Infinite Scroll - Contained within fixed height */}
+              <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="space-y-3 pr-2">
+                  {displayedResults.map((result) => (
                   <div
                     key={result.id}
                     className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
@@ -182,7 +222,6 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                         fill
                         sizes="80px"
                       />
-
                     </div>
                     <div className="ml-3 flex-1 min-w-0">
                       <h5 className="font-medium line-clamp-2 text-gray-800 dark:text-gray-100 text-sm leading-tight mb-1">{result.title}</h5>
@@ -197,72 +236,23 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
 
-              {/* Show More Button and Additional Results */}
-              {hasMoreResults && (
-                <div className="mt-4">
-                  {!showMoreResults ? (
-                    <button
-                      onClick={() => setShowMoreResults(true)}
-                      className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center gap-2"
-                    >
-                      <span>Show More ({additionalResults.length} more results)</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <>
-                      {/* Additional Results */}
-                      <div className="space-y-3 mb-3">
-                        {additionalResults.map((result) => (
-                          <div
-                            key={result.id}
-                            className="flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-lg transition-colors border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500"
-                            onClick={() => handleVideoSelect(result.id, result.title, result)}
-                          >
-                            <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
-                              <Image
-                                src={result.thumbnail}
-                                alt={result.title}
-                                className="object-cover"
-                                fill
-                                sizes="80px"
-                              />
-
-                            </div>
-                            <div className="ml-3 flex-1 min-w-0">
-                              <h5 className="font-medium line-clamp-2 text-gray-800 dark:text-gray-100 text-sm leading-tight mb-1">{result.title}</h5>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">{result.channel}</p>
-                              <div className="flex items-center text-xs text-gray-500 dark:text-gray-500 mb-1">
-                                {result.upload_date && <span>{formatDate(result.upload_date)}</span>}
-                              </div>
-                              {result.description && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-                                  {result.description.length > 120 ? result.description.substring(0, 120) + '...' : result.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Show Less Button */}
-                      <button
-                        onClick={() => setShowMoreResults(false)}
-                        className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center gap-2"
-                      >
-                        <span>Show Less</span>
-                        <svg className="w-4 h-4 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                    </>
+                  {/* Infinite Scroll Trigger and Loading Indicator - Inside scrollable container */}
+                  {hasMoreResults && (
+                    <div ref={resultsEndRef} className="mt-4 flex justify-center">
+                      {isLoadingMore && (
+                        <div className="flex items-center gap-2 py-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Loading more results...</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
+              </div>
+
+
             </>
           )}
         </div>

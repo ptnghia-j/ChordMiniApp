@@ -6,9 +6,9 @@
  */
 
 import axios from 'axios';
-import { ChatMessage, ChatbotRequest, ChatbotResponse, SongContext } from '@/types/chatbotTypes';
-import { LyricsData } from '@/types/musicAiTypes';
 import { v4 as uuidv4 } from 'uuid';
+import { ChatMessage, ChatbotRequest, ChatbotResponse, SongContext, SegmentationRequest, SegmentationResult } from '@/types/chatbotTypes';
+import { LyricsData } from '@/types/musicAiTypes';
 
 /**
  * Sends a message to the chatbot API
@@ -253,4 +253,41 @@ export function truncateConversationHistory(
 
   // Keep the most recent messages
   return messages.slice(-maxMessages);
+}
+
+/**
+ * Sends a request to the segmentation API
+ */
+export async function requestSongSegmentation(
+  songContext: SongContext,
+  geminiApiKey?: string
+): Promise<SegmentationResult> {
+  try {
+    const request: SegmentationRequest = {
+      songContext,
+      geminiApiKey
+    };
+
+    const response = await axios.post('/api/segmentation', request, {
+      timeout: 60000, // 60 second timeout for segmentation analysis
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.error || 'Segmentation analysis failed');
+    }
+  } catch (error) {
+    console.error('Error requesting song segmentation:', error);
+
+    if (axios.isAxiosError(error)) {
+      const message = error.response?.data?.error || error.message;
+      throw new Error(`Segmentation request failed: ${message}`);
+    }
+
+    throw new Error('Failed to analyze song segmentation');
+  }
 }

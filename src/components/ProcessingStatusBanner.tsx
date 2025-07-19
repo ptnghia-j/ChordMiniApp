@@ -56,15 +56,12 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
 
     if (shouldDetectDuration) {
       setIsDurationDetecting(true);
-      console.log('🎵 Starting dynamic duration detection for progress calculation...');
 
       getAudioDurationFromUrl(audioUrl)
         .then((duration) => {
           if (isValidDuration(duration)) {
-            console.log(`✅ Duration detected: ${duration} seconds`);
             setDetectedDuration(duration);
           } else {
-            console.warn(`⚠️ Invalid duration detected: ${duration}, using fallback`);
             setDetectedDuration(180); // Fallback to 3 minutes
           }
         })
@@ -93,10 +90,9 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       const effectiveDuration = audioDuration || detectedDuration;
 
       if (effectiveDuration && effectiveDuration > 0) {
-        // Use 1:1 ratio: x minutes audio = x minutes processing
-        // This means processing takes approximately the same time as audio duration
-        const estimatedTime = effectiveDuration;
-        const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 95);
+        // Use 1:0.6 ratio: x minutes audio = 0.6 * x minutes processing
+        const estimatedTime = 0.6 * effectiveDuration;
+        const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 100);
         setEstimatedProgress(progress);
 
       } else {
@@ -274,7 +270,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
                     {estimatedProgress > 0 ? Math.round(estimatedProgress) : 0}%
                     {(!audioDuration && !detectedDuration) && (
                       <span className="text-xs opacity-75 ml-1">
-                        {isDurationDetecting ? '⏳' : '~'}
+                        {isDurationDetecting ? ' ...' : ' ~'}
                       </span>
                     )}
                   </p>

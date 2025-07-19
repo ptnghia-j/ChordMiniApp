@@ -2,16 +2,21 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChatMessage, SongContext } from '@/types/chatbotTypes';
-import { sendChatMessageWithLyricsRetrieval, createChatMessage, truncateConversationHistory } from '@/services/chatbotService';
+import { ChatMessage, SongContext, SegmentationResult } from '@/types/chatbotTypes';
+import { sendChatMessageWithLyricsRetrieval, createChatMessage, truncateConversationHistory, requestSongSegmentation } from '@/services/chatbotService';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import MarkdownRenderer from './MarkdownRenderer';
+import SegmentationOptionBubbles from './SegmentationOptionBubbles';
+import ConfirmationButtons from './ConfirmationButtons';
+
+
 
 interface ChatbotInterfaceProps {
   isOpen: boolean;
   onClose: () => void;
   songContext?: SongContext;
   className?: string;
+  onSegmentationResult?: (result: SegmentationResult) => void;
 }
 
 /**
@@ -21,16 +26,199 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
   isOpen,
   onClose,
   songContext,
-  className = ''
+  className = '',
+  onSegmentationResult
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOptionBubbles, setShowOptionBubbles] = useState(true);
+  const [selectedOption, setSelectedOption] = useState<'analysis' | 'segmentation' | null>(null);
+  const [showConfirmationButtons, setShowConfirmationButtons] = useState(false);
+  const [pendingSegmentationMessage, setPendingSegmentationMessage] = useState<ChatMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { getApiKey } = useApiKeys();
+
+  // Check if Music.AI API key is available and lyrics exist
+  const checkSegmentationRequirements = async () => {
+    const musicAiKey = await getApiKey('musicAi');
+    const hasApiKey = !!musicAiKey;
+    const hasLyrics = !!(songContext?.lyrics && songContext.lyrics.lines.length > 0);
+    return { hasApiKey, hasLyrics };
+  };
+
+  // Clear conversation and reset to initial state
+  const clearConversation = () => {
+    setMessages([]);
+    setShowOptionBubbles(true);
+    setSelectedOption(null);
+    setError(null);
+
+    // Re-add welcome message
+    const welcomeMessage = createChatMessage(
+      'assistant',
+      `Hello! I'm your AI music assistant. I can help you understand the analysis of this song, including its chord progressions, beat patterns, and lyrics. I also offer advanced song segmentation analysis to visualize song structure. What would you like to explore?`
+    );
+    setMessages([welcomeMessage]);
+  };
+
+
+
+  // Handle segmentation analysis
+  const handleSegmentationAnalysis = async () => {
+    if (!songContext) {
+      setError('No song context available for segmentation analysis');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Get user's Gemini API key if available
+      const geminiApiKey = await getApiKey('gemini');
+
+      // Add processing message
+      const processingMessage = createChatMessage(
+        'assistant',
+        'Analyzing song structure... This may take a moment as I examine the beats, chords, and lyrics to identify different sections.'
+      );
+      setMessages(prev => [...prev, processingMessage]);
+
+      // Request segmentation analysis
+      const segmentationResult = await requestSongSegmentation(songContext, geminiApiKey || undefined);
+
+      // Create success message with results
+      const resultMessage = createChatMessage(
+        'assistant',
+        `**Song segmentation analysis complete!**
+
+I've identified **${segmentationResult.segments.length} sections** in this song:
+
+${segmentationResult.segments.map((segment, index) =>
+  `${index + 1}. **${segment.label || segment.type}** (${segment.startTime.toFixed(1)}s - ${segment.endTime.toFixed(1)}s)`
+).join('\n')}
+
+**Song Structure**: ${segmentationResult.analysis.structure}
+
+**Visual Enhancement**: The beat/chord grid above now shows color-coded sections! Each section type has its own color:
+- **Intro/Outro**: Light gray
+- **Verse**: Light green
+- **Pre-Chorus**: Light orange
+- **Chorus**: Light red/pink
+- **Bridge**: Light purple
+- **Instrumental**: Light yellow
+
+You can now see the song's structure at a glance and understand how different sections flow together!`
+      );
+
+      setMessages(prev => [...prev, resultMessage]);
+
+      // Trigger grid color update by calling the callback
+      if (onSegmentationResult) {
+        onSegmentationResult(segmentationResult);
+        console.log('Segmentation result passed to parent component');
+      }
+
+    } catch (error) {
+      console.error('Segmentation analysis failed:', error);
+      const errorMessage = createChatMessage(
+        'assistant',
+        `**Segmentation analysis failed**
+
+${error instanceof Error ? error.message : 'An unexpected error occurred during analysis.'}
+
+This could be due to:
+- Missing or insufficient lyrics data
+- API key issues
+- Complex song structure that's difficult to analyze
+
+Would you like to try the regular analysis instead, or check your API key configuration?`
+      );
+      setMessages(prev => [...prev, errorMessage]);
+      setError(error instanceof Error ? error.message : 'Segmentation analysis failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle option selection from bubbles
+  const handleOptionSelect = async (option: 'analysis' | 'segmentation') => {
+    setSelectedOption(option);
+    setShowOptionBubbles(false);
+
+    if (option === 'analysis') {
+      const analysisMessage = createChatMessage(
+        'assistant',
+        `Great! I'm ready to help you analyze this song's musical elements. You can ask me about:
+
+• **Chord progressions** - How chords change throughout the song
+• **Beat patterns** - Timing, tempo, and rhythm analysis
+• **Song structure** - Verses, choruses, and musical sections
+• **Lyrics analysis** - Meaning, themes, and lyrical structure
+• **Music theory** - Key signatures, harmonic relationships, and more
+
+What specific aspect would you like to explore first?`
+      );
+      setMessages(prev => [...prev, analysisMessage]);
+    } else if (option === 'segmentation') {
+      const { hasApiKey, hasLyrics } = await checkSegmentationRequirements();
+
+      if (!hasApiKey || !hasLyrics) {
+        const errorMessage = createChatMessage(
+          'assistant',
+          `I'd love to help with song segmentation, but I need a few things first:
+
+${!hasApiKey ? '• **Music.AI API Key**: Please configure your Music.AI API key in the settings' : ''}
+${!hasLyrics ? '• **Lyrics Data**: The song needs lyrics for accurate segmentation analysis' : ''}
+
+Once these requirements are met, I can analyze the song structure and create a beautiful color-coded visualization showing intro, verses, choruses, bridges, and other sections!
+
+Would you like me to help with the regular analysis instead?`
+        );
+        setMessages(prev => [...prev, errorMessage]);
+        setShowOptionBubbles(true); // Show options again
+        setSelectedOption(null);
+      } else {
+        const segmentationMessage = createChatMessage(
+          'assistant',
+          `Perfect! I can perform song segmentation analysis for you. This will:
+
+• **Analyze song structure** - Identify intro, verse, chorus, bridge, outro sections
+• **Create color-coded visualization** - Each section gets a unique color on the beat/chord grid
+• **Provide precise timestamps** - Know exactly when each section starts and ends
+• **Show structural patterns** - See how the song is organized musically
+
+To proceed, I'll analyze the complete song data including beats, chords, and lyrics to identify the structural sections. This may take a moment.
+
+Would you like me to start the segmentation analysis now?`
+        );
+        setMessages(prev => [...prev, segmentationMessage]);
+        setPendingSegmentationMessage(segmentationMessage);
+        setShowConfirmationButtons(true);
+      }
+    }
+  };
+
+  // Handle confirmation button responses
+  const handleConfirmSegmentation = async () => {
+    setShowConfirmationButtons(false);
+    await handleSegmentationAnalysis();
+  };
+
+  const handleCancelSegmentation = () => {
+    setShowConfirmationButtons(false);
+    const cancelMessage = createChatMessage(
+      'assistant',
+      'No problem! Feel free to ask me about the song analysis or choose a different option when you\'re ready.'
+    );
+    setMessages(prev => [...prev, cancelMessage]);
+    setShowOptionBubbles(true);
+    setSelectedOption(null);
+  };
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -49,7 +237,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     if (isOpen && messages.length === 0) {
       const welcomeMessage = createChatMessage(
         'assistant',
-        `Hello! I'm your AI music assistant. I can help you understand the analysis of this song, including its chord progressions, beat patterns, and lyrics. What would you like to know?`
+        `Hello! I'm your AI music assistant. I can help you understand the analysis of this song, including its chord progressions, beat patterns, and lyrics. I also offer advanced song segmentation analysis to visualize song structure. What would you like to explore?`
       );
       setMessages([welcomeMessage]);
     }
@@ -61,8 +249,23 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     const userMessage = createChatMessage('user', inputMessage.trim());
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
+    const messageContent = inputMessage.trim();
     setInputMessage('');
     setError(null);
+
+    // Check if user is confirming segmentation analysis
+    const isSegmentationConfirmation = selectedOption === 'segmentation' &&
+      (messageContent.toLowerCase().includes('yes') ||
+       messageContent.toLowerCase().includes('start') ||
+       messageContent.toLowerCase().includes('proceed') ||
+       messageContent.toLowerCase().includes('analyze'));
+
+    if (isSegmentationConfirmation) {
+      // User confirmed segmentation analysis
+      await handleSegmentationAnalysis();
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -77,7 +280,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
       const geminiApiKey = await getApiKey('gemini');
 
       const response = await sendChatMessageWithLyricsRetrieval(
-        userMessage.content,
+        messageContent,
         truncatedHistory,
         songContext,
         geminiApiKey || undefined
@@ -100,16 +303,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     }
   };
 
-  const clearConversation = () => {
-    setMessages([]);
-    setError(null);
-    // Re-add welcome message
-    const welcomeMessage = createChatMessage(
-      'assistant',
-      `Hello! I'm your AI music assistant. I can help you understand the analysis of this song, including its chord progressions, beat patterns, and lyrics. What would you like to know?`
-    );
-    setMessages([welcomeMessage]);
-  };
+
 
   return (
     <AnimatePresence>
@@ -201,32 +395,56 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`
-                    max-w-[80%] p-3 rounded-lg
-                    ${message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                    }
-                  `}
-                >
-                  {message.role === 'user' ? (
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  ) : (
-                    <MarkdownRenderer
-                      content={message.content}
-                      className="text-sm"
-                    />
-                  )}
-                  <p className="text-xs opacity-70 mt-1">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </p>
+            {messages.map((message, index) => (
+              <div key={message.id}>
+                <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`
+                      max-w-[80%] p-3 rounded-lg
+                      ${message.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                      }
+                    `}
+                  >
+                    {message.role === 'user' ? (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    ) : (
+                      <MarkdownRenderer
+                        content={message.content}
+                        className="text-sm"
+                      />
+                    )}
+                    <p className="text-xs opacity-70 mt-1">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Show option bubbles after the first assistant message */}
+                {index === 0 && message.role === 'assistant' && showOptionBubbles && (
+                  <div className="flex justify-start mt-4">
+                    <div className="max-w-[90%]">
+                      <SegmentationOptionBubbles
+                        songContext={songContext}
+                        onOptionSelect={handleOptionSelect}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Show confirmation buttons for segmentation */}
+                {message === pendingSegmentationMessage && showConfirmationButtons && (
+                  <div className="flex justify-start mt-4">
+                    <div className="max-w-[90%]">
+                      <ConfirmationButtons
+                        onConfirm={handleConfirmSegmentation}
+                        onCancel={handleCancelSegmentation}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 

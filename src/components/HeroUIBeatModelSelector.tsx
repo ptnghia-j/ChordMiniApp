@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
 import { getModelInfo, ModelInfoResult } from '@/services/beatDetectionService';
 
-type ModelType = 'auto' | 'madmom' | 'beat-transformer';
+type ModelType = 'madmom' | 'beat-transformer';
 
 interface HeroUIBeatModelSelectorProps {
   onChange: (model: ModelType) => void;
@@ -28,23 +28,26 @@ const HeroUIBeatModelSelector = ({
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
   const [loading, setLoading] = useState(true);
 
-  // Fetch model information on component mount
+  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
+    // Immediately show UI without waiting for backend
+    setLoading(false);
+
     const fetchModelInfo = async () => {
       try {
+        // Fetch model info in background without blocking UI
         const info = await getModelInfo();
         setModelInfo(info);
       } catch (error) {
-        console.error('Error fetching model info:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching model info (non-blocking):', error);
+        // Keep using fallback data on error - UI already rendered
       }
     };
 
+    // Fetch model info asynchronously without blocking UI
     fetchModelInfo();
   }, []);
 
-  // Update selected model when defaultValue changes
   useEffect(() => {
     setSelectedModel(defaultValue);
   }, [defaultValue]);
@@ -59,43 +62,35 @@ const HeroUIBeatModelSelector = ({
     }
   };
 
-  // Define model options with descriptions
-  const getModelOptions = (): ModelOption[] => [
-    {
-      id: 'auto',
-      name: 'Auto',
-      description: 'Automatically selects the best available model for your audio',
-      available: true
-    },
+  const modelOptions = useMemo((): ModelOption[] => [
     {
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'High-precision DL model with 5-channel audio separation',
+                  'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures. ',
       available: modelInfo?.beat_transformer_available || false
     },
     {
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                  'Neural network with good balance of accuracy and speed',
+                  'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
       available: modelInfo?.madmom_available || false
     }
-  ];
+  ], [modelInfo]);
 
-  // Filter available models - always show beat-transformer since it's the default
-  const availableModels = getModelOptions().filter(model =>
+  const availableModels = useMemo(() => modelOptions.filter(model =>
     model.available || model.id === 'beat-transformer'
-  );
+  ), [modelOptions]);
+  
+  const selectedModelObject = availableModels.find(model => model.id === selectedModel);
+  const baseDescription = selectedModelObject?.description || "Choose the beat detection model for audio analysis";
+  const selectedModelDescription = loading
+    ? `${baseDescription} (Loading detailed info...)`
+    : baseDescription;
 
   const getModelIcon = (modelId: ModelType) => {
     switch (modelId) {
-      case 'auto':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-          </svg>
-        );
       case 'beat-transformer':
         return (
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -125,13 +120,10 @@ const HeroUIBeatModelSelector = ({
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
             </svg>
             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-              Advanced beat detection using transformer architecture
+              {selectedModelDescription}
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400 transition-colors duration-300">
-          Advanced beat detection using transformer architecture
-        </p>
       </div>
 
       <Select
@@ -142,9 +134,9 @@ const HeroUIBeatModelSelector = ({
         variant="bordered"
         color="primary"
         isLoading={loading}
-        isDisabled={loading}
+        isDisabled={false}
         startContent={getModelIcon(selectedModel)}
-        description="Choose the beat detection model for audio analysis"
+        description={selectedModelDescription}
         aria-label="Beat detection model selector"
       >
         {availableModels.map((model) => (
@@ -168,8 +160,21 @@ const HeroUIBeatModelSelector = ({
       </Select>
 
       {loading && (
-        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
-          Loading model information...
+        <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 transition-colors duration-300">
+          <div className="animate-spin h-3 w-3 border border-blue-600 dark:border-blue-400 border-t-transparent rounded-full"></div>
+          <span>Loading detailed model information from backend...</span>
+        </div>
+      )}
+
+      {!loading && modelInfo && (
+        <div className="mt-2 text-xs text-green-600 dark:text-green-400 transition-colors duration-300">
+          ✓ Backend model information loaded
+        </div>
+      )}
+
+      {!loading && !modelInfo && (
+        <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 transition-colors duration-300">
+          ⚠ Using default model options (backend unavailable)
         </div>
       )}
     </div>

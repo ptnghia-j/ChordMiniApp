@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
 
 export interface AudioInteractionsDependencies {
@@ -34,11 +34,8 @@ export interface AudioInteractions {
  */
 export const useAudioInteractions = (deps: AudioInteractionsDependencies): AudioInteractions => {
   const {
-    audioRef,
     youtubePlayer,
     setCurrentTime,
-    setDuration,
-    setIsPlaying,
     currentBeatIndexRef,
     setCurrentBeatIndex,
     setLastClickInfo,
@@ -48,15 +45,10 @@ export const useAudioInteractions = (deps: AudioInteractionsDependencies): Audio
 
   // Handle beat cell clicks for navigation
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
-    // Seek audio element
-    if (audioRef.current) {
-      audioRef.current.currentTime = timestamp;
-      setCurrentTime(timestamp);
-    }
-
-    // Seek YouTube player if available
+    // Seek YouTube player (primary audio source)
     if (youtubePlayer && youtubePlayer.seekTo) {
       youtubePlayer.seekTo(timestamp, 'seconds');
+      setCurrentTime(timestamp);
     }
 
     // FIXED: Direct state update without override mechanism
@@ -72,67 +64,23 @@ export const useAudioInteractions = (deps: AudioInteractionsDependencies): Audio
     });
 
     // console.log(`🎯 BEAT CLICK: Set currentBeatIndex=${beatIndex}, timestamp=${timestamp.toFixed(3)}s`);
-  }, [audioRef, youtubePlayer, setCurrentTime, currentBeatIndexRef, setCurrentBeatIndex, setLastClickInfo]);
+  }, [youtubePlayer, setCurrentTime, currentBeatIndexRef, setCurrentBeatIndex, setLastClickInfo]);
 
   // Function to toggle enharmonic correction display
   const toggleEnharmonicCorrection = useCallback(() => {
     setShowCorrectedChords(!showCorrectedChords);
   }, [showCorrectedChords, setShowCorrectedChords]);
 
-  // Audio event handlers
+  // Placeholder handlers for compatibility (YouTube handles timing directly)
   const handleLoadedMetadata = useCallback(() => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  }, [audioRef, setDuration]);
+    // YouTube player handles metadata loading
+  }, []);
 
   const handleTimeUpdate = useCallback(() => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  }, [audioRef, setCurrentTime]);
+    // YouTube player handles time updates via progress events
+  }, []);
 
-  // Set up audio element event listeners
-  useEffect(() => {
-    const audioElement = audioRef.current;
-    if (!audioElement) return;
-
-    const handlePlay = () => {
-      // console.log(`🎵 AUDIO PLAY EVENT: Setting isPlaying=true`);
-      setIsPlaying(true);
-    };
-    
-    const handlePause = () => {
-      // console.log(`⏸️ AUDIO PAUSE EVENT: Setting isPlaying=false`);
-      setIsPlaying(false);
-    };
-
-    const handleTimeUpdateInternal = () => {
-      if (audioElement) {
-        setCurrentTime(audioElement.currentTime);
-      }
-    };
-
-    const handleLoadedMetadataInternal = () => {
-      if (audioElement) {
-        setDuration(audioElement.duration);
-      }
-    };
-
-    audioElement.addEventListener('loadedmetadata', handleLoadedMetadataInternal);
-    audioElement.addEventListener('play', handlePlay);
-    audioElement.addEventListener('pause', handlePause);
-    audioElement.addEventListener('timeupdate', handleTimeUpdateInternal);
-
-    return () => {
-      if (audioElement) {
-        audioElement.removeEventListener('loadedmetadata', handleLoadedMetadataInternal);
-        audioElement.removeEventListener('play', handlePlay);
-        audioElement.removeEventListener('pause', handlePause);
-        audioElement.removeEventListener('timeupdate', handleTimeUpdateInternal);
-      }
-    };
-  }, [audioRef, setCurrentTime, setDuration, setIsPlaying]);
+  // No audio element event listeners needed - YouTube player handles all events
 
   return {
     handleBeatClick,

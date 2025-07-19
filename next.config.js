@@ -30,13 +30,6 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    domains: [
-      'img.youtube.com',
-      'i.ytimg.com',
-      'yt3.ggpht.com',
-      'firebasestorage.googleapis.com',
-      'lh3.googleusercontent.com'
-    ],
     remotePatterns: [
       {
         protocol: 'https',
@@ -53,6 +46,30 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.ggpht.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.ggpht.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3.us-east-1.amazonaws.com',
       }
     ],
   },
@@ -83,7 +100,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "connect-src 'self' https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://quicktube.app https://chordmini-backend-full-191567167632.us-central1.run.app https://lrclib.net https://api.genius.com https://vercel.com https://*.vercel.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://api.vercel.com; frame-src 'self' https://www.youtube.com https://youtube.com https://*.firebaseapp.com;",
+            value: "connect-src 'self' https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://quicktube.app https://chordmini-backend-full-191567167632.us-central1.run.app https://lrclib.net https://api.genius.com https://vercel.com https://*.vercel.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://api.vercel.com; frame-src 'self' https://www.youtube.com https://youtube.com https://*.firebaseapp.com https://s3.us-east-1.amazonaws.com;",
           },
         ],
       },

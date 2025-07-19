@@ -39,14 +39,14 @@ export async function GET(request: NextRequest) {
     // - Chord progression preview
     
     // For now, return the static logo
-    return NextResponse.redirect(`${baseUrl}/chordMiniLogo.png`);
-    
+    return NextResponse.redirect(`${baseUrl}/chordMiniLogo.webp`);
+
   } catch (error) {
     console.error('Failed to generate OG image:', error);
-    
+
     // Fallback to static logo
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://chordmini.com';
-    return NextResponse.redirect(`${baseUrl}/chordMiniLogo.png`);
+    return NextResponse.redirect(`${baseUrl}/chordMiniLogo.webp`);
   }
 }
 
