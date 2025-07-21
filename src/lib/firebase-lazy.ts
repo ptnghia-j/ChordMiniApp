@@ -77,17 +77,14 @@ export const getAuthInstance = async () => {
 };
 
 // Preload Firebase when user interaction is detected
-export const preloadFirebase = () => {
-  // Use requestIdleCallback for non-critical preloading
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    window.requestIdleCallback(() => {
-      initializeFirebaseApp().catch(console.error);
-    });
-  } else {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      initializeFirebaseApp().catch(console.error);
-    }, 100);
+export const preloadFirebase = async (): Promise<void> => {
+  try {
+    // PERFORMANCE FIX: Initialize Firebase immediately to prevent cache check race condition
+    // Return a Promise so callers can await Firebase initialization
+    await initializeFirebaseApp();
+  } catch (error) {
+    console.error('Firebase preload failed:', error);
+    throw error;
   }
 };
 

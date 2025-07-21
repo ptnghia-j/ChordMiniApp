@@ -67,7 +67,7 @@ const HeroUIBeatModelSelector = ({
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures. ',
+                  'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
       available: modelInfo?.beat_transformer_available || false
     },
     {

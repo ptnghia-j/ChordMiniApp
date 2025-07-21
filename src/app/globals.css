@@ -539,3 +539,13 @@
 .dark .shooting-star-content {
   background: transparent;
 }
+
+/* Hide scrollbars for responsive toggle button container */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}

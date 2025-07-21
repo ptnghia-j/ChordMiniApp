@@ -58,19 +58,23 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
     }
   }, [isOpen]);
 
+  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
+    // Immediately show UI without waiting for backend
+    setLoading(false);
+
     async function fetchModelInfo() {
-      setLoading(true);
       try {
+        // Fetch model info in background without blocking UI
         const info = await getModelInfo();
         setModelInfo(info);
       } catch (error) {
-        console.error('Failed to fetch model info:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching model info (non-blocking):', error);
+        // Keep using fallback data on error - UI already rendered
       }
     }
 
+    // Fetch model info asynchronously without blocking UI
     fetchModelInfo();
   }, []);
 

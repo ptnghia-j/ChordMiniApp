@@ -9,31 +9,37 @@ import { preloadFirebase } from '@/lib/firebase-lazy';
  */
 export default function FirebaseInitializer() {
   useEffect(() => {
-    // Define a function to handle all our non-critical Firebase setup
-    const setupFirebase = () => {
-      preloadFirebase();
-      
-      const initializeCollections = async () => {
-        try {
-          const { initTranslationsCollection } = await import('@/config/firebase');
-          await initTranslationsCollection();
-        } catch (error) {
-          console.error('Error initializing Firebase collections:', error);
+    // PERFORMANCE FIX: Initialize Firebase immediately to prevent cache check race condition
+    // During cold starts, audio extraction was starting before Firebase initialized,
+    // causing cache checks to be bypassed and unnecessary backend calls
+    const setupFirebase = async () => {
+      try {
+        // Initialize Firebase immediately for cache functionality
+        await preloadFirebase();
+
+        // Initialize collections after core Firebase is ready
+        const initializeCollections = async () => {
+          try {
+            const { initTranslationsCollection } = await import('@/config/firebase');
+            await initTranslationsCollection();
+          } catch (error) {
+            console.error('Error initializing Firebase collections:', error);
+          }
+        };
+
+        // Use requestIdleCallback for non-critical collection setup only
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(() => initializeCollections());
+        } else {
+          setTimeout(() => initializeCollections(), 100);
         }
-      };
-      initializeCollections();
+      } catch (error) {
+        console.error('Error setting up Firebase:', error);
+      }
     };
 
-    // Use requestIdleCallback to run our setup function only when the browser is idle
-    // This is a much better approach than a fixed setTimeout
-    if ('requestIdleCallback' in window) {
-      const idleCallbackId = window.requestIdleCallback(setupFirebase);
-      return () => window.cancelIdleCallback(idleCallbackId);
-    } else {
-      // Fallback for older browsers
-      const timeoutId = setTimeout(setupFirebase, 2000);
-      return () => clearTimeout(timeoutId);
-    }
+    // Initialize Firebase immediately on component mount
+    setupFirebase();
   }, []);
 
   // This component doesn't render anything

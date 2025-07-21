@@ -38,10 +38,10 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   cacheAvailable = false,
   cacheCheckCompleted = false
 }) => {
-  // Only show when audio is extracted but not yet analyzed
-  // Allow model selection to show after extraction completes, even if stage is 'complete'
+  // PERFORMANCE FIX: Always show model selection UI, regardless of extraction state
+  // This allows users to select models immediately, even during cold starts
   // Only hide when analysis is actually complete (isAnalyzed is true)
-  if (!isExtracted || isAnalyzed || isAnalyzing || hasError || (stage === 'complete' && isAnalyzed)) {
+  if (isAnalyzed || (stage === 'complete' && isAnalyzed)) {
     return null;
   }
 
@@ -56,9 +56,20 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
             Choose beat and chord detection models to analyze the audio.
           </p>
 
-          {/* Cache availability indicator */}
-          {cacheCheckCompleted && (
-            <div className="mt-2">
+          {/* Status indicator */}
+          <div className="mt-2">
+            {!isExtracted ? (
+              <Chip
+                color="primary"
+                variant="flat"
+                size="sm"
+                startContent={
+                  <span className="w-2 h-2 rounded-full bg-primary-500" />
+                }
+              >
+                Audio extraction in progress - models ready for selection
+              </Chip>
+            ) : cacheCheckCompleted ? (
               <Chip
                 color={cacheAvailable ? "success" : "warning"}
                 variant="flat"
@@ -74,8 +85,19 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
                   : `No cached results for ${beatDetector} + ${chordDetector} - will run new analysis`
                 }
               </Chip>
-            </div>
-          )}
+            ) : (
+              <Chip
+                color="default"
+                variant="flat"
+                size="sm"
+                startContent={
+                  <span className="w-2 h-2 rounded-full bg-default-500" />
+                }
+              >
+                Checking for cached results...
+              </Chip>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-start overflow-visible">
@@ -95,13 +117,18 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
 
           <div className="w-full md:w-1/3 flex items-center justify-center mt-4 md:mt-0">
             <Button
-              onClick={onStartAnalysis}
+              onPress={onStartAnalysis}
               color="primary"
               size="lg"
               className="w-full font-medium bg-blue-600 text-white"
               variant="solid"
+              isDisabled={!isExtracted || isAnalyzing || hasError}
             >
-              {cacheCheckCompleted && cacheAvailable
+              {!isExtracted
+                ? 'Waiting for Audio Extraction...'
+                : isAnalyzing
+                ? 'Analyzing...'
+                : cacheCheckCompleted && cacheAvailable
                 ? 'Load Cached Results'
                 : 'Start Audio Analysis'
               }

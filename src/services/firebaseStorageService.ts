@@ -56,7 +56,7 @@ export async function findExistingAudioFile(
   }
 
   try {
-    console.log(`🔍 Searching Firebase Storage for existing audio file: ${videoId}`);
+    // Firebase Storage search logging removed for production
 
     // List all files in the audio directory
     const audioRef = ref(storage, 'audio');
@@ -90,8 +90,7 @@ export async function findExistingAudioFile(
       console.warn('Could not get file metadata:', metadataError);
     }
 
-    console.log(`🎵 Firebase Storage audio URL: ${audioUrl}`);
-    console.log(`📊 File size: ${fileSize ? (fileSize / 1024 / 1024).toFixed(2) + 'MB' : 'unknown'}`);
+    // Firebase Storage result logging removed for production
 
     return {
       audioUrl,

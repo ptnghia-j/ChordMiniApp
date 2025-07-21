@@ -1067,7 +1067,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
 
         {/* Header section with clean layout */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1 p-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
         {/* Left side - Title */}
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">

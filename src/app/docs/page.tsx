@@ -237,7 +237,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* Quick Start */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg p-6 mb-6">
+                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <FiZap className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                     <div className="flex-1">
@@ -246,7 +246,7 @@ export default function DocsPage() {
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white mb-2">Base URL</h4>
                           <div className="relative group">
-                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                            <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                               {backendUrl}
                             </div>
                             <button
@@ -287,7 +287,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* No Auth Required Card */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-green-500 dark:border-green-400 rounded-r-lg p-6 mb-6">
+                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-green-500 dark:border-green-400 rounded-r-lg p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <FiCheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
                     <div>
@@ -321,7 +321,7 @@ export default function DocsPage() {
                       Cross-Origin Resource Sharing (CORS) is enabled for all origins, allowing browser-based requests.
                     </p>
                     <div className="relative group">
-                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                      <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                         Access-Control-Allow-Origin: *
                       </div>
                       <button
@@ -347,7 +347,7 @@ export default function DocsPage() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="relative group">
-                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             multipart/form-data
                           </div>
                           <button
@@ -364,7 +364,7 @@ export default function DocsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="relative group">
-                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             application/json
                           </div>
                           <button
@@ -398,7 +398,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* Overview Card */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-orange-500 dark:border-orange-400 rounded-r-lg p-6 mb-8">
+                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-orange-500 dark:border-orange-400 rounded-r-lg p-6 mb-8">
                   <div className="flex items-start gap-3">
                     <FiActivity className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                     <div>
@@ -422,7 +422,7 @@ export default function DocsPage() {
                   <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                     <table className="w-full">
                       <thead>
-                        <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                        <tr className="bg-gray-50 dark:bg-content-bg/50 border-b border-gray-200 dark:border-gray-700">
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Endpoint</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Method</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rate Limit</th>
@@ -605,7 +605,7 @@ export default function DocsPage() {
                   <div className="text-gray-600 dark:text-gray-400 flex items-center gap-2 flex-wrap">
                     <span>All endpoints are available at the base URL:</span>
                     <div className="relative group">
-                      <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                      <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                         {backendUrl}
                       </div>
                       <button
@@ -627,7 +627,7 @@ export default function DocsPage() {
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                           /api/detect-beats
                         </div>
                         <button
@@ -644,7 +644,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns beat timestamps, BPM, and time signature.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
+                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> file (audio file), model (optional: beat-transformer, madmom, auto)
                       </p>
@@ -655,7 +655,7 @@ export default function DocsPage() {
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                           /api/recognize-chords
                         </div>
                         <button
@@ -672,7 +672,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns chord progression with timestamps.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
+                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> file (audio file), model (optional: chord-cnn-lstm)
                       </p>
@@ -686,7 +686,7 @@ export default function DocsPage() {
                         <div className="flex items-center gap-3 mb-4">
                           <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">POST</span>
                           <div className="relative group">
-                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                            <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                               /api/recognize-chords-btc-sl
                             </div>
                             <button
@@ -715,7 +715,7 @@ export default function DocsPage() {
                         <div className="flex items-center gap-3 mb-4">
                           <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">POST</span>
                           <div className="relative group">
-                            <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                            <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                               /api/recognize-chords-btc-pl
                             </div>
                             <button
@@ -746,7 +746,7 @@ export default function DocsPage() {
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                           /api/lrclib-lyrics
                         </div>
                         <button
@@ -763,7 +763,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Retrieves synchronized lyrics with timestamps from LRClib database.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
+                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> artist (string), title (string), duration (number, optional)
                       </p>
@@ -774,7 +774,7 @@ export default function DocsPage() {
                     <div className="flex items-center gap-3 mb-4">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">GET</span>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                           /api/model-info
                         </div>
                         <button
@@ -791,7 +791,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Returns information about available models and their capabilities.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3">
+                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> None required
                       </p>
@@ -816,7 +816,7 @@ export default function DocsPage() {
                 <div className="mb-8">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">JavaScript Example</h3>
                   <div className="relative group w-full">
-                    <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                    <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                       <div className="whitespace-pre-wrap break-all">
                         {`const formData = new FormData();
 formData.append('file', audioFile);
@@ -866,7 +866,7 @@ console.log(result);`)}
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request</h4>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                           <div className="whitespace-pre-wrap break-all">
                             {`curl -X POST "${backendUrl}/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
@@ -889,7 +889,7 @@ console.log(result);`)}
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Response</h4>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                           <div className="whitespace-pre-wrap break-all">
                             {`{
   "success": true,
@@ -927,7 +927,7 @@ console.log(result);`)}
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request</h4>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                           <div className="whitespace-pre-wrap break-all">
                             {`curl -X POST "${backendUrl}/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
@@ -950,7 +950,7 @@ console.log(result);`)}
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Response</h4>
                       <div className="relative group">
-                        <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
+                        <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100 overflow-x-auto">
                           <div className="whitespace-pre-wrap break-all">
                             {`{
   "success": true,
@@ -1074,7 +1074,7 @@ console.log(result);`)}
                           You&apos;ve exceeded the rate limit for the endpoint. Wait for the time specified in the Retry-After header.
                         </p>
                         <div className="relative group">
-                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Implement exponential backoff and respect rate limit headers
                           </div>
                           <button
@@ -1095,7 +1095,7 @@ console.log(result);`)}
                           The API supports common audio formats: MP3, WAV, FLAC, M4A, OGG.
                         </p>
                         <div className="relative group">
-                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Convert your audio file to a supported format
                           </div>
                           <button
@@ -1116,7 +1116,7 @@ console.log(result);`)}
                           Large audio files may take longer to process. The API has a 10-minute timeout.
                         </p>
                         <div className="relative group">
-                          <div className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                          <div className="bg-gray-100 dark:bg-content-bg border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                             Solution: Use shorter audio clips or compress your audio file
                           </div>
                           <button

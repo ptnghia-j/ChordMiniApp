@@ -133,8 +133,24 @@ export class FirebaseStorageSimplified {
    */
   async getCachedAudioMetadata(videoId: string): Promise<SimplifiedAudioData | null> {
     if (!db) {
-      console.warn('Firebase not initialized');
-      return null;
+      // PERFORMANCE FIX: Try to initialize Firebase if not ready (race condition fix)
+      try {
+        const { getFirestoreInstance } = await import('@/lib/firebase-lazy');
+        const firestoreInstance = await getFirestoreInstance();
+        if (!firestoreInstance) {
+          console.warn('Firebase not initialized and initialization failed');
+          return null;
+        }
+        // Update global db reference for future calls
+        const { db: globalDb } = await import('@/config/firebase');
+        if (!globalDb) {
+          console.warn('Firebase initialization succeeded but global db not available');
+          return null;
+        }
+      } catch (error) {
+        console.warn('Firebase initialization failed during cache check:', error);
+        return null;
+      }
     }
 
     // Import smart cache

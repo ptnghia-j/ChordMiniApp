@@ -40,6 +40,11 @@ const MetronomeControls = dynamic(() => import('@/components/MetronomeControls')
   ssr: false
 });
 
+const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimplificationToggle'), {
+  loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
   loading: () => <div className="fixed right-4 bottom-16 w-96 h-96 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
@@ -61,9 +66,6 @@ import {
 import {
   getChordGridData as getChordGridDataService
 } from '@/services/chordGridCalculationService';
-import {
-  checkCachedAnalysisAvailability as checkCachedAnalysisAvailabilityService
-} from '@/services/cacheManagementService';
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
@@ -117,6 +119,11 @@ const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(
 import dynamic from 'next/dynamic';
 import UserFriendlyErrorDisplay from '@/components/UserFriendlyErrorDisplay';
 import BeatTimeline from '@/components/BeatTimeline';
+import {
+  simplifyChordArray,
+  simplifyChordCorrections,
+  simplifySequenceCorrections
+} from '@/utils/chordSimplification';
 
 
 // Import the new collapsible video player
@@ -201,17 +208,15 @@ export default function YouTubeVideoAnalyzePage() {
   // Cache availability state
   const [cacheAvailable, setCacheAvailable] = useState<boolean>(false);
   const [cacheCheckCompleted, setCacheCheckCompleted] = useState<boolean>(false);
+  const [cacheCheckInProgress, setCacheCheckInProgress] = useState<boolean>(false);
 
   // Reset cache state when models change (persistence is handled in useModelState hook)
+  // Combined into single useEffect to prevent multiple state updates
   useEffect(() => {
     setCacheCheckCompleted(false);
     setCacheAvailable(false);
-  }, [beatDetector]);
-
-  useEffect(() => {
-    setCacheCheckCompleted(false);
-    setCacheAvailable(false);
-  }, [chordDetector]);
+    setCacheCheckInProgress(false);
+  }, [beatDetector, chordDetector]);
 
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
 
@@ -234,6 +239,9 @@ export default function YouTubeVideoAnalyzePage() {
   // Song segmentation state
   const [segmentationData, setSegmentationData] = useState<SegmentationResult | null>(null);
   const [showSegmentation, setShowSegmentation] = useState(false);
+
+  // Chord simplification state
+  const [simplifyChords, setSimplifyChords] = useState(false);
 
   // Handle segmentation results from chatbot
   const handleSegmentationResult = useCallback((result: SegmentationResult) => {
@@ -268,6 +276,15 @@ export default function YouTubeVideoAnalyzePage() {
   // Memoize chord corrections to prevent useMemo dependency changes
   const memoizedChordCorrections = useMemo(() => chordCorrections, [chordCorrections]);
   const memoizedSequenceCorrections = useMemo(() => sequenceCorrections, [sequenceCorrections]);
+
+  // Memoize simplified chord data when simplification is enabled
+  const simplifiedChordCorrections = useMemo(() => {
+    return simplifyChords ? simplifyChordCorrections(memoizedChordCorrections) : memoizedChordCorrections;
+  }, [simplifyChords, memoizedChordCorrections]);
+
+  const simplifiedSequenceCorrections = useMemo(() => {
+    return simplifyChords ? simplifySequenceCorrections(memoizedSequenceCorrections) : memoizedSequenceCorrections;
+  }, [simplifyChords, memoizedSequenceCorrections]);
 
   // Auto-enable corrections when sequence corrections are available (only once)
   const [hasAutoEnabledCorrections, setHasAutoEnabledCorrections] = useState(false);
@@ -425,20 +442,68 @@ export default function YouTubeVideoAnalyzePage() {
 
   // ✅ EXTRACTED: Check for cached analysis availability using service
   useEffect(() => {
-    const deps = {
-      videoId,
-      beatDetector,
-      chordDetector,
-      audioProcessingState,
-      modelsInitialized,
-      setCacheAvailable,
-      setCacheCheckCompleted,
-      lyrics: null, // Not used in this check
-      setHasCachedLyrics: () => {} // Not used in this check
+    const checkCache = async () => {
+      // Only check if all conditions are met and cache check hasn't been completed yet
+      if (
+        audioProcessingState.isExtracted &&
+        audioProcessingState.audioUrl &&
+        !audioProcessingState.isAnalyzed &&
+        !audioProcessingState.isAnalyzing &&
+        modelsInitialized &&
+        !cacheCheckCompleted && // Prevent duplicate checks
+        !cacheCheckInProgress // Prevent concurrent checks
+      ) {
+        try {
+          setCacheCheckInProgress(true);
+
+          // Add a small delay to ensure Firebase is ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Cache check logging removed for production
+
+          // Add timeout to prevent hanging
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Cache check timeout')), 10000)
+          );
+
+          const cachedData = await Promise.race([
+            getTranscription(videoId, beatDetector, chordDetector),
+            timeoutPromise
+          ]);
+
+          if (cachedData) {
+            console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
+            setCacheAvailable(true);
+          } else {
+            console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
+            setCacheAvailable(false);
+          }
+
+          setCacheCheckCompleted(true);
+        } catch (error) {
+          console.error('Error checking cached analysis:', error);
+          // If Firebase is not available or times out, still mark as completed to prevent infinite loops
+          setCacheAvailable(false);
+          setCacheCheckCompleted(true);
+        } finally {
+          setCacheCheckInProgress(false);
+        }
+      }
     };
 
-    checkCachedAnalysisAvailabilityService(deps as any);
-  }, [audioProcessingState, videoId, beatDetector, chordDetector, modelsInitialized]);
+    checkCache();
+  }, [
+    audioProcessingState.isExtracted,
+    audioProcessingState.audioUrl,
+    audioProcessingState.isAnalyzed,
+    audioProcessingState.isAnalyzing,
+    videoId,
+    beatDetector,
+    chordDetector,
+    modelsInitialized,
+    cacheCheckCompleted,
+    cacheCheckInProgress
+  ]);
 
   // Lyrics transcription state
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
@@ -699,41 +764,7 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [videoId, params, lyrics, audioProcessingState.isExtracted, audioProcessingState.audioUrl, setLyrics, setShowLyrics, setHasCachedLyrics, setActiveTab]); // Re-run when audio extraction completes
 
-  // Check for cached analysis availability (but don't auto-load) when audio is extracted AND models are initialized
-  useEffect(() => {
-    const checkCachedAnalysisAvailability = async () => {
-      if (audioProcessingState.isExtracted && audioProcessingState.audioUrl && !audioProcessingState.isAnalyzed && !audioProcessingState.isAnalyzing && modelsInitialized) {
-        // console.log('🔍 Checking for cached analysis availability (not auto-loading)...');
-
-        try {
-          // Add a small delay to ensure Firebase is ready
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Check if cached analysis exists for current models
-          // console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
-          const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
-
-          if (cachedData) {
-            // console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
-            // console.log(`🔍 Cache contains: beatModel="${cachedData.beatModel}", chordModel="${cachedData.chordModel}"`);
-            setCacheAvailable(true);
-          } else {
-            // console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
-            // console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run new analysis');
-            setCacheAvailable(false);
-          }
-
-          setCacheCheckCompleted(true);
-
-        } catch (error) {
-          console.error('Error checking cached analysis availability:', error);
-          // console.log('🎯 USER ACTION REQUIRED: Click "Start Analysis" to run analysis');
-        }
-      }
-    };
-
-    checkCachedAnalysisAvailability();
-  }, [audioProcessingState.isExtracted, audioProcessingState.audioUrl, audioProcessingState.isAnalyzed, audioProcessingState.isAnalyzing, videoId, beatDetector, chordDetector, modelsInitialized]);
+  // REMOVED: Duplicate cache checking useEffect - now handled by the single useEffect above
 
   // Video title is now handled by the useAudioProcessing hook
 
@@ -931,6 +962,16 @@ export default function YouTubeVideoAnalyzePage() {
 
 
   const chordGridData = useMemo(() => getChordGridDataService(analysisResults as any) as any, [analysisResults]);
+
+  // Create simplified chord grid data when simplification is enabled
+  const simplifiedChordGridData = useMemo(() => {
+    if (!chordGridData || !simplifyChords) return chordGridData;
+
+    return {
+      ...chordGridData,
+      chords: simplifyChordArray(chordGridData.chords || [])
+    };
+  }, [chordGridData, simplifyChords]);
 
   // Use extracted scroll and animation hook
   useScrollAndAnimation({
@@ -1286,7 +1327,7 @@ export default function YouTubeVideoAnalyzePage() {
 
                       <ChordGridContainer
                         analysisResults={analysisResults}
-                        chordGridData={chordGridData}
+                        chordGridData={simplifiedChordGridData}
                         currentBeatIndex={currentBeatIndex}
                         keySignature={keySignature}
                         isDetectingKey={isDetectingKey}
@@ -1294,8 +1335,8 @@ export default function YouTubeVideoAnalyzePage() {
                         isLyricsPanelOpen={isLyricsPanelOpen}
                         onBeatClick={handleBeatClick}
                         showCorrectedChords={showCorrectedChords}
-                        chordCorrections={memoizedChordCorrections}
-                        sequenceCorrections={memoizedSequenceCorrections}
+                        chordCorrections={simplifiedChordCorrections}
+                        sequenceCorrections={simplifiedSequenceCorrections}
                         segmentationData={segmentationData}
                         showSegmentation={showSegmentation}
                         isEditMode={isEditMode}
@@ -1317,7 +1358,7 @@ export default function YouTubeVideoAnalyzePage() {
                   {activeTab === 'guitarChords' && (
                     <GuitarChordsTab
                       analysisResults={analysisResults}
-                      chordGridData={chordGridData}
+                      chordGridData={simplifiedChordGridData}
                       currentBeatIndex={currentBeatIndex}
                       onBeatClick={handleBeatClick}
                       keySignature={keySignature}
@@ -1326,8 +1367,8 @@ export default function YouTubeVideoAnalyzePage() {
                       isLyricsPanelOpen={isLyricsPanelOpen}
                       isUploadPage={false}
                       showCorrectedChords={showCorrectedChords}
-                      chordCorrections={memoizedChordCorrections}
-                      sequenceCorrections={memoizedSequenceCorrections}
+                      chordCorrections={simplifiedChordCorrections}
+                      sequenceCorrections={simplifiedSequenceCorrections}
                       segmentationData={segmentationData}
                       showSegmentation={showSegmentation}
                     />
@@ -1345,6 +1386,7 @@ export default function YouTubeVideoAnalyzePage() {
                       theme={theme}
                       analysisResults={analysisResults}
                       segmentationData={segmentationData}
+                      simplifyChords={simplifyChords}
                     />
                   )}
                 </div>
@@ -1393,11 +1435,14 @@ export default function YouTubeVideoAnalyzePage() {
                 zIndex: 55 // Ensure this is below the control buttons (z-60) but above other content
               }}
             >
-              {/* Floating control buttons - fixed to top of the YouTube player */}
-              <div className="absolute -top-10 left-0 z-60 flex flex-wrap justify-end gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
-                   style={{
-                     right: '48px' // Leave space for minimize/maximize button (40px width + 8px margin)
-                   }}>
+              {/* Improved responsive toggle button container */}
+              <div
+                className="absolute -top-10 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+                style={{
+                  right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
+                  maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
+                }}
+              >
                 <button
                   onClick={toggleFollowMode}
                   className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap ${
@@ -1415,7 +1460,14 @@ export default function YouTubeVideoAnalyzePage() {
                   </span>
                 </button>
 
-
+                {/* Chord simplification toggle - only show when analysis results are available */}
+                {analysisResults && (
+                  <ChordSimplificationToggle
+                    isEnabled={simplifyChords}
+                    onClick={() => setSimplifyChords(!simplifyChords)}
+                    isVideoMinimized={isVideoMinimized}
+                  />
+                )}
 
                 {/* Metronome controls - only show when analysis results are available */}
                 {analysisResults && (

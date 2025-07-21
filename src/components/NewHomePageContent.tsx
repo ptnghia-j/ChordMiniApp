@@ -454,8 +454,9 @@ function NewHomePageContentInner() {
                   Open Source
                 </Chip>
 
-                <p className="text-lg text-gray-700 dark:text-gray-200 leading-relaxed">
-                  ChordMini is a free, open-source project. The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints. We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep the backend server running, you can use the donation link below. We really appreciate your support!
+                <p className="text-md text-gray-700 dark:text-gray-200 leading-relaxed">
+                  ChordMini is a free, open-source project. The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints. We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep the backend server running, you can use the donation link below. We really appreciate your support! <br />
+                  <em className="text-sm">Note: current server is CPU-based computation, GPU acceleration is more than 10 times faster.</em>
                 </p>
               </motion.div>
             </div>

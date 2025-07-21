@@ -7,6 +7,27 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.3.3',
+      date: 'July 21, 2025',
+      title: 'Chord Simplification & UI Improvements',
+      description: 'Enhanced user experience with chord simplification toggle and responsive UI improvements',
+      features: [
+        'NEW: Chord simplification toggle that converts complex chord progressions into 5 basic chord types (Major, Minor, Augmented, Diminished, Suspended)',
+        'IMPROVED: Synchronized lyrics toggle converted from checkbox to modern toggle button design',
+        'IMPROVED: Moved synchronized toggle to lyrics panel header for better space utilization',
+        'IMPROVED: Enhanced responsive layout for toggle buttons above YouTube frame',
+        'IMPROVED: Mobile experience with horizontal scrollable button container that prevents UI overflow'
+      ],
+      technical: [
+        'Implemented comprehensive chord simplification algorithm with support for 5 basic chord types',
+        'Enhanced LyricsPanel component with header reorganization and improved toggle placement',
+        'Added responsive toggle button container with cross-browser scrollbar hiding',
+        'Optimized mobile layout with proper max-width constraints and overflow handling',
+        'Updated documentation with comprehensive changelog section and feature descriptions'
+      ],
+      breaking: []
+    },
+    {
       version: 'v0.3.2',
       date: 'July 19, 2025',
       title: 'Enhanced Lyrics & Chords Display System',

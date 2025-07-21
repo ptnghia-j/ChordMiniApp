@@ -167,7 +167,7 @@ export const checkCachedAnalysisAvailability = async (deps: CacheManagerDependen
       // });
 
       // Check if cached analysis exists for current models
-      console.log(`🔍 Cache check: Looking for ${beatDetector} + ${chordDetector} combination`);
+      // Cache check logging removed for production
       const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {

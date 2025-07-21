@@ -58,12 +58,7 @@ export class AudioExtractionServiceSimplified {
   ): Promise<AudioExtractionResult> {
     const env = detectEnvironment();
 
-    console.log(`🔧 Environment Detection for Audio Extraction:`);
-    console.log(`   Strategy: ${env.strategy}`);
-    console.log(`   isDevelopment: ${env.isDevelopment}`);
-    console.log(`   isProduction: ${env.isProduction}`);
-    console.log(`   isVercel: ${env.isVercel}`);
-    console.log(`   baseUrl: ${env.baseUrl}`);
+    // Environment detection logging removed for production
 
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
@@ -108,7 +103,7 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
-        console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
+        // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
           const existingFile = await findExistingAudioFile(videoId);
@@ -262,7 +257,7 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
-        console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
+        // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
           const existingFile = await findExistingAudioFile(videoId);
@@ -456,7 +451,7 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
-        console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
+        // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
           const existingFile = await findExistingAudioFile(videoId);
@@ -649,7 +644,7 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files
       if (!forceRedownload) {
-        console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
+        // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
           const existingFile = await findExistingAudioFile(videoId);

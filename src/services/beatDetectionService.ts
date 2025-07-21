@@ -93,7 +93,7 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
       const data = await response.json();
       // console.log('🔍 Backend health check response:', data);
 
-      // Convert health check response to model info format
+      // PERFORMANCE FIX: Use backend model descriptions when available, fallback to detailed descriptions
       const result = {
         success: true,
         default_model: data.beat_model || 'beat-transformer',
@@ -102,15 +102,24 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
         madmom_available: data.madmom_available || true, // Available as fallback in the backend
         model_info: {
           'beat-transformer': {
-            name: 'Beat-Transformer',
-            description: 'Advanced beat detection using transformer architecture',
-            performance: 'High accuracy, slower processing',
-            uses_spleeter: true
+            name: data.beat_model_info?.['beat-transformer']?.name || 'Beat-Transformer',
+            description: data.beat_model_info?.['beat-transformer']?.description ||
+                        'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
+            performance: data.beat_model_info?.['beat-transformer']?.performance || 'High accuracy, slower processing',
+            uses_spleeter: data.beat_model_info?.['beat-transformer']?.uses_spleeter ?? true
+          },
+          'madmom': {
+            name: data.beat_model_info?.['madmom']?.name || 'Madmom',
+            description: data.beat_model_info?.['madmom']?.description ||
+                        'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
+            performance: data.beat_model_info?.['madmom']?.performance || 'Medium accuracy, medium speed',
+            uses_spleeter: data.beat_model_info?.['madmom']?.uses_spleeter ?? false
           },
           'chord-cnn-lstm': {
-            name: 'Chord-CNN-LSTM',
-            description: 'Chord recognition using CNN-LSTM architecture',
-            performance: 'High accuracy chord detection'
+            name: data.chord_model_info?.['chord-cnn-lstm']?.name || 'Chord-CNN-LSTM',
+            description: data.chord_model_info?.['chord-cnn-lstm']?.description ||
+                        'Chord recognition using CNN-LSTM architecture',
+            performance: data.chord_model_info?.['chord-cnn-lstm']?.performance || 'High accuracy chord detection'
           }
         }
       };

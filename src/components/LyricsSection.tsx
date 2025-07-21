@@ -6,6 +6,7 @@ import { LyricsData } from '@/types/musicAiTypes';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { SegmentationResult } from '@/types/chatbotTypes';
+import { simplifyChord } from '@/utils/chordSimplification';
 
 // Lazy load heavy lead sheet display component
 const LeadSheetDisplay = dynamic(() => import('@/components/LeadSheetDisplay'), {
@@ -23,6 +24,7 @@ interface LyricsSectionProps {
   analysisResults: AnalysisResult | null;
   onFontSizeChange: (size: number) => void;
   segmentationData?: SegmentationResult | null;
+  simplifyChords?: boolean;
 }
 
 export const LyricsSection: React.FC<LyricsSectionProps> = ({
@@ -34,7 +36,8 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   theme,
   analysisResults,
   onFontSizeChange,
-  segmentationData = null
+  segmentationData = null,
+  simplifyChords = false
 }) => {
   const { isServiceAvailable, getServiceMessage } = useApiKeys();
 
@@ -43,9 +46,9 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   const memoizedChords = useMemo(() => {
     return analysisResults?.chords?.map((chord: {start: number, chord: string}) => ({
       time: chord.start,
-      chord: chord.chord
+      chord: simplifyChords ? simplifyChord(chord.chord) : chord.chord
     })) || [];
-  }, [analysisResults?.chords]);
+  }, [analysisResults?.chords, simplifyChords]);
 
   if (!showLyrics) {
     const musicAiAvailable = isServiceAvailable('musicAi');
@@ -108,7 +111,10 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
     ...lyrics,
     lines: lyrics.lines.map(line => ({
       ...line,
-      chords: line.chords || []
+      chords: (line.chords || []).map(chord => ({
+        ...chord,
+        chord: simplifyChords ? simplifyChord(chord.chord) : chord.chord
+      }))
     }))
   };
 

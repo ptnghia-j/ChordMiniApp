@@ -10,6 +10,7 @@ import PerformanceMonitor from '../components/PerformanceMonitor';
 import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptimizer';
 import DesktopPerformanceOptimizer from '../components/DesktopPerformanceOptimizer';
 import CriticalCSS from '../components/CriticalCSS';
+import CorsErrorSuppression from '../components/CorsErrorSuppression';
 
 // Configure Google Fonts
 const robotoMono = Roboto_Mono({
@@ -188,6 +189,7 @@ export default function RootLayout({
             <ServiceWorkerRegistration />
             <FirebaseInitializer />
             <PerformanceMonitor />
+            <CorsErrorSuppression />
             <main className="flex-1">
               {children}
             </main>

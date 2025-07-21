@@ -158,7 +158,7 @@ export const waitForAuth = (): Promise<void> => {
     });
 
     // In production, use longer timeout to account for slower network conditions
-    const timeoutMs = process.env.NODE_ENV === 'production' ? 20000 : 10000;
+    const timeoutMs = 10000;
     setTimeout(() => {
       unsubscribe();
       console.warn(`⚠️ Firebase auth timeout after ${timeoutMs}ms, proceeding without authentication`);
