@@ -74,7 +74,7 @@ const HeroUIBeatModelSelector = ({
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                  'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
+                        'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
       available: modelInfo?.madmom_available || false
     }
   ], [modelInfo]);
