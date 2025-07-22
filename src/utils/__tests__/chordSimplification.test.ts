@@ -69,6 +69,37 @@ describe('Chord Simplification', () => {
       expect(simplifyChord('')).toBe('');
     });
 
+    test('should handle edge cases that reveal operator precedence bug', () => {
+      // Test case that would fail with the current operator precedence bug
+      // These chords contain 'm' but should NOT be classified as minor
+      expect(simplifyChord('Cmaj7')).toBe('C'); // Contains 'm' in 'maj' but should be major
+      expect(simplifyChord('Gmaj9')).toBe('G'); // Contains 'm' in 'maj' but should be major
+      expect(simplifyChord('Fmaj')).toBe('F'); // Contains 'm' in 'maj' but should be major
+
+      // Test diminished chords to ensure they don't get misclassified
+      expect(simplifyChord('F#dim')).toBe('F♯dim');
+      expect(simplifyChord('Bbdim7')).toBe('B♭dim');
+
+      // Test that actual minor chords work correctly
+      expect(simplifyChord('Fm')).toBe('Fm');
+      expect(simplifyChord('F#min')).toBe('F♯m');
+      expect(simplifyChord('Bbmin7')).toBe('B♭m');
+    });
+
+    test('should handle the specific ChordMini bug case', () => {
+      // Test the exact case from the bug report
+      expect(simplifyChord('F')).toBe('F'); // Should stay F, not become F#m
+      expect(simplifyChord('F#dim')).toBe('F♯dim'); // Should not become F#m#m
+
+      // Test that F# major works correctly
+      expect(simplifyChord('F#')).toBe('F♯');
+      expect(simplifyChord('F#maj')).toBe('F♯');
+
+      // Test that F# minor works correctly
+      expect(simplifyChord('F#m')).toBe('F♯m');
+      expect(simplifyChord('F#min')).toBe('F♯m');
+    });
+
     test('should handle colon notation', () => {
       expect(simplifyChord('C:maj7')).toBe('C');
       expect(simplifyChord('D:min7')).toBe('Dm');
@@ -99,14 +130,28 @@ describe('Chord Simplification', () => {
       };
       const expected = {
         'C': 'C',
+        'Cmaj7': 'C', // Also keep original form mapping
         'Dm': 'Dm',
-        'F♯aug': 'F♯dim'
+        'Dm7/F': 'Dm', // Also keep original form mapping
+        'F♯aug': 'F♯dim',
+        'F#aug/A#': 'F♯dim' // Also keep original form mapping
       };
       expect(simplifyChordCorrections(input)).toEqual(expected);
     });
 
     test('should handle null input', () => {
       expect(simplifyChordCorrections(null)).toBeNull();
+    });
+
+    test('should handle the ChordMini conflict case', () => {
+      // Test the specific case where F should not be corrected to F#
+      const input = {
+        'F': 'F#' // This would be an incorrect correction for Bb major
+      };
+      const result = simplifyChordCorrections(input);
+      expect(result).toEqual({
+        'F': 'F♯' // The correction is applied, but properly simplified
+      });
     });
   });
 

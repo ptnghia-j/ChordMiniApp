@@ -303,6 +303,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
 
 
+
+
     // NEW: Try sequence-based corrections first (more accurate)
     if (sequenceCorrections && visualIndex !== undefined) {
       const { originalSequence, correctedSequence } = sequenceCorrections;
@@ -348,6 +350,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       }
 
       if (foundCorrection) {
+
         return { chord: correctedChord, wasCorrected: true };
       }
     }
@@ -384,9 +387,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
           correctedChord = originalChord.replace(rootNote, correctedRoot);
         }
 
+
         return { chord: correctedChord, wasCorrected: true };
       }
     }
+
+
 
     return { chord: originalChord, wasCorrected: false };
   };

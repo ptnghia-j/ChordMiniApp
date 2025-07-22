@@ -76,9 +76,9 @@ export function simplifyChord(chordName: string): string {
   // Determine the basic chord type based on quality
   const lowerQuality = quality.toLowerCase();
 
-  // Minor chords (any variation of minor)
-  if (lowerQuality.includes('min') || lowerQuality.includes('m') && !lowerQuality.includes('maj')) {
-    return `${formattedRoot}m`;
+  // Check diminished chords FIRST (before minor) since "dim" contains "m"
+  if (lowerQuality.includes('dim') || lowerQuality.includes('°') || lowerQuality.includes('hdim')) {
+    return `${formattedRoot}dim`;
   }
 
   // Augmented chords
@@ -86,14 +86,14 @@ export function simplifyChord(chordName: string): string {
     return `${formattedRoot}aug`;
   }
 
-  // Diminished chords (including half-diminished)
-  if (lowerQuality.includes('dim') || lowerQuality.includes('°') || lowerQuality.includes('hdim')) {
-    return `${formattedRoot}dim`;
-  }
-
   // Suspended chords (sus2, sus4, sus)
   if (lowerQuality.includes('sus')) {
     return `${formattedRoot}sus`;
+  }
+
+  // Minor chords (any variation of minor) - check AFTER dim/aug/sus
+  if ((lowerQuality.includes('min') || lowerQuality.includes('m')) && !lowerQuality.includes('maj')) {
+    return `${formattedRoot}m`;
   }
 
   // Default to major (including maj7, maj9, 7, 9, 11, 13, add9, etc.)
@@ -109,16 +109,28 @@ export function simplifyChordArray(chords: string[]): string[] {
 
 /**
  * Apply chord simplification to chord corrections object
+ * IMPORTANT: This function ensures that corrections work properly with simplification
+ * by creating mappings for both original and simplified chord forms
  */
 export function simplifyChordCorrections(corrections: Record<string, string> | null): Record<string, string> | null {
   if (!corrections) return null;
-  
+
   const simplifiedCorrections: Record<string, string> = {};
-  
+
   for (const [originalChord, correctedChord] of Object.entries(corrections)) {
-    simplifiedCorrections[simplifyChord(originalChord)] = simplifyChord(correctedChord);
+    const simplifiedOriginal = simplifyChord(originalChord);
+    const simplifiedCorrected = simplifyChord(correctedChord);
+
+    // Create mapping for simplified chord
+    simplifiedCorrections[simplifiedOriginal] = simplifiedCorrected;
+
+    // ALSO create mapping for the original chord form to handle cases where
+    // the chord hasn't been simplified yet when the correction is applied
+    if (originalChord !== simplifiedOriginal) {
+      simplifiedCorrections[originalChord] = simplifiedCorrected;
+    }
   }
-  
+
   return simplifiedCorrections;
 }
 

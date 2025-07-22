@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
       // Enhanced prompt for context-aware sequence-based enharmonic correction
       const chordSequence = chordNames.filter(chord => chord && chord !== 'N.C.' && chord !== 'N/C');
 
-      prompt = `Analyze this chord progression sequence and provide context-aware enharmonic corrections that preserve harmonic relationships and key modulations.
+      prompt = `Analyze this chord progression sequence and provide ONLY enharmonic spelling corrections (like C# ↔ Db, F# ↔ Gb) based on key context. DO NOT change chord qualities or functions.
 
 CHORD SEQUENCE (in order): [${chordSequence.join(', ')}]
 
@@ -258,19 +258,30 @@ Please respond with ONLY a JSON object in this exact format:
 }
 
 CRITICAL INSTRUCTIONS:
-1. **Preserve Harmonic Context**: Analyze the ENTIRE sequence to identify key centers and modulations
-2. **Context-Aware Corrections**: Apply different enharmonic spellings based on local key context:
-   - In E major section: C#m stays C#m (vi chord)
-   - In Ab major section: C# becomes Db (IV chord)
-3. **Sequence Integrity**: Return corrected sequence with same length as original
-4. **Key Analysis**: Identify distinct harmonic sections and modulation points
-5. **Selective Corrections**: Only correct chords that improve harmonic clarity
-6. **Quality Preservation**: Keep chord qualities (m, 7, sus, etc.) unchanged
+1. **ENHARMONIC ONLY**: Only change note spellings between enharmonic equivalents:
+   - C# ↔ Db, D# ↔ Eb, F# ↔ Gb, G# ↔ Ab, A# ↔ Bb
+   - NEVER change F to F# (these are different notes, not enharmonic)
+   - NEVER change chord qualities (m, 7, dim, aug, sus, etc.)
+2. **Quality Preservation**: Keep ALL chord qualities exactly unchanged:
+   - "Cm" stays "Cm" or becomes "C#m" (only note spelling changes)
+   - "F7" stays "F7" (never becomes "F#dim" or any other quality)
+   - "Bdim" stays "Bdim" or becomes "A#dim" (only note spelling changes)
+3. **Context-Aware Spelling**: Choose enharmonic spelling based on key context:
+   - In sharp keys (E, B, F#, C#): prefer sharps (C#, F#, G#)
+   - In flat keys (Bb, Eb, Ab, Db): prefer flats (Db, Gb, Ab)
+4. **Sequence Integrity**: Return corrected sequence with same length as original
+5. **Conservative Approach**: When in doubt, keep the original spelling
 
-EXAMPLES:
-- Song modulating E→Ab: ["C#m", "A", "B", "E", "...", "Db", "Ab", "Eb", "Ab"]
-- Corrected sequence: ["C#m", "A", "B", "E", "...", "Db", "Ab", "Eb", "Ab"]
-- Note: C#m stays in E major section, becomes Db in Ab major section
+VALID EXAMPLES:
+- "C#m" → "Dbm" (enharmonic spelling change only)
+- "F#7" → "Gb7" (enharmonic spelling change only)
+- "F" → "F" (NO CHANGE - F and F# are different notes)
+- "Bdim" → "A#dim" (enharmonic spelling change only)
+
+INVALID EXAMPLES (DO NOT DO):
+- "F" → "F#°" (changes note AND adds quality)
+- "C" → "Cm" (changes quality)
+- "Am" → "A" (removes quality)
 
 Respond with ONLY the JSON object, no explanations.`;
     } else {

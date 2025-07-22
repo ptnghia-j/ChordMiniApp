@@ -210,15 +210,99 @@ export default function YouTubeVideoAnalyzePage() {
   const [cacheCheckCompleted, setCacheCheckCompleted] = useState<boolean>(false);
   const [cacheCheckInProgress, setCacheCheckInProgress] = useState<boolean>(false);
 
+  // Firebase initialization tracking to prevent race conditions
+  const [firebaseReady, setFirebaseReady] = useState<boolean>(false);
+  const [initialCacheCheckDone, setInitialCacheCheckDone] = useState<boolean>(false);
+
+  // PERFORMANCE FIX: Simplified Firebase readiness check
+  useEffect(() => {
+    const checkFirebaseReady = async () => {
+      try {
+        // Test Firebase connection with a simple operation
+        const { getFirestoreInstance } = await import('@/lib/firebase-lazy');
+        const firestore = await getFirestoreInstance();
+
+        // Quick connection test - just ensure firestore instance exists
+        if (!firestore) throw new Error('Firestore instance not available');
+
+        setFirebaseReady(true);
+        console.log('🔥 Firebase ready for cache operations');
+      } catch (error) {
+        console.warn('Firebase not ready, will retry...', error);
+        // Shorter retry delay for faster recovery
+        setTimeout(checkFirebaseReady, 500);
+      }
+    };
+
+    checkFirebaseReady();
+  }, []);
+
   // Reset cache state when models change (persistence is handled in useModelState hook)
   // Combined into single useEffect to prevent multiple state updates
   useEffect(() => {
     setCacheCheckCompleted(false);
     setCacheAvailable(false);
     setCacheCheckInProgress(false);
+    setInitialCacheCheckDone(false);
   }, [beatDetector, chordDetector]);
 
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
+
+  // STREAMLINED: Check cache before extraction with connection management
+  const checkCacheBeforeExtraction = useCallback(async (extractionFunction: (forceRefresh?: boolean) => Promise<void>) => {
+    if (!firebaseReady || initialCacheCheckDone) {
+      return;
+    }
+
+    try {
+      setInitialCacheCheckDone(true);
+
+      // PERFORMANCE FIX: Use connection manager for reliable cache access
+      const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
+
+      const cachedAudio = await withFirebaseConnectionCheck(async () => {
+        const { getCachedAudioFile } = await import('@/services/firebaseStorageService');
+        return await getCachedAudioFile(videoId);
+      }, 'cached audio check');
+
+      if (cachedAudio) {
+        console.log(`✅ Found cached audio for ${videoId}, loading from cache`);
+
+        // BANNER FIX: Ensure processing stage is properly reset to idle
+        setStage('idle');
+        setProgress(0);
+        setStatusMessage('');
+
+        // Set audio state directly from cache
+        setAudioProcessingState(prev => ({
+          ...prev,
+          isExtracting: false,
+          isDownloading: false,
+          isExtracted: true,
+          audioUrl: cachedAudio.audioUrl,
+          fromCache: true,
+          error: null,
+          suggestion: null
+        }));
+
+        // Update duration if available
+        if (cachedAudio.duration && cachedAudio.duration > 0) {
+          setDuration(cachedAudio.duration);
+        }
+
+        return; // Skip extraction since we have cached audio
+      }
+
+      // No cached audio found, proceed with extraction
+      console.log(`❌ No cached audio found for ${videoId}, starting extraction`);
+      await extractionFunction(false);
+
+    } catch (error) {
+      console.error('Error checking cached audio:', error);
+      // If cache check fails, proceed with extraction anyway
+      await extractionFunction(false);
+    }
+  }, [videoId, firebaseReady, initialCacheCheckDone, setAudioProcessingState, setDuration, setStage, setProgress, setStatusMessage]);
 
   // Extract state from audio player hook
   const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
@@ -440,58 +524,63 @@ export default function YouTubeVideoAnalyzePage() {
     extractionLockRef
   ]); // Complete dependency array
 
-  // ✅ EXTRACTED: Check for cached analysis availability using service
+  // ✅ STREAMLINED: Check for cached analysis availability AFTER audio extraction
   useEffect(() => {
-    const checkCache = async () => {
-      // Only check if all conditions are met and cache check hasn't been completed yet
+    const checkAnalysisCache = async () => {
+      // Only check if audio is extracted and models are ready
       if (
         audioProcessingState.isExtracted &&
         audioProcessingState.audioUrl &&
         !audioProcessingState.isAnalyzed &&
         !audioProcessingState.isAnalyzing &&
         modelsInitialized &&
-        !cacheCheckCompleted && // Prevent duplicate checks
-        !cacheCheckInProgress // Prevent concurrent checks
+        !cacheCheckCompleted &&
+        !cacheCheckInProgress
       ) {
         try {
           setCacheCheckInProgress(true);
 
-          // Add a small delay to ensure Firebase is ready
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // BANNER FIX: Use connection manager for reliable cache access after inactivity
+          const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
 
-          // Cache check logging removed for production
-
-          // Add timeout to prevent hanging
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Cache check timeout')), 10000)
-          );
-
-          const cachedData = await Promise.race([
-            getTranscription(videoId, beatDetector, chordDetector),
-            timeoutPromise
-          ]);
+          const cachedData = await withFirebaseConnectionCheck(async () => {
+            return await getTranscription(videoId, beatDetector, chordDetector);
+          }, 'analysis cache check');
 
           if (cachedData) {
-            console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models (not auto-loading)`);
+            console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models`);
             setCacheAvailable(true);
           } else {
             console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
             setCacheAvailable(false);
           }
 
+          // BANNER FIX: Ensure processing stage is set to idle after cache check
+          if (stage !== 'idle') {
+            setStage('idle');
+            setProgress(0);
+            setStatusMessage('');
+          }
+
           setCacheCheckCompleted(true);
         } catch (error) {
           console.error('Error checking cached analysis:', error);
-          // If Firebase is not available or times out, still mark as completed to prevent infinite loops
           setCacheAvailable(false);
           setCacheCheckCompleted(true);
+
+          // BANNER FIX: Ensure banner is dismissed on error
+          if (stage !== 'idle') {
+            setStage('idle');
+            setProgress(0);
+            setStatusMessage('');
+          }
         } finally {
           setCacheCheckInProgress(false);
         }
       }
     };
 
-    checkCache();
+    checkAnalysisCache();
   }, [
     audioProcessingState.isExtracted,
     audioProcessingState.audioUrl,
@@ -502,7 +591,11 @@ export default function YouTubeVideoAnalyzePage() {
     chordDetector,
     modelsInitialized,
     cacheCheckCompleted,
-    cacheCheckInProgress
+    cacheCheckInProgress,
+    stage,
+    setStage,
+    setProgress,
+    setStatusMessage
   ]);
 
   // Lyrics transcription state
@@ -690,11 +783,11 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [videoId, setAudioProcessingState]);
 
-  // Load video info and extract audio on component mount
+  // RACE CONDITION FIX: Load video info and extract audio AFTER Firebase is ready
   useEffect(() => {
-    if (videoId && !audioProcessingState.isExtracting && !extractionLockRef.current) {
+    if (videoId && firebaseReady && !audioProcessingState.isExtracting && !extractionLockRef.current && !initialCacheCheckDone) {
 
-      // Reset processing context for new video
+      // BANNER FIX: Reset processing context for new video
       setStage('idle');
       setProgress(0);
       setStatusMessage('');
@@ -706,12 +799,24 @@ export default function YouTubeVideoAnalyzePage() {
       setHasAutoEnabledCorrections(false); // Reset auto-enable flag for new video
       setSequenceCorrections(null); // Reset sequence corrections for new video
 
-      // Extract audio (video title will be loaded automatically with extraction)
-      // Use local function that properly handles search metadata
-      extractAudioFromYouTube(false);
+      // RACE CONDITION FIX: Check cache BEFORE starting extraction
+      // BANNER FIX: Ensure this operation completes properly
+      const performCacheCheck = async () => {
+        try {
+          await checkCacheBeforeExtraction(extractAudioFromYouTube);
+        } catch (error) {
+          console.error('Cache check failed during initial load:', error);
+          // BANNER FIX: Ensure banner is dismissed even if cache check fails
+          setStage('idle');
+          setProgress(0);
+          setStatusMessage('');
+        }
+      };
+
+      performCacheCheck();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, titleFromSearch]); // Re-run when videoId or titleFromSearch changes
+  }, [videoId, titleFromSearch, firebaseReady, initialCacheCheckDone]); // Re-run when videoId, titleFromSearch, or Firebase readiness changes
 
 
 
@@ -759,8 +864,8 @@ export default function YouTubeVideoAnalyzePage() {
     };
 
     if (audioProcessingState.isExtracted && audioProcessingState.audioUrl) {
-      const timer = setTimeout(autoLoadCachedLyrics, 500);
-      return () => clearTimeout(timer);
+      // PERFORMANCE FIX: Load lyrics immediately without delay
+      autoLoadCachedLyrics();
     }
   }, [videoId, params, lyrics, audioProcessingState.isExtracted, audioProcessingState.audioUrl, setLyrics, setShowLyrics, setHasCachedLyrics, setActiveTab]); // Re-run when audio extraction completes
 

@@ -44,7 +44,12 @@ const HARMLESS_ERROR_MESSAGES = [
   'The resource was blocked by a content blocker',
   'AdBlock',
   'uBlock',
-  'Privacy Badger'
+  'Privacy Badger',
+  'WebKitBlobResource error',
+  'Failed to load resource: The operation couldn\'t be completed. (WebKitBlobResource error',
+  'blob:', // Generic blob URL errors
+  'vercel-storage.com', // Vercel Blob storage errors
+  'blob.vercel-storage.com' // Vercel Blob storage errors
 ];
 
 /**

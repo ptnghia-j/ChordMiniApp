@@ -68,10 +68,99 @@ export class FirebaseStorageSimplified {
     videoPublishedAt?: string;
     videoViewCount?: number;
   }): Promise<boolean> {
+    // COLD START FIX: Enhanced Firebase initialization with retry logic
     if (!db) {
-      console.warn('Firebase not initialized, skipping save');
-      return false;
+      console.warn('Firebase not initialized, attempting to initialize...');
+      try {
+        // Try to re-import and initialize Firebase
+        const { db: globalDb } = await import('@/config/firebase');
+        if (!globalDb) {
+          console.warn('Firebase initialization failed, skipping audio metadata save');
+          return false;
+        }
+      } catch (error) {
+        console.warn('Firebase re-initialization failed:', error);
+        return false;
+      }
     }
+
+    // COLD START FIX: Implement retry logic with exponential backoff for authentication issues
+    const maxRetries = 3;
+    const baseDelay = 100; // Start with 100ms
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this._saveAudioMetadataAttempt(data, attempt);
+      } catch (error) {
+        const isPermissionError = error instanceof Error &&
+          (error.message.includes('permission-denied') ||
+           error.message.includes('PERMISSION_DENIED') ||
+           error.message.includes('Missing or insufficient permissions'));
+
+        if (isPermissionError && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 100ms, 200ms, 400ms
+          console.warn(`⚠️ Permission denied on attempt ${attempt}/${maxRetries}, retrying in ${delay}ms...`);
+
+          // Wait for authentication to be ready
+          await new Promise(resolve => setTimeout(resolve, delay));
+
+          // ENHANCED: Use the new comprehensive authentication system
+          try {
+            const { ensureAuthReady, getCurrentAuthUser, isAuthStateReady } = await import('@/config/firebase');
+
+            console.log(`🔍 Auth state before retry ${attempt}: ready=${isAuthStateReady()}, user=${!!getCurrentAuthUser()}`);
+
+            // Use the comprehensive authentication system
+            const authReady = await ensureAuthReady();
+
+            if (authReady) {
+              console.log(`✅ Authentication ensured for retry ${attempt}`);
+            } else {
+              console.warn(`⚠️ Failed to ensure authentication on attempt ${attempt}`);
+            }
+          } catch (authError) {
+            console.warn(`❌ Authentication error on attempt ${attempt}:`, authError);
+          }
+
+          continue; // Retry the operation
+        }
+
+        // If it's not a permission error or we've exhausted retries, handle accordingly
+        if (isPermissionError) {
+          console.error(`❌ Permission denied after ${maxRetries} attempts. This may be due to cold start authentication issues.`);
+          console.warn('🔧 Cache operation failed, but this should not block audio extraction workflow.');
+          return false; // Return false but don't throw to avoid blocking audio extraction
+        }
+
+        // For other errors, log and return false
+        console.error('❌ Error saving audio metadata:', error);
+        return false;
+      }
+    }
+
+    return false; // Should never reach here
+  }
+
+  /**
+   * Internal method to attempt saving audio metadata
+   */
+  private async _saveAudioMetadataAttempt(data: {
+    videoId: string;
+    audioUrl: string;
+    title: string;
+    thumbnail?: string;
+    channelTitle?: string;
+    duration?: number;
+    fileSize?: number;
+    isStreamUrl?: boolean;
+    streamExpiresAt?: number;
+    extractionService?: string;
+    extractionTimestamp?: number;
+    videoDuration?: string;
+    videoDescription?: string;
+    videoPublishedAt?: string;
+    videoViewCount?: number;
+  }, attempt: number): Promise<boolean> {
 
     try {
       console.log(`💾 Saving audio metadata for video ID: ${data.videoId}`);
@@ -81,6 +170,10 @@ export class FirebaseStorageSimplified {
       // This eliminates the 20-second timeout when anonymous auth fails
 
       // Use video ID as document ID
+      if (!db) {
+        console.error('Firebase db is null after initialization check');
+        return false;
+      }
       const docRef = doc(db, AUDIO_CACHE_COLLECTION, data.videoId);
 
       // Prepare simplified data structure
@@ -114,18 +207,48 @@ export class FirebaseStorageSimplified {
       // Save to Firestore
       await setDoc(docRef, audioData);
 
-      console.log(`✅ Audio metadata saved successfully for ${data.videoId}`);
+      console.log(`✅ Audio metadata saved successfully for ${data.videoId} (attempt ${attempt})`);
       return true;
 
     } catch (error) {
-      console.error('❌ Error saving audio metadata:', error);
-      
-      if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
-        console.warn('⚠️ Firestore permissions not configured. This is expected in development.');
-      }
-      
-      return false;
+      // Re-throw the error to be handled by the retry logic in the parent method
+      throw error;
     }
+  }
+
+  /**
+   * NON-BLOCKING: Save audio metadata in background without blocking audio extraction
+   */
+  async saveAudioMetadataBackground(data: {
+    videoId: string;
+    audioUrl: string;
+    title: string;
+    thumbnail?: string;
+    channelTitle?: string;
+    duration: number;
+    fileSize: number;
+    isStreamUrl?: boolean;
+    streamExpiresAt?: number;
+    extractionService?: string;
+    extractionTimestamp?: number;
+    videoDuration?: string;
+    videoDescription?: string;
+    videoPublishedAt?: string;
+    videoViewCount?: number;
+  }): Promise<void> {
+    // Run cache operation in background without blocking
+    setTimeout(async () => {
+      try {
+        const success = await this.saveAudioMetadata(data);
+        if (success) {
+          console.log(`🔄 Background cache save successful for ${data.videoId}`);
+        } else {
+          console.warn(`⚠️ Background cache save failed for ${data.videoId} (non-blocking)`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Background cache save error for ${data.videoId} (non-blocking):`, error);
+      }
+    }, 0); // Execute on next tick
   }
 
   /**
@@ -238,9 +361,32 @@ export class FirebaseStorageSimplified {
           }
 
         } catch (error) {
-          if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
-            // This is expected in development - don't spam logs
-            return null;
+          if (error instanceof Error && (error.message.includes('PERMISSION_DENIED') || error.message.includes('permission-denied'))) {
+            // Enhanced permission error handling for cold starts
+            console.warn('⚠️ Firebase permission denied during cache read. This may be due to cold start initialization.');
+
+            // Attempt retry for cold start scenarios
+            try {
+              console.log('🔄 Retrying cache read after cold start delay...');
+              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for reads
+              if (db) {
+                const retryDocRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
+                const retryDocSnap = await getDoc(retryDocRef);
+
+                if (retryDocSnap.exists()) {
+                  const retryData = retryDocSnap.data() as SimplifiedAudioData;
+                  // Check if stream URL has expired
+                  if (retryData.isStreamUrl && retryData.streamExpiresAt && Date.now() > retryData.streamExpiresAt) {
+                    return null;
+                  }
+                  return retryData;
+                }
+              }
+              return null;
+            } catch (retryError) {
+              console.warn('❌ Cache read retry failed:', retryError);
+              return null;
+            }
           }
           if (error instanceof Error && error.message.includes('Could not load the default credentials')) {
             // Firebase Admin SDK authentication failed - this is expected without service account

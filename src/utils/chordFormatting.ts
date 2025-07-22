@@ -44,6 +44,8 @@ function getQuarterRestSymbol(isDarkMode: boolean): string {
 export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boolean = false): string {
   if (!chordName) return chordName;
 
+
+
   // Handle special cases
   if (chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.' || chordName === 'X') {
     // Use optimized inline SVG quarter rest symbol for "No Chord" notation
@@ -143,6 +145,13 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     bassNote = bassNote.replace(/([A-G])b/g, '$1♭');
   }
 
+  // Handle existing ° symbols in the quality string (from AI corrections)
+  if (quality.includes('°')) {
+    // If ° symbol is already present, format it properly and remove any 'dim' text
+    quality = quality.replace(/dim/g, ''); // Remove 'dim' text if present with °
+    quality = quality.replace(/°/g, '<span style="font-weight: 400; position:relative;top:-1px">°</span>');
+  }
+
   // Apply professional chord quality notation with uniform font weight
   // All parts of chord labels use regular font weight for cleaner appearance
   const formattedRoot = `<span style="font-weight: 400;">${root}</span>`;
@@ -161,8 +170,9 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
     // Half-diminished 7th chords: use slashed circle (ø) with superscript 7
     quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
-  } else if (quality.includes('dim')) {
+  } else if (quality.includes('dim') && !quality.includes('°')) {
     // Use standard diminished symbol (°) for better readability
+    // Only replace 'dim' if ° symbol is not already present
     quality = quality.replace('dim', '<span style="font-weight: 400; position:relative;top:-1px">°</span>');
   } else if (quality.includes('aug')) {
     // Use standard augmented symbol (+) for better readability

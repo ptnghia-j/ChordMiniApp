@@ -101,6 +101,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const [chordPositions, setChordPositions] = useState<Map<string, number>>(new Map()); // Track position for each chord
+
+  // Handle chord position changes
+  const handlePositionChange = useCallback((chordName: string, positionIndex: number) => {
+    setChordPositions(prev => new Map(prev.set(chordName, positionIndex)));
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -325,11 +331,14 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                       >
                         <GuitarChordDiagram
                           chordData={chordDataCache.get(chordInfo.chord) || null}
+                          positionIndex={chordPositions.get(chordInfo.chord) || 0}
                           size="large"
                           showChordName={true}
                           displayName={chordInfo.chord}
                           isFocused={chordInfo.isCurrent}
                           segmentationColor={segmentationColor}
+                          showPositionSelector={chordInfo.isCurrent}
+                          onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
                         />
                       </motion.div>
                     );
@@ -343,7 +352,17 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4 md:gap-6 justify-items-center">
               {uniqueChordData.map(({name, data}, index) => (
                 <div key={index} className="flex justify-center">
-                  <GuitarChordDiagram chordData={data} size="medium" showChordName={true} className="hover:scale-105 transition-transform" displayName={name} isFocused={false} />
+                  <GuitarChordDiagram
+                    chordData={data}
+                    positionIndex={chordPositions.get(name) || 0}
+                    size="medium"
+                    showChordName={true}
+                    className="hover:scale-105 transition-transform"
+                    displayName={name}
+                    isFocused={false}
+                    showPositionSelector={true}
+                    onPositionChange={(positionIndex) => handlePositionChange(name, positionIndex)}
+                  />
                 </div>
               ))}
             </div>

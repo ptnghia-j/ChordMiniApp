@@ -45,97 +45,370 @@ const FALLBACK_CHORD_DATABASE: ChordDatabase = {
   suffixes: ['major', 'minor', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug', '9', 'm9', 'maj9', '11', '13'],
   chords: {
     'C': [
-      { key: 'C', suffix: 'major', positions: [{ frets: [0, 1, 0, 2, 1, 0], fingers: [0, 1, 0, 3, 2, 0], baseFret: 1, barres: [] }] },
-      { key: 'C', suffix: 'minor', positions: [{ frets: [0, 1, 3, 3, 1, 0], fingers: [0, 1, 3, 4, 2, 0], baseFret: 1, barres: [] }] },
-      { key: 'C', suffix: '7', positions: [{ frets: [0, 1, 0, 2, 1, 1], fingers: [0, 1, 0, 3, 2, 4], baseFret: 1, barres: [] }] },
-      { key: 'C', suffix: 'maj7', positions: [{ frets: [0, 1, 0, 2, 0, 0], fingers: [0, 1, 0, 2, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'C', suffix: 'm7', positions: [{ frets: [0, 1, 3, 1, 1, 1], fingers: [0, 1, 3, 1, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'C', suffix: 'sus4', positions: [{ frets: [0, 1, 0, 0, 1, 1], fingers: [0, 1, 0, 0, 2, 3], baseFret: 1, barres: [] }] },
-      { key: 'C', suffix: 'sus2', positions: [{ frets: [0, 1, 0, 0, 1, 3], fingers: [0, 1, 0, 0, 2, 4], baseFret: 1, barres: [] }] }
+      { key: 'C', suffix: 'major', positions: [
+        { frets: [0, 1, 0, 2, 1, 0], fingers: [0, 1, 0, 3, 2, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 3, barres: [1] }
+      ] },
+      { key: 'C', suffix: 'minor', positions: [
+        { frets: [0, 1, 3, 3, 1, 0], fingers: [0, 1, 3, 4, 2, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 3, barres: [1] }
+      ] },
+      { key: 'C', suffix: '7', positions: [
+        { frets: [0, 1, 0, 2, 1, 1], fingers: [0, 1, 0, 3, 2, 4], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 3, 2, 3, 1, 0], fingers: [0, 3, 2, 4, 1, 0], baseFret: 1, barres: [] }
+      ] },
+      { key: 'C', suffix: 'maj7', positions: [
+        { frets: [0, 1, 0, 2, 0, 0], fingers: [0, 1, 0, 2, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 3, barres: [1] },
+        { frets: [-1, 3, 2, 0, 0, 0], fingers: [0, 3, 2, 0, 0, 0], baseFret: 1, barres: [] }
+      ] },
+      { key: 'C', suffix: 'm7', positions: [
+        { frets: [0, 1, 3, 1, 1, 1], fingers: [0, 1, 3, 1, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 3, barres: [1] },
+        { frets: [-1, 3, 1, 3, 1, 3], fingers: [0, 3, 1, 4, 1, 2], baseFret: 1, barres: [] }
+      ] },
+      { key: 'C', suffix: 'sus4', positions: [
+        { frets: [0, 1, 0, 0, 1, 1], fingers: [0, 1, 0, 0, 2, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 3, 3, 0, 1, 1], fingers: [0, 2, 3, 0, 1, 1], baseFret: 1, barres: [1] }
+      ] },
+      { key: 'C', suffix: 'sus2', positions: [
+        { frets: [0, 1, 0, 0, 1, 3], fingers: [0, 1, 0, 0, 2, 4], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 3, 4, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 3, 0, 0, 3, 3], fingers: [0, 2, 0, 0, 3, 4], baseFret: 1, barres: [] }
+      ] }
     ],
     'C♯': [
-      { key: 'C♯', suffix: 'major', positions: [{ frets: [-1, -1, 1, 1, 1, 4], fingers: [0, 0, 1, 1, 1, 4], baseFret: 1, barres: [1] }] },
-      { key: 'C♯', suffix: 'minor', positions: [{ frets: [-1, -1, 2, 1, 2, 0], fingers: [0, 0, 2, 1, 3, 0], baseFret: 1, barres: [] }] },
-      { key: 'C♯', suffix: '7', positions: [{ frets: [-1, -1, 1, 1, 1, 2], fingers: [0, 0, 1, 1, 1, 2], baseFret: 1, barres: [1] }] },
-      { key: 'C♯', suffix: 'maj7', positions: [{ frets: [-1, -1, 1, 1, 1, 1], fingers: [0, 0, 1, 1, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'C♯', suffix: 'm7', positions: [{ frets: [-1, -1, 2, 1, 2, 2], fingers: [0, 0, 2, 1, 3, 4], baseFret: 1, barres: [] }] },
-      { key: 'C♯', suffix: 'sus4', positions: [{ frets: [-1, -1, 1, 1, 2, 4], fingers: [0, 0, 1, 1, 2, 4], baseFret: 1, barres: [1] }] }
+      { key: 'C♯', suffix: 'major', positions: [
+        { frets: [-1, -1, 1, 1, 1, 4], fingers: [0, 0, 1, 1, 1, 4], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 3, 1, 2, 1], fingers: [0, 4, 3, 1, 2, 1], baseFret: 1, barres: [] }
+      ] },
+      { key: 'C♯', suffix: 'minor', positions: [
+        { frets: [-1, -1, 2, 1, 2, 0], fingers: [0, 0, 2, 1, 3, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 2, 1, 2, 0], fingers: [0, 4, 2, 1, 3, 0], baseFret: 1, barres: [] }
+      ] },
+      { key: 'C♯', suffix: '7', positions: [
+        { frets: [-1, -1, 1, 1, 1, 2], fingers: [0, 0, 1, 1, 1, 2], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 3, 1, 1, 1], fingers: [0, 4, 3, 1, 1, 1], baseFret: 1, barres: [1] }
+      ] },
+      { key: 'C♯', suffix: 'maj7', positions: [
+        { frets: [-1, -1, 1, 1, 1, 1], fingers: [0, 0, 1, 1, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 3, 1, 1, 1], fingers: [0, 4, 3, 1, 1, 1], baseFret: 1, barres: [1] }
+      ] },
+      { key: 'C♯', suffix: 'm7', positions: [
+        { frets: [-1, -1, 2, 1, 2, 2], fingers: [0, 0, 2, 1, 3, 4], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 2, 1, 1, 2], fingers: [0, 4, 2, 1, 1, 3], baseFret: 1, barres: [1] }
+      ] },
+      { key: 'C♯', suffix: 'sus4', positions: [
+        { frets: [-1, -1, 1, 1, 2, 4], fingers: [0, 0, 1, 1, 2, 4], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 4, 4, 1, 2, 2], fingers: [0, 3, 4, 1, 2, 2], baseFret: 1, barres: [2] }
+      ] }
     ],
     'D': [
-      { key: 'D', suffix: 'major', positions: [{ frets: [-1, -1, 0, 2, 3, 2], fingers: [0, 0, 0, 1, 3, 2], baseFret: 1, barres: [] }] },
-      { key: 'D', suffix: 'minor', positions: [{ frets: [-1, -1, 0, 2, 3, 1], fingers: [0, 0, 0, 2, 3, 1], baseFret: 1, barres: [] }] },
-      { key: 'D', suffix: '7', positions: [{ frets: [-1, -1, 0, 2, 1, 2], fingers: [0, 0, 0, 3, 1, 2], baseFret: 1, barres: [] }] },
-      { key: 'D', suffix: 'maj7', positions: [{ frets: [-1, -1, 0, 2, 2, 2], fingers: [0, 0, 0, 1, 2, 3], baseFret: 1, barres: [] }] },
-      { key: 'D', suffix: 'm7', positions: [{ frets: [-1, -1, 0, 2, 1, 1], fingers: [0, 0, 0, 2, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'D', suffix: 'sus4', positions: [{ frets: [-1, -1, 0, 2, 3, 3], fingers: [0, 0, 0, 1, 2, 3], baseFret: 1, barres: [] }] },
-      { key: 'D', suffix: 'sus2', positions: [{ frets: [-1, -1, 0, 2, 3, 0], fingers: [0, 0, 0, 1, 2, 0], baseFret: 1, barres: [] }] }
+      { key: 'D', suffix: 'major', positions: [
+        { frets: [-1, -1, 0, 2, 3, 2], fingers: [0, 0, 0, 1, 3, 2], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 10, barres: [] }
+      ] },
+      { key: 'D', suffix: 'minor', positions: [
+        { frets: [-1, -1, 0, 2, 3, 1], fingers: [0, 0, 0, 2, 3, 1], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 10, barres: [] }
+      ] },
+      { key: 'D', suffix: '7', positions: [
+        { frets: [-1, -1, 0, 2, 1, 2], fingers: [0, 0, 0, 3, 1, 2], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 10, barres: [] }
+      ] },
+      { key: 'D', suffix: 'maj7', positions: [
+        { frets: [-1, -1, 0, 2, 2, 2], fingers: [0, 0, 0, 1, 2, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 10, barres: [] }
+      ] },
+      { key: 'D', suffix: 'm7', positions: [
+        { frets: [-1, -1, 0, 2, 1, 1], fingers: [0, 0, 0, 2, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 10, barres: [] }
+      ] },
+      { key: 'D', suffix: 'sus4', positions: [
+        { frets: [-1, -1, 0, 2, 3, 3], fingers: [0, 0, 0, 1, 2, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 1, 3, 4], fingers: [0, 0, 1, 1, 3, 4], baseFret: 10, barres: [1] }
+      ] },
+      { key: 'D', suffix: 'sus2', positions: [
+        { frets: [-1, -1, 0, 2, 3, 0], fingers: [0, 0, 0, 1, 2, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 3, 4, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 4], fingers: [0, 0, 1, 2, 3, 4], baseFret: 10, barres: [] }
+      ] }
     ],
     'E♭': [
-      { key: 'E♭', suffix: 'major', positions: [{ frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 1, barres: [] }] },
-      { key: 'E♭', suffix: 'minor', positions: [{ frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 1, barres: [] }] },
-      { key: 'E♭', suffix: '7', positions: [{ frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 1, barres: [] }] },
-      { key: 'E♭', suffix: 'maj7', positions: [{ frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 1, barres: [] }] },
-      { key: 'E♭', suffix: 'm7', positions: [{ frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 1, barres: [] }] }
+      { key: 'E♭', suffix: 'major', positions: [
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 6, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 11, barres: [] }
+      ] },
+      { key: 'E♭', suffix: 'minor', positions: [
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 6, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 11, barres: [] }
+      ] },
+      { key: 'E♭', suffix: '7', positions: [
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 11, barres: [1] }
+      ] },
+      { key: 'E♭', suffix: 'maj7', positions: [
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 6, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 11, barres: [] }
+      ] },
+      { key: 'E♭', suffix: 'm7', positions: [
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 6, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 11, barres: [1] }
+      ] }
     ],
     'E': [
-      { key: 'E', suffix: 'major', positions: [{ frets: [0, 2, 2, 1, 0, 0], fingers: [0, 2, 3, 1, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'E', suffix: 'minor', positions: [{ frets: [0, 2, 2, 0, 0, 0], fingers: [0, 2, 3, 0, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'E', suffix: '7', positions: [{ frets: [0, 2, 0, 1, 0, 0], fingers: [0, 2, 0, 1, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'E', suffix: 'maj7', positions: [{ frets: [0, 2, 1, 1, 0, 0], fingers: [0, 3, 1, 2, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'E', suffix: 'm7', positions: [{ frets: [0, 2, 0, 0, 0, 0], fingers: [0, 2, 0, 0, 0, 0], baseFret: 1, barres: [] }] },
-      { key: 'E', suffix: 'sus4', positions: [{ frets: [0, 2, 2, 2, 0, 0], fingers: [0, 1, 2, 3, 0, 0], baseFret: 1, barres: [] }] }
+      { key: 'E', suffix: 'major', positions: [
+        { frets: [0, 2, 2, 1, 0, 0], fingers: [0, 2, 3, 1, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 12, barres: [] }
+      ] },
+      { key: 'E', suffix: 'minor', positions: [
+        { frets: [0, 2, 2, 0, 0, 0], fingers: [0, 2, 3, 0, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 12, barres: [] }
+      ] },
+      { key: 'E', suffix: '7', positions: [
+        { frets: [0, 2, 0, 1, 0, 0], fingers: [0, 2, 0, 1, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 12, barres: [] }
+      ] },
+      { key: 'E', suffix: 'maj7', positions: [
+        { frets: [0, 2, 1, 1, 0, 0], fingers: [0, 3, 1, 2, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 12, barres: [] }
+      ] },
+      { key: 'E', suffix: 'm7', positions: [
+        { frets: [0, 2, 0, 0, 0, 0], fingers: [0, 2, 0, 0, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 12, barres: [] }
+      ] },
+      { key: 'E', suffix: 'sus4', positions: [
+        { frets: [0, 2, 2, 2, 0, 0], fingers: [0, 1, 2, 3, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 1, 3, 4], fingers: [0, 0, 1, 1, 3, 4], baseFret: 12, barres: [1] }
+      ] }
     ],
     'F': [
-      { key: 'F', suffix: 'major', positions: [{ frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'F', suffix: 'minor', positions: [{ frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'F', suffix: '7', positions: [{ frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'F', suffix: 'maj7', positions: [{ frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 1, barres: [1] }] },
-      { key: 'F', suffix: 'm7', positions: [{ frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [1] }] }
+      { key: 'F', suffix: 'major', positions: [
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 8, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 13, barres: [] }
+      ] },
+      { key: 'F', suffix: 'minor', positions: [
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 8, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 13, barres: [] }
+      ] },
+      { key: 'F', suffix: '7', positions: [
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 8, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 13, barres: [1] }
+      ] },
+      { key: 'F', suffix: 'maj7', positions: [
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 8, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 13, barres: [] }
+      ] },
+      { key: 'F', suffix: 'm7', positions: [
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 8, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 13, barres: [1] }
+      ] }
     ],
     'F♯': [
-      { key: 'F♯', suffix: 'major', positions: [{ frets: [2, 4, 4, 3, 2, 2], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [2] }] },
-      { key: 'F♯', suffix: 'minor', positions: [{ frets: [2, 4, 4, 2, 2, 2], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [2] }] },
-      { key: 'F♯', suffix: '7', positions: [{ frets: [2, 4, 2, 3, 2, 2], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [2] }] },
-      { key: 'F♯', suffix: 'maj7', positions: [{ frets: [2, 4, 3, 3, 2, 2], fingers: [1, 3, 2, 4, 1, 1], baseFret: 1, barres: [2] }] },
-      { key: 'F♯', suffix: 'm7', positions: [{ frets: [2, 4, 2, 2, 2, 2], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [2] }] }
+      { key: 'F♯', suffix: 'major', positions: [
+        { frets: [2, 4, 4, 3, 2, 2], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [2] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 9, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 14, barres: [] }
+      ] },
+      { key: 'F♯', suffix: 'minor', positions: [
+        { frets: [2, 4, 4, 2, 2, 2], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [2] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 9, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 14, barres: [] }
+      ] },
+      { key: 'F♯', suffix: '7', positions: [
+        { frets: [2, 4, 2, 3, 2, 2], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [2] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 4, 1], baseFret: 9, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 14, barres: [1] }
+      ] },
+      { key: 'F♯', suffix: 'maj7', positions: [
+        { frets: [2, 4, 3, 3, 2, 2], fingers: [1, 3, 2, 4, 1, 1], baseFret: 1, barres: [2] },
+        { frets: [1, 1, 1, 3, 4, 3], fingers: [1, 1, 1, 2, 4, 3], baseFret: 9, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 14, barres: [] }
+      ] },
+      { key: 'F♯', suffix: 'm7', positions: [
+        { frets: [2, 4, 2, 2, 2, 2], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [2] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 9, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 14, barres: [1] }
+      ] }
     ],
     'G': [
-      { key: 'G', suffix: 'major', positions: [{ frets: [3, 2, 0, 0, 3, 3], fingers: [3, 2, 0, 0, 4, 4], baseFret: 1, barres: [] }] },
-      { key: 'G', suffix: 'minor', positions: [{ frets: [3, 5, 5, 3, 3, 3], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [3] }] },
-      { key: 'G', suffix: '7', positions: [{ frets: [3, 2, 0, 0, 0, 1], fingers: [3, 2, 0, 0, 0, 1], baseFret: 1, barres: [] }] },
-      { key: 'G', suffix: 'maj7', positions: [{ frets: [3, 2, 0, 0, 0, 2], fingers: [3, 2, 0, 0, 0, 4], baseFret: 1, barres: [] }] },
-      { key: 'G', suffix: 'm7', positions: [{ frets: [3, 5, 3, 3, 3, 3], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [3] }] },
-      { key: 'G', suffix: 'sus4', positions: [{ frets: [3, 3, 0, 0, 1, 3], fingers: [2, 3, 0, 0, 1, 4], baseFret: 1, barres: [] }] }
+      { key: 'G', suffix: 'major', positions: [
+        { frets: [3, 2, 0, 0, 3, 3], fingers: [3, 2, 0, 0, 4, 4], baseFret: 1, barres: [] },
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 3, barres: [1] }
+      ] },
+      { key: 'G', suffix: 'minor', positions: [
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 10, barres: [] }
+      ] },
+      { key: 'G', suffix: '7', positions: [
+        { frets: [3, 2, 0, 0, 0, 1], fingers: [3, 2, 0, 0, 0, 1], baseFret: 1, barres: [] },
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 10, barres: [1] }
+      ] },
+      { key: 'G', suffix: 'maj7', positions: [
+        { frets: [3, 2, 0, 0, 0, 2], fingers: [3, 2, 0, 0, 0, 4], baseFret: 1, barres: [] },
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 10, barres: [] }
+      ] },
+      { key: 'G', suffix: 'm7', positions: [
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 10, barres: [1] }
+      ] },
+      { key: 'G', suffix: 'sus4', positions: [
+        { frets: [3, 3, 0, 0, 1, 3], fingers: [2, 3, 0, 0, 1, 4], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 3, barres: [1] },
+        { frets: [-1, 1, 1, 3, 4, 4], fingers: [0, 1, 1, 2, 3, 4], baseFret: 10, barres: [1] }
+      ] }
     ],
     'A♭': [
-      { key: 'A♭', suffix: 'major', positions: [{ frets: [4, 6, 6, 5, 4, 4], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [4] }] },
-      { key: 'A♭', suffix: 'minor', positions: [{ frets: [4, 6, 6, 4, 4, 4], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [4] }] },
-      { key: 'A♭', suffix: '7', positions: [{ frets: [4, 6, 4, 5, 4, 4], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [4] }] },
-      { key: 'A♭', suffix: 'maj7', positions: [{ frets: [4, 6, 5, 5, 4, 4], fingers: [1, 3, 2, 4, 1, 1], baseFret: 1, barres: [4] }] },
-      { key: 'A♭', suffix: 'm7', positions: [{ frets: [4, 6, 4, 4, 4, 4], fingers: [1, 3, 1, 1, 1, 1], baseFret: 1, barres: [4] }] }
+      { key: 'A♭', suffix: 'major', positions: [
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 11, barres: [] },
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 8, barres: [] }
+      ] },
+      { key: 'A♭', suffix: 'minor', positions: [
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 11, barres: [] },
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 8, barres: [] }
+      ] },
+      { key: 'A♭', suffix: '7', positions: [
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 11, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 8, barres: [] }
+      ] },
+      { key: 'A♭', suffix: 'maj7', positions: [
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 11, barres: [] },
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 8, barres: [] }
+      ] },
+      { key: 'A♭', suffix: 'm7', positions: [
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 4, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 11, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 8, barres: [] }
+      ] }
     ],
     'A': [
-      { key: 'A', suffix: 'major', positions: [{ frets: [-1, 0, 2, 2, 2, 0], fingers: [0, 0, 1, 2, 3, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: 'minor', positions: [{ frets: [-1, 0, 2, 2, 1, 0], fingers: [0, 0, 2, 3, 1, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: '7', positions: [{ frets: [-1, 0, 2, 0, 2, 0], fingers: [0, 0, 2, 0, 3, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: 'maj7', positions: [{ frets: [-1, 0, 2, 1, 2, 0], fingers: [0, 0, 3, 1, 4, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: 'm7', positions: [{ frets: [-1, 0, 2, 0, 1, 0], fingers: [0, 0, 2, 0, 1, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: 'sus4', positions: [{ frets: [-1, 0, 2, 2, 3, 0], fingers: [0, 0, 1, 2, 4, 0], baseFret: 1, barres: [] }] },
-      { key: 'A', suffix: 'sus2', positions: [{ frets: [-1, 0, 2, 2, 0, 0], fingers: [0, 0, 1, 2, 0, 0], baseFret: 1, barres: [] }] }
+      { key: 'A', suffix: 'major', positions: [
+        { frets: [-1, 0, 2, 2, 2, 0], fingers: [0, 0, 1, 2, 3, 0], baseFret: 1, barres: [] },
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 12, barres: [] }
+      ] },
+      { key: 'A', suffix: 'minor', positions: [
+        { frets: [-1, 0, 2, 2, 1, 0], fingers: [0, 0, 2, 3, 1, 0], baseFret: 1, barres: [] },
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 12, barres: [] }
+      ] },
+      { key: 'A', suffix: '7', positions: [
+        { frets: [-1, 0, 2, 0, 2, 0], fingers: [0, 0, 2, 0, 3, 0], baseFret: 1, barres: [] },
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 12, barres: [1] }
+      ] },
+      { key: 'A', suffix: 'maj7', positions: [
+        { frets: [-1, 0, 2, 1, 2, 0], fingers: [0, 0, 3, 1, 4, 0], baseFret: 1, barres: [] },
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 12, barres: [] }
+      ] },
+      { key: 'A', suffix: 'm7', positions: [
+        { frets: [-1, 0, 2, 0, 1, 0], fingers: [0, 0, 2, 0, 1, 0], baseFret: 1, barres: [] },
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 12, barres: [1] }
+      ] },
+      { key: 'A', suffix: 'sus4', positions: [
+        { frets: [-1, 0, 2, 2, 3, 0], fingers: [0, 0, 1, 2, 4, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 1], fingers: [1, 1, 1, 2, 3, 1], baseFret: 5, barres: [1] },
+        { frets: [-1, 1, 1, 3, 4, 4], fingers: [0, 1, 1, 2, 3, 4], baseFret: 12, barres: [1] }
+      ] },
+      { key: 'A', suffix: 'sus2', positions: [
+        { frets: [-1, 0, 2, 2, 0, 0], fingers: [0, 0, 1, 2, 0, 0], baseFret: 1, barres: [] },
+        { frets: [1, 1, 1, 3, 4, 4], fingers: [1, 1, 1, 2, 3, 4], baseFret: 5, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 4], fingers: [0, 0, 1, 2, 3, 4], baseFret: 12, barres: [] }
+      ] }
     ],
     'B♭': [
-      { key: 'B♭', suffix: 'major', positions: [{ frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 1, barres: [1] }] },
-      { key: 'B♭', suffix: 'minor', positions: [{ frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 1, barres: [1] }] },
-      { key: 'B♭', suffix: '7', positions: [{ frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 1, barres: [1] }] },
-      { key: 'B♭', suffix: 'maj7', positions: [{ frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 1, barres: [1] }] },
-      { key: 'B♭', suffix: 'm7', positions: [{ frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 3, 1, 2, 1], baseFret: 1, barres: [1] }] }
+      { key: 'B♭', suffix: 'major', positions: [
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 10, barres: [] }
+      ] },
+      { key: 'B♭', suffix: 'minor', positions: [
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 10, barres: [] }
+      ] },
+      { key: 'B♭', suffix: '7', positions: [
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 10, barres: [] }
+      ] },
+      { key: 'B♭', suffix: 'maj7', positions: [
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 10, barres: [] }
+      ] },
+      { key: 'B♭', suffix: 'm7', positions: [
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 3, 1, 2, 1], baseFret: 1, barres: [1] },
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 6, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 10, barres: [] }
+      ] }
     ],
     'B': [
-      { key: 'B', suffix: 'major', positions: [{ frets: [-1, 2, 4, 4, 4, 2], fingers: [0, 1, 3, 4, 4, 2], baseFret: 1, barres: [2] }] },
-      { key: 'B', suffix: 'minor', positions: [{ frets: [-1, 2, 4, 4, 3, 2], fingers: [0, 1, 3, 4, 2, 1], baseFret: 1, barres: [2] }] },
-      { key: 'B', suffix: '7', positions: [{ frets: [-1, 2, 1, 2, 0, 2], fingers: [0, 2, 1, 3, 0, 4], baseFret: 1, barres: [] }] },
-      { key: 'B', suffix: 'maj7', positions: [{ frets: [-1, 2, 4, 3, 4, 2], fingers: [0, 1, 3, 2, 4, 1], baseFret: 1, barres: [2] }] },
-      { key: 'B', suffix: 'm7', positions: [{ frets: [-1, 2, 4, 2, 3, 2], fingers: [0, 1, 3, 1, 2, 1], baseFret: 1, barres: [2] }] }
+      { key: 'B', suffix: 'major', positions: [
+        { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 2, barres: [1] },
+        { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 7, barres: [] },
+        { frets: [-1, -1, 1, 3, 4, 3], fingers: [0, 0, 1, 2, 4, 3], baseFret: 9, barres: [] }
+      ] },
+      { key: 'B', suffix: 'minor', positions: [
+        { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 2, barres: [1] },
+        { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 7, barres: [] },
+        { frets: [-1, -1, 1, 3, 4, 2], fingers: [0, 0, 1, 3, 4, 2], baseFret: 9, barres: [] }
+      ] },
+      { key: 'B', suffix: '7', positions: [
+        { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 2, barres: [1] },
+        { frets: [-1, 1, 3, 1, 3, 1], fingers: [0, 1, 3, 1, 4, 1], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 3], fingers: [0, 0, 1, 4, 2, 3], baseFret: 9, barres: [] }
+      ] },
+      { key: 'B', suffix: 'maj7', positions: [
+        { frets: [1, 3, 2, 2, 1, 1], fingers: [1, 3, 2, 4, 1, 1], baseFret: 2, barres: [1] },
+        { frets: [-1, 1, 3, 2, 3, 1], fingers: [0, 1, 3, 2, 4, 1], baseFret: 7, barres: [] },
+        { frets: [-1, -1, 1, 3, 3, 3], fingers: [0, 0, 1, 2, 3, 4], baseFret: 9, barres: [] }
+      ] },
+      { key: 'B', suffix: 'm7', positions: [
+        { frets: [1, 3, 1, 1, 1, 1], fingers: [1, 3, 1, 1, 1, 1], baseFret: 2, barres: [1] },
+        { frets: [-1, 1, 3, 1, 2, 1], fingers: [0, 1, 4, 1, 2, 1], baseFret: 7, barres: [1] },
+        { frets: [-1, -1, 1, 3, 2, 2], fingers: [0, 0, 1, 4, 2, 3], baseFret: 9, barres: [] }
+      ] }
     ]
   }
 };
@@ -419,3 +692,6 @@ export class ChordMappingService {
 
 // Export singleton instance
 export const chordMappingService = ChordMappingService.getInstance();
+
+// Export the chord database for testing and verification
+export { FALLBACK_CHORD_DATABASE as chordDatabase };

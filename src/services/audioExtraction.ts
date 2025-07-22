@@ -586,8 +586,8 @@ export class AudioExtractionServiceSimplified {
       console.log(`💾 Saving with duration: ${finalDuration}s (source: ${extractionResult.duration ? 'audio metadata' : 'search metadata'})`);
 
       if (!isStorageUrl) {
-        // Only save to simplified cache if Firebase Storage upload failed
-        const saved = await firebaseStorageSimplified.saveAudioMetadata({
+        // NON-BLOCKING: Save to simplified cache in background (won't block audio extraction)
+        firebaseStorageSimplified.saveAudioMetadataBackground({
           videoId,
           audioUrl: finalAudioUrl,
           title,
@@ -597,10 +597,8 @@ export class AudioExtractionServiceSimplified {
           fileSize: actualFileSize || 0
         });
 
-        if (saved) {
-          console.log(`💾 Cached stream URL for ${videoId} (fallback)`);
-          console.log(`📈 Stream URL Fallback: videoId=${videoId}, reason=storage_upload_failed`);
-        }
+        console.log(`🔄 Background cache save initiated for ${videoId} (fallback)`);
+        console.log(`📈 Stream URL Fallback: videoId=${videoId}, reason=storage_upload_failed`);
       } else {
         console.log(`💾 Audio metadata already saved to Firebase Storage for ${videoId}`);
       }

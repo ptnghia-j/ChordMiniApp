@@ -43,13 +43,19 @@ export const getFirestoreInstance = async () => {
   const { getFirestore, connectFirestoreEmulator } = await import('firebase/firestore');
   firestore = getFirestore(app);
 
-  // Connect to emulator in development
-  if (process.env.NODE_ENV === 'development') {
+  // Connect to emulator in development only if explicitly enabled
+  const useEmulator = process.env.NODE_ENV === 'development' &&
+                     process.env.USE_FIREBASE_EMULATOR === 'true';
+
+  if (useEmulator) {
     try {
       connectFirestoreEmulator(firestore, 'localhost', 8080);
-    } catch {
-      // Emulator already connected or not available
+      console.log('🔥 Connected to Firestore emulator (localhost:8080)');
+    } catch (error) {
+      console.warn('⚠️ Failed to connect to Firestore emulator, using production Firebase:', error);
     }
+  } else {
+    console.log('🔥 Using production Firestore database');
   }
 
   return firestore;
@@ -64,13 +70,19 @@ export const getAuthInstance = async () => {
   const { getAuth, connectAuthEmulator } = await import('firebase/auth');
   auth = getAuth(app);
 
-  // Connect to emulator in development
-  if (process.env.NODE_ENV === 'development') {
+  // Connect to emulator in development only if explicitly enabled
+  const useEmulator = process.env.NODE_ENV === 'development' &&
+                     process.env.USE_FIREBASE_EMULATOR === 'true';
+
+  if (useEmulator) {
     try {
       connectAuthEmulator(auth, 'http://localhost:9099');
-    } catch {
-      // Emulator already connected or not available
+      console.log('🔐 Connected to Auth emulator (localhost:9099)');
+    } catch (error) {
+      console.warn('⚠️ Failed to connect to Auth emulator, using production Firebase:', error);
     }
+  } else {
+    console.log('🔐 Using production Firebase Auth');
   }
 
   return auth;

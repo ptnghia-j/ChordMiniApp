@@ -354,16 +354,22 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
               {/* Synchronized toggle button in header */}
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setSearchForSynced(!searchForSynced)}
+                  onClick={() => {
+                    if (lrclibData?.has_synchronized) {
+                      setDisplayMode(displayMode === 'sync' ? 'static' : 'sync');
+                    } else {
+                      setSearchForSynced(!searchForSynced);
+                    }
+                  }}
                   className={`px-2 py-1 text-xs rounded-full shadow-sm whitespace-nowrap transition-colors duration-200 flex items-center space-x-1 ${
-                    searchForSynced
+                    (lrclibData?.has_synchronized ? displayMode === 'sync' : searchForSynced)
                       ? 'bg-blue-600 text-white hover:bg-blue-700'
                       : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
                   }`}
                   title={searchForSynced ? "Disable synchronized lyrics search" : "Enable synchronized lyrics search"}
                 >
                   <span>
-                    {searchForSynced ? "Synchronized: ON" : "Synchronized: OFF"}
+                    {lrclibData?.has_synchronized ? (displayMode === 'sync' ? "Synchronized: ON" : "Synchronized: OFF") : (searchForSynced ? "Synchronized: ON" : "Synchronized: OFF")}
                   </span>
                 </button>
 
@@ -436,18 +442,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
 
             {/* Search options - simplified since synchronized toggle moved to header */}
             <div className="flex items-center justify-between">
-
-              {/* Display mode toggle for synchronized lyrics */}
-              {lrclibData?.has_synchronized && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setDisplayMode(displayMode === 'sync' ? 'static' : 'sync')}
-                    className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                  >
-                    {displayMode === 'sync' ? 'Switch to Static' : 'Switch to Sync'}
-                  </button>
-                </div>
-              )}
+              {/* Redundant toggle removed - now handled by header toggle */}
             </div>
           </div>
 

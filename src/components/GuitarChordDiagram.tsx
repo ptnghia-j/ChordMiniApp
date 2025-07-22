@@ -29,6 +29,8 @@ interface GuitarChordDiagramProps {
   displayName?: string; // Override chord name display (for enharmonic corrections)
   isFocused?: boolean; // Whether this chord diagram is currently focused/active
   segmentationColor?: string; // Segmentation color for border styling
+  showPositionSelector?: boolean; // Show position selector for multiple positions
+  onPositionChange?: (positionIndex: number) => void; // Callback for position changes
 }
 
 // Standard guitar instrument configuration
@@ -51,7 +53,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   lite = false,
   displayName,
   isFocused = false,
-  segmentationColor
+  segmentationColor,
+  showPositionSelector = false,
+  onPositionChange
 }) => {
   // Size configurations - responsive sizing
   const sizeConfig = {
@@ -176,8 +180,31 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
             : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
         } transition-colors duration-200`}>
-          {chordName}
+          {displayName || chordName}
         </span>
+      )}
+
+      {/* Position selector for multiple chord positions */}
+      {showPositionSelector && chordData && chordData.positions.length > 1 && (
+        <div className="flex items-center justify-center mt-2 space-x-2">
+          <button
+            onClick={() => onPositionChange && onPositionChange(positionIndex > 0 ? positionIndex - 1 : chordData.positions.length - 1)}
+            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            disabled={!onPositionChange}
+          >
+            ‹
+          </button>
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium min-w-[2rem] text-center">
+            {positionIndex + 1}/{chordData.positions.length}
+          </span>
+          <button
+            onClick={() => onPositionChange && onPositionChange(positionIndex < chordData.positions.length - 1 ? positionIndex + 1 : 0)}
+            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            disabled={!onPositionChange}
+          >
+            ›
+          </button>
+        </div>
       )}
     </div>
   );

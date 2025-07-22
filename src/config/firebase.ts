@@ -9,7 +9,14 @@ import {
   setDoc
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
-import { getAuth, Auth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { getAuth, Auth, signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
+
+// Enhanced authentication state management - Using object to avoid TDZ issues
+const authState = {
+  ready: false,
+  promise: null as Promise<void> | null,
+  user: null as User | null
+};
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -71,38 +78,152 @@ if (hasRequiredConfig) {
   console.warn('- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
 }
 
-// Anonymous authentication setup
-async function setupAnonymousAuth() {
+// Anonymous authentication setup with enhanced cold start handling
+function setupAnonymousAuth() {
   if (!auth) {
     console.warn('Firebase Auth not initialized, skipping anonymous authentication');
     return;
   }
 
-  try {
-    // Listen for auth state changes
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // User authenticated
-      } else {
-        // Sign in anonymously if not already authenticated
-        signInAnonymously(auth!)
-          .catch((error) => {
+  // Only create the promise if it doesn't exist
+  if (!authState.promise) {
+    // Create a promise that resolves when auth state is ready
+    authState.promise = new Promise((resolve) => {
+    try {
+      // Listen for auth state changes with enhanced logging
+      onAuthStateChanged(auth!, async (user) => {
+        console.log('🔐 Auth state changed:', {
+          hasUser: !!user,
+          isAnonymous: user?.isAnonymous,
+          uid: user?.uid,
+          timestamp: new Date().toISOString()
+        });
+
+        authState.user = user;
+
+        if (user) {
+          // User is authenticated
+          console.log('✅ User authenticated:', {
+            uid: user.uid,
+            isAnonymous: user.isAnonymous,
+            creationTime: user.metadata.creationTime,
+            lastSignInTime: user.metadata.lastSignInTime
+          });
+
+          authState.ready = true;
+          resolve();
+        } else {
+          // No user - attempt anonymous sign-in
+          console.log('🔐 No user found, attempting anonymous sign-in...');
+
+          try {
+            const userCredential = await signInAnonymously(auth!);
+            console.log('✅ Anonymous sign-in successful:', {
+              uid: userCredential.user.uid,
+              isAnonymous: userCredential.user.isAnonymous
+            });
+
+            authState.user = userCredential.user;
+            authState.ready = true;
+            resolve();
+          } catch (error: unknown) {
             console.error('❌ Anonymous authentication failed:', error);
-            console.error('❌ Error code:', error.code);
-            console.error('❌ Error message:', error.message);
+
+            // Type guard for Firebase error
+            const firebaseError = error as { code?: string; message?: string };
+            if (firebaseError.code) {
+              console.error('❌ Error code:', firebaseError.code);
+            }
+            if (firebaseError.message) {
+              console.error('❌ Error message:', firebaseError.message);
+            }
 
             // Check if anonymous auth is disabled
-            if (error.code === 'auth/operation-not-allowed') {
+            if (firebaseError.code === 'auth/operation-not-allowed') {
               console.error('🚨 Anonymous authentication is not enabled in Firebase Console!');
               console.error('🚨 Please enable it at: https://console.firebase.google.com/project/chordmini-d29f9/authentication/providers');
             }
-          });
-      }
+
+            // Still resolve to prevent hanging, but mark as not ready
+            authState.ready = false;
+            resolve();
+          }
+        }
+      });
+
+      // Timeout fallback to prevent hanging
+      setTimeout(() => {
+        if (!authState.ready) {
+          console.warn('⚠️ Auth state setup timeout after 10 seconds');
+          authState.ready = false;
+          resolve();
+        }
+      }, 10000);
+
+    } catch (error) {
+      console.error('❌ Error setting up auth state listener:', error);
+      authState.ready = false;
+      resolve();
+    }
+
     });
-  } catch (error) {
-    console.error('Error setting up anonymous authentication:', error);
   }
 }
+
+// Export auth state utilities for cold start handling
+export const waitForAuthState = async (timeoutMs: number = 10000): Promise<boolean> => {
+  if (authState.ready) return true;
+
+  if (authState.promise) {
+    try {
+      await Promise.race([
+        authState.promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth state timeout')), timeoutMs)
+        )
+      ]);
+      return authState.ready;
+    } catch (error) {
+      console.warn('⚠️ Auth state wait timeout or error:', error);
+      return false;
+    }
+  }
+
+  return false;
+};
+
+export const getCurrentAuthUser = () => authState.user;
+
+export const isAuthStateReady = () => authState.ready;
+
+export const ensureAuthReady = async (): Promise<boolean> => {
+  if (authState.ready && authState.user) {
+    return true;
+  }
+
+  // If auth is not ready, try to wait for it
+  const ready = await waitForAuthState(5000);
+  if (ready && authState.user) {
+    return true;
+  }
+
+  // If still not ready, try to sign in manually
+  if (auth && !authState.user) {
+    try {
+      console.log('🔐 Manually attempting anonymous sign-in...');
+      const userCredential = await signInAnonymously(auth);
+      authState.user = userCredential.user;
+      authState.ready = true;
+      console.log('✅ Manual anonymous sign-in successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Manual anonymous sign-in failed:', error);
+      return false;
+    }
+  }
+
+  return false;
+};
 
 // Collection names
 export const TRANSLATIONS_COLLECTION = 'translations';

@@ -85,15 +85,38 @@ service cloud.firestore {
       // Allow read access to everyone for caching functionality (including anonymous users)
       allow read: if true;
 
-      // Allow write access with validation and rate limiting (including anonymous users)
-      allow create: if isValidVideoId(videoId) &&
-                       isValidAudioData(resource.data) &&
-                       isWithinRateLimit();
+      // ENHANCED: Allow write access with relaxed validation for cold start scenarios
+      allow create: if (
+        // Standard validation for authenticated users
+        (request.auth != null &&
+         isValidVideoId(videoId) &&
+         isValidAudioData(resource.data) &&
+         isWithinRateLimit()) ||
 
-      // Allow updates only if the structure is valid (including anonymous users)
-      allow update: if isValidVideoId(videoId) &&
-                       isValidAudioData(resource.data) &&
-                       isWithinRateLimit();
+        // Relaxed validation for cold start scenarios (unauthenticated writes)
+        (request.auth == null &&
+         isValidVideoId(videoId) &&
+         resource.data.keys().hasAll(['videoId', 'audioUrl', 'title', 'createdAt']) &&
+         resource.data.videoId is string &&
+         resource.data.audioUrl is string &&
+         resource.data.title is string &&
+         resource.data.size() <= 20) // More permissive field limit for cold starts
+      );
+
+      // Allow updates with similar relaxed validation
+      allow update: if (
+        // Standard validation for authenticated users
+        (request.auth != null &&
+         isValidVideoId(videoId) &&
+         isValidAudioData(resource.data) &&
+         isWithinRateLimit()) ||
+
+        // Relaxed validation for cold start scenarios
+        (request.auth == null &&
+         isValidVideoId(videoId) &&
+         resource.data.videoId is string &&
+         resource.data.size() <= 20)
+      );
 
       // Prevent deletion by regular users (only allow expiration)
       allow delete: if false;

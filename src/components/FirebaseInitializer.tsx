@@ -40,6 +40,18 @@ export default function FirebaseInitializer() {
 
     // Initialize Firebase immediately on component mount
     setupFirebase();
+
+    // Initialize connection monitoring for inactivity handling
+    const initializeConnectionMonitoring = async () => {
+      try {
+        const { initializeConnectionMonitoring } = await import('@/utils/firebaseConnectionManager');
+        initializeConnectionMonitoring();
+      } catch (error) {
+        console.warn('Failed to initialize Firebase connection monitoring:', error);
+      }
+    };
+
+    initializeConnectionMonitoring();
   }, []);
 
   // This component doesn't render anything
