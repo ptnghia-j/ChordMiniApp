@@ -3,11 +3,18 @@ import { GoogleGenAI } from '@google/genai';
 import { firestoreDb } from '@/services/firebaseService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+export const maxDuration = 120; // 2 minutes for key detection processing
+
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;
 
-// Initialize Gemini API with the API key
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+// Initialize Gemini API with the API key and timeout configuration
+const ai = new GoogleGenAI({
+  apiKey: apiKey || '',
+  httpOptions: {
+    timeout: 120000 // 120 seconds timeout (maximum allowed)
+  }
+});
 
 // Define the model name to use
 const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
@@ -166,8 +173,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a Gemini AI instance with the appropriate API key
-    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
+    // Create a Gemini AI instance with the appropriate API key and timeout configuration
+    const geminiAI = geminiApiKey ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        timeout: 120000 // 120 seconds timeout (maximum allowed)
+      }
+    }) : ai;
 
     // Generate cache key (include enharmonic flag in cache key)
     const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection);

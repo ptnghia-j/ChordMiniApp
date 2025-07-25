@@ -6,13 +6,20 @@ import { formatSongContextForAI, validateSongContext } from '@/services/chatbotS
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;
 
+export const maxDuration = 120; // 2 minutes for chatbot processing
+
 // Validate API key availability (production logging)
 if (!apiKey) {
   console.error('CRITICAL: Gemini API Key not configured for chatbot service');
 }
 
-// Initialize Gemini API with the API key
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+// Initialize Gemini API with the API key and timeout configuration
+const ai = new GoogleGenAI({
+  apiKey: apiKey || '',
+  httpOptions: {
+    timeout: 120000 // 120 seconds timeout (maximum allowed)
+  }
+});
 
 // Define the model name to use
 const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
@@ -113,8 +120,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a Gemini AI instance with the appropriate API key
-    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
+    // Create a Gemini AI instance with the appropriate API key and timeout configuration
+    const geminiAI = geminiApiKey ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        timeout: 120000 // 120 seconds timeout (maximum allowed)
+      }
+    }) : ai;
 
     // Format song context for AI
     const songContextSummary = formatSongContextForAI(songContext);

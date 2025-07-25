@@ -10,8 +10,13 @@ const apiKey = process.env.GEMINI_API_KEY;
 // Log API key status for debugging (without revealing the key)
 console.log('Gemini API Key status:', apiKey ? 'Provided' : 'Missing');
 
-// Initialize Gemini API with the API key
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+// Initialize Gemini API with the API key and timeout configuration
+const ai = new GoogleGenAI({
+  apiKey: apiKey || '',
+  httpOptions: {
+    timeout: 120000 // 120 seconds timeout (maximum allowed)
+  }
+});
 
 // Define the model name to use
 const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';

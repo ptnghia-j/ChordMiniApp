@@ -1,0 +1,129 @@
+# ChordMiniApp Frontend .dockerignore
+# Optimized for Next.js Docker builds
+
+# Dependencies (will be installed in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs (will be generated in container)
+.next/
+out/
+dist/
+build/
+
+# Development files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python backend (deployed separately)
+python_backend/
+*.py
+*.pyc
+__pycache__/
+venv/
+myenv/
+
+# Git and version control
+.git/
+.gitignore
+.gitmodules
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Documentation and markdown files
+*.md
+docs/
+README*
+
+# Test files
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+jest.config.js
+jest.setup.js
+
+# Cache and temporary files
+.cache/
+cache/
+temp/
+tmp/
+*.tmp
+*.temp
+*.log
+
+# Downloads and uploads
+downloads/
+uploads/
+
+# Large media files (keep only essential ones)
+*.mp3
+*.mp4
+*.wav
+*.flac
+*.m4a
+*.aac
+demo_*.png
+*.webp
+
+# Keep essential public assets
+!public/favicon.ico
+!public/site.webmanifest
+!public/*.svg
+!public/chordMiniLogo*.webp
+
+# Development scripts
+scripts/
+bin/
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Vercel and deployment files
+.vercel/
+.vercelignore
+
+# Bundle analysis
+bundle-optimization.json
+advanced-optimization-report.json
+
+# Firebase and security files
+firebase.json
+firestore.rules
+firestore.indexes.json
+storage.rules
+
+# Environment and config files that shouldn't be in container
+.env
+.env.*
+!.env.example
+
+# Package manager files (yarn and pnpm will be copied separately, but keep package-lock.json for npm)
+yarn.lock
+pnpm-lock.yaml
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Coverage reports
+coverage/
+
+# Storybook
+.storybook/
+storybook-static/
+
+# Misc
+*.tgz
+*.tar.gz

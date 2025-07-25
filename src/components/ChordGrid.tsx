@@ -206,7 +206,7 @@ interface ChordGridProps {
   isUploadPage?: boolean; // Whether this is the upload audio file page (for different layout)
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean; // Whether corrected chords are being displayed
-  chordCorrections?: Record<string, string> | null; // Mapping of original chords to corrected chords (legacy)
+  //chordCorrections?: Record<string, string> | null; // Mapping of original chords to corrected chords (legacy)
   // NEW: Enhanced sequence-based corrections
   sequenceCorrections?: {
     originalSequence: string[];
@@ -254,7 +254,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   onBeatClick,
   isUploadPage = false,
   showCorrectedChords = false,
-  chordCorrections = null,
+  //chordCorrections = null,
   sequenceCorrections = null,
   segmentationData = null,
   showSegmentation = false,
@@ -293,104 +293,61 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   };
 
 
-
   // Function to apply chord corrections at display time
   const getDisplayChord = (originalChord: string, visualIndex?: number): { chord: string; wasCorrected: boolean } => {
     // Early return when corrections are disabled or chord is empty
     if (!showCorrectedChords || !originalChord) {
       return { chord: originalChord, wasCorrected: false };
     }
-
-
-
-
-
-    // NEW: Try sequence-based corrections first (more accurate)
+    
+    // Duplicate-aware sequence-based corrections
     if (sequenceCorrections && visualIndex !== undefined) {
-      const { originalSequence, correctedSequence } = sequenceCorrections;
+      const targetOccurrence = chordGroupOccurrenceMap[visualIndex] ?? 0;
 
-      // ENHANCED: Find the chord in the sequence corrections by matching the chord name
-      // The sequence corrections are indexed by the original chord sequence from the API,
-      // but the visual grid may have different indexing due to padding/shifting
-
-      // Strategy 1: Try direct index mapping (works when no padding/shifting)
-      let chordSequenceIndex = visualIndex;
-      if (hasPadding) {
-        // Remove shift and padding offset to get the actual chord sequence index
-        chordSequenceIndex = visualIndex - (shiftCount + paddingCount);
-      }
-
-      // Strategy 2: If direct mapping fails, search for the chord in the sequence
-      let foundCorrection = false;
-      let correctedChord = originalChord;
-
-      // Try direct index mapping first
-      if (chordSequenceIndex >= 0 && chordSequenceIndex < originalSequence.length && chordSequenceIndex < correctedSequence.length) {
-        const sequenceOriginal = originalSequence[chordSequenceIndex];
-        const sequenceCorrected = correctedSequence[chordSequenceIndex];
-
-        if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
-          correctedChord = sequenceCorrected;
-          foundCorrection = true;
+      if (targetOccurrence > 0) {
+        const corrected = chordOccurrenceCorrectionMap[originalChord]?.[targetOccurrence];
+        if (corrected) {
+          return { chord: corrected, wasCorrected: true };
         }
-      }
-
-      // If direct mapping didn't work, search for the chord in the sequence
-      if (!foundCorrection) {
-        for (let i = 0; i < originalSequence.length; i++) {
-          const sequenceOriginal = originalSequence[i];
-          const sequenceCorrected = correctedSequence[i];
-
-          if (sequenceOriginal === originalChord && sequenceCorrected !== sequenceOriginal) {
-            correctedChord = sequenceCorrected;
-            foundCorrection = true;
-            break; // Use the first match
-          }
-        }
-      }
-
-      if (foundCorrection) {
-
-        return { chord: correctedChord, wasCorrected: true };
       }
     }
 
     // FALLBACK: Use legacy chord-by-chord corrections
-    if (chordCorrections) {
-      // Extract the root note from the chord (e.g., "C#:maj" -> "C#", "F#m" -> "F#")
-      // Handle both formats: "C#:maj" and "C#m"
-      let rootNote = originalChord;
+    // if (chordCorrections) {
+    //   // Extract the root note from the chord (e.g., "C#:maj" -> "C#", "F#m" -> "F#")
+    //   // Handle both formats: "C#:maj" and "C#m"
+    //   let rootNote = originalChord;
 
-      // For chords with colon notation (e.g., "C#:maj", "F#:min")
-      if (originalChord.includes(':')) {
-        rootNote = originalChord.split(':')[0];
-      } else {
-        // For chords without colon (e.g., "C#m", "F#", "Db7")
-        // Extract root note (handle sharps and flats)
-        const match = originalChord.match(/^([A-G][#b]?)/);
-        if (match) {
-          rootNote = match[1];
-        }
-      }
+    //   // For chords with colon notation (e.g., "C#:maj", "F#:min")
+    //   if (originalChord.includes(':')) {
+    //     rootNote = originalChord.split(':')[0];
+    //   } else {
+    //     // For chords without colon (e.g., "C#m", "F#", "Db7")
+    //     // Extract root note (handle sharps and flats)
+    //     const match = originalChord.match(/^([A-G][#b]?)/);
+    //     if (match) {
+    //       rootNote = match[1];
+    //     }
+    //   }
 
-      // Check if we have a correction for this root note
-      if (chordCorrections[rootNote]) {
-        const correctedRoot = chordCorrections[rootNote];
+    //   // Check if we have a correction for this root note
+    //   if (chordCorrections[rootNote]) {
+    //     const correctedRoot = chordCorrections[rootNote];
 
-        // Replace the root note in the original chord with the corrected one
-        let correctedChord;
-        if (originalChord.includes(':')) {
-          // For "C#:maj" -> "Db:maj"
-          correctedChord = originalChord.replace(rootNote, correctedRoot);
-        } else {
-          // For "C#m" -> "Dbm", "C#7" -> "Db7"
-          correctedChord = originalChord.replace(rootNote, correctedRoot);
-        }
+    //     // Replace the root note in the original chord with the corrected one
+    //     let correctedChord;
+    //     if (originalChord.includes(':')) {
+    //       // For "C#:maj" -> "Db:maj"
+    //       correctedChord = originalChord.replace(rootNote, correctedRoot);
+    //     } else {
+    //       // For "C#m" -> "Dbm", "C#7" -> "Db7"
+    //       correctedChord = originalChord.replace(rootNote, correctedRoot);
+    //     }
 
 
-        return { chord: correctedChord, wasCorrected: true };
-      }
-    }
+    //     return { chord: correctedChord, wasCorrected: true };
+    //   }
+    // }
 
 
 
@@ -533,8 +490,54 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return computedShiftedChords;
   }, [chords, hasPadding, actualBeatsPerMeasure, calculateOptimalShift]);
 
+  // NEW: Map each visual beat index to the N-th occurrence of its chord group
+  const chordGroupOccurrenceMap = useMemo(() => {
+    const map: number[] = [];
+    const occurrence: Record<string, number> = {};
+    let lastChord: string | null = null;
 
+    shiftedChords.forEach((ch, idx) => {
+      const isRest = ch === '' || ch === 'N.C.' || ch === 'N/C' || ch === 'N';
 
+      if (!isRest && ch !== lastChord) {
+        occurrence[ch] = (occurrence[ch] || 0) + 1;
+        lastChord = ch;
+      }
+
+      map[idx] = !isRest ? occurrence[ch] : 0; // 0 occurrence for rests
+    });
+
+    return map;
+  }, [shiftedChords]);
+
+  // NEW: Precompute corrections for each chord occurrence (O(n))
+  const chordOccurrenceCorrectionMap = useMemo(() => {
+    const map: Record<string, Record<number, string>> = {};
+
+    if (!sequenceCorrections) return map;
+
+    const { originalSequence, correctedSequence } = sequenceCorrections;
+    const occCounter: Record<string, number> = {};
+
+    for (let i = 0; i < originalSequence.length; i++) {
+      const chord = originalSequence[i];
+      const prev  = i > 0 ? originalSequence[i - 1] : null;
+      // may be redundant but safe
+      const isGroupStart = i === 0 || chord !== prev;
+
+      if (isGroupStart) {
+        occCounter[chord] = (occCounter[chord] || 0) + 1;
+        const occ = occCounter[chord];
+        const corrected = correctedSequence[i];
+        if (corrected !== chord) {
+          if (!map[chord]) map[chord] = {};
+          map[chord][occ] = corrected;
+        }
+      }
+    }
+
+    return map;
+  }, [sequenceCorrections]);
 
 
   // PERFORMANCE OPTIMIZATION: Memoized CSS grid columns class generator
@@ -729,7 +732,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
     // FIXED: Block clicking on empty cells (greyed-out cells)
     const chord = chords[globalIndex] || 'undefined';
-    const isEmptyCell = chord === '' || chord === 'N.C.';
+    const isEmptyCell = chord === '';
     if (isEmptyCell) {
       return; // Don't allow clicking on empty cells
     }
@@ -1198,7 +1201,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       if (!!onBeatClick) {
                         // Simple check: cell is clickable if it has a valid timestamp AND is not empty
                         const timestamp = beats[globalIndex];
-                        const isEmptyCell = chord === '' || chord === 'N.C.';
+                        const isEmptyCell = chord === '';
                         isClickable = typeof timestamp === 'number' && timestamp >= 0 && !isEmptyCell;
                       }
 

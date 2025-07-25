@@ -7,6 +7,28 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.3.4',
+      date: 'July 25, 2025',
+      title: 'Guitar Chord Diagram Database Integration & Synchronization Fixes',
+      description: 'Critical fixes for guitar chord diagram accuracy and chord-lyrics synchronization with official database integration',
+      features: [
+        'SYNC FIX: Chord-Lyrics Synchronization (Partial Fix) - Added musical note symbols (♪) for each chord change to improve sync between chords and lyrics sections, addressing sync issues for chords',
+        'PERFORMANCE: Enharmonic Correction Optimization - Fixed enharmonic chord matching logic and optimized performance from O(n²) to O(n) complexity using hash map lookups',
+        'BUG FIX: Chord Padding Click Issue - Fixed non-clickable chord padding for "N.C." (No Chord) vs "N/C" notation handling'
+      ],
+      technical: [
+        'Integrated official @tombatossals/chords-db/lib/guitar.json with 2069+ accurate chord fingering patterns',
+        'Enhanced chord name parsing to support both colon notation (C:minor) from ML models and standard notation (Cm)',
+        'Fixed enharmonic mapping to match database keys: C# → Csharp, F# → Fsharp for proper chord lookup',
+        'Implemented comprehensive suffix mapping for both ML model outputs and standard chord notation',
+        'Removed hardcoded FALLBACK_CHORD_DATABASE with incorrect fret positions and fingering patterns',
+        'Added support for Unicode musical symbols (♯, ♭) and enhanced chord parsing regex patterns'
+      ],
+      breaking: [
+        'Guitar Chord Diagram Database Integration - Replaced hardcoded fallback chord database with official @tombatossals/chords-db database, ensuring accurate chord fingering patterns for all chord types including C minor, C#min7, and B minor'
+      ]
+    },
+    {
       version: 'v0.3.3',
       date: 'July 21, 2025',
       title: 'Chord Simplification & UI Improvements',

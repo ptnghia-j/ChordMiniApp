@@ -1,0 +1,87 @@
+# ChordMiniApp Docker Compose Configuration
+# For local development and testing
+
+version: '3.8'
+
+services:
+  # Frontend - Next.js Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: chordmini-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_PYTHON_API_URL=http://backend:8080
+      - NEXT_TELEMETRY_DISABLED=1
+    depends_on:
+      - backend
+    networks:
+      - chordmini-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backend - Python Flask ML Service
+  backend:
+    build:
+      context: ./python_backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: chordmini-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEFAULT_BEAT_MODEL=beat-transformer
+      - DEFAULT_CHORD_MODEL=chord-cnn-lstm
+      - MAX_CONTENT_LENGTH=104857600
+      - UPLOAD_TIMEOUT=600
+    volumes:
+      # Optional: Mount models directory for development
+      # - ./python_backend/models:/app/models:ro
+      # Optional: Mount cache directory
+      - backend-cache:/tmp/model_cache
+    networks:
+      - chordmini-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Redis for caching (if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: chordmini-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - chordmini-network
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes
+
+networks:
+  chordmini-network:
+    driver: bridge
+    name: chordmini-network
+
+volumes:
+  backend-cache:
+    name: chordmini-backend-cache
+  # redis-data:
+  #   name: chordmini-redis-data

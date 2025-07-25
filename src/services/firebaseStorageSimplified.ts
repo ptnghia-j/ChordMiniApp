@@ -10,6 +10,8 @@
 
 import { db } from '@/config/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { executeWithAuthRecovery } from '@/utils/authRecovery';
+import { safeAuthOperation } from '@/utils/clientOnlyFirebase';
 
 // Collection name for audio cache - matches existing Firebase data
 const AUDIO_CACHE_COLLECTION = 'audioFiles';
@@ -84,61 +86,20 @@ export class FirebaseStorageSimplified {
       }
     }
 
-    // COLD START FIX: Implement retry logic with exponential backoff for authentication issues
-    const maxRetries = 3;
-    const baseDelay = 100; // Start with 100ms
+    console.log(`💾 Saving audio metadata for video ID: ${data.videoId}`);
+    console.log(`📝 Title: "${data.title}"`);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await this._saveAudioMetadataAttempt(data, attempt);
-      } catch (error) {
-        const isPermissionError = error instanceof Error &&
-          (error.message.includes('permission-denied') ||
-           error.message.includes('PERMISSION_DENIED') ||
-           error.message.includes('Missing or insufficient permissions'));
-
-        if (isPermissionError && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 100ms, 200ms, 400ms
-          console.warn(`⚠️ Permission denied on attempt ${attempt}/${maxRetries}, retrying in ${delay}ms...`);
-
-          // Wait for authentication to be ready
-          await new Promise(resolve => setTimeout(resolve, delay));
-
-          // ENHANCED: Use the new comprehensive authentication system
-          try {
-            const { ensureAuthReady, getCurrentAuthUser, isAuthStateReady } = await import('@/config/firebase');
-
-            console.log(`🔍 Auth state before retry ${attempt}: ready=${isAuthStateReady()}, user=${!!getCurrentAuthUser()}`);
-
-            // Use the comprehensive authentication system
-            const authReady = await ensureAuthReady();
-
-            if (authReady) {
-              console.log(`✅ Authentication ensured for retry ${attempt}`);
-            } else {
-              console.warn(`⚠️ Failed to ensure authentication on attempt ${attempt}`);
-            }
-          } catch (authError) {
-            console.warn(`❌ Authentication error on attempt ${attempt}:`, authError);
-          }
-
-          continue; // Retry the operation
-        }
-
-        // If it's not a permission error or we've exhausted retries, handle accordingly
-        if (isPermissionError) {
-          console.error(`❌ Permission denied after ${maxRetries} attempts. This may be due to cold start authentication issues.`);
-          console.warn('🔧 Cache operation failed, but this should not block audio extraction workflow.');
-          return false; // Return false but don't throw to avoid blocking audio extraction
-        }
-
-        // For other errors, log and return false
-        console.error('❌ Error saving audio metadata:', error);
-        return false;
-      }
-    }
-
-    return false; // Should never reach here
+    // Use client-side safe authentication recovery system
+    return await safeAuthOperation(
+      async () => {
+        return await executeWithAuthRecovery(
+          () => this._saveAudioMetadataAttempt(data, 1),
+          'saveAudioMetadata'
+        );
+      },
+      false, // Fallback value for SSR
+      'saveAudioMetadata'
+    ); // Should never reach here
   }
 
   /**
@@ -362,14 +323,13 @@ export class FirebaseStorageSimplified {
 
         } catch (error) {
           if (error instanceof Error && (error.message.includes('PERMISSION_DENIED') || error.message.includes('permission-denied'))) {
-            // Enhanced permission error handling for cold starts
-            console.warn('⚠️ Firebase permission denied during cache read. This may be due to cold start initialization.');
+            // Use enhanced authentication recovery for permission errors
+            console.warn('⚠️ Firebase permission denied during cache read. Attempting authentication recovery...');
 
-            // Attempt retry for cold start scenarios
             try {
-              console.log('🔄 Retrying cache read after cold start delay...');
-              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for reads
-              if (db) {
+              return await executeWithAuthRecovery(async () => {
+                if (!db) return null;
+
                 const retryDocRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
                 const retryDocSnap = await getDoc(retryDocRef);
 
@@ -379,12 +339,13 @@ export class FirebaseStorageSimplified {
                   if (retryData.isStreamUrl && retryData.streamExpiresAt && Date.now() > retryData.streamExpiresAt) {
                     return null;
                   }
+                  console.log(`✅ Cache read successful after authentication recovery`);
                   return retryData;
                 }
-              }
-              return null;
-            } catch (retryError) {
-              console.warn('❌ Cache read retry failed:', retryError);
+                return null;
+              }, 'getCachedAudioMetadata');
+            } catch (recoveryError) {
+              console.warn('❌ Authentication recovery failed for cache read:', recoveryError);
               return null;
             }
           }

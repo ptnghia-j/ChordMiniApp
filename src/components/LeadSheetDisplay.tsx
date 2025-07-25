@@ -94,7 +94,7 @@ const createChordOnlySection = (chords: ChordData[], isCondensed: boolean = fals
         const formattedChord = chord.chord.replace(/:maj$/, ''); // Remove :maj suffix
         return formattedChord;
       }).join(' ') // Show all unique chords together
-    : '♪ ♪ ♪'; // Musical note symbols for regular chord-only sections
+    : '♪'.repeat(Math.max(1, deduplicatedChords.length)).split('').join(' '); // Dynamic musical note symbols based on chord changes
 
   return {
     startTime,
@@ -728,8 +728,12 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
           return acc;
         }, []) : [];
 
+      // Generate dynamic number of musical notes based on actual chord changes
+      const numChordChanges = Math.max(1, uniqueChords.length);
+      const musicalNotes = '♪'.repeat(numChordChanges).split('').join(' ');
+
       wordSegments.push({
-        text: '♪ ♪ ♪', // Musical notes below
+        text: musicalNotes, // Dynamic musical notes below based on chord changes
         chords: uniqueChords // All unique chord labels above
       });
     } else {

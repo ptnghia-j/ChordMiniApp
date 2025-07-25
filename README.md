@@ -20,7 +20,7 @@ Real-time chord progression visualization with synchronized beat detection and g
 
 ![Guitar Diagrams](guitar_diagrams.png)
 
-Interactive guitar chord diagrams synchronized with the beat chord grid.
+Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring 2069+ verified chord positions and synchronized beat grid integration.
 
 ### 🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](leadsheet_with_ai.png)
@@ -77,8 +77,6 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
    Visit [http://localhost:3000](http://localhost:3000)
 
-### Firebase Setup (Required)
-
 1. **Create Firebase project**
    - Visit [Firebase Console](https://console.firebase.google.com/)
    - Click "Create a project"
@@ -129,6 +127,9 @@ NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
 # 3. Add to .env.local
 NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
 ```
+
+### 🔧 Docker Setup
+To be added in next version...
 
 ## 🏗️ Backend Architecture
 
@@ -429,7 +430,8 @@ graph TD
 ### UI Components & Visualization
 - **Framer Motion** - Smooth animations and transitions
 - **Chart.js** - Data visualization for audio analysis
-- **@tombatossals/react-chords** - Guitar chord diagram visualization
+- **@tombatossals/react-chords** - Guitar chord diagram visualization with official chord database
+- **@tombatossals/chords-db** - Official guitar chord database with 2069+ accurate fingering patterns
 - **React Player** - Video playback integration
 
 ### Backend & ML
@@ -462,10 +464,12 @@ graph TD
 - **Key Detection** - Musical key identification with Gemini AI
 
 ### Guitar Features [Beta]
-- **Interactive Chord Diagrams** - Visual guitar fingering patterns
+- **Accurate Chord Database Integration** - Official @tombatossals/chords-db with 2069+ verified chord fingering patterns
+- **Enhanced Chord Recognition** - Support for both ML model colon notation (C:minor) and standard notation (Cm)
+- **Interactive Chord Diagrams** - Visual guitar fingering patterns with correct fret positions and finger placements
 - **Responsive Design** - Adaptive chord count (7/5/3/2/1 for xl/lg/md/sm/xs)
 - **Smooth Animations** - 500ms transitions with optimized scaling
-- **Unicode Notation** - Proper musical symbols (♯, ♭)
+- **Unicode Notation** - Proper musical symbols (♯, ♭) with enharmonic equivalents
 
 ### Lyrics & Transcription [Beta]
 - **Synchronized Lyrics** - Time-aligned lyrics display
@@ -477,6 +481,31 @@ graph TD
 - **Responsive Design** - Mobile-first approach
 - **Performance Optimized** - Lazy loading and code splitting
 - **Offline Support** - Service worker for caching
+
+## 🚀 Deployment Options
+
+### Docker Deployment (Recommended for Production)
+
+ChordMiniApp provides production-ready Docker images for easy deployment:
+
+```bash
+# Production deployment with Docker Compose
+curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/docker-compose.prod.yml
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Available on multiple registries:**
+- **Docker Hub**: `ptnghia/chordmini-frontend:latest`, `ptnghia/chordmini-backend:latest`
+- **GitHub Container Registry**: `ghcr.io/ptnghia-j/chordminiapp/frontend:latest`
+
+**Deployment targets:**
+- **Cloud platforms**: AWS, GCP, Azure, DigitalOcean
+- **Container orchestration**: Kubernetes, Docker Swarm
+- **Edge computing**: Raspberry Pi 4+ (ARM64 support)
+
+### Traditional Deployment
+
+For custom deployments, see the [Local Setup](#-quick-setup) section above.
 
 ## 🤝 Contributing
 

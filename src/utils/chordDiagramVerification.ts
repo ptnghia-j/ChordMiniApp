@@ -5,13 +5,13 @@
  * and identifies any remaining issues with the 4-fret display constraint.
  */
 
-import { chordDatabase } from '@/services/chordMappingService';
+import { loadChordDatabase } from '@/services/chordMappingService';
 import { checkReactChordsCompatibility } from './chordDiagramTest';
 
 /**
  * Verify specific problematic chords that were mentioned in the original issue
  */
-export function verifyProblematicChords(): {
+export async function verifyProblematicChords(): Promise<{
   results: Array<{
     chord: string;
     position: number;
@@ -19,7 +19,7 @@ export function verifyProblematicChords(): {
     issues: string[];
   }>;
   summary: string;
-} {
+}> {
   const problematicChords = [
     { key: 'D', suffix: 'minor' },
     { key: 'C', suffix: 'maj7' },
@@ -37,6 +37,9 @@ export function verifyProblematicChords(): {
     status: 'FIXED' | 'STILL_BROKEN';
     issues: string[];
   }> = [];
+
+  // Load the chord database
+  const chordDatabase = await loadChordDatabase();
 
   for (const targetChord of problematicChords) {
     // Find the chord in the database
@@ -98,16 +101,19 @@ ${brokenCount === 0 ? '✅ All problematic chords have been fixed!' : '❌ Some 
 /**
  * Comprehensive verification of all chord positions
  */
-export function verifyAllChordPositions(): {
+export async function verifyAllChordPositions(): Promise<{
   totalPositions: number;
   fixedPositions: number;
   brokenPositions: number;
   criticalIssues: Array<{chord: string; position: number; issue: string}>;
   summary: string;
-} {
+}> {
   const criticalIssues: Array<{chord: string; position: number; issue: string}> = [];
   let totalPositions = 0;
   let brokenPositions = 0;
+
+  // Load the chord database
+  const chordDatabase = await loadChordDatabase();
 
   // Check all chords in the database
   for (const [, chordTypes] of Object.entries(chordDatabase.chords)) {
@@ -158,15 +164,18 @@ ${brokenPositions === 0 ? '✅ All chord positions are now working correctly!' :
 /**
  * Check for specific patterns that cause rendering issues
  */
-export function checkForRenderingIssues(): {
+export async function checkForRenderingIssues(): Promise<{
   fretWindowViolations: Array<{chord: string; position: number; details: string}>;
   highFretIssues: Array<{chord: string; position: number; details: string}>;
   barreIssues: Array<{chord: string; position: number; details: string}>;
   summary: string;
-} {
+}> {
   const fretWindowViolations: Array<{chord: string; position: number; details: string}> = [];
   const highFretIssues: Array<{chord: string; position: number; details: string}> = [];
   const barreIssues: Array<{chord: string; position: number; details: string}> = [];
+
+  // Load the chord database
+  const chordDatabase = await loadChordDatabase();
 
   for (const [, chordTypes] of Object.entries(chordDatabase.chords)) {
     for (const chordData of chordTypes) {
@@ -235,10 +244,10 @@ ${totalIssues === 0 ? '✅ No rendering issues detected!' : '❌ Rendering issue
 /**
  * Generate a complete verification report
  */
-export function generateCompleteVerificationReport(): string {
-  const problematicResults = verifyProblematicChords();
-  const allPositionsResults = verifyAllChordPositions();
-  const renderingIssues = checkForRenderingIssues();
+export async function generateCompleteVerificationReport(): Promise<string> {
+  const problematicResults = await verifyProblematicChords();
+  const allPositionsResults = await verifyAllChordPositions();
+  const renderingIssues = await checkForRenderingIssues();
 
   return `
 🎯 CHORD DIAGRAM VERIFICATION REPORT

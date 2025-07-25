@@ -26,14 +26,28 @@ export interface ApiRequestOptions {
 }
 
 class ApiService {
-  private baseUrl: string;
+  private backendUrl: string;
+  private frontendUrl: string;
   private clientLimiter: ClientRateLimiter;
 
   constructor() {
-    this.baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    this.backendUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    this.frontendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
     // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)
     this.clientLimiter = new ClientRateLimiter(4, 60000);
+  }
+
+  /**
+   * Determine the correct base URL for an endpoint
+   */
+  private getBaseUrlForEndpoint(endpoint: string): string {
+    // Local Next.js API routes (lyrics, etc.)
+    if (endpoint.startsWith('/api/')) {
+      return this.frontendUrl;
+    }
+    // Backend ML endpoints
+    return this.backendUrl;
   }
 
   /**
@@ -52,7 +66,8 @@ class ApiService {
       ...fetchOptions
     } = options;
 
-    const url = `${this.baseUrl}${endpoint}`;
+    const baseUrl = this.getBaseUrlForEndpoint(endpoint);
+    const url = `${baseUrl}${endpoint}`;
     const clientKey = `${fetchOptions.method || 'GET'}:${endpoint}`;
 
     try {
@@ -323,8 +338,22 @@ class ApiService {
   /**
    * Get lyrics from Genius
    */
-  async getGeniusLyrics(artist: string, title: string): Promise<ApiResponse> {
-    return this.post('/api/genius-lyrics', { artist, title }, {
+  async getGeniusLyrics(artist: string, title: string, searchQuery?: string): Promise<ApiResponse> {
+    const payload: { artist?: string; title?: string; search_query?: string } = {};
+
+    // If we have both artist and title, use them
+    if (artist && title) {
+      payload.artist = artist;
+      payload.title = title;
+    } else if (searchQuery) {
+      // Otherwise use search query
+      payload.search_query = searchQuery;
+    } else {
+      // Fallback: combine artist and title as search query
+      payload.search_query = `${artist} ${title}`.trim();
+    }
+
+    return this.post('/api/genius-lyrics', payload, {
       timeout: 30000,
     });
   }
@@ -355,10 +384,13 @@ class ApiService {
   }
 
   /**
-   * Get the base URL being used
+   * Get the base URL being used for a specific endpoint
    */
-  getBaseUrl(): string {
-    return this.baseUrl;
+  getBaseUrl(endpoint?: string): string {
+    if (endpoint) {
+      return this.getBaseUrlForEndpoint(endpoint);
+    }
+    return this.backendUrl; // Default to backend URL for backward compatibility
   }
 }
 

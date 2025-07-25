@@ -49,9 +49,11 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   // Handle special cases
   if (chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.' || chordName === 'X') {
     // Use optimized inline SVG quarter rest symbol for "No Chord" notation
-    if (chordName === 'N/C' || chordName === 'N.C.') {
+    // if (chordName === 'N/C' || chordName === 'N.C.') {
+    if (chordName === 'N/C' || chordName === 'N' || chordName === 'N.C.') {
       return getQuarterRestSymbol(isDarkMode);
     }
+    
     return chordName;
   }
 

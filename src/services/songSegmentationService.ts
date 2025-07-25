@@ -286,7 +286,12 @@ export async function analyzeSongSegmentation(request: SegmentationRequest): Pro
     throw new Error('Gemini API key is required for segmentation analysis');
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      timeout: 120000 // 120 seconds timeout (maximum allowed)
+    }
+  });
 
   try {
     // Create segmentation prompt

@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { searchLRCLibLyrics, getCurrentLyricsLine, parseVideoTitle, LRCTimestamp, LRCLibResponse } from '@/services/lrclibService';
+import { getCurrentLyricsLine, parseVideoTitle, LRCTimestamp, LRCLibResponse } from '@/services/lrclibService';
+import { searchLyricsWithFallback, checkLyricsServicesHealth, LyricsServiceResponse } from '@/services/lyricsService';
 
 interface LyricsMetadata {
   title: string;
@@ -42,10 +43,12 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
 }) => {
   const [lyricsData, setLyricsData] = useState<LyricsData | null>(null);
   const [lrclibData, setLrclibData] = useState<LRCLibResponse | null>(null);
+  const [enhancedLyricsData, setEnhancedLyricsData] = useState<LyricsServiceResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchForSynced, setSearchForSynced] = useState(true); // Toggle for synchronized lyrics search
+  const [serviceHealth, setServiceHealth] = useState<{ lrclib: boolean; genius: boolean; overall: boolean } | null>(null);
   const [showTooltip, setShowTooltip] = useState(false); // State for tooltip visibility
   const [displayMode, setDisplayMode] = useState<'sync' | 'static'>('sync'); // Display mode toggle
 
@@ -93,6 +96,13 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
     }
   }, [showTooltip]);
 
+  // Check service health when panel opens
+  useEffect(() => {
+    if (isOpen && !serviceHealth) {
+      checkLyricsServicesHealth().then(setServiceHealth);
+    }
+  }, [isOpen, serviceHealth]);
+
   const fetchLyrics = async (query: string) => {
     if (!query.trim()) return;
 
@@ -100,26 +110,58 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
     setError(null);
     setLyricsData(null);
     setLrclibData(null);
+    setEnhancedLyricsData(null);
 
     try {
-      // Use LRCLib for lyrics search
+      // Use enhanced lyrics service with fallback
       const parsedTitle = parseVideoTitle(query.trim());
-      const lrclibResponse = await searchLRCLibLyrics(parsedTitle);
+      const enhancedResponse = await searchLyricsWithFallback({
+        artist: parsedTitle.artist,
+        title: parsedTitle.title,
+        search_query: query.trim(),
+        prefer_synchronized: searchForSynced
+      });
 
-      if (lrclibResponse.success) {
-        setLrclibData(lrclibResponse);
+      if (enhancedResponse.success) {
+        setEnhancedLyricsData(enhancedResponse);
 
-        if (searchForSynced && lrclibResponse.has_synchronized) {
+        // Convert to legacy format for compatibility
+        if (enhancedResponse.metadata.source === 'lrclib') {
+          const legacyResponse: LRCLibResponse = {
+            success: true,
+            has_synchronized: enhancedResponse.has_synchronized,
+            synchronized_lyrics: enhancedResponse.synchronized_lyrics,
+            plain_lyrics: enhancedResponse.plain_lyrics,
+            metadata: {
+              title: enhancedResponse.metadata.title,
+              artist: enhancedResponse.metadata.artist,
+              album: enhancedResponse.metadata.album || '',
+              duration: enhancedResponse.metadata.duration || 0,
+              lrclib_id: 0,
+              instrumental: false
+            },
+            source: enhancedResponse.source
+          };
+          setLrclibData(legacyResponse);
+        }
+
+        // Set display mode based on availability and preference
+        if (searchForSynced && enhancedResponse.has_synchronized) {
           setDisplayMode('sync');
         } else {
           setDisplayMode('static');
         }
+
+        // Show fallback notification if used
+        if (enhancedResponse.fallback_used) {
+          console.log(`ℹ️ Using fallback service: ${enhancedResponse.metadata.source}`);
+        }
       } else {
-        setError('No lyrics found for this search query');
+        setError(enhancedResponse.error || 'No lyrics found for this search query');
       }
     } catch (error) {
       console.error('Error fetching lyrics:', error);
-      setError(`Failed to connect to lyrics service: ${error instanceof Error ? error.message : String(error)}`);
+      setError(`Failed to connect to lyrics services: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -139,14 +181,23 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   const clearLyrics = () => {
     setLyricsData(null);
     setLrclibData(null);
+    setEnhancedLyricsData(null);
     setError(null);
     setSearchQuery('');
   };
 
   // Get current lyrics line for synchronized display
-  const currentLyricsInfo = lrclibData?.synchronized_lyrics
-    ? getCurrentLyricsLine(lrclibData.synchronized_lyrics, currentTime)
-    : { currentIndex: -1 };
+  const currentLyricsInfo = (() => {
+    // Check enhanced lyrics data first
+    if (enhancedLyricsData?.synchronized_lyrics) {
+      return getCurrentLyricsLine(enhancedLyricsData.synchronized_lyrics, currentTime);
+    }
+    // Fallback to legacy LRClib data
+    if (lrclibData?.synchronized_lyrics) {
+      return getCurrentLyricsLine(lrclibData.synchronized_lyrics, currentTime);
+    }
+    return { currentIndex: -1 };
+  })();
 
   // Auto-scroll to current lyrics line
   useEffect(() => {
@@ -440,10 +491,29 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
               </button>
             </div>
 
-            {/* Search options - simplified since synchronized toggle moved to header */}
-            <div className="flex items-center justify-between">
-              {/* Redundant toggle removed - now handled by header toggle */}
-            </div>
+            {/* Service status indicator */}
+            {serviceHealth && (
+              <div className="flex items-center space-x-2 text-xs">
+                <span className="text-gray-600 dark:text-gray-400">Services:</span>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${serviceHealth.lrclib ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                  <span className={serviceHealth.lrclib ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    LRClib
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${serviceHealth.genius ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                  <span className={serviceHealth.genius ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                    Genius
+                  </span>
+                </div>
+                {enhancedLyricsData?.fallback_used && (
+                  <span className="text-yellow-600 dark:text-yellow-400 ml-2">
+                    (Fallback Active)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -461,6 +531,49 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             {error && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              </div>
+            )}
+
+            {/* Enhanced lyrics display (with fallback support) */}
+            {enhancedLyricsData && enhancedLyricsData.metadata.source !== 'lrclib' && (
+              <div className="space-y-4">
+                {/* Song metadata for non-LRClib sources */}
+                <div className="p-3 bg-gray-50 dark:bg-content-bg rounded-lg border-small">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">{enhancedLyricsData.metadata.title}</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">by {enhancedLyricsData.metadata.artist}</p>
+                  {enhancedLyricsData.metadata.album && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500">Album: {enhancedLyricsData.metadata.album}</p>
+                  )}
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                      Source: {enhancedLyricsData.metadata.source === 'genius' ? 'Genius' : enhancedLyricsData.source}
+                      {enhancedLyricsData.fallback_used && ' (Fallback)'}
+                    </span>
+                    {enhancedLyricsData.metadata.genius_url && (
+                      <a
+                        href={enhancedLyricsData.metadata.genius_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        View on Genius
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lyrics content */}
+                <div ref={lyricsContainerRef} className="prose prose-sm dark:prose-invert max-w-none">
+                  {enhancedLyricsData.plain_lyrics ? (
+                    <div className="text-gray-800 dark:text-white leading-relaxed">
+                      {formatLyrics(enhancedLyricsData.plain_lyrics)}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                      <p className="text-sm">No lyrics content available</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

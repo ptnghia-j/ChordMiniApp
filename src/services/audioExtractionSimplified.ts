@@ -11,7 +11,7 @@
 import { yt2mp3MagicService } from './yt2mp3MagicService';
 import { uploadAudioStreamWithRetry } from './streamingFirebaseUpload';
 // PRESERVED FOR REFERENCE: import { quickTubeServiceSimplified } from './quickTubeServiceSimplified';
-// PRESERVED FOR REFERENCE: import { ytMp3GoService } from './ytMp3GoService';
+import { ytMp3GoService } from './ytMp3GoService';
 import { firebaseStorageSimplified, SimplifiedAudioData } from './firebaseStorageSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from './ytDlpService';
@@ -153,15 +153,119 @@ export class AudioExtractionServiceSimplified {
         }
       }
 
-      // Step 3: Extract using YT2MP3 Magic service
+      // Step 3: Extract using YT2MP3 Magic service with yt-mp3-go fallback
       const searchDuration = this.parseDuration(videoMetadata.duration);
       console.log('🎵 Using YT2MP3 Magic service for audio extraction');
       const extractionResult = await yt2mp3MagicService.extractAudio(videoId, title, searchDuration);
 
+      // Fallback to yt-mp3-go if YT2MP3 Magic fails
       if (!extractionResult.success) {
+        console.log(`⚠️ YT2MP3 Magic failed: ${extractionResult.error}`);
+        console.log('🔄 Falling back to yt-mp3-go service...');
+
+        try {
+          const fallbackResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'medium');
+
+          if (fallbackResult.success && fallbackResult.audioUrl) {
+            console.log('✅ yt-mp3-go fallback succeeded');
+
+            // Download and upload to Firebase Storage for permanent caching
+            let finalAudioUrl = fallbackResult.audioUrl;
+            let isStorageUrl = false;
+            let actualFileSize = 0;
+            const finalDuration = fallbackResult.duration || searchDuration;
+
+            console.log(`📝 yt-mp3-go fallback provided external URL: ${finalAudioUrl}`);
+
+            // Try to download and upload to Firebase Storage for permanent access
+            try {
+              console.log(`📥 Downloading yt-mp3-go fallback audio file for Firebase Storage upload...`);
+              const downloadStartTime = Date.now();
+
+              const audioResponse = await fetch(finalAudioUrl);
+              if (audioResponse.ok) {
+                const audioData = await audioResponse.arrayBuffer();
+                actualFileSize = audioData.byteLength;
+                const downloadTime = Date.now() - downloadStartTime;
+
+                console.log(`📥 Downloaded ${(actualFileSize / 1024 / 1024).toFixed(2)}MB from yt-mp3-go fallback in ${downloadTime}ms`);
+
+                // Upload to Firebase Storage with monitoring
+                const uploadStartTime = Date.now();
+                const { uploadAudioFile, saveAudioFileMetadata } = await import('./firebaseStorageService');
+                const uploadResult = await uploadAudioFile(videoId, audioData);
+
+                if (uploadResult) {
+                  const uploadTime = Date.now() - uploadStartTime;
+                  finalAudioUrl = uploadResult.audioUrl;
+                  isStorageUrl = true;
+
+                  console.log(`✅ yt-mp3-go fallback audio stored in Firebase Storage in ${uploadTime}ms: ${finalAudioUrl}`);
+                  console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
+
+                  // Save detailed metadata to Firestore with enhanced video information
+                  await saveAudioFileMetadata({
+                    videoId,
+                    audioUrl: finalAudioUrl,
+                    title,
+                    storagePath: uploadResult.storagePath,
+                    fileSize: actualFileSize,
+                    duration: finalDuration,
+                    isStreamUrl: false,
+                    streamExpiresAt: undefined,
+
+                    // Enhanced metadata from video search results
+                    channelTitle: videoMetadata.channelTitle,
+                    thumbnail: videoMetadata.thumbnail,
+                    extractionService: 'yt-mp3-go-fallback',
+                    extractionTimestamp: Date.now(),
+                    videoDuration: videoMetadata.duration
+                  });
+
+                  console.log(`📈 Firebase Storage Success (fallback): videoId=${videoId}, size=${(actualFileSize / 1024 / 1024).toFixed(2)}MB, uploadTime=${uploadTime}ms`);
+                }
+              }
+            } catch (storageError) {
+              console.warn(`⚠️ Firebase Storage upload failed for yt-mp3-go fallback, using external URL: ${storageError}`);
+              console.log(`📈 Firebase Storage Failure (fallback): videoId=${videoId}, error=${storageError instanceof Error ? storageError.message : 'Unknown'}`);
+            }
+
+            // Save metadata to simplified cache (only if Firebase Storage upload failed)
+            if (!isStorageUrl) {
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: finalAudioUrl,
+                title,
+                duration: finalDuration,
+                fileSize: actualFileSize,
+                extractionService: 'yt-mp3-go-fallback',
+                extractionTimestamp: Date.now(),
+                videoDuration: videoMetadata.duration,
+                isStreamUrl: true // External URLs are temporary
+              });
+            }
+
+            console.log(`✅ yt-mp3-go fallback extraction completed for ${videoId}`);
+
+            return {
+              success: true,
+              audioUrl: finalAudioUrl,
+              title,
+              duration: finalDuration,
+              fromCache: false,
+              isStreamUrl: !isStorageUrl // Firebase Storage URLs are permanent
+            };
+          } else {
+            console.log(`❌ yt-mp3-go fallback also failed: ${fallbackResult.error}`);
+          }
+        } catch (fallbackError) {
+          console.error(`❌ yt-mp3-go fallback error:`, fallbackError);
+        }
+
+        // Both services failed
         return {
           success: false,
-          error: extractionResult.error || 'YT2MP3 Magic extraction failed'
+          error: `Both YT2MP3 Magic and yt-mp3-go failed. YT2MP3 Magic: ${extractionResult.error}`
         };
       }
 
@@ -266,19 +370,26 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Save to simplified cache for faster future access with enhanced metadata
-            await firebaseStorageSimplified.saveAudioMetadata({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fileSize: existingFile.fileSize || 0,
+            // Check if metadata already exists in simplified cache to avoid redundant writes
+            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+            if (!existingMetadata) {
+              console.log(`💾 Saving metadata to simplified cache for faster future access`);
+              // Save to simplified cache for faster future access with enhanced metadata
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: existingFile.audioUrl,
+                title: videoMetadata.title,
+                duration: this.parseDuration(videoMetadata.duration),
+                fileSize: existingFile.fileSize || 0,
 
-              // Enhanced metadata for cache hits
-              extractionService: 'firebase-storage-cache',
-              extractionTimestamp: Date.now(),
-              videoDuration: videoMetadata.duration
-            });
+                // Enhanced metadata for cache hits
+                extractionService: 'firebase-storage-cache',
+                extractionTimestamp: Date.now(),
+                videoDuration: videoMetadata.duration
+              });
+            } else {
+              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
+            }
 
             return {
               success: true,
@@ -460,14 +571,21 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Save to simplified cache for faster future access
-            await firebaseStorageSimplified.saveAudioMetadata({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fileSize: existingFile.fileSize || 0
-            });
+            // Check if metadata already exists in simplified cache to avoid redundant writes
+            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+            if (!existingMetadata) {
+              console.log(`💾 Saving metadata to simplified cache for faster future access`);
+              // Save to simplified cache for faster future access
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: existingFile.audioUrl,
+                title: videoMetadata.title,
+                duration: this.parseDuration(videoMetadata.duration),
+                fileSize: existingFile.fileSize || 0
+              });
+            } else {
+              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
+            }
 
             return {
               success: true,
@@ -651,14 +769,21 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Save to simplified cache for faster future access
-            await firebaseStorageSimplified.saveAudioMetadata({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fileSize: existingFile.fileSize || 0
-            });
+            // Check if metadata already exists in simplified cache to avoid redundant writes
+            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+            if (!existingMetadata) {
+              console.log(`💾 Saving metadata to simplified cache for faster future access`);
+              // Save to simplified cache for faster future access
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: existingFile.audioUrl,
+                title: videoMetadata.title,
+                duration: this.parseDuration(videoMetadata.duration),
+                fileSize: existingFile.fileSize || 0
+              });
+            } else {
+              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
+            }
 
             return {
               success: true,
@@ -871,14 +996,21 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Save to simplified cache for faster future access
-            await firebaseStorageSimplified.saveAudioMetadata({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: `YouTube Video ${videoId}`,
-              duration: 0, // Duration will be detected later
-              fileSize: existingFile.fileSize || 0
-            });
+            // Check if metadata already exists in simplified cache to avoid redundant writes
+            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+            if (!existingMetadata) {
+              console.log(`💾 Saving metadata to simplified cache for faster future access`);
+              // Save to simplified cache for faster future access
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: existingFile.audioUrl,
+                title: `YouTube Video ${videoId}`,
+                duration: 0, // Duration will be detected later
+                fileSize: existingFile.fileSize || 0
+              });
+            } else {
+              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
+            }
 
             return {
               success: true,
@@ -947,10 +1079,116 @@ export class AudioExtractionServiceSimplified {
           break;
       }
 
+      // Fallback to yt-mp3-go if primary service fails
       if (!extractionResult.success) {
+        console.log(`⚠️ Primary service failed: ${extractionResult.error}`);
+        console.log('🔄 Falling back to yt-mp3-go service...');
+
+        try {
+          const fallbackResult = await ytMp3GoService.extractAudio(videoId, undefined, undefined, 'medium');
+
+          if (fallbackResult.success && fallbackResult.audioUrl) {
+            console.log('✅ yt-mp3-go fallback succeeded');
+
+            // Download and upload to Firebase Storage for permanent caching
+            let finalAudioUrl = fallbackResult.audioUrl;
+            let isStorageUrl = false;
+            let actualFileSize = 0;
+            const finalDuration = fallbackResult.duration || 0;
+            const title = fallbackResult.title || `YouTube Video ${videoId}`;
+
+            console.log(`📝 yt-mp3-go fallback provided external URL: ${finalAudioUrl}`);
+
+            // Try to download and upload to Firebase Storage for permanent access
+            try {
+              console.log(`📥 Downloading yt-mp3-go fallback audio file for Firebase Storage upload...`);
+              const downloadStartTime = Date.now();
+
+              const audioResponse = await fetch(finalAudioUrl);
+              if (audioResponse.ok) {
+                const audioData = await audioResponse.arrayBuffer();
+                actualFileSize = audioData.byteLength;
+                const downloadTime = Date.now() - downloadStartTime;
+
+                console.log(`📥 Downloaded ${(actualFileSize / 1024 / 1024).toFixed(2)}MB from yt-mp3-go fallback in ${downloadTime}ms`);
+
+                // Upload to Firebase Storage with monitoring
+                const uploadStartTime = Date.now();
+                const { uploadAudioFile, saveAudioFileMetadata } = await import('./firebaseStorageService');
+                const uploadResult = await uploadAudioFile(videoId, audioData);
+
+                if (uploadResult) {
+                  const uploadTime = Date.now() - uploadStartTime;
+                  finalAudioUrl = uploadResult.audioUrl;
+                  isStorageUrl = true;
+
+                  console.log(`✅ yt-mp3-go fallback audio stored in Firebase Storage in ${uploadTime}ms: ${finalAudioUrl}`);
+                  console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
+
+                  // Save detailed metadata to Firestore with enhanced video information
+                  await saveAudioFileMetadata({
+                    videoId,
+                    audioUrl: finalAudioUrl,
+                    title,
+                    storagePath: uploadResult.storagePath,
+                    fileSize: actualFileSize,
+                    duration: finalDuration,
+                    isStreamUrl: false,
+                    streamExpiresAt: undefined,
+
+                    // Enhanced metadata
+                    channelTitle: 'Unknown Channel',
+                    thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                    extractionService: 'yt-mp3-go-fallback',
+                    extractionTimestamp: Date.now(),
+                    videoDuration: '0:00'
+                  });
+
+                  console.log(`📈 Firebase Storage Success (fallback): videoId=${videoId}, size=${(actualFileSize / 1024 / 1024).toFixed(2)}MB, uploadTime=${uploadTime}ms`);
+                }
+              }
+            } catch (storageError) {
+              console.warn(`⚠️ Firebase Storage upload failed for yt-mp3-go fallback, using external URL: ${storageError}`);
+              console.log(`📈 Firebase Storage Failure (fallback): videoId=${videoId}, error=${storageError instanceof Error ? storageError.message : 'Unknown'}`);
+            }
+
+            // Save metadata to simplified cache (only if Firebase Storage upload failed) - NON-BLOCKING
+            if (!isStorageUrl) {
+              firebaseStorageSimplified.saveAudioMetadataBackground({
+                videoId,
+                audioUrl: finalAudioUrl,
+                title,
+                thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                channelTitle: 'Unknown Channel',
+                duration: finalDuration,
+                fileSize: actualFileSize,
+                extractionService: 'yt-mp3-go-fallback',
+                extractionTimestamp: Date.now(),
+                isStreamUrl: true // External URLs are temporary
+              });
+            }
+
+            console.log(`✅ yt-mp3-go fallback extraction completed for ${videoId}`);
+
+            return {
+              success: true,
+              audioUrl: finalAudioUrl,
+              title,
+              duration: finalDuration,
+              fromCache: false,
+              isStreamUrl: !isStorageUrl // Firebase Storage URLs are permanent
+            };
+          } else {
+            console.log(`❌ yt-mp3-go fallback also failed: ${fallbackResult.error}`);
+          }
+        } catch (fallbackError) {
+          console.error(`❌ yt-mp3-go fallback error:`, fallbackError);
+        }
+
+        // Both services failed
         return {
           success: false,
-          error: extractionResult.error || 'Audio extraction failed'
+          error: `Both primary service and yt-mp3-go failed. Primary: ${extractionResult.error}`
         };
       }
 
@@ -1223,14 +1461,21 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Save to simplified cache for faster future access
-            await firebaseStorageSimplified.saveAudioMetadata({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: title || `Video ${videoId}`,
-              duration: 0, // Duration will be detected later
-              fileSize: existingFile.fileSize || 0
-            });
+            // Check if metadata already exists in simplified cache to avoid redundant writes
+            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+            if (!existingMetadata) {
+              console.log(`💾 Saving metadata to simplified cache for faster future access`);
+              // Save to simplified cache for faster future access
+              await firebaseStorageSimplified.saveAudioMetadata({
+                videoId,
+                audioUrl: existingFile.audioUrl,
+                title: title || `Video ${videoId}`,
+                duration: 0, // Duration will be detected later
+                fileSize: existingFile.fileSize || 0
+              });
+            } else {
+              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
+            }
 
             return {
               success: true,

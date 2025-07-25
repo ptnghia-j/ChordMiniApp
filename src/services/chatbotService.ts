@@ -269,7 +269,7 @@ export async function requestSongSegmentation(
     };
 
     const response = await axios.post('/api/segmentation', request, {
-      timeout: 60000, // 60 second timeout for segmentation analysis
+      timeout: 120000, // 120 second timeout for segmentation analysis (maximum allowed)
       headers: {
         'Content-Type': 'application/json'
       }
