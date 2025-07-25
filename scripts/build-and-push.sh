@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# ChordMiniApp Docker Build and Push Script
+# ChordMiniApp Docker Build and Push Script (MANUAL USE ONLY)
 # This script builds Docker images locally and pushes them to a container registry
+#
+# ⚠️  NOTE: Docker automation has been removed from CI/CD pipeline
+# This script is now for MANUAL deployment only
 
 set -e
 

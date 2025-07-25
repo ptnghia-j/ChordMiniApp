@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# ChordMiniApp Docker Setup Validation Script
+# ChordMiniApp Docker Setup Validation Script (MANUAL USE ONLY)
 # This script validates the Docker configuration and tests local builds
+#
+# ⚠️  NOTE: Docker automation has been removed from CI/CD pipeline
+# This script is now for MANUAL validation only
 
 set -e
 

@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# ChordMiniApp CI/CD Setup Script
+# ChordMiniApp CI/CD Setup Script (VERCEL ONLY)
 # This script helps configure GitHub repository secrets and variables for the CI/CD pipeline
+#
+# ⚠️  NOTE: Docker automation has been removed from CI/CD pipeline
+# This script now only configures Vercel deployment secrets
 
 set -e
 
