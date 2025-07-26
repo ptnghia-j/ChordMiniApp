@@ -260,23 +260,19 @@ function NewHomePageContentInner() {
                   <ul className="space-y-2 text-gray-600 dark:text-gray-400">
                     <li className="flex items-start space-x-3">
                       <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Multiple AI models: Chord-CNN-LSTM and BTC (Beat-Transformer-Chord)</span>
+                      <span>Multiple AI models: Chord-CNN-LSTM and BTC (Bidirectional Transformer for Chord Recognition)</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Supports major, minor, 7th, diminished, and extended chords</span>
+                      <span>Supports major, minor, all 7th chords, diminished, and augmented chords and their inversions</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Real-time chord progression analysis</span>
+                      <span>Enharmonic correction with local key context using reasoning LLM (Gemini)</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Enharmonic correction with toggle functionality</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Context-aware chord interpretation</span>
+                      <span>Context-aware chord interpretation for modulation and segmentation using LLM</span>
                     </li>
                   </ul>
                 </div>
@@ -327,7 +323,7 @@ function NewHomePageContentInner() {
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Time signature identification (4/4, 3/4, 6/8, etc.)</span>
+                      <span>Time signature identification (4/4, 3/4, 6/8, 2/4)</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="text-green-500 mt-1.5 text-xs">●</span>

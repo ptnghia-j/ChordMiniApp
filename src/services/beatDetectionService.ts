@@ -111,7 +111,7 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
           'madmom': {
             name: data.beat_model_info?.['madmom']?.name || 'Madmom',
             description: data.beat_model_info?.['madmom']?.description ||
-                        'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
+                        'Neural network with good balance of accuracy and speed, best for common time signature, flexible in tempo changes',
             performance: data.beat_model_info?.['madmom']?.performance || 'Medium accuracy, medium speed',
             uses_spleeter: data.beat_model_info?.['madmom']?.uses_spleeter ?? false
           },

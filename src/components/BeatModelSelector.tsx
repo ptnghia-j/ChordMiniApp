@@ -92,14 +92,14 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'High-precision DL model with 5-channel audio separation',
+                  'Transformer model with audio channel separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
       available: modelInfo?.beat_transformer_available || false
     },
     {
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                  'Neural network with good balance of accuracy and speed',
+                  'Neural network with good balance of accuracy and speed, best for common time signature, flexible in tempo changes',
       available: modelInfo?.madmom_available || false
     }
   ];

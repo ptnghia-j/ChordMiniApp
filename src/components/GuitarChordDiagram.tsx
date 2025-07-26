@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Chord from '@tombatossals/react-chords/lib/Chord';
+import { formatChordWithMusicalSymbols } from '@/utils/chordFormatting';
 
 interface ChordPosition {
   frets: number[];
@@ -122,33 +123,21 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
   const { width, height } = sizeConfig[size];
 
-  // Chord name for display with proper formatting and Unicode symbols
-  const formatChordName = (key: string, suffix: string): string => {
-    // Convert ASCII sharp/flat symbols to Unicode musical symbols
-    const displayName = key
-      .replace(/#/g, '♯')  // Sharp (#) → ♯ (U+266F)
-      .replace(/([A-G])b/g, '$1♭'); // Flat (b) → ♭ (U+266D) only after note names
-
-    // Add suffix formatting
-    if (suffix === 'major') {
-      // Major chords don't need suffix
-      return displayName;
-    } else if (suffix === 'minor') {
-      return displayName + 'm';
-    } else if (suffix === 'dim') {
-      return displayName + '°';
-    } else if (suffix === 'aug') {
-      return displayName + '+';
-    } else {
-      return displayName + suffix;
+  // Use the centralized chord formatting function for consistency with beat/chord grid
+  // This ensures both components display chord labels with the same formatting
+  const getFormattedChordName = (): string => {
+    if (displayName) {
+      // Use provided displayName (for enharmonic corrections)
+      return formatChordWithMusicalSymbols(displayName, false); // Use light mode for guitar diagrams
+    } else if (chordData) {
+      // Reconstruct chord name from chord data and format it
+      const reconstructedChord = chordData.suffix === 'major'
+        ? chordData.key
+        : `${chordData.key}:${chordData.suffix}`;
+      return formatChordWithMusicalSymbols(reconstructedChord, false); // Use light mode for guitar diagrams
     }
+    return '';
   };
-
-  // Use displayName if provided (for enharmonic corrections), otherwise format from chord data
-  // Apply Unicode symbol conversion to displayName as well
-  const chordName = displayName
-    ? displayName.replace(/#/g, '♯').replace(/b/g, '♭')
-    : formatChordName(chordData.key, chordData.suffix);
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
@@ -171,17 +160,20 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
       {/* Chord name */}
       {showChordName && (
-        <span className={`text-center font-medium mt-2 ${
-          size === 'small' ? 'text-xs' :
-          size === 'medium' ? 'text-sm' :
-          'text-base'
-        } ${
-          isFocused
-            ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
-            : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
-        } transition-colors duration-200`}>
-          {displayName || chordName}
-        </span>
+        <span
+          className={`text-center font-medium mt-2 ${
+            size === 'small' ? 'text-xs' :
+            size === 'medium' ? 'text-sm' :
+            'text-base'
+          } ${
+            isFocused
+              ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
+              : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
+          } transition-colors duration-200`}
+          dangerouslySetInnerHTML={{
+            __html: getFormattedChordName()
+          }}
+        />
       )}
 
       {/* Position selector for multiple chord positions */}

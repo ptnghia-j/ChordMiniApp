@@ -14,7 +14,9 @@ export default function ChangelogPage() {
       features: [
         'SYNC FIX: Chord-Lyrics Synchronization (Partial Fix) - Added musical note symbols (♪) for each chord change to improve sync between chords and lyrics sections, addressing sync issues for chords',
         'PERFORMANCE: Enharmonic Correction Optimization - Fixed enharmonic chord matching logic and optimized performance from O(n²) to O(n) complexity using hash map lookups',
-        'BUG FIX: Chord Padding Click Issue - Fixed non-clickable chord padding for "N.C." (No Chord) vs "N/C" notation handling'
+        'BUG FIX: Chord Padding Click Issue - Fixed non-clickable chord padding for "N.C." (No Chord) vs "N/C" notation handling',
+        'FIX: Replaced hardcoded chord database with official @tombatossals/chords-db database, ensuring accurate chord fingering patterns for all supported chord types',
+        'FIX: Replaced unformatted chord labels under guitar chord diagrams with formatted forms matching beat chord grid'
       ],
       technical: [
         'Integrated official @tombatossals/chords-db/lib/guitar.json with 2069+ accurate chord fingering patterns',
@@ -25,7 +27,7 @@ export default function ChangelogPage() {
         'Added support for Unicode musical symbols (♯, ♭) and enhanced chord parsing regex patterns'
       ],
       breaking: [
-        'Guitar Chord Diagram Database Integration - Replaced hardcoded fallback chord database with official @tombatossals/chords-db database, ensuring accurate chord fingering patterns for all chord types including C minor, C#min7, and B minor'
+        'Guitar Chord Diagram Database Integration - Replaced hardcoded fallback chord database with official @tombatossals/chords-db database, ensuring accurate chord fingering patterns for all supported chord types'
       ]
     },
     {

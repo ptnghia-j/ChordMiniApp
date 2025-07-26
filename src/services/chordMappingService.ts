@@ -74,6 +74,11 @@ export class ChordMappingService {
     'G#': 'Ab',
     'Bb': 'Bb',
     'A#': 'Bb',
+    // Rare enharmonic equivalents (theoretical but possible in ML output)
+    'Cb': 'B',      // C-flat → B natural
+    'Fb': 'E',      // F-flat → E natural
+    'E#': 'F',      // E-sharp → F natural
+    'B#': 'C',      // B-sharp → C natural
     // Unicode format inputs (for Gemini API corrections)
     'D♭': 'Csharp',
     'C♯': 'Csharp',
@@ -84,7 +89,12 @@ export class ChordMappingService {
     'A♭': 'Ab',
     'G♯': 'Ab',
     'B♭': 'Bb',
-    'A♯': 'Bb'
+    'A♯': 'Bb',
+    // Rare enharmonic equivalents (Unicode format)
+    'C♭': 'B',      // C-flat → B natural
+    'F♭': 'E',      // F-flat → E natural
+    'E♯': 'F',      // E-sharp → F natural
+    'B♯': 'C'       // B-sharp → C natural
   };
   // Enhanced chord suffix mappings from ML model to database
   // Handles both colon notation (from ML models) and standard notation

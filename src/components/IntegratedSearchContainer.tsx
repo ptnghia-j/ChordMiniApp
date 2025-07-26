@@ -130,7 +130,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                   setSearchError(null);
                 }}
                 placeholder="Search for music or paste YouTube URL..."
-                className="w-full pl-4 pr-12 py-2 text-base border-2 border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                className="w-full pl-4 pr-12 py-2 text-base border-2 border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-content-bg text-gray-800 dark:text-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               />
               {/* Search Icon Button */}
               <button
