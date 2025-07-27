@@ -139,8 +139,9 @@ export const calculateOptimalShift = (chords: string[], timeSignature: number, p
  * Lines 1416-1489 from original component
  */
 export const calculatePaddingAndShift = (firstDetectedBeatTime: number, bpm: number, timeSignature: number, chords: string[] = []): PaddingResult => {
-  // DEBUG: Temporarily force padding for testing if first beat is > 0.05s
-  if (firstDetectedBeatTime <= 0.05) {
+  // FIXED: Remove aggressive early return that was causing madmom models to bypass padding/shifting
+  // Instead, allow minimal padding calculation even for very small firstDetectedBeatTime values
+  if (firstDetectedBeatTime <= 0.01) {
     return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
   }
 
@@ -204,15 +205,30 @@ export const calculatePaddingAndShift = (firstDetectedBeatTime: number, bpm: num
  * Lines 1492-1847 from original component
  */
 export const getChordGridData = (analysisResults: AnalysisResult | null): ChordGridData => {
+  // DEBUG: Add unique identifier to track function calls
+  const debugId = Math.random().toString(36).substr(2, 9);
+  console.log(`🔍 [getChordGridData-${debugId}] ENTRY: chordModel="${analysisResults?.chordModel}", beatModel="${analysisResults?.beatModel}"`);
+
   if (!analysisResults || !analysisResults.synchronizedChords) {
-    return { chords: [], beats: [], hasPadding: false, paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
+    console.log(`🔍 [getChordGridData-${debugId}] EARLY RETURN: Missing data`);
+    return { chords: [], beats: [], hasPadding: true, paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
   }
 
   // Use first detected beat time for padding calculation
-  const firstDetectedBeat = analysisResults.beats.length > 0 ? 
+  const firstDetectedBeat = analysisResults.beats.length > 0 ?
     (typeof analysisResults.beats[0] === 'object' ? analysisResults.beats[0].time : analysisResults.beats[0]) : 0;
   const bpm = analysisResults.beatDetectionResult?.bpm || 120;
   const timeSignature = analysisResults.beatDetectionResult?.time_signature || 4;
+
+
+
+
+
+  // DEBUG: Log first detected beat time for different models
+  console.log(`🔍 FIRST DETECTED BEAT DEBUG: beatModel="${analysisResults.beatModel}", chordModel="${analysisResults.chordModel}", firstDetectedBeat=${firstDetectedBeat}s, bpm=${bpm}, timeSignature=${timeSignature}`);
+
+  // DEBUG: Log first detected beat time for different models
+  console.log(`🔍 FIRST DETECTED BEAT DEBUG: beatModel="${analysisResults.beatModel}", chordModel="${analysisResults.chordModel}", firstDetectedBeat=${firstDetectedBeat}s, bpm=${bpm}, timeSignature=${timeSignature}`);
 
   // Extract chord data for optimal shift calculation
   const chordData = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
@@ -220,8 +236,12 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   // Use first detected beat time for comprehensive padding and shifting calculation
   const { paddingCount, shiftCount } = calculatePaddingAndShift(firstDetectedBeat, bpm, timeSignature, chordData);
 
-  // Apply comprehensive strategy if we have either padding OR shifting
-  if (paddingCount > 0 || shiftCount > 0) {
+  // FIXED: Apply comprehensive strategy for ALL non-BTC models to ensure consistent behavior
+  // This prevents madmom models from falling through to frontend shifting logic
+  console.log(`🔍 [getChordGridData-${debugId}] CONDITION: chordModel="${analysisResults.chordModel}", isBTC=${analysisResults.chordModel?.includes('btc')}, willEnterComprehensive=${!analysisResults.chordModel?.includes('btc')}`);
+
+  if (!analysisResults.chordModel?.includes('btc')) {
+    console.log(`🔍 [getChordGridData-${debugId}] ENTERING COMPREHENSIVE STRATEGY`);
     // Add only padding N.C. chords (based on first detected beat time)
     // Shifting will be handled in the frontend as greyed-out cells
     const paddingChords = Array(paddingCount).fill('N.C.');
@@ -251,6 +271,15 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     // STAGE 5: Log final visual grid construction
     const finalChords = [...Array(shiftCount).fill(''), ...paddingChords, ...regularChords];
     const finalBeats = [...shiftNullTimestamps, ...paddingTimestamps, ...regularBeats];
+
+    // DEBUG: Log final chord array structure
+    console.log(`🔍 [chordGridProcessor] FINAL CHORDS: [${finalChords.slice(0, 15).map(c => `"${c}"`).join(', ')}], length=${finalChords.length}`);
+
+    // DEBUG: Log final chord array structure
+    console.log(`🔍 [chordGridProcessor] FINAL CHORDS: [${finalChords.slice(0, 15).map(c => `"${c}"`).join(', ')}], length=${finalChords.length}`);
+
+    // DEBUG: Log final chord array structure
+    console.log(`🔍 [chordGridProcessor] FINAL CHORDS: [${finalChords.slice(0, 15).map(c => `"${c}"`).join(', ')}], length=${finalChords.length}`);
 
     // Create original timestamp-to-chord mapping for audio sync (no shifting)
     const originalAudioMapping = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}, index) => {
@@ -350,7 +379,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     const chordCnnLstmResult = {
       chords: finalChords, // Add shift cells as empty strings
       beats: correctedBeats, // FIXED: Use corrected beats with original timestamps
-      hasPadding: true,
+      hasPadding: true, // FIXED: Always true for non-BTC models to ensure consistent behavior
       paddingCount: paddingCount,
       shiftCount: shiftCount,
       totalPaddingCount: paddingCount + shiftCount, // Total includes both padding and shift
@@ -358,9 +387,13 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       animationMapping: animationMapping // NEW: Maps original timestamps to label positions for animation
     };
 
+
+
+    console.log(`🔍 [getChordGridData-${debugId}] RETURNING NON-BTC RESULT: hasPadding=${chordCnnLstmResult.hasPadding}`);
     return chordCnnLstmResult;
   }
 
+  console.log(`🔍 [getChordGridData-${debugId}] ENTERING BTC PATH`);
   // FIXED: BTC models should also use the comprehensive strategy for proper audio-visual sync
   // Apply the same shifting strategy as Chord-CNN-LSTM models for consistent behavior
   const btcChords = analysisResults.synchronizedChords.map((item: {chord: string, beatIndex: number, beatNum?: number}) => item.chord);
@@ -428,12 +461,13 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   const btcResult = {
     chords: btcFinalChords,
     beats: btcCorrectedBeats,
-    hasPadding: btcPaddingCount > 0,
+    hasPadding: true, // FIXED: Always true for consistency with non-BTC models
     paddingCount: btcPaddingCount,
     shiftCount: btcShiftCount,
     totalPaddingCount: btcPaddingCount + btcShiftCount,
     originalAudioMapping: btcOriginalAudioMapping // FIXED: Proper originalAudioMapping with shifting
   };
 
+  console.log(`🔍 [getChordGridData-${debugId}] RETURNING BTC RESULT: hasPadding=${btcResult.hasPadding}`);
   return btcResult;
 };

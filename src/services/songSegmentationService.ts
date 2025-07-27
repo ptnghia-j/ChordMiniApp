@@ -30,7 +30,7 @@ function createSegmentationPrompt(songContext: SongContext): string {
 Beat Information:
 - Total beats: ${beats.length}
 - BPM: ${bpm || 'Unknown'}
-- Time signature: ${time_signature || 4}/4
+- Time signature: ${time_signature === 6 ? '6/8' : `${time_signature || 4}/4`}
 - Complete beat timestamps: ${beats.map((beat, i) => `${i}: ${typeof beat === 'number' && !isNaN(beat) ? (beat as number).toFixed(2) : 'N/A'}s`).join(', ')}
 ` : '';
 

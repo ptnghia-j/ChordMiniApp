@@ -226,7 +226,6 @@ export default function YouTubeVideoAnalyzePage() {
         if (!firestore) throw new Error('Firestore instance not available');
 
         setFirebaseReady(true);
-        console.log('🔥 Firebase ready for cache operations');
       } catch (error) {
         console.warn('Firebase not ready, will retry...', error);
         // Shorter retry delay for faster recovery
@@ -294,7 +293,6 @@ export default function YouTubeVideoAnalyzePage() {
       }
 
       // No cached audio found, proceed with extraction
-      console.log(`❌ No cached audio found for ${videoId}, starting extraction`);
       await extractionFunction(false);
 
     } catch (error) {
@@ -548,10 +546,8 @@ export default function YouTubeVideoAnalyzePage() {
           }, 'analysis cache check');
 
           if (cachedData) {
-            console.log(`✅ Found cached analysis for ${beatDetector} + ${chordDetector} models`);
             setCacheAvailable(true);
           } else {
-            console.log(`❌ No cached analysis found for ${beatDetector} + ${chordDetector} models`);
             setCacheAvailable(false);
           }
 

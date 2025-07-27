@@ -107,7 +107,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="bg-white dark:bg-content-bg rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 group"
+      className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-card hover:shadow-lg transition-all duration-300 w-full border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 group"
     >
       {/* Header */}
       <div className="p-4 pb-2">

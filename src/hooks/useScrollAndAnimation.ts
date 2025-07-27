@@ -191,6 +191,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         // Find the current beat based on chord grid data (includes pickup beats)
         // This ensures consistency between beat tracking and chord display
         if (chordGridData && chordGridData.chords.length > 0) {
+
+
           // FIXED: Use first detected beat time for animation timing to align with actual beat model output
           // This accounts for the offset between chord model start (0.0s) and first beat detection (e.g., 0.534s)
           let firstDetectedBeat = 0.0;
@@ -272,17 +274,22 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               const shiftCount = chordGridData.shiftCount || 0;
               const virtualBeatIndex = rawVirtualBeatIndex + shiftCount;
 
-              // FIXED: Only use valid musical content cells for early animation, never shift cells
+              // FIXED: Allow shift cells to be highlighted during virtual beat estimation
               if (chordGridData && chordGridData.chords.length > 0) {
-                // Skip shift cells entirely - they should never be highlighted
-                // Only consider cells that contain actual musical content (padding or regular chords)
-                const firstValidCellIndex = chordGridData.shiftCount || 0; // First cell after shift cells
+                // Include shift cells in virtual beat animation - they represent valid timing positions
+                // All cells (shift, padding, and regular) should be considered for animation
 
-                if (virtualBeatIndex >= firstValidCellIndex && virtualBeatIndex < chordGridData.chords.length) {
+                if (virtualBeatIndex >= 0 && virtualBeatIndex < chordGridData.chords.length) {
                   const chord = chordGridData.chords[virtualBeatIndex] || '';
+                  const shiftCount = chordGridData.shiftCount || 0;
+                  const paddingCount = chordGridData.paddingCount || 0;
+
+                  // Allow highlighting of shift cells, padding cells, and non-empty regular cells
+                  const isShiftCell = virtualBeatIndex < shiftCount;
+                  const isPaddingCell = virtualBeatIndex >= shiftCount && virtualBeatIndex < (shiftCount + paddingCount);
                   const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
 
-                  if (!isEmptyCell) {
+                  if (isShiftCell || isPaddingCell || !isEmptyCell) {
                     currentBeatIndexRef.current = virtualBeatIndex;
                     setCurrentBeatIndex(virtualBeatIndex);
                   }
@@ -392,7 +399,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               const audioMappingIndex = findCurrentAudioMappingIndex(time, chordGridData.originalAudioMapping);
 
               if (audioMappingIndex !== -1) {
-                currentBeat = audioMappingIndex;
+                currentBeat = audioMappingIndex ;
               }
 
               if (currentBeat === -1) {
@@ -424,16 +431,25 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
             currentBeatIndexRef.current = currentBeat;
             setCurrentBeatIndex(currentBeat);
+
+
           }
 
           if (currentBeat !== -1) {
-            // ENHANCED SAFEGUARD: Never allow empty cell highlighting in any phase
+            // ENHANCED SAFEGUARD: Distinguish between shift cells and regular empty cells
             const shiftCount = chordGridData.shiftCount || 0;
+            const paddingCount = chordGridData.paddingCount || 0;
             const isPreBeatPhase = time < animationRangeStart;
             const chord = chordGridData.chords[currentBeat] || '';
             const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
 
-            if (isEmptyCell && !isPreBeatPhase && currentBeat >= shiftCount) {
+            // FIXED: Allow shift cells (indices 0 to shiftCount-1) to be highlighted
+            // Only prevent highlighting of empty cells that are NOT shift cells
+            const isShiftCell = currentBeat < shiftCount;
+            const isPaddingCell = currentBeat >= shiftCount && currentBeat < (shiftCount + paddingCount);
+
+            if (isEmptyCell && !isPreBeatPhase && !isShiftCell && !isPaddingCell) {
+              // Only block empty cells that are beyond shift and padding ranges
               currentBeatIndexRef.current = -1;
               setCurrentBeatIndex(-1);
             }

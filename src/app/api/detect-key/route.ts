@@ -269,31 +269,41 @@ Please respond with ONLY a JSON object in this exact format:
   }
 }
 
-CRITICAL INSTRUCTIONS:
-1. **ENHARMONIC ONLY**: Only change note spellings between enharmonic equivalents:
-   - C# ↔ Db, D# ↔ Eb, F# ↔ Gb, G# ↔ Ab, A# ↔ Bb
-   - NEVER change F to F# (these are different notes, not enharmonic)
-   - NEVER change chord qualities (m, 7, dim, aug, sus, etc.)
-2. **Quality Preservation**: Keep ALL chord qualities exactly unchanged:
-   - "Cm" stays "Cm" or becomes "C#m" (only note spelling changes)
-   - "F7" stays "F7" (never becomes "F#dim" or any other quality)
-   - "Bdim" stays "Bdim" or becomes "A#dim" (only note spelling changes)
-3. **Context-Aware Spelling**: Choose enharmonic spelling based on key context:
-   - In sharp keys (E, B, F#, C#): prefer sharps (C#, F#, G#)
-   - In flat keys (Bb, Eb, Ab, Db): prefer flats (Db, Gb, Ab)
-4. **Sequence Integrity**: Return corrected sequence with same length as original
-5. **Conservative Approach**: When in doubt, keep the original spelling
+CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:
+1. **SAME PITCH REQUIREMENT**: Only change note spelling, never the actual pitch
+   - ENHARMONIC EQUIVALENTS (same pitch): C#↔Db, D#↔Eb, F#↔Gb, G#↔Ab, A#↔Bb
+   - DIFFERENT PITCHES (never change): C≠C#, D≠D#, E≠F, F≠F#, G≠G#, A≠A#, B≠C
+   - Example: Gdim can become F#dim (G# and Ab are same pitch) but NEVER A#dim (G and A# are different pitches!)
 
-VALID EXAMPLES:
-- "C#m" → "Dbm" (enharmonic spelling change only)
-- "F#7" → "Gb7" (enharmonic spelling change only)
-- "F" → "F" (NO CHANGE - F and F# are different notes)
-- "Bdim" → "A#dim" (enharmonic spelling change only)
+2. **HARMONIC FUNCTION PRESERVATION**: The bass line progression must remain identical
+   - Original progression: E→F#→Gdim→G#m
+   - Valid correction: E→F#→F##dim→G#m (G# and Ab are same pitch)
+   - INVALID correction: E→F#→A#dim→G#m (G and A# are different pitches - changes harmonic function!)
+   - Please aware of walking bass line (E→F#→F##→G# in the context of the key and in the direction of the bass line and hence F## fits in) and notice the double accidentals, double sharps (F##) used in the example above.
 
-INVALID EXAMPLES (DO NOT DO):
-- "F" → "F#°" (changes note AND adds quality)
-- "C" → "Cm" (changes quality)
-- "Am" → "A" (removes quality)
+3. **CHORD QUALITY PRESERVATION**: Keep ALL chord qualities exactly unchanged
+   - "Gdim" stays "dim" quality, can become "F#dim" but never "A#dim" or "Gmaj"
+   - "F#7" stays "7" quality, can become "Gb7" but never "F7" or "F#maj7"
+   - "C#m" stays "m" quality, can become "Dbm" but never "C#" or "Dm"
+
+4. **KEY SIGNATURE OPTIMIZATION**: Choose spellings with less accidentals
+   - Prefer Db major (5 flats) over C# major (7 sharps)
+   - Prefer B major (5 sharps) over Cb major (7 flats)
+
+5. **CONSERVATIVE APPROACH**: When uncertain, preserve original spelling
+
+VALID CORRECTION EXAMPLES (same pitch, different spelling):
+- "C#m" → "Dbm" (C# and Db are the same pitch)
+- "F#7" → "Gb7" (F# and Gb are the same pitch)
+- "G#dim" → "Abdim" (G# and Ab are the same pitch)
+- "A#" → "Bb" (A# and Bb are the same pitch)
+
+INVALID CORRECTION EXAMPLES (NEVER DO - different pitches or qualities):
+- "Gdim" → "A#dim" (G and A# are DIFFERENT PITCHES!)
+- "F" → "F#" (F and F# are DIFFERENT PITCHES!)
+- "C" → "Cm" (changes chord quality)
+- "F#7" → "F7" (F# and F are DIFFERENT PITCHES!)
+- "Am" → "A" (removes chord quality)
 
 Respond with ONLY the JSON object, no explanations.`;
     } else {

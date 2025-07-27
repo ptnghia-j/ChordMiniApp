@@ -169,7 +169,7 @@ const Footer: React.FC = () => {
               </div>
             </div>
             <p className="text-xs text-gray-700 dark:text-gray-300">
-              Version 0.3.4
+              Version 0.3.5
             </p>
           </div>
         </div>

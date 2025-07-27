@@ -7,6 +7,26 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.3.5',
+      date: 'July 27, 2025',
+      title: 'Enharmonic Inversion Fixes & Beat Detection Optimization',
+      description: 'Critical fixes for enharmonic chord inversions and madmom beat detection optimization for songs starting at 0 seconds',
+      features: [
+        'FIX: Enharmonic Inversion Corrections - Fixed enharmonic spelling for chord inversions with flats (Eb/3 → Eb/G, Bb/3 → Bb/D) and sharps (G#/3 → G#/B#)',
+        'FIX: Madmom Beat Detection Optimization - Fixed madmom models skipping optimal shift calculations for songs with first beat detected at or near 0 seconds',
+        'PERFORMANCE: Chord Grid Alignment - Improved chord-to-downbeat alignment for songs that start immediately with strong beats',
+        'MINOR FIX: 6 beats per measure now displayed as 6/8 time signature'
+      ],
+      technical: [
+        'Enhanced enharmonic inversion logic to properly handle flat and sharp chord inversions with correct bass note spelling',
+        'Fixed calculatePaddingAndShift function to separate padding calculation from shift optimization logic',
+        'Removed aggressive early return condition (≤0.05s) that prevented shift calculation for songs starting at 0 seconds',
+        'Maintained shift calculation for optimal chord alignment regardless of first beat timing',
+        'Cleaned up debug console logs from useScrollAndAnimation, Firebase services, and analysis components'
+      ],
+      breaking: []
+    },
+    {
       version: 'v0.3.4',
       date: 'July 25, 2025',
       title: 'Guitar Chord Diagram Database Integration & Synchronization Fixes',

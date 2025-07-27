@@ -390,7 +390,7 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
   }
 
   try {
-    console.log(`Checking for cached audio file: videoId=${videoId}`);
+
 
     // Skip authentication - Firebase security rules allow public access for caching
     // This eliminates the 20-second timeout when anonymous auth fails
@@ -562,7 +562,7 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
       }
     }
 
-    console.log('No cached audio file found in Firestore');
+
     return null;
   } catch (error) {
     console.error('Error getting audio file metadata from Firestore:', error);

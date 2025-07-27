@@ -92,6 +92,7 @@ const HeroScrollingChordAnimation: React.FC<HeroScrollingChordAnimationProps> = 
                   size="large"
                   className="w-24 h-32"
                   showChordName={true}
+                  displayName={chord} // Pass the original chord name for consistent formatting
                 />
               ) : (
                 <div className="w-24 h-32 bg-gray-200 dark:bg-blue-900/20 animate-pulse rounded-lg border border-gray-300 dark:border-blue-700" />

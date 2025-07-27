@@ -86,7 +86,7 @@ export function formatSongContextForAI(songContext: SongContext): string {
     parts.push(`BPM: ${Math.round(songContext.bpm)}`);
   }
   if (songContext.time_signature) {
-    parts.push(`Time Signature: ${songContext.time_signature}/4`);
+    parts.push(`Time Signature: ${songContext.time_signature === 6 ? '6/8' : `${songContext.time_signature}/4`}`);
   }
   if (songContext.beatModel) {
     parts.push(`Beat Detection Model: ${songContext.beatModel}`);

@@ -296,6 +296,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // Function to apply chord corrections at display time
   const getDisplayChord = (originalChord: string, visualIndex?: number): { chord: string; wasCorrected: boolean } => {
     // Early return when corrections are disabled or chord is empty
+    // console.log("currentChord:", originalChord);
     if (!showCorrectedChords || !originalChord) {
       return { chord: originalChord, wasCorrected: false };
     }
@@ -474,19 +475,15 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     if (hasPadding) {
       // COMPREHENSIVE STRATEGY: Backend already provided correctly ordered chords with padding/shift
       // The chords prop already contains: [shift cells (''), padding cells ('N.C.'), regular chords]
-      // console.log(`🔧 USING BACKEND STRATEGY: hasPadding=true, shiftCount=${shiftCount}, chords already include padding/shift`);
       computedShiftedChords = chords; // Use as-is, no additional shifting needed
     } else {
       // FALLBACK STRATEGY: Apply ChordGrid's own shift logic
-      // console.log(`🔧 USING FRONTEND STRATEGY: hasPadding=false, calculating own shift`);
       const computedOptimalShift = calculateOptimalShift(chords, actualBeatsPerMeasure);
       computedShiftedChords = chords.length > 0 ? [
         ...Array(computedOptimalShift).fill(''), // Add k empty greyed-out cells at the beginning
         ...chords // Original chords follow after the shift
       ] : chords;
-      // console.log(`🔧 FRONTEND APPLIED SHIFT: ${computedOptimalShift}, shiftedChords length: ${computedShiftedChords.length}`);
     }
-
     return computedShiftedChords;
   }, [chords, hasPadding, actualBeatsPerMeasure, calculateOptimalShift]);
 
@@ -1104,7 +1101,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
           {/* Time signature tag */}
           <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
             <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
-              Time: {timeSignature}/4
+              Time: {timeSignature === 6 ? '6/8' : `${timeSignature}/4`}
             </span>
           </div>
 

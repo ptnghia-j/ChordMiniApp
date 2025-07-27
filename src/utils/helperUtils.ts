@@ -24,7 +24,8 @@ export const buildSongContext = (
   }
   
   if (analysisResults?.beatDetectionResult?.time_signature) {
-    context += `Time Signature: ${analysisResults.beatDetectionResult.time_signature}/4\n`;
+    const timeSignature = analysisResults.beatDetectionResult.time_signature;
+    context += `Time Signature: ${timeSignature === 6 ? '6/8' : `${timeSignature}/4`}\n`;
   }
   
   if (analysisResults?.synchronizedChords && analysisResults.synchronizedChords.length > 0) {

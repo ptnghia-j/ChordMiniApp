@@ -129,48 +129,48 @@ export const calculateOptimalShift = (chords: string[], timeSignature: number, p
  * Calculate padding and shift based on first detected beat time
  */
 export const calculatePaddingAndShift = (
-  firstDetectedBeatTime: number, 
-  bpm: number, 
-  timeSignature: number, 
+  firstDetectedBeatTime: number,
+  bpm: number,
+  timeSignature: number,
   chords: string[] = []
 ): { paddingCount: number; shiftCount: number; totalPaddingCount: number } => {
-  
-  if (firstDetectedBeatTime <= 0.05) {
-    return { paddingCount: 0, shiftCount: 0, totalPaddingCount: 0 };
-  }
 
-  // Calculate padding based on first detected beat time
-  const rawPaddingCount = Math.floor((firstDetectedBeatTime / 60) * bpm);
-  const beatDuration = Math.round((60 / bpm) * 1000) / 1000;
-  const gapRatio = firstDetectedBeatTime / beatDuration;
-  const paddingCount = rawPaddingCount === 0 && gapRatio > 0.2 ? 1 : rawPaddingCount;
+  // FIXED: Don't skip shift calculation for songs that start at 0s
+  // Padding calculation can be skipped, but shift optimization should still be performed
+  let paddingCount = 0;
 
-  const debugPaddingCount = paddingCount;
+  // Only calculate padding if there's a meaningful pre-beat phase (> 0.05s)
+  if (firstDetectedBeatTime > 0.05) {
+    // Calculate padding based on first detected beat time
+    const rawPaddingCount = Math.floor((firstDetectedBeatTime / 60) * bpm);
+    const beatDuration = Math.round((60 / bpm) * 1000) / 1000;
+    const gapRatio = firstDetectedBeatTime / beatDuration;
+    paddingCount = rawPaddingCount === 0 && gapRatio > 0.2 ? 1 : rawPaddingCount;
 
-  // Optimize padding to reduce visual clutter
-  let optimizedPaddingCount = debugPaddingCount;
-  if (debugPaddingCount >= timeSignature) {
-    const fullMeasuresToRemove = Math.floor(debugPaddingCount / timeSignature);
-    optimizedPaddingCount = debugPaddingCount - (fullMeasuresToRemove * timeSignature);
+    // Optimize padding to reduce visual clutter
+    if (paddingCount >= timeSignature) {
+      const fullMeasuresToRemove = Math.floor(paddingCount / timeSignature);
+      paddingCount = paddingCount - (fullMeasuresToRemove * timeSignature);
 
-    if (optimizedPaddingCount === 0 && debugPaddingCount >= timeSignature) {
-      optimizedPaddingCount = timeSignature - 1;
+      if (paddingCount === 0 && paddingCount >= timeSignature) {
+        paddingCount = timeSignature - 1;
+      }
     }
   }
 
-  // Calculate optimal shift
+  // Calculate optimal shift (always perform this, even for songs starting at 0s)
   let shiftCount = 0;
   if (chords.length > 0) {
-    shiftCount = calculateOptimalShift(chords, timeSignature, optimizedPaddingCount);
+    shiftCount = calculateOptimalShift(chords, timeSignature, paddingCount);
   } else {
-    const beatPositionInMeasure = ((optimizedPaddingCount) % timeSignature) + 1;
+    const beatPositionInMeasure = ((paddingCount) % timeSignature) + 1;
     const finalBeatPosition = beatPositionInMeasure > timeSignature ? 1 : beatPositionInMeasure;
     shiftCount = finalBeatPosition === 1 ? 0 : (timeSignature - finalBeatPosition + 1);
   }
 
-  const totalPaddingCount = optimizedPaddingCount + shiftCount;
+  const totalPaddingCount = paddingCount + shiftCount;
 
-  return { paddingCount: optimizedPaddingCount, shiftCount, totalPaddingCount };
+  return { paddingCount, shiftCount, totalPaddingCount };
 };
 
 /**
@@ -181,7 +181,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     return {
       chords: [],
       beats: [],
-      hasPadding: false,
+      hasPadding: true, // FIXED: Always return true for consistency with animation system
       paddingCount: 0,
       shiftCount: 0,
       totalPaddingCount: 0,
@@ -276,7 +276,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     return {
       chords: finalChords,
       beats: finalBeats,
-      hasPadding: safePaddingCount > 0 || safeShiftCount > 0,
+      hasPadding: true, // FIXED: Always true for consistency with ChordGrid frontend shifting
       paddingCount: safePaddingCount,
       shiftCount: safeShiftCount,
       totalPaddingCount: safePaddingCount + safeShiftCount,
@@ -336,7 +336,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   return {
     chords: btcFinalChords,
     beats: btcFinalBeats,
-    hasPadding: btcPaddingCount > 0 || btcShiftCount > 0,
+    hasPadding: true, // FIXED: Always true for consistency with ChordGrid frontend shifting
     paddingCount: btcPaddingCount,
     shiftCount: btcShiftCount,
     totalPaddingCount: btcPaddingCount + btcShiftCount,

@@ -23,9 +23,9 @@ const robotoMono = Roboto_Mono({
 
 // Define metadata for the application
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NODE_ENV === 'production' ? 'https://chordmini.com' : 'http://localhost:3000'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_PYTHON_API_URL === 'https://chordmini-backend-full-191567167632.us-central1.run.app' ? 'https://chordmini.me' : 'http://localhost:3000'),
   title: {
-    default: 'ChordMini - AI-Powered Music Analysis & Chord Recognition',
+    default: 'ChordMini - Chord Recognition and Beat Tracking with LLM',
     template: '%s | ChordMini'
   },
   description: 'Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics. Analyze YouTube videos and audio files to discover chord progressions, beats, and musical structure.',
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   creator: 'Nghia Phan',
   publisher: 'California State University, Fullerton',
   category: 'Music Technology',
-  classification: 'Music Analysis Software',
+  classification: 'Open Source Software',
   robots: {
     index: true,
     follow: true,
@@ -92,9 +92,9 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://chordmini.com',
+    url: 'https://chordmini.me',
     siteName: 'ChordMini',
-    title: 'ChordMini - AI-Powered Music Analysis & Chord Recognition',
+    title: 'ChordMini - Chord Recognition and Beat Tracking with LLM',
     description: 'Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics.',
     images: [
       {
@@ -107,7 +107,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ChordMini - AI-Powered Music Analysis & Chord Recognition',
+    title: 'ChordMini - Chord Recognition and Beat Tracking with LLM',
     description: 'Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics.',
     images: ['/chordMiniLogo.webp'],
   },
@@ -115,7 +115,7 @@ export const metadata: Metadata = {
     google: 'google-site-verification-code', // To be replaced with actual verification code
   },
   alternates: {
-    canonical: 'https://chordmini.com',
+    canonical: 'https://chordmini.me',
   },
 };
 

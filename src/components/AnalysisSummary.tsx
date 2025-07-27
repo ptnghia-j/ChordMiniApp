@@ -111,7 +111,9 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
 
         <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 transition-colors duration-300">
           <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-            Time: {analysisResults.beatDetectionResult?.time_signature ? `${analysisResults.beatDetectionResult.time_signature}/4` : '4/4'}
+            Time: {analysisResults.beatDetectionResult?.time_signature ?
+              (analysisResults.beatDetectionResult.time_signature === 6 ? '6/8' : `${analysisResults.beatDetectionResult.time_signature}/4`)
+              : '4/4'}
           </span>
         </div>
 

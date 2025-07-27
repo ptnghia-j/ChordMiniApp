@@ -1,0 +1,22 @@
+{
+  "analysisResults": {
+    "beatModel": "beat-transformer",
+    "chordModel": "chord-cnn-lstm",
+    "beats": [
+      { "time": 0.534 },
+      { "time": 1.0 },
+      { "time": 1.5 },
+      { "time": 2.0 }
+    ],
+    "synchronizedChords": [
+      { "chord": "C", "beatIndex": 0 },
+      { "chord": "F", "beatIndex": 1 },
+      { "chord": "G", "beatIndex": 2 },
+      { "chord": "C", "beatIndex": 3 }
+    ],
+    "beatDetectionResult": {
+      "bpm": 120,
+      "time_signature": 4
+    }
+  }
+}

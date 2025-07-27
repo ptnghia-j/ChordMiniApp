@@ -167,7 +167,9 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
                     }
                   </p>
                   <p>
-                    <span className="font-medium mr-1">Time Sig:</span> {analysisResults.beatDetectionResult?.time_signature ? `${analysisResults.beatDetectionResult.time_signature}/4` : '4/4'}
+                    <span className="font-medium mr-1">Time Sig:</span> {analysisResults.beatDetectionResult?.time_signature ?
+                      (analysisResults.beatDetectionResult.time_signature === 6 ? '6/8' : `${analysisResults.beatDetectionResult.time_signature}/4`)
+                      : '4/4'}
                   </p>
                   <p className="flex items-baseline">
                     <span className="font-medium mr-1 whitespace-nowrap">Chord model:</span>

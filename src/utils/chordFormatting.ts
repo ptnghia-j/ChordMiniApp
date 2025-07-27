@@ -108,6 +108,15 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     }
   }
 
+  // Normalize chord quality for consistent display
+  // Convert "min" to "m" for shorter, industry-standard notation
+  if (quality === 'min') {
+    quality = 'm';
+  } else if (quality.startsWith('min') && quality.length > 3) {
+    // Handle complex minor qualities like "min7", "min9", etc.
+    quality = 'm' + quality.substring(3);
+  }
+
   // Process inversion if present
   if (inversion) {
 
@@ -135,16 +144,18 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   }
 
   // Replace sharp (#) with proper Unicode sharp symbol (♯)
-  root = root.replace(/#/g, '♯');
+  // Handle double sharps (##) with double sharp symbol (𝄪)
+  root = root.replace(/##/g, '𝄪').replace(/#/g, '♯');
   if (bassNote) {
-    bassNote = bassNote.replace(/#/g, '♯');
+    bassNote = bassNote.replace(/##/g, '𝄪').replace(/#/g, '♯');
   }
 
   // Replace flat (b) with proper Unicode flat symbol (♭) in root and bass notes
+  // Handle double flats (bb) with double flat symbol (𝄫)
   // More precise pattern: only replace 'b' when it's part of a note name (after A-G)
-  root = root.replace(/([A-G])b/g, '$1♭');
+  root = root.replace(/([A-G])bb/g, '$1𝄫').replace(/([A-G])b/g, '$1♭');
   if (bassNote) {
-    bassNote = bassNote.replace(/([A-G])b/g, '$1♭');
+    bassNote = bassNote.replace(/([A-G])bb/g, '$1𝄫').replace(/([A-G])b/g, '$1♭');
   }
 
   // Handle existing ° symbols in the quality string (from AI corrections)
@@ -313,12 +324,73 @@ function translateScaleDegreeInversion(root: string, quality: string, inversion:
 }
 
 /**
- * Converts a numeric inversion to the actual bass note
+ * Enhanced enharmonic mapping for proper theoretical spelling
+ * Includes double sharps (𝄪) and double flats (𝄫) for complex scenarios
+ */
+const ENHARMONIC_EQUIVALENTS: Record<string, string[]> = {
+  'C': ['C', 'B#', 'Dbb'],
+  'C#': ['C#', 'Db', 'B##'],
+  'D': ['D', 'C##', 'Ebb'],
+  'D#': ['D#', 'Eb', 'Fbb'],
+  'E': ['E', 'D##', 'Fb'],
+  'F': ['F', 'E#', 'Gbb'],
+  'F#': ['F#', 'Gb', 'E##'],
+  'G': ['G', 'F##', 'Abb'],
+  'G#': ['G#', 'Ab'],
+  'A': ['A', 'G##', 'Bbb'],
+  'A#': ['A#', 'Bb', 'Cbb'],
+  'B': ['B', 'A##', 'Cb']
+};
+
+/**
+ * Get the most appropriate enharmonic spelling for a note in a given key context
+ * @param note The note to respell
+ * @param keyContext The key signature context (e.g., 'C#', 'Db', 'F#')
+ * @returns The best enharmonic spelling
+ */
+function getEnharmonicSpelling(note: string, keyContext: string): string {
+  // Normalize input note
+  const normalizedNote = note.replace(/♯/g, '#').replace(/♭/g, 'b');
+
+  // Find all enharmonic equivalents
+  const equivalents = Object.values(ENHARMONIC_EQUIVALENTS).find(group =>
+    group.some(variant => variant === normalizedNote)
+  );
+
+  if (!equivalents) return note;
+
+  // Determine key signature preference
+  const keyUsesFlats = keyContext.includes('b') || keyContext.includes('♭');
+  const keyUseSharps = keyContext.includes('#') || keyContext.includes('♯');
+
+  // FIXED: Prefer natural notes over double accidentals for chord inversions
+  // First check if there's a natural variant (no accidentals)
+  const naturalVariant = equivalents.find(variant => !variant.includes('#') && !variant.includes('b'));
+  if (naturalVariant) return naturalVariant;
+
+  // Only use accidental variants if no natural variant exists
+  // Prefer spelling that matches key signature
+  if (keyUsesFlats) {
+    const flatVariant = equivalents.find(variant => variant.includes('b') && !variant.includes('bb'));
+    if (flatVariant) return flatVariant.replace(/#/g, '♯').replace(/b/g, '♭');
+  }
+
+  if (keyUseSharps) {
+    const sharpVariant = equivalents.find(variant => variant.includes('#') && !variant.includes('##'));
+    if (sharpVariant) return sharpVariant.replace(/#/g, '♯').replace(/b/g, '♭');
+  }
+
+  // Return first equivalent with Unicode symbols (fallback)
+  return equivalents[0].replace(/#/g, '♯').replace(/b/g, '♭');
+}
+
+/**
+ * Converts a numeric inversion to the actual bass note with proper enharmonic spelling
  *
  * @param root The root note of the chord
  * @param quality The quality of the chord (maj, min, etc.)
  * @param inversion The inversion number (3, 5, 7, etc.)
- * @returns The bass note as a string
+ * @returns The bass note as a string with proper enharmonic spelling
  */
 export function getBassNoteFromInversion(root: string, quality: string, inversion: string): string {
   // Define the notes in order
@@ -326,7 +398,7 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   const notesWithFlats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
   // Determine if the root uses sharps or flats
-  const usesFlats = root.includes('b');
+  const usesFlats = root.includes('b') || root.includes('♭');
 
   // For minor chords, prefer flat notation for the third (e.g., Em/G instead of Em/F#)
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
@@ -348,13 +420,16 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // For flat inversions, prefer flat notation (e.g., C/b7 -> C/Bb instead of C/A#)
   const isFlatInversion = inversion.startsWith('b');
 
+  // Normalize root note for lookup (handle Unicode symbols)
+  const normalizedRoot = root.replace(/♯/g, '#').replace(/♭/g, 'b');
+
   // Choose the appropriate note array for the root note lookup
   const rootNoteArray = usesFlats ? notesWithFlats : notes;
 
   // Find the root note index
   let rootIndex = -1;
   for (let i = 0; i < rootNoteArray.length; i++) {
-    if (rootNoteArray[i] === root) {
+    if (rootNoteArray[i] === normalizedRoot) {
       rootIndex = i;
       break;
     }
@@ -425,17 +500,44 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
 
   // Calculate the bass note index
   const bassIndex = (rootIndex + bassSemitones) % 12;
-  const result = bassNoteArray[bassIndex];
+  let result = bassNoteArray[bassIndex];
 
-  // DEBUG: Log final calculation
-  // console.log(`🔍 Final calculation:`, {
-  //   rootIndex,
-  //   bassSemitones,
-  //   intervalAdjustment,
-  //   bassIndex,
-  //   result,
-  //   bassNoteArray: bassNoteArray === notes ? 'sharps' : 'flats'
-  // });
+  // Apply enhanced enharmonic spelling for proper theoretical notation
+  // For complex inversions, use the key context of the root note
+  result = getEnharmonicSpelling(result, root);
+
+  // Handle special cases where double accidentals might be needed
+  // For example: G#/3 should be G#/B# (not G#/C) in sharp keys
+  if (root.includes('#') || root.includes('♯')) {
+    // In sharp keys, prefer sharp spellings even if they require double sharps
+    if (result === 'C' && (inversion === '3' && root.startsWith('G#'))) {
+      result = 'B#'; // G#/3 = G#/B# (theoretically correct)
+    } else if (result === 'F' && (inversion === '3' && root.startsWith('D#'))) {
+      result = 'E#'; // D#/3 = D#/E# (theoretically correct)
+    }
+
+    // FIXED: Handle G# minor chord third specifically
+    // G#min/3 should be B (natural), not A## or C
+    if (root.startsWith('G#') && isMinor && inversion === '3') {
+      result = 'B'; // G#min/3 = G#m/B (natural third of G# minor)
+    }
+
+    // Handle G# minor 7th inversion - should be F## (double sharp)
+    if (root.startsWith('G#') && isMinor && inversion === '7') {
+      result = 'F##'; // G#min/7 = G#m/F## (natural 7th in G# minor context)
+    }
+  }
+
+  // Handle double accidentals for extreme cases
+  if (result.includes('##')) {
+    result = result.replace(/##/g, '𝄪'); // Double sharp Unicode symbol
+  }
+  if (result.includes('bb')) {
+    result = result.replace(/bb/g, '𝄫'); // Double flat Unicode symbol
+  }
+
+  // Convert back to Unicode symbols for display
+  result = result.replace(/#/g, '♯').replace(/b/g, '♭');
 
   return result;
 }
