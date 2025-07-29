@@ -117,6 +117,8 @@ export class AudioExtractionServiceSimplified {
               videoId,
               audioUrl: existingFile.audioUrl,
               title: videoMetadata.title,
+              thumbnail: videoMetadata.thumbnail,
+              channelTitle: videoMetadata.channelTitle,
               duration: this.parseDuration(videoMetadata.duration),
               fileSize: existingFile.fileSize || 0,
               extractionService: 'firebase-storage-cache',
@@ -235,7 +237,9 @@ export class AudioExtractionServiceSimplified {
               await firebaseStorageSimplified.saveAudioMetadata({
                 videoId,
                 audioUrl: finalAudioUrl,
-                title,
+                title: videoMetadata.title || title, // Prefer frontend metadata over extraction service title
+                thumbnail: videoMetadata.thumbnail,
+                channelTitle: videoMetadata.channelTitle,
                 duration: finalDuration,
                 fileSize: actualFileSize,
                 extractionService: 'yt-mp3-go-fallback',
@@ -314,11 +318,13 @@ export class AudioExtractionServiceSimplified {
         };
       }
 
-      // Step 5: Save metadata to simplified cache for future access
+      // Step 5: Save metadata to simplified cache for future access with complete frontend metadata
       await firebaseStorageSimplified.saveAudioMetadata({
         videoId,
         audioUrl: finalAudioUrl,
-        title,
+        title: videoMetadata.title || title, // Prefer frontend metadata over extraction service title
+        thumbnail: videoMetadata.thumbnail,
+        channelTitle: videoMetadata.channelTitle,
         duration: finalDuration,
         fileSize: actualFileSize,
         extractionService: 'yt2mp3-magic',
@@ -379,6 +385,8 @@ export class AudioExtractionServiceSimplified {
                 videoId,
                 audioUrl: existingFile.audioUrl,
                 title: videoMetadata.title,
+                thumbnail: videoMetadata.thumbnail,
+                channelTitle: videoMetadata.channelTitle,
                 duration: this.parseDuration(videoMetadata.duration),
                 fileSize: existingFile.fileSize || 0,
 

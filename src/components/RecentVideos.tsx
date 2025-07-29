@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader, Button, Chip, Skeleton } from '@heroui/reac
 interface TranscribedVideo {
   videoId: string;
   title?: string;
+  channelTitle?: string; // FIXED: Add channel title for complete metadata
   thumbnailUrl?: string;
   processedAt: number;
   duration?: number;
@@ -49,6 +50,7 @@ export default function RecentVideos() {
     fileSize: number;
     streamExpiresAt?: number;
     title?: string; // Add title from audio files
+    channelTitle?: string; // FIXED: Add channel title from audio files
   }
 
   // Helper function to batch query audio files for video IDs with smart caching
@@ -78,7 +80,8 @@ export default function RecentVideos() {
               fromCache: true,
               fileSize: audioData.fileSize || 0,
               streamExpiresAt: audioData.streamExpiresAt,
-              title: audioData.title || null // Use proper video title from enhanced metadata
+              title: audioData.title || null, // Use proper video title from enhanced metadata
+              channelTitle: audioData.channelTitle || null // FIXED: Include channel title from audio metadata
             };
           }
           return null;
@@ -197,6 +200,11 @@ export default function RecentVideos() {
           // Update title with the proper song title from audio files if transcription title is missing
           if (audioData.title && audioData.title !== `Video ${videoId}` && video.title === `Video ${videoId}`) {
             video.title = audioData.title;
+          }
+
+          // FIXED: Update channel title from audio metadata
+          if (audioData.channelTitle) {
+            video.channelTitle = audioData.channelTitle;
           }
         }
       });
@@ -385,7 +393,24 @@ export default function RecentVideos() {
             <Card
               key={video.videoId}
               as={Link}
-              href={`/analyze/${video.videoId}?title=${encodeURIComponent(video.title || `Video ${video.videoId}`)}`}
+              href={(() => {
+                // FIXED: Include complete metadata in navigation URL for Recently Saved items
+                const baseUrl = `/analyze/${video.videoId}`;
+                const params = new URLSearchParams();
+
+                if (video.title && video.title !== `Video ${video.videoId}`) {
+                  params.set('title', video.title);
+                }
+                if (video.channelTitle) {
+                  params.set('channel', video.channelTitle);
+                }
+                if (video.thumbnailUrl) {
+                  params.set('thumbnail', video.thumbnailUrl);
+                }
+
+                const paramString = params.toString();
+                return paramString ? `${baseUrl}?${paramString}` : baseUrl;
+              })()}
               isPressable
               className="group hover:scale-[1.02] transition-transform duration-200 bg-content2 dark:bg-content2 border border-divider dark:border-divider"
             >

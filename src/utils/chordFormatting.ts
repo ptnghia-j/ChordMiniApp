@@ -502,18 +502,18 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   const bassIndex = (rootIndex + bassSemitones) % 12;
   let result = bassNoteArray[bassIndex];
 
-  // Apply enhanced enharmonic spelling for proper theoretical notation
-  // For complex inversions, use the key context of the root note
-  result = getEnharmonicSpelling(result, root);
+  // FIXED: Apply proper enharmonic spelling for chord inversions
+  // For chord inversions, theoretical correctness is more important than simplicity
 
-  // Handle special cases where double accidentals might be needed
-  // For example: G#/3 should be G#/B# (not G#/C) in sharp keys
+  // Handle special cases for proper enharmonic spelling BEFORE general enharmonic logic
   if (root.includes('#') || root.includes('♯')) {
-    // In sharp keys, prefer sharp spellings even if they require double sharps
+    // In sharp keys, prefer sharp spellings to maintain consistency
     if (result === 'C' && (inversion === '3' && root.startsWith('G#'))) {
       result = 'B#'; // G#/3 = G#/B# (theoretically correct)
-    } else if (result === 'F' && (inversion === '3' && root.startsWith('D#'))) {
-      result = 'E#'; // D#/3 = D#/E# (theoretically correct)
+    } else if (result === 'F' && (inversion === '3' && root.startsWith('C#'))) {
+      result = 'E#'; // C#/3 = C#/E# (theoretically correct)
+    } else if (result === 'G' && (inversion === '3' && root.startsWith('D#'))) {
+      result = 'F##'; // D#/3 = D#/F## (theoretically correct - major third from D#)
     }
 
     // FIXED: Handle G# minor chord third specifically
@@ -525,6 +525,28 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
     // Handle G# minor 7th inversion - should be F## (double sharp)
     if (root.startsWith('G#') && isMinor && inversion === '7') {
       result = 'F##'; // G#min/7 = G#m/F## (natural 7th in G# minor context)
+    }
+  } else if (root.includes('b') || root.includes('♭')) {
+    // In flat keys, prefer flat spellings to maintain consistency
+    // No special cases needed yet, but structure is ready for future additions
+  } else {
+    // For natural root notes, apply context-aware enharmonic spelling
+    result = getEnharmonicSpelling(result, root);
+  }
+
+  // For flat inversions (like b3, b7), ensure we use flat notation
+  if (isFlatInversion) {
+    // Convert sharp equivalents to flat notation for flat inversions
+    if (result === 'D#' || result === 'D♯') {
+      result = 'Eb'; // For inversions like C:min/b3
+    } else if (result === 'A#' || result === 'A♯') {
+      result = 'Bb'; // For inversions like F:min/b3
+    } else if (result === 'G#' || result === 'G♯') {
+      result = 'Ab'; // For inversions like Eb:min/b3
+    } else if (result === 'C#' || result === 'C♯') {
+      result = 'Db'; // For inversions like Ab:min/b3
+    } else if (result === 'F#' || result === 'F♯') {
+      result = 'Gb'; // For inversions like Db:min/b3
     }
   }
 

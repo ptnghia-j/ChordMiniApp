@@ -248,7 +248,7 @@ export default function YouTubeVideoAnalyzePage() {
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
 
   // STREAMLINED: Check cache before extraction with connection management
-  const checkCacheBeforeExtraction = useCallback(async (extractionFunction: (forceRefresh?: boolean) => Promise<void>) => {
+  const checkCacheBeforeExtraction = useCallback(async (extractionFunction: (forceRefresh?: boolean) => Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void>) => {
     if (!firebaseReady || initialCacheCheckDone) {
       return;
     }
@@ -289,18 +289,40 @@ export default function YouTubeVideoAnalyzePage() {
           setDuration(cachedAudio.duration);
         }
 
+        // FIXED: Set video title from URL parameters when cached audio is found
+        // This ensures "recently transcribed" videos show proper titles
+        if (titleFromSearch) {
+          setVideoTitle(titleFromSearch);
+          console.log(`✅ Set video title from URL parameters: "${titleFromSearch}"`);
+        } else if (cachedAudio.title && cachedAudio.title !== `YouTube Video ${videoId}`) {
+          setVideoTitle(cachedAudio.title);
+          console.log(`✅ Set video title from cached audio: "${cachedAudio.title}"`);
+        }
+
         return; // Skip extraction since we have cached audio
       }
 
       // No cached audio found, proceed with extraction
-      await extractionFunction(false);
+      const extractionResult = await extractionFunction(false);
+
+      // FIXED: Set video title from extraction result
+      if (extractionResult && extractionResult.title) {
+        setVideoTitle(extractionResult.title);
+        console.log(`✅ Set video title from extraction: "${extractionResult.title}"`);
+      }
 
     } catch (error) {
       console.error('Error checking cached audio:', error);
       // If cache check fails, proceed with extraction anyway
-      await extractionFunction(false);
+      const extractionResult = await extractionFunction(false);
+
+      // FIXED: Set video title from extraction result even when cache check fails
+      if (extractionResult && extractionResult.title) {
+        setVideoTitle(extractionResult.title);
+        console.log(`✅ Set video title from extraction (cache check failed): "${extractionResult.title}"`);
+      }
     }
-  }, [videoId, firebaseReady, initialCacheCheckDone, setAudioProcessingState, setDuration, setStage, setProgress, setStatusMessage]);
+  }, [videoId, firebaseReady, initialCacheCheckDone, setAudioProcessingState, setDuration, setStage, setProgress, setStatusMessage, setVideoTitle, titleFromSearch]);
 
   // Extract state from audio player hook
   const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
@@ -987,7 +1009,7 @@ export default function YouTubeVideoAnalyzePage() {
   };
 
   // Extract audio from YouTube using our API endpoint
-  const extractAudioFromYouTube = useCallback(async (forceRefresh = false) => {
+  const extractAudioFromYouTube = useCallback(async (forceRefresh = false): Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void> => {
     // Create dependency object for extracted service
     const deps = {
       // State setters

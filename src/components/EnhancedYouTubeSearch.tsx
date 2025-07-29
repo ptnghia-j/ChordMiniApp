@@ -56,7 +56,32 @@ export const EnhancedYouTubeSearch: React.FC<EnhancedYouTubeSearchProps> = ({
     const videoId = youtubeUtils.extractVideoId(searchQuery);
     if (videoId) {
       setSearchMode('url');
-      onVideoSelect(videoId); // No title available for direct URL input
+      setLoading(true);
+      setError(null);
+
+      try {
+        // FIXED: Use backend API instead of direct YouTube API calls
+        console.log(`🔍 Fetching metadata for direct URL: ${videoId}`);
+
+        const response = await fetch(`/api/youtube/info?videoId=${videoId}`);
+        const data = await response.json();
+
+        if (data.success && data.title) {
+          // Navigate with full metadata like search results
+          onVideoSelect(videoId, data.title);
+          console.log(`✅ Direct URL metadata fetched: "${data.title}"`);
+        } else {
+          // Fallback to videoId only if metadata fetch fails
+          onVideoSelect(videoId);
+          console.log(`⚠️ Direct URL metadata fetch failed: ${data.error || 'Unknown error'}`);
+        }
+      } catch (err) {
+        console.error('Failed to fetch video metadata for direct URL:', err);
+        // Fallback to videoId only if metadata fetch fails
+        onVideoSelect(videoId);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 

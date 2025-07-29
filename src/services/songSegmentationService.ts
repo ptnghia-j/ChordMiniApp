@@ -71,41 +71,62 @@ Hint: Focus on the overall musical form using both lyrics and harmony.
 
 - Use lyrics to identify structure of the song.
 - Use chord progressions, key changes, and rhythmic shifts to support section boundaries.
-- Label instrumental parts where lyrics are absent, based on musical context.
+- Label instrumental parts where lyrics are absent, based on musical context. Try to avoid short sections (less than 5 seconds) unless supported by clear musical cues.
 - Ensure complete coverage with no gaps and seamless transitions between segments.
-- Try to avoid short sections (less than 5 seconds) unless supported by clear musical cues.
-
+- Segment order should follow typical song structure order.
 
 ANALYSIS GUIDELINES (in order of priority):
-1. **PRIMARY: Lyrics Content Analysis**
-   - Identify intro/outro sections by analyzing lyrical content at the beginning and end of the song
-   - Identify verses by analyzing lyrical themes, narrative progression, and unique content
-   - Identify choruses by finding repeated lyrical phrases, hooks, and memorable lines
-   - Look for pre-chorus sections that build tension before the main chorus
-   - Identify bridges by finding contrasting lyrical content or perspective shifts
+1. **PRIMARY: Lyrics Content Analysis and Song segment order**
+  - Identify intro/outro sections by analyzing lyrical content at the beginning and end of the song
+  - Intro: 
+    + Always comes first (or omitted entirely). 
+    + May lead directly into Verse, Pre‑Chorus, or Chorus.
+  - Outro: 
+    + Always comes last (or omitted entirely). 
+    + May follow Chorus, Bridge, or Solo.
+
+  - Identify verses by analyzing lyrical themes, narrative progression, and unique content
+  - Verse: 
+    + Introduces lyrical/melodic ideas.
+    + Can repeat (e.g. Verse 2, Verse 3) but should follow Chorus or Intro.
+
+  - Identify pre-choruses by finding lyrical content that builds tension before the chorus
+  - Pre‑Chorus:
+    + Must immediately precede a Chorus.
+    + Cannot be followed by any other segment (no Verse, Bridge, Solo, etc.)
+
+  - Identify choruses by finding repeated lyrical phrases, hooks, and memorable lines
+  - Chorus
+    + Must immediately follow a Pre‑Chorus (unless it follows a Verse directly in “Verse → Chorus” form).
+    + Can repeat back‑to‑back or be followed by a Post‑Chorus.
+
+  - Identify bridges by finding contrasting lyrical content or perspective shifts
+  - Bridge:
+    + Appears later (commonly after 2× Verse–Chorus cycles).
+    + Cannot be inserted mid Verse/Chorus or Pre‑Chorus/Chorus pairs.
+
+  - Instrumental
+    + Gaps between lyrics lines (>= 10 seconds) as potential instrumental sections
+    + Often sits after Chorus, or after Bridge.
+    + Should not split Pre‑Chorus → Chorus sequence
 
 2. **SECONDARY: Musical Structure Analysis**
-   - Use chord progression changes as supporting evidence for section boundaries
-   - Consider rhythmic patterns and beat positions for section transitions
-   - Look for key changes or tempo variations that indicate new sections
-   - Based on your knowledge of typical song structures/forms of music, recheck and refine your initial analysis
+  - Use chord progression changes as supporting evidence for section boundaries
+  - Consider rhythmic patterns and beat positions for section transitions
+  - Look for key changes or tempo variations that indicate new sections
+  - Based on your knowledge of typical song structures/forms of music, recheck and refine your initial analysis
 
-3. **Instrumental Section Detection**
-   - Identify gaps between lyrics lines (>= 10 seconds) as potential instrumental sections
-   - Mark sections with no lyrics as instrumental, solo, or breakdown based on context
-   - Consider intro/outro sections that may have minimal or no lyrics
+3. **Complete Coverage Requirements**
+  - CRITICAL: Ensure segments cover the ENTIRE song duration from 0 seconds to ${duration || 300} seconds
+  - No gaps or unlabeled sections should exist between segments
+  - Adjacent segments should connect seamlessly (end time of one = start time of next)
+  - If uncertain about a section, label it as the most likely type with lower confidence
 
-4. **Complete Coverage Requirements**
-   - CRITICAL: Ensure segments cover the ENTIRE song duration from 0 seconds to ${duration || 300} seconds
-   - No gaps or unlabeled sections should exist between segments
-   - Adjacent segments should connect seamlessly (end time of one = start time of next)
-   - If uncertain about a section, label it as the most likely type with lower confidence
-
-5. **Confidence and Reasoning**
-   - Assign higher confidence (0.8-1.0) to sections with clear lyrical patterns
-   - Use medium confidence (0.5-0.79) for sections identified primarily by musical cues
-   - Use lower confidence (0.1-0.49) for ambiguous sections but still provide a label
-   - Consider typical song structures but prioritize actual content analysis
+4. **Confidence and Reasoning**
+  - Assign higher confidence (0.8-1.0) to sections with clear lyrical patterns
+  - Use medium confidence (0.5-0.79) for sections identified primarily by musical cues
+  - Use lower confidence (0.1-0.49) for ambiguous sections but still provide a label
+  - Consider typical song structures but prioritize actual content analysis
 
 OUTPUT FORMAT: Respond with ONLY a valid JSON object in this exact format:
 {
@@ -128,7 +149,7 @@ OUTPUT FORMAT: Respond with ONLY a valid JSON object in this exact format:
   "metadata": {
     "totalDuration": ${duration || 0},
     "analysisTimestamp": ${Date.now()},
-    "model": "gemini-segmentation-v2-enhanced"
+    "model": "gemini-flash-preview-05-20"
   }
 }
 
@@ -137,8 +158,9 @@ CRITICAL REQUIREMENTS:
 - **NO OVERLAPS**: Segments should not overlap (end time of segment N = start time of segment N+1)
 - **CHRONOLOGICAL ORDER**: Segments must be in chronological order by start time
 - **VALID TIMESTAMPS**: All timestamps must be within 0 to ${duration || 300} seconds
+- **SEGMENT ORDER**: Follow typical song structure order (Intro, Verse, Pre-Chorus, Chorus, Bridge, Outro). However any can omit section logically based on careful analysis
 - **CONFIDENCE SCORES**: Use scores between 0.0 and 1.0 based on certainty of identification
-- **REASONING**: Provide brief reasoning for each segment identification
+- **REASONING**: Think carefully before declaring a section. Double check your analysis before finalizing a section. Provide brief reasoning for each segment identification
 - **JSON ONLY**: Respond with ONLY the JSON object, no additional text or explanations outside the JSON`;
 }
 

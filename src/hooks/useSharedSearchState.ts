@@ -117,13 +117,46 @@ export const useSharedSearchState = () => {
     // Check if it's a direct YouTube URL or video ID
     const videoId = extractVideoId(searchQuery);
     if (videoId) {
-      router.push(`/analyze/${videoId}`);
+      setIsSearching(true);
+      setSearchError(null);
+
+      try {
+        // FIXED: Fetch video metadata for direct URLs before navigation
+        console.log(`🔍 Fetching metadata for direct URL: ${videoId}`);
+
+        const response = await fetch(`/api/youtube/info?videoId=${videoId}`);
+        const data = await response.json();
+
+        if (data.success && data.title) {
+          // Navigate with metadata like search results
+          let url = `/analyze/${videoId}?title=${encodeURIComponent(data.title)}`;
+          if (data.uploader) {
+            url += `&channel=${encodeURIComponent(data.uploader)}`;
+          }
+          if (data.thumbnail) {
+            url += `&thumbnail=${encodeURIComponent(data.thumbnail)}`;
+          }
+          router.push(url);
+          console.log(`✅ Direct URL metadata fetched: "${data.title}"`);
+        } else {
+          // Fallback to videoId only if metadata fetch fails
+          router.push(`/analyze/${videoId}`);
+          console.log(`⚠️ Direct URL metadata fetch failed, using videoId only`);
+        }
+      } catch (err) {
+        console.error('Failed to fetch video metadata for direct URL:', err);
+        setSearchError('Failed to fetch video information');
+        // Fallback to videoId only if metadata fetch fails
+        router.push(`/analyze/${videoId}`);
+      } finally {
+        setIsSearching(false);
+      }
       return;
     }
 
     // For search queries, perform the search
     await performSearch(searchQuery);
-  }, [searchQuery, extractVideoId, router, performSearch]);
+  }, [searchQuery, extractVideoId, router, performSearch, setIsSearching, setSearchError]);
 
   // Handle video selection from search results
   const handleVideoSelect = useCallback((videoId: string, title?: string) => {

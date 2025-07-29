@@ -24,7 +24,9 @@ interface ExtendedSynchronizedChord {
 // Define the transcription data structure
 export interface TranscriptionData {
   videoId: string;
-  title?: string; // Add video title field for proper display in RecentVideos
+  title?: string; // Video title field for proper display in RecentVideos
+  channelTitle?: string; // FIXED: Add channel title for complete metadata
+  thumbnail?: string; // FIXED: Add thumbnail URL for complete metadata
   beatModel: string;
   chordModel: string;
   beats: BeatInfo[];

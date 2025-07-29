@@ -40,76 +40,102 @@ export async function GET(request: NextRequest) {
 
     console.log(`Fetching video info for: ${videoId}`);
 
-    // Forward the request to the Python backend
+    // Try multiple methods for video info extraction
+    let data = null;
+    let lastError = null;
+
+    // Method 1: Try Python backend first (if available)
     const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
-    console.log(`Proxying YouTube info request to backend: ${backendUrl}/api/extract-audio`);
+    try {
+      console.log(`Trying Python backend: ${backendUrl}/api/extract-audio`);
 
-    const response = await fetch(`${backendUrl}/api/extract-audio`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-      body: JSON.stringify({
-        videoId,
-        getInfoOnly: true,
-        useEnhancedExtraction: true,
-        retryCount: 0
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Backend info request failed: ${response.status} ${response.statusText} - ${errorText}`);
-
-      // If backend fails with 500, try local extraction as fallback
-      if (response.status === 500) {
-        console.log('Backend info request failed with 500, attempting local fallback...');
-
-        try {
-          const { localExtractionService } = await import('@/services/localExtractionService');
-          const localResult = await localExtractionService.extractAudio(videoId, true);
-
-          if (localResult.success) {
-            console.log('Local info extraction fallback succeeded');
-            return NextResponse.json({
-              success: true,
-              title: localResult.title || `YouTube Video ${videoId}`,
-              duration: localResult.duration || 0,
-              uploader: 'Unknown',
-              description: '',
-              videoId,
-              url: `https://www.youtube.com/watch?v=${videoId}`
-            });
-          }
-        } catch (fallbackError) {
-          console.warn('Local info extraction fallback failed:', fallbackError);
-        }
-      }
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to fetch video info',
-          details: `Backend error: ${response.status} ${response.statusText}`,
-          suggestion: response.status === 500 ?
-            'The video may be restricted or temporarily unavailable. Please try a different video.' :
-            'Please check the video URL and try again.'
+      const response = await fetch(`${backendUrl}/api/extract-audio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-        { status: response.status }
-      );
+        body: JSON.stringify({
+          videoId,
+          getInfoOnly: true,
+          useEnhancedExtraction: true,
+          retryCount: 0
+        }),
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+
+      if (response.ok) {
+        data = await response.json();
+        console.log(`✅ Python backend response: "${data.title}"`);
+
+        // Check if we got meaningful metadata (not just a generic title)
+        if (!data.title || data.title === `YouTube Video ${videoId}` || data.title.includes('Video info not available')) {
+          console.log(`⚠️ Python backend returned generic metadata, trying fallback`);
+          throw new Error('Generic metadata returned');
+        }
+      } else {
+        throw new Error(`Backend error: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`⚠️ Python backend failed: ${errorMessage}`);
+
+      // Method 2: Fallback to basic YouTube metadata extraction
+      try {
+        console.log(`Trying fallback metadata extraction for: ${videoId}`);
+
+        // Use YouTube's oEmbed API as fallback (no API key required)
+        const oembedResponse = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            },
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+          }
+        );
+
+        if (oembedResponse.ok) {
+          const oembedData = await oembedResponse.json();
+          data = {
+            success: true,
+            title: oembedData.title || `YouTube Video ${videoId}`,
+            uploader: oembedData.author_name || 'Unknown',
+            duration: 0, // oEmbed doesn't provide duration
+            description: '',
+            thumbnail: oembedData.thumbnail_url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+          };
+          console.log(`✅ oEmbed fallback successful: "${data.title}"`);
+        } else {
+          throw new Error(`oEmbed failed: ${oembedResponse.status}`);
+        }
+      } catch (oembedError) {
+        const oembedErrorMessage = oembedError instanceof Error ? oembedError.message : String(oembedError);
+        console.log(`⚠️ oEmbed fallback failed: ${oembedErrorMessage}`);
+
+        // Method 3: Last resort - return basic info
+        data = {
+          success: true,
+          title: `YouTube Video ${videoId}`,
+          uploader: 'Unknown',
+          duration: 0,
+          description: '',
+          thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+        };
+        console.log(`🔄 Using basic fallback metadata`);
+      }
     }
 
-    const data = await response.json();
-    console.log(`Backend info request successful: "${data.title}"`);
-
-    if (!data.success) {
+    // Handle the response based on which method succeeded
+    if (!data || !data.success) {
       return NextResponse.json(
         {
           success: false,
-          error: data.error || 'Failed to fetch video info',
-          details: data.details
+          error: 'Failed to fetch video info from all sources',
+          details: lastError ? (lastError instanceof Error ? lastError.message : String(lastError)) : 'All extraction methods failed',
+          suggestion: 'The video may be restricted, private, or temporarily unavailable. Please try a different video.'
         },
         { status: 500 }
       );
@@ -122,6 +148,7 @@ export async function GET(request: NextRequest) {
       duration: data.duration || 0,
       uploader: data.uploader || 'Unknown',
       description: data.description || '',
+      thumbnail: data.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
       videoId,
       url: `https://www.youtube.com/watch?v=${videoId}`
     });

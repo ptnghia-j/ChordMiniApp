@@ -321,7 +321,7 @@ export const transcribeLyricsWithAI = async (deps: AudioProcessingServiceDepende
  * Extract audio from YouTube with comprehensive metadata preservation
  * Lines 947-1120 from original component
  */
-export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDependencies, forceRefresh: boolean = false): Promise<void> => {
+export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDependencies, forceRefresh: boolean = false): Promise<{ audioUrl?: string; fromCache?: boolean; isStreamUrl?: boolean; streamExpiresAt?: number; title?: string; duration?: number } | void> => {
   const {
     videoId,
     titleFromSearch,
@@ -430,6 +430,16 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
         processingContext.setStage('complete');
         processingContext.setProgress(100);
         processingContext.setStatusMessage('Audio extraction completed successfully');
+
+        // FIXED: Return the metadata so the video title can be set properly
+        return {
+          audioUrl: data.audioUrl,
+          fromCache: data.fromCache || false,
+          isStreamUrl: data.isStreamUrl || false,
+          streamExpiresAt: data.streamExpiresAt,
+          title: titleFromSearch || data.title || `YouTube Video ${videoId}`, // Prefer frontend metadata
+          duration: data.duration
+        };
 
       } else {
         throw new Error(data.error || 'Audio extraction failed');
