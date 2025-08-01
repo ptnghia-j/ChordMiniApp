@@ -426,6 +426,7 @@ def detect_beats():
 
             # Create a temporary file
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            temp_file.close()  # FIXED: Close file handle to prevent Windows file locking
             file.save(temp_file.name)
             file_path = temp_file.name
         else:
@@ -627,13 +628,6 @@ def detect_beats():
                         "beat_time_range_end": beat_time_range_end,
                         "processing_method": "enhanced-detector"
                     }
-
-                    # Clean up temporary files if any were created
-                    if 'file' in request.files:
-                        try:
-                            os.unlink(file_path)
-                        except Exception as e:
-                            print(f"Warning: Failed to clean up temporary file: {e}")
 
                     return jsonify(response_data)
 
@@ -946,6 +940,15 @@ def detect_beats():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    finally:
+        # FIXED: Robust cleanup - ensure temporary files are always cleaned up
+        if 'file_path' in locals() and file_path and 'file' in request.files:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+                    print(f"Cleaned up temporary file: {file_path}")
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to clean up temporary file {file_path}: {cleanup_error}")
 
 @app.route('/api/recognize-chords', methods=['POST'])
 @limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production
@@ -988,6 +991,7 @@ def recognize_chords():
 
             # Create a temporary file
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            temp_file.close()  # FIXED: Close file handle to prevent Windows file locking
             file.save(temp_file.name)
             file_path = temp_file.name
         else:
@@ -1124,6 +1128,15 @@ def recognize_chords():
             "success": False,
             "error": str(e)
         }), 500
+    finally:
+        # FIXED: Robust cleanup - ensure temporary files are always cleaned up
+        if 'file_path' in locals() and file_path and 'file' in request.files:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+                    print(f"Cleaned up temporary file: {file_path}")
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to clean up temporary file {file_path}: {cleanup_error}")
 
 def _recognize_chords_btc(model_variant):
     """
@@ -1282,13 +1295,7 @@ def _recognize_chords_btc(model_variant):
                 "error": f"Failed to parse BTC chord data: {str(e)}"
             }), 500
 
-        # Clean up temporary files
-        try:
-            if 'file' in request.files:
-                os.unlink(file_path)
-            os.unlink(lab_path)
-        except Exception as e:
-            print(f"Warning: Failed to clean up temporary files: {e}")
+
 
         # Calculate processing time (duration in seconds)
         processing_time = time.time() - processing_start_time
@@ -1329,6 +1336,23 @@ def _recognize_chords_btc(model_variant):
             "success": False,
             "error": str(e)
         }), 500
+    finally:
+        # FIXED: Robust cleanup - ensure temporary files are always cleaned up
+        if 'file_path' in locals() and file_path and 'file' in request.files:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+                    print(f"Cleaned up temporary audio file: {file_path}")
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to clean up temporary audio file {file_path}: {cleanup_error}")
+
+        if 'lab_path' in locals() and lab_path:
+            try:
+                if os.path.exists(lab_path):
+                    os.unlink(lab_path)
+                    print(f"Cleaned up temporary lab file: {lab_path}")
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to clean up temporary lab file {lab_path}: {cleanup_error}")
 
 @app.route('/api/recognize-chords-btc-sl', methods=['POST'])
 @limiter.limit("2 per minute")  # Heavy processing endpoint - reduced for production

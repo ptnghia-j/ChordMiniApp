@@ -62,7 +62,7 @@ export default function DocsPage() {
     `flex items-center gap-2 text-sm py-2 px-3 rounded-md transition-colors ${
       activeSection === id
         ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold'
-        : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+        : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-gray-800'
     }`;
 
 
@@ -75,7 +75,7 @@ export default function DocsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex gap-8">
           {/* Sidebar Navigation */}
-          <div className="hidden lg:block w-64 flex-shrink-0 bg-gray-50 dark:bg-dark-bg border-r border-gray-200 dark:border-gray-700">
+          <div className="hidden lg:block w-64 flex-shrink-0 bg-white dark:bg-dark-bg border-r border-gray-200 dark:border-gray-700">
             <div className="sticky top-8 py-8 dark:bg-dark-bg">
               <nav className="space-y-1 dark:bg-dark-bg">
                 {/* Overview / Welcome */}
@@ -171,7 +171,7 @@ export default function DocsPage() {
                     </a>
                     <a
                       href="#endpoints"
-                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
                     >
                       <FiLink className="w-4 h-4" />
                       API Reference
@@ -237,7 +237,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* Quick Start */}
-                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg p-6 mb-6">
+                <div className="bg-white dark:bg-content-bg/50 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <FiZap className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                     <div className="flex-1">
@@ -287,7 +287,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* No Auth Required Card */}
-                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-green-500 dark:border-green-400 rounded-r-lg p-6 mb-6">
+                <div className="bg-white dark:bg-content-bg/50 border-l-4 border-green-500 dark:border-green-400 rounded-r-lg p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <FiCheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
                     <div>
@@ -398,7 +398,7 @@ export default function DocsPage() {
                 </div>
 
                 {/* Overview Card */}
-                <div className="bg-gray-50 dark:bg-content-bg/50 border-l-4 border-orange-500 dark:border-orange-400 rounded-r-lg p-6 mb-8">
+                <div className="bg-white dark:bg-content-bg/50 border-l-4 border-orange-500 dark:border-orange-400 rounded-r-lg p-6 mb-8">
                   <div className="flex items-start gap-3">
                     <FiActivity className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                     <div>
@@ -422,7 +422,7 @@ export default function DocsPage() {
                   <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                     <table className="w-full">
                       <thead>
-                        <tr className="bg-gray-50 dark:bg-content-bg/50 border-b border-gray-200 dark:border-gray-700">
+                        <tr className="bg-white dark:bg-content-bg/50 border-b border-gray-200 dark:border-gray-700">
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Endpoint</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Method</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rate Limit</th>
@@ -644,7 +644,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns beat timestamps, BPM, and time signature.
                     </p>
-                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
+                    <div className="bg-white dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> file (audio file), model (optional: beat-transformer, madmom, auto)
                       </p>
@@ -672,7 +672,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Analyzes audio file and returns chord progression with timestamps.
                     </p>
-                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
+                    <div className="bg-white dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> file (audio file), model (optional: chord-cnn-lstm)
                       </p>
@@ -763,7 +763,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Retrieves synchronized lyrics with timestamps from LRClib database.
                     </p>
-                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
+                    <div className="bg-white dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> artist (string), title (string), duration (number, optional)
                       </p>
@@ -791,7 +791,7 @@ export default function DocsPage() {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">
                       Returns information about available models and their capabilities.
                     </p>
-                    <div className="bg-gray-50 dark:bg-content-bg/50 rounded p-3">
+                    <div className="bg-white dark:bg-content-bg/50 rounded p-3">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         <strong>Parameters:</strong> None required
                       </p>
