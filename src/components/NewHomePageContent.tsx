@@ -156,8 +156,8 @@ function NewHomePageContentInner() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    delay: 0.5, 
-                    duration: 1.0,
+                    delay: 0, 
+                    duration: 2.0,
                     ease: "easeOut",
                   }}
                   className="text-xl md:text-2xl lg:text-3xl text-gray-700 dark:text-gray-300 font-light mb-1 min-h-[2.5rem] text-center leading-relaxed"
@@ -186,7 +186,7 @@ function NewHomePageContentInner() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 1 }}
+              transition={{ delay: 0, duration: 1 }}
               className="flex justify-center"
             >
               <HeroScrollingChordAnimation className="w-full max-w-6xl" />
@@ -200,7 +200,7 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 1.0 }}
+                  transition={{ delay: 0.2, duration: 0 }}
                   className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">
@@ -221,7 +221,7 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.7 }}
+                  transition={{ delay: 0.5, duration: 0 }}
                   className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">
@@ -272,7 +272,7 @@ function NewHomePageContentInner() {
                 initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
                 whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
               >
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -327,7 +327,7 @@ function NewHomePageContentInner() {
                 initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
                 whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
               >
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -386,7 +386,7 @@ function NewHomePageContentInner() {
                 initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
                 whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+                transition={{ duration: 0.6, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
               >
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -485,7 +485,7 @@ function NewHomePageContentInner() {
                 initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
                 whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6 w-full"
               >
                 <SupportChordMini />

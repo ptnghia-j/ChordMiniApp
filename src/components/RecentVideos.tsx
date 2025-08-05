@@ -134,7 +134,7 @@ export default function RecentVideos() {
         q = query(
           transcriptionsRef,
           orderBy('createdAt', 'desc'),
-          limit(INITIAL_LOAD_COUNT * 3)
+          limit(INITIAL_LOAD_COUNT)
         );
       }
 

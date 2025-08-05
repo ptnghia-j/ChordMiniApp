@@ -233,6 +233,7 @@ tasks.md
 *.md
 !README.md
 !README-PYTHON-BACKEND.md
+!CONTRIBUTING.md
 
 # Backup files
 *.bak
