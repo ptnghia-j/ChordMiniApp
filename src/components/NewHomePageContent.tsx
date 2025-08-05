@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import OptimizedImage from '@/components/OptimizedImage';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import AnimatedTitle from '@/components/AnimatedTitle';
@@ -23,11 +22,6 @@ const RecentVideos = dynamic(() => import('@/components/LazyRecentVideos'), {
   loading: () => <div className="animate-pulse bg-gray-200 dark:bg-slate-700 rounded-lg h-32"></div>,
   ssr: false
 });
-
-// const AnimatedBorderText = dynamic(() => import('@/components/AnimatedBorderText'), {
-//   loading: () => <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>,
-//   ssr: false
-// });
 
 const HeroScrollingChordAnimation = dynamic(() => import('@/components/HeroScrollingChordAnimation'), {
   loading: () => <div className="w-full h-24 bg-gray-200 dark:bg-slate-700 animate-pulse rounded-lg"></div>,
@@ -80,7 +74,7 @@ function NewHomePageContentInner() {
   }, [searchParams, searchQuery, updateSearchQuery]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-dark-bg transition-colors duration-300">
+    <div className="flex flex-col min-h-screen transition-colors duration-300">
       {/* Navigation */}
       <Navigation showStickySearch={shouldShowStickySearch} />
 
@@ -89,25 +83,56 @@ function NewHomePageContentInner() {
         style={{
           opacity: heroOpacity,
           scale: heroScale,
-          minHeight: 'calc(100vh - 80px)',
-          // CHANGE: Removed inline paddingTop to reduce top whitespace
+          minHeight: 'calc(100vh - 20px)',
         }}
-        // CHANGE: Removed pt-4 class
-        className="relative flex items-start justify-center overflow-hidden"
+        className="relative flex items-start justify-center overflow-hidden bg-gray-50 dark:bg-dark-bg"
       >
-        {/* Hero Background */}
+        {/* Hero Background - Consolidated effects */}
         <div className="absolute inset-0 z-0">
-          <OptimizedImage
-            src={theme === 'dark' ? "/hero-image-placeholder-dark.svg" : "/hero-image-placeholder.svg"}
-            alt="ChordMini - Chord recognition and analysis application"
-            width={1920}
-            height={1080}
-            priority={true}
-            quality={60}
-            sizes="100vw"
-            className="object-cover opacity-10 w-full h-full"
-            data-lcp-image
-          />
+          {theme === 'dark' ? (
+            // Dark Mode: Subtle Midnight Mist effect - better integrated with navigation
+            <div
+              className="absolute inset-0 z-0"
+              style={{
+                backgroundImage: `
+                  radial-gradient(circle at 50% 100%, rgba(70, 85, 110, 0.3) 0%, transparent 10%),
+                  radial-gradient(circle at 50% 100%, rgba(99, 102, 241, 0.25) 0%, transparent 20%),
+                  radial-gradient(circle at 50% 100%, rgba(181, 184, 208, 0.2) 0%, transparent 50%)
+                `,
+              }}
+            />
+          ) : (
+            // Light Mode: Half-circle sunrise effect at horizon
+            <div className="w-full h-full relative">
+              {/* Main sunrise half-circle at bottom */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `
+                    radial-gradient(circle at 50% 100%,
+                      rgba(255, 235, 59, 0.4) 0%,
+                      rgba(255, 193, 7, 0.3) 15%,
+                      rgba(255, 167, 38, 0.2) 30%,
+                      rgba(255, 235, 59, 0.1) 45%,
+                      transparent 60%
+                    )
+                  `,
+                }}
+              />
+              {/* Subtle light rays extending upward */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `
+                    linear-gradient(0deg,
+                      rgba(255, 235, 59, 0.08) 0%,
+                      transparent 40%
+                    )
+                  `,
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Decorative Music Notes - Only show after hydration to prevent mismatch */}
@@ -120,10 +145,8 @@ function NewHomePageContentInner() {
         )}
 
         {/* Split-Screen Layout */}
-        {/* CHANGE: Added pt-8 to control the top spacing from here */}
         <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-8">
           {/* Left Side: Hero Content (60%) */}
-          {/* CHANGE: Increased space-y-2 to space-y-8 to create more room between elements */}
           <div className="lg:col-span-3 space-y-8">
             {/* Title - Centered */}
             <div ref={titleRef} className="text-center">
@@ -133,8 +156,8 @@ function NewHomePageContentInner() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    delay: 1, // This corresponds to the original delay={1000}
-                    duration: 0.5,
+                    delay: 0.5, 
+                    duration: 1.0,
                     ease: "easeOut",
                   }}
                   className="text-xl md:text-2xl lg:text-3xl text-gray-700 dark:text-gray-300 font-light mb-1 min-h-[2.5rem] text-center leading-relaxed"
@@ -163,8 +186,7 @@ function NewHomePageContentInner() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 3, duration: 1 }}
-              // CHANGE: Removed mt-8. The parent's space-y-8 now controls the spacing for consistency.
+              transition={{ delay: 0.3, duration: 1 }}
               className="flex justify-center"
             >
               <HeroScrollingChordAnimation className="w-full max-w-6xl" />
@@ -178,8 +200,8 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 2, duration: 0.6 }}
-                  className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
+                  transition={{ delay: 0.2, duration: 1.0 }}
+                  className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">
                     <OptimizedVideoDemo
@@ -199,8 +221,8 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 2.3, duration: 0.6 }}
-                  className="bg-white dark:bg-content-bg rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
+                  transition={{ delay: 0.5, duration: 0.7 }}
+                  className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">
                     <OptimizedVideoDemo

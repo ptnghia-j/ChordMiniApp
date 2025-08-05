@@ -2820,6 +2820,25 @@ def debug_environment():
         else:
             env_info["model_file_exists"] = False
 
+        # Check Beat Transformer device configuration
+        try:
+            from models.beat_transformer import is_beat_transformer_available, BeatTransformerDetector
+            env_info["beat_transformer_available"] = is_beat_transformer_available()
+
+            # Get device information if Beat Transformer is available
+            if env_info["beat_transformer_available"]:
+                try:
+                    detector = BeatTransformerDetector()
+                    device_info = detector.get_device_info()
+                    env_info["beat_transformer_device"] = device_info
+                    log_info(f"Beat Transformer device info: {device_info}")
+                except Exception as e:
+                    env_info["beat_transformer_device_error"] = str(e)
+                    log_error(f"Failed to get Beat Transformer device info: {e}")
+
+        except ImportError as e:
+            env_info["beat_transformer_error"] = str(e)
+
         return jsonify({
             "success": True,
             "environment": env_info

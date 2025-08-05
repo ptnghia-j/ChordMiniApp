@@ -400,12 +400,11 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // Determine if the root uses sharps or flats
   const usesFlats = root.includes('b') || root.includes('♭');
 
-  // For minor chords, prefer flat notation for the third (e.g., Em/G instead of Em/F#)
+  // Determine if chord is minor for special case handling
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
   const isMinor = quality === 'min' || quality === 'm' ||
                   (quality.startsWith('min') && quality !== 'maj') ||
                   (quality.startsWith('m') && !quality.startsWith('maj'));
-  const preferFlatsForMinor = isMinor && (inversion === '3' || inversion === 'b3');
 
   // DEBUG: Log input parameters and chord quality detection
   // console.log(`🔍 getBassNoteFromInversion DEBUG:`, {
@@ -423,13 +422,17 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // Normalize root note for lookup (handle Unicode symbols)
   const normalizedRoot = root.replace(/♯/g, '#').replace(/♭/g, 'b');
 
-  // Choose the appropriate note array for the root note lookup
-  const rootNoteArray = usesFlats ? notesWithFlats : notes;
+  // FIXED: Use consistent note array for both root lookup and bass note calculation
+  // to prevent enharmonic spelling errors like G#m/b7 -> G#m/Gb instead of G#m/F#
 
-  // Find the root note index
+  // Determine the primary note array based on root note's accidental preference
+  // This ensures consistent enharmonic spelling throughout the chord
+  const primaryNoteArray = usesFlats ? notesWithFlats : notes;
+
+  // Find the root note index in the primary array
   let rootIndex = -1;
-  for (let i = 0; i < rootNoteArray.length; i++) {
-    if (rootNoteArray[i] === normalizedRoot) {
+  for (let i = 0; i < primaryNoteArray.length; i++) {
+    if (primaryNoteArray[i] === normalizedRoot) {
       rootIndex = i;
       break;
     }
@@ -437,8 +440,10 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
 
   if (rootIndex === -1) return inversion; // Fallback if root not found
 
-  // Choose the note array for the bass note result based on inversion type
-  const bassNoteArray = (usesFlats || preferFlatsForMinor || isFlatInversion) ? notesWithFlats : notes;
+  // Use the same primary array for bass note calculation to maintain consistency
+  // Special case: only use flats for bass note if the root itself uses flats
+  // This prevents sharp roots from producing flat bass notes
+  const bassNoteArray = primaryNoteArray;
 
   // Parse the inversion to handle different types of inversions
   let inversionNumber = inversion;
@@ -534,9 +539,11 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
     result = getEnharmonicSpelling(result, root);
   }
 
-  // For flat inversions (like b3, b7), ensure we use flat notation
-  if (isFlatInversion) {
-    // Convert sharp equivalents to flat notation for flat inversions
+  // FIXED: For flat inversions, only convert to flat notation if the root doesn't use sharps
+  // This prevents G#m/b7 -> G#m/Gb (wrong) and ensures G#m/b7 -> G#m/F# (correct)
+  if (isFlatInversion && !root.includes('#') && !root.includes('♯')) {
+    // Only convert to flat notation for roots that don't use sharps
+    // This maintains enharmonic consistency within the chord
     if (result === 'D#' || result === 'D♯') {
       result = 'Eb'; // For inversions like C:min/b3
     } else if (result === 'A#' || result === 'A♯') {
