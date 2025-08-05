@@ -12,7 +12,6 @@ Clean, intuitive interface for YouTube search, URL input, and recent video acces
 
 ### 🎵 Beat & Chord Analysis
 ![Beat Chord Grid](beatchord_grid.png)
-![Beat Chord Grid with Lyrics](beatchord_grid_withlyrics.png)
 
 Real-time chord progression visualization with synchronized beat detection and grid layout.
 
@@ -20,10 +19,10 @@ Real-time chord progression visualization with synchronized beat detection and g
 
 ![Guitar Diagrams](guitar_diagrams.png)
 
-Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring 2069+ verified chord positions and synchronized beat grid integration.
+Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring multiple chord positions and synchronized beat grid integration.
 
 ### 🎤 Lead Sheet with AI Assistant
-![Lead Sheet with AI](leadsheet_with_ai.png)
+![Lead Sheet with AI](leadsheet.png)
 
 Synchronized lyrics transcription with AI chatbot for contextual music analysis and translation support.
 
@@ -37,10 +36,33 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 ### Setup Steps
 
 1. **Clone and install**
+   Clone with submodules in one command (for fresh clones)
    ```bash
-   git clone https://github.com/ptnghia-j/ChordMiniApp.git
+   git clone --recursive https://github.com/ptnghia-j/ChordMiniApp.git
    cd ChordMiniApp
    npm install
+   ```
+
+   #### Verify that submodules are populated
+   ```
+   ls -la python_backend/models/Beat-Transformer/
+   ls -la python_backend/models/Chord-CNN-LSTM/
+   ls -la python_backend/models/ChordMini/
+   ```
+
+   #### If chord recognition encounters issue with fluidsynth:
+   Install FluidSynth for MIDI synthesis
+   ```
+      
+   # --- Windows ---
+   choco install fluidsynth
+
+   # --- macOS ---
+   brew install fluidsynth
+
+   # --- Linux (Debian/Ubuntu-based) ---
+   sudo apt update
+   sudo apt install fluidsynth
    ```
 
 2. **Environment setup**
@@ -102,16 +124,6 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
 ### API Keys Setup
 
-#### YouTube Data API v3 (Optional)
-```bash
-# 1. Go to Google Cloud Console
-# 2. Create/select project
-# 3. Enable YouTube Data API v3
-# 4. Create credentials (API key)
-# 5. Add to .env.local
-NEXT_PUBLIC_YOUTUBE_API_KEY=your_key_here
-```
-
 #### Music.ai API
 ```bash
 # 1. Sign up at music.ai
@@ -140,8 +152,6 @@ ChordMiniApp uses a **hybrid backend architecture**:
 For local development, you **must** run the Python backend on `localhost:5001`:
 
 - **URL**: `http://localhost:5001`
-- **Purpose**: Local development and testing
-- **Setup**: Required for local development (see setup instructions below)
 - **Port Note**: Uses port 5001 to avoid conflict with macOS AirPlay/AirTunes service on port 5000
 
 ### ☁️ Production Backend (your VPS)
@@ -232,19 +242,6 @@ GENIUS_ACCESS_TOKEN=your_genius_token
 FLASK_MAX_CONTENT_LENGTH_MB=150
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
-
-#### macOS AirTunes Port Conflict
-
-**Important for macOS users**: Port 5000 is used by Apple's AirPlay/AirTunes service, which can cause conflicts with local development. This is why ChordMiniApp uses port 5001 for the Python backend.
-
-**Symptoms of port conflict:**
-- 403 Forbidden errors when connecting to backend
-- Response headers showing `Server: AirTunes/xxx.x.x`
-- Backend appears unreachable despite being started
-
-**Solution:**
-- Always use port 5001 for local development (default in current setup)
-- If you need to use a different port, update both the Python backend and `NEXT_PUBLIC_PYTHON_API_URL`
 
 #### Troubleshooting Local Backend
 
@@ -431,7 +428,6 @@ graph TD
 - **Framer Motion** - Smooth animations and transitions
 - **Chart.js** - Data visualization for audio analysis
 - **@tombatossals/react-chords** - Guitar chord diagram visualization with official chord database
-- **@tombatossals/chords-db** - Official guitar chord database with 2069+ accurate fingering patterns
 - **React Player** - Video playback integration
 
 ### Backend & ML
@@ -451,11 +447,6 @@ graph TD
 - **Music.ai SDK** - AI-powered music transcription
 - **Google Gemini API** - AI language model for translations
 
-### Development Tools
-- **ESLint** - Code linting and formatting
-- **Jest** - Testing framework
-- **Bundle Analyzer** - Performance optimization
-
 ## 📱 Features
 
 ### Core Analysis
@@ -464,11 +455,11 @@ graph TD
 - **Key Detection** - Musical key identification with Gemini AI
 
 ### Guitar Features [Beta]
-- **Accurate Chord Database Integration** - Official @tombatossals/chords-db with 2069+ verified chord fingering patterns
+- **Accurate Chord Database Integration** - Official @tombatossals/chords-db with verified chord fingering patterns
 - **Enhanced Chord Recognition** - Support for both ML model colon notation (C:minor) and standard notation (Cm)
 - **Interactive Chord Diagrams** - Visual guitar fingering patterns with correct fret positions and finger placements
 - **Responsive Design** - Adaptive chord count (7/5/3/2/1 for xl/lg/md/sm/xs)
-- **Smooth Animations** - 500ms transitions with optimized scaling
+- **Smooth Animations** - transitions with optimized scaling
 - **Unicode Notation** - Proper musical symbols (♯, ♭) with enharmonic equivalents
 
 ### Lyrics & Transcription [Beta]
