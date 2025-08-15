@@ -78,6 +78,17 @@ interface GuitarChordsTabProps {
   // Segmentation props for synchronized color overlay
   segmentationData?: SegmentationResult | null;
   showSegmentation?: boolean;
+  // Roman numeral analysis props
+  showRomanNumerals?: boolean;
+  romanNumeralData?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
@@ -95,7 +106,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   chordCorrections = null,
   sequenceCorrections = null,
   segmentationData = null,
-  showSegmentation = false
+  showSegmentation = false,
+  showRomanNumerals = false,
+  romanNumeralData = null
 }) => {
   const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
@@ -283,7 +296,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         </div>
         <div className="chord-grid-window bg-white dark:bg-content-bg rounded-lg overflow-hidden">
           <div className="h-32 sm:h-40 md:h-48 lg:h-56 overflow-y-auto">
-            <ChordGridContainer {...{analysisResults, chordGridData, currentBeatIndex, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, onBeatClick, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData, showSegmentation}}/>
+            <ChordGridContainer {...{analysisResults, chordGridData, currentBeatIndex, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, onBeatClick, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData, showSegmentation, showRomanNumerals, romanNumeralData}}/>
           </div>
         </div>
       </div>

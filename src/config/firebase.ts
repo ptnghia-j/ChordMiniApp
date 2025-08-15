@@ -66,8 +66,6 @@ if (hasRequiredConfig) {
 
       // Set up anonymous authentication
       setupAnonymousAuth();
-    } else {
-      console.log('🔧 Skipping client-side auth setup on server-side');
     }
   } catch (error) {
     console.error('Error initializing Firebase:', error);
@@ -90,7 +88,6 @@ if (hasRequiredConfig) {
 async function setupAuthPersistence() {
   // SSR Guard: Only run on client-side where window is available
   if (typeof window === 'undefined') {
-    console.log('🔧 Skipping auth persistence setup on server-side');
     return;
   }
 
@@ -101,7 +98,6 @@ async function setupAuthPersistence() {
 
   try {
     await setPersistence(auth, browserLocalPersistence);
-    console.log('✅ Firebase Auth persistence enabled (local storage)');
   } catch (error) {
     console.warn('⚠️ Failed to set Firebase Auth persistence:', error);
     // Continue without persistence - not critical
@@ -112,7 +108,6 @@ async function setupAuthPersistence() {
 function setupAnonymousAuth() {
   // SSR Guard: Only run on client-side
   if (typeof window === 'undefined') {
-    console.log('🔧 Skipping anonymous auth setup on server-side');
     return;
   }
 
@@ -126,32 +121,17 @@ function setupAnonymousAuth() {
     // Create a promise that resolves when auth state is ready
     authState.promise = new Promise((resolve) => {
     try {
-      // Listen for auth state changes with enhanced logging
+      // Listen for auth state changes
       onAuthStateChanged(auth!, async (user) => {
-        console.log('🔐 Auth state changed:', {
-          hasUser: !!user,
-          isAnonymous: user?.isAnonymous,
-          uid: user?.uid,
-          timestamp: new Date().toISOString()
-        });
 
         authState.user = user;
 
         if (user) {
           // User is authenticated
-          console.log('✅ User authenticated:', {
-            uid: user.uid,
-            isAnonymous: user.isAnonymous,
-            creationTime: user.metadata.creationTime,
-            lastSignInTime: user.metadata.lastSignInTime
-          });
-
           authState.ready = true;
           resolve();
         } else {
           // No user - attempt anonymous sign-in
-          console.log('🔐 No user found, attempting anonymous sign-in...');
-
           // Attempt anonymous sign-in with network retry logic
           await attemptAnonymousSignInWithRetry(resolve);
         }
@@ -183,13 +163,7 @@ async function attemptAnonymousSignInWithRetry(resolve: () => void) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔐 Anonymous sign-in attempt ${attempt}/${maxRetries}...`);
-
       const userCredential = await signInAnonymously(auth!);
-      console.log('✅ Anonymous sign-in successful:', {
-        uid: userCredential.user.uid,
-        isAnonymous: userCredential.user.isAnonymous
-      });
 
       authState.user = userCredential.user;
       authState.ready = true;
@@ -218,12 +192,9 @@ async function attemptAnonymousSignInWithRetry(resolve: () => void) {
       }
 
       if (firebaseError.code === 'auth/network-request-failed') {
-        console.warn(`🌐 Network request failed on attempt ${attempt}. Retrying...`);
-
         if (attempt < maxRetries) {
           // Exponential backoff with jitter for network issues
           const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-          console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -274,7 +245,6 @@ export const isAuthStateReady = () => authState.ready;
 export const ensureAuthReady = async (timeoutMs: number = 30000): Promise<boolean> => {
   // SSR Guard: Return false on server-side
   if (typeof window === 'undefined') {
-    console.log('🔧 ensureAuthReady called on server-side, returning false');
     return false;
   }
 
@@ -283,12 +253,9 @@ export const ensureAuthReady = async (timeoutMs: number = 30000): Promise<boolea
     return true;
   }
 
-  console.log('🔐 Ensuring Firebase authentication is ready...');
-
   // Extended wait for cold start scenarios (increased default timeout)
   const ready = await waitForAuthState(timeoutMs);
   if (ready && authState.user) {
-    console.log('✅ Authentication ready via state listener');
     return true;
   }
 
@@ -297,26 +264,20 @@ export const ensureAuthReady = async (timeoutMs: number = 30000): Promise<boolea
     const maxRetries = 5; // Increased from 3 to 5
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔐 Manual anonymous sign-in attempt ${attempt}/${maxRetries}...`);
         const userCredential = await signInAnonymously(auth);
         authState.user = userCredential.user;
         authState.ready = true;
-        console.log('✅ Manual anonymous sign-in successful');
         return true;
       } catch (error: unknown) {
-        console.error(`❌ Manual sign-in attempt ${attempt} failed:`, error);
-
         // Handle network errors specifically
         const firebaseError = error as { code?: string; message?: string };
         if (firebaseError.code === 'auth/network-request-failed' && attempt < maxRetries) {
           // Longer delay for network issues
           const delay = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s, 16s
-          console.log(`🌐 Network error detected. Waiting ${delay}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         } else if (attempt < maxRetries) {
           // Standard exponential backoff for other errors
           const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s, 8s
-          console.log(`⏳ Waiting ${delay}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -348,7 +309,7 @@ export const initTranslationsCollection = async () => {
         createdAt: new Date().toISOString(),
         note: 'Initial document to create translations collection'
       });
-      console.log('Translations collection initialized');
+
     }
   } catch (error) {
     console.error('Error initializing translations collection:', error);

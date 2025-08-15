@@ -26,13 +26,13 @@ interface ChordData {
 }
 
 // Helper function to generate cache key for key detection
-function generateKeyDetectionCacheKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false): string {
+function generateKeyDetectionCacheKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false, includeRomanNumerals: boolean = false): string {
   const chordString = chords
     .map(chord => `${chord.time?.toFixed(2) || 0}:${chord.chord || chord}`)
     .join('|');
 
-  // Include enharmonic correction flag in the cache key
-  const keyString = `${chordString}_enharmonic:${includeEnharmonicCorrection}`;
+  // Put flags at the beginning to ensure they're not truncated
+  const keyString = `enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
   return Buffer.from(keyString).toString('base64').substring(0, 50);
 }
 
@@ -59,6 +59,15 @@ interface KeyDetectionResult {
         atIndex: number;
       }>;
     };
+  } | null;
+  romanNumerals?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
   } | null;
   rawResponse?: string;
   timestamp?: unknown;
@@ -89,7 +98,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
   try {
     const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
 
-    // ENHANCED: Ensure sequence corrections are properly structured for caching
+    // ENHANCED: Ensure sequence corrections and Roman numerals are properly structured for caching
     const cacheData = {
       ...keyResult,
       timestamp: serverTimestamp(),
@@ -99,6 +108,12 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
         originalSequence: keyResult.sequenceCorrections.originalSequence || [],
         correctedSequence: keyResult.sequenceCorrections.correctedSequence || [],
         keyAnalysis: keyResult.sequenceCorrections.keyAnalysis || null
+      } : null,
+      // Ensure Roman numerals are properly stored
+      romanNumerals: keyResult.romanNumerals ? {
+        analysis: keyResult.romanNumerals.analysis || [],
+        keyContext: keyResult.romanNumerals.keyContext || '',
+        temporalShifts: keyResult.romanNumerals.temporalShifts || []
       } : null
     };
 
@@ -152,7 +167,15 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
 
 export async function POST(request: NextRequest) {
   try {
-    const { chords, includeEnharmonicCorrection = false, bypassCache = false, geminiApiKey } = await request.json();
+    const { chords, includeEnharmonicCorrection = false, bypassCache = false, geminiApiKey, includeRomanNumerals = false } = await request.json();
+
+    // API call tracking for optimization monitoring
+    console.log('🔍 [API] Key detection request:', {
+      chordsCount: chords?.length || 0,
+      includeEnharmonicCorrection,
+      includeRomanNumerals,
+      bypassCache
+    });
 
     if (!chords || !Array.isArray(chords) || chords.length === 0) {
       return NextResponse.json(
@@ -181,12 +204,14 @@ export async function POST(request: NextRequest) {
       }
     }) : ai;
 
-    // Generate cache key (include enharmonic flag in cache key)
-    const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection);
+    // Generate cache key (include enharmonic and Roman numeral flags in cache key)
+    const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection, includeRomanNumerals);
 
     // Check cache first (unless bypassed for testing)
+    console.log('🔍 [CACHE] Checking cache for key:', cacheKey.substring(0, 20) + '...');
     const cachedResult = bypassCache ? null : await checkKeyDetectionCache(cacheKey);
     if (cachedResult && !bypassCache) {
+      console.log('✅ [CACHE] Cache hit - returning cached result');
       // Extract chord names for fallback if enharmonic correction data is missing
       const chordNames = chords.map((chord: ChordData) => {
         if (typeof chord === 'string') {
@@ -207,8 +232,12 @@ export async function POST(request: NextRequest) {
         corrections: cachedResult.corrections || {},
         // ENHANCED: Include sequence corrections from cache with proper structure
         sequenceCorrections: cachedResult.sequenceCorrections || null,
+        // Include Roman numeral analysis from cache
+        romanNumerals: cachedResult.romanNumerals || null,
         fromCache: true
       });
+    } else {
+      console.log('❌ [CACHE] Cache miss - proceeding to Gemini API');
     }
 
     // Format chord progression for AI analysis
@@ -229,11 +258,17 @@ export async function POST(request: NextRequest) {
 
     let prompt: string;
 
-    if (includeEnharmonicCorrection) {
-      // Enhanced prompt for context-aware sequence-based enharmonic correction
+    if (includeEnharmonicCorrection || includeRomanNumerals) {
+      // Enhanced prompt for context-aware sequence-based enharmonic correction and Roman numeral analysis
       const chordSequence = chordNames.filter(chord => chord && chord !== 'N.C.' && chord !== 'N/C');
 
-      prompt = `Analyze this chord progression sequence and provide ONLY enharmonic spelling corrections (like C# ↔ Db, F# ↔ Gb) based on key context. DO NOT change chord qualities or functions.
+      const analysisType = includeEnharmonicCorrection && includeRomanNumerals
+        ? "enharmonic spelling corrections AND Roman numeral analysis"
+        : includeEnharmonicCorrection
+        ? "ONLY enharmonic spelling corrections (like C# ↔ Db, F# ↔ Gb) based on key context. DO NOT change chord qualities or functions"
+        : "Roman numeral analysis";
+
+      prompt = `Analyze this chord progression sequence and provide ${analysisType}.
 
 CHORD SEQUENCE (in order): [${chordSequence.join(', ')}]
 
@@ -242,7 +277,7 @@ TIMING INFORMATION: ${chordProgression}
 Please respond with ONLY a JSON object in this exact format:
 {
   "primaryKey": "[Key Name]",
-  "modulation": "[Key Name]" or null,
+  "modulation": "[Key Name]" or null,${includeEnharmonicCorrection ? `
   "sequenceCorrections": {
     "originalSequence": [${chordSequence.map(c => `"${c}"`).join(', ')}],
     "correctedSequence": ["corrected1", "corrected2", ...],
@@ -266,10 +301,59 @@ Please respond with ONLY a JSON object in this exact format:
   },
   "corrections": {
     "originalChord1": "correctedChord1"
-  }
+  },` : ''}${includeRomanNumerals ? `
+  "romanNumerals": {
+    "analysis": ["I", "vi", "IV", "V7", "I"],
+    "keyContext": "C major",
+    "temporalShifts": [
+      {
+        "chordIndex": 3,
+        "targetKey": "A minor",
+        "romanNumeral": "V7|vi"
+      }
+    ]
+  }` : ''}
 }
 
-CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:
+${includeRomanNumerals ? `
+ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
+1. **STANDARD NOTATION**: Use standard music theory Roman numerals (I, ii, iii, IV, V, vi, vii°)
+   - Major chords: I, IV, V (uppercase)
+   - Minor chords: ii, iii, vi (lowercase)
+   - Diminished chords: vii° (lowercase with degree symbol)
+   - Seventh chords: V7, ii7, etc.
+
+2. **INVERSIONS**: Use proper figure bass notation for ALL inversions
+   **TRIADS:**
+   - Root position: I, ii, iii, IV, V, vi, vii° (no figures)
+   - First inversion: I6, ii6, iii6, IV6, V6, vi6, vii°6 (NOT I/3 or I/E)
+   - Second inversion: I64, ii64, iii64, IV64, V64, vi64, vii°64 (NOT I/5 or I/G)
+
+   **SEVENTH CHORDS:**
+   - Root position: I7, ii7, iii7, IV7, V7, vi7, vii°7 (figure 7)
+   - First inversion: I65, ii65, iii65, IV65, V65, vi65, vii°65 (NOT I7/3)
+   - Second inversion: I43, ii43, iii43, IV43, V43, vi43, vii°43 (NOT I7/5)
+   - Third inversion: I42, ii42, iii42, IV42, V42, vi42, vii°42 (NOT I7/7)
+
+   **CRITICAL**: NEVER use slash notation (I/D, V/B) - ALWAYS use figure bass (I42, V6)
+
+3. **TEMPORARY TONAL SHIFTS**: Use bar notation for analysis, but note frontend conversion
+   - Analysis format: V7|vi (V7 going to vi as temporary tonic)
+   - Frontend will display as: V7/vi (fraction notation)
+   - Example: In C major, E7 going to Am = V7|vi
+
+4. **KEY CONTEXT**: Focus on the local key and temporary modulations
+   - Identify the primary key context
+   - Mark temporary shifts to related keys (relative minor/major, dominant, subdominant)
+   - Use Roman numerals relative to the current tonal center
+
+5. **CHORD MAPPING**: Provide Roman numeral for each chord in sequence
+   - Array length must match the chord sequence length
+   - Use "N.C." for no-chord sections
+   - Mark unclear analysis with "?" (e.g., "V7?")
+
+` : ''}${includeEnharmonicCorrection ? `
+CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:` : ''}
 1. **SAME PITCH REQUIREMENT**: Only change note spelling, never the actual pitch
    - ENHARMONIC EQUIVALENTS (same pitch): C#↔Db, D#↔Eb, F#↔Gb, G#↔Ab, A#↔Bb
    - DIFFERENT PITCHES (never change): C≠C#, D≠D#, E≠F, F≠F#, G≠G#, A≠A#, B≠C
@@ -312,7 +396,7 @@ Respond with ONLY the JSON object, no explanations.`;
 
 Chord progression: ${chordProgression}
 
-Please provide ONLY the key and modulation information in this exact format:
+Please analyze carefully the tonality and provide ONLY the mostly likely key and modulation information in this exact format:
 Primary Key: **[Key Name]**
 Possible Tonal Modulation: **[Key Name]** (around [timestamp]) OR **None**
 
@@ -322,17 +406,19 @@ Do not include any explanations, analysis, or additional text. Just give me the 
     console.log('Sending key detection request to Gemini API');
 
     // Generate content using the Gemini model
+    console.log('🚀 [GEMINI] Sending key detection request to Gemini API');
     const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
       contents: prompt
     });
+    console.log('✅ [GEMINI] Received response from Gemini API');
 
     // Extract and clean the response text
     const text = response.text?.trim() || '';
 
     let result: KeyDetectionResult;
 
-    if (includeEnharmonicCorrection) {
+    if (includeEnharmonicCorrection || includeRomanNumerals) {
       // Parse JSON response for enhanced mode
       try {
         // Clean the response text to remove markdown code blocks if present
@@ -375,6 +461,7 @@ Do not include any explanations, analysis, or additional text. Just give me the 
             correctedChords: correctedSequence,
             corrections: legacyCorrections,
             sequenceCorrections: sequenceCorrections,
+            romanNumerals: jsonResponse.romanNumerals || null,
             rawResponse: text
           };
         } else {
@@ -393,6 +480,7 @@ Do not include any explanations, analysis, or additional text. Just give me the 
             originalChords: chordNames,
             correctedChords: correctedChords,
             corrections: corrections,
+            romanNumerals: jsonResponse.romanNumerals || null,
             rawResponse: text
           };
         }
@@ -408,6 +496,7 @@ Do not include any explanations, analysis, or additional text. Just give me the 
           originalChords: chordNames,
           correctedChords: chordNames, // No correction if parsing failed
           corrections: {},
+          romanNumerals: null, // No Roman numerals if parsing failed
           rawResponse: text
         };
       }

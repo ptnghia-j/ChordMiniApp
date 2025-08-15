@@ -7,6 +7,31 @@ export default function ChangelogPage() {
 
   const releases = [
     {
+      version: 'v0.4.0',
+      date: 'August 15, 2025',
+      title: 'Roman Numeral Analysis & Backend Architecture Refactoring',
+      description: 'Major feature release introducing Roman numeral chord analysis and comprehensive backend refactoring for improved maintainability',
+      features: [
+        'NEW: Roman Numeral Analysis (Beta) - Added Roman numeral chord notation display below chord labels for music theory analysis',
+        'NEW: Key Detection Integration - Roman numerals automatically adapt to detected song key with proper chord function analysis',
+        'NEW: Roman Numeral Toggle - Added dedicated toggle button with beta tag in the chord grid controls',
+        'ARCHITECTURE: Backend Refactoring - Factored monolithic Python app.py into modular services, blueprints, and endpoints',
+        'PERFORMANCE: Improved chord-to-Roman numeral mapping with robust sequence alignment handling',
+        'UI: Enhanced chord grid with optional Roman numeral display for music education and analysis'
+      ],
+      technical: [
+        'Implemented Roman numeral mapping logic with sequence correction handling for accurate chord function analysis',
+        'Refactored Python backend from monolithic app.py into organized blueprints: audio, chord_recognition, debug, key_detection',
+        'Created dedicated service modules for audio processing, chord utilities, and key analysis',
+        'Added robust chord sequence alignment algorithm to handle timing discrepancies between UI and analysis data',
+        'Integrated Roman numeral analysis with existing key detection and chord recognition pipelines',
+        'Cleaned up debug console logs from Roman numeral mapping and authentication flows'
+      ],
+      breaking: [
+        'Roman Numeral Analysis marked as [beta] - feature may evolve based on user feedback and music theory requirements'
+      ]
+    },
+    {
       version: 'v0.3.5',
       date: 'July 27, 2025',
       title: 'Enharmonic Inversion Fixes & Beat Detection Optimization',

@@ -5,7 +5,8 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaExpand, FaCompress } from 'react-icons/fa';
-import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
+import { HiPencil, HiCheck, HiXMark, HiOutlineArrowPath, HiArrowPath } from 'react-icons/hi2';
+import { Tooltip } from '@heroui/react';
 
 import { useParams, useSearchParams } from 'next/navigation';
 // Import types are used in type annotations and interfaces
@@ -41,6 +42,11 @@ const MetronomeControls = dynamic(() => import('@/components/MetronomeControls')
 });
 
 const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimplificationToggle'), {
+  loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
+const RomanNumeralToggle = dynamic(() => import('@/components/RomanNumeralToggle'), {
   loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
@@ -347,6 +353,9 @@ export default function YouTubeVideoAnalyzePage() {
   // Chord simplification state
   const [simplifyChords, setSimplifyChords] = useState(false);
 
+  // Roman numeral analysis state
+  const [showRomanNumerals, setShowRomanNumerals] = useState(false);
+
   // Handle segmentation results from chatbot
   const handleSegmentationResult = useCallback((result: SegmentationResult) => {
     console.log('Received segmentation result:', result);
@@ -375,6 +384,15 @@ export default function YouTubeVideoAnalyzePage() {
         atTime?: number;
       }>;
     };
+    romanNumerals?: {
+      analysis: string[];
+      keyContext: string;
+      temporalShifts?: Array<{
+        chordIndex: number;
+        targetKey: string;
+        romanNumeral: string;
+      }>;
+    } | null;
   } | null>(null);
 
   // Memoize chord corrections to prevent useMemo dependency changes
@@ -399,8 +417,31 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [sequenceCorrections, showCorrectedChords, hasAutoEnabledCorrections]);
 
+  // REMOVED: Separate Roman numeral useEffect to prevent duplicate API calls
+  // Roman numeral logic is now integrated into the main key detection useEffect below
+
+  // Reset Roman numerals requested flag when toggled off
+  useEffect(() => {
+    if (!showRomanNumerals) {
+      setRomanNumeralsRequested(false);
+    }
+  }, [showRomanNumerals]);
 
   const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
+  const [romanNumeralsRequested, setRomanNumeralsRequested] = useState(false);
+
+  // Roman numeral analysis state (separate from sequenceCorrections)
+  const [romanNumeralData, setRomanNumeralData] = useState<{
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null>(null);
+
+
 
   // Current state for playback
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
@@ -690,6 +731,10 @@ export default function YouTubeVideoAnalyzePage() {
             if (cachedTranscription.keySignature) {
               setKeySignature(cachedTranscription.keySignature);
             }
+            // Load cached Roman numeral data
+            if (cachedTranscription.romanNumerals) {
+              setRomanNumeralData(cachedTranscription.romanNumerals);
+            }
           } else if (cachedTranscription && cachedTranscription.originalChords && cachedTranscription.correctedChords) {
             // Backward compatibility: convert old format to new format
             const corrections: Record<string, string> = {};
@@ -706,6 +751,10 @@ export default function YouTubeVideoAnalyzePage() {
             if (cachedTranscription.keySignature) {
               setKeySignature(cachedTranscription.keySignature);
             }
+            // Load cached Roman numeral data (backward compatibility)
+            if (cachedTranscription.romanNumerals) {
+              setRomanNumeralData(cachedTranscription.romanNumerals);
+            }
           } else {
             // No cached chord corrections found
           }
@@ -719,23 +768,41 @@ export default function YouTubeVideoAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisResults?.chords, videoId, chordCorrections]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
 
-  // Key detection effect - only run once when analysis results are available and no enharmonic correction data
+  // Unified key detection effect - handles both initial detection and Roman numeral requests
   useEffect(() => {
-    if (analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !chordCorrections && !keyDetectionAttempted) {
+    // Determine if we need to make an API call
+    const needsInitialDetection = analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !keyDetectionAttempted;
+    const needsRomanNumerals = showRomanNumerals && analysisResults && !romanNumeralsRequested && (sequenceCorrections?.romanNumerals?.analysis?.length || 0) === 0;
+
+    if (needsInitialDetection || needsRomanNumerals) {
       setIsDetectingKey(true);
-      setKeyDetectionAttempted(true);
+      if (needsInitialDetection) {
+        setKeyDetectionAttempted(true);
+      }
+      if (needsRomanNumerals) {
+        setRomanNumeralsRequested(true);
+      }
 
       // Prepare chord data for key detection
-      const chordData = analysisResults.chords.map((chord) => ({
+      // CRITICAL FIX: Deduplicate consecutive identical chords to avoid beat-level analysis
+      const rawChordData = analysisResults.chords.map((chord) => ({
         chord: chord.chord,
         time: chord.time
       }));
+
+      // Remove consecutive duplicate chords to get only chord changes
+      const chordData = rawChordData.filter((chord, index) => {
+        if (index === 0) return true; // Always include first chord
+        return chord.chord !== rawChordData[index - 1].chord; // Include only if different from previous
+      });
+
+      console.log(`🎼 Chord deduplication: ${rawChordData.length} raw chords → ${chordData.length} unique changes`);
 
       // Import and call key detection service with enharmonic correction
 
       import('@/services/keyDetectionService').then(({ detectKey }) => {
         // Use cache for sequence corrections (no bypass)
-        detectKey(chordData, true, false) // Request enharmonic correction, use cache
+        detectKey(chordData, true, false, showRomanNumerals) // Request enharmonic correction, use cache, include Roman numerals if enabled
           .then(result => {
 
             setKeySignature(result.primaryKey);
@@ -753,6 +820,13 @@ export default function YouTubeVideoAnalyzePage() {
               setChordCorrections(result.corrections);
             }
 
+            // Handle Roman numeral analysis (separate from sequence corrections)
+            if (result.romanNumerals) {
+              setRomanNumeralData(result.romanNumerals);
+            } else {
+              setRomanNumeralData(null);
+            }
+
             // Update the transcription cache with key signature and enharmonic correction data
             if (result.primaryKey && result.primaryKey !== 'Unknown') {
               const updateTranscriptionWithKey = async () => {
@@ -766,7 +840,8 @@ export default function YouTubeVideoAnalyzePage() {
                       ...cachedTranscription,
                       keySignature: result.primaryKey,
                       keyModulation: result.modulation,
-                      chordCorrections: result.corrections || null
+                      chordCorrections: result.corrections || null,
+                      romanNumerals: result.romanNumerals || null
                     });
                     // console.log('Updated transcription cache with key signature and enharmonic correction data:', result.primaryKey);
                   }
@@ -787,7 +862,7 @@ export default function YouTubeVideoAnalyzePage() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisResults?.chords, isDetectingKey, chordCorrections, keyDetectionAttempted, videoId]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
+  }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted, videoId, showRomanNumerals, romanNumeralsRequested]); // FIXED: Removed sequenceCorrections?.romanNumerals to prevent infinite loop
 
   // Set YouTube URLs immediately for fast frame loading
   useEffect(() => {
@@ -812,6 +887,7 @@ export default function YouTubeVideoAnalyzePage() {
 
       // Reset key detection flag for new video
       setKeyDetectionAttempted(false);
+      setRomanNumeralsRequested(false); // Reset Roman numerals flag for new video
       setChordCorrections(null); // Reset chord corrections for new video
       setShowCorrectedChords(false); // Reset to show original chords
       setHasAutoEnabledCorrections(false); // Reset auto-enable flag for new video
@@ -1465,6 +1541,8 @@ export default function YouTubeVideoAnalyzePage() {
                         isEditMode={isEditMode}
                         editedChords={editedChords}
                         onChordEdit={handleChordEdit}
+                        showRomanNumerals={showRomanNumerals}
+                        romanNumeralData={romanNumeralData}
                       />
 
                       {/* Control buttons moved to the component level */}
@@ -1494,6 +1572,8 @@ export default function YouTubeVideoAnalyzePage() {
                       sequenceCorrections={simplifiedSequenceCorrections}
                       segmentationData={segmentationData}
                       showSegmentation={showSegmentation}
+                      showRomanNumerals={showRomanNumerals}
+                      romanNumeralData={sequenceCorrections?.romanNumerals || null}
                     />
                   )}
 
@@ -1560,42 +1640,58 @@ export default function YouTubeVideoAnalyzePage() {
             >
               {/* Improved responsive toggle button container */}
               <div
-                className="absolute -top-10 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-1 p-2 bg-white dark:bg-content-bg bg-opacity-80 dark:bg-opacity-90 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+                className="absolute -top-12 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
                 style={{
                   right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
                   maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
                 }}
               >
-                <button
-                  onClick={toggleFollowMode}
-                  className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap ${
-                    isFollowModeEnabled
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-                  }`}
-                  title={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
+                <Tooltip
+                  content={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
+                  placement="top"
+                  delay={500}
+                  closeDelay={100}
+                  classNames={{
+                    base: "max-w-xs",
+                    content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+                  }}
                 >
-                  <span className={`${isVideoMinimized ? 'hidden' : ''}`}>
-                    {isFollowModeEnabled ? "Auto-scroll: ON" : "Auto-scroll: OFF"}
-                  </span>
-                  <span className={`${isVideoMinimized ? 'inline' : 'hidden'}`}>
-                    {isFollowModeEnabled ? "Scroll" : "Scroll"}
-                  </span>
-                </button>
+                  <button
+                    onClick={toggleFollowMode}
+                    className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+                      isFollowModeEnabled
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+                    }`}
+                  >
+                    {/* Icon */}
+                    {isFollowModeEnabled ? (
+                      <HiArrowPath className="h-4 w-4" />
+                    ) : (
+                      <HiOutlineArrowPath className="h-4 w-4" />
+                    )}
+                  </button>
+                </Tooltip>
+
+                {/* Roman numeral toggle - only show when analysis results are available */}
+                {analysisResults && (
+                  <RomanNumeralToggle
+                    isEnabled={showRomanNumerals}
+                    onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+                  />
+                )}
 
                 {/* Chord simplification toggle - only show when analysis results are available */}
                 {analysisResults && (
                   <ChordSimplificationToggle
                     isEnabled={simplifyChords}
                     onClick={() => setSimplifyChords(!simplifyChords)}
-                    isVideoMinimized={isVideoMinimized}
                   />
                 )}
 
                 {/* Metronome controls - only show when analysis results are available */}
                 {analysisResults && (
                   <MetronomeControls
-                    isVideoMinimized={isVideoMinimized}
                     onToggleWithSync={toggleMetronomeWithSync}
                   />
                 )}

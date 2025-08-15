@@ -53,6 +53,15 @@ interface SequenceCorrections {
       atTime?: number;
     }>;
   };
+  romanNumerals?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 interface UseAnalysisStateProps {
@@ -248,9 +257,9 @@ export const useAnalysisState = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisResults?.chords, videoId, chordCorrections]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
 
-  // Key detection effect - only run once when analysis results are available and no enharmonic correction data (lines 407-475)
+  // Key detection effect - only run once when analysis results are available (lines 407-475)
   useEffect(() => {
-    if (analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !chordCorrections && !keyDetectionAttempted) {
+    if (analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !keyDetectionAttempted) {
       setIsDetectingKey(true);
       setKeyDetectionAttempted(true);
 
@@ -317,7 +326,7 @@ export const useAnalysisState = ({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisResults?.chords, isDetectingKey, chordCorrections, keyDetectionAttempted, videoId]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
+  }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted, videoId]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
 
   // Cache availability checking (lines 743-785)
   useEffect(() => {

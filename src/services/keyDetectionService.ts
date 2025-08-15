@@ -24,6 +24,16 @@ export interface KeyDetectionResult {
       }>;
     };
   };
+  // NEW: Roman numeral analysis data
+  romanNumerals?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 export interface ChordData {
@@ -34,7 +44,7 @@ export interface ChordData {
 /**
  * Detect the musical key and modulations from a chord progression
  */
-export async function detectKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false, bypassCache: boolean = false): Promise<KeyDetectionResult> {
+export async function detectKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false, bypassCache: boolean = false, includeRomanNumerals: boolean = false): Promise<KeyDetectionResult> {
   try {
     const response = await fetch('/api/detect-key', {
       method: 'POST',
@@ -44,7 +54,8 @@ export async function detectKey(chords: ChordData[], includeEnharmonicCorrection
       body: JSON.stringify({
         chords,
         includeEnharmonicCorrection,
-        bypassCache
+        bypassCache,
+        includeRomanNumerals
       }),
     });
 

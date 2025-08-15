@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import type { MetronomeService } from '@/services/metronomeService';
 import { FiChevronDown } from 'react-icons/fi';
+import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
+import { Tooltip } from '@heroui/react';
 
 interface MetronomeControlsProps {
   className?: string;
-  isVideoMinimized?: boolean;
   onToggleWithSync?: () => Promise<boolean>; // ENHANCED: Synchronized toggle function with current time
 }
 
 const MetronomeControls: React.FC<MetronomeControlsProps> = ({
   className = '',
-  isVideoMinimized = false,
   onToggleWithSync
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
@@ -115,35 +115,32 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({
     <div className={`metronome-controls ${className}`}>
       {/* Main toggle button */}
       <div className="flex items-center space-x-2">
-        <button
-          onClick={handleToggle}
-          className={`px-2 py-1 text-xs rounded-full shadow-md whitespace-nowrap transition-colors duration-200 ${
-            isEnabled
-              ? 'bg-orange-600 text-white hover:bg-orange-700'
-              : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-          }`}
-          title={isEnabled ? "Disable metronome" : "Enable metronome"}
+        <Tooltip
+          content={isEnabled ? "Disable metronome" : "Enable metronome"}
+          placement="top"
+          delay={500}
+          closeDelay={100}
+          classNames={{
+            base: "max-w-xs",
+            content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+          }}
         >
-          <div className="flex items-center space-x-1">
-            {/* Metronome icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-3 w-3"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
-            </svg>
-            <span>
-              <span className={`${isVideoMinimized ? 'hidden' : ''}`}>
-                {isEnabled ? "Metronome: ON" : "Metronome: OFF"}
-              </span>
-              <span className={`${isVideoMinimized ? 'inline' : 'hidden'}`}>
-                {isEnabled ? "Metro" : "Metro"}
-              </span>
-            </span>
-          </div>
-        </button>
+          <button
+            onClick={handleToggle}
+            className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+              isEnabled
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+            }`}
+          >
+            {/* Icon */}
+            {isEnabled ? (
+              <PiMetronomeBold className="h-4 w-4" />
+            ) : (
+              <PiMetronome className="h-4 w-4" />
+            )}
+          </button>
+        </Tooltip>
       </div>
 
       {/* Expanded controls */}

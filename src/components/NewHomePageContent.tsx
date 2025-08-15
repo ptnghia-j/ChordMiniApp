@@ -200,7 +200,7 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0 }}
+                  transition={{ delay: 0, duration: 0 }}
                   className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">
@@ -221,7 +221,7 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0 }}
+                  transition={{ delay: 0, duration: 0 }}
                   className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
                 >
                   <div className="relative w-full overflow-hidden">

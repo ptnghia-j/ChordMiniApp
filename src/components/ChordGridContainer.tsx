@@ -64,6 +64,17 @@ interface ChordGridContainerProps {
   isEditMode?: boolean;
   editedChords?: Record<number, string>;
   onChordEdit?: (index: number, newChord: string) => void;
+  // Roman numeral analysis props
+  showRomanNumerals?: boolean;
+  romanNumeralData?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
@@ -83,7 +94,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   showSegmentation = false,
   isEditMode = false,
   editedChords = {},
-  onChordEdit
+  onChordEdit,
+  showRomanNumerals = false,
+  romanNumeralData = null
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
@@ -108,7 +121,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       chordCorrections,
       sequenceCorrections,
       segmentationData,
-      showSegmentation
+      showSegmentation,
+      showRomanNumerals,
+      romanNumeralData
     };
   }, [
     chordGridData.chords,
@@ -128,7 +143,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     chordCorrections,
     sequenceCorrections,
     segmentationData,
-    showSegmentation
+    showSegmentation,
+    showRomanNumerals,
+    romanNumeralData
   ]);
 
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation

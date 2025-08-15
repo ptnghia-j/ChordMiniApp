@@ -38,9 +38,7 @@ export class FirebaseAuthManager {
     onAuthStateChanged(auth, (user) => {
       this.currentUser = user;
       this.authStateReady = true;
-      
-      console.log(`🔐 Auth state changed: ${user ? 'authenticated' : 'not authenticated'}`);
-      
+
       // Notify listeners
       this.authStateListeners.forEach(listener => {
         try {

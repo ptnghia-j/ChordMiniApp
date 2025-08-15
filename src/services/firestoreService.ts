@@ -49,6 +49,16 @@ export interface TranscriptionData {
   originalChords?: string[] | null;
   correctedChords?: string[] | null;
   chordCorrections?: Record<string, string> | null;
+  // Add Roman numeral analysis field
+  romanNumerals?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 // Collection name

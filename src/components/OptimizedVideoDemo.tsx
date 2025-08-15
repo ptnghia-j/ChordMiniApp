@@ -108,7 +108,7 @@ export default function OptimizedVideoDemo({
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={handlePosterError}
             loading="eager"
-            priority={true}
+            fetchPriority="high"
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 40vw"
             style={{
               objectFit: 'cover'

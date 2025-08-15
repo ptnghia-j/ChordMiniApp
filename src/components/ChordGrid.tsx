@@ -44,6 +44,8 @@ interface ChordCellProps {
   isEditMode?: boolean;
   editedChord?: string;
   onChordEdit?: (index: number, newChord: string) => void;
+  showRomanNumerals?: boolean;
+  romanNumeral?: string | React.ReactElement;
 }
 
 const ChordCell = React.memo<ChordCellProps>(({
@@ -63,7 +65,9 @@ const ChordCell = React.memo<ChordCellProps>(({
   getDynamicFontSize,
   isEditMode = false,
   editedChord,
-  onChordEdit
+  onChordEdit,
+  showRomanNumerals = false,
+  romanNumeral
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -116,7 +120,11 @@ const ChordCell = React.memo<ChordCellProps>(({
   return (
     <div
       id={`chord-${globalIndex}`}
-      className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full min-h-[2.75rem] sm:min-h-[3.5rem] chord-cell`}
+      className={`${getChordStyle(chord, isCurrentBeat, globalIndex, isClickable)} w-full h-full ${
+        showRomanNumerals
+          ? 'min-h-[3.3rem] sm:min-h-[4.2rem]' // 20% increase when Roman numerals shown
+          : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
+      } chord-cell`}
       style={
         // Only apply segmentation color if this is NOT the current beat
         // Current beat styling takes priority over segmentation colors
@@ -128,7 +136,7 @@ const ChordCell = React.memo<ChordCellProps>(({
       onKeyDown={handleKeyDown}
       aria-label={isClickable ? `Jump to beat ${globalIndex + 1}${chord ? `, chord ${chord}` : ''}` : undefined}
     >
-      {/* Enhanced chord display with pickup beat support */}
+      {/* Enhanced chord display with pickup beat support and Roman numerals */}
       <div style={getChordContainerStyles()}>
         {!isEmpty && showChordLabel && chord ? (
           isEditing ? (
@@ -146,25 +154,49 @@ const ChordCell = React.memo<ChordCellProps>(({
               autoFocus
             />
           ) : (
-            <div
-              // ✅ APPLY FONT: Add the varelaRound class and remove font-medium
-              className={`${varelaRound.className} ${getDynamicFontSize(cellSize, (editedChord || displayChord).length)} leading-tight ${
-                wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
-              } overflow-hidden text-ellipsis whitespace-nowrap max-w-full ${
-                isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
-              }`}
-              style={{
-                ...getChordLabelStyles(),
-                maxWidth: '100%',
-                textOverflow: 'ellipsis',
-              }}
-              title={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}
-              dangerouslySetInnerHTML={{
-                __html: editedChord
-                  ? editedChord // Show raw edited value without formatting
-                  : formatChordWithMusicalSymbols(displayChord, isDarkMode)
-              }}
-            />
+            <div className="flex flex-col items-center justify-center h-full">
+              {/* Chord label */}
+              <div
+                // ✅ APPLY FONT: Add the varelaRound class and remove font-medium
+                className={`${varelaRound.className} ${
+                  showRomanNumerals
+                    ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
+                    : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
+                } leading-tight ${
+                  wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
+                } overflow-hidden text-ellipsis whitespace-nowrap max-w-full ${
+                  isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
+                }`}
+                style={{
+                  ...getChordLabelStyles(),
+                  maxWidth: '100%',
+                  textOverflow: 'ellipsis',
+                }}
+                title={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}
+                dangerouslySetInnerHTML={{
+                  __html: editedChord
+                    ? editedChord // Show raw edited value without formatting
+                    : formatChordWithMusicalSymbols(displayChord, isDarkMode)
+                }}
+              />
+
+              {/* Roman numeral display */}
+              {showRomanNumerals && romanNumeral && (
+                <div
+                  className={`${varelaRound.className} text-xs leading-tight text-gray-600 dark:text-gray-400 mt-0.5 overflow-hidden max-w-full`}
+                  style={{
+                    fontSize: `${Math.max(8, cellSize * 0.15)}px`, // Responsive Roman numeral size
+                    lineHeight: '1.2',
+                  }}
+                  title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
+                >
+                  {typeof romanNumeral === 'string'
+                    ? romanNumeral.replace(/\|/g, '/')
+                    : romanNumeral
+                  }
+                </div>
+              )}
+            </div>
           )
         ) : isEmpty ? (
           <div className="opacity-0" style={getChordLabelStyles()}>·</div>
@@ -233,6 +265,17 @@ interface ChordGridProps {
   isEditMode?: boolean; // Whether edit mode is active
   editedChords?: Record<number, string>; // Temporarily edited chord values
   onChordEdit?: (index: number, newChord: string) => void; // Callback for chord edits
+  // Roman numeral analysis props
+  showRomanNumerals?: boolean; // Whether to show Roman numeral analysis
+  romanNumeralData?: {
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null;
 }
 
 const ChordGrid: React.FC<ChordGridProps> = React.memo(({
@@ -260,7 +303,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   showSegmentation = false,
   isEditMode = false,
   editedChords = {},
-  onChordEdit
+  onChordEdit,
+  showRomanNumerals = false,
+  romanNumeralData = null
 }) => {
 
 
@@ -1013,6 +1058,191 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return calculatedRows;
   }, [groupedByMeasure, dynamicMeasuresPerRow]);
 
+  // Create mapping from beat index to chord sequence index for Roman numerals
+  const beatToChordSequenceMap = useMemo(() => {
+    if (chords.length === 0 || !romanNumeralData?.analysis || !sequenceCorrections?.correctedSequence) return {};
+
+    const map: Record<number, number> = {};
+    const normalizeChord = (chord: string) => {
+      if (chord === 'N' || chord === 'N.C.' || chord === 'N/C' || chord === 'NC') {
+        return 'N';
+      }
+      return chord;
+    };
+
+    // ROBUST APPROACH: Map UI beats directly to corrected sequence using chord matching
+    // This handles sequence length mismatches by finding the best match for each UI chord
+
+    let correctedSequenceIndex = 0;
+    let lastNormalizedChord = '';
+
+    for (let beatIndex = 0; beatIndex < shiftedChords.length; beatIndex++) {
+      const currentChord = shiftedChords[beatIndex];
+
+      if (!currentChord || currentChord === '') {
+        continue;
+      }
+
+      const normalizedCurrent = normalizeChord(currentChord);
+
+      // If chord changes, find the next matching chord in corrected sequence
+      if (normalizedCurrent !== lastNormalizedChord) {
+        if (lastNormalizedChord !== '') {
+          // Look for the next occurrence of this chord in the corrected sequence
+          let found = false;
+          for (let i = correctedSequenceIndex + 1; i < sequenceCorrections.correctedSequence.length; i++) {
+            const correctedChord = normalizeChord(sequenceCorrections.correctedSequence[i]);
+            if (correctedChord === normalizedCurrent) {
+              correctedSequenceIndex = i;
+              found = true;
+              break;
+            }
+          }
+
+          // If not found ahead, increment by 1 (fallback)
+          if (!found) {
+            correctedSequenceIndex = Math.min(correctedSequenceIndex + 1, sequenceCorrections.correctedSequence.length - 1);
+          }
+        }
+        lastNormalizedChord = normalizedCurrent;
+      }
+
+      // Map this beat to the current corrected sequence index
+      if (correctedSequenceIndex < romanNumeralData.analysis.length) {
+        map[beatIndex] = correctedSequenceIndex;
+      }
+    }
+
+
+
+    return map;
+  }, [chords.length, shiftedChords, romanNumeralData?.analysis, sequenceCorrections?.correctedSequence]);
+
+  // Helper function to format Roman numerals with proper figure bass notation
+  const formatRomanNumeral = (romanNumeral: string): React.ReactElement | string => {
+    if (!romanNumeral) return '';
+
+    // Handle figure bass notation (e.g., "I64", "ii6", "V7")
+    const figureMatch = romanNumeral.match(/^([ivxIVX]+)(.*)$/);
+    if (figureMatch) {
+      const [, baseRoman, figures] = figureMatch;
+
+      if (figures) {
+        // Handle different figure bass patterns
+        if (figures === '64') {
+          return (
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {baseRoman}
+              <span style={{
+                position: 'absolute',
+                left: '100%',
+                top: '-0.3em',
+                fontSize: '0.6em',
+                lineHeight: '0.8',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                marginLeft: '1px'
+              }}>
+                <span>6</span>
+                <span>4</span>
+              </span>
+            </span>
+          );
+        } else if (figures === '43') {
+          return (
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {baseRoman}
+              <span style={{
+                position: 'absolute',
+                left: '100%',
+                top: '-0.3em',
+                fontSize: '0.6em',
+                lineHeight: '0.8',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                marginLeft: '1px'
+              }}>
+                <span>4</span>
+                <span>3</span>
+              </span>
+            </span>
+          );
+        } else if (figures === '42') {
+          return (
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {baseRoman}
+              <span style={{
+                position: 'absolute',
+                left: '100%',
+                top: '-0.3em',
+                fontSize: '0.6em',
+                lineHeight: '0.8',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                marginLeft: '1px'
+              }}>
+                <span>4</span>
+                <span>2</span>
+              </span>
+            </span>
+          );
+        } else if (figures === '65') {
+          return (
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {baseRoman}
+              <span style={{
+                position: 'absolute',
+                left: '100%',
+                top: '-0.3em',
+                fontSize: '0.6em',
+                lineHeight: '0.8',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                marginLeft: '1px'
+              }}>
+                <span>6</span>
+                <span>5</span>
+              </span>
+            </span>
+          );
+        } else if (figures === '6') {
+          return (
+            <span>
+              {baseRoman}
+              <sup style={{ fontSize: '0.7em' }}>6</sup>
+            </span>
+          );
+        } else if (figures === '7') {
+          return (
+            <span>
+              {baseRoman}
+              <sup style={{ fontSize: '0.7em' }}>7</sup>
+            </span>
+          );
+        } else if (figures.includes('/')) {
+          // Handle secondary dominants like "V7/vi"
+          return <span>{romanNumeral}</span>;
+        } else {
+          // Handle other figure combinations
+          return (
+            <span>
+              {baseRoman}
+              <sup style={{ fontSize: '0.7em' }}>{figures}</sup>
+            </span>
+          );
+        }
+      }
+
+      return baseRoman;
+    }
+
+    return romanNumeral;
+  };
+
   // Early return if no chords available
   if (chords.length === 0) {
     return (
@@ -1215,6 +1445,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       // Get segmentation color for this beat
                       const segmentationColor = getSegmentationColorForBeatIndex(globalIndex);
 
+                      // Get Roman numeral for this chord using chord sequence mapping
+                      // Only show Roman numeral when chord label is shown (chord changes)
+                      const chordSequenceIndex = beatToChordSequenceMap[globalIndex];
+                      const rawRomanNumeral = showRomanNumerals && showChordLabel && romanNumeralData?.analysis && chordSequenceIndex !== undefined
+                        ? romanNumeralData.analysis[chordSequenceIndex] || ''
+                        : '';
+                      const romanNumeral = rawRomanNumeral ? formatRomanNumeral(rawRomanNumeral) : '';
+
+
+
                       return (
                         <ChordCell
                           key={`chord-${globalIndex}`}
@@ -1235,6 +1475,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           isEditMode={isEditMode}
                           editedChord={editedChords?.[globalIndex]}
                           onChordEdit={onChordEdit}
+                          showRomanNumerals={showRomanNumerals}
+                          romanNumeral={romanNumeral}
                         />
                       );
                     })}

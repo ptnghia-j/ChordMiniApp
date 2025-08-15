@@ -149,7 +149,7 @@ const Footer: React.FC = () => {
             {/* Right Side - Version and Support */}
             <div className="flex items-center space-x-6">
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Version 0.3.5
+                Version 0.4.0
               </span>
               <a
                 href="https://buymeacoffee.com/nghiaphan"
