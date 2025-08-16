@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { LyricsData } from '../types/musicAiTypes';
 
 // Types for UI layout management
@@ -103,6 +103,12 @@ export const useUILayout = ({
 
   // Lyrics panel state (lines 356-357)
   const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
+
+  // Auto-minimize video when panels are open
+  useEffect(() => {
+    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen;
+    setIsVideoMinimized(shouldMinimize);
+  }, [isChatbotOpen, isLyricsPanelOpen]);
 
   // Video control functions (lines 563-570)
   const toggleVideoMinimization = useCallback(() => {

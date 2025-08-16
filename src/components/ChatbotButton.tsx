@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Tooltip } from '@heroui/react';
 
 interface ChatbotButtonProps {
   isOpen: boolean;
@@ -20,28 +21,38 @@ const ChatbotButton: React.FC<ChatbotButtonProps> = ({
   className = ''
 }) => {
   return (
-    <motion.button
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        fixed bottom-4 right-4 z-[9999]
-        w-10 h-10 rounded-full
-        bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400
-        text-white shadow-md hover:shadow-lg
-        flex items-center justify-center
-        transition-all duration-200 ease-in-out
-        focus:outline-none focus:ring-2 focus:ring-blue-300
-        group
-        ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-        ${className}
-      `}
-      whileHover={!disabled ? { scale: 1.05 } : {}}
-      whileTap={!disabled ? { scale: 0.95 } : {}}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0, opacity: 0 }}
-      transition={{ duration: 0.2 }}
+    <Tooltip
+      content={disabled ? 'AI Chat unavailable' : (isOpen ? 'Close AI chat' : 'Open AI chat')}
+      placement="top"
+      delay={500}
+      closeDelay={100}
+      classNames={{
+        base: "max-w-xs",
+        content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+      }}
     >
+      <motion.button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          fixed bottom-4 right-4 z-[9999]
+          w-10 h-10 rounded-full
+          bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400
+          text-white shadow-md hover:shadow-lg
+          flex items-center justify-center
+          transition-all duration-200 ease-in-out
+          focus:outline-none focus:ring-2 focus:ring-blue-300
+          group
+          ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+          ${className}
+        `}
+        whileHover={!disabled ? { scale: 1.05 } : {}}
+        whileTap={!disabled ? { scale: 0.95 } : {}}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
       <AnimatePresence mode="wait">
         {isOpen ? (
           <motion.svg
@@ -73,20 +84,8 @@ const ChatbotButton: React.FC<ChatbotButtonProps> = ({
           </motion.svg>
         )}
       </AnimatePresence>
-
-      {/* Tooltip */}
-      <div className={`
-        absolute bottom-full left-0 mb-1
-        px-2 py-1 bg-gray-800 text-white text-xs rounded
-        opacity-0 pointer-events-none
-        transition-opacity duration-200
-        whitespace-nowrap
-        group-hover:opacity-100
-      `}>
-        {isOpen ? 'Close AI' : 'AI Chat'}
-        <div className="absolute top-full left-3 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
-      </div>
-    </motion.button>
+      </motion.button>
+    </Tooltip>
   );
 };
 

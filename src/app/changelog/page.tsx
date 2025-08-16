@@ -3,9 +3,52 @@
 import React from 'react';
 import Navigation from '@/components/Navigation';
 
-export default function ChangelogPage() {
+// Helper function to parse and style change items with badges
+const renderChangeItem = (item: string, colorClass: string) => {
+  const parts = item.split(': ');
+  const badgeText = parts[0];
+  const description = parts.slice(1).join(': ');
+  
+  let badgeColor = 'text-gray-700 dark:text-gray-200'; // Default
+  if (badgeText.includes('NEW')) badgeColor = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+  if (badgeText.includes('FIX')) badgeColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+  if (badgeText.includes('PERFORMANCE') || badgeText.includes('IMPROVED')) badgeColor = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
 
+  return (
+    <li className="flex items-start gap-3">
+      <svg className={`w-4 h-4 mt-1 flex-shrink-0 ${colorClass}`} fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+      </svg>
+      <div>
+        <span className={`px-2 py-0.5 rounded-md text-xs font-semibold mr-2 ${badgeColor}`}>{badgeText}</span>
+        <span className="text-gray-700 dark:text-gray-300">{description}</span>
+      </div>
+    </li>
+  );
+};
+
+export default function ChangelogPage() {
   const releases = [
+    {
+      version: 'v0.4.1',
+      date: 'August 16, 2025',
+      title: 'Roman Numeral Integration & Component Architecture Improvements',
+      description: 'Enhanced Roman numeral functionality with guitar chord integration, major component refactoring, and UI/UX improvements',
+      features: [
+        'NEW: Roman Numeral Analysis in Guitar Chords Tab - Integrated Roman numeral chord analysis functionality directly into the guitar chords tab for comprehensive music theory analysis',
+      ],
+      technical: [
+        'REFACTORING: Analysis Page Components - Completed major refactoring work across multiple analysis page components for improved maintainability and performance',
+        'REFACTORING: Chord Grid Architecture - Restructured chord grid component architecture with better separation of concerns and reusable patterns',
+        'REFACTORING: Lyrics Transcription Components - Broke down LeadSheetDisplay component into smaller, reusable components: LyricsControls, NoLyricsMessage, and LyricLine for better modularity',
+        'FIX: Chord Label Display Consistency - Fixed guitar chord diagram display inconsistency with roman numeral analysis',
+        'FIX: YouTube Video Player Resizing - Resolved video player resizing issues when lyrics or AI chat panels are opened for better space optimization',
+        'UI: Roman Numeral Typography - Improved visual styling and typography for Roman numeral chord displays with better readability and positioning',
+        'UI: Changelog Design - Redesigned changelog interface for enhanced readability and better information hierarchy',
+        'UI: Layout Stability - Fixed layout shift issues in toggle button groups for smoother user interactions'
+      ],
+      breaking: []
+    },
     {
       version: 'v0.4.0',
       date: 'August 15, 2025',
@@ -355,89 +398,95 @@ export default function ChangelogPage() {
     }
   ];
 
+
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-dark-bg">
+    <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       <Navigation />
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-12 md:py-16">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-            Changelog
+        <div className="text-center mb-12 md:mb-16">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-black dark:text-white mb-4">
+            Release Notes
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Track ChordMini&apos;s evolution with detailed release notes and feature updates.
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+            Follow the journey of our product. Here’s a detailed log of every feature, fix, and improvement we’ve shipped.
           </p>
         </div>
 
-        {/* Releases */}
-        <div className="max-w-2xl mx-auto space-y-6">
-          {releases.map((release, index) => (
-            <div
-              key={index}
-              className="bg-gray-100 dark:bg-content-bg rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
-            >
-              {/* Release Header */}
-              <div className="bg-primary-600 dark:bg-primary-700 text-white p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold">{release.version}</h2>
-                    <p className="text-primary-100 mt-1 text-lg">{release.title}</p>
+        {/* Timeline Container */}
+        <div className="relative max-w-4xl mx-auto">
+          {/* The vertical line in the middle of the timeline */}
+          <div className="absolute left-6 top-2 h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></div>
+
+          <div className="relative space-y-12">
+            {releases.map((release, index) => (
+              <div key={index} className="relative">
+                {/* The dot on the timeline */}
+                <div className="absolute left-6 top-2 w-4 h-4 rounded-full bg-primary-600 border-4 border-white dark:border-dark-bg transform -translate-x-1/2" aria-hidden="true"></div>
+
+                {/* Main Content Flex Container */}
+                <div className="flex flex-col md:flex-row gap-4 md:gap-8 ml-14">
+                  
+                  {/* Left Column: Date and Version */}
+                  <div className="w-full md:w-36 flex-shrink-0 md:text-right">
+                    <p className="font-semibold text-gray-800 dark:text-gray-200">{release.date}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      {release.version}
+                    </span>
                   </div>
-                  <div className="text-right">
-                    <div className="text-primary-100 text-sm">Released</div>
-                    <div className="text-lg font-semibold">{release.date}</div>
+
+                  {/* Right Column: Release Details */}
+                  <div className="flex-grow bg-gray-50 dark:bg-content-bg p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 className="text-2xl font-bold text-black dark:text-white">{release.title}</h2>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">{release.description}</p>
+                    
+                    <div className="mt-6 space-y-6">
+                      {/* Features Section */}
+                      {release.features && release.features.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Features & Improvements</h3>
+                          <ul className="mt-3 space-y-3">
+                            {release.features.map((item, index) => (
+                              <li key={index}>{renderChangeItem(item, 'text-blue-500 dark:text-blue-400')}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Technical Section */}
+                      {release.technical && release.technical.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold uppercase tracking-wider text-green-600 dark:text-green-400">Technical</h3>
+                          <ul className="mt-3 space-y-3">
+                            {release.technical.map((item, index) => (
+                              <li key={index}>{renderChangeItem(item, 'text-green-500 dark:text-green-400')}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Breaking Changes Section */}
+                      {release.breaking && release.breaking.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">Core Changes</h3>
+                          <ul className="mt-3 space-y-3">
+                            {release.breaking.map((item, index) => (
+                              <li key={index} className="flex items-start gap-3">
+                                <svg className="w-4 h-4 mt-1 flex-shrink-0 text-red-500 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.636-1.214 2.26-1.214 2.896 0l6.363 12.176c.61 1.166-.27 2.612-1.58 2.612H3.078c-1.31 0-2.19-1.446-1.58-2.612L8.257 3.099zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-3a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd"></path>
+                                </svg>
+                                <span className="text-gray-700 dark:text-gray-300">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <p className="text-primary-100 mt-2 text-sm">{release.description}</p>
               </div>
-
-              {/* Release Content */}
-              <div className="p-4 bg-gray-100 dark:bg-content-bg">
-                {/* Added Features */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-green-600 dark:text-green-400 mb-4">
-                    Features
-                  </h3>
-                  <ul className="space-y-2">
-                    {release.features.map((item, idx) => (
-                      <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex items-start">
-                        <span className="text-green-500 mr-3 mt-1 text-xs">•</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Breaking Changes */}
-                {release.breaking && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-4">
-                      Core Changes
-                    </h3>
-                    <ul className="space-y-2">
-                      {release.breaking.map((item, idx) => (
-                        <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex items-start">
-                          <span className="text-red-500 mr-3 mt-1 text-xs">⚠</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-500 dark:text-gray-400">
-          <p className="text-lg">
-            For technical details and API documentation, visit the{' '}
-            <a href="/docs" className="text-primary-600 dark:text-primary-400 hover:underline font-medium">
-              API Documentation
-            </a>{' '}
-            page.
-          </p>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -32,6 +32,9 @@ interface GuitarChordDiagramProps {
   segmentationColor?: string; // Segmentation color for border styling
   showPositionSelector?: boolean; // Show position selector for multiple positions
   onPositionChange?: (positionIndex: number) => void; // Callback for position changes
+  // Roman numeral analysis props
+  showRomanNumerals?: boolean;
+  romanNumeral?: React.ReactElement | string;
 }
 
 // Standard guitar instrument configuration
@@ -56,7 +59,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   isFocused = false,
   segmentationColor,
   showPositionSelector = false,
-  onPositionChange
+  onPositionChange,
+  showRomanNumerals = false,
+  romanNumeral
 }) => {
   // Size configurations - responsive sizing
   const sizeConfig = {
@@ -105,6 +110,23 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             No Chord
           </span>
         )}
+
+        {/* Roman numeral display for No Chord */}
+        {showRomanNumerals && romanNumeral && (
+          <div
+            className={`text-center font-semibold mt-1 text-blue-700 dark:text-blue-300 ${
+              size === 'small' ? 'text-xs' :
+              size === 'medium' ? 'text-sm' :
+              'text-base'
+            }`}
+            title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
+          >
+            {typeof romanNumeral === 'string'
+              ? romanNumeral.replace(/\|/g, '/')
+              : romanNumeral
+            }
+          </div>
+        )}
       </div>
     );
   }
@@ -124,17 +146,19 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   const { width, height } = sizeConfig[size];
 
   // Use the centralized chord formatting function for consistency with beat/chord grid
-  // This ensures both components display chord labels with the same formatting
+  // For guitar chord diagrams, prioritize the actual chord data name over displayName
+  // since guitar diagrams don't support inversions and should show the lookup name
   const getFormattedChordName = (): string => {
-    if (displayName) {
-      // Use provided displayName (for enharmonic corrections)
-      return formatChordWithMusicalSymbols(displayName, false); // Use light mode for guitar diagrams
-    } else if (chordData) {
+    if (chordData) {
       // Reconstruct chord name from chord data and format it
+      // This represents the actual chord that was looked up (without bass note for slash chords)
       const reconstructedChord = chordData.suffix === 'major'
         ? chordData.key
         : `${chordData.key}:${chordData.suffix}`;
       return formatChordWithMusicalSymbols(reconstructedChord, false); // Use light mode for guitar diagrams
+    } else if (displayName) {
+      // Fallback to displayName if no chord data is available
+      return formatChordWithMusicalSymbols(displayName, false); // Use light mode for guitar diagrams
     }
     return '';
   };
@@ -174,6 +198,23 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             __html: getFormattedChordName()
           }}
         />
+      )}
+
+      {/* Roman numeral display */}
+      {showRomanNumerals && romanNumeral && (
+        <div
+          className={`text-center font-semibold mt-1 text-blue-700 dark:text-blue-300 ${
+            size === 'small' ? 'text-xs' :
+            size === 'medium' ? 'text-sm' :
+            'text-base'
+          }`}
+          title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
+        >
+          {typeof romanNumeral === 'string'
+            ? romanNumeral.replace(/\|/g, '/')
+            : romanNumeral
+          }
+        </div>
       )}
 
       {/* Position selector for multiple chord positions */}

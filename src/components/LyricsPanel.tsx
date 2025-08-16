@@ -276,14 +276,14 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             border border-gray-200 dark:border-gray-700
             flex flex-col
 
-            /* Desktop positioning and sizing - same as ChatbotInterface */
+            /* Desktop positioning and sizing - adjusted for nav bar */
             bottom-16 right-4
             w-96 max-w-[calc(100vw-2rem)]
-            h-[calc(100vh-6rem)] max-h-[800px] min-h-[400px]
+            h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px]
 
             /* Mobile responsive - full screen on small devices */
             sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)]
-            sm:h-[calc(100vh-6rem)] sm:max-h-[800px] sm:min-h-[400px]
+            sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]
 
             /* Mobile slide-up panel - takes 80% of screen height */
             max-sm:bottom-0 max-sm:right-0 max-sm:left-0

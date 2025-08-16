@@ -135,9 +135,14 @@ export default function LocalAudioAnalyzePage() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords'>('beatChordMap');
 
-  // Key signature and chord correction states (simplified for upload audio page)
-  const keySignature = null;
-  const isDetectingKey = false;
+  // Roman numeral analysis state
+  const [showRomanNumerals] = useState(false);
+  const romanNumeralData = null;
+
+  // Key signature and chord correction states - now with proper key detection
+  const [keySignature, setKeySignature] = useState<string | null>(null);
+  const [isDetectingKey, setIsDetectingKey] = useState(false);
+  const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
   const showCorrectedChords = false;
   const chordCorrections = useMemo(() => ({} as Record<string, string>), []);
   const sequenceCorrections = useMemo(() => (null as {
@@ -392,6 +397,48 @@ export default function LocalAudioAnalyzePage() {
     }
     return getChordGridDataService(analysisResults);
   }, [analysisResults]);
+
+  // Key detection effect - automatically detect key after chord analysis
+  useEffect(() => {
+    if (analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !keyDetectionAttempted) {
+      setIsDetectingKey(true);
+      setKeyDetectionAttempted(true);
+
+      // Prepare chord data for key detection
+      // CRITICAL FIX: Deduplicate consecutive identical chords to avoid beat-level analysis
+      const rawChordData = analysisResults.chords
+        .filter((chord) => chord.time !== undefined && chord.time !== null)
+        .map((chord) => ({
+          chord: chord.chord,
+          time: chord.time as number // Safe to cast since we filtered out undefined/null
+        }));
+
+      // Remove consecutive duplicate chords to get only chord changes
+      const chordData = rawChordData.filter((chord, index) => {
+        if (index === 0) return true; // Always include first chord
+        return chord.chord !== rawChordData[index - 1].chord; // Include only if different from previous
+      });
+
+      console.log(`🎼 Chord deduplication: ${rawChordData.length} raw chords → ${chordData.length} unique changes`);
+
+      // Import and call key detection service with enharmonic correction
+      import('@/services/keyDetectionService').then(({ detectKey }) => {
+        // Use cache for sequence corrections (no bypass)
+        detectKey(chordData, true, false) // Request enharmonic correction, use cache
+          .then(result => {
+            console.log('🔑 Key detection result:', result.primaryKey);
+            setKeySignature(result.primaryKey);
+          })
+          .catch(error => {
+            console.error('Failed to detect key:', error);
+            setKeySignature(null);
+          })
+          .finally(() => {
+            setIsDetectingKey(false);
+          });
+      });
+    }
+  }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted]);
 
   // Beat animation tracking for HTML audio elements
   useEffect(() => {
@@ -684,6 +731,8 @@ export default function LocalAudioAnalyzePage() {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
+                        showRomanNumerals={showRomanNumerals}
+                        romanNumeralData={romanNumeralData}
                       />
                     )}
                   </div>

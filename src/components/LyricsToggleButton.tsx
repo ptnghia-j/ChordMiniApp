@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Tooltip } from '@heroui/react';
 
 interface LyricsToggleButtonProps {
   isOpen: boolean;
@@ -19,32 +20,41 @@ const LyricsToggleButton: React.FC<LyricsToggleButtonProps> = ({
   className = ''
 }) => {
   return (
-    <motion.button
-      onClick={onClick}
-      className={`
-        fixed z-[9999]
-        w-10 h-10 rounded-full
-        bg-green-600 hover:bg-green-700
-        text-white shadow-md
-        flex items-center justify-center
-        transition-all duration-300
-        hover:scale-110 active:scale-95
-
-        /* Desktop positioning - positioned to the left of chatbot button */
-        bottom-4 right-16
-
-        /* Mobile positioning - stack vertically */
-        max-sm:bottom-16 max-sm:right-4
-
-        ${className}
-      `}
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.95 }}
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      title={isOpen ? 'Close lyrics' : 'Open lyrics'}
+    <Tooltip
+      content={isOpen ? 'Close lyrics panel' : 'Open lyrics panel'}
+      placement="top"
+      delay={500}
+      closeDelay={100}
+      classNames={{
+        base: "max-w-xs",
+        content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+      }}
     >
+      <motion.button
+        onClick={onClick}
+        className={`
+          fixed z-[9999]
+          w-10 h-10 rounded-full
+          bg-green-600 hover:bg-green-700
+          text-white shadow-md
+          flex items-center justify-center
+          transition-all duration-300
+          hover:scale-110 active:scale-95
+
+          /* Desktop positioning - positioned to the left of chatbot button */
+          bottom-4 right-16
+
+          /* Mobile positioning - stack vertically */
+          max-sm:bottom-16 max-sm:right-4
+
+          ${className}
+        `}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      >
       <motion.div
         animate={{ rotate: isOpen ? 180 : 0 }}
         transition={{ duration: 0.3 }}
@@ -84,16 +94,17 @@ const LyricsToggleButton: React.FC<LyricsToggleButtonProps> = ({
         )}
       </motion.div>
       
-      {/* Notification dot for new features */}
-      {!isOpen && (
-        <motion.div
-          className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.5, duration: 0.3 }}
-        />
-      )}
-    </motion.button>
+        {/* Notification dot for new features */}
+        {!isOpen && (
+          <motion.div
+            className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+          />
+        )}
+      </motion.button>
+    </Tooltip>
   );
 };
 

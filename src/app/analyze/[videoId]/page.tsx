@@ -4,52 +4,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { FaExpand, FaCompress } from 'react-icons/fa';
-import { HiPencil, HiCheck, HiXMark, HiOutlineArrowPath, HiArrowPath } from 'react-icons/hi2';
-import { Tooltip } from '@heroui/react';
 
 import { useParams, useSearchParams } from 'next/navigation';
 // Import types are used in type annotations and interfaces
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import Navigation from '@/components/Navigation';
 import LyricsToggleButton from '@/components/LyricsToggleButton';
-import SegmentationToggleButton from '@/components/SegmentationToggleButton';
 
 // Dynamic imports for heavy components to improve initial bundle size
-const ProcessingStatusBanner = dynamic(() => import('@/components/ProcessingStatusBanner'), {
-  loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: true
-});
-
 const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
   loading: () => <div className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const ExtractionNotification = dynamic(() => import('@/components/ExtractionNotification'), {
-  loading: () => <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
-
-const DownloadingIndicator = dynamic(() => import('@/components/DownloadingIndicator'), {
-  loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
-
-const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
-  loading: () => <div className="h-20 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
-
-const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimplificationToggle'), {
-  loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
-
-const RomanNumeralToggle = dynamic(() => import('@/components/RomanNumeralToggle'), {
-  loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
 
 const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
   loading: () => <div className="fixed right-4 bottom-16 w-96 h-96 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -57,8 +24,8 @@ const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { SongContext, SegmentationResult } from '@/types/chatbotTypes';
-import { LyricsData } from '@/types/musicAiTypes';
+import { SongContext } from '@/types/chatbotTypes';
+
 import { useMetronomeSync } from '@/hooks/useMetronomeSync';
 import { useAudioProcessing } from '@/hooks/useAudioProcessing';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
@@ -123,7 +90,6 @@ const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(
 });
 
 import dynamic from 'next/dynamic';
-import UserFriendlyErrorDisplay from '@/components/UserFriendlyErrorDisplay';
 import BeatTimeline from '@/components/BeatTimeline';
 import {
   simplifyChordArray,
@@ -131,16 +97,21 @@ import {
   simplifySequenceCorrections
 } from '@/utils/chordSimplification';
 
+// Import new sub-components
+import FloatingVideoDock from '@/components/FloatingVideoDock';
+import AnalysisHeader from '@/components/AnalysisHeader';
+import ResultsTabs from '@/components/ResultsTabs';
+import ProcessingBanners from '@/components/ProcessingBanners';
 
-// Import the new collapsible video player
-const CollapsibleVideoPlayer = dynamic(() => import('@/components/CollapsibleVideoPlayer'), {
-  ssr: false,
-  loading: () => (
-    <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
-      <div className="text-white">Loading player...</div>
-    </div>
-  )
-});
+// Import new hooks and contexts
+import { useFirebaseReadiness } from '@/hooks/useFirebaseReadiness';
+import { useYouTubeSetup } from '@/hooks/useYouTubeSetup';
+import { useSegmentationState } from '@/hooks/useSegmentationState';
+import { useTabsAndEditing } from '@/hooks/useTabsAndEditing';
+import { useLyricsState } from '@/hooks/useLyricsState';
+import { useChordProcessing } from '@/hooks/useChordProcessing';
+// import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
+
 
 export default function YouTubeVideoAnalyzePage() {
   const params = useParams();
@@ -217,30 +188,8 @@ export default function YouTubeVideoAnalyzePage() {
   const [cacheCheckInProgress, setCacheCheckInProgress] = useState<boolean>(false);
 
   // Firebase initialization tracking to prevent race conditions
-  const [firebaseReady, setFirebaseReady] = useState<boolean>(false);
+  const { firebaseReady } = useFirebaseReadiness();
   const [initialCacheCheckDone, setInitialCacheCheckDone] = useState<boolean>(false);
-
-  // PERFORMANCE FIX: Simplified Firebase readiness check
-  useEffect(() => {
-    const checkFirebaseReady = async () => {
-      try {
-        // Test Firebase connection with a simple operation
-        const { getFirestoreInstance } = await import('@/lib/firebase-lazy');
-        const firestore = await getFirestoreInstance();
-
-        // Quick connection test - just ensure firestore instance exists
-        if (!firestore) throw new Error('Firestore instance not available');
-
-        setFirebaseReady(true);
-      } catch (error) {
-        console.warn('Firebase not ready, will retry...', error);
-        // Shorter retry delay for faster recovery
-        setTimeout(checkFirebaseReady, 500);
-      }
-    };
-
-    checkFirebaseReady();
-  }, []);
 
   // Reset cache state when models change (persistence is handled in useModelState hook)
   // Combined into single useEffect to prevent multiple state updates
@@ -346,22 +295,25 @@ export default function YouTubeVideoAnalyzePage() {
   const [keySignature, setKeySignature] = useState<string | null>(null);
   const [isDetectingKey, setIsDetectingKey] = useState(false);
 
-  // Song segmentation state
-  const [segmentationData, setSegmentationData] = useState<SegmentationResult | null>(null);
-  const [showSegmentation, setShowSegmentation] = useState(false);
+  // Use segmentation state hook
+  const {
+    segmentationData,
+    showSegmentation,
+    setShowSegmentation,
+    handleSegmentationResult,
+  } = useSegmentationState();
 
-  // Chord simplification state
-  const [simplifyChords, setSimplifyChords] = useState(false);
-
-  // Roman numeral analysis state
-  const [showRomanNumerals, setShowRomanNumerals] = useState(false);
-
-  // Handle segmentation results from chatbot
-  const handleSegmentationResult = useCallback((result: SegmentationResult) => {
-    console.log('Received segmentation result:', result);
-    setSegmentationData(result);
-    setShowSegmentation(true);
-  }, []);
+  // Use chord processing hook
+  const {
+    simplifyChords,
+    showRomanNumerals,
+    romanNumeralsRequested,
+    romanNumeralData,
+    setSimplifyChords,
+    setShowRomanNumerals,
+    setRomanNumeralsRequested,
+    setRomanNumeralData,
+  } = useChordProcessing();
 
   // Enharmonic correction state
   const [chordCorrections, setChordCorrections] = useState<Record<string, string> | null>(null);
@@ -425,23 +377,9 @@ export default function YouTubeVideoAnalyzePage() {
     if (!showRomanNumerals) {
       setRomanNumeralsRequested(false);
     }
-  }, [showRomanNumerals]);
+  }, [showRomanNumerals, setRomanNumeralsRequested]);
 
   const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
-  const [romanNumeralsRequested, setRomanNumeralsRequested] = useState(false);
-
-  // Roman numeral analysis state (separate from sequenceCorrections)
-  const [romanNumeralData, setRomanNumeralData] = useState<{
-    analysis: string[];
-    keyContext: string;
-    temporalShifts?: Array<{
-      chordIndex: number;
-      targetKey: string;
-      romanNumeral: string;
-    }>;
-  } | null>(null);
-
-
 
   // Current state for playback
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
@@ -657,62 +595,65 @@ export default function YouTubeVideoAnalyzePage() {
     setStatusMessage
   ]);
 
-  // Lyrics transcription state
-  const [lyrics, setLyrics] = useState<LyricsData | null>(null);
-  const [isTranscribingLyrics, setIsTranscribingLyrics] = useState<boolean>(false);
-  const [lyricsError, setLyricsError] = useState<string | null>(null);
-  const [fontSize, setFontSize] = useState<number>(16);
-  const [showLyrics, setShowLyrics] = useState<boolean>(false);
-  const [hasCachedLyrics, setHasCachedLyrics] = useState<boolean>(false);
+  // Use lyrics state hook
+  const {
+    lyrics,
+    showLyrics,
+    hasCachedLyrics,
+    isTranscribingLyrics,
+    lyricsError,
+    translatedLyrics,
+    setLyrics,
+    setShowLyrics,
+    setHasCachedLyrics,
+    setIsTranscribingLyrics,
+    setLyricsError,
+  } = useLyricsState();
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords' | 'lyricsChords'>('beatChordMap');
+  // Font size state (not part of lyrics hook)
+  const [fontSize, setFontSize] = useState<number>(16);
+
+  // Use tabs and editing hook (excluding videoTitle which comes from useAudioProcessing)
+  const {
+    activeTab,
+    setActiveTab,
+    isEditMode,
+    editedTitle,
+    editedChords,
+    handleEditModeToggle,
+    handleTitleSave: handleTitleSaveFromHook,
+    handleTitleCancel,
+    handleTitleChange,
+    handleChordEdit,
+  } = useTabsAndEditing(videoTitle || '');
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-  const [translatedLyrics] = useState<{[language: string]: {
-    originalLyrics: string;
-    translatedLyrics: string;
-    sourceLanguage: string;
-    targetLanguage: string;
-  }}>({});
+
 
   // Lyrics panel state
   const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
 
-  // Edit mode state
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedChords, setEditedChords] = useState<Record<number, string>>({});
+  // Auto-minimize video when panels are open
+  useEffect(() => {
+    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen;
+    setIsVideoMinimized(shouldMinimize);
+  }, [isChatbotOpen, isLyricsPanelOpen]);
 
-  // Edit mode handlers
-  const handleEditModeToggle = useCallback(() => {
-    if (!isEditMode) {
-      // Entering edit mode - initialize with current values
-      setEditedTitle(videoTitle || '');
-      setEditedChords({});
-    }
-    setIsEditMode(!isEditMode);
-  }, [isEditMode, videoTitle]);
-
+  // Create a wrapper for handleTitleSave that uses setVideoTitle from useAudioProcessing
   const handleTitleSave = useCallback(() => {
     if (editedTitle.trim()) {
       setVideoTitle(editedTitle.trim());
     }
-    setIsEditMode(false);
-  }, [editedTitle, setVideoTitle]);
+    handleTitleSaveFromHook();
+  }, [editedTitle, setVideoTitle, handleTitleSaveFromHook]);
 
-  const handleTitleCancel = useCallback(() => {
-    setEditedTitle(videoTitle || '');
-    setIsEditMode(false);
-  }, [videoTitle]);
-
-  const handleChordEdit = useCallback((index: number, newChord: string) => {
-    setEditedChords(prev => ({
-      ...prev,
-      [index]: newChord
-    }));
-  }, []);
+  // Create a wrapper for handleChordEdit to match the expected signature (index-based)
+  const handleChordEditWrapper = useCallback((index: number, newChord: string) => {
+    // Convert index to chord string for the hook's signature
+    const originalChord = `chord_${index}`;
+    handleChordEdit(originalChord, newChord);
+  }, [handleChordEdit]);
 
   // Check for cached enharmonic correction data when analysis results are loaded
   useEffect(() => {
@@ -864,17 +805,8 @@ export default function YouTubeVideoAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted, videoId, showRomanNumerals, romanNumeralsRequested]); // FIXED: Removed sequenceCorrections?.romanNumerals to prevent infinite loop
 
-  // Set YouTube URLs immediately for fast frame loading
-  useEffect(() => {
-    if (videoId) {
-      // Set YouTube URLs immediately without waiting for API calls
-      setAudioProcessingState(prev => ({
-        ...prev,
-        youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
-        videoUrl: `https://www.youtube.com/watch?v=${videoId}`
-      }));
-    }
-  }, [videoId, setAudioProcessingState]);
+  // Use YouTube setup hook
+  useYouTubeSetup(videoId, setAudioProcessingState);
 
   // RACE CONDITION FIX: Load video info and extract audio AFTER Firebase is ready
   useEffect(() => {
@@ -1220,30 +1152,25 @@ export default function YouTubeVideoAnalyzePage() {
       {/* Use the Navigation component */}
       <Navigation />
 
-      {/* Downloading Indicator - shown during initial download */}
-      <DownloadingIndicator
-        isVisible={audioProcessingState.isDownloading && !audioProcessingState.fromCache}
-      />
-
-      {/* Extraction Notification Banner - shown after download completes */}
-      <ExtractionNotification
-        isVisible={showExtractionNotification}
+      {/* Processing Banners Component */}
+      <ProcessingBanners
+        isDownloading={audioProcessingState.isDownloading}
         fromCache={audioProcessingState.fromCache}
-        onDismiss={useCallback(() => setShowExtractionNotification(false), [])}
-        onRefresh={useCallback(() => extractAudioFromYouTube(true), [extractAudioFromYouTube])}
+        showExtractionNotification={showExtractionNotification}
+        onDismissExtraction={useCallback(() => setShowExtractionNotification(false), [])}
+        onRefreshExtraction={useCallback(() => extractAudioFromYouTube(true), [extractAudioFromYouTube])}
+        analysisResults={analysisResults}
+        audioDuration={duration}
+        audioUrl={audioProcessingState.audioUrl || undefined}
+        fromFirestoreCache={audioProcessingState.fromFirestoreCache}
+        error={audioProcessingState.error || null}
+        suggestion={audioProcessingState.suggestion || undefined}
+        onTryAnotherVideo={handleTryAnotherVideo}
+        onRetry={() => extractAudioFromYouTube(true)}
       />
 
       <div className="container py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "100%" }}>
         <div className="bg-white dark:bg-dark-bg transition-colors duration-300">
-
-        {/* Processing Status Banner - positioned in content flow */}
-        <ProcessingStatusBanner
-          analysisResults={analysisResults}
-          audioDuration={duration}
-          audioUrl={audioProcessingState.audioUrl || undefined}
-          fromCache={audioProcessingState.fromCache}
-          fromFirestoreCache={audioProcessingState.fromFirestoreCache}
-        />
 
         {/* Main content area - responsive width based on chatbot and lyrics panel state */}
         <div className={`flex flex-col transition-all duration-300 ${
@@ -1255,17 +1182,6 @@ export default function YouTubeVideoAnalyzePage() {
 
             {/* Processing Status and Model Selection in a single row */}
             <div className="mb-2 px-4 pt-2 pb-1">
-              {/* Error message */}
-              {audioProcessingState.error && (
-                <UserFriendlyErrorDisplay
-                  error={audioProcessingState.error}
-                  suggestion={audioProcessingState.suggestion || undefined}
-                  onTryAnotherVideo={handleTryAnotherVideo}
-                  onRetry={() => extractAudioFromYouTube(true)}
-                  className="mb-2"
-                />
-              )}
-
               {/* Analysis Controls Component */}
               <AnalysisControls
                 isExtracted={audioProcessingState.isExtracted}
@@ -1281,242 +1197,43 @@ export default function YouTubeVideoAnalyzePage() {
                 cacheAvailable={cacheAvailable}
                 cacheCheckCompleted={cacheCheckCompleted}
               />
-              </div>
             </div>
+          </div>
 
             {/* Analysis results */}
             {analysisResults && audioProcessingState.isAnalyzed && (
             <div className="mt-0 space-y-2 px-4">
 
-              {/* Tabbed interface for analysis results */}
-              <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
-                {/* Mobile: buttons next to title, Desktop: buttons on right side */}
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-2">
-                  {/* Title section */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full md:w-auto gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        {isEditMode ? (
-                          <div className="flex items-center gap-2 flex-1">
-                            <input
-                              type="text"
-                              value={editedTitle}
-                              onChange={(e) => setEditedTitle(e.target.value)}
-                              className="flex-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-800 dark:text-gray-100"
-                              placeholder="Enter song title..."
-                              autoFocus
-                            />
-                            <button
-                              onClick={handleTitleSave}
-                              className="p-1 text-green-600 hover:text-green-700 transition-colors"
-                              title="Save title"
-                            >
-                              <HiCheck className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={handleTitleCancel}
-                              className="p-1 text-red-600 hover:text-red-700 transition-colors"
-                              title="Cancel edit"
-                            >
-                              <HiXMark className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300 truncate flex-1">
-                              {videoTitle}
-                            </p>
-                            <button
-                              onClick={handleEditModeToggle}
-                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                              title="Edit song title and chords"
-                            >
-                              <HiPencil className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
+              {/* Analysis Header Component */}
+              <AnalysisHeader
+                videoTitle={videoTitle}
+                isEditMode={isEditMode}
+                editedTitle={editedTitle}
+                onTitleChange={handleTitleChange}
+                onEditToggle={handleEditModeToggle}
+                onTitleSave={handleTitleSave}
+                onTitleCancel={handleTitleCancel}
+                showCorrectedChords={showCorrectedChords}
+                hasCorrections={((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
+                  (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0))}
+                toggleEnharmonicCorrection={toggleEnharmonicCorrection}
+                isTranscribingLyrics={isTranscribingLyrics}
+                hasCachedLyrics={hasCachedLyrics}
+                canTranscribe={isServiceAvailable('musicAi') && !!audioProcessingState.audioUrl}
+                transcribeLyricsWithAI={transcribeLyricsWithAI}
+                showSegmentation={showSegmentation}
+                hasSegmentationData={!!segmentationData}
+                setShowSegmentation={setShowSegmentation}
+                lyricsError={lyricsError}
+              />
 
-                    {/* Buttons row - next to title on mobile, separate on desktop */}
-                    <div className="flex gap-2 flex-shrink-0 md:hidden">
-                      {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
-                      {((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
-                        (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0)) && (
-                        <button
-                          onClick={toggleEnharmonicCorrection}
-                          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg border font-medium transition-colors duration-200 whitespace-nowrap ${
-                            showCorrectedChords
-                              ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
-                              : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
-                          }`}
-                          title={showCorrectedChords ? 'Show original chord spellings' : 'Show corrected enharmonic spellings'}
-                        >
-                          {showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'}
-                        </button>
-                      )}
-
-                      {/* Music.AI Transcription Button */}
-                      <button
-                        onClick={() => {
-                          transcribeLyricsWithAI();
-                        }}
-                        disabled={
-                          isTranscribingLyrics ||
-                          !audioProcessingState.audioUrl ||
-                          !isServiceAvailable('musicAi')
-                        }
-                        className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors whitespace-nowrap ${
-                          isServiceAvailable('musicAi')
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
-                            : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        }`}
-                        title={
-                          !isServiceAvailable('musicAi')
-                            ? "Add your Music.AI API key in Settings to enable lyrics transcription"
-                            : !audioProcessingState.audioUrl
-                            ? "Extract audio first to enable lyrics transcription"
-                            : isTranscribingLyrics
-                            ? "Transcription in progress..."
-                            : "AI transcription from audio (word-level sync)"
-                        }
-                      >
-                        {isTranscribingLyrics
-                          ? "Transcribing..."
-                          : !isServiceAvailable('musicAi')
-                          ? "API Key Required"
-                          : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
-                        }
-                      </button>
-
-                      {/* Segmentation Toggle Button */}
-                      <SegmentationToggleButton
-                        isEnabled={showSegmentation}
-                        onClick={() => setShowSegmentation(!showSegmentation)}
-                        hasSegmentationData={!!segmentationData}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Desktop buttons - separate section on right side */}
-                  <div className="hidden md:flex gap-2 flex-shrink-0">
-                    {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
-                    {((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
-                      (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0)) && (
-                      <button
-                        onClick={toggleEnharmonicCorrection}
-                        className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors duration-200 whitespace-nowrap ${
-                          showCorrectedChords
-                            ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
-                            : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
-                        }`}
-                        title={showCorrectedChords ? 'Show original chord spellings' : 'Show corrected enharmonic spellings'}
-                      >
-                        {showCorrectedChords ? 'Show Original' : 'Fix Enharmonics'}
-                      </button>
-                    )}
-
-                    {/* Music.AI Transcription Button */}
-                    <button
-                      onClick={() => {
-                        transcribeLyricsWithAI();
-                      }}
-                      disabled={
-                        isTranscribingLyrics ||
-                        !audioProcessingState.audioUrl ||
-                        !isServiceAvailable('musicAi')
-                      }
-                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
-                        isServiceAvailable('musicAi')
-                          ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
-                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                      }`}
-                      title={
-                        !isServiceAvailable('musicAi')
-                          ? "Add your Music.AI API key in Settings to enable lyrics transcription"
-                          : !audioProcessingState.audioUrl
-                          ? "Extract audio first to enable lyrics transcription"
-                          : isTranscribingLyrics
-                          ? "Transcription in progress..."
-                          : "AI transcription from audio (word-level sync)"
-                      }
-                    >
-                      {isTranscribingLyrics
-                        ? "Transcribing..."
-                        : !isServiceAvailable('musicAi')
-                        ? "API Key Required"
-                        : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
-                      }
-                    </button>
-
-                    {/* Segmentation Toggle Button */}
-                    <SegmentationToggleButton
-                      isEnabled={showSegmentation}
-                      onClick={() => setShowSegmentation(!showSegmentation)}
-                      hasSegmentationData={!!segmentationData}
-                    />
-                  </div>
-                </div>
-
-                    {lyricsError && (
-                      <div className={`mt-2 md:col-span-2 ${
-                        lyricsError.includes('Transcribing lyrics')
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-red-500'
-                      }`}>
-                        {lyricsError}
-                      </div>
-                    )}
-
-                {/* Tabs */}
-                <div className="border-b border-gray-200 mb-4">
-                  <div className="flex -mb-px">
-                    <button
-                      onClick={() => setActiveTab('beatChordMap')}
-                      className={`py-2 px-4 text-sm font-medium ${
-                        activeTab === 'beatChordMap'
-                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                      }`}
-                    >
-                      Beat & Chord Map
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('guitarChords')}
-                      className={`py-2 px-4 text-sm font-medium ${
-                        activeTab === 'guitarChords'
-                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                      }`}
-                    >
-                      <span className="flex items-center space-x-1">
-                        <span>Guitar Chords</span>
-                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
-                          beta
-                        </span>
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('lyricsChords')}
-                      disabled={!showLyrics && !hasCachedLyrics}
-                      className={`py-2 px-4 text-sm font-medium ${
-                        activeTab === 'lyricsChords'
-                          ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                          : (!showLyrics && !hasCachedLyrics)
-                            ? 'text-gray-400 cursor-not-allowed'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                      }`}
-                    >
-                      <span className="flex items-center space-x-1">
-                        <span>Lyrics & Chords</span>
-                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
-                          beta
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                </div>
+              {/* Results Tabs Component */}
+              <ResultsTabs
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                showLyrics={showLyrics}
+                hasCachedLyrics={hasCachedLyrics}
+              />
 
                 {/* Tab content */}
                 <div className="tab-content">
@@ -1540,7 +1257,7 @@ export default function YouTubeVideoAnalyzePage() {
                         showSegmentation={showSegmentation}
                         isEditMode={isEditMode}
                         editedChords={editedChords}
-                        onChordEdit={handleChordEdit}
+                        onChordEdit={handleChordEditWrapper}
                         showRomanNumerals={showRomanNumerals}
                         romanNumeralData={romanNumeralData}
                       />
@@ -1573,7 +1290,7 @@ export default function YouTubeVideoAnalyzePage() {
                       segmentationData={segmentationData}
                       showSegmentation={showSegmentation}
                       showRomanNumerals={showRomanNumerals}
-                      romanNumeralData={sequenceCorrections?.romanNumerals || null}
+                      romanNumeralData={romanNumeralData}
                     />
                   )}
 
@@ -1593,7 +1310,7 @@ export default function YouTubeVideoAnalyzePage() {
                     />
                   )}
                 </div>
-              </div>
+            
 
 
               {/* Beats visualization - New optimized component */}
@@ -1604,9 +1321,9 @@ export default function YouTubeVideoAnalyzePage() {
                 currentDownbeatIndex={currentDownbeatIndex}
                 duration={duration}
               />
-            </div>
-          )}
-          </div>
+            </div>)}
+          
+          
 
           {/* Audio Player Component */}
           <AudioPlayer
@@ -1622,112 +1339,33 @@ export default function YouTubeVideoAnalyzePage() {
             onYouTubePlayerReady={handleYouTubePlayerReady}
           />
 
-          {/* Floating video player for all screens - fixed position */}
-          {(audioProcessingState.youtubeEmbedUrl || audioProcessingState.videoUrl) && (
-            <div
-              className={`fixed bottom-4 z-50 transition-all duration-300 shadow-xl ${
-                isChatbotOpen || isLyricsPanelOpen
-                  ? 'right-[420px]' // Move video further right when chatbot or lyrics panel is open to avoid overlap
-                  : 'right-4'
-              } ${
-                isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'
-              }`}
-              style={{
-                maxWidth: isVideoMinimized ? '250px' : '500px',
-                pointerEvents: 'auto',
-                zIndex: 55 // Ensure this is below the control buttons (z-60) but above other content
-              }}
-            >
-              {/* Improved responsive toggle button container */}
-              <div
-                className="absolute -top-12 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
-                style={{
-                  right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
-                  maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
-                }}
-              >
-                <Tooltip
-                  content={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
-                  placement="top"
-                  delay={500}
-                  closeDelay={100}
-                  classNames={{
-                    base: "max-w-xs",
-                    content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
-                  }}
-                >
-                  <button
-                    onClick={toggleFollowMode}
-                    className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-                      isFollowModeEnabled
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-                    }`}
-                  >
-                    {/* Icon */}
-                    {isFollowModeEnabled ? (
-                      <HiArrowPath className="h-4 w-4" />
-                    ) : (
-                      <HiOutlineArrowPath className="h-4 w-4" />
-                    )}
-                  </button>
-                </Tooltip>
-
-                {/* Roman numeral toggle - only show when analysis results are available */}
-                {analysisResults && (
-                  <RomanNumeralToggle
-                    isEnabled={showRomanNumerals}
-                    onClick={() => setShowRomanNumerals(!showRomanNumerals)}
-                  />
-                )}
-
-                {/* Chord simplification toggle - only show when analysis results are available */}
-                {analysisResults && (
-                  <ChordSimplificationToggle
-                    isEnabled={simplifyChords}
-                    onClick={() => setSimplifyChords(!simplifyChords)}
-                  />
-                )}
-
-                {/* Metronome controls - only show when analysis results are available */}
-                {analysisResults && (
-                  <MetronomeControls
-                    onToggleWithSync={toggleMetronomeWithSync}
-                  />
-                )}
-              </div>
-              <div className="relative">
-                {/* Minimize/Maximize button */}
-                <button
-                  onClick={toggleVideoMinimization}
-                  className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10 w-10 h-6 flex items-center justify-center hover:bg-gray-700 transition-colors"
-                  title={isVideoMinimized ? "Expand video player" : "Minimize video player"}
-                >
-                  {isVideoMinimized ? (
-                    <FaExpand className="h-3 w-3" />
-                  ) : (
-                    <FaCompress className="h-3 w-3" />
-                  )}
-                </button>
-
-                {/* Video player with mobile collapsible functionality */}
-                {(audioProcessingState.youtubeEmbedUrl || audioProcessingState.videoUrl) && (
-                  <CollapsibleVideoPlayer
-                    videoId={videoId}
-                    isPlaying={isPlaying}
-                    playbackRate={playbackRate}
-                    currentTime={currentTime}
-                    duration={duration}
-                    onReady={handleYouTubeReady}
-                    onPlay={handleYouTubePlay}
-                    onPause={handleYouTubePause}
-                    onProgress={handleYouTubeProgress}
-                    onSeek={seek}
-                  />
-                )}
-              </div>
-            </div>
-          )}
+          {/* Floating Video Dock Component */}
+          <FloatingVideoDock
+            isChatbotOpen={isChatbotOpen}
+            isLyricsPanelOpen={isLyricsPanelOpen}
+            isVideoMinimized={isVideoMinimized}
+            isFollowModeEnabled={isFollowModeEnabled}
+            showRomanNumerals={showRomanNumerals}
+            simplifyChords={simplifyChords}
+            analysisResults={analysisResults}
+            toggleVideoMinimization={toggleVideoMinimization}
+            toggleFollowMode={toggleFollowMode}
+            setShowRomanNumerals={setShowRomanNumerals}
+            setSimplifyChords={setSimplifyChords}
+            toggleMetronomeWithSync={toggleMetronomeWithSync}
+            videoId={videoId}
+            isPlaying={isPlaying}
+            playbackRate={playbackRate}
+            currentTime={currentTime}
+            duration={duration}
+            onReady={handleYouTubeReady}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onProgress={handleYouTubeProgress}
+            onSeek={seek}
+            youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
+            videoUrl={audioProcessingState.videoUrl}
+          />
 
           {/* Chatbot Section */}
           <ChatbotSection
@@ -1750,8 +1388,10 @@ export default function YouTubeVideoAnalyzePage() {
             videoTitle={videoTitle}
             currentTime={currentTime}
           />
+
         </div>
       </div>
     </div>
+  </div>
   );
 }

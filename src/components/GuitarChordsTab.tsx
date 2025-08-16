@@ -10,6 +10,7 @@ import { ChordGridContainer } from '@/components/ChordGridContainer';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
 
+
 // Lazy load heavy guitar chord diagram component
 const GuitarChordDiagram = dynamic(() => import('@/components/GuitarChordDiagram'), {
   loading: () => <div className="w-20 h-24 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />,
@@ -113,6 +114,10 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
+
+
+
+
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [chordPositions, setChordPositions] = useState<Map<string, number>>(new Map()); // Track position for each chord
 
@@ -128,18 +133,32 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const applyCorrectedChordName = useCallback((originalChord: string, visualIndex?: number): string => {
+
+
+  // Chord correction for guitar diagrams (always applies corrections when available for consistent display)
+  const applyCorrectedChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {
     if (!showCorrectedChords || !originalChord || originalChord === 'N.C.') return originalChord;
+
     if (sequenceCorrections && visualIndex !== undefined) {
       const { originalSequence, correctedSequence } = sequenceCorrections;
       let chordSequenceIndex = visualIndex;
       if (chordGridData.hasPadding) {
         chordSequenceIndex -= ((chordGridData.shiftCount || 0) + (chordGridData.paddingCount || 0));
       }
+
+      // First try exact index matching
       if (chordSequenceIndex >= 0 && chordSequenceIndex < originalSequence.length && originalSequence[chordSequenceIndex] === originalChord) {
         return correctedSequence[chordSequenceIndex];
       }
+
+      // If exact index matching fails, look for the chord anywhere in the original sequence
+      // This ensures consistent corrections for the same chord throughout the progression
+      const correctionIndex = originalSequence.findIndex(chord => chord === originalChord);
+      if (correctionIndex !== -1 && correctionIndex < correctedSequence.length) {
+        return correctedSequence[correctionIndex];
+      }
     }
+
     if (chordCorrections) {
       const rootNote = originalChord.includes(':') ? originalChord.split(':')[0] : (originalChord.match(/^([A-G][#b]?)/)?.[1] || originalChord);
       if (chordCorrections[rootNote]) return originalChord.replace(rootNote, chordCorrections[rootNote]);
@@ -147,7 +166,19 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return originalChord;
   }, [showCorrectedChords, chordCorrections, sequenceCorrections, chordGridData.hasPadding, chordGridData.shiftCount, chordGridData.paddingCount]);
 
-  const preprocessAndCorrectChordName = useCallback((originalChord: string, visualIndex?: number): string => {
+
+
+  // Helper function to extract root chord for guitar diagram lookup (strips bass note)
+  const getRootChordForDiagramLookup = useCallback((chordName: string): string => {
+    if (!chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC') {
+      return chordName;
+    }
+    // Strip inversion/bass note for guitar diagram lookup (C/E → C, C/G → C)
+    // This ensures we get playable root position chord diagrams
+    return chordName.split('/')[0].trim();
+  }, []);
+
+  const preprocessAndCorrectChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {
     // Normalize all "no chord" representations to a single canonical form
     if (!originalChord ||
         originalChord === '' ||
@@ -157,34 +188,38 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         originalChord === 'NC') {
       return 'N.C.'; // Use 'N.C.' as the canonical "no chord" representation
     }
-    const preprocessedChord = originalChord.split('/')[0].trim();
-    return applyCorrectedChordName(preprocessedChord, visualIndex);
-  }, [applyCorrectedChordName]);
+    // Strip bass note for guitar diagram lookup since guitar diagrams don't support inversions
+    const rootChord = getRootChordForDiagramLookup(originalChord);
+    return applyCorrectedChordNameForGuitarDiagrams(rootChord, visualIndex);
+  }, [applyCorrectedChordNameForGuitarDiagrams, getRootChordForDiagramLookup]);
 
-  const uniqueChords = useMemo(() => {
+
+
+  // Unique chords for guitar diagrams (always applies corrections for consistent display)
+  const uniqueChordsForGuitarDiagrams = useMemo(() => {
     const chordSet = new Set<string>();
     if (chordGridData.originalAudioMapping?.length) {
       chordGridData.originalAudioMapping.forEach(mapping => {
-        if (mapping.chord) chordSet.add(preprocessAndCorrectChordName(mapping.chord, mapping.visualIndex));
+        if (mapping.chord) chordSet.add(preprocessAndCorrectChordNameForGuitarDiagrams(mapping.chord, mapping.visualIndex));
       });
     } else {
       const skipCount = (chordGridData.paddingCount || 0) + (chordGridData.shiftCount || 0);
       chordGridData.chords.slice(skipCount).forEach((chord, index) => {
-        if (chord) chordSet.add(preprocessAndCorrectChordName(chord, skipCount + index));
+        if (chord) chordSet.add(preprocessAndCorrectChordNameForGuitarDiagrams(chord, skipCount + index));
       });
     }
     return Array.from(chordSet).sort();
-  }, [chordGridData, preprocessAndCorrectChordName]);
+  }, [chordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
 
   useEffect(() => {
     const loadChordData = async () => {
       const chordsToLoad = new Set<string>();
-      uniqueChords.forEach(chord => {
+      uniqueChordsForGuitarDiagrams.forEach(chord => {
         if (!chordDataCache.has(chord)) chordsToLoad.add(chord);
       });
       const currentOriginalChord = chordGridData.chords[currentBeatIndex];
       if (currentOriginalChord) {
-        const currentProcessedChord = preprocessAndCorrectChordName(currentOriginalChord, currentBeatIndex);
+        const currentProcessedChord = preprocessAndCorrectChordNameForGuitarDiagrams(currentOriginalChord, currentBeatIndex);
         if (!chordDataCache.has(currentProcessedChord)) chordsToLoad.add(currentProcessedChord);
       }
       if (chordsToLoad.size > 0) {
@@ -203,16 +238,20 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       }
     };
     loadChordData();
-  }, [uniqueChords, currentBeatIndex, chordGridData.chords, preprocessAndCorrectChordName, chordDataCache]);
+  }, [uniqueChordsForGuitarDiagrams, currentBeatIndex, chordGridData.chords, preprocessAndCorrectChordNameForGuitarDiagrams, chordDataCache]);
 
-  const uniqueChordData = useMemo(() => {
+  // Unfiltered chord data for guitar diagrams (always shows all chords with consistent corrections)
+  const uniqueChordDataForGuitarDiagrams = useMemo(() => {
     const seenChords = new Set<string>();
-    return uniqueChords
+    return uniqueChordsForGuitarDiagrams
       .filter(chord => !seenChords.has(chord) && seenChords.add(chord))
       .map(chord => ({ name: chord, data: chordDataCache.get(chord) || null }));
-  }, [uniqueChords, chordDataCache]);
+  }, [uniqueChordsForGuitarDiagrams, chordDataCache]);
 
-  const getUniqueChordProgression = useMemo(() => {
+
+
+  // Unfiltered chord progression for guitar diagrams (always shows all chords regardless of Roman numeral toggle)
+  const getUniqueChordProgressionForGuitarDiagrams = useMemo(() => {
     if (!chordGridData.chords.length) return [];
     const uniqueProgression = [];
     let lastChord = null;
@@ -223,7 +262,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       const isPaddingCell = i >= (chordGridData.shiftCount || 0) && i < skipCount && originalChord === 'N.C.' && chordGridData.hasPadding;
       if (isShiftCell || isPaddingCell) continue;
       if (originalChord) {
-        const processedChord = preprocessAndCorrectChordName(originalChord, i);
+        const processedChord = preprocessAndCorrectChordNameForGuitarDiagrams(originalChord, i);
+
         if (processedChord !== lastChord) {
           uniqueProgression.push({ chord: processedChord, startIndex: i, timestamp: chordGridData.beats[i] || 0 });
           lastChord = processedChord;
@@ -231,10 +271,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       }
     }
     return uniqueProgression;
-  }, [chordGridData, preprocessAndCorrectChordName]);
+  }, [chordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
+
+
 
   const getVisibleChordRange = useMemo(() => {
-    const progression = getUniqueChordProgression;
+    const progression = getUniqueChordProgressionForGuitarDiagrams;
     if (progression.length === 0) return [];
     let currentChordInProgressionIndex = progression.findIndex((c, i) => currentBeatIndex >= c.startIndex && (i + 1 === progression.length || currentBeatIndex < progression[i + 1].startIndex));
     if (currentChordInProgressionIndex === -1) currentChordInProgressionIndex = 0;
@@ -261,7 +303,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       ...chordInfo,
       isCurrent: chordInfo.startIndex === progression[currentChordInProgressionIndex].startIndex,
     }));
-  }, [getUniqueChordProgression, currentBeatIndex, windowWidth]);
+  }, [getUniqueChordProgressionForGuitarDiagrams, currentBeatIndex, windowWidth]);
 
 
   if (!analysisResults) {
@@ -352,6 +394,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                           segmentationColor={segmentationColor}
                           showPositionSelector={chordInfo.isCurrent}
                           onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
+                          showRomanNumerals={false}
+                          romanNumeral=""
                         />
                       </motion.div>
                     );
@@ -361,9 +405,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
           </div>
         ) : !isLoadingChords && (
           <div className="summary-chord-view bg-white dark:bg-content-bg rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-6 text-center">All Chords in Song ({uniqueChords.length} unique)</h3>
+            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-6 text-center">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4 md:gap-6 justify-items-center">
-              {uniqueChordData.map(({name, data}, index) => (
+              {uniqueChordDataForGuitarDiagrams.map(({name, data}, index) => (
                 <div key={index} className="flex justify-center">
                   <GuitarChordDiagram
                     chordData={data}
@@ -375,11 +419,13 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                     isFocused={false}
                     showPositionSelector={true}
                     onPositionChange={(positionIndex) => handlePositionChange(name, positionIndex)}
+                    showRomanNumerals={false}
+                    romanNumeral=""
                   />
                 </div>
               ))}
             </div>
-            {uniqueChords.length === 0 && (
+            {uniqueChordsForGuitarDiagrams.length === 0 && (
               <div className="text-center text-gray-500 dark:text-gray-400 py-12 max-w-md mx-auto">
                 <Image src="/quarter_rest.svg" alt="No chords" width={64} height={64} className="mx-auto mb-4 opacity-50" style={{ filter: 'brightness(0.4)' }} />
                 <p className="text-lg font-medium">No chords detected in this song</p>

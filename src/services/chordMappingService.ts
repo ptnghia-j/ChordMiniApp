@@ -155,7 +155,8 @@ export class ChordMappingService {
   /**
    * Preprocesses chord names to handle inversions and normalize for guitar chord database compatibility
    * @param chordName - Raw chord name from ML model (e.g., "C/E", "Am/G", "F#m7/A")
-   * @returns Normalized chord name without inversion (e.g., "C", "Am", "F#m7")
+   * @returns Normalized chord name without inversion for chord diagram lookup (e.g., "C", "Am", "F#m7")
+   * Note: This is only used for chord diagram lookup, not for display names
    */
   private preprocessChordName(chordName: string): string {
     if (!chordName || chordName === 'N.C.') {
@@ -164,6 +165,8 @@ export class ChordMappingService {
 
     // Handle chord inversions by removing the bass note (everything after "/")
     // Examples: "C/E" → "C", "Am/G" → "Am", "F#m7/A" → "F#m7"
+    // This is necessary because guitar chord diagrams don't accurately represent slash chord fingerings
+    // The original chord name with slash notation should be preserved for display purposes
     const inversionMatch = chordName.match(/^([^/]+)\/(.+)$/);
     if (inversionMatch) {
       const rootChord = inversionMatch[1].trim();

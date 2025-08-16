@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { firestoreDb } from '@/services/firebaseService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import crypto from 'crypto';
 
 export const maxDuration = 120; // 2 minutes for key detection processing
 
@@ -27,13 +28,19 @@ interface ChordData {
 
 // Helper function to generate cache key for key detection
 function generateKeyDetectionCacheKey(chords: ChordData[], includeEnharmonicCorrection: boolean = false, includeRomanNumerals: boolean = false): string {
+  // Create a more precise and unique representation
   const chordString = chords
-    .map(chord => `${chord.time?.toFixed(2) || 0}:${chord.chord || chord}`)
+    .map(chord => `${chord.time?.toFixed(3) || 0}:${chord.chord || chord}`)
     .join('|');
 
   // Put flags at the beginning to ensure they're not truncated
   const keyString = `enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
-  return Buffer.from(keyString).toString('base64').substring(0, 50);
+
+  // Use SHA-256 hash for better uniqueness and consistent length
+  const hash = crypto.createHash('sha256').update(keyString).digest('hex');
+
+  // Return first 32 characters of hash for reasonable cache key length
+  return hash.substring(0, 32);
 }
 
 // Define types for key detection result

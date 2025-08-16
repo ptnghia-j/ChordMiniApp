@@ -2,6 +2,9 @@
 
 import React from 'react';
 import ChordGrid from '@/components/ChordGrid';
+import { RefactoredChordGrid } from './RefactoredChordGrid';
+import { ChordGridProvider } from '@/contexts/ChordGridContext';
+import { useChordGridContext } from '@/hooks/useChordGridContext';
 // import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
@@ -75,6 +78,10 @@ interface ChordGridContainerProps {
       romanNumeral: string;
     }>;
   } | null;
+  // NEW: Enable refactored version with context and performance optimizations
+  useRefactoredVersion?: boolean;
+  enableVirtualization?: boolean;
+  virtualizationThreshold?: number;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
@@ -96,7 +103,10 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   editedChords = {},
   onChordEdit,
   showRomanNumerals = false,
-  romanNumeralData = null
+  romanNumeralData = null,
+  useRefactoredVersion = false,
+  enableVirtualization = true,
+  virtualizationThreshold = 100,
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
@@ -153,24 +163,59 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     onBeatClick(beatIndex, timestamp);
   }, [onBeatClick]);
 
+  // Use context-based hook for refactored version
+  const { chordGridState, chordGridActions } = useChordGridContext({
+    chordGridData: {
+      chords: chordGridData.chords,
+      beats: chordGridData.beats,
+      hasPickupBeats: chordGridData.hasPickupBeats || false,
+      pickupBeatsCount: chordGridData.pickupBeatsCount || 0,
+      hasPadding: chordGridData.hasPadding,
+      paddingCount: chordGridData.paddingCount,
+      shiftCount: chordGridData.shiftCount,
+      originalAudioMapping: chordGridData.originalAudioMapping,
+    },
+    currentBeatIndex,
+    timeSignature: 4, // Default time signature, can be made configurable
+    isUploadPage,
+    onBeatClick: memoizedOnBeatClick,
+    onChordEdit: onChordEdit ? (originalChord: string, newChord: string) => {
+      // Convert from string-based to index-based for compatibility
+      const index = chordGridData.chords.findIndex(chord => chord === originalChord);
+      if (index !== -1) onChordEdit(index, newChord);
+    } : undefined,
+  });
+
+  // Render refactored version with context
+  if (useRefactoredVersion) {
+    return (
+      <ChordGridProvider
+        chordGridState={chordGridState}
+        chordGridActions={chordGridActions}
+      >
+        <RefactoredChordGrid
+          enableVirtualization={enableVirtualization}
+          virtualizationThreshold={virtualizationThreshold}
+        />
+      </ChordGridProvider>
+    );
+  }
+
+  // Render legacy version
   return (
     <div>
-      {(() => {
-        return (
-          <ChordGrid
-            // PERFORMANCE OPTIMIZATION: Use memoized stable props
-            {...stableProps}
-            // Only frequently changing props passed directly
-            currentBeatIndex={currentBeatIndex}
-            isChatbotOpen={isChatbotOpen}
-            isLyricsPanelOpen={isLyricsPanelOpen}
-            onBeatClick={memoizedOnBeatClick}
-            isEditMode={isEditMode}
-            editedChords={editedChords}
-            onChordEdit={onChordEdit}
-          />
-        );
-      })()}
+      <ChordGrid
+        // PERFORMANCE OPTIMIZATION: Use memoized stable props
+        {...stableProps}
+        // Only frequently changing props passed directly
+        currentBeatIndex={currentBeatIndex}
+        isChatbotOpen={isChatbotOpen}
+        isLyricsPanelOpen={isLyricsPanelOpen}
+        onBeatClick={memoizedOnBeatClick}
+        isEditMode={isEditMode}
+        editedChords={editedChords}
+        onChordEdit={onChordEdit}
+      />
     </div>
   );
 });

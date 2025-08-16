@@ -1,7 +1,12 @@
 /**
  * Utility functions for formatting chord names with proper musical notation
  * Following industry-standard conventions used in professional music notation software
+ * Enhanced with ChordGrid-specific formatting functions
  */
+
+import React from 'react';
+import { SegmentationResult } from '@/types/chatbotTypes';
+import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
 
 // Inline SVG content for quarter rest symbols (optimized to prevent loading delays and flickering)
 const QUARTER_REST_SVG_LIGHT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125" style="width: 100%; height: 100%;">
@@ -109,11 +114,12 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   }
 
   // Normalize chord quality for consistent display
-  // Convert "min" to "m" for shorter, industry-standard notation
-  if (quality === 'min') {
+  // Convert "min" and "minor" to "m" for shorter, industry-standard notation
+  if (quality === 'min' || quality === 'minor') {
     quality = 'm';
-  } else if (quality.startsWith('min') && quality.length > 3) {
+  } else if (quality.startsWith('min') && quality.length > 3 && quality !== 'minor') {
     // Handle complex minor qualities like "min7", "min9", etc.
+    // Exclude "minor" to prevent it from becoming "mor"
     quality = 'm' + quality.substring(3);
   }
 
@@ -172,8 +178,8 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   if (quality === 'maj') {
     // Major chords don't need a suffix in standard notation
     quality = '';
-  } else if (quality === 'min') {
-    // Use 'm' instead of 'min' for minor chords (industry standard)
+  } else if (quality === 'min' || quality === 'minor') {
+    // Use 'm' instead of 'min'/'minor' for minor chords (industry standard)
     quality = '<span style="font-weight: 400;">m</span>';
   } else if (quality.includes('sus')) {
     // Format suspension with proper superscript - handle both sus4 and sus(extensions)
@@ -278,8 +284,8 @@ function translateScaleDegreeInversion(root: string, quality: string, inversion:
 
   // Determine if chord is minor for scale degree calculation
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
-  const isMinor = quality === 'min' || quality === 'm' ||
-                  (quality.startsWith('min') && quality !== 'maj') ||
+  const isMinor = quality === 'min' || quality === 'minor' || quality === 'm' ||
+                  (quality.startsWith('min') && quality !== 'maj' && quality !== 'minor') ||
                   (quality.startsWith('m') && !quality.startsWith('maj'));
 
   // Parse the inversion to handle accidentals
@@ -402,8 +408,8 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
 
   // Determine if chord is minor for special case handling
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
-  const isMinor = quality === 'min' || quality === 'm' ||
-                  (quality.startsWith('min') && quality !== 'maj') ||
+  const isMinor = quality === 'min' || quality === 'minor' || quality === 'm' ||
+                  (quality.startsWith('min') && quality !== 'maj' && quality !== 'minor') ||
                   (quality.startsWith('m') && !quality.startsWith('maj'));
 
   // DEBUG: Log input parameters and chord quality detection
@@ -631,3 +637,188 @@ export function getChordContainerStyles(): React.CSSProperties {
     padding: '0.0625rem' // Minimal padding for very tight layout
   };
 }
+
+/**
+ * Formats Roman numerals with proper figure bass notation
+ */
+export const formatRomanNumeral = (romanNumeral: string): React.ReactElement | string => {
+  if (!romanNumeral) return '';
+
+  // Handle figure bass notation (e.g., "I64", "ii6", "V7")
+  const figureMatch = romanNumeral.match(/^([ivxIVX]+)(.*)$/);
+  if (figureMatch) {
+    const [, baseRoman, figures] = figureMatch;
+
+    if (figures) {
+      // Handle different figure bass patterns
+      if (figures === '64') {
+        return React.createElement('span', { style: { position: 'relative', display: 'inline-block' } }, [
+          baseRoman,
+          React.createElement('span', {
+            key: 'figures',
+            style: {
+              position: 'absolute',
+              left: '100%',
+              top: '-0.3em',
+              fontSize: '0.6em',
+              lineHeight: '0.8',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginLeft: '1px'
+            }
+          }, [
+            React.createElement('span', { key: '6' }, '6'),
+            React.createElement('span', { key: '4' }, '4')
+          ])
+        ]);
+      } else if (figures === '43') {
+        return React.createElement('span', { style: { position: 'relative', display: 'inline-block' } }, [
+          baseRoman,
+          React.createElement('span', {
+            key: 'figures',
+            style: {
+              position: 'absolute',
+              left: '100%',
+              top: '-0.3em',
+              fontSize: '0.6em',
+              lineHeight: '0.8',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginLeft: '1px'
+            }
+          }, [
+            React.createElement('span', { key: '4' }, '4'),
+            React.createElement('span', { key: '3' }, '3')
+          ])
+        ]);
+      } else if (figures === '6') {
+        return React.createElement('span', {}, [
+          baseRoman,
+          React.createElement('sup', { key: 'sup', style: { fontSize: '0.7em' } }, '6')
+        ]);
+      } else if (figures === '7') {
+        return React.createElement('span', {}, [
+          baseRoman,
+          React.createElement('sup', { key: 'sup', style: { fontSize: '0.7em' } }, '7')
+        ]);
+      } else if (figures.includes('/')) {
+        // Handle secondary dominants like "V7/vi"
+        return React.createElement('span', {}, romanNumeral);
+      } else {
+        // Handle other figure combinations
+        return React.createElement('span', {}, [
+          baseRoman,
+          React.createElement('sup', { key: 'sup', style: { fontSize: '0.7em' } }, figures)
+        ]);
+      }
+    }
+
+    return baseRoman;
+  }
+
+  return romanNumeral;
+};
+
+/**
+ * Builds mapping from beat index to chord sequence index for Roman numerals
+ */
+export const buildBeatToChordSequenceMap = (
+  chordsLength: number,
+  shiftedChords: string[],
+  romanNumeralData: { analysis: string[] } | null,
+  sequenceCorrections: { correctedSequence: string[] } | null
+): Record<number, number> => {
+  if (chordsLength === 0 || !romanNumeralData?.analysis) return {};
+
+  const map: Record<number, number> = {};
+  const normalizeChord = (chord: string) => {
+    if (chord === 'N' || chord === 'N.C.' || chord === 'N/C' || chord === 'NC') {
+      return 'N';
+    }
+    return chord;
+  };
+
+  // Use corrected sequence if available, otherwise use original chord sequence for mapping
+  const referenceSequence = sequenceCorrections?.correctedSequence || shiftedChords;
+  let sequenceIndex = 0;
+  let lastNormalizedChord = '';
+
+  for (let beatIndex = 0; beatIndex < shiftedChords.length; beatIndex++) {
+    const currentChord = shiftedChords[beatIndex];
+
+    if (!currentChord || currentChord === '') {
+      continue;
+    }
+
+    const normalizedCurrent = normalizeChord(currentChord);
+
+    // Only advance the sequence index when the chord actually changes
+    if (normalizedCurrent !== lastNormalizedChord) {
+      if (sequenceCorrections?.correctedSequence) {
+        // Using corrected sequence - find the next matching chord
+        if (lastNormalizedChord !== '') {
+          // Look for the next occurrence of this chord in the corrected sequence
+          let found = false;
+          for (let i = sequenceIndex + 1; i < referenceSequence.length; i++) {
+            const correctedChord = normalizeChord(referenceSequence[i]);
+            if (correctedChord === normalizedCurrent) {
+              sequenceIndex = i;
+              found = true;
+              break;
+            }
+          }
+
+          // If not found ahead, increment by 1 (fallback)
+          if (!found) {
+            sequenceIndex = Math.min(sequenceIndex + 1, referenceSequence.length - 1);
+          }
+        }
+      } else {
+        // Using original sequence - simple mapping based on chord changes
+        if (lastNormalizedChord !== '' && sequenceIndex < romanNumeralData.analysis.length - 1) {
+          sequenceIndex++;
+        }
+      }
+      lastNormalizedChord = normalizedCurrent;
+    }
+
+    // Map this beat to the current sequence index
+    if (sequenceIndex < romanNumeralData.analysis.length) {
+      map[beatIndex] = sequenceIndex;
+    }
+  }
+
+  return map;
+};
+
+/**
+ * Gets segmentation color for a specific beat index
+ */
+export const getSegmentationColorForBeatIndex = (
+  beatIndex: number,
+  beats: (number | null)[],
+  segmentationData: SegmentationResult | null,
+  showSegmentation: boolean,
+  originalAudioMapping?: Array<{ visualIndex: number; timestamp: number }>,
+  timestamp?: number | null
+): string | undefined => {
+  // Try to get timestamp from originalAudioMapping first for accuracy
+  let finalTimestamp: number | null = timestamp || null;
+
+  if (originalAudioMapping && finalTimestamp === null) {
+    const mappingEntry = originalAudioMapping.find(item => item.visualIndex === beatIndex);
+    if (mappingEntry) {
+      finalTimestamp = mappingEntry.timestamp;
+    }
+  }
+
+  // Fallback to beats array if no mapping found
+  if (finalTimestamp === null) {
+    finalTimestamp = beats[beatIndex];
+  }
+
+  // Use the enhanced segmentation function with direct timestamp
+  return getSegmentationColorForBeat(beatIndex, beats, segmentationData, showSegmentation, finalTimestamp);
+};
