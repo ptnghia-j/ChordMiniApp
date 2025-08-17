@@ -31,7 +31,7 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.4.1',
-      date: 'August 16, 2025',
+      date: 'August 17, 2025',
       title: 'Roman Numeral Integration & Component Architecture Improvements',
       description: 'Enhanced Roman numeral functionality with guitar chord integration, major component refactoring, and UI/UX improvements',
       features: [
@@ -43,9 +43,10 @@ export default function ChangelogPage() {
         'REFACTORING: Lyrics Transcription Components - Broke down LeadSheetDisplay component into smaller, reusable components: LyricsControls, NoLyricsMessage, and LyricLine for better modularity',
         'FIX: Chord Label Display Consistency - Fixed guitar chord diagram display inconsistency with roman numeral analysis',
         'FIX: YouTube Video Player Resizing - Resolved video player resizing issues when lyrics or AI chat panels are opened for better space optimization',
-        'UI: Roman Numeral Typography - Improved visual styling and typography for Roman numeral chord displays with better readability and positioning',
+        'UI: Roman Numeral Typography - Fixed typography and positioning for Roman numeral displays',
         'UI: Changelog Design - Redesigned changelog interface for enhanced readability and better information hierarchy',
-        'UI: Layout Stability - Fixed layout shift issues in toggle button groups for smoother user interactions'
+        'UI: Layout Stability - Fixed layout shift issues in toggle button groups for smoother user interactions',
+        'UI: Added background color for cell where modulation occurs to indicate key change'
       ],
       breaking: []
     },

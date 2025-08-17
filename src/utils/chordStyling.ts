@@ -163,10 +163,10 @@ export const calculateGridLayout = (
 
   // Determine container size category based on actual container width
   const effectiveWidth = containerWidth > 0 ? containerWidth : screenWidth;
-  const isMobilePortrait = effectiveWidth < 568;
-  const isMobileLandscape = effectiveWidth >= 568 && effectiveWidth < 768;
+  const isMobilePortrait = effectiveWidth < 375;
+  const isMobileLandscape = effectiveWidth >= 375 && effectiveWidth < 768;
   const isTablet = effectiveWidth >= 768 && effectiveWidth < 1024;
-  const isDesktop = effectiveWidth >= 1024 && effectiveWidth < 1440;
+  const isDesktop = effectiveWidth >= 1024;
 
   // Check if any panel is open
   const anyPanelOpen = isChatbotOpen || isLyricsPanelOpen;

@@ -121,7 +121,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             }`}
             title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
           >
-            {typeof romanNumeral === 'string'
+            {React.isValidElement(romanNumeral)
+              ? romanNumeral
+              : typeof romanNumeral === 'string'
               ? romanNumeral.replace(/\|/g, '/')
               : romanNumeral
             }

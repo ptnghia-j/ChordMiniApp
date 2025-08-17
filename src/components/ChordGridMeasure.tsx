@@ -27,6 +27,24 @@ export interface ChordGridMeasureProps {
       romanNumeral: string;
     }>;
   } | null;
+  sequenceCorrections?: {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null;
 
   // Function props
   getDisplayChord: (originalChord: string, visualIndex?: number) => { chord: string; wasCorrected: boolean };
@@ -64,6 +82,7 @@ export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
   editedChords,
   showRomanNumerals,
   romanNumeralData,
+  sequenceCorrections,
   getDisplayChord,
   shouldShowChordLabel,
   getSegmentationColorForBeatIndex,
@@ -127,6 +146,16 @@ export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
             : '';
           const romanNumeral = rawRomanNumeral ? formatRomanNumeral(rawRomanNumeral) : '';
 
+          // Check for modulation at this chord index
+          const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(
+            mod => mod.atIndex === chordSequenceIndex
+          );
+          const modulationMarker = modulationInfo ? {
+            isModulation: true,
+            fromKey: modulationInfo.fromKey,
+            toKey: modulationInfo.toKey
+          } : undefined;
+
           return (
             <ChordCell
               key={`chord-${globalIndex}`}
@@ -149,6 +178,7 @@ export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
                 onChordEdit={onChordEdit}
                 showRomanNumerals={showRomanNumerals}
                 romanNumeral={romanNumeral}
+                modulationInfo={modulationMarker}
               />
           );
         })}

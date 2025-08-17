@@ -737,7 +737,7 @@ export default function YouTubeVideoAnalyzePage() {
         return chord.chord !== rawChordData[index - 1].chord; // Include only if different from previous
       });
 
-      console.log(`🎼 Chord deduplication: ${rawChordData.length} raw chords → ${chordData.length} unique changes`);
+
 
       // Import and call key detection service with enharmonic correction
 

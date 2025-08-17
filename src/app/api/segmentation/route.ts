@@ -38,6 +38,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+
+
     // Check API key availability
     const apiKey = geminiApiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {

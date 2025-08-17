@@ -302,6 +302,23 @@ export async function analyzeSongSegmentation(request: SegmentationRequest): Pro
     throw new Error('Lyrics data is required for segmentation analysis');
   }
 
+  // Validate or calculate duration
+  let actualDuration = songContext.duration;
+  if (!actualDuration || actualDuration <= 0) {
+    // Try to calculate duration from beat data
+    if (songContext.beats && songContext.beats.length > 0) {
+      const lastBeat = songContext.beats[songContext.beats.length - 1];
+      if (typeof lastBeat === 'number' && lastBeat > 0) {
+        actualDuration = lastBeat + 2; // Add 2 seconds buffer after last beat
+      }
+    }
+
+    // If still no duration, use fallback
+    if (!actualDuration || actualDuration <= 0) {
+      actualDuration = 300; // 5 minutes fallback
+    }
+  }
+
   // Initialize Gemini API
   const apiKey = geminiApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -316,8 +333,12 @@ export async function analyzeSongSegmentation(request: SegmentationRequest): Pro
   });
 
   try {
-    // Create segmentation prompt
-    const prompt = createSegmentationPrompt(songContext);
+    // Create segmentation prompt with corrected duration
+    const correctedSongContext = {
+      ...songContext,
+      duration: actualDuration
+    };
+    const prompt = createSegmentationPrompt(correctedSongContext);
     console.log('Sending segmentation request to Gemini...');
 
     // Generate segmentation analysis
@@ -347,9 +368,8 @@ export async function analyzeSongSegmentation(request: SegmentationRequest): Pro
       throw new Error('Failed to parse segmentation response from Gemini');
     }
 
-    // Validate and clean the result
-    const duration = songContext.duration || 300; // Default to 5 minutes if unknown
-    const validatedResult = validateSegmentationResult(parsedResult, duration);
+    // Validate and clean the result using the calculated actual duration
+    const validatedResult = validateSegmentationResult(parsedResult, actualDuration);
 
     if (!validatedResult) {
       throw new Error('Invalid segmentation result from Gemini');

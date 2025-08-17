@@ -416,6 +416,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                         : '';
                       const romanNumeral = rawRomanNumeral ? formatRomanNumeral(rawRomanNumeral) : '';
 
+                      // Check for modulation at this chord index
+                      const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(
+                        mod => mod.atIndex === chordSequenceIndex
+                      );
+                      const modulationMarker = modulationInfo ? {
+                        isModulation: true,
+                        fromKey: modulationInfo.fromKey,
+                        toKey: modulationInfo.toKey
+                      } : undefined;
+
                       return (
                         <ChordCell
                           key={`chord-${globalIndex}`}
@@ -438,6 +448,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           onChordEdit={onChordEdit}
                           showRomanNumerals={showRomanNumerals}
                           romanNumeral={romanNumeral}
+                          modulationInfo={modulationMarker}
                         />
                       );
                     })}

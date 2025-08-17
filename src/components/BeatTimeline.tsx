@@ -88,7 +88,7 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
   }
 
   return (
-    <div className={`p-4 rounded-lg bg-white dark:bg-content-bg border border-gray-200 dark:border-gray-600 transition-colors duration-300 ${className}`}>
+    <div className={`p-4 rounded-lg transition-colors duration-300 ${className}`}>
       <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100">Beat Timeline</h3>
       
       {/* Scrollable beat container */}

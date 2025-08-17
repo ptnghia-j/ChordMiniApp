@@ -652,24 +652,46 @@ export const formatRomanNumeral = (romanNumeral: string): React.ReactElement | s
     if (figures) {
       // Handle different figure bass patterns
       if (figures === '64') {
-        return React.createElement('span', { style: { position: 'relative', display: 'inline-block' } }, [
-          baseRoman,
+        // Create I64 with stacked superscript figures
+        return React.createElement('span', {
+          style: {
+            position: 'relative',
+            display: 'inline-block',
+          },
+          key: 'roman-64'
+        }, [
+          React.createElement('span', { key: 'base' }, baseRoman),
           React.createElement('span', {
             key: 'figures',
             style: {
               position: 'absolute',
               left: '100%',
-              top: '-0.3em',
-              fontSize: '0.6em',
-              lineHeight: '0.8',
+              top: '-0.5em',
+              fontSize: '0.7em',
+              lineHeight: '1.2',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              marginLeft: '1px'
+              marginLeft: '1px', // Reduced margin for closer positioning
+              fontWeight: 'normal',
+              zIndex: 10
             }
           }, [
-            React.createElement('span', { key: '6' }, '6'),
-            React.createElement('span', { key: '4' }, '4')
+            React.createElement('span', {
+              key: '6',
+              style: {
+                display: 'block',
+                textAlign: 'center'
+              }
+            }, '6'),
+            React.createElement('span', {
+              key: '4',
+              style: {
+                display: 'block',
+                marginTop: '-0.15em',
+                textAlign: 'center'
+              }
+            }, '4')
           ])
         ]);
       } else if (figures === '43') {

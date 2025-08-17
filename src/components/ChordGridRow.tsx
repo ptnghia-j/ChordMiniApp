@@ -25,6 +25,24 @@ export interface ChordGridRowProps {
       romanNumeral: string;
     }>;
   } | null;
+  sequenceCorrections?: {
+    originalSequence: string[];
+    correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
+  } | null;
 
   // Function props
   getDisplayChord: (originalChord: string, visualIndex?: number) => { chord: string; wasCorrected: boolean };
@@ -61,6 +79,7 @@ export const ChordGridRow: React.FC<ChordGridRowProps> = ({
   editedChords,
   showRomanNumerals,
   romanNumeralData,
+  sequenceCorrections,
   getDisplayChord,
   shouldShowChordLabel,
   getSegmentationColorForBeatIndex,
@@ -90,6 +109,7 @@ export const ChordGridRow: React.FC<ChordGridRowProps> = ({
           editedChords={editedChords}
           showRomanNumerals={showRomanNumerals}
           romanNumeralData={romanNumeralData}
+          sequenceCorrections={sequenceCorrections}
 
           getDisplayChord={getDisplayChord}
           shouldShowChordLabel={shouldShowChordLabel}

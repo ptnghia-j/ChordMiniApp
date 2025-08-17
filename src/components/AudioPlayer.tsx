@@ -89,7 +89,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   } else {
     // --- STATE 2: Desktop View (Full Player) ---
     return (
-      <div className="relative w-full p-3 pt-8 bg-gray-50 dark:bg-content-bg rounded-lg mb-3 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
+      <div className="relative w-full p-3 pt-8 rounded-lg mb-3 transition-colors duration-300 border border-gray-200 dark:border-gray-600">
         <button onClick={() => setIsPlayerVisible(false)} className="absolute top-2 right-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
         </button>

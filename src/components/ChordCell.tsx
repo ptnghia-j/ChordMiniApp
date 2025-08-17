@@ -32,6 +32,11 @@ export interface ChordCellProps {
   onChordEdit?: (index: number, newChord: string) => void;
   showRomanNumerals?: boolean;
   romanNumeral?: string | React.ReactElement;
+  modulationInfo?: {
+    isModulation: boolean;
+    fromKey?: string;
+    toKey?: string;
+  };
 }
 
 /**
@@ -57,7 +62,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
   editedChord,
   onChordEdit,
   showRomanNumerals = false,
-  romanNumeral
+  romanNumeral,
+  modulationInfo
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -108,10 +114,22 @@ export const ChordCell = React.memo<ChordCellProps>(({
           ? 'min-h-[3.3rem] sm:min-h-[4.2rem]' // 20% increase when Roman numerals shown
           : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
       } chord-cell`}
-      style={
-        // Only apply segmentation color if this is NOT the current beat
-        // Current beat styling takes priority over segmentation colors
-        !isCurrentBeat && segmentationColor ? { backgroundColor: segmentationColor } : undefined
+      style={{
+        // Priority order: current beat > modulation > segmentation
+        // Current beat styling takes priority over all other background colors
+        ...(
+          isCurrentBeat ? {} : // Current beat uses CSS classes, no background override
+          modulationInfo?.isModulation ? {
+            backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)', // Light green with opacity (green-500 base)
+            border: isDarkMode ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(34, 197, 94, 0.3)'
+          } :
+          segmentationColor ? { backgroundColor: segmentationColor } : {}
+        )
+      }}
+      title={
+        modulationInfo?.isModulation
+          ? `Key change: ${modulationInfo.fromKey} → ${modulationInfo.toKey}`
+          : undefined
       }
       onClick={handleClick}
       role={isClickable ? "button" : undefined}
@@ -167,19 +185,26 @@ export const ChordCell = React.memo<ChordCellProps>(({
               {/* Roman numeral display */}
               {showRomanNumerals && romanNumeral && (
                 <div
-                  className={`${varelaRound.className} font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 overflow-hidden max-w-full`}
+                  className={`${varelaRound.className} font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
                   style={{
                     fontSize: `${Math.max(10, cellSize * 0.18)}px`, // Larger, more readable Roman numeral size
                     lineHeight: '1.1',
+                    overflow: 'visible', // Allow superscripts to extend beyond container
+                    position: 'relative', // Ensure proper positioning context for absolute children
+                    minHeight: '1.2em' // Provide space for superscripts
                   }}
                   title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
                 >
-                  {typeof romanNumeral === 'string'
+                  {React.isValidElement(romanNumeral)
+                    ? romanNumeral
+                    : typeof romanNumeral === 'string'
                     ? romanNumeral.replace(/\|/g, '/')
                     : romanNumeral
                   }
                 </div>
               )}
+
+
             </div>
           )
         ) : isEmpty ? (
