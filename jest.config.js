@@ -33,7 +33,7 @@ const customJestConfig = {
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
   globals: {
     'ts-jest': {
-      tsconfig: 'tsconfig.json',
+      tsconfig: 'tsconfig.test.json',
     },
   },
 }

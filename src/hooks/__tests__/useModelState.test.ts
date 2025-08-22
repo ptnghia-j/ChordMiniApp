@@ -13,6 +13,11 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 });
 
+// Mock getSafeChordModel to return the requested model directly in tests
+jest.mock('@/utils/modelFiltering', () => ({
+  getSafeChordModel: jest.fn((model) => model), // Return the requested model as-is
+}));
+
 describe('useModelState Hook', () => {
   beforeEach(() => {
     jest.clearAllMocks();

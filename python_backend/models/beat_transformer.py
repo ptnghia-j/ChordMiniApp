@@ -806,9 +806,13 @@ class BeatTransformerDetector:
             beat_activation_enhanced = condition_activation_for_madmom(beat_activation)
             downbeat_activation_enhanced = condition_activation_for_madmom(downbeat_activation)
 
+            # Track which algorithm is actually used
+            algorithm_used = "beat_transformer"  # Default
+
             # Use enhanced DBN processors or peak-picking algorithm
             if not MADMOM_AVAILABLE:
                 print("Madmom not available, using GPU-accelerated peak-picking algorithm")
+                algorithm_used = "beat_transformer_gpu_peaks"
                 # GPU-ACCELERATED peak-picking algorithm with PyTorch operations
 
                 # Calculate frame rate and timing parameters
@@ -1104,6 +1108,7 @@ class BeatTransformerDetector:
                     except Exception as e2:
                         print(f"All madmom DBN approaches failed: {e2}")
                         print("Falling back to peak-picking algorithm")
+                        algorithm_used = "beat_transformer_fallback_peaks"
                         # Fallback to peak-picking when madmom fails
                         from scipy import signal as scipy_signal
 
@@ -1205,7 +1210,7 @@ class BeatTransformerDetector:
                 "total_downbeats": len(dbn_downbeat_times),
                 "duration": float(duration),
                 "time_signature": f"{int(time_signature)}/4",  # Format as string like "4/4"
-                "model_used": "beat_transformer"
+                "model_used": algorithm_used
             }
 
         except Exception as e:
@@ -1222,7 +1227,7 @@ class BeatTransformerDetector:
                 "total_downbeats": 0,
                 "duration": 0,
                 "time_signature": "4/4",
-                "model_used": "beat_transformer"
+                "model_used": "beat_transformer_error"
             }
 
     def _gpu_accelerated_peak_detection(self, beat_activation, downbeat_activation, frame_rate, min_distance):

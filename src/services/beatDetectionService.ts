@@ -13,10 +13,39 @@ export interface BeatDetectionBackendResponse {
   BPM?: number; // Some responses use uppercase
   total_beats?: number;
   duration?: number;
-  time_signature?: number;
+  time_signature?: number | string; // Can be number or string like "3/4"
   model?: string;
   model_used?: string;
   error?: string;
+}
+
+// Helper function to parse time signature from various formats
+function parseTimeSignature(timeSignature: unknown): number {
+  const defaultValue = 4;
+
+  if (typeof timeSignature === 'string') {
+    // Handle string formats like "3/4", "4/4", etc.
+    if (timeSignature.includes('/')) {
+      const numerator = parseInt(timeSignature.split('/')[0], 10);
+      if (!isNaN(numerator) && numerator >= 2 && numerator <= 16) {
+        return numerator;
+      }
+    } else {
+      // Handle string numbers like "3", "4"
+      const parsed = parseInt(timeSignature, 10);
+      if (!isNaN(parsed) && parsed >= 2 && parsed <= 16) {
+        return parsed;
+      }
+    }
+  } else if (typeof timeSignature === 'number') {
+    // Handle numeric time signatures
+    if (!isNaN(timeSignature) && timeSignature >= 2 && timeSignature <= 16) {
+      return timeSignature;
+    }
+  }
+
+  console.warn(`Invalid time signature: ${timeSignature}, using default ${defaultValue}`);
+  return defaultValue;
 }
 
 
@@ -237,7 +266,7 @@ export async function detectBeatsWithRateLimit(
       bpm: (data.BPM as number) || (data.bpm as number) || 120,
       total_beats: (data.beats as number[]).length,
       duration: (data.duration as number) || 0,
-      time_signature: (data.time_signature as number) || 4,
+      time_signature: parseTimeSignature(data.time_signature),
       model: (data.model_used as string) || detector
     };
 
@@ -506,11 +535,8 @@ export async function detectBeatsFromFile(
         data.bpm = 120;
       }
 
-      // Validate time signature
-      if (typeof data.time_signature !== 'number' || isNaN(data.time_signature) || data.time_signature < 2 || data.time_signature > 16) {
-        console.warn(`Invalid time signature detected: ${data.time_signature}, using default 4`);
-        data.time_signature = 4;
-      }
+      // Parse and validate time signature using helper function
+      data.time_signature = parseTimeSignature(data.time_signature);
 
       // Validate downbeats if present
       if (data.downbeats && Array.isArray(data.downbeats)) {
@@ -680,7 +706,7 @@ export async function detectBeatsFromFirebaseUrl(
         bpm: backendResponse.BPM || backendResponse.bpm || 120,
         total_beats: (backendResponse.beats || []).length,
         duration: backendResponse.duration || 0,
-        time_signature: backendResponse.time_signature || 4,
+        time_signature: parseTimeSignature(backendResponse.time_signature),
         model: backendResponse.model_used || detector
       };
     } else if (blobResult.error === 'USE_STANDARD_FLOW') {

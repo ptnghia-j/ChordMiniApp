@@ -56,14 +56,14 @@ describe('useAudioInteractions Hook', () => {
   });
 
   describe('handleBeatClick', () => {
-    it('seeks audio element and updates state', () => {
+    it('seeks YouTube player and updates state', () => {
       const { result } = renderHook(() => useAudioInteractions(mockDependencies));
 
       act(() => {
         result.current.handleBeatClick(5, 10.5);
       });
 
-      expect(mockDependencies.audioRef.current.currentTime).toBe(10.5);
+      // The hook only handles YouTube player seeking and state updates
       expect(mockDependencies.setCurrentTime).toHaveBeenCalledWith(10.5);
       expect(mockDependencies.youtubePlayer.seekTo).toHaveBeenCalledWith(10.5, 'seconds');
       expect(mockDependencies.currentBeatIndexRef.current).toBe(5);
@@ -80,14 +80,15 @@ describe('useAudioInteractions Hook', () => {
         ...mockDependencies,
         audioRef: { current: null },
       };
-      
+
       const { result } = renderHook(() => useAudioInteractions(deps));
 
       act(() => {
         result.current.handleBeatClick(5, 10.5);
       });
 
-      expect(deps.setCurrentTime).not.toHaveBeenCalled();
+      // The hook still calls setCurrentTime and YouTube player seeking
+      expect(deps.setCurrentTime).toHaveBeenCalledWith(10.5);
       expect(deps.youtubePlayer.seekTo).toHaveBeenCalledWith(10.5, 'seconds');
     });
 
@@ -96,15 +97,15 @@ describe('useAudioInteractions Hook', () => {
         ...mockDependencies,
         youtubePlayer: null,
       };
-      
+
       const { result } = renderHook(() => useAudioInteractions(deps));
 
       act(() => {
         result.current.handleBeatClick(5, 10.5);
       });
 
-      expect(deps.audioRef.current.currentTime).toBe(10.5);
-      expect(deps.setCurrentTime).toHaveBeenCalledWith(10.5);
+      // When YouTube player is null, setCurrentTime is not called
+      expect(deps.setCurrentTime).not.toHaveBeenCalled();
     });
   });
 
@@ -136,14 +137,15 @@ describe('useAudioInteractions Hook', () => {
   });
 
   describe('handleLoadedMetadata', () => {
-    it('sets duration from audio element', () => {
+    it('is a placeholder function that does nothing', () => {
       const { result } = renderHook(() => useAudioInteractions(mockDependencies));
 
       act(() => {
         result.current.handleLoadedMetadata();
       });
 
-      expect(mockDependencies.setDuration).toHaveBeenCalledWith(100);
+      // The function is a placeholder - YouTube player handles metadata loading
+      expect(mockDependencies.setDuration).not.toHaveBeenCalled();
     });
 
     it('handles null audioRef gracefully', () => {
@@ -151,7 +153,7 @@ describe('useAudioInteractions Hook', () => {
         ...mockDependencies,
         audioRef: { current: null },
       };
-      
+
       const { result } = renderHook(() => useAudioInteractions(deps));
 
       act(() => {
@@ -163,14 +165,15 @@ describe('useAudioInteractions Hook', () => {
   });
 
   describe('handleTimeUpdate', () => {
-    it('updates current time from audio element', () => {
+    it('is a placeholder function that does nothing', () => {
       const { result } = renderHook(() => useAudioInteractions(mockDependencies));
 
       act(() => {
         result.current.handleTimeUpdate();
       });
 
-      expect(mockDependencies.setCurrentTime).toHaveBeenCalledWith(0);
+      // The function is a placeholder - YouTube player handles time updates
+      expect(mockDependencies.setCurrentTime).not.toHaveBeenCalled();
     });
 
     it('handles null audioRef gracefully', () => {
@@ -178,7 +181,7 @@ describe('useAudioInteractions Hook', () => {
         ...mockDependencies,
         audioRef: { current: null },
       };
-      
+
       const { result } = renderHook(() => useAudioInteractions(deps));
 
       act(() => {

@@ -176,7 +176,7 @@ export async function analyzeAudioWithRateLimit(
                 beats.push({
                   time,
                   strength: 0.8, // Default strength
-                  beatNum: (index % (beatResults.time_signature || 4)) + 1
+                  beatNum: (index % (typeof beatResults.time_signature === 'number' ? beatResults.time_signature : 4)) + 1
                 });
               }
             }
@@ -229,7 +229,7 @@ export async function analyzeAudioWithRateLimit(
               beatModel: beatDetector,
               audioDuration: audioDuration,
               beatDetectionResult: {
-                time_signature: beatResults.time_signature,
+                time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
                 bpm: beatResults.bpm || ('BPM' in beatResults ? (beatResults as { BPM: number }).BPM : undefined),
                 beatShift: 0
               }
@@ -366,7 +366,7 @@ export async function analyzeAudioWithRateLimit(
                     beats.push({
                       time,
                       strength: 0.8, // Default strength
-                      beatNum: (index % (beatResults.time_signature || 4)) + 1
+                      beatNum: (index % (typeof beatResults.time_signature === 'number' ? beatResults.time_signature : 4)) + 1
                     });
                   }
                 }
@@ -406,7 +406,7 @@ export async function analyzeAudioWithRateLimit(
                 beatModel: beatDetector,
                 audioDuration: audioDuration,
                 beatDetectionResult: {
-                  time_signature: beatResults.time_signature,
+                  time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
                   bpm: beatResults.bpm || ('BPM' in beatResults ? (beatResults as { BPM: number }).BPM : undefined),
                   beatShift: 0
                 }
@@ -554,7 +554,7 @@ export async function analyzeAudioWithRateLimit(
         beats.push({
           time,
           strength: 0.8, // Default strength
-          beatNum: (index % (beatResults.time_signature || 4)) + 1
+          beatNum: (index % (typeof beatResults.time_signature === 'number' ? beatResults.time_signature : 4)) + 1
         });
       }
 
@@ -658,7 +658,7 @@ export async function analyzeAudioWithRateLimit(
       chordModel: chordDetector,
       audioDuration: audioDuration,
       beatDetectionResult: {
-        time_signature: beatResults.time_signature,
+        time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
         bpm: beatResults.bpm
       }
     };
@@ -879,7 +879,7 @@ export async function analyzeAudio(
         beats.push({
           time,
           strength: 0.8, // Default strength since backend no longer provides this
-          beatNum: (index % (beatResults.time_signature || 4)) + 1
+          beatNum: (index % (typeof beatResults.time_signature === 'number' ? beatResults.time_signature : 4)) + 1
         });
       }
 
@@ -1018,7 +1018,7 @@ export async function analyzeAudio(
       chordModel: chordDetector,
       audioDuration: audioDuration,
       beatDetectionResult: {
-        time_signature: beatResults.time_signature,
+        time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
         bpm: beatResults.bpm
       }
     };

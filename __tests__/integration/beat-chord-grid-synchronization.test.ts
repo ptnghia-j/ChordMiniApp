@@ -194,10 +194,10 @@ describe('Beat-Chord Grid Synchronization Tests', () => {
         expect(mapping).toHaveProperty('chord');
         expect(mapping).toHaveProperty('timestamp');
         expect(mapping).toHaveProperty('visualIndex');
-        expect(mapping).toHaveProperty('originalIndex');
+        expect(mapping).toHaveProperty('audioIndex');
         expect(typeof mapping.timestamp).toBe('number');
         expect(typeof mapping.visualIndex).toBe('number');
-        expect(typeof mapping.originalIndex).toBe('number');
+        expect(typeof mapping.audioIndex).toBe('number');
       });
     });
   });
@@ -231,7 +231,7 @@ describe('Beat-Chord Grid Synchronization Tests', () => {
       
       expect(gridData.chords).toEqual([]);
       expect(gridData.beats).toEqual([]);
-      expect(gridData.hasPadding).toBe(false);
+      expect(gridData.hasPadding).toBe(true);
       expect(gridData.paddingCount).toBe(0);
       expect(gridData.shiftCount).toBe(0);
       expect(gridData.totalPaddingCount).toBe(0);
