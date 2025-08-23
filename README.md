@@ -5,24 +5,24 @@
 ## Features Overview
 
 ### 🏠 Homepage Interface
-![ChordMini Homepage Light](homepage.png)
-![ChordMini Homepage Dark](homepage_dark.png)
+![ChordMini Homepage Light](public/homepage.png)
+![ChordMini Homepage Dark](public/homepage_dark.png)
 
 Clean, intuitive interface for YouTube search, URL input, and recent video access.
 
 ### 🎵 Beat & Chord Analysis
-![Beat Chord Grid](beatchord_grid.png)
+![Beat Chord Grid](public/beatchord_grid.png)
 
 Real-time chord progression visualization with synchronized beat detection and grid layout with add-on features: Roman Numeral Analysis, Key Modulation Signals, Simplified Chord Notation, and Enhanced Chord Correction.
 
 ### 🎵 Guitar Diagrams
 
-![Guitar Diagrams](guitar_diagrams.png)
+![Guitar Diagrams](public/guitar_diagrams.png)
 
 Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring multiple chord positions and synchronized beat grid integration.
 
 ### 🎤 Lead Sheet with AI Assistant
-![Lead Sheet with AI](leadsheet.png)
+![Lead Sheet with AI](public/leadsheet.png)
 
 Synchronized lyrics transcription with AI chatbot for contextual music analysis and translation support.
 

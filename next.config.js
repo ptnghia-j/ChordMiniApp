@@ -26,9 +26,12 @@ const nextConfig = {
     } : false,
   },
 
+
+
   // Target modern browsers to reduce bundle size
   experimental: {
     optimizePackageImports: ['firebase', '@firebase/app', '@firebase/firestore', '@firebase/auth'],
+    nextScriptWorkers: false,
   },
 
   // Image optimization
@@ -98,12 +101,36 @@ const nextConfig = {
         ],
       },
       {
-        // Suppress Google Ads CORS errors from YouTube embeds
+        // Enhanced CORS and CSP headers to handle YouTube embeds and Google Ads
         source: '/:path*',
         headers: [
           {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, X-Requested-With',
+          },
+          {
             key: 'Content-Security-Policy',
-            value: "connect-src 'self' https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://quicktube.app https://chordmini-backend-full-191567167632.us-central1.run.app https://lrclib.net https://api.genius.com https://vercel.com https://*.vercel.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://api.vercel.com; frame-src 'self' https://www.youtube.com https://youtube.com https://*.firebaseapp.com https://s3.us-east-1.amazonaws.com;",
+            value: "connect-src 'self' https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://*.google.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://www.google.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://tpc.googlesyndication.com https://securepubads.g.doubleclick.net https://partner.googleadservices.com https://googleadservices.com https://quicktube.app https://chordmini-backend-full-191567167632.us-central1.run.app https://lrclib.net https://api.genius.com https://vercel.com https://*.vercel.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://api.vercel.com; frame-src 'self' https://www.youtube.com https://youtube.com https://*.firebaseapp.com https://s3.us-east-1.amazonaws.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; img-src 'self' data: https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://pagead2.googlesyndication.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://*.googleapis.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com;",
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'unsafe-none',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin',
           },
         ],
       },

@@ -18,7 +18,7 @@ export const useYouTubeSetup = (
         youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`,
         videoUrl: `https://www.youtube.com/watch?v=${videoId}`
       }));
-      console.log(`🎬 Set YouTube URLs for video: ${videoId}`);
+
     }
   }, [videoId, setAudioProcessingState]);
 };

@@ -8,7 +8,7 @@ const renderChangeItem = (item: string, colorClass: string) => {
   const parts = item.split(': ');
   const badgeText = parts[0];
   const description = parts.slice(1).join(': ');
-  
+
   let badgeColor = 'text-gray-700 dark:text-gray-200'; // Default
   if (badgeText.includes('NEW')) badgeColor = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
   if (badgeText.includes('FIX')) badgeColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
@@ -29,6 +29,21 @@ const renderChangeItem = (item: string, colorClass: string) => {
 
 export default function ChangelogPage() {
   const releases = [
+    {
+      version: 'v0.4.2',
+      date: 'August 23, 2025',
+      title: 'Audio Mixer & Refactoring',
+      description: 'Introduces synchronized chord audio playback and consolidates audio analysis logic into a single orchestrator for maintainability',
+      features: [
+        'NEW: Audio Mixer - Play back chord audio alongside video with beat-aligned, synchronized chord sounds',
+      ],
+      technical: [
+        'ARCHITECTURE: Centralized audio analysis orchestrator (audioAnalysisService.ts) coordinating beat detection, chord recognition, and synchronization with Vercel Blob support',
+        'REFACTOR: Backward-compatible facade (chordRecognitionService.ts) delegates to the orchestrator to reduce duplication and simplify imports',
+      ],
+      breaking: []
+    },
+
     {
       version: 'v0.4.1',
       date: 'August 17, 2025',
@@ -427,7 +442,7 @@ export default function ChangelogPage() {
 
                 {/* Main Content Flex Container */}
                 <div className="flex flex-col md:flex-row gap-4 md:gap-8 ml-14">
-                  
+
                   {/* Left Column: Date and Version */}
                   <div className="w-full md:w-36 flex-shrink-0 md:text-right">
                     <p className="font-semibold text-gray-800 dark:text-gray-200">{release.date}</p>
@@ -440,7 +455,7 @@ export default function ChangelogPage() {
                   <div className="flex-grow bg-gray-50 dark:bg-content-bg p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                     <h2 className="text-2xl font-bold text-black dark:text-white">{release.title}</h2>
                     <p className="mt-2 text-gray-600 dark:text-gray-400">{release.description}</p>
-                    
+
                     <div className="mt-6 space-y-6">
                       {/* Features Section */}
                       {release.features && release.features.length > 0 && (
@@ -453,7 +468,7 @@ export default function ChangelogPage() {
                           </ul>
                         </div>
                       )}
-                      
+
                       {/* Technical Section */}
                       {release.technical && release.technical.length > 0 && (
                         <div>

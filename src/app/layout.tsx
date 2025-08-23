@@ -11,6 +11,7 @@ import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptim
 import DesktopPerformanceOptimizer from '../components/DesktopPerformanceOptimizer';
 import CriticalCSS from '../components/CriticalCSS';
 import CorsErrorSuppression from '../components/CorsErrorSuppression';
+import DevIndicatorHider from '../components/DevIndicatorHider';
 
 // Configure Google Fonts
 const robotoMono = Roboto_Mono({
@@ -190,6 +191,7 @@ export default function RootLayout({
             <FirebaseInitializer />
             <PerformanceMonitor />
             <CorsErrorSuppression />
+            {process.env.NODE_ENV === 'development' ? <DevIndicatorHider /> : null}
             <main className="flex-1">
               {children}
             </main>

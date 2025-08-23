@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { FaExpand, FaCompress } from 'react-icons/fa';
 import { Slider } from '@heroui/react';
 
+// Import ReactPlayer type for TypeScript
+import ReactPlayer from 'react-player';
+
 // Dynamically import ReactPlayer to avoid SSR issues
-const ReactPlayer = dynamic(() => import('react-player/youtube'), {
+const DynamicReactPlayer = dynamic(() => import('react-player/youtube'), {
   ssr: false,
   loading: () => (
     <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
@@ -42,6 +45,7 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const playerRef = useRef<ReactPlayer>(null);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -58,6 +62,71 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Handle ReactPlayer ready event and expose internal YouTube player
+  const handleReady = (player: ReactPlayer) => {
+    playerRef.current = player;
+
+    // Try to get the internal YouTube player instance
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const internalPlayer = (player as any).getInternalPlayer();
+      if (internalPlayer && typeof internalPlayer.setVolume === 'function') {
+        // Create a wrapper that includes volume control methods
+        const enhancedPlayer = {
+          // ReactPlayer methods
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          seekTo: (time: number, type?: 'seconds' | 'fraction') => (player as any).seekTo(time, type),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          getCurrentTime: () => (player as any).getCurrentTime(),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          getDuration: () => (player as any).getDuration(),
+          // YouTube iframe API methods through internal player
+          setVolume: (volume: number) => internalPlayer.setVolume(volume),
+          getVolume: () => internalPlayer.getVolume(),
+          mute: () => internalPlayer.mute(),
+          unMute: () => internalPlayer.unMute(),
+          isMuted: () => internalPlayer.isMuted(),
+          playVideo: () => internalPlayer.playVideo(),
+          pauseVideo: () => internalPlayer.pauseVideo(),
+          setPlaybackRate: (rate: number) => internalPlayer.setPlaybackRate(rate),
+          muted: false
+        };
+        onReady?.(enhancedPlayer);
+      } else {
+        // Fallback: create a basic wrapper without volume control
+        const basicPlayer = {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          seekTo: (time: number, type?: 'seconds' | 'fraction') => (player as any).seekTo(time, type),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          getCurrentTime: () => (player as any).getCurrentTime(),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          getDuration: () => (player as any).getDuration(),
+          playVideo: () => console.warn('playVideo not available'),
+          pauseVideo: () => console.warn('pauseVideo not available'),
+          setPlaybackRate: (rate: number) => console.warn('setPlaybackRate not available', rate),
+          muted: false
+        };
+        onReady?.(basicPlayer);
+      }
+    } catch (error) {
+      console.warn('Could not access internal YouTube player for volume control:', error);
+      // Fallback: create a basic wrapper
+      const fallbackPlayer = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        seekTo: (time: number, type?: 'seconds' | 'fraction') => (player as any).seekTo(time, type),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        getCurrentTime: () => (player as any).getCurrentTime(),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        getDuration: () => (player as any).getDuration(),
+        playVideo: () => console.warn('playVideo not available'),
+        pauseVideo: () => console.warn('pauseVideo not available'),
+        setPlaybackRate: (rate: number) => console.warn('setPlaybackRate not available', rate),
+        muted: false
+      };
+      onReady?.(fallbackPlayer);
+    }
+  };
+
   // Collapsed mobile view - enhanced bar with video frame
   if (isMobile && isCollapsed) {
     return (
@@ -68,14 +137,15 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Mini video frame */}
             <div className="w-20 h-12 bg-black rounded overflow-hidden flex-shrink-0 relative">
-              <ReactPlayer
+              <DynamicReactPlayer
+                ref={playerRef}
                 url={`https://www.youtube.com/watch?v=${videoId}`}
                 width="100%"
                 height="100%"
                 controls={false}
                 playing={isPlaying}
                 playbackRate={playbackRate}
-                onReady={onReady}
+                onReady={handleReady}
                 onPlay={onPlay}
                 onPause={onPause}
                 onProgress={onProgress}
@@ -171,14 +241,15 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
 
       {/* Full video player */}
       <div className="aspect-video bg-black rounded-lg overflow-hidden shadow-lg">
-        <ReactPlayer
+        <DynamicReactPlayer
+          ref={playerRef}
           url={`https://www.youtube.com/watch?v=${videoId}`}
           width="100%"
           height="100%"
           controls={true}
           playing={isPlaying}
           playbackRate={playbackRate}
-          onReady={onReady}
+          onReady={handleReady}
           onPlay={onPlay}
           onPause={onPause}
           onProgress={onProgress}

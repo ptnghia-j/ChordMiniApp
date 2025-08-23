@@ -1,0 +1,305 @@
+/**
+ * Audio Analysis Orchestrator Service
+ *
+ * Coordinates chord recognition and beat detection, including large-file
+ * handling with Vercel Blob uploads. Maintains existing signatures.
+ */
+
+import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+
+import { vercelBlobUploadService } from '@/services/vercelBlobUploadService';
+import { detectBeatsFromFile, detectBeatsWithRateLimit, detectBeatsFromFirebaseUrl } from '@/services/beatDetectionService';
+import { synchronizeChords } from '@/utils/chordSynchronization';
+import { recognizeChordsWithRateLimit } from '@/services/chordService';
+import type { AnalysisResult, BeatInfo, ChordDetectorType, ChordDetectionResult, BeatDetectionBackendResponse } from '@/types/audioAnalysis';
+
+function toBeatInfo(beatResults: BeatDetectionBackendResponse): BeatInfo[] {
+  const beats: BeatInfo[] = [];
+  if (Array.isArray(beatResults.beats)) {
+    for (let index = 0; index < beatResults.beats.length; index++) {
+      const time = beatResults.beats[index];
+      if (typeof time !== 'number' || isNaN(time) || time < 0) continue;
+      beats.push({
+        time,
+        strength: 0.8,
+        beatNum: (index % (typeof beatResults.time_signature === 'number' ? beatResults.time_signature : 4)) + 1
+      });
+    }
+  }
+  return beats;
+}
+
+async function fetchFileFromUrl(url: string): Promise<File> {
+  const encoded = url.includes('quicktube.app/dl/')
+    ? encodeURIComponent(url).replace(/%5B/g, '[').replace(/%5D/g, ']')
+    : encodeURIComponent(url);
+  const proxyUrl = `/api/proxy-audio?url=${encoded}`;
+  const response = await fetch(proxyUrl);
+  if (!response.ok) {
+    if (response.status >= 500) throw new Error(`Backend service temporarily unavailable (${response.status}). Please try again later or use file upload.`);
+    if (response.status === 413) throw new Error(`Audio file too large for processing (${response.status}). Try a shorter clip.`);
+    if (response.status === 408 || response.status === 504) throw new Error(`Request timed out (${response.status}). Try again shortly.`);
+    throw new Error(`Failed to fetch audio from URL: ${response.status} ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  if (blob.size === 0) throw new Error('Audio file is empty or corrupted');
+  if (blob.size > 100 * 1024 * 1024) throw new Error('Audio file is too large (>100MB). Please use a smaller file.');
+  return new File([blob], 'audio.wav', { type: 'audio/wav' });
+}
+
+async function handleBlobPath(
+  audioFile: File,
+  beatDetector: 'auto' | 'madmom' | 'beat-transformer',
+  chordDetector: ChordDetectorType,
+  audioDuration?: number
+): Promise<AnalysisResult> {
+  // Chords
+  const chordBlob = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, chordDetector);
+  if (!chordBlob.success) {
+    const err = chordBlob.error || 'Unknown blob upload error';
+    throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${err}. Please try a smaller file or check your internet connection.`);
+  }
+  const chordResp = chordBlob.data as { success: boolean; chords?: ChordDetectionResult[] };
+  if (!chordResp.chords || !Array.isArray(chordResp.chords)) {
+    throw new Error('Invalid chord recognition response: chords array not found or not an array');
+  }
+  const chordResults = chordResp.chords as ChordDetectionResult[];
+
+  // Beats
+  let beatResults: BeatDetectionBackendResponse;
+  try {
+    const beatBlob = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, beatDetector);
+    if (!beatBlob.success) {
+      console.warn(`⚠️ Vercel Blob beat detection failed: ${beatBlob.error}, using empty beats array`);
+      beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+    } else {
+      beatResults = beatBlob.data as BeatDetectionBackendResponse;
+      if (!beatResults.beats || !Array.isArray(beatResults.beats)) {
+        console.warn('⚠️ Invalid beat detection response from blob upload, using empty beats array');
+        beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️ Beat detection failed for blob upload: ${e}, using empty beats array`);
+    beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+  }
+
+  const beats = toBeatInfo(beatResults);
+  let synchronizedChords;
+  try {
+    synchronizedChords = synchronizeChords(chordResults, beats);
+    if (!synchronizedChords || !Array.isArray(synchronizedChords)) throw new Error('Chord synchronization failed: invalid result format');
+  } catch (e) {
+    console.error('Error in blob API chord synchronization:', e);
+    synchronizedChords = beats.map((_, index) => ({ chord: 'N/C', beatIndex: index }));
+  }
+
+  return {
+    chords: chordResults,
+    beats,
+    downbeats: beatResults.downbeats || [],
+    downbeats_with_measures: [],
+    synchronizedChords,
+    chordModel: chordDetector,
+    beatModel: beatDetector,
+    audioDuration,
+    beatDetectionResult: {
+      time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
+      bpm: typeof beatResults.bpm === 'number' ? beatResults.bpm : (typeof (beatResults as unknown as { BPM?: number }).BPM === 'number' ? (beatResults as unknown as { BPM?: number }).BPM : undefined),
+      beatShift: 0
+    }
+  };
+}
+
+export async function analyzeAudioWithRateLimit(
+  audioInput: File | AudioBuffer | string,
+  beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+): Promise<AnalysisResult> {
+  const { isLocalBackend } = await import('@/utils/backendConfig');
+  const isLocalhost = isLocalBackend();
+
+  let audioFile: File;
+  let audioDuration: number | undefined;
+
+  if (audioInput instanceof File) {
+    if (audioInput.size === 0) throw new Error('Audio file is empty or corrupted');
+    if (audioInput.size > 100 * 1024 * 1024) throw new Error('Audio file is too large (>100MB). Please use a smaller file.');
+    audioFile = audioInput;
+    try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
+    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
+    }
+  } else if (typeof audioInput === 'string') {
+    audioFile = await fetchFileFromUrl(audioInput);
+    try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
+    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
+    }
+  } else if (audioInput instanceof AudioBuffer) {
+    if (!audioInput || audioInput.length === 0) throw new Error('AudioBuffer is empty or invalid');
+    if (audioInput.duration === 0) throw new Error('AudioBuffer has zero duration');
+    if (audioInput.duration > 300) throw new Error('Audio duration exceeds maximum supported length (5 minutes).');
+    if (audioInput.sampleRate < 8000 || audioInput.sampleRate > 192000) throw new Error(`Unsupported sample rate: ${audioInput.sampleRate}Hz. Supported range: 8kHz-192kHz`);
+    const { audioBufferToWav } = await import('@/utils/audioBufferUtils');
+    const blob = await audioBufferToWav(audioInput);
+    audioFile = new File([blob], 'audio.wav', { type: 'audio/wav' });
+    audioDuration = audioInput.duration;
+  } else {
+    throw new Error('Invalid audio input: must be either File object, AudioBuffer, or URL string');
+  }
+
+  // Beat detection (rate limited path)
+  let beatResults: BeatDetectionBackendResponse;
+  try {
+    if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+    } else {
+      beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
+    }
+    if (!beatResults || !beatResults.beats) throw new Error('Beat detection failed: missing beats data');
+    if (!Array.isArray(beatResults.beats)) throw new Error('Invalid beat detection results: beats is not an array');
+    if (beatResults.beats.length === 0) throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
+    // filter invalid
+    beatResults.beats = beatResults.beats.filter((t: number) => typeof t === 'number' && !isNaN(t) && t >= 0 && t <= 3600);
+    if (beatResults.beats.length === 0) throw new Error('All detected beats have invalid timestamps');
+  } catch (e) {
+    console.error('Error in beat detection with rate limiting:', e);
+    if (e instanceof Error) {
+      if (e.message.includes('Rate limited')) throw new Error(`Beat detection rate limited: ${e.message}`);
+      if (e.message.includes('too large')) throw new Error('Audio file is too large for beat detection. Try a shorter clip or the madmom detector.');
+      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits. Please use a smaller file or try the madmom detector.');
+      if (e.message.includes('timeout')) throw new Error('Beat detection timed out. Try a shorter clip or the madmom detector.');
+      throw new Error(`Beat detection failed: ${e.message}`);
+    }
+    throw new Error(`Beat detection failed: ${String(e) || 'Unknown error'}`);
+  }
+
+  const beats = toBeatInfo(beatResults);
+
+  // Chords
+  let chordResults: ChordDetectionResult[];
+  try {
+    chordResults = await recognizeChordsWithRateLimit(audioFile, chordDetector);
+    // filter invalid chords
+    chordResults = chordResults.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number' && !isNaN(c.start) && !isNaN(c.end) && c.start >= 0 && c.end >= 0 && c.start < c.end && c.end <= 3600);
+  } catch (e) {
+    console.error('Error in chord recognition with rate limiting:', e);
+    if (e instanceof Error) {
+      if (e.message.includes('Rate limited')) throw new Error(`Chord recognition rate limited: ${e.message}`);
+      if (e.message.includes('too large')) throw new Error('Audio file is too large for chord recognition. Try a shorter clip.');
+      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits for chord recognition. Please use a smaller file.');
+      if (e.message.includes('timeout')) throw new Error('Chord recognition timed out. Try a shorter clip.');
+      throw new Error(`Chord recognition failed: ${e.message}`);
+    }
+    throw new Error('Chord recognition failed with unknown error');
+  }
+
+  // Synchronize
+  let synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+  synchronizedChords = synchronizedChords.filter((sc) => sc && typeof sc.beatIndex === 'number' && !isNaN(sc.beatIndex) && sc.beatIndex >= 0 && sc.beatIndex < beats.length && typeof (sc as { chord?: string }).chord === 'string');
+
+  return {
+    chords: chordResults,
+    beats,
+    downbeats: beatResults.downbeats,
+    synchronizedChords,
+    beatModel: (beatResults as unknown as { model?: string }).model,
+    chordModel: chordDetector,
+    audioDuration,
+    beatDetectionResult: {
+      time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
+      bpm: beatResults.bpm
+    }
+  };
+}
+
+export async function analyzeAudio(
+  audioInput: AudioBuffer | string,
+  beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+): Promise<AnalysisResult> {
+  const { isLocalBackend } = await import('@/utils/backendConfig');
+  const isLocalhost = isLocalBackend();
+
+  let audioFile: File;
+  let audioDuration: number | undefined;
+
+  if (typeof audioInput === 'string') {
+    audioFile = await fetchFileFromUrl(audioInput);
+    try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
+  } else if (audioInput instanceof AudioBuffer) {
+    if (!audioInput || audioInput.length === 0) throw new Error('AudioBuffer is empty or invalid');
+    if (audioInput.duration === 0) throw new Error('AudioBuffer has zero duration');
+    if (audioInput.duration > 300) throw new Error('Audio duration exceeds maximum supported length (5 minutes).');
+    if (audioInput.sampleRate < 8000 || audioInput.sampleRate > 192000) throw new Error(`Unsupported sample rate: ${audioInput.sampleRate}Hz. Supported range: 8kHz-192kHz`);
+    const { audioBufferToWav } = await import('@/utils/audioBufferUtils');
+    const blob = await audioBufferToWav(audioInput);
+    audioFile = new File([blob], 'audio.wav', { type: 'audio/wav' });
+    audioDuration = audioInput.duration;
+  } else {
+    throw new Error('Invalid audio input: must be either AudioBuffer or URL string');
+  }
+
+  console.log(`Detecting beats using ${beatDetector} model...`);
+  let beatResults: BeatDetectionBackendResponse;
+  try {
+    if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+    } else {
+      beatResults = await detectBeatsFromFile(audioFile, beatDetector);
+    }
+    if (!beatResults || !beatResults.success) throw new Error(`Beat detection failed: ${beatResults?.error || 'Unknown error from beat detection service'}`);
+    if (!beatResults.beats || !Array.isArray(beatResults.beats)) throw new Error('Invalid beat detection results: missing or invalid beats array');
+    if (beatResults.beats.length === 0) throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
+    // filter invalid
+    beatResults.beats = beatResults.beats.filter((t: number) => typeof t === 'number' && !isNaN(t) && t >= 0 && t <= 3600);
+    if (beatResults.beats.length === 0) throw new Error('All detected beats have invalid timestamps');
+  } catch (e) {
+    console.error('Error in beat detection:', e);
+    if (e instanceof Error) {
+      if (e.message.includes('too large')) throw new Error('Audio file is too large for beat detection. Try a shorter clip or the madmom detector.');
+      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits. Please use a smaller file or try the madmom detector.');
+      if (e.message.includes('timeout')) throw new Error('Beat detection timed out. Try a shorter clip or the madmom detector.');
+      throw new Error(`Beat detection failed: ${e.message}`);
+    }
+    throw new Error('Beat detection failed with unknown error');
+  }
+
+  const beats = toBeatInfo(beatResults);
+
+  // Chords
+  let chordResults: ChordDetectionResult[];
+  try {
+    chordResults = await recognizeChordsWithRateLimit(audioFile, chordDetector);
+    // filter invalid chords
+    chordResults = chordResults.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number' && !isNaN(c.start) && !isNaN(c.end) && c.start >= 0 && c.end >= 0 && c.start < c.end && c.end <= 3600);
+  } catch (e) {
+    console.error('Error in chord recognition:', e);
+    if (e instanceof Error) {
+      if (e.message.includes('too large')) throw new Error('Audio file is too large for chord recognition. Try a shorter clip.');
+      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits for chord recognition. Please use a smaller file.');
+      if (e.message.includes('timeout')) throw new Error('Chord recognition timed out. Try a shorter clip.');
+      throw new Error(`Chord recognition failed: ${e.message}`);
+    }
+    throw new Error('Chord recognition failed with unknown error');
+  }
+
+  // Synchronize
+  const synchronizedChords = synchronizeChords(chordResults, beats);
+
+  return {
+    chords: chordResults,
+    beats,
+    downbeats: beatResults.downbeats,
+    synchronizedChords,
+    beatModel: (beatResults as unknown as { model?: string }).model,
+    chordModel: chordDetector,
+    audioDuration,
+    beatDetectionResult: {
+      time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
+      bpm: beatResults.bpm
+    }
+  };
+}
+

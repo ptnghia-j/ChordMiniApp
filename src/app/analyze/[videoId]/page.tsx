@@ -248,10 +248,14 @@ export default function YouTubeVideoAnalyzePage() {
         // This ensures "recently transcribed" videos show proper titles
         if (titleFromSearch) {
           setVideoTitle(titleFromSearch);
-          console.log(`✅ Set video title from URL parameters: "${titleFromSearch}"`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Set video title from URL parameters: "${titleFromSearch}"`);
+          }
         } else if (cachedAudio.title && cachedAudio.title !== `YouTube Video ${videoId}`) {
           setVideoTitle(cachedAudio.title);
-          console.log(`✅ Set video title from cached audio: "${cachedAudio.title}"`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Set video title from cached audio: "${cachedAudio.title}"`);
+          }
         }
 
         return; // Skip extraction since we have cached audio
@@ -263,7 +267,9 @@ export default function YouTubeVideoAnalyzePage() {
       // FIXED: Set video title from extraction result
       if (extractionResult && extractionResult.title) {
         setVideoTitle(extractionResult.title);
-        console.log(`✅ Set video title from extraction: "${extractionResult.title}"`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Set video title from extraction: "${extractionResult.title}"`);
+        }
       }
 
     } catch (error) {
@@ -274,7 +280,9 @@ export default function YouTubeVideoAnalyzePage() {
       // FIXED: Set video title from extraction result even when cache check fails
       if (extractionResult && extractionResult.title) {
         setVideoTitle(extractionResult.title);
-        console.log(`✅ Set video title from extraction (cache check failed): "${extractionResult.title}"`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Set video title from extraction (cache check failed): "${extractionResult.title}"`);
+        }
       }
     }
   }, [videoId, firebaseReady, initialCacheCheckDone, setAudioProcessingState, setDuration, setStage, setProgress, setStatusMessage, setVideoTitle, titleFromSearch]);
@@ -1348,6 +1356,9 @@ export default function YouTubeVideoAnalyzePage() {
             showRomanNumerals={showRomanNumerals}
             simplifyChords={simplifyChords}
             analysisResults={analysisResults}
+            currentBeatIndex={currentBeatIndex}
+            chords={simplifiedChordGridData.chords}
+            beats={simplifiedChordGridData.beats}
             toggleVideoMinimization={toggleVideoMinimization}
             toggleFollowMode={toggleFollowMode}
             setShowRomanNumerals={setShowRomanNumerals}
@@ -1365,6 +1376,7 @@ export default function YouTubeVideoAnalyzePage() {
             onSeek={seek}
             youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
             videoUrl={audioProcessingState.videoUrl}
+            youtubePlayer={youtubePlayer}
           />
 
           {/* Chatbot Section */}

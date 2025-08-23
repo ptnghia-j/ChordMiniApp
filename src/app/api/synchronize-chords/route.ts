@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { synchronizeChords } from '@/services/chordRecognitionService';
+import { synchronizeChords } from '@/utils/chordSynchronization';
 
 // Define interfaces for the synchronization request
 interface ChordDetectionResult {

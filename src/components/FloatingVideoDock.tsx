@@ -6,6 +6,7 @@ import { FaExpand, FaCompress } from 'react-icons/fa';
 import { HiOutlineArrowPath, HiArrowPath } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
 import { AnalysisResult } from '@/services/chordRecognitionService';
+import { useChordPlayback } from '@/hooks/useChordPlayback';
 
 // Dynamic imports for heavy components
 const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
@@ -17,6 +18,8 @@ const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimpli
   loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
+
+import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 
 const RomanNumeralToggle = dynamic(() => import('@/components/RomanNumeralToggle'), {
   loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -37,13 +40,18 @@ interface FloatingVideoDockProps {
   isChatbotOpen: boolean;
   isLyricsPanelOpen: boolean;
   isVideoMinimized: boolean;
-  
+
   // Toggle states and handlers
   isFollowModeEnabled: boolean;
   showRomanNumerals: boolean;
   simplifyChords: boolean;
   analysisResults: AnalysisResult | null; // for opacity gating
-  
+
+  // Chord playback props
+  currentBeatIndex: number;
+  chords: string[];
+  beats: (number | null)[];
+
   // Handlers
   toggleVideoMinimization: () => void;
   toggleFollowMode: () => void;
@@ -66,6 +74,22 @@ interface FloatingVideoDockProps {
   // URLs
   youtubeEmbedUrl?: string;
   videoUrl?: string;
+
+  // YouTube player for volume control
+  youtubePlayer?: {
+    seekTo: (time: number, type?: 'seconds' | 'fraction') => void;
+    playVideo: () => void;
+    pauseVideo: () => void;
+    setPlaybackRate: (rate: number) => void;
+    getCurrentTime: () => number;
+    muted: boolean;
+    // Volume control methods (may not be available on all YouTube player implementations)
+    setVolume?: (volume: number) => void;
+    getVolume?: () => number;
+    mute?: () => void;
+    unMute?: () => void;
+    isMuted?: () => boolean;
+  } | null;
 }
 
 const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
@@ -76,6 +100,9 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   showRomanNumerals,
   simplifyChords,
   analysisResults,
+  currentBeatIndex,
+  chords,
+  beats,
   toggleVideoMinimization,
   toggleFollowMode,
   setShowRomanNumerals,
@@ -92,8 +119,18 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   onProgress,
   onSeek,
   youtubeEmbedUrl,
-  videoUrl
+  videoUrl,
+  youtubePlayer
 }) => {
+  // Chord playback hook
+  const chordPlayback = useChordPlayback({
+    currentBeatIndex,
+    chords,
+    beats,
+    isPlaying,
+    currentTime
+  });
+
   // Don't render if no video URLs are available
   if (!youtubeEmbedUrl && !videoUrl) {
     return null;
@@ -154,6 +191,19 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           <RomanNumeralToggle
             isEnabled={showRomanNumerals}
             onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+          />
+        </div>
+
+        {/* Chord playback toggle - reserve space to prevent layout shift */}
+        <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+          <ChordPlaybackToggle
+            isEnabled={chordPlayback.isEnabled}
+            onClick={chordPlayback.togglePlayback}
+            pianoVolume={chordPlayback.pianoVolume}
+            guitarVolume={chordPlayback.guitarVolume}
+            onPianoVolumeChange={chordPlayback.setPianoVolume}
+            onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+            youtubePlayer={youtubePlayer}
           />
         </div>
 
