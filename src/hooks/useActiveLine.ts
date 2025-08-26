@@ -68,23 +68,27 @@ export const useActiveLine = ({
     let syncedTime = currentTime;
     let shouldShowLyrics = true;
 
-    // If we have chord data, find the first non-"N" chord to determine music start time
+    // If we have chord data, use it to prevent getting stuck in long chord-only spans
     if (chords && chords.length > 0) {
-      // Find the first actual chord (not "N" which represents no chord/silence)
-      const firstActualChord = chords.find(chord =>
-        chord.chord && chord.chord !== 'N' && chord.chord.trim() !== ''
-      );
+      // First actual chord (not silence)
+      const firstActualChord = chords.find(chord => chord.chord && chord.chord !== 'N' && chord.chord.trim() !== '');
+      const musicStartTime = firstActualChord ? (firstActualChord.time || 0) : 0;
 
-      if (firstActualChord) {
-        const musicStartTime = firstActualChord.time || 0;
+      // If current time is before the music starts, hide lyrics
+      if (currentTime < musicStartTime) {
+        shouldShowLyrics = false;
+      }
 
-        // If current time is before the music starts, don't show lyrics
-        if (currentTime < musicStartTime) {
-          shouldShowLyrics = false;
-        } else {
-          // Adjust timing to account for music start offset
-          syncedTime = currentTime;
-        }
+      // Also clamp syncedTime to not exceed the end of the last processed line preceding currentTime
+      // This keeps active-line search from latching onto a far-future chord-only block
+      const priorLine = processedLines
+        .filter(l => l.startTime <= currentTime)
+        .sort((a, b) => b.startTime - a.startTime)[0];
+
+      if (priorLine && currentTime > priorLine.endTime) {
+        syncedTime = priorLine.endTime + 0.001; // nudge into the next interval without large jumps
+      } else {
+        syncedTime = currentTime;
       }
     }
 

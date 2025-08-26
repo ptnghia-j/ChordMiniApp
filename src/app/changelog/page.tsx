@@ -13,7 +13,7 @@ const renderChangeItem = (item: string, colorClass: string) => {
   if (badgeText.includes('NEW')) badgeColor = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
   if (badgeText.includes('FIX')) badgeColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
   if (badgeText.includes('PERFORMANCE') || badgeText.includes('IMPROVED')) badgeColor = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-
+  if (badgeText === ('UI')) badgeColor = 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
   return (
     <li className="flex items-start gap-3">
       <svg className={`w-4 h-4 mt-1 flex-shrink-0 ${colorClass}`} fill="currentColor" viewBox="0 0 20 20">
@@ -29,6 +29,18 @@ const renderChangeItem = (item: string, colorClass: string) => {
 
 export default function ChangelogPage() {
   const releases = [
+    {
+      version: 'v0.4.4',
+      date: 'August 26, 2025',
+      title: 'Responsive Video Dock & Lyrics Sync Fix',
+      description: 'Places the YouTube frame alongside the utility dock and resolves lyrics/chords timing conflicts.',
+      features: [
+        'UI: YouTube frame placed next to the utility dock to prevent creeping into the footer',
+        'FIX: Lyrics service (Music.ai) merging and synchronization conflict resolved for chord-only/silence sections'
+      ],
+      breaking: []
+    },
+
     {
       version: 'v0.4.3',
       date: 'August 26, 2025',

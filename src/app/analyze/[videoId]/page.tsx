@@ -16,6 +16,11 @@ const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
   ssr: false
 });
 
+const ResponsiveVideoUtilityLayout = dynamic(() => import('@/components/ResponsiveVideoUtilityLayout'), {
+  loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 
 const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
   loading: () => <div className="fixed right-4 bottom-16 w-96 h-96 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -147,7 +152,7 @@ export default function YouTubeVideoAnalyzePage() {
     state: audioPlayerState,
     audioRef,
     youtubePlayer,
-    seek,
+    seek, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleTimeUpdate: _handleTimeUpdate, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleLoadedMetadata: _handleLoadedMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
     setState: setAudioPlayerState,
@@ -428,8 +433,8 @@ export default function YouTubeVideoAnalyzePage() {
   // Use playback state hook for YouTube event handlers
   const {
     handleYouTubeReady,
-    handleYouTubePlay,
-    handleYouTubePause,
+    handleYouTubePlay, // eslint-disable-line @typescript-eslint/no-unused-vars
+    handleYouTubePause, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleYouTubeProgress,
   } = usePlaybackState({
     audioRef,
@@ -1462,79 +1467,87 @@ export default function YouTubeVideoAnalyzePage() {
         </div>
       </div>
 
-      {/* Utility banner below the grid */}
+      {/* FIXED: Responsive layout for utility bar and video player */}
       {analysisResults && (
-        <div className="px-3 pb-1 sm:px-4 sm:pb-1.5">
-          <UtilityBar
-            isFollowModeEnabled={isFollowModeEnabled}
-            showRomanNumerals={showRomanNumerals}
-            simplifyChords={simplifyChords}
-            chordPlayback={chordPlayback}
-            youtubePlayer={youtubePlayer}
-            toggleFollowMode={toggleFollowMode}
-            setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
-            setSimplifyChords={(v) => setSimplifyChords(v)}
-            isCountdownEnabled={isCountdownEnabled}
-            isCountingDown={isCountingDown}
-            countdownDisplay={countdownDisplay}
-            toggleCountdown={toggleCountdown}
-            isChatbotOpen={isChatbotOpen}
-            isLyricsPanelOpen={isLyricsPanelOpen}
-            toggleChatbot={toggleChatbot}
-            toggleLyricsPanel={toggleLyricsPanel}
-            metronome={{
-              isEnabled: isMetronomeEnabled,
-              toggleMetronomeWithSync: handleMetronomeToggle
-            }}
-          />
-        </div>
-      )}
-
-
-
-
-      <FloatingVideoDock
-        isChatbotOpen={isChatbotOpen}
-        isLyricsPanelOpen={isLyricsPanelOpen}
-        isVideoMinimized={isVideoMinimized}
-        isFollowModeEnabled={isFollowModeEnabled}
-        showRomanNumerals={showRomanNumerals}
-        simplifyChords={simplifyChords}
-        analysisResults={analysisResults}
-        currentBeatIndex={currentBeatIndex}
-        chords={simplifiedChordGridData?.chords || []}
-        beats={simplifiedChordGridData?.beats || []}
-        toggleVideoMinimization={toggleVideoMinimization}
-        toggleFollowMode={toggleFollowMode}
-        setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
-        setSimplifyChords={() => { /* retained externally; no-op in embedded layout */ }}
-        toggleMetronomeWithSync={async () => false}
-        videoId={videoId}
-        isPlaying={isPlaying}
-        playbackRate={playbackRate}
-        currentTime={currentTime}
-        duration={duration}
-        onReady={handleYouTubeReady}
-        onPlay={async () => {
-          if (isCountdownEnabled && youtubePlayer && (youtubePlayer as any).pauseVideo && !countdownStateRef.current.completed) {
-            try { (youtubePlayer as any).pauseVideo(); } catch {}
-            setIsPlaying(false);
-            countdownStateRef.current.inProgress = true;
-            const ok = await runCountdown();
-            countdownStateRef.current.inProgress = false;
-            countdownStateRef.current.completed = ok;
-            if (ok) { try { (youtubePlayer as any).playVideo(); } catch {} }
+        <ResponsiveVideoUtilityLayout
+          isVideoMinimized={isVideoMinimized}
+          isChatbotOpen={isChatbotOpen}
+          isLyricsPanelOpen={isLyricsPanelOpen}
+          videoPlayer={
+            <FloatingVideoDock
+              isChatbotOpen={isChatbotOpen}
+              isLyricsPanelOpen={isLyricsPanelOpen}
+              isVideoMinimized={isVideoMinimized}
+              isFollowModeEnabled={isFollowModeEnabled}
+              showRomanNumerals={showRomanNumerals}
+              simplifyChords={simplifyChords}
+              analysisResults={analysisResults}
+              currentBeatIndex={currentBeatIndex}
+              chords={simplifiedChordGridData?.chords || []}
+              beats={simplifiedChordGridData?.beats || []}
+              toggleVideoMinimization={toggleVideoMinimization}
+              toggleFollowMode={toggleFollowMode}
+              setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
+              setSimplifyChords={() => { /* retained externally; no-op in embedded layout */ }}
+              toggleMetronomeWithSync={async () => false}
+              videoId={videoId}
+              isPlaying={isPlaying}
+              playbackRate={playbackRate}
+              currentTime={currentTime}
+              duration={duration}
+              onReady={handleYouTubeReady}
+              onPlay={async () => {
+                if (isCountdownEnabled && youtubePlayer && (youtubePlayer as any).pauseVideo && !countdownStateRef.current.completed) {
+                  try { (youtubePlayer as any).pauseVideo(); } catch {}
+                  await runCountdown();
+                } else {
+                  setIsPlaying(true);
+                }
+              }}
+              onPause={() => setIsPlaying(false)}
+              onProgress={handleYouTubeProgress}
+              onSeek={(time: number) => {
+                if (youtubePlayer && youtubePlayer.seekTo) {
+                  youtubePlayer.seekTo(time, 'seconds');
+                }
+              }}
+              youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
+              videoUrl={audioProcessingState.videoUrl}
+              youtubePlayer={youtubePlayer}
+              showTopToggles={false} // Hide top toggles since they're in utility bar
+              positionMode="relative" // Use relative positioning for responsive layout
+              isCountdownEnabled={isCountdownEnabled}
+              isCountingDown={isCountingDown}
+              countdownDisplay={countdownDisplay}
+              onRequestCountdown={async () => { await runCountdown(); }}
+            />
           }
-          handleYouTubePlay();
-        }}
-        onPause={handleYouTubePause}
-        onProgress={handleYouTubeProgress}
-        onSeek={seek}
-        youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
-        videoUrl={audioProcessingState.videoUrl}
-        youtubePlayer={youtubePlayer}
-        showTopToggles={false}
-      />
+          utilityBar={
+            <UtilityBar
+              isFollowModeEnabled={isFollowModeEnabled}
+              showRomanNumerals={showRomanNumerals}
+              simplifyChords={simplifyChords}
+              chordPlayback={chordPlayback}
+              youtubePlayer={youtubePlayer}
+              toggleFollowMode={toggleFollowMode}
+              setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
+              setSimplifyChords={(v) => setSimplifyChords(v)}
+              isCountdownEnabled={isCountdownEnabled}
+              isCountingDown={isCountingDown}
+              countdownDisplay={countdownDisplay}
+              toggleCountdown={toggleCountdown}
+              isChatbotOpen={isChatbotOpen}
+              isLyricsPanelOpen={isLyricsPanelOpen}
+              toggleChatbot={toggleChatbot}
+              toggleLyricsPanel={toggleLyricsPanel}
+              metronome={{
+                isEnabled: isMetronomeEnabled,
+                toggleMetronomeWithSync: handleMetronomeToggle
+              }}
+            />
+          }
+        />
+      )}
     </div>
   );
 }

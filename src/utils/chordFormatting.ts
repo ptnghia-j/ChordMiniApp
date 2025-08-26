@@ -182,13 +182,20 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     // Use 'm' instead of 'min'/'minor' for minor chords (industry standard)
     quality = '<span style="font-weight: 400;">m</span>';
   } else if (quality.includes('sus')) {
-    // Format suspension with proper superscript - handle both sus4 and sus(extensions)
-    quality = quality.replace(/sus(\d)/, '<sup style="font-weight: 300; font-size: 0.75em;">sus$1</sup>');
-    // Handle sus followed by parentheses (e.g., "sus(b7)")
-    quality = quality.replace(/sus(?=\()/g, '<span style="font-weight: 400;">sus</span>');
+    // FIXED: Handle sus chords with consistent formatting to prevent layout shifts
+    // Process sus with parentheses first to avoid conflicts
+    if (quality.includes('sus') && quality.includes('(')) {
+      // Handle "sus4(b7)" -> "sus⁴⁽♭⁷⁾" with consistent superscript sizing
+      quality = quality.replace(/sus(\d+)(?=\()/g, '<span style="font-weight: 400;">sus</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1;">$1</sup>');
+      // Handle "sus(b7)" -> "sus⁽♭⁷⁾"
+      quality = quality.replace(/sus(?=\()/g, '<span style="font-weight: 400;">sus</span>');
+    } else {
+      // Handle simple sus chords: "sus4" -> "sus⁴"
+      quality = quality.replace(/sus(\d+)/g, '<span style="font-weight: 400;">sus</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1;">$1</sup>');
+    }
   } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
-    // Half-diminished 7th chords: use slashed circle (ø) with superscript 7
-    quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
+    // FIXED: Half-diminished 7th chords with consistent superscript sizing
+    quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">7</sup>';
   } else if (quality.includes('dim') && !quality.includes('°')) {
     // Use standard diminished symbol (°) for better readability
     // Only replace 'dim' if ° symbol is not already present
@@ -199,19 +206,19 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   } else if (quality.includes('7') || quality.includes('9') || quality.includes('11') || quality.includes('13')) {
     // Handle extensions with proper formatting
 
-    // First handle complex cases with both quality and extension
+    // FIXED: Handle complex cases with consistent superscript sizing
     if (quality.startsWith('min')) {
-      quality = '<span style="font-weight: 400;">m</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
+      quality = '<span style="font-weight: 400;">m</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
     } else if (quality.startsWith('maj')) {
       // Use triangle (Δ) for major 7th chords - industry standard
       if (quality === 'maj7') {
-        quality = '<span style="font-weight: 400; position:relative;top:-1px">Δ</span><sup style="font-weight: 300; font-size: 0.75em;">7</sup>';
+        quality = '<span style="font-weight: 400; position:relative;top:-1px">Δ</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">7</sup>';
       } else {
-        quality = '<span style="font-weight: 400;">maj</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
+        quality = '<span style="font-weight: 400;">maj</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
       }
     } else {
-      // Make numeric extensions superscript with lighter weight
-      quality = '<span style="font-weight: 400;">' + quality.replace(/(\d+)/g, '</span><sup style="font-weight: 300; font-size: 0.75em;">$1</sup><span style="font-weight: 400;">') + '</span>';
+      // Make numeric extensions superscript with consistent sizing
+      quality = '<span style="font-weight: 400;">' + quality.replace(/(\d+)/g, '</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup><span style="font-weight: 400;">') + '</span>';
       // Clean up empty spans
       quality = quality.replace(/<span style="font-weight: 400;"><\/span>/g, '');
     }
@@ -220,28 +227,28 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     quality = `<span style="font-weight: 400;">${quality}</span>`;
   }
 
-  // Handle altered notes (add, b5, #9, etc.)
+  // FIXED: Handle altered notes with consistent superscript sizing
   if (quality.includes('add')) {
-    quality = quality.replace(/add(\d+)/g, '<span style="font-weight: 400;">add</span><sup style="font-weight: 300; font-size: 0.75em;">$1</sup>');
+    quality = quality.replace(/add(\d+)/g, '<span style="font-weight: 400;">add</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
   }
 
-  // Handle parentheses around chord extensions first (e.g., "(b7)" -> "⁽♭⁷⁾")
+  // FIXED: Handle parentheses around chord extensions with consistent sizing and stable layout
   if (quality.includes('(') && quality.includes(')')) {
-    // Handle flat extensions in parentheses: (b5), (b7), (b9), (b13)
-    quality = quality.replace(/\(b(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽♭$1⁾</sup>');
-    // Handle sharp extensions in parentheses: (#5), (#9), (#11)
-    quality = quality.replace(/\(#(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽♯$1⁾</sup>');
-    // Handle numeric extensions in parentheses: (7), (9), (11), (13)
-    quality = quality.replace(/\((\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.75em;">⁽$1⁾</sup>');
+    // Handle flat extensions in parentheses: (b5), (b7), (b9), (b13) -> ⁽♭⁵⁾, ⁽♭⁷⁾, etc.
+    quality = quality.replace(/\(b(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽♭$1⁾</sup>');
+    // Handle sharp extensions in parentheses: (#5), (#9), (#11) -> ⁽♯⁵⁾, ⁽♯⁹⁾, etc.
+    quality = quality.replace(/\(#(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽♯$1⁾</sup>');
+    // Handle numeric extensions in parentheses: (7), (9), (11), (13) -> ⁽⁷⁾, ⁽⁹⁾, etc.
+    quality = quality.replace(/\((\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽$1⁾</sup>');
   }
 
-  // Handle non-parenthesized extensions
+  // FIXED: Handle non-parenthesized extensions with consistent sizing
   if (quality.includes('b5') || quality.includes('b7') || quality.includes('b9') || quality.includes('b13')) {
-    quality = quality.replace(/b(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">♭$1</sup>');
+    quality = quality.replace(/b(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">♭$1</sup>');
   }
 
   if (quality.includes('#5') || quality.includes('#9') || quality.includes('#11')) {
-    quality = quality.replace(/#(\d+)/g, '<sup style="font-weight: 300; font-size: 0.75em;">♯$1</sup>');
+    quality = quality.replace(/#(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">♯$1</sup>');
   }
 
   // Combine root, quality, and bass note with proper spacing
@@ -620,8 +627,8 @@ export function getChordLabelStyles(): React.CSSProperties {
 }
 
 /**
- * Generates container styles for chord labels in the chord grid
- * Ensures consistent sizing and prevents layout shifts
+ * FIXED: Generates container styles for chord labels with stable layout for superscripts
+ * Prevents layout shifts and auto-scroll jitter by providing consistent dimensions
  *
  * @returns Object with CSS styles for the chord container
  */
@@ -633,8 +640,11 @@ export function getChordContainerStyles(): React.CSSProperties {
     width: '100%',
     height: '100%',
     position: 'relative',
-    overflow: 'visible', // Allow content to overflow for complex chord names
-    padding: '0.0625rem' // Minimal padding for very tight layout
+    overflow: 'visible', // Allow superscripts to extend beyond container
+    padding: '0.0625rem', // Minimal padding for very tight layout
+    // CRITICAL: Reserve space for superscripts to prevent layout shifts
+    minHeight: '1.5em', // Ensure enough vertical space for superscripts
+    lineHeight: '1.2', // Consistent line height for stable measurements
   };
 }
 
@@ -667,8 +677,8 @@ export const formatRomanNumeral = (romanNumeral: string): React.ReactElement | s
               position: 'absolute',
               left: '100%',
               top: '-0.5em',
-              fontSize: '0.7em',
-              lineHeight: '1.2',
+              fontSize: '0.7em', // Consistent with chord superscripts
+              lineHeight: '1', // Stable line height
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -723,16 +733,30 @@ export const formatRomanNumeral = (romanNumeral: string): React.ReactElement | s
       } else if (figures === '7') {
         return React.createElement('span', {}, [
           baseRoman,
-          React.createElement('sup', { key: 'sup', style: { fontSize: '0.7em' } }, '7')
+          React.createElement('sup', {
+            key: 'sup',
+            style: {
+              fontSize: '0.7em',
+              lineHeight: '1',
+              verticalAlign: 'super'
+            }
+          }, '7')
         ]);
       } else if (figures.includes('/')) {
         // Handle secondary dominants like "V7/vi"
         return React.createElement('span', {}, romanNumeral);
       } else {
-        // Handle other figure combinations
+        // FIXED: Handle other figure combinations with consistent styling
         return React.createElement('span', {}, [
           baseRoman,
-          React.createElement('sup', { key: 'sup', style: { fontSize: '0.7em' } }, figures)
+          React.createElement('sup', {
+            key: 'sup',
+            style: {
+              fontSize: '0.7em',
+              lineHeight: '1',
+              verticalAlign: 'super'
+            }
+          }, figures)
         ]);
       }
     }

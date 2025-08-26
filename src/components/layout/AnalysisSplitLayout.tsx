@@ -74,19 +74,23 @@ export default function AnalysisSplitLayout({
             <div
               className={`transition-colors ${
                 orientation === 'horizontal'
-                  ? 'w-4 md:w-5 cursor-col-resize'
-                  : 'h-4 md:h-5 cursor-row-resize'
+                  ? 'w-4 md:w-5 h-full cursor-col-resize'
+                  : 'h-4 md:h-5 w-full cursor-row-resize'
               }`}
             >
-              {/* Visible grabber glyph */}
+              {/* FIXED: Centered visible grabber glyph */}
               <div className="h-full w-full flex items-center justify-center">
-                <div className={`${orientation === 'horizontal' ? 'h-8 w-1' : 'w-8 h-1'} rounded bg-gray-300 dark:bg-gray-600 shadow-sm`}/>
+                <div className={`${
+                  orientation === 'horizontal'
+                    ? 'h-12 w-1' // Increased height for better visibility
+                    : 'w-12 h-1' // Increased width for better visibility
+                } rounded bg-gray-400 dark:bg-gray-500 shadow-sm group-hover:bg-gray-500 dark:group-hover:bg-gray-400 transition-colors`}/>
               </div>
-              {/* Bar background to increase hit area */}
+              {/* FIXED: Centered bar background with better hover feedback */}
               <div
                 className={`${
                   orientation === 'horizontal' ? 'h-full w-full' : 'h-full w-full'
-                } bg-gray-200/60 dark:bg-gray-700/50 hover:bg-gray-300/70 dark:hover:bg-gray-600/70 absolute inset-0 pointer-events-none rounded`}
+                } bg-gray-200/40 dark:bg-gray-700/40 hover:bg-gray-300/60 dark:hover:bg-gray-600/60 absolute inset-0 pointer-events-none rounded transition-colors`}
               />
             </div>
           </PanelResizeHandle>

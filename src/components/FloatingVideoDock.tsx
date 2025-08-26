@@ -95,7 +95,7 @@ interface FloatingVideoDockProps {
   showTopToggles?: boolean;
 
   // Positioning mode
-  positionMode?: 'fixed' | 'sticky';
+  positionMode?: 'fixed' | 'sticky' | 'relative';
 
   // Countdown gating (optional)
   isCountdownEnabled?: boolean;
@@ -154,22 +154,42 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
     return null;
   }
 
+  // FIXED: Support relative positioning for responsive layout
+  const getContainerStyles = () => {
+    if (positionMode === 'relative') {
+      return {
+        position: 'relative' as const,
+        width: '100%',
+        maxWidth: isVideoMinimized ? '250px' : '500px',
+        minWidth: isVideoMinimized ? '200px' : '300px',
+        pointerEvents: 'auto' as const,
+        zIndex: 'auto'
+      };
+    }
+
+    const position = positionMode === 'sticky' ? 'sticky' : 'fixed';
+    return {
+      position: position as 'sticky' | 'fixed',
+      bottom: positionMode === 'sticky' ? undefined : '88px',
+      top: positionMode === 'sticky' ? '8px' : undefined,
+      right: isChatbotOpen || isLyricsPanelOpen ? '420px' : '4px',
+      maxWidth: isVideoMinimized ? '250px' : '500px',
+      minWidth: isVideoMinimized ? '200px' : '300px',
+      pointerEvents: 'auto' as const,
+      zIndex: 55
+    };
+  };
+
+  const containerStyles = getContainerStyles();
+
   return (
     <div
-      className={`${positionMode === 'sticky' ? 'sticky' : 'fixed'} z-50 transition-all duration-300 shadow-xl ${
-        isChatbotOpen || isLyricsPanelOpen
-          ? 'right-[420px]' // Move video further right when chatbot or lyrics panel is open to avoid overlap
-          : 'right-4'
-      } ${
-        isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'
+      className={`z-50 transition-all duration-300 shadow-xl ${
+        positionMode === 'relative'
+          ? 'w-full'
+          : `${isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'}`
       }`}
-      style={{
-        bottom: positionMode === 'sticky' ? undefined : '88px',
-        top: positionMode === 'sticky' ? '8px' : undefined,
-        maxWidth: isVideoMinimized ? '250px' : '500px',
-        pointerEvents: 'auto',
-        zIndex: 55 // Ensure this is below the control buttons (z-60) but above other content
-      }}
+      style={containerStyles}
     >
       {/* Improved responsive toggle button container */}
       {showTopToggles && (

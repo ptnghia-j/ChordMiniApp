@@ -182,16 +182,19 @@ export const ChordCell = React.memo<ChordCellProps>(({
                 }}
               />
 
-              {/* Roman numeral display */}
+              {/* FIXED: Roman numeral display with stable layout */}
               {showRomanNumerals && romanNumeral && (
                 <div
                   className={`${varelaRound.className} font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
                   style={{
                     fontSize: `${Math.max(10, cellSize * 0.18)}px`, // Larger, more readable Roman numeral size
-                    lineHeight: '1.1',
+                    lineHeight: '1', // FIXED: Consistent line height to prevent layout shifts
                     overflow: 'visible', // Allow superscripts to extend beyond container
                     position: 'relative', // Ensure proper positioning context for absolute children
-                    minHeight: '1.2em' // Provide space for superscripts
+                    minHeight: '1.4em', // FIXED: More space for superscripts to prevent jitter
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                   title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
                 >

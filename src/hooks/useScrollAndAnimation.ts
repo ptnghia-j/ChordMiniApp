@@ -141,15 +141,23 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     return result;
   }, []);
 
-  // Function to handle auto-scrolling to the current beat
+  // FIXED: Improved auto-scrolling with layout stability
   const scrollToCurrentBeat = useCallback(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
-      beatElement.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
+      // CRITICAL: Wait for any pending layout changes to complete before scrolling
+      // This prevents jitter caused by superscript rendering or font loading
+      requestAnimationFrame(() => {
+        // Double RAF to ensure layout is fully stable
+        requestAnimationFrame(() => {
+          beatElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest' // Prevent horizontal scrolling that can cause jitter
+          });
+        });
       });
     }
   }, [currentBeatIndex, isFollowModeEnabled]);

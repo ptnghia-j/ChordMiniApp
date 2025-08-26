@@ -86,7 +86,8 @@ const createChordOnlySection = (chords: ChordData[], isCondensed: boolean = fals
   const deduplicatedChords = deduplicateChords(chords);
 
   const startTime = chords[0].time;
-  const endTime = chords[chords.length - 1].time + 2; // Add 2 seconds buffer after last chord
+  // Use a small safety buffer to avoid overlapping into the next lyric line
+  const endTime = chords[chords.length - 1].time + 0.5; // 0.5s buffer after last uncovered chord
 
   // For condensed sections, show all unique chords in a single compact row with proper formatting
   const displayText = isCondensed
@@ -305,8 +306,35 @@ export const useProcessedLyrics = ({
       });
     }
 
-    // 4. Sort and return final result
-    return allItems.sort((a, b) => a.startTime - b.startTime);
+    // 4. Sort and then clip overlaps so placeholders can't swallow lyric lines
+    const sorted = allItems.sort((a, b) => a.startTime - b.startTime);
+
+    const minGap = 0.05; // 50ms guard gap
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const cur: ProcessedLyricLine = sorted[i];
+      const next: ProcessedLyricLine = sorted[i + 1];
+
+      if (cur.endTime > next.startTime - minGap) {
+        // Prefer keeping the lyric line intact when overlapping with chord-only placeholder
+        const preferNext = !!(!next.isChordOnly && !next.isInstrumental);
+        const preferCur = !!(!cur.isChordOnly && !cur.isInstrumental);
+
+        if (!preferCur && preferNext) {
+          // Current is placeholder overlapping into a lyric line: clamp current endTime
+          cur.endTime = Math.max(cur.startTime, next.startTime - minGap);
+          if (typeof cur.duration === 'number') cur.duration = Math.max(0, cur.endTime - cur.startTime);
+        } else {
+          // Otherwise clamp to avoid any overlap
+          cur.endTime = Math.max(cur.startTime, Math.min(cur.endTime, next.startTime - minGap));
+          if (typeof cur.duration === 'number') cur.duration = Math.max(0, cur.endTime - cur.startTime);
+        }
+      }
+    }
+
+    // Drop zero-duration placeholders
+    const cleaned = sorted.filter(item => (item.endTime - item.startTime) > 0);
+
+    return cleaned;
   }, [lyrics, memoizedChords, segmentationData]);
 
   return processedAndMergedLyrics;

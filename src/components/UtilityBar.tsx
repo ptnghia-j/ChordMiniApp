@@ -46,6 +46,10 @@ interface UtilityBarProps {
     isEnabled: boolean;
     toggleMetronomeWithSync: () => Promise<boolean>;
   };
+
+  // Layout
+  maxWidth?: string | number;
+  className?: string;
 }
 
 const UtilityBar: React.FC<UtilityBarProps> = ({
@@ -65,13 +69,15 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isLyricsPanelOpen,
   toggleChatbot,
   toggleLyricsPanel,
-  metronome
+  metronome,
+  maxWidth = '1200px',
+  className = ''
 }) => {
   return (
-    <div className="w-full">
+    <div className={`w-full ${className}`}>
       <div
-        className="mx-auto rounded-2xl bg-white/70 dark:bg-content-bg/70 backdrop-blur-md border border-gray-200 dark:border-gray-700 shadow-sm px-3 sm:px-4 py-1.5 sm:py-2.5"
-        style={{ maxWidth: '1200px' }}
+        className="mx-auto rounded-2xl bg-slate-100/70 dark:bg-slate-800/70  backdrop-blur-md border border-gray-300 dark:border-gray-700 shadow-sm px-3 sm:px-4 py-1.5 sm:py-2.5"
+        style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
       >
         <div className="flex items-center justify-between gap-3">
           {/* Left group */}
@@ -89,7 +95,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle auto-scroll"
               >
-                {isFollowModeEnabled ? <HiArrowPath className="h-4 w-4"/> : <HiOutlineArrowPath className="h-4 w-4"/>}
+                {isFollowModeEnabled ? <HiArrowPath className="h-5 w-5"/> : <HiOutlineArrowPath className="h-5 w-5"/>}
               </button>
             </Tooltip>
 
@@ -130,7 +136,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                   className={`p-2 rounded-full transition-colors ${metronome.isEnabled ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
                   aria-label="Toggle metronome"
                 >
-                  {metronome.isEnabled ? <PiMetronomeBold className="h-4 w-4"/> : <PiMetronome className="h-4 w-4"/>}
+                  {metronome.isEnabled ? <PiMetronomeBold className="h-5 w-5"/> : <PiMetronome className="h-5 w-5"/>}
                 </button>
               </Tooltip>
             )}
@@ -149,7 +155,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 aria-label="Toggle countdown"
               >
                 {/* Simple timer glyph */}
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 2h4"/>
                   <path d="M12 14V8"/>
                   <circle cx="12" cy="14" r="7"/>
@@ -179,7 +185,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle lyrics panel"
               >
-                <FaRegFileLines className="h-4 w-4"/>
+                <FaRegFileLines className="h-5 w-5"/>
               </button>
             </Tooltip>
 
@@ -195,7 +201,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle AI chat"
               >
-                <HiOutlineChatBubbleLeftRight className="h-4 w-4"/>
+                <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
               </button>
             </Tooltip>
           </div>

@@ -505,15 +505,21 @@ export default function LocalAudioAnalyzePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, analysisResults]); // CRITICAL FIX: Intentionally limited dependencies to prevent animation loop restarts
 
-  // Auto-scroll to current beat when follow mode is enabled
+  // FIXED: Auto-scroll with layout stability for superscript rendering
   useEffect(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
-      beatElement.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
+      // Wait for layout stability before scrolling to prevent jitter
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          beatElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+          });
+        });
       });
     }
   }, [currentBeatIndex, isFollowModeEnabled]);
