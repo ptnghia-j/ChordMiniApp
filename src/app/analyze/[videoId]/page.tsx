@@ -1113,6 +1113,9 @@ export default function YouTubeVideoAnalyzePage() {
   const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
   const [countdownDisplay, setCountdownDisplay] = useState<string>('');
 
+  // Metronome state
+  const [isMetronomeEnabled, setIsMetronomeEnabled] = useState<boolean>(false);
+
   const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
   const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
 
@@ -1214,7 +1217,7 @@ export default function YouTubeVideoAnalyzePage() {
   });
 
   // Metronome synchronization hook - PRE-GENERATED TRACK APPROACH
-  useMetronomeSync({
+  const { toggleMetronomeWithSync } = useMetronomeSync({
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
@@ -1227,6 +1230,24 @@ export default function YouTubeVideoAnalyzePage() {
     chordGridBeats: chordGridData.beats || [], // Use same processed beats as chord grid
     audioDuration: analysisResults?.audioDuration || 0 // Total audio duration for track generation
   });
+
+  // Sync metronome state with metronome service
+  useEffect(() => {
+    const syncMetronomeState = async () => {
+      if (typeof window !== 'undefined') {
+        const { metronomeService } = await import('@/services/metronomeService');
+        setIsMetronomeEnabled(metronomeService.isMetronomeEnabled());
+      }
+    };
+    syncMetronomeState();
+  }, []);
+
+  // Wrapper function to handle metronome toggle and state update
+  const handleMetronomeToggle = useCallback(async (): Promise<boolean> => {
+    const newEnabled = await toggleMetronomeWithSync();
+    setIsMetronomeEnabled(newEnabled);
+    return newEnabled;
+  }, [toggleMetronomeWithSync]);
 
   // Ensure YouTube player is unmuted for playback
   useEffect(() => {
@@ -1461,6 +1482,10 @@ export default function YouTubeVideoAnalyzePage() {
             isLyricsPanelOpen={isLyricsPanelOpen}
             toggleChatbot={toggleChatbot}
             toggleLyricsPanel={toggleLyricsPanel}
+            metronome={{
+              isEnabled: isMetronomeEnabled,
+              toggleMetronomeWithSync: handleMetronomeToggle
+            }}
           />
         </div>
       )}

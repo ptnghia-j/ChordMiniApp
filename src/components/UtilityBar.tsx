@@ -4,6 +4,7 @@ import React from 'react';
 import { Tooltip } from '@heroui/react';
 import { HiArrowPath, HiOutlineArrowPath, HiOutlineChatBubbleLeftRight } from 'react-icons/hi2';
 import { FaRegFileLines } from 'react-icons/fa6';
+import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
@@ -39,6 +40,12 @@ interface UtilityBarProps {
   isLyricsPanelOpen: boolean;
   toggleChatbot: () => void;
   toggleLyricsPanel: () => void;
+
+  // Metronome
+  metronome?: {
+    isEnabled: boolean;
+    toggleMetronomeWithSync: () => Promise<boolean>;
+  };
 }
 
 const UtilityBar: React.FC<UtilityBarProps> = ({
@@ -57,7 +64,8 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isChatbotOpen,
   isLyricsPanelOpen,
   toggleChatbot,
-  toggleLyricsPanel
+  toggleLyricsPanel,
+  metronome
 }) => {
   return (
     <div className="w-full">
@@ -107,6 +115,25 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
               isEnabled={simplifyChords}
               onClick={() => setSimplifyChords(!simplifyChords)}
             />
+
+            {/* Metronome */}
+            {metronome && (
+              <Tooltip
+                content={metronome.isEnabled ? 'Disable metronome' : 'Enable metronome'}
+                placement="top"
+                classNames={{
+                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                }}
+              >
+                <button
+                  onClick={metronome.toggleMetronomeWithSync}
+                  className={`p-2 rounded-full transition-colors ${metronome.isEnabled ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                  aria-label="Toggle metronome"
+                >
+                  {metronome.isEnabled ? <PiMetronomeBold className="h-4 w-4"/> : <PiMetronome className="h-4 w-4"/>}
+                </button>
+              </Tooltip>
+            )}
 
             {/* Countdown */}
             <Tooltip
