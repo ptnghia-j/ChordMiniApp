@@ -35,6 +35,9 @@ interface GuitarChordDiagramProps {
   // Roman numeral analysis props
   showRomanNumerals?: boolean;
   romanNumeral?: React.ReactElement | string;
+  labelClassName?: string;
+  romanNumeralClassName?: string;
+
 }
 
 // Standard guitar instrument configuration
@@ -61,7 +64,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   showPositionSelector = false,
   onPositionChange,
   showRomanNumerals = false,
-  romanNumeral
+  romanNumeral,
+  labelClassName,
+  romanNumeralClassName
 }) => {
   // Size configurations - responsive sizing
   const sizeConfig = {
@@ -98,7 +103,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           />
         </div>
         {showChordName && (
-          <span className={`text-center font-medium mt-2 ${
+          <span className={`text-center font-medium mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
@@ -106,7 +111,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             isFocused
               ? 'text-gray-600 dark:text-gray-300' // Focused: slightly darker
               : 'text-gray-500 dark:text-gray-400' // Unfocused: lighter
-          } transition-colors duration-200`}>
+          } transition-colors duration-200 ${labelClassName || ''}`}>
             No Chord
           </span>
         )}
@@ -114,7 +119,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
         {/* Roman numeral display for No Chord */}
         {showRomanNumerals && romanNumeral && (
           <div
-            className={`text-center font-semibold mt-1 text-blue-700 dark:text-blue-300 ${
+            className={`text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
               size === 'small' ? 'text-xs' :
               size === 'medium' ? 'text-sm' :
               'text-base'
@@ -187,7 +192,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
       {/* Chord name */}
       {showChordName && (
         <span
-          className={`text-center font-medium mt-2 ${
+          className={`text-center font-medium mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
@@ -195,7 +200,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             isFocused
               ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
               : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
-          } transition-colors duration-200`}
+          } transition-colors duration-200 ${labelClassName || ''}`}
           dangerouslySetInnerHTML={{
             __html: getFormattedChordName()
           }}
@@ -205,11 +210,11 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
       {/* Roman numeral display */}
       {showRomanNumerals && romanNumeral && (
         <div
-          className={`text-center font-semibold mt-1 text-blue-700 dark:text-blue-300 ${
+          className={`text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
-          }`}
+          } ${romanNumeralClassName || ''}`}
           title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
         >
           {typeof romanNumeral === 'string'
@@ -221,7 +226,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
       {/* Position selector for multiple chord positions */}
       {showPositionSelector && chordData && chordData.positions.length > 1 && (
-        <div className="flex items-center justify-center mt-2 space-x-2">
+        <div className="flex items-center justify-center mt-1.5 space-x-2">
           <button
             onClick={() => onPositionChange && onPositionChange(positionIndex > 0 ? positionIndex - 1 : chordData.positions.length - 1)}
             className="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"

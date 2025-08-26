@@ -22,7 +22,7 @@ const ai = new GoogleGenAI({
 });
 
 // Define the model name to use
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 /**
  * Generates a system prompt with song context for the AI chatbot

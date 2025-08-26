@@ -16,8 +16,8 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
   hasCachedLyrics
 }) => {
   return (
-    <div className="border-b border-gray-200 mb-4">
-      <div className="flex -mb-px">
+    <div className="border-b border-gray-200 mb-4 sticky top-0 z-[60] bg-white/90 dark:bg-content-bg/90 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="flex -mb-px px-2 sm:px-0">
         <button
           onClick={() => setActiveTab('beatChordMap')}
           className={`py-2 px-4 text-sm font-medium ${

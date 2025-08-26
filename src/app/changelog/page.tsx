@@ -30,6 +30,18 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.4.3',
+      date: 'August 26, 2025',
+      title: 'Video Dock Countdown & Resize Handle Layering',
+      description: 'Improves countdown gating for video playback and ensures the floating video dock stays above the split-pane resizer.',
+      features: [
+        'UI: Floating video dock now shows a gated countdown overlay and intercepts initial clicks to run countdown before playing',
+        'UI: Split-pane resize handle z-index reduced so the video dock is always above it',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.4.2',
       date: 'August 23, 2025',
       title: 'Audio Mixer & Refactoring',

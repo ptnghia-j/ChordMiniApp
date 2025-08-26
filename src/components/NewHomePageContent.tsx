@@ -48,7 +48,7 @@ function NewHomePageContentInner() {
   // Scroll-based animations
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
-  const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95]);
+  // const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95]);
 
   // Use shared search state for synchronization between main and sticky search
   const {
@@ -82,7 +82,7 @@ function NewHomePageContentInner() {
       <motion.section
         style={{
           opacity: heroOpacity,
-          scale: heroScale,
+          // scale: heroScale,
           minHeight: 'calc(100vh - 20px)',
         }}
         className="relative flex items-start justify-center overflow-hidden bg-gray-50 dark:bg-dark-bg"
@@ -244,9 +244,58 @@ function NewHomePageContentInner() {
         </div>
       </motion.section>
 
-      {/* Animated Features Section */}
-      <section className="py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-6 space-y-20">
+      {/* Recent Videos Section - Light source in the center */}
+      <section className="relative py-16 bg-white dark:bg-slate-800 transition-colors duration-300 min-h-[33vh] overflow-hidden">
+        {/* Background Gradient */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {theme === 'dark' ? (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 60%)` }} />
+          ) : (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(255, 235, 59, 0.2) 0%, transparent 70%)` }} />
+          )}
+        </div>
+        
+        {/* Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Recent Analyses
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Explore recently analyzed songs and discover new music through our community
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            <RecentVideos />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Animated Features Section - Light source at the top */}
+      <section className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
+        {/* Background Gradient */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {theme === 'dark' ? (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%)` }} />
+          ) : (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 0%, rgba(255, 235, 59, 0.2) 0%, transparent 60%)` }} />
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6 space-y-20">
           {/* Feature 1: Advanced Chord Recognition */}
           <div id="features" className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* Left Column: Title and Subtitle (40%) */}
@@ -422,38 +471,19 @@ function NewHomePageContentInner() {
         </div>
       </section>
 
-      {/* Recent Videos Section - Two Column Layout */}
-      <section className="py-16 bg-white dark:bg-slate-800 transition-colors duration-300 min-h-[33vh]">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Recent Analyses
-            </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Explore recently analyzed songs and discover new music through our community
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
-            <RecentVideos />
-          </motion.div>
+      {/* Animated Support Section - Diffuse glow */}
+      <section className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
+        {/* Background Gradient */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {theme === 'dark' ? (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 0%, rgba(70, 85, 110, 0.2) 0%, transparent 70%)` }} />
+          ) : (
+            <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(255, 167, 38, 0.1) 0%, transparent 50%)` }} />
+          )}
         </div>
-      </section>
 
-      {/* Animated Support Section */}
-      <section className="py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-6">
+        {/* Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
             {/* Left Column: Description (40%) */}
             <div className="lg:col-span-2 lg:text-left">
@@ -473,8 +503,10 @@ function NewHomePageContentInner() {
                 </Chip>
 
                 <p className="text-md text-gray-700 dark:text-gray-200 leading-relaxed">
-                  ChordMini is a free, open-source project. The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints. We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep the backend server running, you can use the donation link below. We really appreciate your support! <br />
+                  ChordMini is a free, open-source project. The backend server is not guaranteed to be maintained and running for extended periods due to budget constraints. We try our best to keep it running and add new features/models. If you&apos;d like to support the project to keep the backend server running, you can use the donation link. We really appreciate your support! <br />
                   <em className="text-sm">Note: current server is CPU-based computation, GPU acceleration is more than 10 times faster.</em>
+                  <br />
+                  <em className="text-sm">You can always clone/self-host the app from the source code in <a className="text-yellow-500"href="https://github.com/ptnghia-j/ChordMiniApp" target="_blank" rel="noopener noreferrer">github</a> and deploy it on your own server.</em>
                 </p>
               </motion.div>
             </div>

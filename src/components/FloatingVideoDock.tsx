@@ -58,7 +58,7 @@ interface FloatingVideoDockProps {
   setShowRomanNumerals: (value: boolean) => void;
   setSimplifyChords: (value: boolean) => void;
   toggleMetronomeWithSync: () => Promise<boolean>;
-  
+
   // Video player props
   videoId: string;
   isPlaying: boolean;
@@ -70,7 +70,7 @@ interface FloatingVideoDockProps {
   onPause: () => void;
   onProgress: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek: (time: number) => void;
-  
+
   // URLs
   youtubeEmbedUrl?: string;
   videoUrl?: string;
@@ -90,6 +90,18 @@ interface FloatingVideoDockProps {
     unMute?: () => void;
     isMuted?: () => boolean;
   } | null;
+
+  // UI options
+  showTopToggles?: boolean;
+
+  // Positioning mode
+  positionMode?: 'fixed' | 'sticky';
+
+  // Countdown gating (optional)
+  isCountdownEnabled?: boolean;
+  isCountingDown?: boolean;
+  countdownDisplay?: string;
+  onRequestCountdown?: () => Promise<void> | void;
 }
 
 const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
@@ -120,9 +132,15 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   onSeek,
   youtubeEmbedUrl,
   videoUrl,
-  youtubePlayer
+  youtubePlayer,
+  showTopToggles = true,
+  positionMode = 'fixed',
+  isCountdownEnabled = false,
+  isCountingDown = false,
+  countdownDisplay,
+  onRequestCountdown
 }) => {
-  // Chord playback hook
+  // Chord playback hook - keep active regardless of top toggles so UtilityBar can still control playback
   const chordPlayback = useChordPlayback({
     currentBeatIndex,
     chords,
@@ -138,7 +156,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
 
   return (
     <div
-      className={`fixed bottom-4 z-50 transition-all duration-300 shadow-xl ${
+      className={`${positionMode === 'sticky' ? 'sticky' : 'fixed'} z-50 transition-all duration-300 shadow-xl ${
         isChatbotOpen || isLyricsPanelOpen
           ? 'right-[420px]' // Move video further right when chatbot or lyrics panel is open to avoid overlap
           : 'right-4'
@@ -146,82 +164,87 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
         isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'
       }`}
       style={{
+        bottom: positionMode === 'sticky' ? undefined : '88px',
+        top: positionMode === 'sticky' ? '8px' : undefined,
         maxWidth: isVideoMinimized ? '250px' : '500px',
         pointerEvents: 'auto',
         zIndex: 55 // Ensure this is below the control buttons (z-60) but above other content
       }}
     >
       {/* Improved responsive toggle button container */}
-      <div
-        className="absolute -top-12 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
-        style={{
-          right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
-          maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
-        }}
-      >
-        <Tooltip
-          content={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
-          placement="top"
-          delay={500}
-          closeDelay={100}
-          classNames={{
-            base: "max-w-xs",
-            content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+      {showTopToggles && (
+        <div
+          className="absolute -top-12 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+          style={{
+            right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
+            maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
           }}
         >
-          <button
-            onClick={toggleFollowMode}
-            className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-              isFollowModeEnabled
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-            }`}
+          <Tooltip
+            content={isFollowModeEnabled ? "Disable auto-scroll" : "Enable auto-scroll"}
+            placement="top"
+            delay={500}
+            closeDelay={100}
+            classNames={{
+              base: "max-w-xs",
+              content: "bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg"
+            }}
           >
-            {/* Icon */}
-            {isFollowModeEnabled ? (
-              <HiArrowPath className="h-4 w-4" />
-            ) : (
-              <HiOutlineArrowPath className="h-4 w-4" />
-            )}
-          </button>
-        </Tooltip>
+            <button
+              onClick={toggleFollowMode}
+              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+                isFollowModeEnabled
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+              }`}
+            >
+              {/* Icon */}
+              {isFollowModeEnabled ? (
+                <HiArrowPath className="h-4 w-4" />
+              ) : (
+                <HiOutlineArrowPath className="h-4 w-4" />
+              )}
+            </button>
+          </Tooltip>
 
-        {/* Roman numeral toggle - reserve space to prevent layout shift */}
-        <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
-          <RomanNumeralToggle
-            isEnabled={showRomanNumerals}
-            onClick={() => setShowRomanNumerals(!showRomanNumerals)}
-          />
-        </div>
+          {/* Roman numeral toggle - reserve space to prevent layout shift */}
+          <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+            <RomanNumeralToggle
+              isEnabled={showRomanNumerals}
+              onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+            />
+          </div>
 
-        {/* Chord playback toggle - reserve space to prevent layout shift */}
-        <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
-          <ChordPlaybackToggle
-            isEnabled={chordPlayback.isEnabled}
-            onClick={chordPlayback.togglePlayback}
-            pianoVolume={chordPlayback.pianoVolume}
-            guitarVolume={chordPlayback.guitarVolume}
-            onPianoVolumeChange={chordPlayback.setPianoVolume}
-            onGuitarVolumeChange={chordPlayback.setGuitarVolume}
-            youtubePlayer={youtubePlayer}
-          />
-        </div>
+          {/* Chord playback toggle - reserve space to prevent layout shift */}
+          <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+            <ChordPlaybackToggle
+              isEnabled={chordPlayback.isEnabled}
+              onClick={chordPlayback.togglePlayback}
+              pianoVolume={chordPlayback.pianoVolume}
+              guitarVolume={chordPlayback.guitarVolume}
+              onPianoVolumeChange={chordPlayback.setPianoVolume}
+              onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+              youtubePlayer={youtubePlayer}
+            />
+          </div>
 
-        {/* Chord simplification toggle - reserve space to prevent layout shift */}
-        <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
-          <ChordSimplificationToggle
-            isEnabled={simplifyChords}
-            onClick={() => setSimplifyChords(!simplifyChords)}
-          />
-        </div>
+          {/* Chord simplification toggle - reserve space to prevent layout shift */}
+          <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+            <ChordSimplificationToggle
+              isEnabled={simplifyChords}
+              onClick={() => setSimplifyChords(!simplifyChords)}
+            />
+          </div>
 
-        {/* Metronome controls - reserve space to prevent layout shift */}
-        <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
-          <MetronomeControls
-            onToggleWithSync={toggleMetronomeWithSync}
-          />
+          {/* Metronome controls - reserve space to prevent layout shift */}
+          <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+            <MetronomeControls
+              onToggleWithSync={toggleMetronomeWithSync}
+            />
+          </div>
         </div>
-      </div>
+      )}
+
       
       <div className="relative">
         {/* Minimize/Maximize button */}
@@ -237,20 +260,46 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           )}
         </button>
 
+        {/* Countdown overlay */}
+        {isCountdownEnabled && isCountingDown && (
+          <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/40 text-white text-4xl font-bold select-none pointer-events-none">
+            {countdownDisplay || ''}
+          </div>
+        )}
+
         {/* Video player with mobile collapsible functionality */}
         {(youtubeEmbedUrl || videoUrl) && (
-          <CollapsibleVideoPlayer
-            videoId={videoId}
-            isPlaying={isPlaying}
-            playbackRate={playbackRate}
-            currentTime={currentTime}
-            duration={duration}
-            onReady={onReady}
-            onPlay={onPlay}
-            onPause={onPause}
-            onProgress={onProgress}
-            onSeek={onSeek}
-          />
+          <div className="relative">
+            {/* Click-catcher to trigger countdown before play */}
+            {isCountdownEnabled && !isCountingDown && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  // If not playing, request countdown then delegate to onPlay
+                  if (!isPlaying && onRequestCountdown) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    await onRequestCountdown();
+                  }
+                }}
+                className="absolute inset-0 z-50 bg-transparent"
+                aria-label="Start with countdown"
+              />
+            )}
+
+            <CollapsibleVideoPlayer
+              videoId={videoId}
+              isPlaying={isPlaying}
+              playbackRate={playbackRate}
+              currentTime={currentTime}
+              duration={duration}
+              onReady={onReady}
+              onPlay={onPlay}
+              onPause={onPause}
+              onProgress={onProgress}
+              onSeek={onSeek}
+            />
+          </div>
         )}
       </div>
     </div>

@@ -16,6 +16,7 @@ interface LyricsPanelProps {
   videoTitle?: string;
   currentTime?: number;
   className?: string;
+  embedded?: boolean; // when true, render as embedded panel inside split layout
 }
 
 const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
@@ -23,7 +24,8 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   onClose,
   videoTitle = '',
   currentTime = 0,
-  className = ''
+  className = '',
+  embedded = false
 }) => {
   
   const [lyricsData, setLyricsData] = useState<LyricsServiceResponse | null>(null);
@@ -102,12 +104,16 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
     return { currentIndex: -1 };
   })();
 
-  // **Preserved auto-scroll and focus functionality**
+  // Auto-scroll current line within the lyrics panel only (avoid page scroll)
   useEffect(() => {
     if ((lrclibData?.has_synchronized || enhancedLyricsData?.has_synchronized) && displayMode === 'sync' && currentLyricsInfo.currentIndex >= 0) {
-      const currentElement = document.querySelector(`[data-lyrics-index="${currentLyricsInfo.currentIndex}"]`);
-      if (currentElement && lyricsContainerRef.current) {
-        currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const container = lyricsContainerRef.current;
+      const currentElement = document.querySelector(`[data-lyrics-index="${currentLyricsInfo.currentIndex}"]`) as HTMLElement | null;
+      if (container && currentElement) {
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = currentElement.getBoundingClientRect();
+        const delta = (elementRect.top - containerRect.top) - (container.clientHeight / 2 - currentElement.clientHeight / 2);
+        container.scrollBy({ top: delta, behavior: 'smooth' });
       }
     }
   }, [currentLyricsInfo.currentIndex, lrclibData, enhancedLyricsData, displayMode]);
@@ -133,20 +139,24 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
     <AnimatePresence>
       {isOpen && (
         <>
-          <motion.div className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          {!embedded && (
+            <motion.div className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          )}
           <motion.div
             className={`
-              fixed z-[9998] flex flex-col
+              ${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'}
+              ${embedded ? '' : 'z-[9998]'}
+              flex flex-col
               bg-white dark:bg-content-bg
               border border-neutral-200 dark:border-gray-700
               shadow-2xl rounded-xl
-              bottom-16 right-4 w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px]
-              sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]
-              max-sm:bottom-0 max-sm:right-0 max-sm:left-0 max-sm:w-full max-sm:h-[80vh] max-sm:max-h-[80vh] max-sm:min-h-[60vh]
-              max-sm:rounded-t-xl max-sm:rounded-b-none
+              ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'}
               ${className}
             `}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} transition={{ duration: 0.3, ease: 'easeInOut' }}
+            initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
+            animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
             {/* --- Header: Original content and structure with new styles --- */}
             <div className="flex items-center justify-between p-3 border-b border-neutral-200 dark:border-gray-700 shrink-0">
@@ -198,12 +208,12 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             </div>
 
             {/* --- Content Area: Original structure with new styles and dark:text-white --- */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div ref={lyricsContainerRef} className="flex-1 overflow-y-auto overscroll-contain p-4">
               {isLoading && (<div className="flex justify-center h-full items-center"><div className="w-6 h-6 border-2 border-t-green-500 border-neutral-200 dark:border-neutral-700 rounded-full animate-spin"></div></div>)}
               {error && (<div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-500/30 rounded-lg text-red-700 dark:text-red-400">{error}</div>)}
               
               {enhancedLyricsData && enhancedLyricsData.metadata.source !== 'lrclib' && (
-                <div className="space-y-4" ref={lyricsContainerRef}>
+                <div className="space-y-4">
                   <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-gray-700">
                     <h4 className="font-semibold text-neutral-900 dark:text-white">{enhancedLyricsData.metadata.title}</h4>
                     <p className="text-sm text-neutral-600 dark:text-neutral-300">by {enhancedLyricsData.metadata.artist}</p>
@@ -213,7 +223,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                 </div>
               )}
               {lrclibData && (
-                <div className="space-y-4" ref={lyricsContainerRef}>
+                <div className="space-y-4">
                   <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-gray-700">
                     <h4 className="font-semibold text-neutral-900 dark:text-white">{lrclibData.metadata.title}</h4>
                     <p className="text-sm text-neutral-600 dark:text-neutral-300">by {lrclibData.metadata.artist}</p>

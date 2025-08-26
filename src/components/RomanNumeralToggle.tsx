@@ -29,8 +29,7 @@ const RomanNumeralToggle: React.FC<RomanNumeralToggleProps> = ({
         delay={500}
         closeDelay={100}
         classNames={{
-          base: "max-w-xs",
-          content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+          content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
         }}
       >
         <motion.button

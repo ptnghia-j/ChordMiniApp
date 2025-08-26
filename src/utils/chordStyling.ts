@@ -100,6 +100,9 @@ export const getChordStyle = (
     classes += " hover:bg-gray-50 dark:hover:bg-gray-700";
   }
 
+  // Ensure outline doesn't get clipped by parent overflow-hidden when highlighted
+  classes += " outline-0 outline-offset-0";
+
   // Clean empty cell styling with solid colors
   if (isEmpty) {
     classes = `${baseClasses} bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600`;
@@ -119,21 +122,15 @@ export const getChordStyle = (
     }
   }
 
-  // Professional current beat highlighting with prominent blue border
+  // Current beat: single border color and subtle background, no double borders
   if (isCurrentBeat) {
+    const highlightBase = `${baseClasses} ${isEmpty ? '' : ''}`;
     if (isEmpty) {
-      // Subtle highlighting for empty current beats with blue border
-      classes = `${baseClasses} bg-gray-200 dark:bg-gray-600 border-2 border-blue-500 dark:border-blue-400 relative z-10 ring-1 ring-blue-300 dark:ring-blue-500`;
+      classes = `${highlightBase} bg-gray-200 dark:bg-gray-600 border-blue-600 dark:border-blue-400`;
       textColor = "text-gray-600 dark:text-gray-300";
     } else {
-      // Prominent current beat highlighting with strong blue border
-      classes = `${baseClasses} bg-blue-100 dark:bg-blue-800 border-2 border-blue-500 dark:border-blue-400 relative z-10 ring-1 ring-blue-300 dark:ring-blue-500`;
+      classes = `${highlightBase} bg-blue-100 dark:bg-blue-800 border-blue-600 dark:border-blue-400`;
       textColor = "text-blue-900 dark:text-blue-100";
-    }
-
-    // Enhanced hover effects for current beat cells
-    if (isClickable) {
-      classes += " hover:border-blue-600 dark:hover:border-blue-300 hover:ring-2 hover:ring-blue-400 dark:hover:ring-blue-400";
     }
   }
 

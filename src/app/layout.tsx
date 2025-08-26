@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Roboto_Mono } from 'next/font/google';
 import './globals.css';
+import '../styles/analysis-embedded.css';
 import { Providers } from './providers';
 import ClientErrorBoundary from '../components/ClientErrorBoundary';
 import FirebaseInitializer from '../components/FirebaseInitializer';

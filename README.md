@@ -13,7 +13,7 @@ Clean, intuitive interface for YouTube search, URL input, and recent video acces
 ### 🎵 Beat & Chord Analysis
 ![Beat Chord Grid](public/beatchord_grid.png)
 
-Real-time chord progression visualization with synchronized beat detection and grid layout with add-on features: Roman Numeral Analysis, Key Modulation Signals, Simplified Chord Notation, and Enhanced Chord Correction.
+Chord progression visualization with synchronized beat detection and grid layout with add-on features: Roman Numeral Analysis, Key Modulation Signals, Simplified Chord Notation, and Enhanced Chord Correction.
 
 ### 🎵 Guitar Diagrams
 

@@ -121,6 +121,16 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [chordPositions, setChordPositions] = useState<Map<string, number>>(new Map()); // Track position for each chord
 
+  // Responsive diagram sizing for animated view
+  const diagramConfig = useMemo(() => {
+    if (windowWidth >= 1536) return { size: 'large' as const, cellWidth: 136, marginX: 12, minH: 210, labelClass: '' };
+    if (windowWidth >= 1280) return { size: 'large' as const, cellWidth: 128, marginX: 10, minH: 205, labelClass: '' };
+    if (windowWidth >= 1024) return { size: 'medium' as const, cellWidth: 118, marginX: 9, minH: 198, labelClass: '' };
+    if (windowWidth >= 768) return { size: 'medium' as const, cellWidth: 108, marginX: 8, minH: 190, labelClass: '' };
+    if (windowWidth >= 640) return { size: 'small' as const, cellWidth: 96, marginX: 7, minH: 180, labelClass: 'text-[10px] leading-tight' };
+    return { size: 'small' as const, cellWidth: 90, marginX: 6, minH: 170, labelClass: 'text-[10px] leading-tight' };
+  }, [windowWidth]);
+
   // Handle chord position changes
   const handlePositionChange = useCallback((chordName: string, positionIndex: number) => {
     setChordPositions(prev => new Map(prev.set(chordName, positionIndex)));
@@ -323,10 +333,10 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   };
 
   return (
-    <div className={`guitar-chords-tab space-y-6 ${className}`}>
+    <div className={`guitar-chords-tab space-y-3 sm:space-y-3 ${className}`}>
       {/* Beat & Chord Progression Section */}
       <div className="chord-grid-section">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Beat & Chord Progression</h3>
           <div className="flex items-center space-x-3">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">View:</span>
@@ -337,7 +347,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
           </div>
         </div>
         <div className="chord-grid-window bg-white dark:bg-content-bg rounded-lg overflow-hidden">
-          <div className="h-32 sm:h-40 md:h-48 lg:h-56 overflow-y-auto">
+          <div className="h-24 sm:h-32 md:h-40 lg:h-48 overflow-y-auto">
             <ChordGridContainer {...{analysisResults, chordGridData, currentBeatIndex, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, onBeatClick, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData, showSegmentation, showRomanNumerals, romanNumeralData}}/>
           </div>
         </div>
@@ -353,8 +363,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         )}
 
         {!isLoadingChords && viewMode === 'animated' ? (
-          <div className="animated-chord-view relative bg-white dark:bg-content-bg overflow-hidden">
-            <div className="flex justify-center items-center" style={{minHeight: '200px'}}>
+          <div className="animated-chord-view relative bg-white dark:bg-content-bg overflow-visible">
+            <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.minH - 60, 100) }}>
                 <AnimatePresence initial={false}>
                   {getVisibleChordRange.map((chordInfo) => {
                     // Get segmentation color for this chord position
@@ -372,14 +382,19 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                       <motion.div
                         layout
                         key={`guitar-chord-${chordInfo.startIndex}`}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: chordInfo.isCurrent ? 1 : 0.6, scale: chordInfo.isCurrent ? 1.05 : 0.95, filter: `blur(${chordInfo.isCurrent ? 0 : 1}px)`, zIndex: chordInfo.isCurrent ? 10 : 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        transition={itemTransition} // ✅ APPLY TWEEN TRANSITION
-                        className="flex-shrink-0 relative rounded-lg"
+                        initial={false}
+                        animate={{
+                          opacity: chordInfo.isCurrent ? 1 : 0.6,
+                          scale: 1,
+                          filter: `blur(${chordInfo.isCurrent ? 0 : 1}px)`,
+                          zIndex: chordInfo.isCurrent ? 10 : 1
+                        }}
+                        exit={{ opacity: 0.6 }}
+                        transition={itemTransition}
+                        className="flex-shrink-0 relative rounded-lg will-change-transform"
                         style={{
-                          width: '140px',
-                          margin: '0 12px',
+                          width: `${diagramConfig.cellWidth}px`,
+                          margin: `0 ${diagramConfig.marginX}px`,
                           backgroundColor: segmentationColor || 'transparent',
                           padding: segmentationColor ? '8px' : '0'
                         }}
@@ -387,7 +402,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                         <GuitarChordDiagram
                           chordData={chordDataCache.get(chordInfo.chord) || null}
                           positionIndex={chordPositions.get(chordInfo.chord) || 0}
-                          size="large"
+                          size={diagramConfig.size}
                           showChordName={true}
                           displayName={chordInfo.chord}
                           isFocused={chordInfo.isCurrent}
@@ -396,6 +411,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                           onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
                           showRomanNumerals={false}
                           romanNumeral=""
+                          labelClassName={diagramConfig.labelClass}
+                          // Prevent internal re-render animations when unchanged
+                          key={`diagram-${chordInfo.chord}-${chordPositions.get(chordInfo.chord) || 0}`}
                         />
                       </motion.div>
                     );

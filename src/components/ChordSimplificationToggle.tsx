@@ -28,15 +28,14 @@ const ChordSimplificationToggle: React.FC<ChordSimplificationToggleProps> = ({
       delay={500}
       closeDelay={100}
       classNames={{
-        base: "max-w-xs",
-        content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+        content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
       }}
     >
       <motion.button
         onClick={onClick}
         className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
           isEnabled
-            ? 'bg-green-600 text-white hover:bg-green-700'
+            ? 'bg-blue-600 text-white hover:bg-blue-700'
             : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
         } ${className}`}
         whileHover={{ scale: 1.02 }}

@@ -1,0 +1,182 @@
+"use client";
+
+import React from 'react';
+import { Tooltip } from '@heroui/react';
+import { HiArrowPath, HiOutlineArrowPath, HiOutlineChatBubbleLeftRight } from 'react-icons/hi2';
+import { FaRegFileLines } from 'react-icons/fa6';
+import RomanNumeralToggle from '@/components/RomanNumeralToggle';
+import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
+import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
+
+interface UtilityBarProps {
+  // States
+  isFollowModeEnabled: boolean;
+  showRomanNumerals: boolean;
+  simplifyChords: boolean;
+  chordPlayback: {
+    isEnabled: boolean;
+    togglePlayback: () => void;
+    pianoVolume: number;
+    guitarVolume: number;
+    setPianoVolume: (v: number) => void;
+    setGuitarVolume: (v: number) => void;
+  };
+  youtubePlayer?: Parameters<typeof ChordPlaybackToggle>[0]['youtubePlayer'];
+
+  // Handlers
+  toggleFollowMode: () => void;
+  setShowRomanNumerals: (val: boolean) => void;
+  setSimplifyChords: (val: boolean) => void;
+
+  // Countdown
+  isCountdownEnabled: boolean;
+  isCountingDown: boolean;
+  countdownDisplay?: string;
+  toggleCountdown: () => void;
+
+  // Panels
+  isChatbotOpen: boolean;
+  isLyricsPanelOpen: boolean;
+  toggleChatbot: () => void;
+  toggleLyricsPanel: () => void;
+}
+
+const UtilityBar: React.FC<UtilityBarProps> = ({
+  isFollowModeEnabled,
+  showRomanNumerals,
+  simplifyChords,
+  chordPlayback,
+  youtubePlayer,
+  toggleFollowMode,
+  setShowRomanNumerals,
+  setSimplifyChords,
+  isCountdownEnabled,
+  isCountingDown,
+  countdownDisplay,
+  toggleCountdown,
+  isChatbotOpen,
+  isLyricsPanelOpen,
+  toggleChatbot,
+  toggleLyricsPanel
+}) => {
+  return (
+    <div className="w-full">
+      <div
+        className="mx-auto rounded-2xl bg-white/70 dark:bg-content-bg/70 backdrop-blur-md border border-gray-200 dark:border-gray-700 shadow-sm px-3 sm:px-4 py-1.5 sm:py-2.5"
+        style={{ maxWidth: '1200px' }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          {/* Left group */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Auto-scroll */}
+            <Tooltip
+              content={isFollowModeEnabled ? 'Disable auto-scroll' : 'Enable auto-scroll'}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
+            >
+              <button
+                onClick={toggleFollowMode}
+                className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                aria-label="Toggle auto-scroll"
+              >
+                {isFollowModeEnabled ? <HiArrowPath className="h-4 w-4"/> : <HiOutlineArrowPath className="h-4 w-4"/>}
+              </button>
+            </Tooltip>
+
+            {/* Roman numerals */}
+            <RomanNumeralToggle
+              isEnabled={showRomanNumerals}
+              onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+            />
+
+            {/* Chord playback with mixer */}
+            <ChordPlaybackToggle
+              isEnabled={chordPlayback.isEnabled}
+              onClick={chordPlayback.togglePlayback}
+              pianoVolume={chordPlayback.pianoVolume}
+              guitarVolume={chordPlayback.guitarVolume}
+              onPianoVolumeChange={chordPlayback.setPianoVolume}
+              onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+              youtubePlayer={youtubePlayer || null}
+            />
+
+            {/* Simplify */}
+            <ChordSimplificationToggle
+              isEnabled={simplifyChords}
+              onClick={() => setSimplifyChords(!simplifyChords)}
+            />
+
+            {/* Countdown */}
+            <Tooltip
+              content={isCountdownEnabled ? 'Disable 1-measure countdown' : 'Enable 1-measure countdown'}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
+            >
+              <button
+                onClick={toggleCountdown}
+                className={`p-2 rounded-full transition-colors ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                aria-label="Toggle countdown"
+              >
+                {/* Simple timer glyph */}
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 2h4"/>
+                  <path d="M12 14V8"/>
+                  <circle cx="12" cy="14" r="7"/>
+                </svg>
+              </button>
+            </Tooltip>
+
+            {/* Countdown readout when active */}
+            {isCountingDown && (
+              <div className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-200 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">
+                {countdownDisplay || ''}
+              </div>
+            )}
+          </div>
+
+          {/* Right group: Lyrics + Chat */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Tooltip
+              content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
+            >
+              <button
+                onClick={toggleLyricsPanel}
+                className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                aria-label="Toggle lyrics panel"
+              >
+                <FaRegFileLines className="h-4 w-4"/>
+              </button>
+            </Tooltip>
+
+            <Tooltip
+              content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
+            >
+              <button
+                onClick={toggleChatbot}
+                className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                aria-label="Toggle AI chat"
+              >
+                <HiOutlineChatBubbleLeftRight className="h-4 w-4"/>
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UtilityBar;
+

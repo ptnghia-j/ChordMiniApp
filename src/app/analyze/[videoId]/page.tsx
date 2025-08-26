@@ -9,7 +9,6 @@ import { useParams, useSearchParams } from 'next/navigation';
 // Import types are used in type annotations and interfaces
 import { getTranscription, saveTranscription } from '@/services/firestoreService';
 import Navigation from '@/components/Navigation';
-import LyricsToggleButton from '@/components/LyricsToggleButton';
 
 // Dynamic imports for heavy components to improve initial bundle size
 const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
@@ -46,18 +45,11 @@ import { useApiKeys } from '@/hooks/useApiKeys';
 
 // Import skeleton loaders
 import {
-  AudioPlayerSkeleton,
   AnalysisControlsSkeleton,
   ChordGridSkeleton,
   LyricsSkeleton,
   ChatbotSkeleton
 } from '@/components/SkeletonLoaders';
-
-// Optimized dynamic imports with progressive loading strategy
-const AudioPlayer = dynamic(() => import('@/components/AudioPlayer').then(mod => ({ default: mod.AudioPlayer })), {
-  loading: () => <AudioPlayerSkeleton />,
-  ssr: false
-});
 
 // Load analysis controls immediately as they're needed for user interaction
 const AnalysisControls = dynamic(() => import('@/components/AnalysisControls').then(mod => ({ default: mod.AnalysisControls })), {
@@ -83,10 +75,9 @@ const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
   ssr: false
 });
 
-// Chatbot - load only when user opens the chatbot
-const ChatbotSection = dynamic(() => import('@/components/ChatbotSection').then(mod => ({ default: mod.ChatbotSection })), {
-  loading: () => <ChatbotSkeleton />,
-  ssr: false
+// Chatbot interface - load only when user opens the chatbot
+const ChatbotInterfaceDyn = dynamic(() => import('@/components/ChatbotInterface'), {
+  loading: () => <ChatbotSkeleton />, ssr: false
 });
 
 import dynamic from 'next/dynamic';
@@ -103,6 +94,10 @@ import AnalysisHeader from '@/components/AnalysisHeader';
 import ResultsTabs from '@/components/ResultsTabs';
 import ProcessingBanners from '@/components/ProcessingBanners';
 
+import AnalysisSplitLayout from '@/components/layout/AnalysisSplitLayout';
+
+import UtilityBar from '@/components/UtilityBar';
+import { useChordPlayback } from '@/hooks/useChordPlayback';
 // Import new hooks and contexts
 import { useFirebaseReadiness } from '@/hooks/useFirebaseReadiness';
 import { useYouTubeSetup } from '@/hooks/useYouTubeSetup';
@@ -152,13 +147,9 @@ export default function YouTubeVideoAnalyzePage() {
     state: audioPlayerState,
     audioRef,
     youtubePlayer,
-    play,
-    pause,
     seek,
-    setPlaybackRate: setPlayerPlaybackRate,
     handleTimeUpdate: _handleTimeUpdate, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleLoadedMetadata: _handleLoadedMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
-    handleYouTubePlayerReady,
     setState: setAudioPlayerState,
     setYoutubePlayer,
     setDuration
@@ -317,10 +308,10 @@ export default function YouTubeVideoAnalyzePage() {
     showRomanNumerals,
     romanNumeralsRequested,
     romanNumeralData,
-    setSimplifyChords,
-    setShowRomanNumerals,
     setRomanNumeralsRequested,
     setRomanNumeralData,
+    setShowRomanNumerals,
+    setSimplifyChords,
   } = useChordProcessing();
 
   // Enharmonic correction state
@@ -954,11 +945,7 @@ export default function YouTubeVideoAnalyzePage() {
   };
 
   // Function to check if chatbot should be available
-  const isChatbotAvailable = () => {
-    // For now, always show the chatbot on analyze pages for testing
-    // console.log('Chatbot always available for testing on analyze pages');
-    return true;
-  };
+
 
   // Function to transcribe lyrics using Music.AI (word-level transcription)
   const transcribeLyricsWithAI = async () => {
@@ -1112,6 +1099,103 @@ export default function YouTubeVideoAnalyzePage() {
     };
   }, [chordGridData, simplifyChords]);
 
+  // Setup chord playback hook for UtilityBar controls
+  const chordPlayback = useChordPlayback({
+    currentBeatIndex,
+    chords: simplifiedChordGridData?.chords || [],
+    beats: simplifiedChordGridData?.beats || [],
+    isPlaying,
+    currentTime
+  });
+
+  // Countdown state
+  const [isCountdownEnabled, setIsCountdownEnabled] = useState<boolean>(false);
+  const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
+  const [countdownDisplay, setCountdownDisplay] = useState<string>('');
+
+  const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+  const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
+
+  // Countdown controller to prevent races/cancellation
+  const countdownCtrlRef = useRef<{ intervalId: ReturnType<typeof setInterval> | null; aborted: boolean; token: number } | null>(null);
+
+  const cancelCountdown = useCallback(() => {
+    const ctrl = countdownCtrlRef.current;
+    if (ctrl) {
+      ctrl.aborted = true;
+      if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
+      countdownCtrlRef.current = null;
+    }
+    setIsCountingDown(false);
+    setCountdownDisplay('');
+  }, []);
+
+  const runCountdown = useCallback(async () => {
+    if (!isCountdownEnabled) return true;
+    if (!youtubePlayer) return true; // Fallback: no delay if player not ready
+    // If there's an active countdown, don't start another
+    if (countdownCtrlRef.current && !countdownCtrlRef.current.aborted) return false;
+
+    const beatsPerMeasure = Math.max(2, Math.min(12, timeSignature || 4));
+    const beatDurationSec = 60 / Math.max(1, bpm || 120);
+    const totalMs = beatsPerMeasure * beatDurationSec * 1000;
+
+    setIsCountingDown(true);
+    const start = Date.now();
+    const token = Math.random();
+    const ctrl = { intervalId: null as ReturnType<typeof setInterval> | null, aborted: false, token };
+    countdownCtrlRef.current = ctrl;
+
+    return await new Promise<boolean>((resolve) => {
+      ctrl.intervalId = setInterval(() => {
+        // Abort guard
+        if (!countdownCtrlRef.current || countdownCtrlRef.current.token !== token || countdownCtrlRef.current.aborted) {
+          if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
+          setIsCountingDown(false);
+          setCountdownDisplay('');
+          resolve(false);
+          return;
+        }
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, totalMs - elapsed);
+        const remainingBeats = Math.ceil(remaining / (beatDurationSec * 1000));
+        setCountdownDisplay(`${remainingBeats}`);
+        if (remaining <= 0) {
+          if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
+          // Validate not aborted right at completion
+          if (!countdownCtrlRef.current || countdownCtrlRef.current.token !== token || countdownCtrlRef.current.aborted) {
+            setIsCountingDown(false);
+            setCountdownDisplay('');
+            resolve(false);
+            return;
+          }
+          countdownCtrlRef.current = null;
+          setIsCountingDown(false);
+          setCountdownDisplay('');
+          resolve(true);
+        }
+      }, 100);
+    });
+  }, [isCountdownEnabled, timeSignature, bpm, youtubePlayer]);
+
+  // Guard refs to prevent countdown loop on programmatic play
+  const countdownStateRef = useRef<{ inProgress: boolean; completed: boolean }>({ inProgress: false, completed: false });
+
+  // Reset countdown completion flag when playback is paused
+  useEffect(() => {
+    if (!isPlaying) {
+      // If user pauses during countdown, cancel it
+      cancelCountdown();
+      countdownStateRef.current.completed = false;
+      countdownStateRef.current.inProgress = false;
+    }
+  }, [isPlaying, cancelCountdown]);
+
+  const toggleCountdown = useCallback(() => {
+    setIsCountdownEnabled(prev => !prev);
+  }, []);
+
+
   // Use extracted scroll and animation hook
   useScrollAndAnimation({
     youtubePlayer,
@@ -1130,7 +1214,7 @@ export default function YouTubeVideoAnalyzePage() {
   });
 
   // Metronome synchronization hook - PRE-GENERATED TRACK APPROACH
-  const { toggleMetronomeWithSync } = useMetronomeSync({
+  useMetronomeSync({
     beats: analysisResults?.beats || [],
     downbeats: analysisResults?.downbeats,
     currentTime,
@@ -1156,7 +1240,7 @@ export default function YouTubeVideoAnalyzePage() {
   }, [youtubePlayer, audioRef]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -1177,233 +1261,258 @@ export default function YouTubeVideoAnalyzePage() {
         onRetry={() => extractAudioFromYouTube(true)}
       />
 
-      <div className="container py-0 min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300" style={{ maxWidth: "100%" }}>
-        <div className="bg-white dark:bg-dark-bg transition-colors duration-300">
+      {/* Main viewport area - no page-level scrolling; panes will scroll independently */}
+      <div className="flex-1 min-h-0">
+        {/* Top controls (non-scrolling header in the split layout) */}
+        <div className="px-4 pt-2 pb-1">
+          <AnalysisControls
+            isExtracted={audioProcessingState.isExtracted}
+            isAnalyzed={audioProcessingState.isAnalyzed}
+            isAnalyzing={audioProcessingState.isAnalyzing}
+            hasError={!!audioProcessingState.error}
+            stage={stage}
+            beatDetector={beatDetector}
+            chordDetector={chordDetector}
+            onBeatDetectorChange={setBeatDetector}
+            onChordDetectorChange={setChordDetector}
+            onStartAnalysis={handleAudioAnalysis}
+            cacheAvailable={cacheAvailable}
+            cacheCheckCompleted={cacheCheckCompleted}
+          />
+        </div>
 
-        {/* Main content area - responsive width based on chatbot and lyrics panel state */}
-        <div className={`flex flex-col transition-all duration-300 ${
-          isChatbotOpen || isLyricsPanelOpen ? 'mr-[420px]' : ''
-        }`}>
-          {/* Content area: Chord and beat visualization */}
-          <div className="w-full p-0 overflow-visible">
-            {/* Audio player is now handled by the AudioPlayer component */}
-
-            {/* Processing Status and Model Selection in a single row */}
-            <div className="mb-2 px-4 pt-2 pb-1">
-              {/* Analysis Controls Component */}
-              <AnalysisControls
-                isExtracted={audioProcessingState.isExtracted}
-                isAnalyzed={audioProcessingState.isAnalyzed}
-                isAnalyzing={audioProcessingState.isAnalyzing}
-                hasError={!!audioProcessingState.error}
-                stage={stage}
-                beatDetector={beatDetector}
-                chordDetector={chordDetector}
-                onBeatDetectorChange={setBeatDetector}
-                onChordDetectorChange={setChordDetector}
-                onStartAnalysis={handleAudioAnalysis}
-                cacheAvailable={cacheAvailable}
-                cacheCheckCompleted={cacheCheckCompleted}
-              />
-            </div>
-          </div>
-
-            {/* Analysis results */}
-            {analysisResults && audioProcessingState.isAnalyzed && (
-            <div className="mt-0 space-y-2 px-4">
-
-              {/* Analysis Header Component */}
-              <AnalysisHeader
-                videoTitle={videoTitle}
-                isEditMode={isEditMode}
-                editedTitle={editedTitle}
-                onTitleChange={handleTitleChange}
-                onEditToggle={handleEditModeToggle}
-                onTitleSave={handleTitleSave}
-                onTitleCancel={handleTitleCancel}
-                showCorrectedChords={showCorrectedChords}
-                hasCorrections={((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
-                  (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0))}
-                toggleEnharmonicCorrection={toggleEnharmonicCorrection}
-                isTranscribingLyrics={isTranscribingLyrics}
-                hasCachedLyrics={hasCachedLyrics}
-                canTranscribe={isServiceAvailable('musicAi') && !!audioProcessingState.audioUrl}
-                transcribeLyricsWithAI={transcribeLyricsWithAI}
-                showSegmentation={showSegmentation}
-                hasSegmentationData={!!segmentationData}
-                setShowSegmentation={setShowSegmentation}
-                lyricsError={lyricsError}
-              />
-
-              {/* Results Tabs Component */}
-              <ResultsTabs
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                showLyrics={showLyrics}
-                hasCachedLyrics={hasCachedLyrics}
-              />
-
-                {/* Tab content */}
-                <div className="tab-content">
-                  {/* Beat & Chord Map Tab */}
-                  {activeTab === 'beatChordMap' && (
-                    <div>
-
-                      <ChordGridContainer
-                        analysisResults={analysisResults}
-                        chordGridData={simplifiedChordGridData}
-                        currentBeatIndex={currentBeatIndex}
-                        keySignature={keySignature}
-                        isDetectingKey={isDetectingKey}
-                        isChatbotOpen={isChatbotOpen}
-                        isLyricsPanelOpen={isLyricsPanelOpen}
-                        onBeatClick={handleBeatClick}
-                        showCorrectedChords={showCorrectedChords}
-                        chordCorrections={simplifiedChordCorrections}
-                        sequenceCorrections={simplifiedSequenceCorrections}
-                        segmentationData={segmentationData}
-                        showSegmentation={showSegmentation}
-                        isEditMode={isEditMode}
-                        editedChords={editedChords}
-                        onChordEdit={handleChordEditWrapper}
-                        showRomanNumerals={showRomanNumerals}
-                        romanNumeralData={romanNumeralData}
-                      />
-
-                      {/* Control buttons moved to the component level */}
-
-                      {/* Collapsible Analysis Summary */}
-                      <AnalysisSummary
-                        analysisResults={analysisResults}
-                        audioDuration={duration}
-                      />
-                    </div>
-                  )}
-
-                  {/* Guitar Chords Tab */}
-                  {activeTab === 'guitarChords' && (
-                    <GuitarChordsTab
-                      analysisResults={analysisResults}
-                      chordGridData={simplifiedChordGridData}
-                      currentBeatIndex={currentBeatIndex}
-                      onBeatClick={handleBeatClick}
-                      keySignature={keySignature}
-                      isDetectingKey={isDetectingKey}
-                      isChatbotOpen={isChatbotOpen}
-                      isLyricsPanelOpen={isLyricsPanelOpen}
-                      isUploadPage={false}
+        {/* Resizable split layout */}
+        {/* Split layout switches to single-pane when both side panels are closed */}
+        <div className="h-[calc(100vh-180px)] min-h-0 px-4 pb-1">
+          <AnalysisSplitLayout
+            isSplit={isLyricsPanelOpen || isChatbotOpen}
+            storageKey="analysis-split-layout-v1"
+            defaultDesktopLayout={[60, 40]}
+            defaultMobileLayout={[60, 40]}
+            left={(
+              <div className="pr-2">
+                {analysisResults && audioProcessingState.isAnalyzed ? (
+                  <div className="space-y-2">
+                    <AnalysisHeader
+                      videoTitle={videoTitle}
+                      isEditMode={isEditMode}
+                      editedTitle={editedTitle}
+                      onTitleChange={handleTitleChange}
+                      onEditToggle={handleEditModeToggle}
+                      onTitleSave={handleTitleSave}
+                      onTitleCancel={handleTitleCancel}
                       showCorrectedChords={showCorrectedChords}
-                      chordCorrections={simplifiedChordCorrections}
-                      sequenceCorrections={simplifiedSequenceCorrections}
-                      segmentationData={segmentationData}
+                      hasCorrections={((memoizedChordCorrections !== null && Object.keys(memoizedChordCorrections).length > 0) ||
+                        (memoizedSequenceCorrections !== null && memoizedSequenceCorrections.correctedSequence.length > 0))}
+                      toggleEnharmonicCorrection={toggleEnharmonicCorrection}
+                      isTranscribingLyrics={isTranscribingLyrics}
+                      hasCachedLyrics={hasCachedLyrics}
+                      canTranscribe={isServiceAvailable('musicAi') && !!audioProcessingState.audioUrl}
+                      transcribeLyricsWithAI={transcribeLyricsWithAI}
                       showSegmentation={showSegmentation}
-                      showRomanNumerals={showRomanNumerals}
-                      romanNumeralData={romanNumeralData}
+                      hasSegmentationData={!!segmentationData}
+                      setShowSegmentation={setShowSegmentation}
+                      lyricsError={lyricsError}
                     />
-                  )}
 
-                  {/* Lyrics & Chords Tab */}
-                  {activeTab === 'lyricsChords' && (
-                    <LyricsSection
-                      lyrics={lyrics}
+                    <ResultsTabs
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
                       showLyrics={showLyrics}
                       hasCachedLyrics={hasCachedLyrics}
-                      currentTime={currentTime}
-                      fontSize={fontSize}
-                      onFontSizeChange={setFontSize}
-                      theme={theme}
-                      analysisResults={analysisResults}
-                      segmentationData={segmentationData}
-                      simplifyChords={simplifyChords}
                     />
-                  )}
+
+                    <div className="tab-content">
+                      {activeTab === 'beatChordMap' && (
+                        <div>
+                          <ChordGridContainer
+                            analysisResults={analysisResults}
+                            chordGridData={simplifiedChordGridData}
+                            currentBeatIndex={currentBeatIndex}
+                            keySignature={keySignature}
+                            isDetectingKey={isDetectingKey}
+                            isChatbotOpen={isChatbotOpen}
+                            isLyricsPanelOpen={isLyricsPanelOpen}
+                            onBeatClick={handleBeatClick}
+                            showCorrectedChords={showCorrectedChords}
+                            chordCorrections={simplifiedChordCorrections}
+                            sequenceCorrections={simplifiedSequenceCorrections}
+                            segmentationData={segmentationData}
+                            showSegmentation={showSegmentation}
+                            isEditMode={isEditMode}
+                            editedChords={editedChords}
+                            onChordEdit={handleChordEditWrapper}
+                            showRomanNumerals={showRomanNumerals}
+                            romanNumeralData={romanNumeralData}
+                          />
+
+                          <AnalysisSummary
+                            analysisResults={analysisResults}
+                            audioDuration={duration}
+                          />
+                        </div>
+                      )}
+
+                      {activeTab === 'guitarChords' && (
+                        <GuitarChordsTab
+                          analysisResults={analysisResults}
+                          chordGridData={simplifiedChordGridData}
+                          currentBeatIndex={currentBeatIndex}
+                          onBeatClick={handleBeatClick}
+                          keySignature={keySignature}
+                          isDetectingKey={isDetectingKey}
+                          isChatbotOpen={isChatbotOpen}
+                          isLyricsPanelOpen={isLyricsPanelOpen}
+                          isUploadPage={false}
+                          showCorrectedChords={showCorrectedChords}
+                          chordCorrections={simplifiedChordCorrections}
+                          sequenceCorrections={simplifiedSequenceCorrections}
+                          segmentationData={segmentationData}
+                          showSegmentation={showSegmentation}
+                          showRomanNumerals={showRomanNumerals}
+                          romanNumeralData={romanNumeralData}
+                        />
+                      )}
+                    </div>
+
+	                    {activeTab === 'lyricsChords' && (
+	                      <LyricsSection
+	                        lyrics={lyrics}
+	                        showLyrics={showLyrics}
+	                        hasCachedLyrics={hasCachedLyrics}
+	                        currentTime={currentTime}
+	                        fontSize={fontSize}
+	                        onFontSizeChange={setFontSize}
+	                        theme={theme}
+	                        analysisResults={analysisResults}
+	                        segmentationData={segmentationData}
+	                        simplifyChords={simplifyChords}
+	                      />
+	                    )}
+
+
+                    {activeTab === 'beatChordMap' && (
+                      <BeatTimeline
+                        beats={analysisResults?.beats || []}
+                        downbeats={analysisResults?.downbeats || []}
+                        currentBeatIndex={currentBeatIndex}
+                        currentDownbeatIndex={currentDownbeatIndex}
+                        duration={duration}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 dark:text-gray-400 p-4">Run analysis to see results</div>
+                )}
+              </div>
+            )}
+            right={(
+              <div className="pl-2 h-full flex flex-col gap-4">
+                {/* Render embedded panels stacked when open; components keep their logic, we override layout via className */}
+                <div className="flex-1 relative">
+                  <div className="absolute inset-0">
+                    <div className="w-full h-full relative">
+                      <div className={`absolute inset-0 transition-all duration-300 ${isLyricsPanelOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                        <LyricsPanel
+                          isOpen={isLyricsPanelOpen}
+                          onClose={() => setIsLyricsPanelOpen(false)}
+                          videoTitle={videoTitle}
+                          currentTime={currentTime}
+                          className="static inset-auto w-full h-full max-h-none max-w-none rounded-lg shadow-sm"
+                          embedded
+                        />
+                      </div>
+                      <div className={`absolute inset-0 transition-all duration-300 ${isChatbotOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                        <ChatbotInterfaceDyn
+                          isOpen={isChatbotOpen}
+                          onClose={() => setIsChatbotOpen(false)}
+                          songContext={buildSongContext}
+                          className="static inset-auto w-full h-full max-h-none max-w-none rounded-lg shadow-sm"
+                          onSegmentationResult={handleSegmentationResult}
+                          embedded
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-            
-
-
-              {/* Beats visualization - New optimized component */}
-              <BeatTimeline
-                beats={analysisResults?.beats || []}
-                downbeats={analysisResults?.downbeats || []}
-                currentBeatIndex={currentBeatIndex}
-                currentDownbeatIndex={currentDownbeatIndex}
-                duration={duration}
-              />
-            </div>)}
-          
-          
-
-          {/* Audio Player Component */}
-          <AudioPlayer
-            youtubeVideoId={videoId}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={duration}
-            playbackRate={playbackRate}
-            onPlay={play}
-            onPause={pause}
-            onSeek={seek}
-            onPlaybackRateChange={setPlayerPlaybackRate}
-            onYouTubePlayerReady={handleYouTubePlayerReady}
+              </div>
+            )}
           />
+        </div>
+      </div>
 
-          {/* Floating Video Dock Component */}
-          <FloatingVideoDock
-            isChatbotOpen={isChatbotOpen}
-            isLyricsPanelOpen={isLyricsPanelOpen}
-            isVideoMinimized={isVideoMinimized}
+      {/* Utility banner below the grid */}
+      {analysisResults && (
+        <div className="px-3 pb-1 sm:px-4 sm:pb-1.5">
+          <UtilityBar
             isFollowModeEnabled={isFollowModeEnabled}
             showRomanNumerals={showRomanNumerals}
             simplifyChords={simplifyChords}
-            analysisResults={analysisResults}
-            currentBeatIndex={currentBeatIndex}
-            chords={simplifiedChordGridData.chords}
-            beats={simplifiedChordGridData.beats}
-            toggleVideoMinimization={toggleVideoMinimization}
-            toggleFollowMode={toggleFollowMode}
-            setShowRomanNumerals={setShowRomanNumerals}
-            setSimplifyChords={setSimplifyChords}
-            toggleMetronomeWithSync={toggleMetronomeWithSync}
-            videoId={videoId}
-            isPlaying={isPlaying}
-            playbackRate={playbackRate}
-            currentTime={currentTime}
-            duration={duration}
-            onReady={handleYouTubeReady}
-            onPlay={handleYouTubePlay}
-            onPause={handleYouTubePause}
-            onProgress={handleYouTubeProgress}
-            onSeek={seek}
-            youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
-            videoUrl={audioProcessingState.videoUrl}
+            chordPlayback={chordPlayback}
             youtubePlayer={youtubePlayer}
+            toggleFollowMode={toggleFollowMode}
+            setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
+            setSimplifyChords={(v) => setSimplifyChords(v)}
+            isCountdownEnabled={isCountdownEnabled}
+            isCountingDown={isCountingDown}
+            countdownDisplay={countdownDisplay}
+            toggleCountdown={toggleCountdown}
+            isChatbotOpen={isChatbotOpen}
+            isLyricsPanelOpen={isLyricsPanelOpen}
+            toggleChatbot={toggleChatbot}
+            toggleLyricsPanel={toggleLyricsPanel}
           />
-
-          {/* Chatbot Section */}
-          <ChatbotSection
-            isAvailable={isChatbotAvailable()}
-            isOpen={isChatbotOpen}
-            onToggle={toggleChatbot}
-            onClose={() => setIsChatbotOpen(false)}
-            songContext={buildSongContext}
-            onSegmentationResult={handleSegmentationResult}
-          />
-
-          {/* Lyrics Panel Components */}
-          <LyricsToggleButton
-            isOpen={isLyricsPanelOpen}
-            onClick={toggleLyricsPanel}
-          />
-          <LyricsPanel
-            isOpen={isLyricsPanelOpen}
-            onClose={() => setIsLyricsPanelOpen(false)}
-            videoTitle={videoTitle}
-            currentTime={currentTime}
-          />
-
         </div>
-      </div>
+      )}
+
+
+
+
+      <FloatingVideoDock
+        isChatbotOpen={isChatbotOpen}
+        isLyricsPanelOpen={isLyricsPanelOpen}
+        isVideoMinimized={isVideoMinimized}
+        isFollowModeEnabled={isFollowModeEnabled}
+        showRomanNumerals={showRomanNumerals}
+        simplifyChords={simplifyChords}
+        analysisResults={analysisResults}
+        currentBeatIndex={currentBeatIndex}
+        chords={simplifiedChordGridData?.chords || []}
+        beats={simplifiedChordGridData?.beats || []}
+        toggleVideoMinimization={toggleVideoMinimization}
+        toggleFollowMode={toggleFollowMode}
+        setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
+        setSimplifyChords={() => { /* retained externally; no-op in embedded layout */ }}
+        toggleMetronomeWithSync={async () => false}
+        videoId={videoId}
+        isPlaying={isPlaying}
+        playbackRate={playbackRate}
+        currentTime={currentTime}
+        duration={duration}
+        onReady={handleYouTubeReady}
+        onPlay={async () => {
+          if (isCountdownEnabled && youtubePlayer && (youtubePlayer as any).pauseVideo && !countdownStateRef.current.completed) {
+            try { (youtubePlayer as any).pauseVideo(); } catch {}
+            setIsPlaying(false);
+            countdownStateRef.current.inProgress = true;
+            const ok = await runCountdown();
+            countdownStateRef.current.inProgress = false;
+            countdownStateRef.current.completed = ok;
+            if (ok) { try { (youtubePlayer as any).playVideo(); } catch {} }
+          }
+          handleYouTubePlay();
+        }}
+        onPause={handleYouTubePause}
+        onProgress={handleYouTubeProgress}
+        onSeek={seek}
+        youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
+        videoUrl={audioProcessingState.videoUrl}
+        youtubePlayer={youtubePlayer}
+        showTopToggles={false}
+      />
     </div>
-  </div>
   );
 }
+
+
+

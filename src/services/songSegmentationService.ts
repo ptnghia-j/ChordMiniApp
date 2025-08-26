@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import { SongContext, SegmentationResult, SegmentationRequest, SongSegment } from '@/types/chatbotTypes';
 
 // Gemini model configuration
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
+const MODEL_NAME = 'gemini-2.5-pro';
 
 /**
  * Creates a comprehensive prompt for song segmentation analysis

@@ -1,0 +1,24 @@
+/* Embedded mode overrides for right-pane panels when rendered inside AnalysisSplitLayout */
+.embedded-pane .fixed {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  box-shadow: none !important;
+  border-radius: 0.5rem !important; /* keep a subtle rounding */
+}
+
+.embedded-pane .fixed .flex-1,
+.embedded-pane .fixed .overflow-y-auto {
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Make the overlay hidden in embedded context */
+.embedded-pane .inset-0.bg-black { display: none !important; }
+
+/* Ensure each pane scrolls independently */
+.embedded-pane { overflow-y: auto; }
+

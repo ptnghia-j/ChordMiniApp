@@ -18,6 +18,7 @@ interface ChatbotInterfaceProps {
   songContext?: SongContext;
   className?: string;
   onSegmentationResult?: (result: SegmentationResult) => void;
+  embedded?: boolean;
 }
 
 /**
@@ -28,7 +29,8 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
   onClose,
   songContext,
   className = '',
-  onSegmentationResult
+  onSegmentationResult,
+  embedded = false
 }) => {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -41,11 +43,12 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
   const [pendingSegmentationMessage, setPendingSegmentationMessage] = useState<ChatMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Using a textarea for a better multi-line chat experience, ref type is updated.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { getApiKey } = useApiKeys();
 
-  
+
   const checkSegmentationRequirements = async () => {
     const musicAiKey = await getApiKey('musicAi');
     const hasApiKey = !!musicAiKey;
@@ -133,7 +136,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     setShowOptionBubbles(true);
     setSelectedOption(null);
   };
-  
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
     const userMessage = createChatMessage('user', inputMessage.trim());
@@ -173,7 +176,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
       handleSendMessage();
     }
   };
-  
+
   // Auto-adjust textarea height as user types
   useEffect(() => {
     if (textareaRef.current) {
@@ -184,13 +187,21 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     }
   }, [inputMessage]);
 
+  // When messages change, scroll only the internal container; do not affect page scroll
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages]);
+
+
 
   useEffect(() => {
     if (isOpen && textareaRef.current) {
-      textareaRef.current.focus();
+      // Focus without causing the page to scroll
+      // Use DOM API via Element as any to pass preventScroll without lint errors
+      const el = textareaRef.current as unknown as { focus: (opts?: { preventScroll?: boolean }) => void };
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
     }
   }, [isOpen]);
 
@@ -205,35 +216,32 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
     <AnimatePresence>
       {isOpen && (
         <>
-          <motion.div
-            className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-          />
+          {!embedded && (
+            <motion.div
+              className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={onClose}
+            />
+          )}
           {/* Main Container: Preserved original sizing, updated colors */}
           <motion.div
             className={`
-              fixed z-[9998] flex flex-col
+              ${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'}
+              ${embedded ? '' : 'z-[9998]'}
+              flex flex-col
               bg-white dark:bg-content-bg
               border border-neutral-200 dark:border-gray-700
               shadow-2xl rounded-xl
-              bottom-16 right-4
-              w-96 max-w-[calc(100vw-2rem)]
-              h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px]
-              sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)]
-              sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]
-              max-sm:bottom-0 max-sm:right-0 max-sm:left-0
-              max-sm:w-full max-sm:h-[80vh] max-sm:max-h-[80vh] max-sm:min-h-[60vh]
-              max-sm:rounded-t-xl max-sm:rounded-b-none
+              ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'}
               ${className}
             `}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
+            animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
             {/* Header: Preserved original content, updated styles */}
             <div className="flex items-center justify-between p-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
@@ -252,7 +260,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             </div>
 
             {/* Messages: Preserved all logic, updated bubble colors */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message, index) => (
                 <div key={message.id}>
                   <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>

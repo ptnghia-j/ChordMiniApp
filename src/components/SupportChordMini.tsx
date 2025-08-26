@@ -90,7 +90,7 @@ const SupportChordMini: React.FC = () => {
         </div>
       </AnimatedBorderText>
 
-      {/* Research / Fun Fact Component */}
+      {/* Research / Fact Component */}
       <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-3">
           <HiSparkles className="w-5 h-5 text-blue-600 dark:text-blue-300 mt-0.5 flex-shrink-0" />

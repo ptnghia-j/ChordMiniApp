@@ -183,7 +183,8 @@ export function simplifySequenceCorrections(sequenceCorrections: {
       sections: sequenceCorrections.keyAnalysis.sections.map((section) => ({
         ...section,
         chords: section.chords.map((chord: string) => simplifyChord(chord))
-      }))
+      })),
+      modulations: sequenceCorrections.keyAnalysis.modulations
     } : undefined
   };
 }
