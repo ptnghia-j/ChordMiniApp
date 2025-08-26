@@ -101,7 +101,7 @@ interface FloatingVideoDockProps {
   isCountdownEnabled?: boolean;
   isCountingDown?: boolean;
   countdownDisplay?: string;
-  onRequestCountdown?: () => Promise<void> | void;
+  onRequestCountdown?: () => Promise<boolean> | boolean;
 }
 
 const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
@@ -137,8 +137,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   positionMode = 'fixed',
   isCountdownEnabled = false,
   isCountingDown = false,
-  countdownDisplay,
-  onRequestCountdown
+  countdownDisplay
 }) => {
   // Chord playback hook - keep active regardless of top toggles so UtilityBar can still control playback
   const chordPlayback = useChordPlayback({
@@ -290,22 +289,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
         {/* Video player with mobile collapsible functionality */}
         {(youtubeEmbedUrl || videoUrl) && (
           <div className="relative">
-            {/* Click-catcher to trigger countdown before play */}
-            {isCountdownEnabled && !isCountingDown && (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  // If not playing, request countdown then delegate to onPlay
-                  if (!isPlaying && onRequestCountdown) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    await onRequestCountdown();
-                  }
-                }}
-                className="absolute inset-0 z-50 bg-transparent"
-                aria-label="Start with countdown"
-              />
-            )}
+
 
             <CollapsibleVideoPlayer
               videoId={videoId}

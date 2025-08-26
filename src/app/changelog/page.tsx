@@ -43,7 +43,7 @@ export default function ChangelogPage() {
 
     {
       version: 'v0.4.3',
-      date: 'August 26, 2025',
+      date: 'August 25, 2025',
       title: 'Video Dock Countdown & Resize Handle Layering',
       description: 'Improves countdown gating for video playback and ensures the floating video dock stays above the split-pane resizer.',
       features: [

@@ -1127,6 +1127,9 @@ export default function YouTubeVideoAnalyzePage() {
   // Countdown controller to prevent races/cancellation
   const countdownCtrlRef = useRef<{ intervalId: ReturnType<typeof setInterval> | null; aborted: boolean; token: number } | null>(null);
 
+  // Guard refs to prevent countdown loop on programmatic play
+  const countdownStateRef = useRef<{ inProgress: boolean; completed: boolean }>({ inProgress: false, completed: false });
+
   const cancelCountdown = useCallback(() => {
     const ctrl = countdownCtrlRef.current;
     if (ctrl) {
@@ -1134,15 +1137,16 @@ export default function YouTubeVideoAnalyzePage() {
       if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
       countdownCtrlRef.current = null;
     }
+    countdownStateRef.current.inProgress = false;
     setIsCountingDown(false);
     setCountdownDisplay('');
   }, []);
 
   const runCountdown = useCallback(async () => {
     if (!isCountdownEnabled) return true;
-    if (!youtubePlayer) return true; // Fallback: no delay if player not ready
-    // If there's an active countdown, don't start another
-    if (countdownCtrlRef.current && !countdownCtrlRef.current.aborted) return false;
+
+    // Prevent starting a new countdown if one is already in progress
+    if (countdownStateRef.current.inProgress) return false;
 
     const beatsPerMeasure = Math.max(2, Math.min(12, timeSignature || 4));
     const beatDurationSec = 60 / Math.max(1, bpm || 120);
@@ -1154,45 +1158,48 @@ export default function YouTubeVideoAnalyzePage() {
     const ctrl = { intervalId: null as ReturnType<typeof setInterval> | null, aborted: false, token };
     countdownCtrlRef.current = ctrl;
 
-    return await new Promise<boolean>((resolve) => {
+    // Mark countdown in progress and ensure player is paused
+    countdownStateRef.current.inProgress = true;
+    countdownStateRef.current.completed = false;
+    try { (youtubePlayer as any)?.pauseVideo?.(); } catch {}
+    setCountdownDisplay(`${beatsPerMeasure}`);
+
+    // Drive countdown
+    const ok = await new Promise<boolean>((resolve) => {
       ctrl.intervalId = setInterval(() => {
         // Abort guard
         if (!countdownCtrlRef.current || countdownCtrlRef.current.token !== token || countdownCtrlRef.current.aborted) {
           if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
+          countdownStateRef.current.inProgress = false;
           setIsCountingDown(false);
           setCountdownDisplay('');
           resolve(false);
           return;
         }
+
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, totalMs - elapsed);
         const remainingBeats = Math.ceil(remaining / (beatDurationSec * 1000));
         setCountdownDisplay(`${remainingBeats}`);
         if (remaining <= 0) {
           if (ctrl.intervalId) clearInterval(ctrl.intervalId as any);
-          // Validate not aborted right at completion
-          if (!countdownCtrlRef.current || countdownCtrlRef.current.token !== token || countdownCtrlRef.current.aborted) {
-            setIsCountingDown(false);
-            setCountdownDisplay('');
-            resolve(false);
-            return;
-          }
+          // Completion (not aborted)
           countdownCtrlRef.current = null;
+          countdownStateRef.current.inProgress = false;
+          countdownStateRef.current.completed = true;
           setIsCountingDown(false);
           setCountdownDisplay('');
           resolve(true);
         }
       }, 100);
     });
+
+    return ok;
   }, [isCountdownEnabled, timeSignature, bpm, youtubePlayer]);
 
-  // Guard refs to prevent countdown loop on programmatic play
-  const countdownStateRef = useRef<{ inProgress: boolean; completed: boolean }>({ inProgress: false, completed: false });
-
-  // Reset countdown completion flag when playback is paused
+  // Reset countdown flags when playback is paused
   useEffect(() => {
     if (!isPlaying) {
-      // If user pauses during countdown, cancel it
       cancelCountdown();
       countdownStateRef.current.completed = false;
       countdownStateRef.current.inProgress = false;
@@ -1497,12 +1504,18 @@ export default function YouTubeVideoAnalyzePage() {
               duration={duration}
               onReady={handleYouTubeReady}
               onPlay={async () => {
-                if (isCountdownEnabled && youtubePlayer && (youtubePlayer as any).pauseVideo && !countdownStateRef.current.completed) {
-                  try { (youtubePlayer as any).pauseVideo(); } catch {}
-                  await runCountdown();
-                } else {
-                  setIsPlaying(true);
+                if (isCountdownEnabled && !isPlaying && !countdownStateRef.current.inProgress && !countdownStateRef.current.completed) {
+                  // Gate the first play with countdown
+                  try { (youtubePlayer as any)?.pauseVideo?.(); } catch {}
+                  const ok = await runCountdown();
+                  if (ok) {
+                    countdownStateRef.current.completed = false; // consume
+                    try { (youtubePlayer as any)?.playVideo?.(); } catch {}
+                    setIsPlaying(true);
+                  }
+                  return;
                 }
+                setIsPlaying(true);
               }}
               onPause={() => setIsPlaying(false)}
               onProgress={handleYouTubeProgress}
@@ -1519,7 +1532,7 @@ export default function YouTubeVideoAnalyzePage() {
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}
               countdownDisplay={countdownDisplay}
-              onRequestCountdown={async () => { await runCountdown(); }}
+              onRequestCountdown={async () => await runCountdown()}
             />
           }
           utilityBar={
