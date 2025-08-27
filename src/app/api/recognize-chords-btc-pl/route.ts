@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 
 /**
  * API route to recognize chords in an audio file using the BTC Pseudo-Label model
@@ -14,20 +13,18 @@ export async function POST(request: NextRequest) {
     // Get the form data from the request
     const formData = await request.formData();
 
-    // Log audio duration for debugging before sending to backend ML service
-    const file = formData.get('file') as File;
+    // Optional: lightweight file debug (server-safe)
+    const file = formData.get('file') as File | null;
     if (file) {
-      try {
-        const duration = await getAudioDurationFromFile(file);
-        console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with BTC-PL chord recognition analysis`);
-      } catch (durationError) {
-        console.warn(`⚠️ Could not detect audio duration for debugging: ${durationError}`);
-      }
+      console.log(`BTC-PL request: file name=${file.name || 'unknown'}, size=${(file as File).size ?? 'n/a'}B`);
     }
 
-    // Forward the request to the Python backend
+    // Ensure detector is set for unified backend endpoint
+    if (!formData.get('detector')) formData.set('detector', 'btc-pl');
+
+    // Forward the request to the Python backend unified endpoint
     const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
-    const response = await fetch(`${backendUrl}/api/recognize-chords-btc-pl`, {
+    const response = await fetch(`${backendUrl}/api/recognize-chords`, {
       method: 'POST',
       body: formData,
     });

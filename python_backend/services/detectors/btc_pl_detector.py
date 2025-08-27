@@ -31,65 +31,54 @@ class BTCPLDetectorService:
         
     def is_available(self) -> bool:
         """
-        Check if BTC-PL is available.
-        
+        Check if BTC-PL is available based on actual files in our repository layout.
+
         Returns:
             bool: True if the detector can be used
         """
         if self._available is not None:
             return self._available
-            
+
         try:
             if not self.model_dir or not self.model_dir.exists():
                 log_error("BTC-PL model directory not found")
                 self._available = False
                 return False
-                
-            # Check for BTC-PL specific files
+
+            # Check for required directories
             config_dir = self.model_dir / "config"
             checkpoints_dir = self.model_dir / "checkpoints"
-            
-            required_paths = [config_dir, checkpoints_dir]
-            for path in required_paths:
+            for path in [config_dir, checkpoints_dir]:
                 if not path.exists():
                     log_error(f"Required BTC-PL path not found: {path}")
                     self._available = False
                     return False
-            
-            # Check for specific BTC-PL files
-            required_files = [
-                "config/btc_model_large_voca_pl.yaml",
-                "checkpoints/btc_model_large_voca_pl.pt"
-            ]
-            
-            for file in required_files:
-                if not (self.model_dir / file).exists():
-                    log_debug(f"BTC-PL file not found: {file}")
-                    self._available = False
-                    return False
-            
-            # Try to import BTC modules
-            try:
-                original_dir = os.getcwd()
-                sys.path.insert(0, str(self.model_dir))
-                os.chdir(str(self.model_dir))
-                
-                # Test basic imports
-                import torch
-                from btc.model import BTC
-                from btc.utils import load_model
-                
-                self._available = True
-                log_debug("BTC-PL availability: True")
-                return True
-                
-            except ImportError as e:
-                log_error(f"BTC-PL import failed: {e}")
+
+            # Check for actual files we ship
+            config_path = config_dir / "btc_config.yaml"
+            checkpoint_path = checkpoints_dir / "btc" / "btc_combined_best.pth"
+            if not config_path.exists():
+                log_debug(f"BTC-PL config not found: {config_path}")
                 self._available = False
                 return False
-            finally:
-                os.chdir(original_dir)
-                
+            if not checkpoint_path.exists():
+                log_debug(f"BTC-PL checkpoint not found: {checkpoint_path}")
+                self._available = False
+                return False
+
+            # Try to import prerequisites and our btc wrapper
+            try:
+                import torch  # noqa: F401
+                from btc_chord_recognition import btc_chord_recognition  # noqa: F401
+            except Exception as e:
+                log_error(f"BTC-PL import check failed: {e}")
+                self._available = False
+                return False
+
+            self._available = True
+            log_debug("BTC-PL availability: True")
+            return True
+
         except Exception as e:
             log_error(f"Error checking BTC-PL availability: {e}")
             self._available = False
@@ -127,44 +116,26 @@ class BTCPLDetectorService:
             temp_lab_path = temp_lab_file.name
             temp_lab_file.close()
             
-            # Change to model directory and run recognition
+            # Use our unified BTC wrapper to generate a .lab file
             sys.path.insert(0, str(self.model_dir))
             os.chdir(str(self.model_dir))
-            
-            # Import BTC modules
-            import torch
-            from btc.model import BTC
-            from btc.utils import load_model, audio_file_to_features, predict, decode_chord
-            
-            # Load model
-            config_path = self.model_dir / "config" / "btc_model_large_voca_pl.yaml"
-            checkpoint_path = self.model_dir / "checkpoints" / "btc_model_large_voca_pl.pt"
-            
-            model = load_model(str(config_path), str(checkpoint_path))
-            
-            # Process audio
-            features = audio_file_to_features(file_path)
-            
-            # Predict chords
-            with torch.no_grad():
-                predictions = predict(model, features)
-            
-            # Decode predictions to chord labels
-            chord_sequence = decode_chord(predictions)
-            
-            # Convert to lab format and save
-            self._save_chord_sequence_to_lab(chord_sequence, temp_lab_path)
-            
+
+            from btc_chord_recognition import btc_chord_recognition
+
+            ok = btc_chord_recognition(file_path, temp_lab_path, model_variant='pl')
+            if not ok:
+                raise RuntimeError("btc_chord_recognition returned False for PL variant")
+
             # Parse the lab file
             chord_data = self._parse_lab_file(temp_lab_path)
-            
+
             # Calculate duration (using "end" field to match frontend expectations)
             duration = chord_data[-1]["end"] if chord_data else 0.0
-            
+
             processing_time = time.time() - start_time
-            
+
             log_info(f"BTC-PL recognition successful: {len(chord_data)} chords detected")
-            
+
             return {
                 "success": True,
                 "chords": chord_data,
