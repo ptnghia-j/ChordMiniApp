@@ -117,10 +117,25 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
 4. **Create Firestore collections**
 
-   The app will automatically create these collections:
-   - `cached-videos` - Processed video data
-   - `cached-lyrics` - Transcribed lyrics
-   - `cached-translations` - Translated content
+   The app uses the following Firestore collections. They are created automatically on first write (no manual creation required):
+   - `transcriptions` — Beat and chord analysis results (docId: `${videoId}_${beatModel}_${chordModel}`)
+   - `translations` — Lyrics translation cache (docId: cacheKey based on content hash)
+   - `lyrics` — Music.ai transcription results (docId: `videoId`)
+   - `keyDetections` — Musical key analysis cache (docId: cacheKey)
+   - `audioFiles` — Audio file metadata and URLs (docId: `videoId`)
+
+5. **Enable Anonymous Authentication**
+   - In Firebase Console: Authentication → Sign-in method → enable Anonymous
+
+6. **Configure Firebase Storage**
+   - Set environment variable: `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com`
+   - Folder structure:
+     - `audio/` for audio files
+     - `video/` for optional video files
+   - Filename pattern requirement: filenames must include the 11-character YouTube video ID in brackets, e.g. `audio_[VIDEOID]_timestamp.mp3` (enforced by Storage rules)
+   - File size limits (enforced by Storage rules):
+     - Audio: up to 50MB
+     - Video: up to 100MB
 
 ### API Keys Setup
 
