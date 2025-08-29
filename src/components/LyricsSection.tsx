@@ -2,10 +2,11 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { LyricsData } from '@/types/musicAiTypes';
+import { LyricsData, ChordMarker } from '@/types/musicAiTypes';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { SegmentationResult } from '@/types/chatbotTypes';
+import type { BeatInfo } from '@/services/beatDetectionService';
 import { simplifyChord } from '@/utils/chordSimplification';
 
 // Lazy load heavy lead sheet display component
@@ -41,14 +42,88 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
 }) => {
   const { isServiceAvailable, getServiceMessage } = useApiKeys();
 
-  // Memoize the chords transformation to prevent infinite re-renders
-  // This must be called before any early returns to follow Rules of Hooks
-  const memoizedChords = useMemo(() => {
-    return analysisResults?.chords?.map((chord: {start: number, chord: string}) => ({
-      time: chord.start,
-      chord: simplifyChords ? simplifyChord(chord.chord) : chord.chord
-    })) || [];
-  }, [analysisResults?.chords, simplifyChords]);
+  // Legacy raw chord list removed; alignment uses beatAlignedChords from synchronizedChords
+
+  // Beat/chord-centric timeline: compute beat times and beat-aligned chord change events
+  const beatTimes = useMemo<number[]>(() => {
+    const beats: BeatInfo[] = (analysisResults?.beats as BeatInfo[]) || [];
+    return beats.map((b) => (typeof (b as unknown as number) === 'number' ? (b as unknown as number) : b?.time)).filter((t): t is number => typeof t === 'number');
+  }, [analysisResults?.beats]);
+
+  const beatAlignedChords = useMemo(() => {
+    if (!analysisResults?.synchronizedChords || !beatTimes.length) return null as null | { time: number; chord: string }[];
+
+    const events: { time: number; chord: string }[] = [];
+    let lastChord = '';
+    analysisResults.synchronizedChords.forEach((item: { chord: string; beatIndex: number }) => {
+      const idx = item?.beatIndex ?? -1;
+      if (idx < 0 || idx >= beatTimes.length) return;
+      const chordLabel = simplifyChords ? simplifyChord(item.chord) : item.chord;
+      if (!chordLabel || chordLabel === lastChord) return;
+      lastChord = chordLabel;
+      events.push({ time: beatTimes[idx], chord: chordLabel });
+    });
+    return events;
+  }, [analysisResults?.synchronizedChords, beatTimes, simplifyChords]);
+
+  // Snap lyric line boundaries to nearest beat timestamps
+  const snappedLyrics = useMemo(() => {
+    if (!lyrics?.lines?.length) return { lines: [] } as LyricsData;
+    if (!beatTimes.length) {
+      // Fallback: preserve original lyrics structure
+      return {
+        ...lyrics,
+        lines: lyrics.lines.map((line) => ({
+          ...line,
+          chords: (line.chords || []).map((chord: ChordMarker) => ({
+            ...chord,
+            chord: simplifyChords ? simplifyChord(chord.chord) : chord.chord
+          }))
+        }))
+      } as LyricsData;
+    }
+
+    const nearestBeat = (t: number): number => {
+      if (!beatTimes.length || typeof t !== 'number') return t;
+      // Linear search is fine for typical beat counts; keeps code simple and robust
+      let best = beatTimes[0];
+      let bestDiff = Math.abs(best - t);
+      for (let i = 1; i < beatTimes.length; i++) {
+        const diff = Math.abs(beatTimes[i] - t);
+        if (diff < bestDiff) { best = beatTimes[i]; bestDiff = diff; }
+      }
+      return best;
+    };
+
+    const epsilon = 1e-3;
+    const snapped = lyrics.lines.map((line) => {
+      const start = nearestBeat(line.startTime);
+      let end = nearestBeat(line.endTime);
+      if (end <= start) {
+        // Move end to the next beat strictly after start when needed
+        const nextIdx = beatTimes.findIndex((bt) => bt > start + epsilon);
+        end = nextIdx !== -1 ? beatTimes[nextIdx] : start + 0.25;
+      }
+      return { ...line, startTime: start, endTime: end, chords: [] };
+    });
+
+    // Ensure monotonic, non-overlapping lines by nudging starts to next valid beat
+    for (let i = 1; i < snapped.length; i++) {
+      const prev = snapped[i - 1];
+      const curr = snapped[i];
+      if (curr.startTime < prev.endTime + epsilon) {
+        const nextIdx = beatTimes.findIndex((bt) => bt >= prev.endTime + epsilon);
+        curr.startTime = nextIdx !== -1 ? beatTimes[nextIdx] : prev.endTime + epsilon;
+        if (curr.endTime <= curr.startTime) {
+          const afterIdx = beatTimes.findIndex((bt) => bt > curr.startTime + epsilon);
+          curr.endTime = afterIdx !== -1 ? beatTimes[afterIdx] : curr.startTime + 0.25;
+        }
+      }
+    }
+
+    return { ...lyrics, lines: snapped } as LyricsData;
+  }, [lyrics, beatTimes, simplifyChords]);
+
 
   if (!showLyrics) {
     const musicAiAvailable = isServiceAvailable('musicAi');
@@ -106,28 +181,21 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
     );
   }
 
-  // Ensure each line has a chords array to match SynchronizedLyrics interface
-  const synchronizedLyrics = {
-    ...lyrics,
-    lines: lyrics.lines.map(line => ({
-      ...line,
-      chords: (line.chords || []).map(chord => ({
-        ...chord,
-        chord: simplifyChords ? simplifyChord(chord.chord) : chord.chord
-      }))
-    }))
-  };
+  // Keep the old structure in place for reference, but we now pass snappedLyrics to the display
+  // const synchronizedLyrics = undefined as unknown as LyricsData; // no longer used (removed)
 
   return (
     <div>
       <LeadSheetDisplay
-        lyrics={synchronizedLyrics}
+        lyrics={{ lines: snappedLyrics.lines.map(l => ({ startTime: l.startTime, endTime: l.endTime, text: l.text, chords: (l.chords || []).map(c => ({ time: c.time, chord: c.chord, position: c.position ?? 0 })) })) }}
         currentTime={currentTime}
         fontSize={fontSize}
         onFontSizeChange={onFontSizeChange}
         darkMode={theme === 'dark'}
-        chords={memoizedChords}
+        chords={beatAlignedChords || []}
         segmentationData={segmentationData}
+        downbeatsOnly={false}
+        downbeatTimes={((analysisResults?.beats as BeatInfo[]) || []).filter((b) => typeof b === 'object' && (b as BeatInfo).beatNum === 1).map((b) => (b as BeatInfo).time)}
       />
     </div>
   );

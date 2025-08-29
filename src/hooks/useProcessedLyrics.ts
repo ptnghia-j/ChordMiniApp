@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { enhanceLyricsWithCharacterTiming, EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
 
-// Types
-interface ChordData {
+// Types: beat-aligned chord events
+export interface BeatAlignedChordEvent {
   time: number;
   chord: string;
 }
@@ -30,10 +30,10 @@ interface SynchronizedLyrics {
 /**
  * Deduplicate consecutive identical chords - only show chords on changes
  */
-const deduplicateChords = (chords: ChordData[]): ChordData[] => {
+const deduplicateChords = (chords: BeatAlignedChordEvent[]): BeatAlignedChordEvent[] => {
   if (chords.length === 0) return [];
 
-  const deduplicated: ChordData[] = [chords[0]]; // Always include the first chord
+  const deduplicated: BeatAlignedChordEvent[] = [chords[0]]; // Always include the first chord
 
   for (let i = 1; i < chords.length; i++) {
     const currentChord = chords[i];
@@ -51,7 +51,7 @@ const deduplicateChords = (chords: ChordData[]): ChordData[] => {
 /**
  * Create instrumental placeholders for sections without lyrics
  */
-const createInstrumentalPlaceholder = (segment: SongSegment, chords: ChordData[]) => {
+const createInstrumentalPlaceholder = (segment: SongSegment, chords: BeatAlignedChordEvent[]) => {
   const sectionLabel = segment.label || segment.type || 'Instrumental';
 
   // Find chords that occur during this instrumental section
@@ -81,9 +81,9 @@ const createInstrumentalPlaceholder = (segment: SongSegment, chords: ChordData[]
  * Create chord-only sections for chords that don't fall within lyrics or instrumental sections
  * Optimizes sections with minimal unique chords by condensing them
  */
-const createChordOnlySection = (chords: ChordData[], isCondensed: boolean = false) => {
+const createChordOnlySection = (chords: BeatAlignedChordEvent[], isCondensed: boolean = false) => {
   // Deduplicate chords to only show chord changes
-  const deduplicatedChords = deduplicateChords(chords);
+  const deduplicatedChords = deduplicateChords(chords as BeatAlignedChordEvent[]);
 
   const startTime = chords[0].time;
   // Use a small safety buffer to avoid overlapping into the next lyric line
@@ -116,8 +116,13 @@ const createChordOnlySection = (chords: ChordData[], isCondensed: boolean = fals
 // Hook interface
 interface UseProcessedLyricsProps {
   lyrics: SynchronizedLyrics;
-  chords: ChordData[];
+  // Beat-aligned chord events (same timeline as synchronizedChords)
+  beatAlignedChords: BeatAlignedChordEvent[];
   segmentationData: SegmentationResult | null;
+  // Optional filter to keep only downbeat chord changes
+  downbeatsOnly?: boolean;
+  // Optional downbeat times to support the filter (seconds)
+  downbeatTimes?: number[];
 }
 
 export type ProcessedLyricLine = EnhancedLyricLine & {
@@ -134,11 +139,21 @@ export type ProcessedLyricLine = EnhancedLyricLine & {
  */
 export const useProcessedLyrics = ({
   lyrics,
-  chords,
-  segmentationData
+  beatAlignedChords,
+  segmentationData,
+  downbeatsOnly = false,
+  downbeatTimes = []
 }: UseProcessedLyricsProps): ProcessedLyricLine[] => {
   // Memoize chords array to prevent unnecessary re-renders
-  const memoizedChords = useMemo(() => chords || [], [chords]);
+  const memoizedChords = useMemo(() => {
+    if (!beatAlignedChords || beatAlignedChords.length === 0) return [] as BeatAlignedChordEvent[];
+    if (downbeatsOnly && downbeatTimes.length) {
+      // Lightweight inline matcher (avoid circular import)
+      const isNear = (t: number) => downbeatTimes.some((db) => Math.abs(db - t) <= 0.12);
+      return beatAlignedChords.filter((c) => isNear(c.time));
+    }
+    return beatAlignedChords;
+  }, [beatAlignedChords, downbeatsOnly, downbeatTimes]);
 
   // FIXED: Combined processing with useMemo to prevent infinite loops
   const processedAndMergedLyrics = useMemo(() => {
@@ -266,7 +281,7 @@ export const useProcessedLyrics = ({
 
     // Add chord-only sections for chords that don't fall within any lyrics or instrumental sections
     const sortedItems = [...allItems].sort((a, b) => a.startTime - b.startTime);
-    const chordsToAdd: ChordData[] = [];
+    const chordsToAdd: BeatAlignedChordEvent[] = [];
 
     memoizedChords.forEach(chord => {
       // Check if this chord falls within any existing item (lyrics or instrumental)
@@ -281,7 +296,7 @@ export const useProcessedLyrics = ({
 
     // Group consecutive uncovered chords into condensed sections
     if (chordsToAdd.length > 0) {
-      let currentGroup: ChordData[] = [];
+      let currentGroup: BeatAlignedChordEvent[] = [];
       let lastChordTime = -1;
       const chordGapThreshold = 8;
 

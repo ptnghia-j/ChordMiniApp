@@ -44,8 +44,10 @@ interface LeadSheetProps {
   fontSize: number;
   onFontSizeChange: (size: number) => void;
   darkMode?: boolean;
-  chords?: ChordData[]; // Optional chord data from analysis results
+  chords?: ChordData[]; // Optional chord data from analysis results (beat-aligned events expected)
   segmentationData?: SegmentationResult | null; // Optional segmentation data for section labels and instrumental placeholders
+  downbeatsOnly?: boolean;
+  downbeatTimes?: number[];
 }
 
 /**
@@ -58,7 +60,9 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   onFontSizeChange,
   darkMode = false,
   chords = [],
-  segmentationData = null
+  segmentationData = null,
+  downbeatsOnly = false,
+  downbeatTimes = []
 }) => {
   // Ref for the container element (used for auto-scrolling)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,8 +84,10 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   // Use the extracted hook for processing lyrics
   const processedAndMergedLyrics = useProcessedLyrics({
     lyrics,
-    chords: memoizedChords,
-    segmentationData
+    beatAlignedChords: memoizedChords,
+    segmentationData,
+    downbeatsOnly,
+    downbeatTimes
   });
 
   // Use the extracted hook for active line management
