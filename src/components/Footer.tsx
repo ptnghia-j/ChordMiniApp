@@ -55,15 +55,17 @@ const Footer: React.FC = () => {
             {/* Brand Section */}
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
-                <Image
+                <Link href="/">
+                  <Image
                   src={theme === 'dark' ? "/chordMiniLogo-dark.webp" : "/chordMiniLogo.webp"}
                   alt="ChordMini Logo"
                   width={40}
                   height={40}
                   sizes="40px"
-                  style={{ width: '40px', height: '40px' }}
                   priority={false}
-                />
+                  className="w-10 h-10"
+                  />
+                </Link>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                     ChordMini
