@@ -15,6 +15,7 @@ import { useSharedSearchState } from '@/hooks/useSharedSearchState';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { Chip } from '@heroui/react';
 import { HiSparkles } from 'react-icons/hi2';
+// import { WarningBanner } from '@/components/WarningBanner';
 import SupportChordMini from '@/components/SupportChordMini'
 
 // Dynamic imports for heavy components
@@ -78,6 +79,10 @@ function NewHomePageContentInner() {
       {/* Navigation */}
       <Navigation showStickySearch={shouldShowStickySearch} />
 
+
+      {/* <WarningBanner /> */}
+
+      
       {/* Hero Section - Adjusted for navigation bar visibility */}
       <motion.section
         style={{
@@ -91,46 +96,77 @@ function NewHomePageContentInner() {
         <div className="absolute inset-0 z-0">
           {theme === 'dark' ? (
             // Dark Mode: Subtle Midnight Mist effect - better integrated with navigation
-            <div
-              className="absolute inset-0 z-0"
-              style={{
-                backgroundImage: `
-                  radial-gradient(circle at 50% 100%, rgba(70, 85, 110, 0.3) 0%, transparent 10%),
-                  radial-gradient(circle at 50% 100%, rgba(99, 102, 241, 0.25) 0%, transparent 20%),
-                  radial-gradient(circle at 50% 100%, rgba(181, 184, 208, 0.2) 0%, transparent 50%)
-                `,
-              }}
-            />
+            // <div
+            //   className="absolute inset-0 z-0"
+            //   style={{
+            //     backgroundImage: `
+            //       radial-gradient(circle at 50% 100%, rgba(70, 85, 110, 0.3) 0%, transparent 10%),
+            //       radial-gradient(circle at 50% 100%, rgba(99, 102, 241, 0.25) 0%, transparent 20%),
+            //       radial-gradient(circle at 50% 100%, rgba(181, 184, 208, 0.2) 0%, transparent 50%)
+            //     `,
+            //   }}
+            // />
+
+            <div className="min-h-screen w-full bg-black relative">
+              {/* Deep Ocean Glow */}
+              <div
+                className="absolute inset-0 z-0"
+                style={{
+                  background:
+                  "radial-gradient(70% 55% at 50% 50%, #2a5d77 0%, #184058 18%, #0f2a43 34%, #0a1b30 50%, #071226 66%, #040d1c 80%, #020814 92%, #01040d 97%, #000309 100%), radial-gradient(160% 130% at 10% 10%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%), radial-gradient(160% 130% at 90% 90%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%)"
+                }}
+              />
+            </div>
+            
           ) : (
             // Light Mode: Half-circle sunrise effect at horizon
-            <div className="w-full h-full relative">
-              {/* Main sunrise half-circle at bottom */}
+            // <div className="w-full h-full relative">
+            //   {/* Main sunrise half-circle at bottom */}
+            //   <div
+            //     className="absolute inset-0"
+            //     style={{
+            //       background: `
+            //         radial-gradient(circle at 50% 100%,
+            //           rgba(255, 235, 59, 0.4) 0%,
+            //           rgba(255, 193, 7, 0.3) 15%,
+            //           rgba(255, 167, 38, 0.2) 30%,
+            //           rgba(255, 235, 59, 0.1) 45%,
+            //           transparent 60%
+            //         )
+            //       `,
+            //     }}
+            //   />
+            //   {/* Subtle light rays extending upward */}
+            //   <div
+            //     className="absolute inset-0"
+            //     style={{
+            //       background: `
+            //         linear-gradient(0deg,
+            //           rgba(255, 235, 59, 0.08) 0%,
+            //           transparent 40%
+            //         )
+            //       `,
+            //     }}
+            //   />
+            // </div>
+            <div className="min-h-screen w-full relative bg-white">
+              {/* Cool Blue Glow Right */}
               <div
-                className="absolute inset-0"
+                className="absolute inset-0 z-0"
                 style={{
-                  background: `
-                    radial-gradient(circle at 50% 100%,
-                      rgba(255, 235, 59, 0.4) 0%,
-                      rgba(255, 193, 7, 0.3) 15%,
-                      rgba(255, 167, 38, 0.2) 30%,
-                      rgba(255, 235, 59, 0.1) 45%,
-                      transparent 60%
+                  background: "#ffffff",
+                  backgroundImage: `
+                    radial-gradient(
+                      circle at top right,
+                      rgba(70, 130, 180, 0.5),
+                      transparent 70%
                     )
                   `,
+                  filter: "blur(80px)",
+                  backgroundRepeat: "no-repeat",
                 }}
               />
-              {/* Subtle light rays extending upward */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: `
-                    linear-gradient(0deg,
-                      rgba(255, 235, 59, 0.08) 0%,
-                      transparent 40%
-                    )
-                  `,
-                }}
-              />
+                {/* Your Content/Components */}
             </div>
           )}
         </div>

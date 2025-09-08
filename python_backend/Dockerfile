@@ -50,12 +50,18 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code and essential files
 COPY app.py .
+COPY app_factory.py .
+COPY config.py .
 COPY config/ config/
 COPY services/ services/
-COPY scipy_patch.py .
-# Copy models directory (large files excluded via .dockerignore)
+COPY blueprints/ blueprints/
 COPY models/ models/
-# Note: Large Beat-Transformer model files excluded via .dockerignore to reduce container size
+COPY utils/ utils/
+COPY extensions.py .
+COPY error_handlers.py .
+COPY scipy_patch.py .
+COPY compat/ compat/
+# Note: BTC models and large Beat-Transformer files excluded via .dockerignore to reduce container size
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash --uid 1001 app \

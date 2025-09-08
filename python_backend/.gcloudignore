@@ -282,8 +282,8 @@ tests/
 *_test.py
 test_*.py
 
-# Exclude documentation
-docs/
+# Exclude documentation (but keep blueprints/docs/ for Flask blueprint)
+# docs/ - COMMENTED OUT: conflicts with blueprints/docs/ Flask blueprint
 doc/
 *.md
 README*
@@ -291,7 +291,7 @@ README*
 # Exclude configuration files that shouldn't be deployed
 *.ini
 *.cfg
-config.py
+# config.py - COMMENTED OUT: needed for production deployment
 
 # Exclude any local development files
 local/

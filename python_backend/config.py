@@ -62,8 +62,9 @@ class Config:
     USE_CHORD_CNN_LSTM = True
     USE_SPLEETER = True
     USE_GENIUS = True
-    USE_BTC_SL = True
-    USE_BTC_PL = True
+    # DEPLOYMENT UPDATE: Disable BTC models for this deployment
+    USE_BTC_SL = False
+    USE_BTC_PL = False
 
     # External service timeouts (seconds)
     EXTERNAL_API_TIMEOUT = 30

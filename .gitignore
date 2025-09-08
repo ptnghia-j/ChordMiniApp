@@ -220,6 +220,9 @@ checkpoints/
 **/*.der
 **/*.pfx
 
+# Cloud deployment configurations with sensitive info
+python_backend/cloudbuild.yaml
+
 # Development and testing files
 test_*.html
 test_*.py
@@ -250,3 +253,7 @@ youtube_cookies.txt
 output_with_clicks.wav
 beats_with_positions.txt
 downbeats_measures.txt
+
+
+# Ignore cloud build
+cloudbuild.yaml
