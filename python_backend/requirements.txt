@@ -4,10 +4,10 @@
 # Compatible with both local development (GPU) and production (CPU)
 # ============================================================================
 
-# Core Python dependencies (Python 3.9 compatible)
-numpy==1.22.4
-numba==0.55.2
-scipy==1.9.3
+# Core Python dependencies (Updated to match local environment)
+numpy==1.26.4
+numba==0.59.1
+scipy==1.13.1
 
 # ============================================================================
 # Core Flask Web Application
@@ -18,12 +18,12 @@ flask-limiter==3.5.0
 werkzeug==2.3.4
 gunicorn==21.2.0
 python-dotenv==1.0.0
-limits==3.13.0
+limits==5.2.0
 
 # ============================================================================
 # Audio Processing Libraries
 # ============================================================================
-librosa==0.8.1
+librosa==0.10.1
 soundfile==0.12.1
 audioread==3.0.1
 resampy==0.4.3
@@ -33,13 +33,13 @@ pydub==0.25.1
 # ============================================================================
 # ML Frameworks - GPU Acceleration Support
 # ============================================================================
-# TensorFlow for production deployment (Python 3.9 compatible)
-tensorflow==2.13.1
+# TensorFlow for production deployment (Updated version)
+tensorflow==2.15.1
 protobuf==3.20.3
 
-# PyTorch CPU-only for production deployment
-torch==1.13.1
-torchaudio==0.13.1
+# PyTorch CPU-only for production deployment (Updated version)
+torch==2.6.0
+torchaudio==2.6.0
 
 # ============================================================================
 # Spleeter - Real 5-stems Audio Separation (GPU Accelerated)
@@ -66,7 +66,7 @@ pyfluidsynth==1.3.4
 matplotlib==3.5.3
 seaborn==0.13.2
 pandas==1.5.3
-scikit-learn==1.3.2
+scikit-learn==1.6.1
 joblib==1.4.2
 
 # ============================================================================
@@ -80,18 +80,18 @@ pumpp==0.6.0
 # Utility Libraries
 # ============================================================================
 requests==2.31.0
-httpx==0.19.0
+httpx==0.28.1
 Pillow==10.0.0
-lyricsgenius==3.3.1
+lyricsgenius==3.6.2
 PyYAML==6.0.2
 tqdm==4.67.1
 
 # ============================================================================
 # Development and Jupyter Support (Optional for production)
 # ============================================================================
-ipython==8.18.1
+ipython==8.36.0
 jupyter==1.1.1
-jupyterlab==3.6.8
+jupyterlab==4.4.4
 
 # ============================================================================
 # YouTube and Media Processing
@@ -102,14 +102,14 @@ pytube==15.0.0
 # ============================================================================
 # Additional Dependencies for Compatibility
 # ============================================================================
-h5py==3.8.0
-packaging==23.2
-typing_extensions==4.5.0
-six==1.16.0
-click==8.1.8
-cachetools==5.3.2
-certifi==2023.11.17
-charset-normalizer==3.3.2
-idna==3.6
-urllib3==2.1.0
+h5py==3.13.0
+packaging==25.0
+typing_extensions==4.10.0
+six==1.17.0
+click==8.2.1
+cachetools==5.5.2
+certifi==2025.1.31
+charset-normalizer==3.4.1
+idna==3.10
+urllib3==2.4.0
 wrapt==1.14.1
