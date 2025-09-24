@@ -23,6 +23,8 @@ interface UsePlaybackStateProps {
   setAudioPlayerState: (updater: (prev: AudioPlayerState) => AudioPlayerState) => void;
   setDuration: (duration: number) => void;
   isFollowModeEnabled: boolean;
+  // Optional: allow this hook to manage auto-scroll internally; off by default to avoid conflicts
+  enableAutoScroll?: boolean;
 }
 
 interface UsePlaybackStateReturn {
@@ -71,7 +73,8 @@ export const usePlaybackState = ({
   audioPlayerState,
   setAudioPlayerState,
   setDuration,
-  isFollowModeEnabled
+  isFollowModeEnabled,
+  enableAutoScroll = false,
 }: UsePlaybackStateProps): UsePlaybackStateReturn => {
 
   // Current state for playback (lines 319-329)
@@ -175,10 +178,12 @@ export const usePlaybackState = ({
     }
   }, [currentBeatIndex, isFollowModeEnabled]);
 
-  // Auto-scroll when current beat changes
+  // Auto-scroll when current beat changes (optional)
   useEffect(() => {
-    scrollToCurrentBeat();
-  }, [currentBeatIndex, scrollToCurrentBeat]);
+    if (enableAutoScroll) {
+      scrollToCurrentBeat();
+    }
+  }, [currentBeatIndex, scrollToCurrentBeat, enableAutoScroll]);
 
   // Set up audio element event listeners (lines 2515-2553): Complete audio event handling
   useEffect(() => {

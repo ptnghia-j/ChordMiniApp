@@ -28,17 +28,17 @@ export interface ScrollAndAnimationDependencies {
   youtubePlayer: YouTubePlayer | null; // YouTube player for timing
   isPlaying: boolean;
   analysisResults: AnalysisResult | null;
-  
+
   // Beat tracking state
   currentBeatIndex: number;
   currentBeatIndexRef: React.MutableRefObject<number>;
   setCurrentBeatIndex: (index: number) => void;
   setCurrentDownbeatIndex: (index: number) => void;
   setCurrentTime: (time: number) => void;
-  
+
   // UI state
   isFollowModeEnabled: boolean;
-  
+
   // Animation data
   chordGridData: ChordGridData | null;
   globalSpeedAdjustment: number | null;
@@ -141,17 +141,36 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     return result;
   }, []);
 
+  // Throttle consecutive scrollIntoView calls to avoid conflicting smooth scrolls
+  const lastScrollTimeRef = useRef(0);
+
   // FIXED: Improved auto-scrolling with layout stability
   const scrollToCurrentBeat = useCallback(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
+    const now = Date.now();
+    // Throttle to avoid overlapping smooth scrolls from multiple sources
+    if (now - lastScrollTimeRef.current < 120) {
+      return;
+    }
+
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
+      const rect = beatElement.getBoundingClientRect();
+      const viewportCenter = window.innerHeight / 2;
+      const elementCenter = rect.top + rect.height / 2;
+      const delta = elementCenter - viewportCenter;
+
+      // Skip micro-adjustments if already near center
+      if (Math.abs(delta) < 32) {
+        return;
+      }
+
       // CRITICAL: Wait for any pending layout changes to complete before scrolling
-      // This prevents jitter caused by superscript rendering or font loading
       requestAnimationFrame(() => {
         // Double RAF to ensure layout is fully stable
         requestAnimationFrame(() => {
+          lastScrollTimeRef.current = Date.now();
           beatElement.scrollIntoView({
             behavior: 'smooth',
             block: 'center',

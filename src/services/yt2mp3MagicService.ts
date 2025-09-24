@@ -139,24 +139,65 @@ class Yt2mp3MagicService {
         };
       }
 
-      // Check if response is actually an MP3 file
-      const contentType = response.headers.get('content-type');
-      const contentDisposition = response.headers.get('content-disposition');
-      const contentLength = response.headers.get('content-length');
+      // Determine final response: some providers now return a JSON with a download link
+      let finalResponse = response;
+      let contentType = finalResponse.headers.get('content-type');
+      let contentDisposition = finalResponse.headers.get('content-disposition');
+      let contentLength = finalResponse.headers.get('content-length');
 
       console.log(`📊 Content-Type: ${contentType}`);
       if (contentDisposition) console.log(`📊 Content-Disposition: ${contentDisposition}`);
       if (contentLength) console.log(`📊 Content-Length: ${this.formatFileSize(parseInt(contentLength))}`);
 
-      // Verify it's an audio file
-      if (!contentType || !contentType.includes('audio/mpeg')) {
-        const responseText = await response.text();
-        console.error(`❌ Expected audio/mpeg but got: ${contentType}`);
-        console.error(`📄 Response body: ${responseText.substring(0, 500)}`);
-        
+      // If the service returned JSON with a link, follow it to get the actual MP3
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const json = await finalResponse.json();
+          const link: string | undefined = json?.link || json?.url || json?.downloadUrl || json?.download || json?.data?.link;
+
+          if (link) {
+            console.log(`🔗 Following download link from JSON response: ${link}`);
+            const downloadResp = await fetch(link, {
+              method: 'GET',
+              headers: { 'User-Agent': this.USER_AGENT, 'Accept': '*/*' },
+              redirect: 'follow',
+              signal: createSafeTimeoutSignal(this.CONVERSION_TIMEOUT)
+            });
+
+            if (!downloadResp.ok) {
+              const errTxt = await downloadResp.text().catch(() => '');
+              console.error(`❌ Download link fetch failed: ${downloadResp.status} ${downloadResp.statusText}`);
+              console.error(`📄 Body: ${errTxt.substring(0, 500)}`);
+              return {
+                success: false,
+                error: `Download link fetch failed: ${downloadResp.status} ${downloadResp.statusText}`,
+                videoId,
+                title,
+                duration: duration || 0
+              };
+            }
+
+            finalResponse = downloadResp;
+            contentType = finalResponse.headers.get('content-type');
+            contentDisposition = finalResponse.headers.get('content-disposition');
+            contentLength = finalResponse.headers.get('content-length');
+            console.log(`📊 Final Content-Type after following link: ${contentType}`);
+          }
+        } catch (jsonErr) {
+          console.warn('⚠️ Failed to parse JSON or follow link from provider response:', jsonErr);
+        }
+      }
+
+      // Verify it's an audio file (accept common content-types)
+      const isAudio = !!contentType && (contentType.startsWith('audio/') || contentType === 'application/octet-stream');
+      if (!isAudio) {
+        let preview = '';
+        try { preview = await finalResponse.text(); } catch {}
+        console.error(`❌ Invalid response type: ${contentType}. Expected audio/*`);
+        if (preview) console.error(`📄 Response body: ${preview.substring(0, 500)}`);
         return {
           success: false,
-          error: `Invalid response type: ${contentType}. Expected audio/mpeg`,
+          error: `Invalid response type: ${contentType}. Expected audio/*`,
           videoId,
           title,
           duration: duration || 0
@@ -172,12 +213,12 @@ class Yt2mp3MagicService {
 
       return {
         success: true,
-        audioStream: response.body as ReadableStream<Uint8Array>,
+        audioStream: finalResponse.body as ReadableStream<Uint8Array>,
         filename,
         title: title || filename.replace('.mp3', ''),
         duration: duration || 0,
         fileSize: contentLength ? parseInt(contentLength) : undefined,
-        contentType,
+        contentType: contentType || undefined,
         videoId,
         error: undefined
       };
