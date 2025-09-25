@@ -99,7 +99,7 @@ export default function RecentVideos() {
     return resultMap;
   }, []);
 
-  const fetchVideos = useCallback(async (isLoadMore = false, currentVideos: TranscribedVideo[] = []) => {
+  const fetchVideos = async (isLoadMore = false, currentVideos: TranscribedVideo[] = []) => {
     if (!db) {
       setError('Firebase not initialized');
       setLoading(false);
@@ -214,27 +214,37 @@ export default function RecentVideos() {
       setLoading(false);
       setLoadingMore(false);
     }
-    // FIX: Removed `videos` from dependency array to prevent infinite loop
-    // The function uses functional updates (prev => [...prev, ...new]) so it doesn't need videos in deps
-  }, [lastDoc, hasMore, fetchAudioFiles]);
+    // FIX: Converted to regular function to prevent useCallback dependency issues
+  };
 
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
 
   const handleLoadMore = useCallback(() => {
     setVideos(currentVideos => {
+      // Call fetchVideos directly without depending on it in useCallback
       fetchVideos(true, currentVideos);
       return currentVideos; // Return current state unchanged, fetchVideos will update it
     });
-  }, [fetchVideos]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array to prevent infinite loop
 
   // Initial load effect - runs only once on mount
   useEffect(() => {
+    let isMounted = true;
+
     // We wrap this in a self-invoking function to handle the async call correctly inside useEffect
     (async () => {
+      if (isMounted) {
         await fetchVideos(false, []);
+      }
     })();
-  }, [fetchVideos]); // Include fetchVideos dependency
+
+    return () => {
+      isMounted = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount to prevent infinite loop
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
