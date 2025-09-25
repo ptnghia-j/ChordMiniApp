@@ -34,6 +34,7 @@
     "@types/react-window": "^1.8.8",
     "@types/uuid": "^10.0.0",
     "@vercel/blob": "^1.1.1",
+    "appwrite": "^20.1.0",
     "axios": "^1.9.0",
     "clsx": "^2.1.0",
     "crypto-browserify": "^3.12.1",

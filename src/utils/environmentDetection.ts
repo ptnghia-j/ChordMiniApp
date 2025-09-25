@@ -7,7 +7,7 @@
  * - Automatic fallback between strategies for reliability
  */
 
-export type AudioProcessingStrategy = 'yt2mp3magic' | 'ytdlp';
+export type AudioProcessingStrategy = 'appwrite-ytdlp' | 'ytdlp' | 'yt-mp3-go';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -48,9 +48,23 @@ export function detectEnvironment(): EnvironmentConfig {
     baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://chordmini.com';
   }
 
-  // Determine strategy based on URL detection
-  // Use ytdlp for localhost development, yt2mp3magic for production
-  const strategy: AudioProcessingStrategy = isLocalhost ? 'ytdlp' : 'yt2mp3magic';
+  // Determine strategy based on URL detection and Appwrite availability
+  // Priority: appwrite-ytdlp > ytdlp (localhost) > yt-mp3-go (fallback)
+  let strategy: AudioProcessingStrategy;
+
+  // Check if Appwrite is configured
+  const appwriteProjectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+
+  if (appwriteProjectId && appwriteProjectId.trim() !== '') {
+    // Use Appwrite YT-DLP service if configured (most reliable)
+    strategy = 'appwrite-ytdlp';
+  } else if (isLocalhost) {
+    // Use local yt-dlp for localhost development
+    strategy = 'ytdlp';
+  } else {
+    // Fallback to yt-mp3-go for production without Appwrite
+    strategy = 'yt-mp3-go';
+  }
   
   return {
     strategy,
@@ -76,10 +90,17 @@ export function shouldUseYtDlp(): boolean {
 }
 
 /**
- * Check if we should use YT2MP3 Magic integration (production)
+ * Check if we should use Appwrite YT-DLP integration (preferred)
  */
-export function shouldUseYt2mp3Magic(): boolean {
-  return getAudioProcessingStrategy() === 'yt2mp3magic';
+export function shouldUseAppwriteYtDlp(): boolean {
+  return getAudioProcessingStrategy() === 'appwrite-ytdlp';
+}
+
+/**
+ * Check if we should use yt-mp3-go integration (fallback)
+ */
+export function shouldUseYtMp3Go(): boolean {
+  return getAudioProcessingStrategy() === 'yt-mp3-go';
 }
 
 /**
@@ -91,9 +112,17 @@ export function getAudioProcessingConfig() {
   return {
     strategy: env.strategy,
     endpoints: {
-      yt2mp3magic: {
-        baseUrl: 'https://yt2mp3-magic.onrender.com',
-        convertPath: '/convert-mp3',
+      appwriteYtdlp: {
+        projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '',
+        functionId: 'yt-dlp-audio-extractor',
+        endpoint: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID
+          ? `https://${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}.appwrite.global`
+          : '',
+        timeout: 300000 // 5 minutes
+      },
+      ytMp3Go: {
+        baseUrl: 'https://yt-mp3-go.onrender.com',
+        convertPath: '/convert',
         searchEnabled: false
       },
       ytdlp: {
@@ -106,7 +135,7 @@ export function getAudioProcessingConfig() {
     features: {
       filenameGeneration: env.strategy === 'ytdlp', // Only yt-dlp requires filename generation
       caching: env.isProduction, // Enable caching in production
-      fallback: env.strategy === 'ytdlp' ? 'yt2mp3magic' : 'ytdlp' // Automatic fallback between strategies
+      fallback: env.strategy === 'ytdlp' ? 'yt-mp3-go' : 'ytdlp' // Automatic fallback between strategies
     }
   };
 }

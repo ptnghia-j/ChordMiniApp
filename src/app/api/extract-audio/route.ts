@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtractionSimplified';
+import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtraction';
 import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     try {
       let result;
 
-      // Use simplified extraction with search metadata if available
+      // Use extraction with search metadata if available
       if (videoMetadata) {
         console.log(`📊 Using provided video metadata for ${videoId}`);
         result = await audioExtractionServiceSimplified.extractAudio(videoMetadata, forceRedownload);
@@ -89,7 +89,9 @@ export async function POST(request: NextRequest) {
 
       // Determine the method based on environment
       const env = detectEnvironment();
-      const method = env.strategy === 'ytdlp' ? 'yt-dlp' : 'yt2mp3-magic';
+      const method = env.strategy === 'ytdlp' ? 'yt-dlp' :
+                    env.strategy === 'appwrite-ytdlp' ? 'appwrite-ytdlp' :
+                    'yt2mp3-magic';
 
       return NextResponse.json({
         success: true,

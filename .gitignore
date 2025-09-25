@@ -257,3 +257,5 @@ downbeats_measures.txt
 
 # Ignore cloud build
 cloudbuild.yaml
+
+yt-dlp-server/

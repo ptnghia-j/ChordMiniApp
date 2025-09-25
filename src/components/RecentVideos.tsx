@@ -227,7 +227,7 @@ export default function RecentVideos() {
     (async () => {
         await fetchVideos(false);
     })();
-  }, []); // Intentionally empty to run only once
+  }, [fetchVideos]); // Include fetchVideos dependency
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
