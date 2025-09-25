@@ -90,7 +90,7 @@ echo "=================="
 
 # Run ESLint
 echo -n "Running ESLint... "
-if npx eslint . --ext .ts,.tsx,.js,.jsx > eslint.log 2>&1; then
+if npm run lint > eslint.log 2>&1; then
     check_pass "No ESLint errors"
     rm -f eslint.log
 else
@@ -145,7 +145,7 @@ echo ""
 echo "5. 🔥 Firebase Configuration"
 echo "============================"
 
-# Check Firebase files
+# Check Firebase files (organized in firebase/ directory, symlinked to root)
 if [ -f "firebase.json" ]; then
     check_pass "firebase.json exists"
 else

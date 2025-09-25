@@ -40,6 +40,12 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
+# Firebase symlinks (actual files are in firebase/ directory)
+/firebase.json
+/firestore.rules
+/firestore.indexes.json
+/storage.rules
+
 # debug
 npm-debug.log*
 yarn-debug.log*
