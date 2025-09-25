@@ -145,6 +145,23 @@ echo ""
 echo "5. 🔥 Firebase Configuration"
 echo "============================"
 
+# Create symlinks for Firebase files if they don't exist (for CI/CD compatibility)
+if [ ! -f "firebase.json" ] && [ -f "firebase/firebase.json" ]; then
+    ln -sf firebase/firebase.json firebase.json
+fi
+
+if [ ! -f "firestore.rules" ] && [ -f "firebase/firestore.rules" ]; then
+    ln -sf firebase/firestore.rules firestore.rules
+fi
+
+if [ ! -f "firestore.indexes.json" ] && [ -f "firebase/firestore.indexes.json" ]; then
+    ln -sf firebase/firestore.indexes.json firestore.indexes.json
+fi
+
+if [ ! -f "storage.rules" ] && [ -f "firebase/storage.rules" ]; then
+    ln -sf firebase/storage.rules storage.rules
+fi
+
 # Check Firebase files (organized in firebase/ directory, symlinked to root)
 if [ -f "firebase.json" ]; then
     check_pass "firebase.json exists"
