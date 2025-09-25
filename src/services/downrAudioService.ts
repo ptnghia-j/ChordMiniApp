@@ -64,6 +64,11 @@ export class DownrAudioService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Origin': 'https://downr.org',
+          'Referer': 'https://downr.org/',
         },
         body: JSON.stringify({
           url: youtubeUrl,
@@ -75,7 +80,25 @@ export class DownrAudioService {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        throw new Error(`downr.org API failed: ${response.status} ${response.statusText}`);
+        // Provide more specific error messages for common HTTP status codes
+        let errorMessage = `downr.org API failed: ${response.status} ${response.statusText}`;
+
+        switch (response.status) {
+          case 403:
+            errorMessage = `Access forbidden (403): downr.org may be blocking requests or the video is restricted`;
+            break;
+          case 429:
+            errorMessage = `Rate limited (429): Too many requests to downr.org, please try again later`;
+            break;
+          case 500:
+          case 502:
+          case 503:
+          case 504:
+            errorMessage = `Server error (${response.status}): downr.org service is temporarily unavailable`;
+            break;
+        }
+
+        throw new Error(errorMessage);
       }
       
       const data: DownrResponse = await response.json();

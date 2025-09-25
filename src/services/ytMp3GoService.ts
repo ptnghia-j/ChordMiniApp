@@ -50,7 +50,7 @@ interface YtMp3GoJobStatus {
 
 export class YtMp3GoService {
   private static instance: YtMp3GoService;
-  private readonly YT_MP3_GO_BASE_URL = 'https://lukavukanovic.xyz';
+  private readonly YT_MP3_GO_BASE_URL = 'https://yt-mp3-go.onrender.com';
   private readonly API_PATH = '/yt-downloader';
 
   // Quality options for the new API
