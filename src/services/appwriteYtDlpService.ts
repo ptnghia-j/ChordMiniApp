@@ -56,12 +56,13 @@ export class AppwriteYtDlpService {
   }
 
   /**
-   * Extract audio from YouTube video
+   * Extract audio from YouTube video with enhanced bot detection handling
    * @param videoUrl YouTube video URL
-   * @param format Audio format (default: 'worstaudio' for space efficiency)
+   * @param format Audio format (default: 'bestaudio' for better quality)
+   * @param retryCount Number of retry attempts for bot detection issues
    * @returns Promise<ArrayBuffer> Audio data as ArrayBuffer
    */
-  async extractAudio(videoUrl: string, format: string = 'worstaudio'): Promise<ArrayBuffer> {
+  async extractAudio(videoUrl: string, format: string = 'bestaudio', retryCount: number = 2): Promise<ArrayBuffer> {
     if (!this.projectId || !this.functions) {
       throw new Error('Appwrite YT-DLP service is not configured. Set NEXT_PUBLIC_APPWRITE_PROJECT_ID environment variable.');
     }
@@ -75,51 +76,90 @@ export class AppwriteYtDlpService {
       format
     };
 
-    try {
-      console.log(`[AppwriteYtDlpService] Extracting audio from: ${videoUrl}`);
-      
-      // Use Appwrite SDK to execute the function
-      console.log(`[AppwriteYtDlpService] Trying request with data:`, requestData);
+    let lastError: Error | null = null;
 
-      // Execute the function using Appwrite SDK (new object-based API)
-      const execution = await this.functions.createExecution({
-        functionId: this.functionId,
-        body: JSON.stringify(requestData)
-      });
+    // Try multiple times with delays to handle bot detection
+    for (let attempt = 0; attempt <= retryCount; attempt++) {
+      try {
+        console.log(`[AppwriteYtDlpService] Extracting audio from: ${videoUrl} (attempt ${attempt + 1}/${retryCount + 1})`);
 
-      // Check if execution was successful
-      if (execution.responseStatusCode !== 200) {
-        throw new Error(`Function execution failed with status ${execution.responseStatusCode}: ${execution.errors}`);
+        // Add delay between retries to avoid triggering bot detection
+        if (attempt > 0) {
+          const delay = Math.min(5000 * attempt, 15000); // 5s, 10s, 15s max
+          console.log(`[AppwriteYtDlpService] Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // Execute the function using Appwrite SDK with enhanced headers
+        const execution = await this.functions.createExecution({
+          functionId: this.functionId,
+          body: JSON.stringify(requestData),
+          // Add headers to help with bot detection
+          headers: {
+            'User-Agent': 'ChordMiniApp/2.0 (Audio Analysis)',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+          }
+        });
+
+        // Check if execution was successful
+        if (execution.responseStatusCode !== 200) {
+          throw new Error(`Function execution failed with status ${execution.responseStatusCode}: ${execution.errors}`);
+        }
+
+        // Parse the response body
+        const result: AppwriteYtDlpResponse = JSON.parse(execution.responseBody);
+
+        if (!result.success) {
+          const errorMsg = result.error || 'Audio extraction failed';
+
+          // Check if this is a bot detection error
+          if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('bot')) {
+            console.log(`[AppwriteYtDlpService] Bot detection triggered on attempt ${attempt + 1}`);
+            if (attempt < retryCount) {
+              lastError = new Error(errorMsg);
+              continue; // Try again
+            }
+          }
+
+          throw new Error(errorMsg);
+        }
+
+        if (!result.data?.audio) {
+          throw new Error('No audio data received from server');
+        }
+
+        // Convert base64 to ArrayBuffer
+        const audioBuffer = this.base64ToArrayBuffer(result.data.audio);
+
+        console.log(`[AppwriteYtDlpService] Audio extracted successfully: ${result.data.filename} (${audioBuffer.byteLength} bytes) on attempt ${attempt + 1}`);
+
+        return audioBuffer;
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        console.error(`[AppwriteYtDlpService] Attempt ${attempt + 1} failed:`, lastError.message);
+
+        // If this is the last attempt, don't continue
+        if (attempt === retryCount) {
+          break;
+        }
       }
-
-      // Parse the response body
-      const result: AppwriteYtDlpResponse = JSON.parse(execution.responseBody);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Audio extraction failed');
-      }
-
-      if (!result.data?.audio) {
-        throw new Error('No audio data received from server');
-      }
-
-      // Convert base64 to ArrayBuffer
-      const audioBuffer = this.base64ToArrayBuffer(result.data.audio);
-      
-      console.log(`[AppwriteYtDlpService] Audio extracted successfully: ${result.data.filename} (${audioBuffer.byteLength} bytes)`);
-      
-      return audioBuffer;
-
-    } catch (error) {
-      console.error('[AppwriteYtDlpService] Audio extraction failed:', error);
-      
-      if (error instanceof Error) {
-        // Re-throw with more context
-        throw new Error(`Appwrite YT-DLP extraction failed: ${error.message}`);
-      }
-      
-      throw new Error('Unknown error occurred during audio extraction');
     }
+
+    // All attempts failed
+    console.error('[AppwriteYtDlpService] All extraction attempts failed');
+
+    if (lastError) {
+      // Provide more helpful error messages for common issues
+      if (lastError.message.includes('Sign in to confirm') || lastError.message.includes('bot')) {
+        throw new Error('YouTube bot detection is currently blocking requests. This is a temporary issue that usually resolves within a few hours. Please try again later or use a different video.');
+      }
+
+      throw new Error(`Appwrite YT-DLP extraction failed after ${retryCount + 1} attempts: ${lastError.message}`);
+    }
+
+    throw new Error('Unknown error occurred during audio extraction');
   }
 
   /**

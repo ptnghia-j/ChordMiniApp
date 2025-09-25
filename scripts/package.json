@@ -1,0 +1,16 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "This directory contains utility scripts for managing cached data in the ChordMini application's Firebase Firestore database.",
+  "main": "advanced-bundle-optimization.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "node-appwrite": "^19.1.0"
+  }
+}
