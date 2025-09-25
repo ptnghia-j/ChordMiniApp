@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       // Determine the method based on environment
       const env = detectEnvironment();
       const method = env.strategy === 'ytdlp' ? 'yt-dlp' :
-                    env.strategy === 'appwrite-ytdlp' ? 'appwrite-ytdlp' :
+                    env.strategy === 'downr-org' ? 'downr-org' :
                     'yt2mp3-magic';
 
       return NextResponse.json({

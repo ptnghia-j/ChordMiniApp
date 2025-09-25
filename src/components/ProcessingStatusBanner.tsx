@@ -178,7 +178,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       case 'beat-detection':
         return {
           title: 'Detecting Beats',
-          color: theme === 'dark' ? 'bg-blue-900/30 border-blue-600' : 'bg-blue-50 border-blue-200',
+          color: theme === 'dark' ? 'bg-blue-900/80 border-blue-600' : 'bg-blue-50/90 border-blue-200',
           textColor: theme === 'dark' ? 'text-blue-200' : 'text-blue-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-500'}`} viewBox="0 0 20 20" fill="currentColor">
@@ -190,7 +190,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       case 'chord-recognition':
         return {
           title: 'Recognizing Chords',
-          color: theme === 'dark' ? 'bg-purple-900/30 border-purple-600' : 'bg-purple-50 border-purple-200',
+          color: theme === 'dark' ? 'bg-purple-900/80 border-purple-600' : 'bg-purple-50/90 border-purple-200',
           textColor: theme === 'dark' ? 'text-purple-200' : 'text-purple-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-500'}`} viewBox="0 0 20 20" fill="currentColor">
@@ -201,7 +201,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       case 'complete':
         return {
           title: 'Processing Complete',
-          color: theme === 'dark' ? 'bg-green-900/30 border-green-600' : 'bg-green-50 border-green-200',
+          color: theme === 'dark' ? 'bg-green-900/80 border-green-600' : 'bg-green-50/90 border-green-200',
           textColor: theme === 'dark' ? 'text-green-200' : 'text-green-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-green-400' : 'text-green-500'}`} viewBox="0 0 20 20" fill="currentColor">
@@ -212,7 +212,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       case 'error':
         return {
           title: 'Error',
-          color: theme === 'dark' ? 'bg-red-900/30 border-red-600' : 'bg-red-50 border-red-200',
+          color: theme === 'dark' ? 'bg-red-900/80 border-red-600' : 'bg-red-50/90 border-red-200',
           textColor: theme === 'dark' ? 'text-red-200' : 'text-red-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`} viewBox="0 0 20 20" fill="currentColor">
@@ -223,7 +223,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       default:
         return {
           title: 'Processing',
-          color: theme === 'dark' ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-50 border-gray-200',
+          color: theme === 'dark' ? 'bg-gray-800/80 border-gray-600' : 'bg-gray-50/90 border-gray-200',
           textColor: theme === 'dark' ? 'text-gray-200' : 'text-gray-700',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} viewBox="0 0 20 20" fill="currentColor">
@@ -244,10 +244,10 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
   }
 
   return (
-    <div className="w-full z-40 transition-all duration-300 ease-in-out mb-4">
-        <div className="max-w-screen-lg mx-auto px-4">
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+        <div className="px-4">
         {/* Single banner that adapts based on stage */}
-        <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-md ${color} border`}>
+        <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-lg backdrop-blur-sm ${color} border`}>
           <div className="flex items-center space-x-3">
             {/* Show 3-dot animation for processing stages, icon for others */}
             {(stage === 'beat-detection' || stage === 'chord-recognition') ? (

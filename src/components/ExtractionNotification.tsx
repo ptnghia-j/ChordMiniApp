@@ -45,18 +45,18 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
   if (!isShowing) return null;
 
   return (
-    <div className={`w-full z-40 transition-all duration-300 ease-in-out mb-4 ${
-      isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+    <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out ${
+      isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
     }`}>
-      <div className="max-w-screen-lg mx-auto px-4">
-        <div className={`flex items-center justify-between py-2 px-4 rounded-lg shadow-md border ${
+      <div className="px-4">
+        <div className={`flex items-center justify-between py-2 px-4 rounded-lg shadow-lg border backdrop-blur-sm ${
           fromCache
             ? theme === 'dark'
-              ? 'bg-blue-900/30 border-blue-600'
-              : 'bg-blue-50 border-blue-200'
+              ? 'bg-blue-900/80 border-blue-600'
+              : 'bg-blue-50/90 border-blue-200'
             : theme === 'dark'
-              ? 'bg-green-900/30 border-green-600'
-              : 'bg-green-50 border-green-200'
+              ? 'bg-green-900/80 border-green-600'
+              : 'bg-green-50/90 border-green-200'
         }`}>
           <div className="flex items-center space-x-2">
             {fromCache ? (

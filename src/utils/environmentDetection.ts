@@ -7,7 +7,7 @@
  * - Automatic fallback between strategies for reliability
  */
 
-export type AudioProcessingStrategy = 'appwrite-ytdlp' | 'ytdlp' | 'yt-mp3-go';
+export type AudioProcessingStrategy = 'downr-org' | 'ytdlp' | 'yt-mp3-go';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -48,22 +48,16 @@ export function detectEnvironment(): EnvironmentConfig {
     baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://chordmini.com';
   }
 
-  // Determine strategy based on URL detection and Appwrite availability
-  // Priority: appwrite-ytdlp > ytdlp (localhost) > yt-mp3-go (fallback)
+  // Determine strategy based on URL detection and service availability
+  // Priority: downr-org (production) > ytdlp (localhost) > yt-mp3-go (fallback)
   let strategy: AudioProcessingStrategy;
 
-  // Check if Appwrite is configured
-  const appwriteProjectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-
-  if (appwriteProjectId && appwriteProjectId.trim() !== '') {
-    // Use Appwrite YT-DLP service if configured (most reliable)
-    strategy = 'appwrite-ytdlp';
-  } else if (isLocalhost) {
+  if (isLocalhost) {
     // Use local yt-dlp for localhost development
     strategy = 'ytdlp';
   } else {
-    // Fallback to yt-mp3-go for production without Appwrite
-    strategy = 'yt-mp3-go';
+    // Use downr.org for production (most reliable for remote deployment)
+    strategy = 'downr-org';
   }
   
   return {
@@ -90,10 +84,10 @@ export function shouldUseYtDlp(): boolean {
 }
 
 /**
- * Check if we should use Appwrite YT-DLP integration (preferred)
+ * Check if we should use downr.org integration (preferred for production)
  */
-export function shouldUseAppwriteYtDlp(): boolean {
-  return getAudioProcessingStrategy() === 'appwrite-ytdlp';
+export function shouldUseDownrOrg(): boolean {
+  return getAudioProcessingStrategy() === 'downr-org';
 }
 
 /**
@@ -112,13 +106,11 @@ export function getAudioProcessingConfig() {
   return {
     strategy: env.strategy,
     endpoints: {
-      appwriteYtdlp: {
-        projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '',
-        functionId: 'yt-dlp-audio-extractor',
-        endpoint: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID
-          ? `https://${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}.appwrite.global`
-          : '',
-        timeout: 300000 // 5 minutes
+      downrOrg: {
+        baseUrl: 'https://downr.org',
+        apiPath: '/.netlify/functions/download',
+        timeout: 30000, // 30 seconds
+        formats: ['opus', 'webm', 'mp3', 'm4a']
       },
       ytMp3Go: {
         baseUrl: 'https://yt-mp3-go.onrender.com',

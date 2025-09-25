@@ -18,12 +18,12 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="w-full z-40 transition-all duration-300 ease-in-out mb-4">
-      <div className="max-w-screen-lg mx-auto px-4">
-        <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-md border ${
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+      <div className="px-4">
+        <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-lg border backdrop-blur-sm ${
           theme === 'dark'
-            ? 'bg-yellow-900/30 border-yellow-600'
-            : 'bg-yellow-50 border-yellow-200'
+            ? 'bg-yellow-900/80 border-yellow-600'
+            : 'bg-yellow-50/90 border-yellow-200'
         }`}>
           <div className="flex items-center space-x-3 w-full">
             {/* Animated spinner */}

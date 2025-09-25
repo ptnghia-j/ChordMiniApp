@@ -241,23 +241,10 @@ tasks.md
 # Documentation files - ignore temporary and specific .md files but keep important docs
 *.md.bak
 *.md.tmp
-task.md
-tasks.md
+.md
 
-# Ignore specific temporary/generated .md files
-FIREBASE_INFINITE_LOOP_FIX.md
-VERCEL_GITHUB_ACTIONS_FIX.md
-CI_CD_FIXES_SUMMARY.md
-PROJECT_REORGANIZATION_2025.md
-DOCKER_DEPLOYMENT.md
-DOWNR_ORG_COMPATIBILITY_REPORT.md
-DOWNR_ROBUSTNESS_FINAL_REPORT.md
-VERCEL_DEPLOYMENT_REQUIREMENTS.md
-YOUTUBE_BLOCKING_ANALYSIS.md
-YOUTUBE_BOT_DETECTION_SOLUTION.md
 
-# Keep all documentation in docs/ folder
-!docs/**/*.md
+docs/**/*.md
 # Keep important root-level documentation
 !README.md
 !README-PYTHON-BACKEND.md

@@ -13,14 +13,14 @@
  */
 
 
-import { uploadAudioStreamWithRetry } from './streamingFirebaseUpload';
+// Removed uploadAudioStreamWithRetry import - will be re-added in Task 2
 // PRESERVED FOR REFERENCE: import { quickTubeServiceSimplified } from './quickTubeServiceSimplified';
 import { ytMp3GoService } from './ytMp3GoService';
 import { firebaseStorageSimplified, SimplifiedAudioData } from './firebaseStorageSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from './ytDlpService';
 import { asyncJobService } from './asyncJobService';
-import { appwriteYtDlpService } from './appwriteYtDlpService';
+// Removed Appwrite service - migrated to downr.org
 
 export interface AudioExtractionResult {
   success: boolean;
@@ -72,8 +72,8 @@ export class AudioExtractionServiceSimplified {
 
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
-      case 'appwrite-ytdlp':
-        return await this.extractAudioWithAppwrite(videoMetadata, forceRedownload);
+      case 'downr-org':
+        return await this.extractAudioWithDownrOrg(videoMetadata, forceRedownload);
 
       case 'ytdlp':
         if (env.isDevelopment) {
@@ -86,9 +86,9 @@ export class AudioExtractionServiceSimplified {
         }
 
       default:
-        // Fallback to Appwrite YT-DLP for unknown strategies
-        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to Appwrite YT-DLP`);
-        return await this.extractAudioWithAppwrite(videoMetadata, forceRedownload);
+        // Fallback to downr.org for unknown strategies
+        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to downr.org`);
+        return await this.extractAudioWithDownrOrg(videoMetadata, forceRedownload);
     }
   }
 
@@ -290,9 +290,9 @@ export class AudioExtractionServiceSimplified {
   }
 
   /**
-   * Extract audio using Appwrite YT-DLP service (most reliable method)
+   * Extract audio using downr.org service (production-ready method)
    */
-  private async extractAudioWithAppwrite(
+  private async extractAudioWithDownrOrg(
     videoMetadata: YouTubeVideoMetadata,
     forceRedownload: boolean = false
   ): Promise<AudioExtractionResult> {
@@ -362,15 +362,28 @@ export class AudioExtractionServiceSimplified {
         }
       }
 
-      // Step 3: Extract audio using Appwrite YT-DLP service
+      // Step 3: Extract audio using downr.org service
       const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      console.log(`🚀 [Appwrite YT-DLP] Starting audio extraction for: ${videoUrl}`);
+      console.log(`🚀 [downr.org] Starting audio extraction for: ${videoUrl}`);
       console.log(`📹 Video: "${title}" (${videoId})`);
 
-      const audioBuffer = await appwriteYtDlpService.extractAudio(videoUrl);
-      console.log(`✅ [Appwrite YT-DLP] Audio extraction successful: ${audioBuffer.byteLength} bytes`);
+      const extractResult = await this.callDownrOrgAPI(videoUrl);
+      console.log(`✅ [downr.org] Audio extraction successful: ${extractResult.formats.length} formats available`);
 
-      // Step 4: Upload to Firebase Storage for permanent access
+      // Step 4: Select best audio format (prioritize Opus for timing accuracy)
+      const audioFormats = extractResult.formats.filter(f => f.type === 'audio');
+      if (audioFormats.length === 0) {
+        throw new Error('No audio formats available from downr.org');
+      }
+
+      const selectedFormat = this.selectBestAudioFormat(audioFormats);
+      console.log(`🎵 Selected format: ${selectedFormat.ext} (${selectedFormat.bitrate || 'unknown'} bitrate)`);
+
+      // Step 5: Download audio file
+      const audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+      console.log(`📥 Audio download successful: ${audioBuffer.byteLength} bytes`);
+
+      // Step 6: Upload to Firebase Storage for permanent access
       let finalAudioUrl = '';
       let isStorageUrl = false;
       const actualFileSize = audioBuffer.byteLength;
@@ -386,12 +399,13 @@ export class AudioExtractionServiceSimplified {
           }
         });
 
+        const { uploadAudioStreamWithRetry } = await import('./streamingFirebaseUpload');
         const uploadResult = await uploadAudioStreamWithRetry(
           audioStream,
           {
             videoId,
             title,
-            contentType: 'audio/mpeg'
+            contentType: this.getContentTypeFromFormat(selectedFormat.ext)
           }
         );
 
@@ -408,40 +422,40 @@ export class AudioExtractionServiceSimplified {
         finalAudioUrl = ''; // Will be handled below
       }
 
-      // Step 5: Save metadata to cache
+      // Step 7: Save metadata to cache
       const audioData: SimplifiedAudioData = {
         videoId,
         audioUrl: finalAudioUrl,
         title,
-        duration: 0, // Duration will be detected later if needed
+        duration: this.parseDuration(videoMetadata.duration),
         fileSize: actualFileSize,
         isStreamUrl: !isStorageUrl,
         streamExpiresAt: isStorageUrl ? undefined : Date.now() + (24 * 60 * 60 * 1000), // 24 hours from now
         createdAt: Date.now(),
 
-        // Enhanced metadata for Appwrite extractions
-        extractionService: 'appwrite-ytdlp',
+        // Enhanced metadata for downr.org extractions
+        extractionService: 'downr-org',
         extractionTimestamp: Date.now(),
         videoDuration: videoMetadata.duration
       };
 
       await firebaseStorageSimplified.saveAudioMetadata(audioData);
-      console.log(`💾 Cached Appwrite extraction result for ${videoId}`);
+      console.log(`💾 Cached downr.org extraction result for ${videoId}`);
 
       return {
         success: true,
         audioUrl: finalAudioUrl,
         title,
-        duration: 0,
+        duration: this.parseDuration(videoMetadata.duration),
         fromCache: false,
         isStreamUrl: !isStorageUrl,
         streamExpiresAt: audioData.streamExpiresAt
       };
 
     } catch (error) {
-      console.error(`❌ [Appwrite YT-DLP] Audio extraction failed for ${videoId}:`, error);
+      console.error(`❌ [downr.org] Audio extraction failed for ${videoId}:`, error);
 
-      // Fallback to yt-mp3-go if Appwrite fails
+      // Fallback to yt-mp3-go if downr.org fails
       console.log(`🔄 Falling back to yt-mp3-go service...`);
       try {
         return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
@@ -449,10 +463,201 @@ export class AudioExtractionServiceSimplified {
         console.error(`❌ Fallback to yt-mp3-go also failed:`, fallbackError);
         return {
           success: false,
-          error: `Both Appwrite YT-DLP and yt-mp3-go failed. Appwrite error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
+          error: `Both downr.org and yt-mp3-go failed. downr.org error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
         };
       }
     }
+  }
+
+  /**
+   * Call downr.org API to extract audio metadata and URLs
+   */
+  private async callDownrOrgAPI(youtubeUrl: string): Promise<{
+    title: string;
+    duration: number;
+    formats: Array<{
+      type: string;
+      ext: string;
+      url: string;
+      bitrate?: number;
+      audioQuality?: string;
+      quality?: string;
+    }>;
+  }> {
+    const https = await import('https');
+
+    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify({
+        url: youtubeUrl,
+        format: 'audio'
+      });
+
+      const options = {
+        hostname: 'downr.org',
+        port: 443,
+        path: '/.netlify/functions/download',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'ChordMiniApp/1.0'
+        }
+      };
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              reject(new Error(`downr.org API failed: ${res.statusCode} ${data}`));
+              return;
+            }
+
+            const result = JSON.parse(data);
+
+            if (!result.medias || !Array.isArray(result.medias)) {
+              reject(new Error('No media found in downr.org response'));
+              return;
+            }
+
+            const transformedResult = {
+              title: result.title,
+              duration: result.duration,
+              formats: result.medias.map((media: {
+                type: string;
+                ext: string;
+                url: string;
+                bitrate?: number;
+                audioQuality?: string;
+                quality?: string;
+              }) => ({
+                type: media.type,
+                ext: media.ext,
+                url: media.url,
+                bitrate: media.bitrate,
+                audioQuality: media.audioQuality,
+                quality: media.quality
+              }))
+            };
+
+            resolve(transformedResult);
+          } catch (error) {
+            reject(new Error(`Failed to parse downr.org response: ${error instanceof Error ? error.message : 'Unknown error'}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(new Error(`downr.org API request failed: ${error.message}`));
+      });
+
+      req.setTimeout(30000, () => {
+        req.destroy();
+        reject(new Error('downr.org API request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Select best audio format with priority: Opus > WebM > MP3 > M4A
+   */
+  private selectBestAudioFormat(formats: Array<{
+    type: string;
+    ext: string;
+    url: string;
+    bitrate?: number;
+    audioQuality?: string;
+    quality?: string;
+  }>): {
+    type: string;
+    ext: string;
+    url: string;
+    bitrate?: number;
+    audioQuality?: string;
+    quality?: string;
+  } {
+    const formatPriority = ['opus', 'webm', 'mp3', 'm4a'];
+
+    for (const preferredExt of formatPriority) {
+      const matchingFormats = formats.filter(f => f.ext === preferredExt);
+      if (matchingFormats.length > 0) {
+        return matchingFormats.reduce((best, current) =>
+          (current.bitrate || 0) > (best.bitrate || 0) ? current : best
+        );
+      }
+    }
+
+    return formats[0];
+  }
+
+  /**
+   * Download audio file from URL with redirect handling
+   */
+  private async downloadAudioFromUrl(audioUrl: string): Promise<ArrayBuffer> {
+    const https = await import('https');
+    const http = await import('http');
+    const protocol = audioUrl.startsWith('https:') ? https : http;
+
+    return new Promise((resolve, reject) => {
+
+      const req = protocol.get(audioUrl, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          // Follow redirect
+          this.downloadAudioFromUrl(res.headers.location).then(resolve).catch(reject);
+          return;
+        }
+
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed: ${res.statusCode}`));
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+
+        res.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+
+        res.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+        });
+
+        res.on('error', (error: Error) => {
+          reject(new Error(`Download error: ${error.message}`));
+        });
+      });
+
+      req.on('error', (error: Error) => {
+        reject(new Error(`Download request failed: ${error.message}`));
+      });
+
+      req.setTimeout(60000, () => {
+        req.destroy();
+        reject(new Error('Download timeout'));
+      });
+    });
+  }
+
+  /**
+   * Get content type from audio format extension
+   */
+  private getContentTypeFromFormat(ext: string): string {
+    const contentTypes: Record<string, string> = {
+      'opus': 'audio/opus',
+      'webm': 'audio/webm',
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/mp4'
+    };
+
+    return contentTypes[ext] || 'audio/mpeg';
   }
 
   /**
@@ -773,12 +978,12 @@ export class AudioExtractionServiceSimplified {
         //   break;
 
         default:
-          // Fallback to Appwrite YT-DLP for unknown strategies
-          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to Appwrite YT-DLP`);
+          // Fallback to downr.org for unknown strategies
+          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to downr.org`);
           // For direct ID extraction, we need to create minimal metadata
           const minimalMetadata = { id: videoId, title: `Video ${videoId}`, duration: '0:00', thumbnail: '', channelTitle: '' };
-          const appwriteResult = await this.extractAudioWithAppwrite(minimalMetadata, false);
-          extractionResult = appwriteResult;
+          const downrResult = await this.extractAudioWithDownrOrg(minimalMetadata, false);
+          extractionResult = downrResult;
           break;
       }
 
@@ -901,14 +1106,9 @@ export class AudioExtractionServiceSimplified {
     const env = detectEnvironment();
 
     switch (env.strategy) {
-      case 'appwrite-ytdlp':
-        // Check if Appwrite is configured
-        try {
-          const serviceInfo = await appwriteYtDlpService.getServiceInfo();
-          return serviceInfo.isConfigured;
-        } catch {
-          return false;
-        }
+      case 'downr-org':
+        // downr.org is always available (no configuration needed)
+        return true;
 
       case 'ytdlp':
         return env.isDevelopment ? await ytDlpService.isAvailable() : false;
@@ -918,13 +1118,8 @@ export class AudioExtractionServiceSimplified {
       //   return await ytMp3GoService.isAvailable();
 
       default:
-        // Fallback to Appwrite YT-DLP availability check
-        try {
-          const serviceInfo = await appwriteYtDlpService.getServiceInfo();
-          return serviceInfo.isConfigured;
-        } catch {
-          return false;
-        }
+        // Fallback to downr.org (always available)
+        return true;
     }
   }
 
