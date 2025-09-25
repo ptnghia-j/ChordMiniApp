@@ -163,6 +163,13 @@ export class DownrAudioService {
       const timeoutId = setTimeout(() => controller.abort(), this.DOWNLOAD_TIMEOUT);
       
       const response = await fetch(audioUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Range': 'bytes=0-',
+        },
         signal: controller.signal
       });
       

@@ -455,15 +455,29 @@ export class AudioExtractionServiceSimplified {
     } catch (error) {
       console.error(`❌ [downr.org] Audio extraction failed for ${videoId}:`, error);
 
-      // Fallback to yt-mp3-go if downr.org fails
-      console.log(`🔄 Falling back to yt-mp3-go service...`);
+      // Fallback to simple fallback service if downr.org fails
+      console.log(`🔄 Falling back to alternative services...`);
       try {
-        return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
+        const { simpleFallbackService } = await import('./simpleFallbackService');
+        const fallbackResult = await simpleFallbackService.extractAudio(videoId, title);
+
+        if (fallbackResult.success && fallbackResult.audioUrl) {
+          return {
+            success: true,
+            audioUrl: fallbackResult.audioUrl,
+            title: fallbackResult.title || title,
+            duration: fallbackResult.duration || 0,
+            fromCache: false,
+            isStreamUrl: true
+          };
+        } else {
+          throw new Error(fallbackResult.error || 'Fallback service failed');
+        }
       } catch (fallbackError) {
-        console.error(`❌ Fallback to yt-mp3-go also failed:`, fallbackError);
+        console.error(`❌ Fallback services also failed:`, fallbackError);
         return {
           success: false,
-          error: `Both downr.org and yt-mp3-go failed. downr.org error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
+          error: `Both downr.org and fallback services failed. downr.org error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
         };
       }
     }
@@ -610,8 +624,17 @@ export class AudioExtractionServiceSimplified {
     const protocol = audioUrl.startsWith('https:') ? https : http;
 
     return new Promise((resolve, reject) => {
+      const options = {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Range': 'bytes=0-',
+        }
+      };
 
-      const req = protocol.get(audioUrl, (res) => {
+      const req = protocol.get(audioUrl, options, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           // Follow redirect
           this.downloadAudioFromUrl(res.headers.location).then(resolve).catch(reject);
