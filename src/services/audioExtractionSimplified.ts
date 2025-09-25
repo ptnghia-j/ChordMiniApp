@@ -575,8 +575,25 @@ export class AudioExtractionServiceSimplified {
       const selectedFormat = this.selectBestAudioFormat(audioFormats);
       console.log(`🎵 Selected format: ${selectedFormat.ext} (${selectedFormat.bitrate || 'unknown'} bitrate)`);
 
-      // Step 5: Download audio file
-      const audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+      // Step 5: Download audio file using Google Video handler
+      let audioBuffer: ArrayBuffer;
+
+      // Use Google Video handler for Google Video URLs
+      const { googleVideoHandler } = await import('./googleVideoHandler');
+      if (googleVideoHandler.isGoogleVideoUrl(selectedFormat.url)) {
+        console.log(`🎵 Using Google Video handler for download`);
+        const result = await googleVideoHandler.downloadAudio(selectedFormat.url);
+
+        if (!result.success || !result.audioBuffer) {
+          throw new Error(`Google Video download failed: ${result.error}`);
+        }
+
+        audioBuffer = result.audioBuffer;
+      } else {
+        // Fallback to original method for non-Google URLs
+        audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+      }
+
       console.log(`📥 Audio download successful: ${audioBuffer.byteLength} bytes`);
 
       // Step 6: Upload to Firebase Storage for permanent access
@@ -651,31 +668,12 @@ export class AudioExtractionServiceSimplified {
     } catch (error) {
       console.error(`❌ [downr.org] Audio extraction failed for ${videoId}:`, error);
 
-      // Fallback to simple fallback service if downr.org fails
-      console.log(`🔄 Falling back to alternative services...`);
-      try {
-        const { simpleFallbackService } = await import('./simpleFallbackService');
-        const fallbackResult = await simpleFallbackService.extractAudio(videoId, title);
-
-        if (fallbackResult.success && fallbackResult.audioUrl) {
-          return {
-            success: true,
-            audioUrl: fallbackResult.audioUrl,
-            title: fallbackResult.title || title,
-            duration: fallbackResult.duration || 0,
-            fromCache: false,
-            isStreamUrl: true
-          };
-        } else {
-          throw new Error(fallbackResult.error || 'Fallback service failed');
-        }
-      } catch (fallbackError) {
-        console.error(`❌ Fallback services also failed:`, fallbackError);
-        return {
-          success: false,
-          error: `Both downr.org and fallback services failed. downr.org error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
-        };
-      }
+      // Return the downr.org error for now - focus on fixing the real issue
+      console.error(`❌ downr.org failed, no reliable fallback available`);
+      return {
+        success: false,
+        error: `downr.org audio extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}. This is likely due to Google Video URL access restrictions from Vercel.`
+      };
     }
   }
 
