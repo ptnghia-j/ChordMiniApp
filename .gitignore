@@ -238,21 +238,11 @@ task.md
 tasks.md
 *.md.bak
 
-# Documentation files - ignore temporary and specific .md files but keep important docs
-*.md.bak
-*.md.tmp
-.md
-
-
-docs/**/*.md
-# Keep important root-level documentation
+# Documentation files (exclude all .md except README.md and README-PYTHON-BACKEND.md)
+*.md
 !README.md
 !README-PYTHON-BACKEND.md
 !CONTRIBUTING.md
-!CHANGELOG.md
-!LICENSE.md
-# Keep README files in subdirectories
-!**/README.md
 
 # Backup files
 *.bak
@@ -276,59 +266,8 @@ cloudbuild.yaml
 
 yt-dlp-server/
 
-# Scripts dependencies but keep organized script folders
-scripts/node_modules
+scripts/node_modules/
+scripts/package.json
 scripts/package-lock.json
-
-# Keep scripts/testing and scripts/utilities - they contain important organized scripts
-# scripts/testing - contains development and testing scripts
-# scripts/utilities - contains maintenance and utility scripts
-
-# Exclude any sensitive test results or temporary files in scripts
-scripts/**/test-results/
-scripts/**/temp/
-scripts/**/*.log
-scripts/**/*.tmp
-scripts/**/node_modules/
-
-# Additional sensitive patterns
-**/*-report-*.json
-**/*robustness*.json
-**/*stress*.json
-**/complete-robustness-report-*.json
-
-# Environment-specific files
-.env.prod
-**/.env.prod
-**/.env.development
-**/.env.staging
-
-# Additional security patterns
-**/auth-config*.json
-**/oauth-config*.json
-**/*-private-key*.json
-**/*-service-account*.json
-**/client-secret*.json
-**/app-secrets*.json
-
-# Vercel-specific sensitive files
-.vercel/**/*.env*
-.vercel/**/project.json
-
-# Docker secrets
-docker-compose.override.yml
-docker-compose.prod.yml
-**/secrets/
-**/docker-secrets/
-
-# CI/CD sensitive files
-.github/workflows/*-secrets.yml
-**/*-deployment-key*
-**/*-deploy-key*
-
-# Database dumps and backups
-*.sql
-*.dump
-*.backup
-**/*-backup-*
-**/*-dump-*
+scripts/testing
+scripts/utilities
