@@ -53,10 +53,8 @@ export function detectEnvironment(): EnvironmentConfig {
   let strategy: AudioProcessingStrategy;
 
   if (isLocalhost) {
-    // TEMPORARY: Use downr.org to test ScrapingBee integration
-    strategy = 'downr-org';
     // Use local yt-dlp for localhost development
-    // strategy = 'ytdlp';
+    strategy = 'ytdlp';
   } else {
     // Use downr.org for production (most reliable for remote deployment)
     strategy = 'downr-org';

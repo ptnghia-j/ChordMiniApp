@@ -379,31 +379,67 @@ export class AudioExtractionServiceSimplified {
       const selectedFormat = this.selectBestAudioFormat(audioFormats);
       console.log(`🎵 Selected format: ${selectedFormat.ext} (${selectedFormat.bitrate || 'unknown'} bitrate)`);
 
-      // Step 5: Download audio file using ScrapingBee for Google Video URLs
+      // Step 5: Download audio file using proxy services for Google Video URLs
       let audioBuffer: ArrayBuffer;
 
-      // Import ScrapingBee service
+      // Import proxy services
+      const { searchApiService } = await import('./searchApiAudioService');
       const { scrapingBeeService } = await import('./scrapingBeeAudioService');
 
-      // Use ScrapingBee for Google Video URLs (bypasses datacenter IP blocking)
-      if (scrapingBeeService.isGoogleVideoUrl(selectedFormat.url)) {
-        console.log(`🐝 Using ScrapingBee for Google Video URL download`);
-        const result = await scrapingBeeService.downloadAudio(selectedFormat.url);
+      // Use proxy services for Google Video URLs (bypasses datacenter IP blocking)
+      if (searchApiService.isGoogleVideoUrl(selectedFormat.url)) {
+        console.log(`🔍 Trying proxy services for Google Video URL download`);
 
-        if (!result.success || !result.audioBuffer) {
-          console.error(`❌ ScrapingBee failed, trying fallback method`);
-          console.error(`   Error: ${result.error}`);
+        // Try SearchAPI.io first (doesn't block Google Video domains)
+        if (searchApiService.isConfigured()) {
+          console.log(`🔍 Using SearchAPI.io for Google Video URL download`);
+          const searchApiResult = await searchApiService.downloadAudio(selectedFormat.url);
 
-          // Fallback to original method if ScrapingBee fails
-          try {
-            audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
-            console.log(`✅ Fallback method succeeded`);
-          } catch (fallbackError) {
-            throw new Error(`Both ScrapingBee and fallback failed. ScrapingBee: ${result.error}. Fallback: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+          if (searchApiResult.success && searchApiResult.audioBuffer) {
+            audioBuffer = searchApiResult.audioBuffer;
+            console.log(`✅ SearchAPI.io download successful`);
+          } else {
+            console.error(`❌ SearchAPI.io failed: ${searchApiResult.error}`);
+
+            // Fallback to ScrapingBee
+            console.log(`🐝 Trying ScrapingBee as fallback`);
+            const scrapingBeeResult = await scrapingBeeService.downloadAudio(selectedFormat.url);
+
+            if (scrapingBeeResult.success && scrapingBeeResult.audioBuffer) {
+              audioBuffer = scrapingBeeResult.audioBuffer;
+              console.log(`✅ ScrapingBee fallback successful`);
+            } else {
+              console.error(`❌ ScrapingBee also failed: ${scrapingBeeResult.error}`);
+
+              // Final fallback to original method
+              try {
+                audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+                console.log(`✅ Original method fallback succeeded`);
+              } catch (fallbackError) {
+                throw new Error(`All proxy methods failed. SearchAPI: ${searchApiResult.error}. ScrapingBee: ${scrapingBeeResult.error}. Original: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+              }
+            }
           }
         } else {
-          audioBuffer = result.audioBuffer;
-          console.log(`✅ ScrapingBee download successful`);
+          // SearchAPI.io not configured, try ScrapingBee
+          console.log(`🐝 SearchAPI.io not configured, using ScrapingBee`);
+          const result = await scrapingBeeService.downloadAudio(selectedFormat.url);
+
+          if (!result.success || !result.audioBuffer) {
+            console.error(`❌ ScrapingBee failed, trying original method`);
+            console.error(`   Error: ${result.error}`);
+
+            // Fallback to original method if ScrapingBee fails
+            try {
+              audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+              console.log(`✅ Original method fallback succeeded`);
+            } catch (fallbackError) {
+              throw new Error(`Both ScrapingBee and original method failed. ScrapingBee: ${result.error}. Original: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+            }
+          } else {
+            audioBuffer = result.audioBuffer;
+            console.log(`✅ ScrapingBee download successful`);
+          }
         }
       } else {
         // Use original method for non-Google URLs
