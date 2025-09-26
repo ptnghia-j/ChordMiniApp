@@ -575,26 +575,39 @@ export class AudioExtractionServiceSimplified {
       const selectedFormat = this.selectBestAudioFormat(audioFormats);
       console.log(`🎵 Selected format: ${selectedFormat.ext} (${selectedFormat.bitrate || 'unknown'} bitrate)`);
 
-      // Step 5: Download audio file using Google Video handler
+      // Step 5: Download audio file using ScrapingBee for Google Video URLs
       let audioBuffer: ArrayBuffer;
 
-      // Use Google Video handler for Google Video URLs
-      const { googleVideoHandler } = await import('./googleVideoHandler');
-      if (googleVideoHandler.isGoogleVideoUrl(selectedFormat.url)) {
-        console.log(`🎵 Using Google Video handler for download`);
-        const result = await googleVideoHandler.downloadAudio(selectedFormat.url);
+      // Import ScrapingBee service
+      const { scrapingBeeService } = await import('./scrapingBeeAudioService');
+
+      // Use ScrapingBee for Google Video URLs (bypasses datacenter IP blocking)
+      if (scrapingBeeService.isGoogleVideoUrl(selectedFormat.url)) {
+        console.log(`🐝 Using ScrapingBee for Google Video URL download`);
+        const result = await scrapingBeeService.downloadAudio(selectedFormat.url);
 
         if (!result.success || !result.audioBuffer) {
-          throw new Error(`Google Video download failed: ${result.error}`);
-        }
+          console.error(`❌ ScrapingBee failed, trying fallback method`);
+          console.error(`   Error: ${result.error}`);
 
-        audioBuffer = result.audioBuffer;
+          // Fallback to original method if ScrapingBee fails
+          try {
+            audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+            console.log(`✅ Fallback method succeeded`);
+          } catch (fallbackError) {
+            throw new Error(`Both ScrapingBee and fallback failed. ScrapingBee: ${result.error}. Fallback: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+          }
+        } else {
+          audioBuffer = result.audioBuffer;
+          console.log(`✅ ScrapingBee download successful`);
+        }
       } else {
-        // Fallback to original method for non-Google URLs
+        // Use original method for non-Google URLs
+        console.log(`🔄 Using original method for non-Google URL`);
         audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
       }
 
-      console.log(`📥 Audio download successful: ${audioBuffer.byteLength} bytes`);
+      console.log(`📥 Audio download successful: ${(audioBuffer.byteLength / 1024 / 1024).toFixed(2)}MB (${audioBuffer.byteLength} bytes)`);
 
       // Step 6: Upload to Firebase Storage for permanent access
       let finalAudioUrl = '';
