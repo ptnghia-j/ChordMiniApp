@@ -67,6 +67,18 @@ export default function LocalAudioAnalyzePage() {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        try { URL.revokeObjectURL(objectUrlRef.current); } catch {}
+        objectUrlRef.current = null;
+      }
+    };
+  }, []);
+
 
   // Use processing context
   const {
@@ -197,9 +209,15 @@ export default function LocalAudioAnalyzePage() {
     });
     setAnalysisResults(null);
 
-    // Create a blob URL for the audio element
+    // Create a blob URL for the audio element (Safari-safe) and track it for cleanup
     if (audioRef.current) {
-      audioRef.current.src = URL.createObjectURL(file);
+      if (objectUrlRef.current) {
+        try { URL.revokeObjectURL(objectUrlRef.current); } catch {}
+        objectUrlRef.current = null;
+      }
+      const u = URL.createObjectURL(file);
+      objectUrlRef.current = u;
+      audioRef.current.src = u;
       audioRef.current.load();
     }
   };
@@ -217,8 +235,17 @@ export default function LocalAudioAnalyzePage() {
       setProgress(0);
       setStatusMessage('Starting beat detection...');
 
-      // Use existing object URL from audio element or create new one
-      const audioUrl = audioRef.current?.src || URL.createObjectURL(audioFile);
+      // Use existing object URL from audio element or create new one (track and cleanup)
+      let audioUrl = audioRef.current?.src;
+      if (!audioUrl) {
+        if (objectUrlRef.current) {
+          try { URL.revokeObjectURL(objectUrlRef.current); } catch {}
+          objectUrlRef.current = null;
+        }
+        const u = URL.createObjectURL(audioFile);
+        objectUrlRef.current = u;
+        audioUrl = u;
+      }
 
       setAudioProcessingState(prev => ({
         ...prev,

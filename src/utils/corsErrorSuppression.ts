@@ -28,7 +28,10 @@ const HARMLESS_CORS_PATTERNS = [
   /ytimg\.com/,
   /ggpht\.com/,
   /youtube\.com\/embed/,
-  
+  /youtube-nocookie\.com/,
+  /www-widgetapi\.js.*Unable to post message/,
+  /Unable to post message to https:\/\/www\.youtube(?:-nocookie)?\.com.*Recipient has origin/,
+
   // Generic CORS patterns for embedded content
   /Access to .* from origin .* has been blocked by CORS policy/,
   /Cross-Origin Request Blocked/,

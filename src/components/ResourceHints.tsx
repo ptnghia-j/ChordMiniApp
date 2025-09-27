@@ -8,7 +8,9 @@ import { useEffect } from 'react';
  */
 const ResourceHints: React.FC = () => {
   useEffect(() => {
-    // Preload critical fonts
+    if (typeof window === 'undefined' || window.location.pathname !== '/') return;
+
+    // Preload critical fonts (homepage only)
     const fontPreload = document.createElement('link');
     fontPreload.rel = 'preload';
     fontPreload.href = 'https://fonts.gstatic.com/s/robotomono/v23/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW4AJi8SJQt.woff2';
@@ -17,7 +19,7 @@ const ResourceHints: React.FC = () => {
     fontPreload.crossOrigin = 'anonymous';
     document.head.appendChild(fontPreload);
 
-    // Preload critical images
+    // Preload critical images (homepage only)
     const heroImagePreload = document.createElement('link');
     heroImagePreload.rel = 'preload';
     heroImagePreload.href = '/hero-image-placeholder.svg';
@@ -33,10 +35,6 @@ const ResourceHints: React.FC = () => {
       prefetchLink.href = target;
       document.head.appendChild(prefetchLink);
     });
-
-    return () => {
-      // Cleanup if needed
-    };
   }, []);
 
   return null;

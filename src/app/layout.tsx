@@ -164,11 +164,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/chordMiniLogo.webp" sizes="180x180" />
         <link rel="manifest" href="/site.webmanifest" />
 
-        {/* Preload critical resources to reduce request chains */}
-        <link rel="preload" href="/demo1.webp" as="image" type="image/webp" />
-        <link rel="preload" href="/demo1_dark.webp" as="image" type="image/webp" />
-        <link rel="preload" href="/chordMiniLogo.webp" as="image" type="image/webp" />
-        <link rel="preload" href="/chordMiniLogo-dark.webp" as="image" type="image/webp" />
+        {/* Removed global image preloads: let Next/Image with priority handle above-the-fold assets on the pages that use them to avoid preload-not-used warnings. */}
 
         {/* Resource hints for performance */}
         <link rel="preconnect" href="https://i.ytimg.com" />

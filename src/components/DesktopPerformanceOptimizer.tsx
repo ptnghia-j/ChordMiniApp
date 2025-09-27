@@ -14,29 +14,15 @@ export default function DesktopPerformanceOptimizer() {
   useEffect(() => {
     // 1. Optimize CSS loading to prevent render blocking
     const optimizeCSSLoading = () => {
-      // Load non-critical CSS asynchronously
-      const loadCSS = (href: string) => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        link.media = 'print';
-        link.onload = () => {
-          link.media = 'all';
-        };
-        document.head.appendChild(link);
-      };
+      // Loading non-critical CSS manually is disabled; Next.js handles CSS injection from imports.
 
-      // Defer non-critical stylesheets
-      const criticalCSS = [
-        '/_next/static/css/app/layout.css',
-        '/_next/static/css/app/globals.css'
-      ];
+      // Defer non-critical stylesheets (disabled)
+      // Do NOT manually reference Next.js internal CSS chunk paths.
+      // Next injects CSS based on imports; hardcoding these causes 404s and Safari parse errors.
+      const criticalCSS: string[] = [];
 
-      criticalCSS.forEach(css => {
-        const existingLink = document.querySelector(`link[href="${css}"]`);
-        if (!existingLink) {
-          loadCSS(css);
-        }
+      criticalCSS.forEach(() => {
+        /* no-op */
       });
     };
 
@@ -63,34 +49,8 @@ export default function DesktopPerformanceOptimizer() {
 
     // 3. Implement resource bundling optimization
     const optimizeResourceBundling = () => {
-      // Only preload resources that are actually needed on the current page
-      const isHomePage = typeof window !== 'undefined' && window.location.pathname === '/';
-
-      // Only preload hero images that are immediately visible on homepage
-      const criticalResources = [];
-
-      if (isHomePage) {
-        criticalResources.push(
-          { href: '/hero-image-placeholder.svg', as: 'image', type: 'image/svg+xml' },
-          { href: '/hero-image-placeholder-dark.svg', as: 'image', type: 'image/svg+xml' }
-        );
-        // Demo images are lazy-loaded and don't need preloading
-      }
-
-      criticalResources.forEach(resource => {
-        const existingPreload = document.querySelector(`link[href="${resource.href}"][rel="preload"]`);
-        if (!existingPreload) {
-          const link = document.createElement('link');
-          link.rel = 'preload';
-          link.href = resource.href;
-          link.as = resource.as;
-          if (resource.type) {
-            link.type = resource.type;
-          }
-          link.fetchPriority = 'high';
-          document.head.appendChild(link);
-        }
-      });
+      // Intentionally do nothing: rely on Next.js automatic image priority and route-level code splitting.
+      // Avoid manual <link rel="preload"> to prevent preload-not-used warnings.
     };
 
     // 4. Optimize critical rendering path
