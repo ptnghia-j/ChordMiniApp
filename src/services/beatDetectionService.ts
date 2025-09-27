@@ -669,9 +669,11 @@ export async function detectBeatsFromFirebaseUrl(
     const encodedUrl = encodeURIComponent(firebaseUrl);
     const proxyUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
 
+    console.log(`[36m[detectBeatsFromFirebaseUrl][0m videoId=${videoId || 'none'} -> proxyUrl=${proxyUrl.substring(0, 140)}...`);
 
     const response = await fetch(proxyUrl);
     if (!response.ok) {
+      console.error(`[31m[detectBeatsFromFirebaseUrl][0m proxy fetch failed: status=${response.status} ${response.statusText}`);
       throw new Error(`Failed to fetch audio from Firebase URL: ${response.status} ${response.statusText}`);
     }
 

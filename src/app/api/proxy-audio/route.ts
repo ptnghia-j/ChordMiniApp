@@ -174,7 +174,8 @@ export async function GET(request: NextRequest) {
         'storage.googleapis.com',
         'firebasestorage.googleapis.com',
         'lukavukanovic.xyz', // yt-mp3-go fallback service
-        'ytdown.io' // temporary alternative extractor for testing
+        'ytdown.io', // ytdown primary domain
+        'ytcontent.net' // ytdown CDN domain
       ];
 
       // Allow localhost URLs in development environment
@@ -448,7 +449,8 @@ export async function HEAD(request: NextRequest) {
         'storage.googleapis.com',
         'firebasestorage.googleapis.com',
         'lukavukanovic.xyz',
-        'ytdown.io'
+        'ytdown.io',
+        'ytcontent.net'
       ];
       const isDevelopment = process.env.NODE_ENV === 'development';
       if (isDevelopment) allowedDomains.push('localhost','127.0.0.1');

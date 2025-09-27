@@ -54,13 +54,16 @@ export function detectEnvironment(): EnvironmentConfig {
 
   // Check for manual strategy override
   const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY;
+  // Allow forcing ytdown.io in dev without changing manual override
+  const devForceYtdown = process.env.NEXT_PUBLIC_DEV_USE_YTDOWN_IO === 'true';
+
   if (manualStrategy && manualStrategy !== 'auto' &&
       ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
     strategy = manualStrategy as AudioProcessingStrategy;
     console.log(`🔧 Using manual audio strategy override: ${strategy}`);
   } else if (isLocalhost) {
-    // Use local yt-dlp for localhost development
-    strategy = 'ytdlp';
+    // For local development, allow switching to ytdown.io for debugging upload/403 issues
+    strategy = devForceYtdown ? 'ytdown-io' : 'ytdlp';
   } else {
     // Use ytdown.io for production (more reliable than downr.org, no 403 errors)
     strategy = 'ytdown-io';

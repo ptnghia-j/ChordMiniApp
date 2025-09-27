@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
         'storage.googleapis.com',
         'firebasestorage.googleapis.com',
         'lukavukanovic.xyz', // yt-mp3-go fallback service
-        'ytdown.io' // temporary alternative extractor for testing
+        'ytdown.io', // ytdown primary domain
+        'ytcontent.net' // ytdown CDN domain
       ];
       
       if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
