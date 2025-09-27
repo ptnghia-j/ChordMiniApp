@@ -48,11 +48,17 @@ export function detectEnvironment(): EnvironmentConfig {
     baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://chordmini.com';
   }
 
-  // Determine strategy based on URL detection and service availability
-  // Priority: ytdown-io (production) > ytdlp (localhost) > yt-mp3-go (fallback)
+  // Determine strategy based on manual override or URL detection
+  // Priority: manual override > ytdown-io (production) > ytdlp (localhost) > yt-mp3-go (fallback)
   let strategy: AudioProcessingStrategy;
 
-  if (isLocalhost) {
+  // Check for manual strategy override
+  const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY;
+  if (manualStrategy && manualStrategy !== 'auto' &&
+      ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
+    strategy = manualStrategy as AudioProcessingStrategy;
+    console.log(`🔧 Using manual audio strategy override: ${strategy}`);
+  } else if (isLocalhost) {
     // Use local yt-dlp for localhost development
     strategy = 'ytdlp';
   } else {

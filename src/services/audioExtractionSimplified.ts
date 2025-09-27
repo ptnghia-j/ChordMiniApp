@@ -594,33 +594,62 @@ export class AudioExtractionServiceSimplified {
       console.log(`🔗 [ytdown.io] Using direct download URL (Vercel-optimized)`);
       console.log(`   Direct URL: ${directUrl}`);
 
-      // Step 5: Upload directly from URL to Firebase Storage (no serverless download)
+      // Step 5: Start parallel pipeline - Firebase upload + immediate processing capability
       let finalAudioUrl = '';
       let isStorageUrl = false;
 
       try {
-        console.log(`☁️ Uploading audio to Firebase Storage from direct URL...`);
+        console.log(`🚀 Starting parallel pipeline: Firebase upload + direct URL processing`);
 
-        const { uploadAudioFromUrlWithRetry } = await import('./streamingFirebaseUpload');
-        const uploadResult = await uploadAudioFromUrlWithRetry(
-          directUrl,
-          {
+        // Import parallel pipeline service
+        const { startParallelPipeline, canUseDirectUrlWithBackend } = await import('./parallelPipelineService');
+
+        // Check if direct URL can be used with backend
+        if (canUseDirectUrlWithBackend(directUrl)) {
+          console.log(`✅ Direct URL compatible with Google Cloud Run backend`);
+
+          // Start parallel pipeline (Firebase upload in background)
+          const pipelineResult = await startParallelPipeline({
             videoId,
             title,
-            contentType: 'audio/mp4' // M4A format from ytdown.io
-          }
-        );
+            directUrl,
+            contentType: 'audio/mp4'
+          });
 
-        if (uploadResult.success && uploadResult.audioUrl) {
-          finalAudioUrl = uploadResult.audioUrl;
-          isStorageUrl = true;
-          console.log(`✅ Firebase Storage upload successful: ${finalAudioUrl}`);
-          console.log(`   File size: ${uploadResult.fileSize ? this.formatFileSize(uploadResult.fileSize) : 'Unknown'}`);
+          if (pipelineResult.success) {
+            // Use direct URL immediately for processing
+            finalAudioUrl = directUrl;
+            isStorageUrl = false; // Direct URL, not Firebase Storage
+            console.log(`🚀 Parallel pipeline started - processing can begin immediately`);
+            console.log(`   Processing URL: ${finalAudioUrl}`);
+            console.log(`   Firebase upload: Running in background`);
+          } else {
+            throw new Error('Failed to start parallel pipeline');
+          }
         } else {
-          throw new Error(uploadResult.error || 'Upload failed');
+          // Fallback to sequential upload if direct URL not compatible
+          console.log(`⚠️ Direct URL not compatible with backend, using sequential upload`);
+
+          const { uploadAudioFromUrlWithRetry } = await import('./streamingFirebaseUpload');
+          const uploadResult = await uploadAudioFromUrlWithRetry(
+            directUrl,
+            {
+              videoId,
+              title,
+              contentType: 'audio/mp4'
+            }
+          );
+
+          if (uploadResult.success && uploadResult.audioUrl) {
+            finalAudioUrl = uploadResult.audioUrl;
+            isStorageUrl = true;
+            console.log(`✅ Sequential Firebase Storage upload successful: ${finalAudioUrl}`);
+          } else {
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
         }
       } catch (uploadError) {
-        console.warn(`⚠️ Firebase Storage upload failed for ${videoId}:`, uploadError);
+        console.warn(`⚠️ Pipeline optimization failed for ${videoId}:`, uploadError);
         console.log(`   Falling back to direct URL: ${directUrl}`);
         // Continue without permanent storage - use direct URL
         finalAudioUrl = directUrl;
