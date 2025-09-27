@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
     // Validate URL to prevent SSRF attacks
     try {
       const url = new URL(audioUrl);
-      
+
       // Only allow specific domains for security
       const allowedDomains = [
         'quicktube.app',
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
       if (isDevelopment) {
         allowedDomains.push('localhost', '127.0.0.1');
       }
-      
+
       if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
         return NextResponse.json(
           { error: 'URL domain not allowed' },
@@ -395,6 +395,86 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+}
+
+
+// Handle HEAD requests (for size probing via cache during upload window)
+export async function HEAD(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const audioUrl = searchParams.get('url');
+    const videoId = searchParams.get('videoId');
+
+    if (!audioUrl) {
+      return new NextResponse(null, { status: 400 });
+    }
+
+    const isFirebaseUrl = isFirebaseStorageUrl(audioUrl);
+
+    if (videoId && isFirebaseUrl) {
+      try {
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const meta = getCachedAudioMeta(videoId);
+        const cachedFile = getCachedAudioFile(videoId);
+        if (cachedFile) {
+          // Respond with headers only
+          return new NextResponse(null, {
+            status: 200,
+            headers: {
+              'Content-Type': cachedFile.type || 'audio/mpeg',
+              'Content-Length': String(cachedFile.size),
+              'Cache-Control': 'public, max-age=3600',
+              'Access-Control-Allow-Origin': '*',
+              'X-Cache-Source': 'parallel-pipeline',
+              'X-Cache-Hit': 'true',
+              'X-Cache-Age': String(meta.ageMs ?? 0),
+              'X-Cache-Expires-In': String(meta.expiresInMs ?? 0)
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('HEAD cache check failed:', e);
+      }
+    }
+
+    // If not cached or not Firebase URL, validate domain and proxy HEAD
+    const fetchUrl = audioUrl;
+    try {
+      const url = new URL(audioUrl);
+      const allowedDomains = [
+        'quicktube.app',
+        'dl.quicktube.app',
+        'storage.googleapis.com',
+        'firebasestorage.googleapis.com',
+        'lukavukanovic.xyz',
+        'ytdown.io'
+      ];
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      if (isDevelopment) allowedDomains.push('localhost','127.0.0.1');
+      if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
+        return new NextResponse(null, { status: 403 });
+      }
+    } catch {
+      return new NextResponse(null, { status: 400 });
+    }
+
+    try {
+      const headResp = await fetch(fetchUrl, { method: 'HEAD', headers: { 'User-Agent': 'ChordMini/1.0' }, signal: AbortSignal.timeout(15000) });
+      const len = headResp.headers.get('content-length') || '0';
+      return new NextResponse(null, {
+        status: headResp.status,
+        headers: {
+          'Content-Length': len,
+          'Content-Type': headResp.headers.get('content-type') || 'application/octet-stream',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    } catch {
+      return new NextResponse(null, { status: 502 });
+    }
+  } catch {
+    return new NextResponse(null, { status: 500 });
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * Audio Metadata Service
- * 
+ *
  * Provides accurate audio duration and metadata extraction from audio files
  * using the music-metadata library for reliable MP3/audio file analysis.
  */
@@ -79,6 +79,31 @@ export class AudioMetadataService {
   }
 
   /**
+   * Extract metadata directly from a Blob/File without any network fetch
+   */
+  async extractMetadataFromBlob(blob: Blob): Promise<AudioMetadata | null> {
+    try {
+      const ab = await blob.arrayBuffer();
+      const buffer = Buffer.from(ab);
+      const metadata = await parseBuffer(buffer);
+      const result: AudioMetadata = {
+        duration: metadata.format.duration || 0,
+        format: metadata.format.container,
+        bitrate: metadata.format.bitrate,
+        sampleRate: metadata.format.sampleRate,
+        channels: metadata.format.numberOfChannels,
+        title: metadata.common.title,
+        artist: metadata.common.artist,
+        album: metadata.common.album
+      };
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to extract metadata from Blob:', error);
+      return null;
+    }
+  }
+
+  /**
    * Extract metadata from a partial download (first few MB) for faster processing
    */
   async extractMetadataFromPartialDownload(audioUrl: string, maxBytes: number = 2 * 1024 * 1024): Promise<AudioMetadata | null> {
@@ -138,10 +163,10 @@ export class AudioMetadataService {
    */
   formatDuration(seconds: number): string {
     if (!seconds || seconds <= 0) return '0:00';
-    
+
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    
+
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
@@ -150,13 +175,13 @@ export class AudioMetadataService {
    */
   estimateDurationFromFileSize(fileSizeBytes: number, bitrate: number = 128): number {
     if (!fileSizeBytes || fileSizeBytes <= 0) return 0;
-    
+
     // Estimate duration based on file size and bitrate
     // Formula: duration = (file_size_bytes * 8) / (bitrate_kbps * 1000)
     const estimatedDuration = (fileSizeBytes * 8) / (bitrate * 1000);
-    
+
     console.log(`📊 Estimated duration from file size: ${estimatedDuration}s (${this.formatDuration(estimatedDuration)})`);
-    
+
     return estimatedDuration;
   }
 

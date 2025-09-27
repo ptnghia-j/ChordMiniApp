@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
           // Extract duration from cached file using audio metadata service
           try {
-            const metadata = await audioMetadataService.extractMetadataFromPartialDownload(URL.createObjectURL(cachedFile));
+            const metadata = await audioMetadataService.extractMetadataFromBlob(cachedFile);
             if (metadata && metadata.duration > 0) {
               console.log(`✅ Duration detected from cached file: ${metadata.duration} seconds`);
               return NextResponse.json({
