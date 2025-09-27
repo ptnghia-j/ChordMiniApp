@@ -8,9 +8,10 @@
 /**
  * Get audio duration from a URL using a proxy to avoid CORS issues
  * @param audioUrl The URL of the audio file
+ * @param videoId Optional video ID for cache lookup
  * @returns Promise that resolves to the duration in seconds
  */
-export async function getAudioDurationFromUrl(audioUrl: string): Promise<number> {
+export async function getAudioDurationFromUrl(audioUrl: string, videoId?: string): Promise<number> {
   try {
     // console.log(`🎵 Detecting duration for audio URL: ${audioUrl}`);
 
@@ -20,7 +21,7 @@ export async function getAudioDurationFromUrl(audioUrl: string): Promise<number>
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ audioUrl }),
+      body: JSON.stringify({ audioUrl, videoId }),
     });
 
     if (!response.ok) {

@@ -116,12 +116,43 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const audioUrl = searchParams.get('url');
+    const videoId = searchParams.get('videoId'); // Optional videoId for cache lookup
 
     if (!audioUrl) {
       return NextResponse.json(
         { error: 'Missing url parameter' },
         { status: 400 }
       );
+    }
+
+    // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
+    if (videoId && isFirebaseStorageUrl(audioUrl)) {
+      try {
+        const { getCachedAudioFile } = await import('@/services/parallelPipelineService');
+        const cachedFile = getCachedAudioFile(videoId);
+
+        if (cachedFile) {
+          console.log(`🚀 Using cached complete audio file for proxy (${(cachedFile.size / 1024 / 1024).toFixed(2)}MB)`);
+
+          // Convert blob to ArrayBuffer
+          const audioBuffer = await cachedFile.arrayBuffer();
+
+          return new NextResponse(audioBuffer, {
+            status: 200,
+            headers: {
+              'Content-Type': cachedFile.type || 'audio/mpeg',
+              'Content-Length': audioBuffer.byteLength.toString(),
+              'Cache-Control': 'public, max-age=3600',
+              'Access-Control-Allow-Origin': '*',
+              'X-Cache-Source': 'parallel-pipeline' // Debug header
+            },
+          });
+        } else {
+          console.log(`⚠️ No cached file found for ${videoId}, proceeding with Firebase URL fetch`);
+        }
+      } catch (cacheError) {
+        console.warn(`⚠️ Cache lookup failed for ${videoId}:`, cacheError);
+      }
     }
 
     // Validate URL to prevent SSRF attacks

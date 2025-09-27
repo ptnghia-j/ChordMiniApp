@@ -66,7 +66,7 @@ export async function processAudioWithBackend(
     if (!duration) {
       try {
         console.log(`⏱️ Getting audio duration for timeout calculation...`);
-        duration = await getAudioDurationFromUrl(audioUrl);
+        duration = await getAudioDurationFromUrl(audioUrl, videoId);
         console.log(`⏱️ Audio duration: ${duration} seconds`);
       } catch (error) {
         console.warn(`⚠️ Failed to get audio duration, using default: ${error}`);

@@ -29,11 +29,16 @@ function toBeatInfo(beatResults: BeatDetectionBackendResponse): BeatInfo[] {
   return beats;
 }
 
-async function fetchFileFromUrl(url: string): Promise<File> {
+async function fetchFileFromUrl(url: string, videoId?: string): Promise<File> {
   const encoded = url.includes('quicktube.app/dl/')
     ? encodeURIComponent(url).replace(/%5B/g, '[').replace(/%5D/g, ']')
     : encodeURIComponent(url);
-  const proxyUrl = `/api/proxy-audio?url=${encoded}`;
+
+  // Add videoId parameter if available for cache lookup
+  const proxyUrl = videoId
+    ? `/api/proxy-audio?url=${encoded}&videoId=${videoId}`
+    : `/api/proxy-audio?url=${encoded}`;
+
   const response = await fetch(proxyUrl);
   if (!response.ok) {
     if (response.status >= 500) throw new Error(`Backend service temporarily unavailable (${response.status}). Please try again later or use file upload.`);

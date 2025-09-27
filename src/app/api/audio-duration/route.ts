@@ -15,7 +15,7 @@ export const maxDuration = 60; // 1 minute for duration detection
 
 export async function POST(request: NextRequest) {
   try {
-    const { audioUrl } = await request.json();
+    const { audioUrl, videoId } = await request.json();
 
     if (!audioUrl) {
       return NextResponse.json(
@@ -25,6 +25,39 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🎵 Detecting duration for: ${audioUrl}`);
+
+    // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
+    if (videoId && isFirebaseStorageUrl(audioUrl)) {
+      try {
+        const { getCachedAudioFile } = await import('@/services/parallelPipelineService');
+        const cachedFile = getCachedAudioFile(videoId);
+
+        if (cachedFile) {
+          console.log(`🚀 Using cached complete audio file for duration detection (${(cachedFile.size / 1024 / 1024).toFixed(2)}MB)`);
+
+          // Extract duration from cached file using audio metadata service
+          try {
+            const metadata = await audioMetadataService.extractMetadataFromPartialDownload(URL.createObjectURL(cachedFile));
+            if (metadata && metadata.duration > 0) {
+              console.log(`✅ Duration detected from cached file: ${metadata.duration} seconds`);
+              return NextResponse.json({
+                success: true,
+                duration: metadata.duration,
+                method: 'cached_file',
+                format: metadata.format,
+                bitrate: metadata.bitrate
+              });
+            }
+          } catch (metadataError) {
+            console.warn(`⚠️ Failed to extract metadata from cached file:`, metadataError);
+          }
+        } else {
+          console.log(`⚠️ No cached file found for ${videoId}, proceeding with URL-based detection`);
+        }
+      } catch (cacheError) {
+        console.warn(`⚠️ Cache lookup failed for ${videoId}:`, cacheError);
+      }
+    }
 
     // Validate URL to prevent SSRF attacks
     try {
