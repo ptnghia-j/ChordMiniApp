@@ -124,7 +124,7 @@ export class AudioProcessingService {
       }
 
       // Perform analysis with rate limiting
-      const analysisResults = await analyzeAudioWithRateLimit(audioUrl, beatDetector as 'auto' | 'madmom' | 'beat-transformer', chordDetector as ChordDetectorType);
+      const analysisResults = await analyzeAudioWithRateLimit(audioUrl, beatDetector as 'auto' | 'madmom' | 'beat-transformer', chordDetector as ChordDetectorType, videoId);
 
       // Cache the results (note: enharmonic correction data will be added later via updateTranscriptionWithKey)
       const transcriptionData = {

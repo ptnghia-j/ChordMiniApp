@@ -14,16 +14,18 @@ export type { AnalysisResult, ChordDetectorType, ChordDetectionResult } from '@/
 export async function analyzeAudioWithRateLimit(
   audioInput: File | AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm',
+  videoId?: string
 ): Promise<AnalysisResult> {
-  return analyzeAudioWithRateLimitService(audioInput, beatDetector, chordDetector);
+  return analyzeAudioWithRateLimitService(audioInput, beatDetector, chordDetector, videoId);
 }
 
 export async function analyzeAudio(
   audioInput: AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm',
+  videoId?: string
 ): Promise<AnalysisResult> {
-  return analyzeAudioService(audioInput, beatDetector, chordDetector);
+  return analyzeAudioService(audioInput, beatDetector, chordDetector, videoId);
 }
 

@@ -30,6 +30,27 @@ function toBeatInfo(beatResults: BeatDetectionBackendResponse): BeatInfo[] {
 }
 
 async function fetchFileFromUrl(url: string, videoId?: string): Promise<File> {
+  // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
+  if (videoId) {
+    try {
+      const { getCachedAudioFile } = await import('./parallelPipelineService');
+      const cachedFile = getCachedAudioFile(videoId);
+
+      if (cachedFile) {
+        console.log(`🚀 Using cached complete audio file for analysis (${(cachedFile.size / 1024 / 1024).toFixed(2)}MB)`);
+
+        // Convert Blob to File with proper name and type
+        const fileName = `${videoId}.${cachedFile.type.includes('mp4') ? 'm4a' : 'mp3'}`;
+        return new File([cachedFile], fileName, { type: cachedFile.type || 'audio/mpeg' });
+      } else {
+        console.log(`⚠️ No cached file found for ${videoId}, proceeding with URL fetch`);
+      }
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache lookup failed for ${videoId}:`, cacheError);
+    }
+  }
+
+  // Fallback to URL-based fetching
   const encoded = url.includes('quicktube.app/dl/')
     ? encodeURIComponent(url).replace(/%5B/g, '[').replace(/%5D/g, ']')
     : encodeURIComponent(url);
@@ -119,7 +140,8 @@ async function handleBlobPath(
 export async function analyzeAudioWithRateLimit(
   audioInput: File | AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm',
+  videoId?: string
 ): Promise<AnalysisResult> {
   const { isLocalBackend } = await import('@/utils/backendConfig');
   const isLocalhost = isLocalBackend();
@@ -136,7 +158,7 @@ export async function analyzeAudioWithRateLimit(
       return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
     }
   } else if (typeof audioInput === 'string') {
-    audioFile = await fetchFileFromUrl(audioInput);
+    audioFile = await fetchFileFromUrl(audioInput, videoId);
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
       return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
@@ -222,7 +244,8 @@ export async function analyzeAudioWithRateLimit(
 export async function analyzeAudio(
   audioInput: AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-  chordDetector: ChordDetectorType = 'chord-cnn-lstm'
+  chordDetector: ChordDetectorType = 'chord-cnn-lstm',
+  videoId?: string
 ): Promise<AnalysisResult> {
   const { isLocalBackend } = await import('@/utils/backendConfig');
   const isLocalhost = isLocalBackend();
@@ -231,7 +254,7 @@ export async function analyzeAudio(
   let audioDuration: number | undefined;
 
   if (typeof audioInput === 'string') {
-    audioFile = await fetchFileFromUrl(audioInput);
+    audioFile = await fetchFileFromUrl(audioInput, videoId);
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
   } else if (audioInput instanceof AudioBuffer) {
     if (!audioInput || audioInput.length === 0) throw new Error('AudioBuffer is empty or invalid');

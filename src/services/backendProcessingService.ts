@@ -90,9 +90,14 @@ export async function processAudioWithBackend(
         ? `${backendUrl}/api/detect-beats`
         : `${backendUrl}/api/recognize-chords`;
 
+      // Convert Blob to File with proper metadata for backend upload
+      const audioFile = new File([cachedAudioFile], `${videoId}.m4a`, {
+        type: cachedAudioFile.type || 'audio/mp4'
+      });
+
       // Prepare form data with complete file
       const formData = new FormData();
-      formData.append('audio_file', cachedAudioFile, `${videoId}.m4a`);
+      formData.append('audio_file', audioFile);
       formData.append('detector', detector);
 
       console.log(`📡 Sending complete file to: ${endpoint} (timeout: ${timeoutMs}ms)`);
