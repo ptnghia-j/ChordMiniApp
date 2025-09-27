@@ -8,7 +8,7 @@ import { analyzeSongSegmentation } from '@/services/songSegmentationService';
  * Analyzes song structure and returns segmentation data with timestamps
  */
 
-export const maxDuration = 180; // 3 minutes for segmentation analysis
+export const maxDuration = 240; // 4 minutes for segmentation analysis
 
 export async function POST(request: NextRequest) {
   try {

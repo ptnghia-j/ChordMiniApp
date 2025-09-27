@@ -144,13 +144,20 @@ export class AudioConversionService {
       // Read output file
       const outputData = await this.ffmpeg.readFile(outputFileName);
       const outputSize = outputData.length;
-      
-      // Create output File object
-      const outputBlob = new Blob([outputData], { 
-        type: outputExt === 'mp3' ? 'audio/mpeg' : 'audio/wav' 
+
+      // Create output File object (ensure BlobPart is a Uint8Array with ArrayBuffer backing)
+      // Some @ffmpeg/ffmpeg typings use Uint8Array<ArrayBufferLike>, which TS refuses for BlobPart.
+      // Copy into a fresh Uint8Array so its buffer is a standard ArrayBuffer.
+      const safeBytes = outputData instanceof Uint8Array ? new Uint8Array(outputData) : new Uint8Array(outputSize);
+      if (!(outputData instanceof Uint8Array)) {
+        // @ts-expect-error - outputData may be FileData; copy byte-by-byte if needed
+        for (let i = 0; i < outputSize; i++) safeBytes[i] = outputData[i];
+      }
+      const outputBlob = new Blob([safeBytes], {
+        type: outputExt === 'mp3' ? 'audio/mpeg' : 'audio/wav'
       });
-      const outputFile = new File([outputBlob], outputFileName, { 
-        type: outputBlob.type 
+      const outputFile = new File([outputBlob], outputFileName, {
+        type: outputBlob.type
       });
       
       // Cleanup FFmpeg filesystem

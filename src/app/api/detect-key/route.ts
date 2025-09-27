@@ -4,7 +4,7 @@ import { firestoreDb } from '@/services/firebaseService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 
-export const maxDuration = 120; // 2 minutes for key detection processing
+export const maxDuration = 240; // 4 minutes for key detection processing
 
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;
@@ -13,7 +13,7 @@ const apiKey = process.env.GEMINI_API_KEY;
 const ai = new GoogleGenAI({
   apiKey: apiKey || '',
   httpOptions: {
-    timeout: 120000 // 120 seconds timeout (maximum allowed)
+    timeout: maxDuration * 1000 // Convert minutes to milliseconds
   }
 });
 

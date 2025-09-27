@@ -38,22 +38,35 @@ export class MetronomeService {
    */
   private async loadExternalAudioFile(url: string): Promise<AudioBuffer | null> {
     if (!this.audioContext) {
-      console.error('AudioContext not available for loading external audio file:', url);
+      console.warn('AudioContext not available for loading external audio file:', url);
       return null;
     }
 
+    const tryFetch = async (target: string) => {
+      const res = await fetch(target, { cache: 'force-cache' });
+      return res.ok ? res : null;
+    };
+
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
+      // First attempt: as-is (absolute path from public/)
+      let response = await tryFetch(url);
+
+      // Retry with explicit origin if first attempt fails (defensive for edge cases)
+      if (!response && typeof window !== 'undefined') {
+        const absolute = new URL(url, window.location.origin).toString();
+        response = await tryFetch(absolute);
+      }
+
+      if (!response) {
+        console.warn(`Metronome sample not found (404): ${url}`);
+        return null; // Let caller fall back to procedural generation
       }
 
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-
       return audioBuffer;
     } catch (error) {
-      console.error(`Error loading external audio file ${url}:`, error);
+      console.warn(`Error loading external audio file ${url}:`, error);
       return null;
     }
   }
