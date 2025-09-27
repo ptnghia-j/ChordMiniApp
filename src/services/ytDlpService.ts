@@ -1,17 +1,15 @@
 /**
  * yt-dlp Service for Development Environment
  * 
- * This service provides yt-dlp integration for local development, using the same
- * precise filename generation algorithm we perfected for QuickTube compatibility.
- * 
+ * This service provides yt-dlp integration for local development.
+ *
  * Features:
- * - Uses our QuickTube-compatible filename generation
  * - Provides reliable local development experience
  * - Maintains backward compatibility with existing workflows
- * - Supports the same video formats and quality as QuickTube
+ * - Supports high-quality audio extraction
  */
 
-import { QuickTubeFilenameGenerator } from './quickTubeFilenameGenerator';
+// Removed QuickTubeFilenameGenerator import - service has been removed
 
 export interface YtDlpDownloadResult {
   success: boolean;
@@ -38,11 +36,9 @@ export interface YtDlpExtractResult {
 }
 
 class YtDlpService {
-  private filenameGenerator: QuickTubeFilenameGenerator;
   private readonly baseUrl: string;
 
   constructor() {
-    this.filenameGenerator = new QuickTubeFilenameGenerator();
     this.baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   }
 
@@ -103,9 +99,10 @@ class YtDlpService {
         throw new Error('Could not extract video ID from URL');
       }
 
-      // Generate QuickTube-compatible filename
-      const expectedFilename = this.filenameGenerator.generateFilename(videoInfo.title, extractedVideoId)[0].filename;
-      
+      // Generate simple filename for yt-dlp
+      const sanitizedTitle = videoInfo.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+      const expectedFilename = `${sanitizedTitle}-[${extractedVideoId}].mp3`;
+
       console.log(`🔧 Generated expected filename: ${expectedFilename}`);
 
       // Download audio with specific filename

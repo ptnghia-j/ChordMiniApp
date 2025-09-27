@@ -2,10 +2,11 @@
  * Audio Extraction Service - Environment-Aware Integration
  *
  * This service provides environment-aware audio extraction:
- * 1. Uses yt-dlp for localhost/development (more reliable, no API limits)
- * 2. Uses QuickTube for Vercel/production (serverless compatible)
- * 3. Video ID-based caching and storage
- * 4. Leverages existing search results for metadata
+ * 1. Uses ytdown.io for production (reliable, works from datacenter IPs)
+ * 2. Uses yt-dlp for localhost/development (more reliable, no API limits)
+ * 3. Uses yt-mp3-go as fallback (non-functional but preserved)
+ * 4. Video ID-based caching and storage
+ * 5. Leverages existing search results for metadata
  */
 
 
@@ -16,6 +17,7 @@ import { firebaseStorageSimplified, SimplifiedAudioData } from './firebaseStorag
 import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from './ytDlpService';
 import { asyncJobService } from './asyncJobService';
+import { YtdownIoCompatService } from './ytdownIoCompatService';
 
 export interface AudioExtractionResult {
   success: boolean;
@@ -62,8 +64,10 @@ export class AudioExtractionServiceSimplified {
 
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
-      case 'downr-org':
-        return await this.extractAudioWithDownrOrg(videoMetadata, forceRedownload);
+      case 'ytdown-io':
+        return await this.extractAudioWithYtdownIo(videoMetadata, forceRedownload);
+
+
 
       case 'ytdlp':
         if (env.isDevelopment) {
@@ -84,9 +88,9 @@ export class AudioExtractionServiceSimplified {
       //   return await this.extractAudioWithQuickTube(videoMetadata, forceRedownload);
 
       default:
-        // Fallback to downr.org for unknown strategies
-        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to downr.org`);
-        return await this.extractAudioWithDownrOrg(videoMetadata, forceRedownload);
+        // Fallback to ytdown.io for unknown strategies
+        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to ytdown.io`);
+        return await this.extractAudioWithYtdownIo(videoMetadata, forceRedownload);
     }
   }
 
@@ -485,10 +489,19 @@ export class AudioExtractionServiceSimplified {
   }
   */
 
+
+
+
+
+
+
+
+
   /**
-   * Extract audio using downr.org service (production-ready method)
+   * Extract audio using ytdown.io service (production-ready method)
+   * This replaces downr.org with a more reliable service that works from datacenter IPs
    */
-  private async extractAudioWithDownrOrg(
+  private async extractAudioWithYtdownIo(
     videoMetadata: YouTubeVideoMetadata,
     forceRedownload: boolean = false
   ): Promise<AudioExtractionResult> {
@@ -558,94 +571,30 @@ export class AudioExtractionServiceSimplified {
         }
       }
 
-      // Step 3: Extract audio using downr.org service
+      // Step 3: Extract audio using ytdown.io service
       const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      console.log(`🚀 [downr.org] Starting audio extraction for: ${videoUrl}`);
+      console.log(`🚀 [ytdown.io] Starting audio extraction for: ${videoUrl}`);
       console.log(`📹 Video: "${title}" (${videoId})`);
 
-      const extractResult = await this.callDownrOrgAPI(videoUrl);
-      console.log(`✅ [downr.org] Audio extraction successful: ${extractResult.formats.length} formats available`);
+      const ytdownCompatService = new YtdownIoCompatService();
+      const extractResult = await ytdownCompatService.extractAudio(videoUrl);
 
-      // Step 4: Select best audio format (prioritize Opus for timing accuracy)
-      const audioFormats = extractResult.formats.filter(f => f.type === 'audio');
-      if (audioFormats.length === 0) {
-        throw new Error('No audio formats available from downr.org');
+      if (!extractResult.success) {
+        throw new Error(extractResult.error || 'ytdown.io extraction failed');
       }
 
-      const selectedFormat = this.selectBestAudioFormat(audioFormats);
-      console.log(`🎵 Selected format: ${selectedFormat.ext} (${selectedFormat.bitrate || 'unknown'} bitrate)`);
+      console.log(`✅ [ytdown.io] Audio extraction successful: ${extractResult.allFormats?.length || 0} formats available`);
 
-      // Step 5: Download audio file using proxy services for Google Video URLs
-      let audioBuffer: ArrayBuffer;
-
-      // Import proxy services
-      const { searchApiService } = await import('./searchApiAudioService');
-      const { scrapingBeeService } = await import('./scrapingBeeAudioService');
-
-      // Use proxy services for Google Video URLs (bypasses datacenter IP blocking)
-      if (searchApiService.isGoogleVideoUrl(selectedFormat.url)) {
-        console.log(`🔍 Trying proxy services for Google Video URL download`);
-
-        // Try SearchAPI.io first (doesn't block Google Video domains)
-        if (searchApiService.isConfigured()) {
-          console.log(`🔍 Using SearchAPI.io for Google Video URL download`);
-          const searchApiResult = await searchApiService.downloadAudio(selectedFormat.url);
-
-          if (searchApiResult.success && searchApiResult.audioBuffer) {
-            audioBuffer = searchApiResult.audioBuffer;
-            console.log(`✅ SearchAPI.io download successful`);
-          } else {
-            console.error(`❌ SearchAPI.io failed: ${searchApiResult.error}`);
-
-            // Fallback to ScrapingBee
-            console.log(`🐝 Trying ScrapingBee as fallback`);
-            const scrapingBeeResult = await scrapingBeeService.downloadAudio(selectedFormat.url);
-
-            if (scrapingBeeResult.success && scrapingBeeResult.audioBuffer) {
-              audioBuffer = scrapingBeeResult.audioBuffer;
-              console.log(`✅ ScrapingBee fallback successful`);
-            } else {
-              console.error(`❌ ScrapingBee also failed: ${scrapingBeeResult.error}`);
-
-              // Final fallback to original method
-              try {
-                audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
-                console.log(`✅ Original method fallback succeeded`);
-              } catch (fallbackError) {
-                throw new Error(`All proxy methods failed. SearchAPI: ${searchApiResult.error}. ScrapingBee: ${scrapingBeeResult.error}. Original: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
-              }
-            }
-          }
-        } else {
-          // SearchAPI.io not configured, try ScrapingBee
-          console.log(`🐝 SearchAPI.io not configured, using ScrapingBee`);
-          const result = await scrapingBeeService.downloadAudio(selectedFormat.url);
-
-          if (!result.success || !result.audioBuffer) {
-            console.error(`❌ ScrapingBee failed, trying original method`);
-            console.error(`   Error: ${result.error}`);
-
-            // Fallback to original method if ScrapingBee fails
-            try {
-              audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
-              console.log(`✅ Original method fallback succeeded`);
-            } catch (fallbackError) {
-              throw new Error(`Both ScrapingBee and original method failed. ScrapingBee: ${result.error}. Original: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
-            }
-          } else {
-            audioBuffer = result.audioBuffer;
-            console.log(`✅ ScrapingBee download successful`);
-          }
-        }
-      } else {
-        // Use original method for non-Google URLs
-        console.log(`🔄 Using original method for non-Google URL`);
-        audioBuffer = await this.downloadAudioFromUrl(selectedFormat.url);
+      // Step 4: Download audio file (ytdown.io handles the two-step process internally)
+      if (!extractResult.audioUrl) {
+        throw new Error('No audio URL available from ytdown.io');
       }
 
+      console.log(`📥 [ytdown.io] Downloading audio file...`);
+      const audioBuffer = await ytdownCompatService.downloadAudio(extractResult.audioUrl);
       console.log(`📥 Audio download successful: ${(audioBuffer.byteLength / 1024 / 1024).toFixed(2)}MB (${audioBuffer.byteLength} bytes)`);
 
-      // Step 6: Upload to Firebase Storage for permanent access
+      // Step 5: Upload to Firebase Storage for permanent access
       let finalAudioUrl = '';
       let isStorageUrl = false;
       const actualFileSize = audioBuffer.byteLength;
@@ -667,7 +616,7 @@ export class AudioExtractionServiceSimplified {
           {
             videoId,
             title,
-            contentType: this.getContentTypeFromFormat(selectedFormat.ext)
+            contentType: 'audio/mp4' // M4A format from ytdown.io
           }
         );
 
@@ -684,29 +633,27 @@ export class AudioExtractionServiceSimplified {
         finalAudioUrl = ''; // Will be handled below
       }
 
-      // Step 7: Save metadata to cache
-      const audioData = {
+      // Step 6: Save metadata to cache
+      const audioData: SimplifiedAudioData = {
         videoId,
-        audioUrl: finalAudioUrl,
+        audioUrl: finalAudioUrl || extractResult.audioUrl, // Use storage URL or fallback to original
         title,
         duration: this.parseDuration(videoMetadata.duration),
         fileSize: actualFileSize,
-        isStreamUrl: !isStorageUrl,
-        streamExpiresAt: isStorageUrl ? undefined : Date.now() + (24 * 60 * 60 * 1000), // 24 hours from now
-        createdAt: Date.now(),
-
-        // Enhanced metadata for downr.org extractions
-        extractionService: 'downr-org',
+        extractionService: 'ytdown.io',
         extractionTimestamp: Date.now(),
-        videoDuration: videoMetadata.duration
+        videoDuration: videoMetadata.duration,
+        isStreamUrl: !isStorageUrl,
+        streamExpiresAt: isStorageUrl ? undefined : Date.now() + (24 * 60 * 60 * 1000), // 24 hours for ytdown.io URLs
+        createdAt: Date.now() // Add the required createdAt field
       };
 
       await firebaseStorageSimplified.saveAudioMetadata(audioData);
-      console.log(`💾 Cached downr.org extraction result for ${videoId}`);
+      console.log(`💾 Cached ytdown.io extraction result for ${videoId}`);
 
       return {
         success: true,
-        audioUrl: finalAudioUrl,
+        audioUrl: finalAudioUrl || extractResult.audioUrl,
         title,
         duration: this.parseDuration(videoMetadata.duration),
         fromCache: false,
@@ -715,116 +662,16 @@ export class AudioExtractionServiceSimplified {
       };
 
     } catch (error) {
-      console.error(`❌ [downr.org] Audio extraction failed for ${videoId}:`, error);
+      console.error(`❌ [ytdown.io] Audio extraction failed for ${videoId}:`, error);
 
-      // Return the downr.org error for now - focus on fixing the real issue
-      console.error(`❌ downr.org failed, no reliable fallback available`);
       return {
         success: false,
-        error: `downr.org audio extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}. This is likely due to Google Video URL access restrictions from Vercel.`
+        error: `ytdown.io audio extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
   }
 
-  /**
-   * Call downr.org API to extract audio metadata and URLs
-   */
-  private async callDownrOrgAPI(youtubeUrl: string): Promise<{
-    title: string;
-    duration: number;
-    formats: Array<{
-      type: string;
-      ext: string;
-      url: string;
-      bitrate?: number;
-      audioQuality?: string;
-      quality?: string;
-    }>;
-  }> {
-    const https = await import('https');
 
-    return new Promise((resolve, reject) => {
-      const postData = JSON.stringify({
-        url: youtubeUrl,
-        format: 'audio'
-      });
-
-      const options = {
-        hostname: 'downr.org',
-        port: 443,
-        path: '/.netlify/functions/download',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Origin': 'https://downr.org',
-          'Referer': 'https://downr.org/',
-        }
-      };
-      const req = https.request(options, (res) => {
-        let data = '';
-
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-
-        res.on('end', () => {
-          try {
-            if (res.statusCode !== 200) {
-              reject(new Error(`downr.org API failed: ${res.statusCode} ${data}`));
-              return;
-            }
-
-            const result = JSON.parse(data);
-
-            if (!result.medias || !Array.isArray(result.medias)) {
-              reject(new Error('No media found in downr.org response'));
-              return;
-            }
-
-            const transformedResult = {
-              title: result.title,
-              duration: result.duration,
-              formats: result.medias.map((media: {
-                type: string;
-                ext: string;
-                url: string;
-                bitrate?: number;
-                audioQuality?: string;
-                quality?: string;
-              }) => ({
-                type: media.type,
-                ext: media.ext,
-                url: media.url,
-                bitrate: media.bitrate,
-                audioQuality: media.audioQuality,
-                quality: media.quality
-              }))
-            };
-
-            resolve(transformedResult);
-          } catch (error) {
-            reject(new Error(`Failed to parse downr.org response: ${error instanceof Error ? error.message : 'Unknown error'}`));
-          }
-        });
-      });
-
-      req.on('error', (error) => {
-        reject(new Error(`downr.org API request failed: ${error.message}`));
-      });
-
-      req.setTimeout(30000, () => {
-        req.destroy();
-        reject(new Error('downr.org API request timeout'));
-      });
-
-      req.write(postData);
-      req.end();
-    });
-  }
 
   /**
    * Select best audio format with priority: Opus > WebM > MP3 > M4A
@@ -1245,12 +1092,12 @@ export class AudioExtractionServiceSimplified {
         //   break;
 
         default:
-          // Fallback to downr.org for unknown strategies
-          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to downr.org`);
+          // Fallback to ytdown.io for unknown strategies
+          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to ytdown.io`);
           // For direct ID extraction, we need to create minimal metadata
           const minimalMetadata = { id: videoId, title: `Video ${videoId}`, duration: '0:00', thumbnail: '', channelTitle: '' };
-          const downrResult = await this.extractAudioWithDownrOrg(minimalMetadata, false);
-          extractionResult = downrResult;
+          const ytdownResult = await this.extractAudioWithYtdownIo(minimalMetadata, false);
+          extractionResult = ytdownResult;
           break;
       }
 
@@ -1477,9 +1324,7 @@ export class AudioExtractionServiceSimplified {
     const env = detectEnvironment();
 
     switch (env.strategy) {
-      case 'downr-org':
-        // downr.org is always available (no configuration needed)
-        return true;
+
 
       case 'ytdlp':
         return env.isDevelopment ? await ytDlpService.isAvailable() : false;
@@ -1491,7 +1336,7 @@ export class AudioExtractionServiceSimplified {
       //   return await quickTubeServiceSimplified.isAvailable();
 
       default:
-        // Fallback to downr.org (always available)
+        // Fallback to ytdown.io (always available)
         return true;
     }
   }
@@ -1671,6 +1516,9 @@ export class AudioExtractionServiceSimplified {
       };
     }
   }
+
+  // REMOVED: tryProxyServicesForGoogleVideo method
+  // This was part of the removed downr-org extraction pipeline that used SearchAPI and ScrapingBee services
 }
 
 // Export singleton instance

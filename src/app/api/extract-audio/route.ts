@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtraction';
+import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtractionSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**
@@ -9,9 +9,9 @@ import { detectEnvironment } from '@/utils/environmentDetection';
  * - Uses YouTube search metadata directly (no filename guessing)
  * - Video ID-based caching and storage
  * - Environment-aware service selection:
- *   - Vercel Production: yt-mp3-go (better Unicode support)
+ *   - Production: ytdown.io (reliable, works from datacenter IPs)
  *   - Local Development: yt-dlp
- *   - Fallback: QuickTube
+ *   - Fallback: yt-mp3-go (non-functional but preserved)
  * - Leverages existing search results for metadata
  */
 
@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
       // Determine the method based on environment
       const env = detectEnvironment();
       const method = env.strategy === 'ytdlp' ? 'yt-dlp' :
-                    env.strategy === 'downr-org' ? 'downr-org' :
-                    'yt2mp3-magic';
+                    env.strategy === 'ytdown-io' ? 'ytdown-io' :
+                    'yt-mp3-go';
 
       return NextResponse.json({
         success: true,

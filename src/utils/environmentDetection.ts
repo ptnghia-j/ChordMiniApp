@@ -7,7 +7,7 @@
  * - Automatic fallback between strategies for reliability
  */
 
-export type AudioProcessingStrategy = 'downr-org' | 'ytdlp' | 'yt-mp3-go';
+export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go' | 'ytdown-io';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -49,15 +49,15 @@ export function detectEnvironment(): EnvironmentConfig {
   }
 
   // Determine strategy based on URL detection and service availability
-  // Priority: downr-org (production) > ytdlp (localhost) > yt-mp3-go (fallback)
+  // Priority: ytdown-io (production) > ytdlp (localhost) > yt-mp3-go (fallback)
   let strategy: AudioProcessingStrategy;
 
   if (isLocalhost) {
     // Use local yt-dlp for localhost development
     strategy = 'ytdlp';
   } else {
-    // Use downr.org for production (most reliable for remote deployment)
-    strategy = 'downr-org';
+    // Use ytdown.io for production (more reliable than downr.org, no 403 errors)
+    strategy = 'ytdown-io';
   }
   
   return {
@@ -83,18 +83,20 @@ export function shouldUseYtDlp(): boolean {
   return getAudioProcessingStrategy() === 'ytdlp';
 }
 
-/**
- * Check if we should use downr.org integration (preferred for production)
- */
-export function shouldUseDownrOrg(): boolean {
-  return getAudioProcessingStrategy() === 'downr-org';
-}
+
 
 /**
  * Check if we should use yt-mp3-go integration (fallback)
  */
 export function shouldUseYtMp3Go(): boolean {
   return getAudioProcessingStrategy() === 'yt-mp3-go';
+}
+
+/**
+ * Check if we should use ytdown.io integration (preferred for production)
+ */
+export function shouldUseYtdownIo(): boolean {
+  return getAudioProcessingStrategy() === 'ytdown-io';
 }
 
 /**
@@ -106,12 +108,7 @@ export function getAudioProcessingConfig() {
   return {
     strategy: env.strategy,
     endpoints: {
-      downrOrg: {
-        baseUrl: 'https://downr.org',
-        apiPath: '/.netlify/functions/download',
-        timeout: 30000, // 30 seconds
-        formats: ['opus', 'webm', 'mp3', 'm4a']
-      },
+
       ytMp3Go: {
         baseUrl: 'https://yt-mp3-go.onrender.com',
         convertPath: '/convert',

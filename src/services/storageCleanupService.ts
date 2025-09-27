@@ -1,7 +1,7 @@
 /**
  * Storage Cleanup Service for ChordMiniApp
  * 
- * Handles automatic cleanup of expired QuickTube stream URLs, orphaned storage files,
+ * Handles automatic cleanup of expired stream URLs, orphaned storage files,
  * and maintenance of the Firebase Storage and Firestore systems.
  */
 
