@@ -145,6 +145,19 @@ export async function processAudioWithBackend(
       const urlType = audioUrl.includes('firebasestorage.googleapis.com') ? 'firebase' : 'direct';
       console.log(`   URL type: ${urlType}`);
 
+      // If URL is Firebase and we have a videoId, ensure upload completion to avoid 403 during parallel upload
+      if (urlType === 'firebase' && videoId) {
+        try {
+          const { waitForFirebaseUpload } = await import('./parallelPipelineService');
+          // Wait up to 60s for upload completion signal from the parallel pipeline
+          console.log('⏳ Waiting for Firebase upload completion before backend request...');
+          await waitForFirebaseUpload(videoId, 60000);
+          console.log('✅ Firebase upload reported complete for videoId:', videoId);
+        } catch (e) {
+          console.warn('⚠️ Proceeding without upload wait due to error or timeout:', e);
+        }
+      }
+
       // Use the appropriate endpoint based on processing type
       const endpoint = processingType === 'beats'
         ? `${backendUrl}/api/detect-beats-firebase`

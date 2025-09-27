@@ -659,14 +659,15 @@ export async function detectBeatsFromFile(
  */
 export async function detectBeatsFromFirebaseUrl(
   firebaseUrl: string,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+  videoId?: string
 ): Promise<BeatDetectionResult> {
   try {
 
 
     // Step 1: Download the Firebase Storage file using our proxy service
     const encodedUrl = encodeURIComponent(firebaseUrl);
-    const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
+    const proxyUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
 
 
     const response = await fetch(proxyUrl);

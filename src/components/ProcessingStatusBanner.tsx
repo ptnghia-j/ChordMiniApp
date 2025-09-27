@@ -26,13 +26,15 @@ interface ProcessingStatusBannerProps {
   audioUrl?: string; // Add audioUrl for dynamic duration detection
   fromCache?: boolean;
   fromFirestoreCache?: boolean;
+  videoId?: string; // Optional videoId to prefer cached file for duration detection
 }
 
 const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo(({
   audioDuration,
   audioUrl,
   fromCache = false,
-  fromFirestoreCache = false
+  fromFirestoreCache = false,
+  videoId
 }) => {
   const { stage, statusMessage, getFormattedElapsedTime, elapsedTime } = useProcessing();
   const { theme } = useTheme();
@@ -57,7 +59,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     if (shouldDetectDuration) {
       setIsDurationDetecting(true);
 
-      getAudioDurationFromUrl(audioUrl)
+      getAudioDurationFromUrl(audioUrl, videoId)
         .then((duration) => {
           if (isValidDuration(duration)) {
             setDetectedDuration(duration);
@@ -79,7 +81,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       setDetectedDuration(null);
       setIsDurationDetecting(false);
     }
-  }, [stage, audioDuration, audioUrl, detectedDuration, isDurationDetecting]);
+  }, [stage, audioDuration, audioUrl, detectedDuration, isDurationDetecting, videoId]);
 
   // Calculate estimated progress for beat and chord detection
   useEffect(() => {

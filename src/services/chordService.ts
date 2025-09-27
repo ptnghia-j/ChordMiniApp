@@ -142,7 +142,8 @@ export async function recognizeChordsWithRateLimit(
  */
 export async function recognizeChordsFromInput(
   audioInput: File | string,
-  model: ChordDetectorType = 'chord-cnn-lstm'
+  model: ChordDetectorType = 'chord-cnn-lstm',
+  videoId?: string
 ): Promise<ChordDetectionResult[]> {
   if (audioInput instanceof File) {
     return recognizeChordsWithRateLimit(audioInput, model);
@@ -153,7 +154,7 @@ export async function recognizeChordsFromInput(
   const encodedUrl = audioInput.includes('quicktube.app/dl/')
     ? encodeURIComponent(audioInput).replace(/%5B/g, '[').replace(/%5D/g, ']')
     : encodeURIComponent(audioInput);
-  const proxyUrl = `/api/proxy-audio?url=${encodedUrl}`;
+  const proxyUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
 
   const response = await fetch(proxyUrl);
   if (!response.ok) {

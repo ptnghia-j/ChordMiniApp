@@ -25,18 +25,19 @@ interface ProcessingBannersProps {
   // Downloading indicator
   isDownloading: boolean;
   fromCache: boolean;
-  
+
   // Extraction notification
   showExtractionNotification: boolean;
   onDismissExtraction: () => void;
   onRefreshExtraction: () => void;
-  
+
   // Processing status
   analysisResults: AnalysisResult | null;
   audioDuration: number;
   audioUrl?: string;
   fromFirestoreCache?: boolean;
-  
+  videoId?: string; // Optional for cache-aware duration detection
+
   // Error display
   error: string | null;
   suggestion?: string;
@@ -54,6 +55,7 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
   audioDuration,
   audioUrl,
   fromFirestoreCache,
+  videoId,
   error,
   suggestion,
   onTryAnotherVideo,
@@ -81,6 +83,7 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
         audioUrl={audioUrl}
         fromCache={fromCache}
         fromFirestoreCache={fromFirestoreCache}
+        videoId={videoId}
       />
 
       {/* Error message */}

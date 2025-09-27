@@ -180,7 +180,7 @@ export async function analyzeAudioWithRateLimit(
   let beatResults: BeatDetectionBackendResponse;
   try {
     if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
-      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
     } else {
       beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
     }
@@ -273,7 +273,7 @@ export async function analyzeAudio(
   let beatResults: BeatDetectionBackendResponse;
   try {
     if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
-      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector);
+      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
     } else {
       beatResults = await detectBeatsFromFile(audioFile, beatDetector);
     }

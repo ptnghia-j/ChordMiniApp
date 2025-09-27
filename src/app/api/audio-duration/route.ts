@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
         'dl.quicktube.app',
         'storage.googleapis.com',
         'firebasestorage.googleapis.com',
-        'lukavukanovic.xyz' // yt-mp3-go fallback service
+        'lukavukanovic.xyz', // yt-mp3-go fallback service
+        'ytdown.io' // temporary alternative extractor for testing
       ];
       
       if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {

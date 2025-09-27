@@ -1288,6 +1288,7 @@ export default function YouTubeVideoAnalyzePage() {
         audioDuration={duration}
         audioUrl={audioProcessingState.audioUrl || undefined}
         fromFirestoreCache={audioProcessingState.fromFirestoreCache}
+        videoId={videoId}
         error={audioProcessingState.error || null}
         suggestion={audioProcessingState.suggestion || undefined}
         onTryAnotherVideo={handleTryAnotherVideo}
