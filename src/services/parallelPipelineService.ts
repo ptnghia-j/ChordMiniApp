@@ -1,6 +1,6 @@
 /**
  * Parallel Pipeline Service
- * 
+ *
  * Optimizes the audio processing pipeline by running Google Cloud Run
  * computation in parallel with Firebase Storage upload, using ytdown.io
  * direct URLs to eliminate the upload bottleneck.
@@ -104,14 +104,14 @@ async function uploadToFirebaseInBackground(
 ): Promise<void> {
   try {
     console.log(`📤 Background Firebase upload started for ${options.videoId}`);
-    
+
     const { uploadAudioFromUrlWithRetry } = await import('./streamingFirebaseUpload');
     const uploadResult = await uploadAudioFromUrlWithRetry(directUrl, options);
-    
+
     if (uploadResult.success && uploadResult.audioUrl) {
       console.log(`✅ Background Firebase upload completed for ${options.videoId}`);
       console.log(`   Firebase URL: ${uploadResult.audioUrl}`);
-      
+
       // Store the Firebase URL for later retrieval if needed
       backgroundUploadResults.set(options.videoId, {
         success: true,
@@ -219,10 +219,10 @@ export async function waitForFirebaseUpload(
   timeoutMs: number = 60000
 ): Promise<string | null> {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < timeoutMs) {
     const result = backgroundUploadResults.get(videoId);
-    
+
     if (result) {
       if (result.success && result.firebaseUrl) {
         return result.firebaseUrl;
@@ -231,11 +231,11 @@ export async function waitForFirebaseUpload(
         return null;
       }
     }
-    
+
     // Wait 1 second before checking again
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  
+
   console.warn(`Firebase upload timeout for ${videoId} after ${timeoutMs}ms`);
   return null;
 }
@@ -257,6 +257,31 @@ export function getCachedAudioFile(videoId: string): Blob | null {
   }
   return null;
 }
+
+/**
+ * Debug meta for cached audio file
+ */
+export function getCachedAudioMeta(videoId: string): {
+  present: boolean;
+  ageMs?: number;
+  size?: number;
+  timestamp?: number;
+  expiresInMs?: number;
+} {
+  const cached = audioFileCache.get(videoId);
+  if (!cached) return { present: false };
+  const now = Date.now();
+  const ttl = 10 * 60 * 1000;
+  const ageMs = now - cached.timestamp;
+  return {
+    present: true,
+    ageMs,
+    size: cached.blob.size,
+    timestamp: cached.timestamp,
+    expiresInMs: Math.max(0, ttl - ageMs)
+  };
+}
+
 
 /**
  * Clean up old background upload results and audio file cache (call periodically)
@@ -313,7 +338,7 @@ export function canUseDirectUrlWithBackend(url: string): boolean {
  */
 export function getBackendEndpointForDirectUrl(processingType: 'beats' | 'chords'): string {
   const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
-  
+
   // Use the "firebase" endpoints which accept any HTTP URL
   switch (processingType) {
     case 'beats':

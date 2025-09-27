@@ -26,10 +26,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎵 Detecting duration for: ${audioUrl}`);
 
+    const isFirebaseUrl = isFirebaseStorageUrl(audioUrl);
+    console.log(`🔎 audio-duration: videoId=${videoId || 'none'}, isFirebaseUrl=${isFirebaseUrl}`);
+
     // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
-    if (videoId && isFirebaseStorageUrl(audioUrl)) {
+    if (videoId && isFirebaseUrl) {
       try {
-        const { getCachedAudioFile } = await import('@/services/parallelPipelineService');
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const meta = getCachedAudioMeta(videoId);
+        console.log(`🔎 cache-meta:`, meta);
         const cachedFile = getCachedAudioFile(videoId);
 
         if (cachedFile) {

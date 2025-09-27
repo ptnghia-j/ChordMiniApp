@@ -125,10 +125,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const isFirebaseUrl = isFirebaseStorageUrl(audioUrl);
+    console.log(`🔎 proxy-audio: videoId=${videoId || 'none'}, isFirebaseUrl=${isFirebaseUrl}`);
+
     // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
-    if (videoId && isFirebaseStorageUrl(audioUrl)) {
+    if (videoId && isFirebaseUrl) {
       try {
-        const { getCachedAudioFile } = await import('@/services/parallelPipelineService');
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const meta = getCachedAudioMeta(videoId);
+        console.log(`🔎 cache-meta:`, meta);
         const cachedFile = getCachedAudioFile(videoId);
 
         if (cachedFile) {
@@ -144,7 +149,10 @@ export async function GET(request: NextRequest) {
               'Content-Length': audioBuffer.byteLength.toString(),
               'Cache-Control': 'public, max-age=3600',
               'Access-Control-Allow-Origin': '*',
-              'X-Cache-Source': 'parallel-pipeline' // Debug header
+              'X-Cache-Source': 'parallel-pipeline', // Debug header
+              'X-Cache-Hit': 'true',
+              'X-Cache-Age': String(meta.ageMs ?? 0),
+              'X-Cache-Expires-In': String(meta.expiresInMs ?? 0)
             },
           });
         } else {

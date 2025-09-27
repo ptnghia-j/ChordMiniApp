@@ -39,10 +39,10 @@ export async function getAudioDurationFromUrl(audioUrl: string, videoId?: string
 
   } catch (error) {
     console.error('❌ Failed to detect audio duration:', error);
-    
+
     // Fallback: Try to estimate duration from file size (very rough estimate)
     try {
-      const fallbackDuration = await estimateDurationFromFileSize(audioUrl);
+      const fallbackDuration = await estimateDurationFromFileSize(audioUrl, videoId);
       // console.log(`⚠️ Using fallback duration estimation: ${fallbackDuration} seconds`);
       return fallbackDuration;
     } catch (fallbackError) {
@@ -106,7 +106,7 @@ export async function getAudioDurationFromFile(audioFile: File): Promise<number>
  * @param audioUrl The URL of the audio file
  * @returns Promise that resolves to estimated duration in seconds
  */
-async function estimateDurationFromFileSize(audioUrl: string): Promise<number> {
+async function estimateDurationFromFileSize(audioUrl: string, videoId?: string): Promise<number> {
   try {
     // Use HEAD request to get file size without downloading the entire file
     // CRITICAL FIX: For QuickTube URLs, preserve square brackets during URL encoding
@@ -118,9 +118,9 @@ async function estimateDurationFromFileSize(audioUrl: string): Promise<number> {
       // For other URLs, use standard encoding
       encodedUrl = encodeURIComponent(audioUrl);
     }
-    const response = await fetch(`/api/proxy-audio?url=${encodedUrl}`, {
-      method: 'HEAD',
-    });
+    // Include videoId so proxy-audio can use cached file when applicable
+    const headUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
+    const response = await fetch(headUrl, { method: 'HEAD' });
 
     if (!response.ok) {
       throw new Error(`Failed to get file info: ${response.status}`);
@@ -132,7 +132,7 @@ async function estimateDurationFromFileSize(audioUrl: string): Promise<number> {
     }
 
     const fileSizeBytes = parseInt(contentLength, 10);
-    
+
     // Very rough estimation: assume 128kbps MP3 encoding
     // 128 kbps = 16 KB/s, so duration = fileSize / 16000
     const estimatedDuration = fileSizeBytes / 16000;

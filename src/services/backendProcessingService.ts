@@ -78,7 +78,9 @@ export async function processAudioWithBackend(
     const timeoutMs = calculateProcessingTimeout(duration);
 
     // Check if we have a cached complete audio file
-    const { getCachedAudioFile } = await import('./parallelPipelineService');
+    const { getCachedAudioFile, getCachedAudioMeta } = await import('./parallelPipelineService');
+    const meta = getCachedAudioMeta(videoId);
+    console.log('🔎 backend cache-meta:', meta);
     const cachedAudioFile = getCachedAudioFile(videoId);
 
     if (cachedAudioFile) {
