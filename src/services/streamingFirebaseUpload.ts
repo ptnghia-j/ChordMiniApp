@@ -204,3 +204,81 @@ export async function uploadAudioStreamWithRetry(
     error: `Upload failed after ${maxRetries} attempts. Last error: ${lastError}`
   };
 }
+
+/**
+ * Upload audio directly from URL to Firebase Storage (Vercel-optimized)
+ * This avoids downloading large files in serverless functions
+ */
+export async function uploadAudioFromUrlWithRetry(
+  audioUrl: string,
+  options: StreamingUploadOptions,
+  maxRetries: number = 2
+): Promise<StreamingUploadResult> {
+  let lastError: string = '';
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`🔗 URL upload attempt ${attempt}/${maxRetries} for video ${options.videoId}`);
+    console.log(`   Source URL: ${audioUrl}`);
+
+    try {
+      // Fetch the audio file as a stream with timeout protection
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for Vercel
+
+      const response = await fetch(audioUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body available');
+      }
+
+      // Convert the response stream to the format expected by uploadAudioStream
+      const audioStream = response.body;
+
+      console.log(`📤 Streaming upload to Firebase Storage...`);
+      const result = await uploadAudioStream(audioStream, options);
+
+      if (result.success) {
+        if (attempt > 1) {
+          console.log(`✅ URL upload succeeded on attempt ${attempt}`);
+        }
+        return result;
+      } else {
+        lastError = result.error || 'Unknown error';
+        console.warn(`⚠️ URL upload attempt ${attempt} failed: ${lastError}`);
+      }
+
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        lastError = 'Upload timeout: File too large for serverless environment';
+        console.error(`❌ URL upload timeout on attempt ${attempt}`);
+      } else {
+        lastError = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`⚠️ URL upload attempt ${attempt} failed: ${lastError}`);
+      }
+    }
+
+    // Wait before retry (except on last attempt)
+    if (attempt < maxRetries) {
+      const delay = attempt * 2000; // 2s, 4s, etc.
+      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return {
+    success: false,
+    error: `URL upload failed after ${maxRetries} attempts. Last error: ${lastError}`
+  };
+}

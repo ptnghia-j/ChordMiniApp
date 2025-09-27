@@ -36,6 +36,7 @@ export interface DownrCompatExtractionResult {
   selectedFormat?: DownrCompatAudioFormat;
   allFormats?: DownrCompatAudioFormat[];
   audioUrl?: string;
+  directDownloadUrl?: string; // Direct URL for client-side download (Vercel-optimized)
   audioBuffer?: ArrayBuffer;
   error?: string;
   extractionTime: number;
@@ -77,12 +78,23 @@ export class YtdownIoCompatService {
 
       const extractionTime = performance.now() - startTime;
 
+      // Get direct download URL for Vercel optimization
+      let directDownloadUrl: string | undefined;
+      try {
+        directDownloadUrl = await this.getDirectDownloadUrl(bestFormat.url);
+        console.log(`🔗 [YtdownIoCompat] Direct download URL obtained`);
+      } catch (error) {
+        console.warn(`⚠️ [YtdownIoCompat] Could not get direct URL: ${error}`);
+        // Continue without direct URL - fallback to original URL
+      }
+
       console.log(`✅ [YtdownIoCompat] Audio extraction successful`);
       console.log(`   Title: ${result.title}`);
       console.log(`   Duration: ${result.duration}`);
       console.log(`   Selected format: ${bestFormat.ext} - ${bestFormat.bitrate}kbps`);
       console.log(`   Available formats: ${compatFormats.length}`);
       console.log(`   Extraction time: ${extractionTime.toFixed(2)}ms`);
+      console.log(`   Direct URL available: ${directDownloadUrl ? 'Yes' : 'No'}`);
 
       return {
         success: true,
@@ -91,6 +103,7 @@ export class YtdownIoCompatService {
         selectedFormat: bestFormat,
         allFormats: compatFormats,
         audioUrl: bestFormat.url,
+        directDownloadUrl, // Vercel-optimized direct URL
         extractionTime
       };
 
@@ -107,14 +120,14 @@ export class YtdownIoCompatService {
   }
 
   /**
-   * Download audio file from URL (compatible with downr.org API)
-   * Handles ytdown.io's two-step process: status check → actual download
+   * Get direct download URL (Vercel-optimized - no file download in serverless)
+   * Handles ytdown.io's two-step process: status check → return direct URL
    */
-  async downloadAudio(audioUrl: string): Promise<ArrayBuffer> {
+  async getDirectDownloadUrl(audioUrl: string): Promise<string> {
     const startTime = performance.now();
 
     try {
-      console.log(`📥 [YtdownIoCompat] Getting download URL from: ${audioUrl}`);
+      console.log(`🔗 [YtdownIoCompat] Getting direct download URL from: ${audioUrl}`);
 
       // Step 1: Get the actual download URL from ytdown.io status endpoint
       const statusResponse = await fetch(audioUrl, {
@@ -134,18 +147,49 @@ export class YtdownIoCompatService {
         throw new Error(`No download URL found in response: ${JSON.stringify(statusData)}`);
       }
 
-      console.log(`📥 [YtdownIoCompat] Downloading from actual URL: ${statusData.fileUrl}`);
+      const processingTime = performance.now() - startTime;
+      console.log(`✅ [YtdownIoCompat] Direct URL obtained successfully`);
+      console.log(`   Direct download URL: ${statusData.fileUrl}`);
+      console.log(`   Processing time: ${processingTime.toFixed(2)}ms`);
 
-      // Step 2: Download the actual audio file
-      const downloadResponse = await fetch(statusData.fileUrl, {
+      return statusData.fileUrl;
+
+    } catch (error) {
+      console.error('[YtdownIoCompat] Failed to get direct URL:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Download audio file from URL (compatible with downr.org API)
+   * ⚠️ WARNING: This method downloads large files in serverless functions
+   * Use getDirectDownloadUrl() for Vercel deployment to avoid timeouts
+   */
+  async downloadAudio(audioUrl: string): Promise<ArrayBuffer> {
+    const startTime = performance.now();
+
+    try {
+      console.log(`📥 [YtdownIoCompat] Starting audio download from: ${audioUrl}`);
+      console.log(`⚠️  [YtdownIoCompat] WARNING: Downloading large files in serverless may cause timeouts`);
+
+      // Get the direct download URL first
+      const directUrl = await this.getDirectDownloadUrl(audioUrl);
+
+      // Download the actual audio file with timeout protection
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for Vercel
+
+      const downloadResponse = await fetch(directUrl, {
+        signal: controller.signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
           'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
           'Accept-Language': 'en-US,en;q=0.9',
           'Accept-Encoding': 'identity',
-          'Range': 'bytes=0-',
         }
       });
+
+      clearTimeout(timeoutId);
 
       if (!downloadResponse.ok) {
         throw new Error(`Download failed: ${downloadResponse.status} ${downloadResponse.statusText}`);
@@ -157,11 +201,14 @@ export class YtdownIoCompatService {
       console.log(`✅ [YtdownIoCompat] Audio download successful`);
       console.log(`   File size: ${(audioBuffer.byteLength / (1024 * 1024)).toFixed(2)} MB`);
       console.log(`   Download time: ${downloadTime.toFixed(2)}ms`);
-      console.log(`   Actual download URL: ${statusData.fileUrl}`);
 
       return audioBuffer;
 
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('[YtdownIoCompat] Download timeout - file too large for serverless');
+        throw new Error('Download timeout: File too large for serverless environment. Use direct URL instead.');
+      }
       console.error('[YtdownIoCompat] Download failed:', error);
       throw error;
     }

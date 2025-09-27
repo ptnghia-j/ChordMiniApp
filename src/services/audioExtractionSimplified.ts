@@ -585,34 +585,25 @@ export class AudioExtractionServiceSimplified {
 
       console.log(`✅ [ytdown.io] Audio extraction successful: ${extractResult.allFormats?.length || 0} formats available`);
 
-      // Step 4: Download audio file (ytdown.io handles the two-step process internally)
-      if (!extractResult.audioUrl) {
+      // Step 4: Get direct download URL (Vercel-optimized approach)
+      const directUrl = extractResult.directDownloadUrl || extractResult.audioUrl;
+      if (!directUrl) {
         throw new Error('No audio URL available from ytdown.io');
       }
 
-      console.log(`📥 [ytdown.io] Downloading audio file...`);
-      const audioBuffer = await ytdownCompatService.downloadAudio(extractResult.audioUrl);
-      console.log(`📥 Audio download successful: ${(audioBuffer.byteLength / 1024 / 1024).toFixed(2)}MB (${audioBuffer.byteLength} bytes)`);
+      console.log(`🔗 [ytdown.io] Using direct download URL (Vercel-optimized)`);
+      console.log(`   Direct URL: ${directUrl}`);
 
-      // Step 5: Upload to Firebase Storage for permanent access
+      // Step 5: Upload directly from URL to Firebase Storage (no serverless download)
       let finalAudioUrl = '';
       let isStorageUrl = false;
-      const actualFileSize = audioBuffer.byteLength;
 
       try {
-        console.log(`☁️ Uploading audio to Firebase Storage...`);
+        console.log(`☁️ Uploading audio to Firebase Storage from direct URL...`);
 
-        // Convert ArrayBuffer to ReadableStream
-        const audioStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new Uint8Array(audioBuffer));
-            controller.close();
-          }
-        });
-
-        const { uploadAudioStreamWithRetry } = await import('./streamingFirebaseUpload');
-        const uploadResult = await uploadAudioStreamWithRetry(
-          audioStream,
+        const { uploadAudioFromUrlWithRetry } = await import('./streamingFirebaseUpload');
+        const uploadResult = await uploadAudioFromUrlWithRetry(
+          directUrl,
           {
             videoId,
             title,
@@ -624,22 +615,29 @@ export class AudioExtractionServiceSimplified {
           finalAudioUrl = uploadResult.audioUrl;
           isStorageUrl = true;
           console.log(`✅ Firebase Storage upload successful: ${finalAudioUrl}`);
+          console.log(`   File size: ${uploadResult.fileSize ? this.formatFileSize(uploadResult.fileSize) : 'Unknown'}`);
         } else {
           throw new Error(uploadResult.error || 'Upload failed');
         }
       } catch (uploadError) {
         console.warn(`⚠️ Firebase Storage upload failed for ${videoId}:`, uploadError);
-        // Continue without permanent storage - we still have the audio data
-        finalAudioUrl = ''; // Will be handled below
+        console.log(`   Falling back to direct URL: ${directUrl}`);
+        // Continue without permanent storage - use direct URL
+        finalAudioUrl = directUrl;
+        isStorageUrl = false;
       }
 
       // Step 6: Save metadata to cache
+      // Estimate file size from ytdown.io metadata if available
+      const estimatedFileSize = extractResult.selectedFormat?.extension === 'm4a' ?
+        this.estimateFileSizeFromDuration(this.parseDuration(videoMetadata.duration), 128) : 0;
+
       const audioData: SimplifiedAudioData = {
         videoId,
-        audioUrl: finalAudioUrl || extractResult.audioUrl, // Use storage URL or fallback to original
+        audioUrl: finalAudioUrl,
         title,
         duration: this.parseDuration(videoMetadata.duration),
-        fileSize: actualFileSize,
+        fileSize: estimatedFileSize, // Estimated size since we didn't download
         extractionService: 'ytdown.io',
         extractionTimestamp: Date.now(),
         videoDuration: videoMetadata.duration,
@@ -1515,6 +1513,25 @@ export class AudioExtractionServiceSimplified {
         error: error instanceof Error ? error.message : 'Unknown async extraction error'
       };
     }
+  }
+
+  /**
+   * Estimate file size based on duration and bitrate
+   */
+  private estimateFileSizeFromDuration(durationSeconds: number, bitrateKbps: number): number {
+    // Formula: (bitrate in bits per second * duration in seconds) / 8 bits per byte
+    const bitrateBytes = (bitrateKbps * 1000) / 8;
+    return Math.round(bitrateBytes * durationSeconds);
+  }
+
+  /**
+   * Format file size for display
+   */
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    else if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    else return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   }
 
   // REMOVED: tryProxyServicesForGoogleVideo method

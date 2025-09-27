@@ -164,6 +164,9 @@ cache/
 /tmp/
 *.tmp
 
+# Temporary player script files
+*-player-script.js
+
 # Cached audio files
 /public/audio/
 
