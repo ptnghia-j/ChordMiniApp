@@ -281,14 +281,31 @@ export function cleanupBackgroundResults(maxAgeMs: number = 300000): void {
 }
 
 /**
- * Check if ytdown.io URL can be used directly with Google Cloud Run
- * 
+ * Check if URL can be used directly with Google Cloud Run
+ *
  * Based on analysis: Google Cloud Run backend accepts any HTTP URL
  * via the "firebase" endpoints (they use requests.get() internally)
+ *
+ * Updated: All HTTP/HTTPS URLs should work with the backend
  */
 export function canUseDirectUrlWithBackend(url: string): boolean {
-  // ytdown.io URLs are HTTP URLs that work with Google Cloud Run
-  return url.includes('ytcontent.net') || url.includes('ytdown');
+  try {
+    const urlObj = new URL(url);
+    // Accept all HTTP/HTTPS URLs - the backend can handle them via firebase endpoints
+    const isHttpUrl = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+
+    // Exclude Firebase Storage URLs to avoid conflicts with our Firebase upload logic
+    const isFirebaseStorage = url.includes('firebasestorage.googleapis.com') ||
+                              url.includes('storage.googleapis.com');
+
+    console.log(`🔍 URL compatibility check: ${url.substring(0, 50)}...`);
+    console.log(`   Protocol: ${urlObj.protocol}, HTTP: ${isHttpUrl}, Firebase: ${isFirebaseStorage}`);
+
+    return isHttpUrl && !isFirebaseStorage;
+  } catch (error) {
+    console.warn(`⚠️ Invalid URL format: ${url}`, error);
+    return false;
+  }
 }
 
 /**

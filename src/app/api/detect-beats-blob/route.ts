@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { audioMetadataService } from '@/services/audioMetadataService';
 
 /**
  * API route to detect beats using Vercel Blob URL
@@ -8,6 +9,29 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 
 // Configure Vercel function timeout (up to 800 seconds for Pro plan)
 export const maxDuration = 800; // 13+ minutes for ML processing
+
+/**
+ * Calculate dynamic timeout based on audio duration
+ * Uses 75% of audio duration + base processing time
+ */
+function calculateProcessingTimeout(audioDuration: number): number {
+  // Base timeout for model loading and setup (30 seconds)
+  const baseTimeout = 30000;
+
+  // 75% of audio duration for processing (in milliseconds)
+  const processingTime = Math.ceil(audioDuration * 0.75 * 1000);
+
+  // Minimum timeout of 2 minutes, maximum of 13 minutes (to stay within Vercel limits)
+  const minTimeout = 120000; // 2 minutes
+  const maxTimeout = 780000; // 13 minutes (slightly less than maxDuration)
+
+  const calculatedTimeout = baseTimeout + processingTime;
+  const finalTimeout = Math.max(minTimeout, Math.min(maxTimeout, calculatedTimeout));
+
+  console.log(`⏱️ Blob timeout calculation: duration=${audioDuration}s, calculated=${calculatedTimeout}ms, final=${finalTimeout}ms`);
+
+  return finalTimeout;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,6 +80,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`📁 Downloaded ${audioBuffer.byteLength} bytes, sending to Python backend as ${filename}`);
 
+    // Get audio duration for timeout calculation
+    let audioDuration = 180; // Default 3 minutes
+    try {
+      console.log(`⏱️ Extracting audio duration for timeout calculation...`);
+      const metadata = await audioMetadataService.extractMetadataFromPartialDownload(blobUrl);
+      if (metadata && metadata.duration > 0) {
+        audioDuration = metadata.duration;
+        console.log(`⏱️ Audio duration detected: ${audioDuration} seconds`);
+      } else {
+        console.warn(`⚠️ Could not detect audio duration, using default: ${audioDuration} seconds`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Failed to get audio duration, using default: ${error}`);
+    }
+
+    // Calculate dynamic timeout based on audio duration
+    const timeoutValue = calculateProcessingTimeout(audioDuration);
+
     // Create new FormData for the Python backend
     const backendFormData = new FormData();
     backendFormData.append('file', audioBlob, filename);
@@ -66,9 +108,7 @@ export async function POST(request: NextRequest) {
       backendFormData.append('detector', detector as string);
     }
 
-    // Create a safe timeout signal that works across environments
-    const timeoutValue = 800000; // 13+ minutes timeout to match backend
-    // // console.log(`🔍 Sending to Python backend: ${backendUrl}/api/detect-beats`);
+    console.log(`🔍 Sending to Python backend: ${backendUrl}/api/detect-beats (timeout: ${timeoutValue}ms)`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 

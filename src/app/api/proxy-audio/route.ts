@@ -1,5 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
+
+/**
+ * Fetch audio with Firebase Storage-aware retry logic
+ */
+async function fetchAudioWithRetry(
+  fetchUrl: string,
+  maxRetries: number = 3
+): Promise<Response> {
+  const isFirebaseUrl = isFirebaseStorageUrl(fetchUrl);
+  const retries = isFirebaseUrl ? Math.max(maxRetries, 5) : maxRetries; // More retries for Firebase
+  const baseTimeout = isFirebaseUrl ? 30000 : 120000; // Shorter timeout for Firebase retries
+
+  console.log(`📡 Fetching audio (${isFirebaseUrl ? 'Firebase Storage' : 'External'}) with ${retries} max retries: ${fetchUrl}`);
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const timeout = baseTimeout + (attempt - 1) * 10000; // Increase timeout with each retry
+      const abortSignal = createSafeTimeoutSignal(timeout);
+
+      console.log(`📡 Attempt ${attempt}/${retries} (timeout: ${timeout}ms): ${fetchUrl}`);
+
+      const response = await fetch(fetchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Accept': 'audio/mpeg, audio/*, */*'
+        },
+        signal: abortSignal,
+      });
+
+      console.log(`📊 Response received (attempt ${attempt}):`, {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url
+      });
+
+      if (response.ok) {
+        console.log(`✅ Audio fetch successful on attempt ${attempt}`);
+        return response;
+      }
+
+      // Handle Firebase Storage specific errors
+      if (isFirebaseUrl && response.status === 403) {
+        console.log(`⚠️ Firebase Storage 403 error (attempt ${attempt}/${retries}) - file may still be uploading`);
+
+        if (attempt < retries) {
+          // Exponential backoff for Firebase Storage 403s
+          const delay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+          console.log(`⏳ Waiting ${delay}ms before retry (Firebase upload may be in progress)...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+
+      // For non-Firebase URLs or final attempt, try fallback request
+      if (attempt === retries) {
+        console.log(`🔄 Final attempt with minimal headers...`);
+        try {
+          const fallbackResponse = await fetch(fetchUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; ChordMini/1.0)',
+            },
+            signal: createSafeTimeoutSignal(30000),
+          });
+
+          if (fallbackResponse.ok) {
+            console.log(`✅ Fallback request successful`);
+            return fallbackResponse;
+          }
+        } catch (fallbackError) {
+          console.error(`❌ Fallback request failed:`, fallbackError);
+        }
+      }
+
+      // If not the last attempt and not a Firebase 403, wait before retry
+      if (attempt < retries && !(isFirebaseUrl && response.status === 403)) {
+        const delay = 1000 * attempt; // Linear backoff for other errors
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+    } catch (error) {
+      console.error(`❌ Fetch attempt ${attempt} failed:`, error);
+
+      if (attempt === retries) {
+        throw error;
+      }
+
+      // Wait before retry
+      const delay = 1000 * attempt;
+      console.log(`⏳ Waiting ${delay}ms before retry after error...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error(`All ${retries} fetch attempts failed`);
+}
 import { retryAudioDownload } from '@/utils/retryUtils';
 
 /**
@@ -85,89 +185,8 @@ export async function GET(request: NextRequest) {
       console.warn('URL encoding warning:', urlError);
     }
 
-    // Create a safe timeout signal that works across environments
-    // Increased timeout for large audio files (3-4 minute songs can be 5-10MB)
-    const timeoutValue = 120000; // 2 minute timeout for audio downloads
-    // // console.log(`🔍 Proxy audio timeout value: ${timeoutValue}ms (${timeoutValue/1000}s)`);
-
-    const abortSignal = createSafeTimeoutSignal(timeoutValue);
-
-    // Enhanced debug logging for Vercel environment
-    // console.log(`🌐 Environment info:`, {
-    //   isVercel: !!process.env.VERCEL,
-    //   region: process.env.VERCEL_REGION || 'unknown',
-    //   nodeEnv: process.env.NODE_ENV,
-    //   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    // });
-
-    // Fetch the audio file with cache-busting headers to avoid CDN issues
-    console.log(`📡 Making request to: ${fetchUrl}`);
-    const response = await fetch(fetchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Accept': 'audio/mpeg, audio/*, */*'
-      },
-      signal: abortSignal,
-    });
-
-    console.log(`📊 Response received:`, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      url: response.url
-    });
-
-    if (!response.ok) {
-      console.error(`❌ Primary request failed: ${response.status} ${response.statusText}`);
-
-      // Try a fallback request with minimal headers
-      console.log(`🔄 Attempting fallback request...`);
-      try {
-        const fallbackResponse = await fetch(fetchUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ChordMini/1.0)',
-          },
-          signal: createSafeTimeoutSignal(30000),
-        });
-
-        console.log(`📊 Fallback response:`, {
-          status: fallbackResponse.status,
-          statusText: fallbackResponse.statusText,
-          headers: Object.fromEntries(fallbackResponse.headers.entries())
-        });
-
-        if (fallbackResponse.ok) {
-          console.log(`✅ Fallback request succeeded`);
-          const fallbackBuffer = await fallbackResponse.arrayBuffer();
-
-          if (fallbackBuffer.byteLength > 0) {
-            console.log(`✅ Fallback audio data: ${(fallbackBuffer.byteLength / 1024 / 1024).toFixed(2)}MB`);
-            return new NextResponse(fallbackBuffer, {
-              status: 200,
-              headers: {
-                'Content-Type': fallbackResponse.headers.get('Content-Type') || 'audio/mpeg',
-                'Content-Length': fallbackBuffer.byteLength.toString(),
-                'Cache-Control': 'public, max-age=3600',
-                'Access-Control-Allow-Origin': '*',
-              },
-            });
-          }
-        }
-      } catch (fallbackError) {
-        console.error(`❌ Fallback request also failed:`, fallbackError);
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Failed to fetch audio file',
-          details: `${response.status} ${response.statusText}`
-        },
-        { status: response.status }
-      );
-    }
+    // Use Firebase-aware retry logic for fetching audio
+    const response = await fetchAudioWithRetry(fetchUrl);
 
     // Get the audio data with detailed logging and manual stream reading
     // // console.log(`🔍 Response headers:`, Object.fromEntries(response.headers.entries()));

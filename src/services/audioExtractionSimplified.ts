@@ -18,6 +18,33 @@ import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from './ytDlpService';
 import { asyncJobService } from './asyncJobService';
 import { YtdownIoCompatService } from './ytdownIoCompatService';
+import { validateFirebaseStorageUrl } from '@/utils/urlValidationUtils';
+
+/**
+ * Validate Firebase Storage URL accessibility before returning it
+ * @param firebaseUrl The Firebase Storage URL to validate
+ * @param originalUrl The original URL to fall back to if validation fails
+ * @param videoId Video ID for logging
+ * @returns Object with validated URL and storage status
+ */
+async function validateAndReturnUrl(
+  firebaseUrl: string,
+  originalUrl: string,
+  videoId: string
+): Promise<{ url: string; isStorageUrl: boolean }> {
+  console.log(`🔍 Validating Firebase Storage URL accessibility for ${videoId}...`);
+
+  const validation = await validateFirebaseStorageUrl(firebaseUrl, 15000, 3);
+
+  if (validation.isAccessible) {
+    console.log(`✅ Firebase Storage URL validated and accessible for ${videoId}`);
+    return { url: firebaseUrl, isStorageUrl: true };
+  } else {
+    console.log(`⚠️ Firebase Storage URL not accessible for ${videoId}: ${validation.error}`);
+    console.log(`🔄 Falling back to original URL: ${originalUrl}`);
+    return { url: originalUrl, isStorageUrl: false };
+  }
+}
 
 export interface AudioExtractionResult {
   success: boolean;
@@ -223,11 +250,20 @@ export class AudioExtractionServiceSimplified {
 
             if (uploadResult) {
               const uploadTime = Date.now() - uploadStartTime;
-              finalAudioUrl = uploadResult.audioUrl;
-              isStorageUrl = true;
 
-              console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${finalAudioUrl}`);
+              // Validate Firebase Storage URL accessibility before using it
+              const { url: validatedUrl, isStorageUrl: validatedIsStorageUrl } = await validateAndReturnUrl(
+                uploadResult.audioUrl,
+                downloadResult.audioUrl, // Fall back to original URL
+                videoId
+              );
+
+              finalAudioUrl = validatedUrl;
+              isStorageUrl = validatedIsStorageUrl;
+
+              console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${uploadResult.audioUrl}`);
               console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
+              console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback original'} URL: ${finalAudioUrl}`);
 
               // Save detailed metadata to Firestore
               await saveAudioFileMetadata({
@@ -412,11 +448,20 @@ export class AudioExtractionServiceSimplified {
 
           if (uploadResult) {
             const uploadTime = Date.now() - uploadStartTime;
-            finalAudioUrl = uploadResult.audioUrl;
-            isStorageUrl = true;
 
-            console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${finalAudioUrl}`);
+            // Validate Firebase Storage URL accessibility before using it
+            const { url: validatedUrl, isStorageUrl: validatedIsStorageUrl } = await validateAndReturnUrl(
+              uploadResult.audioUrl,
+              finalAudioUrl, // Fall back to current URL (ytdown.io)
+              videoId
+            );
+
+            finalAudioUrl = validatedUrl;
+            isStorageUrl = validatedIsStorageUrl;
+
+            console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${uploadResult.audioUrl}`);
             console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
+            console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback ytdown.io'} URL: ${finalAudioUrl}`);
 
             // Save detailed metadata to Firestore with enhanced video information
             await saveAudioFileMetadata({

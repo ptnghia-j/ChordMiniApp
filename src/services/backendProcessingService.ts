@@ -1,15 +1,18 @@
 /**
  * Backend Processing Service
- * 
+ *
  * Handles communication with Google Cloud Run backend for audio processing
  * using direct URLs from ytdown.io or Firebase Storage URLs.
  */
+
+import { getAudioDurationFromUrl } from '@/utils/audioDurationUtils';
 
 export interface BackendProcessingOptions {
   audioUrl: string;
   videoId: string;
   detector?: string;
   processingType: 'beats' | 'chords';
+  audioDuration?: number; // Optional pre-calculated duration
 }
 
 export interface BackendProcessingResult {
@@ -21,12 +24,35 @@ export interface BackendProcessingResult {
 }
 
 /**
+ * Calculate dynamic timeout based on audio duration
+ * Uses 75% of audio duration + base processing time
+ */
+function calculateProcessingTimeout(audioDuration: number): number {
+  // Base timeout for model loading and setup (30 seconds)
+  const baseTimeout = 30000;
+
+  // 75% of audio duration for processing (in milliseconds)
+  const processingTime = Math.ceil(audioDuration * 0.75 * 1000);
+
+  // Minimum timeout of 2 minutes, maximum of 15 minutes
+  const minTimeout = 120000; // 2 minutes
+  const maxTimeout = 900000; // 15 minutes
+
+  const calculatedTimeout = baseTimeout + processingTime;
+  const finalTimeout = Math.max(minTimeout, Math.min(maxTimeout, calculatedTimeout));
+
+  console.log(`⏱️ Timeout calculation: duration=${audioDuration}s, calculated=${calculatedTimeout}ms, final=${finalTimeout}ms`);
+
+  return finalTimeout;
+}
+
+/**
  * Process audio using Google Cloud Run backend with complete file or URL
  */
 export async function processAudioWithBackend(
   options: BackendProcessingOptions
 ): Promise<BackendProcessingResult> {
-  const { audioUrl, videoId, detector = 'auto', processingType } = options;
+  const { audioUrl, videoId, detector = 'auto', processingType, audioDuration } = options;
   const startTime = Date.now();
 
   console.log(`🎵 Starting ${processingType} processing for ${videoId}`);
@@ -34,6 +60,22 @@ export async function processAudioWithBackend(
 
   try {
     const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+
+    // Get audio duration for timeout calculation
+    let duration = audioDuration;
+    if (!duration) {
+      try {
+        console.log(`⏱️ Getting audio duration for timeout calculation...`);
+        duration = await getAudioDurationFromUrl(audioUrl);
+        console.log(`⏱️ Audio duration: ${duration} seconds`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to get audio duration, using default: ${error}`);
+        duration = 180; // 3 minutes default
+      }
+    }
+
+    // Calculate dynamic timeout based on audio duration
+    const timeoutMs = calculateProcessingTimeout(duration);
 
     // Check if we have a cached complete audio file
     const { getCachedAudioFile } = await import('./parallelPipelineService');
@@ -53,12 +95,12 @@ export async function processAudioWithBackend(
       formData.append('audio_file', cachedAudioFile, `${videoId}.m4a`);
       formData.append('detector', detector);
 
-      console.log(`📡 Sending complete file to: ${endpoint}`);
+      console.log(`📡 Sending complete file to: ${endpoint} (timeout: ${timeoutMs}ms)`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(120000) // 2 minutes timeout
+        signal: AbortSignal.timeout(timeoutMs) // Dynamic timeout based on audio duration
       });
 
       if (!response.ok) {
@@ -108,12 +150,12 @@ export async function processAudioWithBackend(
       formData.append('firebase_url', audioUrl); // Backend parameter name
       formData.append('detector', detector);
 
-      console.log(`📡 Sending URL request to: ${endpoint}`);
+      console.log(`📡 Sending URL request to: ${endpoint} (timeout: ${timeoutMs}ms)`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(120000) // 2 minutes timeout
+        signal: AbortSignal.timeout(timeoutMs) // Dynamic timeout based on audio duration
       });
 
       if (!response.ok) {
@@ -171,13 +213,15 @@ export async function processAudioWithBackend(
 export async function processBeats(
   audioUrl: string,
   videoId: string,
-  detector: string = 'beat-transformer'
+  detector: string = 'beat-transformer',
+  audioDuration?: number
 ): Promise<BackendProcessingResult> {
   return processAudioWithBackend({
     audioUrl,
     videoId,
     detector,
-    processingType: 'beats'
+    processingType: 'beats',
+    audioDuration
   });
 }
 
@@ -187,13 +231,15 @@ export async function processBeats(
 export async function processChords(
   audioUrl: string,
   videoId: string,
-  detector: string = 'btc-pl'
+  detector: string = 'btc-pl',
+  audioDuration?: number
 ): Promise<BackendProcessingResult> {
   return processAudioWithBackend({
     audioUrl,
     videoId,
     detector,
-    processingType: 'chords'
+    processingType: 'chords',
+    audioDuration
   });
 }
 

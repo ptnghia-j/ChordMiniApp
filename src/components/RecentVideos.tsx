@@ -99,7 +99,7 @@ export default function RecentVideos() {
     return resultMap;
   }, []);
 
-  const fetchVideos = async (isLoadMore = false, currentVideos: TranscribedVideo[] = []) => {
+  const fetchVideos = useCallback(async (isLoadMore = false) => {
     if (!db) {
       setError('Firebase not initialized');
       setLoading(false);
@@ -128,7 +128,7 @@ export default function RecentVideos() {
           transcriptionsRef,
           orderBy('createdAt', 'desc'),
           startAfter(lastDoc),
-          limit(LOAD_MORE_COUNT)
+          limit(LOAD_MORE_COUNT) 
         );
       } else {
         q = query(
@@ -143,8 +143,8 @@ export default function RecentVideos() {
       const videoMap = new Map<string, TranscribedVideo>();
       const videoIds: string[] = [];
 
-      // Create a set of existing video IDs from the passed current videos for deduplication on "load more"
-      const existingVideoIds = new Set(isLoadMore ? currentVideos.map(v => v.videoId) : []);
+      // Create a set of existing video IDs from the current state for deduplication on "load more"
+      const existingVideoIds = new Set(isLoadMore ? videos.map(v => v.videoId) : []);
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -164,7 +164,7 @@ export default function RecentVideos() {
             beatModel: data.beatModel,
             chordModel: data.chordModel,
             bpm: data.bpm,
-            timeSignature: data.timeSignature,
+            timeSignature: data.timeSignature || 4,
             keySignature: data.keySignature,
             audioFilename: undefined,
             audioUrl: undefined,
@@ -214,37 +214,20 @@ export default function RecentVideos() {
       setLoading(false);
       setLoadingMore(false);
     }
-    // FIX: Converted to regular function to prevent useCallback dependency issues
-  };
+    // FIX: Removed `videos` from dependency array. This hook now correctly depends
+    // only on the functions and pagination state it needs to run.
+  }, [lastDoc, hasMore, fetchAudioFiles, videos]);
 
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
 
-  const handleLoadMore = useCallback(() => {
-    setVideos(currentVideos => {
-      // Call fetchVideos directly without depending on it in useCallback
-      fetchVideos(true, currentVideos);
-      return currentVideos; // Return current state unchanged, fetchVideos will update it
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array to prevent infinite loop
-
   // Initial load effect - runs only once on mount
   useEffect(() => {
-    let isMounted = true;
-
     // We wrap this in a self-invoking function to handle the async call correctly inside useEffect
     (async () => {
-      if (isMounted) {
-        await fetchVideos(false, []);
-      }
+        await fetchVideos(false);
     })();
-
-    return () => {
-      isMounted = false;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - only run once on mount to prevent infinite loop
+  }, []); // Intentionally empty to run only once
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -369,7 +352,7 @@ export default function RecentVideos() {
           {/* "Load More" button and loading indicator inside the scrollable container */}
           <div className="flex justify-center mt-4">
             {hasMore && !loadingMore && (
-              <Button onPress={handleLoadMore} color="primary" variant="flat">Load More</Button>
+              <Button onPress={() => fetchVideos(true)} color="primary" variant="flat">Load More</Button>
             )}
             {loadingMore && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
