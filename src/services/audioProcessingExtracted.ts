@@ -150,7 +150,13 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
         chordModel: cachedData.chordModel || 'chord-cnn-lstm',
         audioDuration: cachedData.audioDuration || 0,
         beatDetectionResult: {
-          time_signature: cachedData.timeSignature ?? undefined,
+          time_signature: (() => {
+            const ts = cachedData.timeSignature as unknown;
+            if (typeof ts === 'string') {
+              return ts.includes('/') ? parseInt(ts.split('/')[0], 10) : parseInt(ts, 10);
+            }
+            return typeof ts === 'number' ? ts : undefined;
+          })(),
           bpm: cachedData.bpm ?? undefined,
           beatShift: cachedData.beatShift ?? undefined
         }

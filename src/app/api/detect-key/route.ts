@@ -396,6 +396,12 @@ INVALID CORRECTION EXAMPLES (NEVER DO - different pitches or qualities):
 - "F#7" → "F7" (F# and F are DIFFERENT PITCHES!)
 - "Am" → "A" (removes chord quality)
 
+Note: Based on the chords, a key may be classified as either major or natural minor.
+- To classify a key as minor, you need clear evidence, such as accidentals raising the leading tone.
+- For example, when deciding between B♭ major and G minor, unless there are chords containing the F# tone (such as D major) within the song, it is more likely B♭ major.
+- Consider both the opening chord and the final chord for justification.
+- Do not overlook the decision between major and minor; choose the one that best fits the musical context.
+
 Respond with ONLY the JSON object, no explanations.`;
     } else {
       // Original prompt for key detection only

@@ -246,7 +246,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
   }
 
   return (
-    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-in-out">
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[80] transition-all duration-300 ease-in-out">
         <div className="px-4">
         {/* Single banner that adapts based on stage */}
         <div className={`flex items-center justify-between py-3 px-4 rounded-lg shadow-lg backdrop-blur-sm ${color} border`}>

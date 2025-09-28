@@ -306,16 +306,27 @@ export async function detectBeatsFromFile(
 
         if (blobResult.success) {
 
-          // The blob result data is already the Python backend response, so we can return it directly
+          // The blob result data is the Python backend response; normalize fields before returning
           const backendResponse = blobResult.data as BeatDetectionBackendResponse;
-
 
           // Validate that we have a beats array
           if (!backendResponse.beats || !Array.isArray(backendResponse.beats)) {
             throw new Error(`Invalid beat detection response: beats array not found or not an array`);
           }
 
-          return backendResponse as BeatDetectionResult;
+          // Normalize to BeatDetectionResult with numeric time_signature
+          const normalized: BeatDetectionResult = {
+            success: true,
+            beats: backendResponse.beats || [],
+            downbeats: backendResponse.downbeats || [],
+            bpm: (backendResponse.BPM as number) || (backendResponse.bpm as number) || 120,
+            total_beats: (backendResponse.beats || []).length,
+            duration: (backendResponse.duration as number) || 0,
+            time_signature: parseTimeSignature(backendResponse.time_signature),
+            model: (backendResponse.model_used as string) || (backendResponse.model as string)
+          };
+
+          return normalized;
         } else {
           // For large files, don't fall back to direct processing - throw error instead
           const errorMsg = blobResult.error || 'Unknown blob upload error';
@@ -799,7 +810,19 @@ export async function detectBeatsFromPath(
       // Add model identification for debugging
       // console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
 
-      return data;
+      // Normalize and map to BeatDetectionResult
+      const backendData: BeatDetectionBackendResponse = data as BeatDetectionBackendResponse;
+      const normalized: BeatDetectionResult = {
+        success: true,
+        beats: backendData.beats || [],
+        downbeats: backendData.downbeats || [],
+        bpm: (backendData.BPM as number) || (backendData.bpm as number) || 120,
+        total_beats: (backendData.beats || []).length,
+        duration: (backendData.duration as number) || 0,
+        time_signature: parseTimeSignature(backendData.time_signature),
+        model: (backendData.model_used as string) || detector
+      };
+      return normalized;
     } catch (parseError) {
       console.error('Error parsing response:', parseError);
       throw new Error('Invalid response format from beat detection API');
