@@ -100,6 +100,17 @@ async function handleBlobPath(
       beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
     } else {
       beatResults = beatBlob.data as BeatDetectionBackendResponse;
+
+      // Normalize time_signature from string "6/4" to numeric 6 for production blob path
+      const tsRaw = (beatResults as BeatDetectionBackendResponse).time_signature;
+      const tsNum = typeof tsRaw === 'number' ? tsRaw
+                  : (typeof tsRaw === 'string'
+                     ? (tsRaw.includes('/') ? parseInt(tsRaw.split('/')[0], 10) : parseInt(tsRaw, 10))
+                     : undefined);
+      if (typeof tsNum === 'number' && !isNaN(tsNum)) {
+        (beatResults as BeatDetectionBackendResponse).time_signature = tsNum; // ensure numeric for toBeatInfo and UI
+      }
+
       if (!beatResults.beats || !Array.isArray(beatResults.beats)) {
         console.warn('⚠️ Invalid beat detection response from blob upload, using empty beats array');
         beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
