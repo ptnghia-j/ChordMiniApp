@@ -31,7 +31,7 @@ interface CollapsibleVideoPlayerProps {
   onSeek?: (time: number) => void;
 }
 
-export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
+export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   videoId,
   isPlaying,
   playbackRate,
@@ -265,6 +265,19 @@ export const CollapsibleVideoPlayer: React.FC<CollapsibleVideoPlayerProps> = ({
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo optimization
+  const prevTime = prevProps.currentTime ?? 0;
+  const nextTime = nextProps.currentTime ?? 0;
+
+  return prevProps.videoId === nextProps.videoId &&
+         prevProps.isPlaying === nextProps.isPlaying &&
+         prevProps.playbackRate === nextProps.playbackRate &&
+         Math.abs(prevTime - nextTime) < 0.1 &&
+         prevProps.duration === nextProps.duration;
+});
+
+// Set display name for React DevTools
+CollapsibleVideoPlayer.displayName = 'CollapsibleVideoPlayer';
 
 export default CollapsibleVideoPlayer;

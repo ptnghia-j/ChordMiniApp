@@ -32,12 +32,21 @@ export default function ChangelogPage() {
     {
       version: 'v0.4.5 (in progress)',
       date: 'September 27, 2025',
-      title: 'Extraction Service Update, Floating Banner, and Smoother Auto‑Scroll',
-      description: 'Prefers regular YouTube embeds again, introduces a floating utility banner to prevent layout shifts, and tunes auto‑scroll to reduce jitter (partial fix).',
+      title: 'Context Migration, Corrections Visuals, and Faster UI',
+      description: 'Completes Advanced Context Migration, restoring chord corrections visuals and improving responsiveness while avoiding unnecessary fetches and re-renders.',
       features: [
-        'INFRA: Switched extraction service provider for improved reliability, supporting m4a format',
-        'UI: Utility banner moved to a floating component to avoid layout shifts during analysis',
-        'UX: Auto‑scroll adjusted to scroll less aggressively and reduce animation conflicts (partial fix)'
+        'PERFORMANCE: Completed UI Context Migration for toggles (Roman numerals, segmentation, chord simplification) reducing unnecessary component updates',
+        'FIX: Restored purple vs white chord labels for corrected vs original chords in the grid',
+        'FIX: Roman numeral analysis restored with reliable context sync and no duplicate API calls',
+        'UI: Floating utility banner refined; controls are consistent and do not cause layout shifts',
+        'UI: LyricsSection now respects chord simplification via UIContext (no prop drilling)',
+      ],
+      technical: [
+        'ARCHITECTURE: Moved simplifyChords to UIContext with controlled props and selector hooks (useSimplifySelector)',
+        'PERFORMANCE: Added focused context selectors and React.memo where beneficial to minimize re-renders',
+        'PERFORMANCE: Memoized UtilityBar and toggle components to reduce render cost in large pages',
+        'STABILITY: Reconnected sequenceCorrections to ChordGridContainer so corrected chords render immediately',
+        'STABILITY: Prevented re-fetching on toggle changes by centralizing state and stabilizing effect deps'
       ],
       breaking: []
     },

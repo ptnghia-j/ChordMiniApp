@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Tooltip } from '@heroui/react';
 import { HiArrowPath, HiOutlineArrowPath, HiOutlineChatBubbleLeftRight } from 'react-icons/hi2';
 import { FaRegFileLines } from 'react-icons/fa6';
@@ -8,12 +8,12 @@ import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
+import { useUI } from '@/contexts/UIContext';
+import { useSimplifySelector } from '@/contexts/selectors';
 
 interface UtilityBarProps {
   // States
   isFollowModeEnabled: boolean;
-  showRomanNumerals: boolean;
-  simplifyChords: boolean;
   chordPlayback: {
     isEnabled: boolean;
     togglePlayback: () => void;
@@ -26,8 +26,6 @@ interface UtilityBarProps {
 
   // Handlers
   toggleFollowMode: () => void;
-  setShowRomanNumerals: (val: boolean) => void;
-  setSimplifyChords: (val: boolean) => void;
 
   // Countdown
   isCountdownEnabled: boolean;
@@ -54,13 +52,9 @@ interface UtilityBarProps {
 
 const UtilityBar: React.FC<UtilityBarProps> = ({
   isFollowModeEnabled,
-  showRomanNumerals,
-  simplifyChords,
   chordPlayback,
   youtubePlayer,
   toggleFollowMode,
-  setShowRomanNumerals,
-  setSimplifyChords,
   isCountdownEnabled,
   isCountingDown,
   countdownDisplay,
@@ -73,6 +67,11 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   maxWidth = '1200px',
   className = ''
 }) => {
+  // Roman numerals from UIContext
+  const { showRomanNumerals, toggleRomanNumerals } = useUI();
+  // Simplify from UIContext selector
+  const { simplifyChords, toggleSimplifyChords } = useSimplifySelector();
+
   return (
     <div className={`w-full ${className}`}>
       <div
@@ -102,7 +101,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             {/* Roman numerals */}
             <RomanNumeralToggle
               isEnabled={showRomanNumerals}
-              onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+              onClick={toggleRomanNumerals}
             />
 
             {/* Chord playback with mixer */}
@@ -119,7 +118,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             {/* Simplify */}
             <ChordSimplificationToggle
               isEnabled={simplifyChords}
-              onClick={() => setSimplifyChords(!simplifyChords)}
+              onClick={toggleSimplifyChords}
             />
 
             {/* Metronome */}
@@ -211,5 +210,5 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   );
 };
 
-export default UtilityBar;
+export default memo(UtilityBar);
 

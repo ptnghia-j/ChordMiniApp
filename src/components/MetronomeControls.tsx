@@ -9,7 +9,7 @@ interface MetronomeControlsProps {
   onToggleWithSync?: () => Promise<boolean>; // ENHANCED: Synchronized toggle function with current time
 }
 
-const MetronomeControls: React.FC<MetronomeControlsProps> = ({
+const MetronomeControls = React.memo<MetronomeControlsProps>(({
   className = '',
   onToggleWithSync
 }) => {
@@ -267,6 +267,9 @@ const MetronomeControls: React.FC<MetronomeControlsProps> = ({
       `}</style>
     </div>
   );
-};
+});
+
+// Set display name for React DevTools
+MetronomeControls.displayName = 'MetronomeControls';
 
 export default MetronomeControls;

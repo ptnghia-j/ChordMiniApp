@@ -3,6 +3,7 @@
 import React from 'react';
 import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
 import SegmentationToggleButton from '@/components/SegmentationToggleButton';
+import { useUI } from '@/contexts/UIContext';
 
 interface AnalysisHeaderProps {
   // Title and editing
@@ -13,7 +14,7 @@ interface AnalysisHeaderProps {
   onEditToggle: () => void;
   onTitleSave: () => void;
   onTitleCancel: () => void;
-  
+
   // Correction toggle
   showCorrectedChords: boolean;
   hasCorrections: boolean;
@@ -26,10 +27,8 @@ interface AnalysisHeaderProps {
   transcribeLyricsWithAI: () => void;
   
   // Segmentation
-  showSegmentation: boolean;
   hasSegmentationData: boolean;
-  setShowSegmentation: (value: boolean) => void;
-  
+
   // Error display
   lyricsError: string | null;
 }
@@ -49,11 +48,10 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
   hasCachedLyrics,
   canTranscribe,
   transcribeLyricsWithAI,
-  showSegmentation,
   hasSegmentationData,
-  setShowSegmentation,
   lyricsError
 }) => {
+  const { showSegmentation, toggleSegmentation } = useUI();
   return (
     <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
       {/* Mobile: buttons next to title, Desktop: buttons on right side */}
@@ -150,7 +148,7 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
             {/* Segmentation Toggle Button */}
             <SegmentationToggleButton
               isEnabled={showSegmentation}
-              onClick={() => setShowSegmentation(!showSegmentation)}
+              onClick={toggleSegmentation}
               hasSegmentationData={hasSegmentationData}
             />
           </div>
@@ -201,7 +199,7 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
           {/* Segmentation Toggle Button */}
           <SegmentationToggleButton
             isEnabled={showSegmentation}
-            onClick={() => setShowSegmentation(!showSegmentation)}
+            onClick={toggleSegmentation}
             hasSegmentationData={hasSegmentationData}
           />
         </div>

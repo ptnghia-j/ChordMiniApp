@@ -9,25 +9,31 @@ interface PlaybackState {
   currentTime: number;
   duration: number;
   playbackRate: number;
-  
+
   // Player refs
   audioRef: RefObject<HTMLAudioElement>;
   youtubePlayer: unknown; // YouTube player instance
-  
+
   // Playback controls
   play: () => void;
   pause: () => void;
   seek: (time: number) => void;
   setPlayerPlaybackRate: (rate: number) => void;
-  
+
+  // Beat tracking (migrated from props)
+  currentBeatIndex: number;
+  onBeatClick: (beatIndex: number, timestamp: number) => void;
+  setCurrentBeatIndex: (index: number) => void;
+  setCurrentDownbeatIndex: (index: number) => void;
+
   // Video UI state
   isVideoMinimized: boolean;
   isFollowModeEnabled: boolean;
-  
+
   // Video UI toggles
   toggleVideoMinimization: () => void;
   toggleFollowMode: () => void;
-  
+
   // State setters (for integration with existing hooks)
   setIsPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
@@ -57,6 +63,15 @@ interface PlaybackProviderProps {
     seek: (time: number) => void;
     setPlayerPlaybackRate: (rate: number) => void;
   };
+  // Beat tracking state and handlers
+  beatState: {
+    currentBeatIndex: number;
+  };
+  beatHandlers: {
+    onBeatClick: (beatIndex: number, timestamp: number) => void;
+    setCurrentBeatIndex: (index: number) => void;
+    setCurrentDownbeatIndex: (index: number) => void;
+  };
   videoUIState: {
     isVideoMinimized: boolean;
     isFollowModeEnabled: boolean;
@@ -83,6 +98,8 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
   audioRef,
   youtubePlayer,
   playbackControls,
+  beatState,
+  beatHandlers,
   videoUIState,
   videoUIControls,
   setters,
@@ -104,6 +121,12 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     pause: playbackControls.pause,
     seek: playbackControls.seek,
     setPlayerPlaybackRate: playbackControls.setPlayerPlaybackRate,
+
+    // Beat tracking
+    currentBeatIndex: beatState.currentBeatIndex,
+    onBeatClick: beatHandlers.onBeatClick,
+    setCurrentBeatIndex: beatHandlers.setCurrentBeatIndex,
+    setCurrentDownbeatIndex: beatHandlers.setCurrentDownbeatIndex,
     
     // Video UI state
     isVideoMinimized: videoUIState.isVideoMinimized,
@@ -126,6 +149,8 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({
     audioRef,
     youtubePlayer,
     playbackControls,
+    beatState,
+    beatHandlers,
     videoUIState,
     videoUIControls,
     setters,

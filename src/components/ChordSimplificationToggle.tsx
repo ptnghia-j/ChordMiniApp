@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { HiOutlineSparkles, HiSparkles } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
@@ -52,4 +52,4 @@ const ChordSimplificationToggle: React.FC<ChordSimplificationToggleProps> = ({
   );
 };
 
-export default ChordSimplificationToggle;
+export default memo(ChordSimplificationToggle);

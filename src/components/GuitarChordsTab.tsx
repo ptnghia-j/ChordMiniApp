@@ -9,6 +9,9 @@ import { chordMappingService } from '@/services/chordMappingService';
 import { ChordGridContainer } from '@/components/ChordGridContainer';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
+import { useAnalysisData } from '@/contexts/AnalysisDataContext';
+import { usePlayback } from '@/contexts/PlaybackContext';
+import { useSegmentationSelector } from '@/contexts/selectors';
 
 
 // Lazy load heavy guitar chord diagram component
@@ -46,13 +49,11 @@ interface ChordGridData {
 }
 
 interface GuitarChordsTabProps {
-  analysisResults: AnalysisResult | null;
+  analysisResults?: AnalysisResult | null;
   chordGridData: ChordGridData;
-  currentBeatIndex: number;
-  onBeatClick: (beatIndex: number, timestamp: number) => void;
   className?: string;
-  keySignature: string | null;
-  isDetectingKey: boolean;
+  keySignature?: string | null;
+  isDetectingKey?: boolean;
   isChatbotOpen?: boolean;
   isLyricsPanelOpen?: boolean;
   isUploadPage?: boolean;
@@ -76,41 +77,26 @@ interface GuitarChordsTabProps {
       }>;
     };
   } | null;
-  // Segmentation props for synchronized color overlay
+  // Segmentation props for synchronized color overlay (data only; toggle from UIContext)
   segmentationData?: SegmentationResult | null;
-  showSegmentation?: boolean;
-  // Roman numeral analysis props
-  showRomanNumerals?: boolean;
-  romanNumeralData?: {
-    analysis: string[];
-    keyContext: string;
-    temporalShifts?: Array<{
-      chordIndex: number;
-      targetKey: string;
-      romanNumeral: string;
-    }>;
-  } | null;
 }
 
 export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   analysisResults,
   chordGridData,
-  currentBeatIndex,
-  onBeatClick,
   className = '',
   keySignature,
   isDetectingKey,
   isChatbotOpen = false,
   isLyricsPanelOpen = false,
   isUploadPage = false,
-  showCorrectedChords = false,
-  chordCorrections = null,
+  showCorrectedChords,
+  chordCorrections,
   sequenceCorrections = null,
   segmentationData = null,
-  showSegmentation = false,
-  showRomanNumerals = false,
-  romanNumeralData = null
 }) => {
+  const { currentBeatIndex } = usePlayback();
+
   const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
@@ -145,9 +131,18 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
 
 
+  // Pull analysis toggles and data from context when not provided via props
+  // Segmentation toggle from UIContext
+  const { showSegmentation } = useSegmentationSelector();
+
+  const analysisCtx = useAnalysisData();
+  const mergedAnalysisResults = analysisResults ?? analysisCtx.analysisResults;
+  const mergedShowCorrectedChords = showCorrectedChords ?? analysisCtx.showCorrectedChords;
+  const mergedChordCorrections = chordCorrections ?? analysisCtx.chordCorrections;
+
   // Chord correction for guitar diagrams (always applies corrections when available for consistent display)
   const applyCorrectedChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {
-    if (!showCorrectedChords || !originalChord || originalChord === 'N.C.') return originalChord;
+    if (!mergedShowCorrectedChords || !originalChord || originalChord === 'N.C.') return originalChord;
 
     if (sequenceCorrections && visualIndex !== undefined) {
       const { originalSequence, correctedSequence } = sequenceCorrections;
@@ -169,12 +164,13 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       }
     }
 
-    if (chordCorrections) {
+    if (mergedChordCorrections) {
       const rootNote = originalChord.includes(':') ? originalChord.split(':')[0] : (originalChord.match(/^([A-G][#b]?)/)?.[1] || originalChord);
-      if (chordCorrections[rootNote]) return originalChord.replace(rootNote, chordCorrections[rootNote]);
+      const correction = mergedChordCorrections[rootNote as keyof typeof mergedChordCorrections];
+      if (correction) return originalChord.replace(rootNote, correction as string);
     }
     return originalChord;
-  }, [showCorrectedChords, chordCorrections, sequenceCorrections, chordGridData.hasPadding, chordGridData.shiftCount, chordGridData.paddingCount]);
+  }, [mergedShowCorrectedChords, mergedChordCorrections, sequenceCorrections, chordGridData.hasPadding, chordGridData.shiftCount, chordGridData.paddingCount]);
 
 
 
@@ -316,7 +312,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   }, [getUniqueChordProgressionForGuitarDiagrams, currentBeatIndex, windowWidth]);
 
 
-  if (!analysisResults) {
+  if (!mergedAnalysisResults) {
     return (
       <div className={`flex items-center justify-center p-8 bg-white dark:bg-content-bg rounded-lg shadow-card ${className}`}>
         <p className="text-gray-500 dark:text-gray-400">Run chord analysis to see guitar chord diagrams.</p>
@@ -348,7 +344,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         </div>
         <div className="chord-grid-window bg-white dark:bg-content-bg rounded-lg overflow-hidden">
           <div className="h-24 sm:h-32 md:h-40 lg:h-48 overflow-y-auto">
-            <ChordGridContainer {...{analysisResults, chordGridData, currentBeatIndex, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, onBeatClick, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData, showSegmentation, showRomanNumerals, romanNumeralData}}/>
+            <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
           </div>
         </div>
       </div>

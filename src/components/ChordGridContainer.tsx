@@ -5,6 +5,9 @@ import ChordGrid from '@/components/ChordGrid';
 import { RefactoredChordGrid } from './RefactoredChordGrid';
 import { ChordGridProvider } from '@/contexts/ChordGridContext';
 import { useChordGridContext } from '@/hooks/useChordGridContext';
+import { useAnalysisData } from '@/contexts/AnalysisDataContext';
+import { usePlayback } from '@/contexts/PlaybackContext';
+import { useRomanNumeralsSelector, useSegmentationSelector } from '@/contexts/selectors';
 // import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
@@ -29,14 +32,12 @@ interface ChordGridData {
 }
 
 interface ChordGridContainerProps {
-  analysisResults: AnalysisResult | null;
+  analysisResults?: AnalysisResult | null;
   chordGridData: ChordGridData; // Accept comprehensive chord grid data as prop
-  currentBeatIndex: number;
-  keySignature: string | null;
-  isDetectingKey: boolean;
+  keySignature?: string | null;
+  isDetectingKey?: boolean;
   isChatbotOpen: boolean;
   isLyricsPanelOpen: boolean;
-  onBeatClick: (beatIndex: number, timestamp: number) => void;
   isUploadPage?: boolean; // Whether this is the upload audio file page
   // Visual indicator for corrected chords
   showCorrectedChords?: boolean;
@@ -62,22 +63,10 @@ interface ChordGridContainerProps {
   } | null;
   // NEW: Song segmentation data for color-coding
   segmentationData?: SegmentationResult | null;
-  showSegmentation?: boolean;
   // Edit mode props
   isEditMode?: boolean;
   editedChords?: Record<number, string>;
   onChordEdit?: (index: number, newChord: string) => void;
-  // Roman numeral analysis props
-  showRomanNumerals?: boolean;
-  romanNumeralData?: {
-    analysis: string[];
-    keyContext: string;
-    temporalShifts?: Array<{
-      chordIndex: number;
-      targetKey: string;
-      romanNumeral: string;
-    }>;
-  } | null;
   // NEW: Enable refactored version with context and performance optimizations
   useRefactoredVersion?: boolean;
   enableVirtualization?: boolean;
@@ -87,53 +76,60 @@ interface ChordGridContainerProps {
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
   analysisResults,
   chordGridData, // Use the comprehensive chord grid data passed as prop
-  currentBeatIndex,
   keySignature,
   isDetectingKey,
   isChatbotOpen,
   isLyricsPanelOpen,
-  onBeatClick,
   isUploadPage = false,
-  showCorrectedChords = false,
+  showCorrectedChords,
   chordCorrections = null,
   sequenceCorrections = null,
   segmentationData = null,
-  showSegmentation = false,
   isEditMode = false,
   editedChords = {},
   onChordEdit,
-  showRomanNumerals = false,
-  romanNumeralData = null,
   useRefactoredVersion = false,
   enableVirtualization = true,
   virtualizationThreshold = 100,
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
+  const analysisCtx = useAnalysisData();
+  const mergedAnalysisResults = analysisResults ?? analysisCtx.analysisResults;
+  const mergedKeySignature = (keySignature !== undefined ? keySignature : analysisCtx.keySignature) || undefined;
+  const mergedIsDetectingKey = isDetectingKey ?? analysisCtx.isDetectingKey;
+  const mergedShowCorrectedChords = showCorrectedChords ?? analysisCtx.showCorrectedChords;
+  const mergedChordCorrections = chordCorrections ?? analysisCtx.chordCorrections;
+  // Use selector to subscribe to only Roman numerals slice
+  const { showRomanNumerals: mergedShowRomanNumerals, romanNumeralData: mergedRomanNumeralData } = useRomanNumeralsSelector();
+
+  // Segmentation toggle from UI context
+  const { showSegmentation } = useSegmentationSelector();
+
   const stableProps = React.useMemo(() => {
-    const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+    const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
 
     return {
       chords: chordGridData.chords,
       beats: chordGridData.beats,
       timeSignature,
-      keySignature: keySignature || undefined,
-      isDetectingKey,
+      keySignature: mergedKeySignature,
+      isDetectingKey: mergedIsDetectingKey,
       hasPickupBeats: chordGridData.hasPickupBeats,
       pickupBeatsCount: chordGridData.pickupBeatsCount,
       hasPadding: chordGridData.hasPadding,
       paddingCount: chordGridData.paddingCount,
       shiftCount: chordGridData.shiftCount,
-      beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
+      beatTimeRangeStart: mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start || 0,
       originalAudioMapping: chordGridData.originalAudioMapping,
       isUploadPage,
-      showCorrectedChords,
-      chordCorrections,
+      showCorrectedChords: mergedShowCorrectedChords,
+      chordCorrections: mergedChordCorrections,
       sequenceCorrections,
       segmentationData,
       showSegmentation,
-      showRomanNumerals,
-      romanNumeralData
+      showRomanNumerals: mergedShowRomanNumerals,
+      romanNumeralData: mergedRomanNumeralData
     };
   }, [
     chordGridData.chords,
@@ -144,20 +140,22 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     chordGridData.paddingCount,
     chordGridData.shiftCount,
     chordGridData.originalAudioMapping,
-    analysisResults?.beatDetectionResult?.time_signature,
-    analysisResults?.beatDetectionResult?.beat_time_range_start,
-    keySignature,
-    isDetectingKey,
+    mergedAnalysisResults?.beatDetectionResult?.time_signature,
+    mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start,
+    mergedKeySignature,
+    mergedIsDetectingKey,
     isUploadPage,
-    showCorrectedChords,
-    chordCorrections,
+    mergedShowCorrectedChords,
+    mergedChordCorrections,
     sequenceCorrections,
     segmentationData,
     showSegmentation,
-    showRomanNumerals,
-    romanNumeralData
+    mergedShowRomanNumerals,
+    mergedRomanNumeralData
   ]);
 
+  // Get beat state and click handler from PlaybackContext
+  const { currentBeatIndex, onBeatClick } = usePlayback();
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
   const memoizedOnBeatClick = React.useCallback((beatIndex: number, timestamp: number) => {
     onBeatClick(beatIndex, timestamp);
@@ -207,7 +205,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       <ChordGrid
         // PERFORMANCE OPTIMIZATION: Use memoized stable props
         {...stableProps}
-        // Only frequently changing props passed directly
+        // Beat state and click handler now come from context
         currentBeatIndex={currentBeatIndex}
         isChatbotOpen={isChatbotOpen}
         isLyricsPanelOpen={isLyricsPanelOpen}

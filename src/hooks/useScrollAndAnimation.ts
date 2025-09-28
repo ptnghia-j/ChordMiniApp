@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { unstable_batchedUpdates } from 'react-dom';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { YouTubePlayer } from '@/types/youtube';
 import { timingSyncService } from '@/services/timingSyncService';
@@ -75,9 +76,14 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     lastClickInfo,
   } = deps;
 
-  // PERFORMANCE OPTIMIZATION: Binary search for beat tracking
-  // Reduces complexity from O(n) to O(log n) for real-time playback
-  const findCurrentBeatIndex = useCallback((currentTime: number, beats: (number | null)[]): number => {
+  // ANTI-JITTER: Hysteresis-based beat tracking to prevent oscillation
+  // Adds stability buffer zones around beat boundaries to eliminate double-blinking
+  const lastStableBeatRef = useRef(-1);
+  const beatStabilityCounterRef = useRef(0);
+  const STABILITY_THRESHOLD = 2; // Require 2 consecutive frames with same beat
+  const HYSTERESIS_BUFFER = 0.05; // 50ms buffer zone around beat boundaries
+
+  const findCurrentBeatIndexWithHysteresis = useCallback((currentTime: number, beats: (number | null)[]): number => {
     if (!beats || beats.length === 0) return -1;
 
     // Filter out null beats and create searchable array
@@ -90,10 +96,10 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
     if (validBeats.length === 0) return -1;
 
-    // Binary search for the current beat
+    // Binary search for the current beat with hysteresis
     let left = 0;
     let right = validBeats.length - 1;
-    let currentBeatIndex = -1;
+    let candidateBeatIndex = -1;
 
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
@@ -104,9 +110,28 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         ? validBeats[mid + 1].time
         : beatTime + 2.0; // Default 2-second range for last beat
 
+      // ANTI-JITTER: Use midpoint between beats as switching threshold
+      // This creates more stable switching behavior
+      const switchingPoint = beatTime + (nextBeatTime - beatTime) / 2;
+
       if (currentTime >= beatTime && currentTime < nextBeatTime) {
-        // Found the current beat
-        currentBeatIndex = validBeats[mid].index;
+        // ANTI-JITTER: Apply hysteresis based on current stable beat
+        const currentStableBeat = lastStableBeatRef.current;
+        const currentBeatIndex = validBeats[mid].index;
+
+        if (currentStableBeat === currentBeatIndex) {
+          // Already on this beat, use wider tolerance to prevent switching
+          candidateBeatIndex = currentBeatIndex;
+        } else if (currentTime < switchingPoint - HYSTERESIS_BUFFER) {
+          // Clearly in previous beat territory
+          candidateBeatIndex = mid > 0 ? validBeats[mid - 1].index : currentBeatIndex;
+        } else if (currentTime > switchingPoint + HYSTERESIS_BUFFER) {
+          // Clearly in current beat territory
+          candidateBeatIndex = currentBeatIndex;
+        } else {
+          // In buffer zone - stick with current stable beat if possible
+          candidateBeatIndex = currentStableBeat !== -1 ? currentStableBeat : currentBeatIndex;
+        }
         break;
       } else if (currentTime < beatTime) {
         right = mid - 1;
@@ -115,12 +140,33 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       }
     }
 
-    return currentBeatIndex;
+    // ANTI-JITTER: Require stability before changing beat index
+    if (candidateBeatIndex === lastStableBeatRef.current) {
+      // Same beat as before - increment stability counter
+      beatStabilityCounterRef.current = Math.min(beatStabilityCounterRef.current + 1, STABILITY_THRESHOLD);
+      return candidateBeatIndex;
+    } else {
+      // Different beat candidate - check if we have enough stability
+      if (beatStabilityCounterRef.current >= STABILITY_THRESHOLD) {
+        // We've been stable long enough, allow the change
+        lastStableBeatRef.current = candidateBeatIndex;
+        beatStabilityCounterRef.current = 1; // Reset counter for new beat
+        return candidateBeatIndex;
+      } else {
+        // Not stable enough yet - increment counter but return previous stable beat
+        beatStabilityCounterRef.current += 1;
+        return lastStableBeatRef.current;
+      }
+    }
   }, []);
 
-  // PERFORMANCE OPTIMIZATION: Binary search for audio mapping
+  // PERFORMANCE OPTIMIZATION: Binary search for audio mapping with timing precision
   const findCurrentAudioMappingIndex = useCallback((currentTime: number, audioMapping: Array<{timestamp: number; visualIndex: number}>): number => {
     if (!audioMapping || audioMapping.length === 0) return -1;
+
+    // ANTI-JITTER: Add small timing tolerance to prevent oscillation
+    const TIMING_TOLERANCE = 0.02; // 20ms tolerance for timing precision
+    const adjustedTime = currentTime + TIMING_TOLERANCE;
 
     let left = 0;
     let right = audioMapping.length - 1;
@@ -130,7 +176,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       const mid = Math.floor((left + right) / 2);
       const item = audioMapping[mid];
 
-      if (currentTime >= item.timestamp) {
+      if (adjustedTime >= item.timestamp) {
         result = item.visualIndex;
         left = mid + 1; // Continue searching for a later match
       } else {
@@ -143,6 +189,29 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
   // Throttle consecutive scrollIntoView calls to avoid conflicting smooth scrolls
   const lastScrollTimeRef = useRef(0);
+
+  // JITTER GUARDS: Track last emitted beat and timing to apply dwell/hysteresis
+  const lastEmittedBeatRef = useRef(-1);
+  const lastEmitTimeRef = useRef(0);
+  const prevTimeRef = useRef(0);
+
+  // Guard constants
+  const PHASE_SWITCH_BUFFER = 0.03; // 30ms buffer between pre-beat and model phase
+  const OFF_DWELL_SECONDS = 0.08; // require 80ms before turning highlight off (-1)
+
+  // ANTI-JITTER: Centralized state update function to prevent multiple conflicting updates
+  const updateBeatIndexSafely = useCallback((newBeatIndex: number) => {
+    // Only update if the beat index actually changed
+    if (currentBeatIndexRef.current !== newBeatIndex) {
+      unstable_batchedUpdates(() => {
+        currentBeatIndexRef.current = newBeatIndex;
+        setCurrentBeatIndex(newBeatIndex);
+        // Track emission for dwell/monotonic guards
+        lastEmittedBeatRef.current = newBeatIndex;
+        // lastEmitTimeRef is updated by the rAF loop when time is known
+      });
+    }
+  }, [setCurrentBeatIndex, currentBeatIndexRef]);
 
   // FIXED: Improved auto-scrolling with layout stability
   const scrollToCurrentBeat = useCallback(() => {
@@ -245,7 +314,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
           let currentBeat = -1;
 
-          if (time <= animationRangeStart) {
+          if (time < animationRangeStart - PHASE_SWITCH_BUFFER) {
             // PHASE 1: Pre-model context (0.0s to first detected beat)
             // Only animate if there are actual padding cells to animate through
             const paddingCount = chordGridData.paddingCount || 0;
@@ -286,8 +355,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
               if (bestPaddingIndex !== -1) {
                 const finalBeatIndex = shiftCount + bestPaddingIndex;
-                currentBeatIndexRef.current = finalBeatIndex;
-                setCurrentBeatIndex(finalBeatIndex);
+                updateBeatIndexSafely(finalBeatIndex);
+                lastEmitTimeRef.current = time;
               }
             } else {
               // No padding cells, use virtual beat estimation for early animation
@@ -317,13 +386,13 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
                   const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
 
                   if (isShiftCell || isPaddingCell || !isEmptyCell) {
-                    currentBeatIndexRef.current = virtualBeatIndex;
-                    setCurrentBeatIndex(virtualBeatIndex);
+                    updateBeatIndexSafely(virtualBeatIndex);
+                    lastEmitTimeRef.current = time;
                   }
                 }
               }
             }
-          } else {
+          } else if (time > animationRangeStart + PHASE_SWITCH_BUFFER) {
             // PHASE 2: Model beats (first detected beat onwards)
             // Use ChordGrid's beat array for consistency with click handling
 
@@ -335,8 +404,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
               // PHASE 1: Initial positioning (first 200ms after click)
               if (timeSinceClick < 200 && timeDifference < 1.0) {
-                currentBeatIndexRef.current = lastClickInfo.visualIndex;
-                setCurrentBeatIndex(lastClickInfo.visualIndex);
+                updateBeatIndexSafely(lastClickInfo.visualIndex);
+                lastEmitTimeRef.current = time;
                 useClickPosition = true; // Flag to skip normal beat tracking for this frame
               } else if (timeSinceClick >= 200) {
                 // DEBUG: Log when animation resumes after click
@@ -437,9 +506,9 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
                   modelType: analysisResults.chordModel?.includes('btc') ? 'BTC' : 'Chord-CNN-LSTM',
                 });
 
-                // PERFORMANCE OPTIMIZATION: Use binary search instead of linear search
-                // This reduces complexity from O(n) to O(log n) for beat tracking
-                currentBeat = findCurrentBeatIndex(time, chordGridData.beats);
+                // ANTI-JITTER: Use hysteresis-based beat tracking to prevent oscillation
+                // This eliminates double-blinking by adding stability to beat detection
+                currentBeat = findCurrentBeatIndexWithHysteresis(time, chordGridData.beats);
 
                 if (currentBeat === -1) {
                   console.log(`🎬 ANIMATION MAPPING: Binary search fallback - no beat found`, {
@@ -456,54 +525,82 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               });
             }
 
-            currentBeatIndexRef.current = currentBeat;
-            setCurrentBeatIndex(currentBeat);
-
-
-          }
-
-          if (currentBeat !== -1) {
-            // ENHANCED SAFEGUARD: Distinguish between shift cells and regular empty cells
-            const shiftCount = chordGridData.shiftCount || 0;
-            const paddingCount = chordGridData.paddingCount || 0;
-            const isPreBeatPhase = time < animationRangeStart;
-            const chord = chordGridData.chords[currentBeat] || '';
-            const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
-
-            // FIXED: Allow shift cells (indices 0 to shiftCount-1) to be highlighted
-            // Only prevent highlighting of empty cells that are NOT shift cells
-            const isShiftCell = currentBeat < shiftCount;
-            const isPaddingCell = currentBeat >= shiftCount && currentBeat < (shiftCount + paddingCount);
-
-            if (isEmptyCell && !isPreBeatPhase && !isShiftCell && !isPaddingCell) {
-              // Only block empty cells that are beyond shift and padding ranges
-              currentBeatIndexRef.current = -1;
-              setCurrentBeatIndex(-1);
-            }
-          } else {
-            // MODEL PHASE: No beat found, set to -1
-            currentBeatIndexRef.current = -1;
-            setCurrentBeatIndex(-1);
-          }
-
-          // Find current downbeat if available
-          if (analysisResults.downbeats && analysisResults.downbeats.length > 0) {
+            // ANTI-JITTER: Consolidate ALL state updates into single batch
+            // This eliminates multiple renders that can cause visual flickering
+            let finalBeatIndex = currentBeat;
             let currentDownbeat = -1;
-            for (let i = 0; i < analysisResults.downbeats.length; i++) {
-              const downbeat = analysisResults.downbeats[i];
-              if (downbeat && downbeat <= time) {
-                currentDownbeat = i;
-              } else {
-                break;
+
+            // Apply empty cell filtering logic
+            if (currentBeat !== -1) {
+              const shiftCount = chordGridData.shiftCount || 0;
+              const paddingCount = chordGridData.paddingCount || 0;
+              const isPreBeatPhase = time < animationRangeStart;
+              const chord = chordGridData.chords[currentBeat] || '';
+              const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
+
+              // FIXED: Allow shift cells (indices 0 to shiftCount-1) to be highlighted
+              // Only prevent highlighting of empty cells that are NOT shift cells
+              const isShiftCell = currentBeat < shiftCount;
+              const isPaddingCell = currentBeat >= shiftCount && currentBeat < (shiftCount + paddingCount);
+
+              if (isEmptyCell && !isPreBeatPhase && !isShiftCell && !isPaddingCell) {
+                // Only block empty cells that are beyond shift and padding ranges
+                finalBeatIndex = -1;
+              }
+            } else {
+              // MODEL PHASE: No beat found, set to -1
+              finalBeatIndex = -1;
+            }
+
+            // Calculate current downbeat
+            if (analysisResults.downbeats && analysisResults.downbeats.length > 0) {
+              for (let i = 0; i < analysisResults.downbeats.length; i++) {
+                const downbeat = analysisResults.downbeats[i];
+                if (downbeat && downbeat <= time) {
+                  currentDownbeat = i;
+                } else {
+                  break;
+                }
               }
             }
-            setCurrentDownbeatIndex(currentDownbeat);
+
+            // Stabilize candidate index before emitting
+            let stableFinalBeat = finalBeatIndex;
+            const lastEmitted = lastEmittedBeatRef.current;
+            const prevTime = prevTimeRef.current;
+            const isRewinding = time + 1e-6 < prevTime;
+
+            if (!isRewinding && lastEmitted !== -1 && stableFinalBeat !== -1 && stableFinalBeat < lastEmitted) {
+              // Enforce non-decreasing progression during forward playback
+              stableFinalBeat = lastEmitted;
+            }
+
+            if (stableFinalBeat === -1 && lastEmitted !== -1) {
+              // Require brief dwell time before turning highlight off to avoid flicker
+              if (time - lastEmitTimeRef.current < OFF_DWELL_SECONDS) {
+                stableFinalBeat = lastEmitted;
+              }
+            }
+
+            // ANTI-JITTER: Single consolidated state update with downbeat
+            unstable_batchedUpdates(() => {
+              if (currentBeatIndexRef.current !== stableFinalBeat) {
+                currentBeatIndexRef.current = stableFinalBeat;
+                setCurrentBeatIndex(stableFinalBeat);
+                lastEmittedBeatRef.current = stableFinalBeat;
+                lastEmitTimeRef.current = time;
+              }
+              setCurrentDownbeatIndex(currentDownbeat);
+            });
+
+
           }
         } // End of normal beat tracking (if !useClickPosition)
       }
 
       // PERFORMANCE OPTIMIZATION: Schedule next frame for smooth 60fps updates
       // Always schedule next frame - the loop will check isPlaying state dynamically
+      prevTimeRef.current = time;
       rafRef.current = requestAnimationFrame(updateBeatTracking);
     };
 
@@ -518,7 +615,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // CRITICAL FIX: Include isPlaying to ensure animation starts when YouTube playback begins
   // The animation loop handles play/pause gracefully by checking state dynamically
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndex, findCurrentAudioMappingIndex]); // Added isPlaying back to ensure animation starts on YouTube play
+  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely]); // Updated to use centralized beat updates
 
   return {
     scrollToCurrentBeat,

@@ -360,7 +360,8 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
 
     // Start processing context
     processingContext.startProcessing();
-    processingContext.setStage('audio-extraction');
+    // Use standardized stage name for extraction to align with ProcessingStage
+    processingContext.setStage('extracting');
     processingContext.setProgress(0);
     processingContext.setStatusMessage('Extracting audio from YouTube...');
 

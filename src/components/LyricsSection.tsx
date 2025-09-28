@@ -8,6 +8,7 @@ import { useApiKeys } from '@/hooks/useApiKeys';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import type { BeatInfo } from '@/services/beatDetectionService';
 import { simplifyChord } from '@/utils/chordSimplification';
+import { useSimplifySelector } from '@/contexts/selectors';
 
 // Lazy load heavy lead sheet display component
 const LeadSheetDisplay = dynamic(() => import('@/components/LeadSheetDisplay'), {
@@ -25,7 +26,6 @@ interface LyricsSectionProps {
   analysisResults: AnalysisResult | null;
   onFontSizeChange: (size: number) => void;
   segmentationData?: SegmentationResult | null;
-  simplifyChords?: boolean;
 }
 
 export const LyricsSection: React.FC<LyricsSectionProps> = ({
@@ -37,10 +37,10 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   theme,
   analysisResults,
   onFontSizeChange,
-  segmentationData = null,
-  simplifyChords = false
+  segmentationData = null
 }) => {
   const { isServiceAvailable, getServiceMessage } = useApiKeys();
+  const { simplifyChords } = useSimplifySelector();
 
   // Legacy raw chord list removed; alignment uses beatAlignedChords from synchronizedChords
 

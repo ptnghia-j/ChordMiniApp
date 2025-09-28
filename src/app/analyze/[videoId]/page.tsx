@@ -48,6 +48,8 @@ import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
 import { useApiKeys } from '@/hooks/useApiKeys';
 
+
+
 // Import skeleton loaders
 import {
   AnalysisControlsSkeleton,
@@ -58,6 +60,8 @@ import {
 
 // Load analysis controls immediately as they're needed for user interaction
 const AnalysisControls = dynamic(() => import('@/components/AnalysisControls').then(mod => ({ default: mod.AnalysisControls })), {
+
+
   loading: () => <AnalysisControlsSkeleton />,
   ssr: false
 });
@@ -89,7 +93,6 @@ import dynamic from 'next/dynamic';
 import BeatTimeline from '@/components/BeatTimeline';
 import {
   simplifyChordArray,
-  simplifyChordCorrections,
   simplifySequenceCorrections
 } from '@/utils/chordSimplification';
 
@@ -110,7 +113,10 @@ import { useSegmentationState } from '@/hooks/useSegmentationState';
 import { useTabsAndEditing } from '@/hooks/useTabsAndEditing';
 import { useLyricsState } from '@/hooks/useLyricsState';
 import { useChordProcessing } from '@/hooks/useChordProcessing';
-// import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
+import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
+import { PlaybackProvider } from '@/contexts/PlaybackContext';
+import { UIProvider } from '@/contexts/UIContext';
+
 
 
 export default function YouTubeVideoAnalyzePage() {
@@ -152,7 +158,6 @@ export default function YouTubeVideoAnalyzePage() {
     state: audioPlayerState,
     audioRef,
     youtubePlayer,
-    seek, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleTimeUpdate: _handleTimeUpdate, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleLoadedMetadata: _handleLoadedMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
     setState: setAudioPlayerState,
@@ -303,7 +308,6 @@ export default function YouTubeVideoAnalyzePage() {
   const {
     segmentationData,
     showSegmentation,
-    setShowSegmentation,
     handleSegmentationResult,
   } = useSegmentationState();
 
@@ -315,9 +319,13 @@ export default function YouTubeVideoAnalyzePage() {
     romanNumeralData,
     setRomanNumeralsRequested,
     setRomanNumeralData,
+
+
     setShowRomanNumerals,
     setSimplifyChords,
   } = useChordProcessing();
+
+
 
   // Enharmonic correction state
   const [chordCorrections, setChordCorrections] = useState<Record<string, string> | null>(null);
@@ -355,10 +363,7 @@ export default function YouTubeVideoAnalyzePage() {
   const memoizedChordCorrections = useMemo(() => chordCorrections, [chordCorrections]);
   const memoizedSequenceCorrections = useMemo(() => sequenceCorrections, [sequenceCorrections]);
 
-  // Memoize simplified chord data when simplification is enabled
-  const simplifiedChordCorrections = useMemo(() => {
-    return simplifyChords ? simplifyChordCorrections(memoizedChordCorrections) : memoizedChordCorrections;
-  }, [simplifyChords, memoizedChordCorrections]);
+  // (Removed) simplifiedChordCorrections: now provided via AnalysisDataContext when needed
 
   const simplifiedSequenceCorrections = useMemo(() => {
     return simplifyChords ? simplifySequenceCorrections(memoizedSequenceCorrections) : memoizedSequenceCorrections;
@@ -433,8 +438,6 @@ export default function YouTubeVideoAnalyzePage() {
   // Use playback state hook for YouTube event handlers
   const {
     handleYouTubeReady,
-    handleYouTubePlay, // eslint-disable-line @typescript-eslint/no-unused-vars
-    handleYouTubePause, // eslint-disable-line @typescript-eslint/no-unused-vars
     handleYouTubeProgress,
   } = usePlaybackState({
     audioRef,
@@ -527,7 +530,9 @@ export default function YouTubeVideoAnalyzePage() {
     extractionLockRef
   ]); // Complete dependency array
 
-  // ✅ STREAMLINED: Check for cached analysis availability AFTER audio extraction
+  // PERFORMANCE OPTIMIZATION: Split massive useEffect into focused effects
+
+  // Audio state changes only - check cache when audio is extracted
   useEffect(() => {
     const checkAnalysisCache = async () => {
       // Only check if audio is extracted and models are ready
@@ -556,25 +561,11 @@ export default function YouTubeVideoAnalyzePage() {
             setCacheAvailable(false);
           }
 
-          // BANNER FIX: Ensure processing stage is set to idle after cache check
-          if (stage !== 'idle') {
-            setStage('idle');
-            setProgress(0);
-            setStatusMessage('');
-          }
-
           setCacheCheckCompleted(true);
         } catch (error) {
           console.error('Error checking cached analysis:', error);
           setCacheAvailable(false);
           setCacheCheckCompleted(true);
-
-          // BANNER FIX: Ensure banner is dismissed on error
-          if (stage !== 'idle') {
-            setStage('idle');
-            setProgress(0);
-            setStatusMessage('');
-          }
         } finally {
           setCacheCheckInProgress(false);
         }
@@ -587,17 +578,26 @@ export default function YouTubeVideoAnalyzePage() {
     audioProcessingState.audioUrl,
     audioProcessingState.isAnalyzed,
     audioProcessingState.isAnalyzing,
-    videoId,
-    beatDetector,
-    chordDetector,
     modelsInitialized,
     cacheCheckCompleted,
     cacheCheckInProgress,
-    stage,
-    setStage,
-    setProgress,
-    setStatusMessage
+    videoId,
+    beatDetector,
+    chordDetector
   ]);
+
+  // Stage management - handle banner dismissal when stage changes
+  useEffect(() => {
+    // BANNER FIX (scoped): After cache check, only reset to idle for pre-analysis stages
+    if (!cacheCheckCompleted) return;
+
+    // Do NOT interfere with analysis stages (beat-detection, chord-recognition) or completion
+    if (stage === 'downloading' || stage === 'extracting') {
+      setStage('idle');
+      setProgress(0);
+      setStatusMessage('');
+    }
+  }, [cacheCheckCompleted, stage, setStage, setProgress, setStatusMessage]);
 
   // Use lyrics state hook
   const {
@@ -679,6 +679,7 @@ export default function YouTubeVideoAnalyzePage() {
             // Load cached Roman numeral data
             if (cachedTranscription.romanNumerals) {
               setRomanNumeralData(cachedTranscription.romanNumerals);
+
             }
           } else if (cachedTranscription && cachedTranscription.originalChords && cachedTranscription.correctedChords) {
             // Backward compatibility: convert old format to new format
@@ -699,6 +700,7 @@ export default function YouTubeVideoAnalyzePage() {
             // Load cached Roman numeral data (backward compatibility)
             if (cachedTranscription.romanNumerals) {
               setRomanNumeralData(cachedTranscription.romanNumerals);
+
             }
           } else {
             // No cached chord corrections found
@@ -1273,6 +1275,91 @@ export default function YouTubeVideoAnalyzePage() {
   }, [youtubePlayer, audioRef]);
 
   return (
+    <AnalysisDataProvider
+      analysisState={{
+        analysisResults,
+        isAnalyzing: audioProcessingState.isAnalyzing,
+        analysisError: audioProcessingState.error || null,
+        cacheAvailable,
+        cacheCheckCompleted,
+        cacheCheckInProgress,
+        keySignature,
+        isDetectingKey,
+        chordCorrections,
+        showCorrectedChords,
+      }}
+      modelState={{
+        beatDetector,
+        chordDetector,
+        modelsInitialized,
+      }}
+      lyricsState={{
+        lyrics,
+        showLyrics,
+        hasCachedLyrics,
+        isTranscribingLyrics,
+        lyricsError,
+      }}
+      chordProcessingState={{
+        simplifyChords,
+        showRomanNumerals: showRomanNumerals,
+        romanNumeralsRequested,
+        romanNumeralData,
+      }}
+      operations={{
+        // Analysis operations
+        startAnalysis: () => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: true, error: null })),
+        completeAnalysis: (results) => { setAnalysisResults(results); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: true })); },
+        failAnalysis: (error) => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, error })),
+        resetAnalysis: () => { setAnalysisResults(null as any); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: false, error: null })); },
+        // Model operations
+        setBeatDetector: (d: string) => setBeatDetector(d as any),
+        setChordDetector: (d: string) => setChordDetector(d as any),
+        // Lyrics operations
+        startLyricsTranscription: () => setIsTranscribingLyrics(true),
+        completeLyricsTranscription: (lyricsData) => { setLyrics(lyricsData); setIsTranscribingLyrics(false); setShowLyrics(true); },
+        failLyricsTranscription: (error) => { setLyricsError(error); setIsTranscribingLyrics(false); },
+        toggleLyricsVisibility: () => setShowLyrics(v => !v),
+        // Chord processing operations
+        toggleChordSimplification: () => setSimplifyChords(v => !v),
+        toggleRomanNumerals: () => setShowRomanNumerals(v => !v),
+        updateRomanNumeralData: (data) => setRomanNumeralData(data),
+      }}
+    >
+      <UIProvider
+        initialVideoTitle={videoTitle}
+        controlledShowRomanNumerals={showRomanNumerals}
+        onShowRomanNumeralsChange={setShowRomanNumerals}
+        controlledRomanNumeralData={romanNumeralData}
+        onRomanNumeralDataChange={setRomanNumeralData}
+        initialShowSegmentation={showSegmentation}
+        controlledSimplifyChords={simplifyChords}
+        onSimplifyChordsChange={setSimplifyChords}
+      >
+        <PlaybackProvider
+          audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
+          audioRef={audioRef as any}
+          youtubePlayer={youtubePlayer}
+          playbackControls={{
+            play: () => { try { (youtubePlayer as any)?.playVideo?.(); } catch {} setIsPlaying(true); },
+            pause: () => { try { (youtubePlayer as any)?.pauseVideo?.(); } catch {} setIsPlaying(false); },
+            seek: (time: number) => { try { (youtubePlayer as any)?.seekTo?.(time, 'seconds'); } catch {} setCurrentTime(time); },
+            setPlayerPlaybackRate: (rate: number) => { try { (youtubePlayer as any)?.setPlaybackRate?.(rate); } catch {} setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })); },
+          }}
+          beatState={{ currentBeatIndex }}
+          beatHandlers={{ onBeatClick: handleBeatClick, setCurrentBeatIndex, setCurrentDownbeatIndex }}
+          videoUIState={{ isVideoMinimized, isFollowModeEnabled }}
+          videoUIControls={{ toggleVideoMinimization, toggleFollowMode }}
+          setters={{
+            setIsPlaying,
+            setCurrentTime,
+            setDuration,
+            setPlaybackRate: (rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })),
+            setYoutubePlayer: (player: unknown) => setYoutubePlayer(player as any),
+            setIsVideoMinimized,
+            setIsFollowModeEnabled,
+          }}
+        >
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
       {/* Use the Navigation component */}
       <Navigation />
@@ -1343,9 +1430,7 @@ export default function YouTubeVideoAnalyzePage() {
                       hasCachedLyrics={hasCachedLyrics}
                       canTranscribe={isServiceAvailable('musicAi') && !!audioProcessingState.audioUrl}
                       transcribeLyricsWithAI={transcribeLyricsWithAI}
-                      showSegmentation={showSegmentation}
                       hasSegmentationData={!!segmentationData}
-                      setShowSegmentation={setShowSegmentation}
                       lyricsError={lyricsError}
                     />
 
@@ -1360,24 +1445,14 @@ export default function YouTubeVideoAnalyzePage() {
                       {activeTab === 'beatChordMap' && (
                         <div>
                           <ChordGridContainer
-                            analysisResults={analysisResults}
                             chordGridData={simplifiedChordGridData}
-                            currentBeatIndex={currentBeatIndex}
-                            keySignature={keySignature}
-                            isDetectingKey={isDetectingKey}
                             isChatbotOpen={isChatbotOpen}
                             isLyricsPanelOpen={isLyricsPanelOpen}
-                            onBeatClick={handleBeatClick}
-                            showCorrectedChords={showCorrectedChords}
-                            chordCorrections={simplifiedChordCorrections}
-                            sequenceCorrections={simplifiedSequenceCorrections}
                             segmentationData={segmentationData}
-                            showSegmentation={showSegmentation}
                             isEditMode={isEditMode}
                             editedChords={editedChords}
                             onChordEdit={handleChordEditWrapper}
-                            showRomanNumerals={showRomanNumerals}
-                            romanNumeralData={romanNumeralData}
+                            sequenceCorrections={simplifiedSequenceCorrections}
                           />
 
                           <AnalysisSummary
@@ -1389,22 +1464,12 @@ export default function YouTubeVideoAnalyzePage() {
 
                       {activeTab === 'guitarChords' && (
                         <GuitarChordsTab
-                          analysisResults={analysisResults}
                           chordGridData={simplifiedChordGridData}
-                          currentBeatIndex={currentBeatIndex}
-                          onBeatClick={handleBeatClick}
-                          keySignature={keySignature}
-                          isDetectingKey={isDetectingKey}
                           isChatbotOpen={isChatbotOpen}
                           isLyricsPanelOpen={isLyricsPanelOpen}
                           isUploadPage={false}
-                          showCorrectedChords={showCorrectedChords}
-                          chordCorrections={simplifiedChordCorrections}
                           sequenceCorrections={simplifiedSequenceCorrections}
                           segmentationData={segmentationData}
-                          showSegmentation={showSegmentation}
-                          showRomanNumerals={showRomanNumerals}
-                          romanNumeralData={romanNumeralData}
                         />
                       )}
                     </div>
@@ -1420,7 +1485,6 @@ export default function YouTubeVideoAnalyzePage() {
 	                        theme={theme}
 	                        analysisResults={analysisResults}
 	                        segmentationData={segmentationData}
-	                        simplifyChords={simplifyChords}
 	                      />
 	                    )}
 
@@ -1487,16 +1551,12 @@ export default function YouTubeVideoAnalyzePage() {
               isLyricsPanelOpen={isLyricsPanelOpen}
               isVideoMinimized={isVideoMinimized}
               isFollowModeEnabled={isFollowModeEnabled}
-              showRomanNumerals={showRomanNumerals}
-              simplifyChords={simplifyChords}
               analysisResults={analysisResults}
               currentBeatIndex={currentBeatIndex}
               chords={simplifiedChordGridData?.chords || []}
               beats={simplifiedChordGridData?.beats || []}
               toggleVideoMinimization={toggleVideoMinimization}
               toggleFollowMode={toggleFollowMode}
-              setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
-              setSimplifyChords={() => { /* retained externally; no-op in embedded layout */ }}
               toggleMetronomeWithSync={async () => false}
               videoId={videoId}
               isPlaying={isPlaying}
@@ -1539,13 +1599,9 @@ export default function YouTubeVideoAnalyzePage() {
           utilityBar={
             <UtilityBar
               isFollowModeEnabled={isFollowModeEnabled}
-              showRomanNumerals={showRomanNumerals}
-              simplifyChords={simplifyChords}
               chordPlayback={chordPlayback}
               youtubePlayer={youtubePlayer}
               toggleFollowMode={toggleFollowMode}
-              setShowRomanNumerals={(v) => { setShowRomanNumerals(v); if (v !== showRomanNumerals) setRomanNumeralsRequested(!v); }}
-              setSimplifyChords={(v) => setSimplifyChords(v)}
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}
               countdownDisplay={countdownDisplay}
@@ -1563,6 +1619,11 @@ export default function YouTubeVideoAnalyzePage() {
         />
       )}
     </div>
+    </PlaybackProvider>
+    </UIProvider>
+
+    </AnalysisDataProvider>
+
   );
 }
 

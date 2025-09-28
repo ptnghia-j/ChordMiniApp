@@ -7,6 +7,7 @@ import { HiOutlineArrowPath, HiArrowPath } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { useChordPlayback } from '@/hooks/useChordPlayback';
+import { useUI } from '@/contexts/UIContext';
 
 // Dynamic imports for heavy components
 const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
@@ -20,6 +21,7 @@ const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimpli
 });
 
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
+import { useSimplifySelector } from '@/contexts/selectors';
 
 const RomanNumeralToggle = dynamic(() => import('@/components/RomanNumeralToggle'), {
   loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -43,8 +45,6 @@ interface FloatingVideoDockProps {
 
   // Toggle states and handlers
   isFollowModeEnabled: boolean;
-  showRomanNumerals: boolean;
-  simplifyChords: boolean;
   analysisResults: AnalysisResult | null; // for opacity gating
 
   // Chord playback props
@@ -55,8 +55,6 @@ interface FloatingVideoDockProps {
   // Handlers
   toggleVideoMinimization: () => void;
   toggleFollowMode: () => void;
-  setShowRomanNumerals: (value: boolean) => void;
-  setSimplifyChords: (value: boolean) => void;
   toggleMetronomeWithSync: () => Promise<boolean>;
 
   // Video player props
@@ -109,21 +107,18 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   isLyricsPanelOpen,
   isVideoMinimized,
   isFollowModeEnabled,
-  showRomanNumerals,
-  simplifyChords,
   analysisResults,
   currentBeatIndex,
   chords,
   beats,
   toggleVideoMinimization,
   toggleFollowMode,
-  setShowRomanNumerals,
-  setSimplifyChords,
   toggleMetronomeWithSync,
   videoId,
   isPlaying,
   playbackRate,
   currentTime,
+
   duration,
   onReady,
   onPlay,
@@ -139,7 +134,13 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   isCountingDown = false,
   countdownDisplay
 }) => {
+  // Roman numerals from UI Context
+  const { showRomanNumerals, toggleRomanNumerals } = useUI();
+
   // Chord playback hook - keep active regardless of top toggles so UtilityBar can still control playback
+  // Simplify selector from UIContext
+  const { simplifyChords, toggleSimplifyChords } = useSimplifySelector();
+
   const chordPlayback = useChordPlayback({
     currentBeatIndex,
     chords,
@@ -230,7 +231,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
             <RomanNumeralToggle
               isEnabled={showRomanNumerals}
-              onClick={() => setShowRomanNumerals(!showRomanNumerals)}
+              onClick={toggleRomanNumerals}
             />
           </div>
 
@@ -251,7 +252,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
             <ChordSimplificationToggle
               isEnabled={simplifyChords}
-              onClick={() => setSimplifyChords(!simplifyChords)}
+              onClick={toggleSimplifyChords}
             />
           </div>
 
@@ -264,7 +265,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
         </div>
       )}
 
-      
+
       <div className="relative">
         {/* Minimize/Maximize button */}
         <button

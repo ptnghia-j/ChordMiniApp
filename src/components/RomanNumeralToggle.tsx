@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { HiOutlineHashtag, HiHashtag } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
@@ -59,4 +59,4 @@ const RomanNumeralToggle: React.FC<RomanNumeralToggleProps> = ({
   );
 };
 
-export default RomanNumeralToggle;
+export default memo(RomanNumeralToggle);

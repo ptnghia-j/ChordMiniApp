@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@heroui/react';
 import Navigation from '@/components/Navigation';
@@ -147,9 +147,6 @@ export default function LocalAudioAnalyzePage() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords'>('beatChordMap');
 
-  // Roman numeral analysis state
-  const [showRomanNumerals] = useState(false);
-  const romanNumeralData = null;
 
   // Key signature and chord correction states - now with proper key detection
   const [keySignature, setKeySignature] = useState<string | null>(null);
@@ -551,29 +548,7 @@ export default function LocalAudioAnalyzePage() {
     }
   }, [currentBeatIndex, isFollowModeEnabled]);
 
-  // Beat click handler
-  const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
-    if (!audioRef.current) return;
-
-    // Use the timestamp directly if provided, otherwise get from chord grid data
-    let targetTime = timestamp;
-
-    if (!timestamp && beatIndex >= 0 && beatIndex < chordGridData.beats.length) {
-      const beatTime = chordGridData.beats[beatIndex];
-      if (typeof beatTime === 'number') {
-        targetTime = beatTime;
-      }
-    }
-
-    if (targetTime >= 0) {
-      audioRef.current.currentTime = targetTime;
-      setCurrentTime(targetTime);
-
-      // Update beat index immediately for responsive animation
-      currentBeatIndexRef.current = beatIndex;
-      setCurrentBeatIndex(beatIndex);
-    }
-  }, [chordGridData.beats]);
+  
 
   // Metronome synchronization hook - use duration from audio element
   const { toggleMetronomeWithSync } = useMetronomeSync({
@@ -736,12 +711,10 @@ export default function LocalAudioAnalyzePage() {
                       <ChordGridContainer
                         analysisResults={analysisResults}
                         chordGridData={chordGridData}
-                        currentBeatIndex={currentBeatIndex}
                         keySignature={keySignature}
                         isDetectingKey={isDetectingKey}
                         isChatbotOpen={false}
                         isLyricsPanelOpen={false}
-                        onBeatClick={handleBeatClick}
                         isUploadPage={true}
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
@@ -754,8 +727,6 @@ export default function LocalAudioAnalyzePage() {
                       <GuitarChordsTab
                         analysisResults={analysisResults}
                         chordGridData={chordGridData}
-                        currentBeatIndex={currentBeatIndex}
-                        onBeatClick={handleBeatClick}
                         keySignature={keySignature}
                         isDetectingKey={isDetectingKey}
                         isChatbotOpen={false}
@@ -764,8 +735,6 @@ export default function LocalAudioAnalyzePage() {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
-                        showRomanNumerals={showRomanNumerals}
-                        romanNumeralData={romanNumeralData}
                       />
                     )}
                   </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
@@ -221,13 +221,13 @@ export default function RecentVideos() {
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
 
-  // Initial load effect - runs only once on mount
+  // Initial load effect - run only once using a ref guard (satisfies exhaustive-deps)
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    // We wrap this in a self-invoking function to handle the async call correctly inside useEffect
-    (async () => {
-        await fetchVideos(false);
-    })();
-  }, []); // Intentionally empty to run only once
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    void fetchVideos(false);
+  }, [fetchVideos]);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
