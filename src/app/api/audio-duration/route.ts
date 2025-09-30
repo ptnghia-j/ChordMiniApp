@@ -11,7 +11,7 @@ import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
  */
 
 // Configure Vercel function timeout
-export const maxDuration = 60; // 1 minute for duration detection
+export const maxDuration = 180; // 3 minute for duration detection
 
 export async function POST(request: NextRequest) {
   try {

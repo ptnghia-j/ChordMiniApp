@@ -30,8 +30,8 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
-      version: 'v0.4.5 (in progress)',
-      date: 'September 27, 2025',
+      version: 'v0.4.5',
+      date: 'September 29, 2025',
       title: 'Context Migration, Corrections Visuals, and Faster UI',
       description: 'Completes Advanced Context Migration, restoring chord corrections visuals and improving responsiveness while avoiding unnecessary fetches and re-renders.',
       features: [
@@ -48,7 +48,9 @@ export default function ChangelogPage() {
         'STABILITY: Reconnected sequenceCorrections to ChordGridContainer so corrected chords render immediately',
         'STABILITY: Prevented re-fetching on toggle changes by centralizing state and stabilizing effect deps'
       ],
-      breaking: []
+      breaking: [
+        'First working release of Docker Images for both frontend and backend services'
+      ]
     },
 
     {
@@ -87,7 +89,9 @@ export default function ChangelogPage() {
         'ARCHITECTURE: Centralized audio analysis orchestrator (audioAnalysisService.ts) coordinating beat detection, chord recognition, and synchronization with Vercel Blob support',
         'REFACTOR: Backward-compatible facade (chordRecognitionService.ts) delegates to the orchestrator to reduce duplication and simplify imports',
       ],
-      breaking: []
+      breaking: [
+        'Audio mixture service supporting chord playback - initial release (no soundfont available) '
+      ]
     },
 
     {
