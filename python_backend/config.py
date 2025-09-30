@@ -33,6 +33,8 @@ class Config:
     CORS_ORIGINS = [
         "http://localhost:3000",  # Development
         "http://127.0.0.1:3000",  # Development
+        "http://chordmini-frontend:3000",  # Docker container (internal network)
+        "http://0.0.0.0:3000",  # Docker bind address
         "https://*.vercel.app",   # Vercel deployments
         "https://chord-mini-app.vercel.app",  # Specific Vercel deployment
     ]

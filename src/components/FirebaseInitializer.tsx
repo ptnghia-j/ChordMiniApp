@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { preloadFirebase } from '@/lib/firebase-lazy';
+import { preloadFirebase } from '@/config/firebase';
 
 /**
  * Client component that preloads Firebase when needed
  * Uses lazy loading to reduce initial bundle size
+ *
+ * MIGRATION: Updated to use @/config/firebase instead of @/lib/firebase-lazy
  */
 export default function FirebaseInitializer() {
   useEffect(() => {

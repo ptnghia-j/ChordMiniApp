@@ -5,7 +5,13 @@
  * - Localhost Development: Use yt-dlp when both NEXT_PUBLIC_BASE_URL and NEXT_PUBLIC_PYTHON_API_URL contain "localhost"
  * - Production: Use yt2mp3magic for all other environments
  * - Automatic fallback between strategies for reliability
+ *
+ * RUNTIME CONFIG SUPPORT:
+ * - Server-side code (API routes, SSR): Use detectEnvironment() (sync, uses process.env)
+ * - Client-side code (React components): Use detectEnvironmentAsync() for runtime config
  */
+
+import { loadPublicConfig } from '@/config/publicConfig';
 
 export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go' | 'ytdown-io';
 
@@ -18,8 +24,11 @@ export interface EnvironmentConfig {
 }
 
 /**
- * Detect the current environment and return appropriate configuration
+ * Detect the current environment and return appropriate configuration (sync, for server-side)
  * Uses URL-based detection for simplified strategy selection
+ *
+ * NOTE: This function uses process.env and is suitable for server-side code (API routes, SSR).
+ * For client-side code, use detectEnvironmentAsync() to get runtime configuration.
  */
 export function detectEnvironment(): EnvironmentConfig {
   // Check if we're in a browser environment
@@ -68,7 +77,67 @@ export function detectEnvironment(): EnvironmentConfig {
     // Use ytdown.io for production (more reliable than downr.org, no 403 errors)
     strategy = 'ytdown-io';
   }
-  
+
+  return {
+    strategy,
+    isProduction,
+    isDevelopment,
+    isVercel,
+    baseUrl
+  };
+}
+
+/**
+ * Detect the current environment with runtime configuration (async, for client-side)
+ *
+ * Use this function in client-side code to get environment configuration
+ * that is set at Docker container runtime.
+ *
+ * @returns Promise resolving to environment configuration
+ */
+export async function detectEnvironmentAsync(): Promise<EnvironmentConfig> {
+  // Server-side: use sync version
+  if (typeof window === 'undefined') {
+    return detectEnvironment();
+  }
+
+  // Client-side: load runtime config
+  const config = await loadPublicConfig();
+
+  // Get environment variables from runtime config
+  const nodeEnv = config.NODE_ENV;
+  const envBaseUrl = config.NEXT_PUBLIC_BASE_URL || '';
+  const envPythonApiUrl = config.NEXT_PUBLIC_PYTHON_API_URL || '';
+
+  // URL-based environment detection
+  const isLocalhost = envBaseUrl.includes('localhost') && envPythonApiUrl.includes('localhost');
+
+  // Determine environment based on URL detection
+  const isDevelopment = isLocalhost || nodeEnv === 'development';
+  const isProduction = !isDevelopment;
+  const isVercel = isProduction && !isLocalhost;
+
+  // Get base URL for response
+  const baseUrl = window.location.origin;
+
+  // Determine strategy based on manual override or URL detection
+  let strategy: AudioProcessingStrategy;
+
+  // Check for manual strategy override
+  const manualStrategy = config.NEXT_PUBLIC_AUDIO_STRATEGY;
+  // Allow forcing ytdown.io in dev without changing manual override
+  const devForceYtdown = config.NEXT_PUBLIC_DEV_USE_YTDOWN_IO === 'true';
+
+  if (manualStrategy && manualStrategy !== 'auto' &&
+      ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
+    strategy = manualStrategy as AudioProcessingStrategy;
+    console.log(`🔧 Using manual audio strategy override: ${strategy}`);
+  } else if (isLocalhost) {
+    strategy = devForceYtdown ? 'ytdown-io' : 'ytdlp';
+  } else {
+    strategy = 'ytdown-io';
+  }
+
   return {
     strategy,
     isProduction,

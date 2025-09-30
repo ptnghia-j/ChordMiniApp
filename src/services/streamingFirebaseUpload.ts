@@ -1,12 +1,12 @@
 /**
  * Streaming Firebase Upload Service
- * 
+ *
  * This service handles streaming upload of audio files directly from
  * external services to Firebase Storage without storing locally.
  */
 
 import { ref, uploadBytesResumable, getDownloadURL, UploadTaskSnapshot } from 'firebase/storage';
-import { storage } from '../config/firebase';
+import { getStorageInstance } from '../config/firebase';
 
 // Request deduplication: prevent multiple concurrent uploads of the same video
 const pendingUploads = new Map<string, Promise<StreamingUploadResult>>();
@@ -35,15 +35,18 @@ export async function uploadAudioStream(
   audioStream: ReadableStream<Uint8Array>,
   options: StreamingUploadOptions
 ): Promise<StreamingUploadResult> {
-  if (!storage) {
-    console.warn('Firebase Storage not initialized, cannot upload audio stream');
-    return {
-      success: false,
-      error: 'Firebase Storage not initialized'
-    };
-  }
-
   try {
+    // Get Firebase Storage instance (ensures initialization)
+    const storage = await getStorageInstance();
+
+    if (!storage) {
+      console.warn('Firebase Storage not initialized, cannot upload audio stream');
+      return {
+        success: false,
+        error: 'Firebase Storage not initialized'
+      };
+    }
+
     const { videoId, filename, title, contentType = 'audio/mpeg' } = options;
 
     console.log(`📤 Starting streaming upload for video ${videoId}`);
@@ -489,6 +492,9 @@ async function uploadBlobToFirebase(
   const { videoId, contentType } = options;
 
   try {
+    // Get Firebase Storage instance (ensures initialization)
+    const storage = await getStorageInstance();
+
     if (!storage) {
       throw new Error('Firebase Storage not initialized');
     }

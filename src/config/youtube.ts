@@ -1,7 +1,34 @@
 // YouTube API Configuration
+//
+// RUNTIME CONFIG SUPPORT:
+// - Server-side code: Use YOUTUBE_API_KEY constant (process.env)
+// - Client-side code: Use getYouTubeApiKeyAsync() for runtime config
 
-// Get the API key from environment variables
-export const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || ''; // API key now loaded from env var
+import { loadPublicConfig } from '@/config/publicConfig';
+
+// Get the API key from environment variables (sync, for server-side)
+// NOTE: This constant uses process.env and is suitable for server-side code (API routes, SSR).
+// For client-side code, use getYouTubeApiKeyAsync() to get runtime configuration.
+export const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || '';
+
+/**
+ * Get YouTube API key with runtime configuration (async, for client-side)
+ *
+ * Use this function in client-side code to get the YouTube API key
+ * that is configured at Docker container runtime.
+ *
+ * @returns Promise resolving to YouTube API key
+ */
+export async function getYouTubeApiKeyAsync(): Promise<string> {
+  // Server-side: use process.env directly
+  if (typeof window === 'undefined') {
+    return YOUTUBE_API_KEY;
+  }
+
+  // Client-side: load runtime config
+  const config = await loadPublicConfig();
+  return config.NEXT_PUBLIC_YOUTUBE_API_KEY || '';
+}
 
 // YouTube API endpoints
 export const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';

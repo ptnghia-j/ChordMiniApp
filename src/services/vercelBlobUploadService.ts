@@ -43,14 +43,30 @@ class VercelBlobUploadService {
   }
 
   /**
+   * Check if we're running in server-side context (Node.js/Docker)
+   * Vercel Blob client SDK requires browser globals like 'location'
+   */
+  private isServerSide(): boolean {
+    return typeof window === 'undefined';
+  }
+
+  /**
    * Check if file should use blob upload based on environment and file size
    * - Localhost development: Never use blob upload (send directly to Python backend)
-   * - Production: Use blob upload for files > 4.0MB if blob is configured
+   * - Server-side (Docker/API routes): Never use blob upload (client SDK requires browser)
+   * - Production client-side: Use blob upload for files > 4.0MB if blob is configured
    */
   shouldUseBlobUpload(fileSize: number): boolean {
-    // Skip blob upload entirely in localhost development
+    // Skip blob upload in localhost development
     if (this.isLocalhostDevelopment()) {
 
+      return false;
+    }
+
+    // Skip blob upload in server-side contexts (Docker, API routes)
+    // The @vercel/blob/client SDK requires browser globals like 'location'
+    if (this.isServerSide()) {
+      console.debug('Skipping Vercel Blob upload in server-side context (Docker/API routes)');
       return false;
     }
 

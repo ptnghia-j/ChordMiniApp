@@ -9,8 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 
-// Only allow in development environment
+// Allow yt-dlp in production when explicitly configured via NEXT_PUBLIC_AUDIO_STRATEGY
 const isDevelopment = process.env.NODE_ENV === 'development';
+const allowYtDlpInProduction = process.env.NEXT_PUBLIC_AUDIO_STRATEGY === 'ytdlp';
 
 interface YtDlpSearchResult {
   id: string;
@@ -25,12 +26,12 @@ interface YtDlpSearchResult {
 }
 
 export async function POST(request: NextRequest) {
-  // Block in production
-  if (!isDevelopment) {
+  // Block in production unless explicitly enabled
+  if (!isDevelopment && !allowYtDlpInProduction) {
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'yt-dlp endpoints are only available in development environment' 
+      {
+        success: false,
+        error: 'yt-dlp endpoints are only available in development environment or when NEXT_PUBLIC_AUDIO_STRATEGY=ytdlp'
       },
       { status: 403 }
     );

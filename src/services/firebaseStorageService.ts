@@ -1,5 +1,5 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
-import { db, storage } from '@/config/firebase';
+import { db, getStorageInstance } from '@/config/firebase';
 import { doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 // Collection name for audio files - must match Firestore rules
@@ -50,6 +50,9 @@ export async function findExistingAudioFile(
   storagePath: string;
   fileSize?: number;
 } | null> {
+  // Get Firebase Storage instance (ensures initialization)
+  const storage = await getStorageInstance();
+
   if (!storage) {
     console.warn('Firebase Storage not initialized');
     return null;
@@ -122,7 +125,14 @@ export async function findExistingAudioFiles(
     fileSize?: number;
   }>();
 
-  if (!storage || videoIds.length === 0) {
+  if (videoIds.length === 0) {
+    return results;
+  }
+
+  // Get Firebase Storage instance (ensures initialization)
+  const storage = await getStorageInstance();
+
+  if (!storage) {
     return results;
   }
 
@@ -204,6 +214,9 @@ export async function uploadAudioFile(
   storagePath: string;
   videoStoragePath?: string;
 } | null> {
+  // Get Firebase Storage instance (ensures initialization)
+  const storage = await getStorageInstance();
+
   if (!storage || !db) {
     console.warn('Firebase Storage not initialized, skipping upload');
     return null;
@@ -362,14 +375,14 @@ export async function saveAudioFileMetadata(
     console.log('Audio file metadata saved successfully to Firestore');
     return true;
   } catch (error) {
-    console.error('Error saving audio file metadata to Firestore:', error);
-
-    // Check for specific permission errors
+    // Check for specific permission errors - these are expected and handled by fallback
     if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
-      console.warn('Firestore permissions not configured for audio file metadata. This is expected in development.');
-      console.warn('To fix this, update your Firestore security rules to allow writes to the audioFiles collection.');
+      console.debug('Firestore permissions not configured for audio file metadata. Using fallback cache.');
+      return false; // Silent failure - fallback cache will handle it
     }
 
+    // Log other errors normally
+    console.error('Error saving audio file metadata to Firestore:', error);
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
@@ -495,8 +508,9 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
 
             // Import Firebase Storage functions
             const { ref, getDownloadURL } = await import('firebase/storage');
-            const { storage } = await import('@/config/firebase');
+            const { getStorageInstance } = await import('@/config/firebase');
 
+            const storage = await getStorageInstance();
             if (!storage) {
               console.warn('Firebase Storage not initialized');
               return data;
@@ -653,6 +667,9 @@ export async function getCachedAudioFile(videoId: string): Promise<AudioFileData
  * @returns True if successful, false otherwise
  */
 export async function deleteAudioFile(storagePath: string): Promise<boolean> {
+  // Get Firebase Storage instance (ensures initialization)
+  const storage = await getStorageInstance();
+
   if (!storage) {
     console.warn('Firebase Storage not initialized, skipping delete');
     return false;

@@ -53,7 +53,20 @@ export default function RecentVideos() {
   }
 
   const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
-    if (!db || videoIds.length === 0) {
+    // Ensure Firebase is initialized
+    let firestoreDb = db;
+    if (!firestoreDb) {
+      try {
+        const { ensureFirebaseInitialized } = await import('@/config/firebase');
+        const { db: initializedDb } = await ensureFirebaseInitialized();
+        firestoreDb = initializedDb;
+      } catch (error) {
+        console.error('❌ Firebase initialization failed in fetchAudioFiles:', error);
+        return new Map<string, AudioFileMetadata>();
+      }
+    }
+
+    if (!firestoreDb || videoIds.length === 0) {
       return new Map<string, AudioFileMetadata>();
     }
 
@@ -62,8 +75,8 @@ export default function RecentVideos() {
       videoIds,
       async (videoId: string) => {
         try {
-          if (!db) return null;
-          const audioDocRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
+          if (!firestoreDb) return null;
+          const audioDocRef = doc(firestoreDb, AUDIO_FILES_COLLECTION, videoId);
           const audioDocSnap = await getDoc(audioDocRef);
 
           if (audioDocSnap.exists()) {
@@ -100,7 +113,25 @@ export default function RecentVideos() {
   }, []);
 
   const fetchVideos = useCallback(async (isLoadMore = false) => {
-    if (!db) {
+    // CRITICAL FIX: Ensure Firebase is initialized before fetching
+    // Race condition: Component mounts before setTimeout(0) in firebase.ts completes
+    // This ensures db is initialized before attempting to fetch data
+    let firestoreDb = db;
+    if (!firestoreDb) {
+      try {
+        const { ensureFirebaseInitialized } = await import('@/config/firebase');
+        const { db: initializedDb } = await ensureFirebaseInitialized();
+        firestoreDb = initializedDb;
+        console.log('✅ Firebase initialized for RecentVideos');
+      } catch (error) {
+        console.error('❌ Firebase initialization failed:', error);
+        setError('Firebase not initialized');
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!firestoreDb) {
       setError('Firebase not initialized');
       setLoading(false);
       return;
@@ -119,7 +150,7 @@ export default function RecentVideos() {
         setLoading(true); // Only set main loading state for initial fetch
       }
 
-      const transcriptionsRef = collection(db, TRANSCRIPTIONS_COLLECTION);
+      const transcriptionsRef = collection(firestoreDb, TRANSCRIPTIONS_COLLECTION);
       let q;
 
 

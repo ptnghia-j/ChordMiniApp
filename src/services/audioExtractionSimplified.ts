@@ -97,12 +97,13 @@ export class AudioExtractionServiceSimplified {
 
 
       case 'ytdlp':
-        if (env.isDevelopment) {
+        // Allow yt-dlp in production when explicitly configured
+        if (env.isDevelopment || process.env.NEXT_PUBLIC_AUDIO_STRATEGY === 'ytdlp') {
           return await this.extractAudioWithYtDlp(videoMetadata, forceRedownload);
         } else {
           return {
             success: false,
-            error: 'yt-dlp is only available in development environment'
+            error: 'yt-dlp is only available in development environment or when NEXT_PUBLIC_AUDIO_STRATEGY=ytdlp'
           };
         }
 
@@ -137,6 +138,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
@@ -232,9 +241,60 @@ export class AudioExtractionServiceSimplified {
       const finalDuration = downloadResult.duration || 0;
 
       try {
-        if (downloadResult.audioUrl && downloadResult.audioUrl.startsWith('http://localhost:')) {
-          // For local yt-dlp files, read the file and upload to Firebase Storage
-          console.log(`📥 Reading local audio file for Firebase Storage upload: ${downloadResult.audioUrl}`);
+        // DOCKER FIX: Use localPath directly instead of fetching URL
+        // In Docker, fetching localhost URLs from within the container doesn't work reliably
+        if (downloadResult.localPath) {
+          // For local yt-dlp files, read the file directly from filesystem
+          console.log(`📥 Reading local audio file from filesystem for Firebase Storage upload: ${downloadResult.localPath}`);
+
+          // Import fs/promises for server-side file reading
+          const fs = await import('fs/promises');
+          const audioBuffer = await fs.readFile(downloadResult.localPath);
+          // Convert Buffer to ArrayBuffer for Firebase upload
+          const audioData: ArrayBuffer = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength) as ArrayBuffer;
+          actualFileSize = audioData.byteLength;
+
+          console.log(`📥 Read ${(actualFileSize / 1024 / 1024).toFixed(2)}MB local file for storage`);
+
+          // Upload to Firebase Storage with monitoring
+          const uploadStartTime = Date.now();
+          const { uploadAudioFile, saveAudioFileMetadata } = await import('./firebaseStorageService');
+          const uploadResult = await uploadAudioFile(videoId, audioData);
+
+          if (uploadResult) {
+            const uploadTime = Date.now() - uploadStartTime;
+
+            // Validate Firebase Storage URL accessibility before using it
+            const { url: validatedUrl, isStorageUrl: validatedIsStorageUrl } = await validateAndReturnUrl(
+              uploadResult.audioUrl,
+              downloadResult.audioUrl, // Fall back to original URL
+              videoId
+            );
+
+            finalAudioUrl = validatedUrl;
+            isStorageUrl = validatedIsStorageUrl;
+
+            console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${uploadResult.audioUrl}`);
+            console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
+            console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback original'} URL: ${finalAudioUrl}`);
+
+            // Save detailed metadata to Firestore
+            await saveAudioFileMetadata({
+              videoId,
+              audioUrl: finalAudioUrl,
+              title: videoMetadata.title,
+              storagePath: uploadResult.storagePath,
+              fileSize: actualFileSize,
+              duration: finalDuration,
+              isStreamUrl: false,
+              streamExpiresAt: undefined
+            });
+
+            console.log(`📈 Firebase Storage Success: videoId=${videoId}, size=${(actualFileSize / 1024 / 1024).toFixed(2)}MB, uploadTime=${uploadTime}ms`);
+          }
+        } else if (downloadResult.audioUrl && downloadResult.audioUrl.startsWith('http://localhost:')) {
+          // FALLBACK: Try fetching URL if localPath is not available (backward compatibility)
+          console.log(`📥 Reading local audio file via URL for Firebase Storage upload: ${downloadResult.audioUrl}`);
 
           const audioResponse = await fetch(downloadResult.audioUrl);
           if (audioResponse.ok) {
@@ -349,6 +409,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
@@ -556,6 +624,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
       if (!forceRedownload) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
@@ -869,6 +945,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files
       if (!forceRedownload) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         // Firebase Storage check logging removed for production
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
@@ -1083,6 +1167,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Step 1: Check Firebase Storage first for permanent audio files
       if (!forceRedownload) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
         try {
           const { findExistingAudioFile } = await import('./firebaseStorageService');
@@ -1399,7 +1491,10 @@ export class AudioExtractionServiceSimplified {
 
 
       case 'ytdlp':
-        return env.isDevelopment ? await ytDlpService.isAvailable() : false;
+        // Allow yt-dlp in production when explicitly configured
+        return (env.isDevelopment || process.env.NEXT_PUBLIC_AUDIO_STRATEGY === 'ytdlp')
+          ? await ytDlpService.isAvailable()
+          : false;
 
       // PRESERVED FOR REFERENCE - service availability checks
       // case 'ytmp3go':
@@ -1483,6 +1578,14 @@ export class AudioExtractionServiceSimplified {
     try {
       // Check Firebase Storage first for permanent audio files (unless force refresh)
       if (!forceRefresh) {
+        // CRITICAL FIX: Ensure Firebase is initialized before cache check
+        try {
+          const { ensureFirebaseInitialized } = await import('@/config/firebase');
+          await ensureFirebaseInitialized();
+        } catch (initError) {
+          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
+        }
+
         const env = detectEnvironment();
         console.log(`🔍 [${env.isProduction ? 'PROD' : 'DEV'}] Checking Firebase Storage for existing audio file: ${videoId}`);
         try {

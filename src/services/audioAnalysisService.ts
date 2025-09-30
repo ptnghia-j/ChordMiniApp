@@ -266,7 +266,14 @@ export async function analyzeAudio(
 
   if (typeof audioInput === 'string') {
     audioFile = await fetchFileFromUrl(audioInput, videoId);
-    try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
+    // Only detect duration client-side (browser) - server-side (Docker) doesn't have Audio API
+    if (typeof window !== 'undefined') {
+      try {
+        audioDuration = await getAudioDurationFromFile(audioFile);
+      } catch (e) {
+        console.debug(`Could not detect audio duration (client-side): ${e}`);
+      }
+    }
   } else if (audioInput instanceof AudioBuffer) {
     if (!audioInput || audioInput.length === 0) throw new Error('AudioBuffer is empty or invalid');
     if (audioInput.duration === 0) throw new Error('AudioBuffer has zero duration');

@@ -1,6 +1,8 @@
 /**
  * Firebase Connection Manager
  * Handles Firebase connection staleness and recovery after periods of inactivity
+ *
+ * MIGRATION: Updated to use @/config/firebase instead of @/lib/firebase-lazy
  */
 
 let lastActivityTime = Date.now();
@@ -27,7 +29,7 @@ export const isConnectionPotentiallyStale = (): boolean => {
  */
 export const testFirebaseConnection = async (): Promise<boolean> => {
   try {
-    const { getFirestoreInstance } = await import('@/lib/firebase-lazy');
+    const { getFirestoreInstance } = await import('@/config/firebase');
     const firestore = await getFirestoreInstance();
 
     // Simple connection test - just ensure we can get the instance
@@ -63,10 +65,10 @@ export const refreshFirebaseConnectionIfNeeded = async (): Promise<boolean> => {
   }
 
   console.log('🔄 Refreshing potentially stale Firebase connection...');
-  
+
   try {
     // Force re-initialization of Firebase
-    const { initializeFirebaseApp } = await import('@/lib/firebase-lazy');
+    const { initializeFirebaseApp } = await import('@/config/firebase');
     await initializeFirebaseApp();
     
     // Test the connection

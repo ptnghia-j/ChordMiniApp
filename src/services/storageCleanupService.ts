@@ -7,7 +7,7 @@
 
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject, listAll, getMetadata } from 'firebase/storage';
-import { db, storage } from '@/config/firebase';
+import { db, getStorageInstance } from '@/config/firebase';
 import { storageMonitoringService } from './storageMonitoringService';
 
 export interface CleanupResult {
@@ -153,6 +153,9 @@ export class StorageCleanupService {
     let spaceFreed = 0;
 
     try {
+      // Get Firebase Storage instance (ensures initialization)
+      const storage = await getStorageInstance();
+
       if (!storage || !db) {
         errors.push('Firebase Storage or Firestore not initialized');
         return { count, spaceFreed, errors };

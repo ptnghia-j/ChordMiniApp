@@ -99,6 +99,69 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
    Visit [http://localhost:3000](http://localhost:3000)
 
+---
+
+## 🐳 Docker Deployment (Recommended for Production)
+
+### Prerequisites
+- Docker and Docker Compose installed ([Get Docker](https://docs.docker.com/get-docker/))
+- Firebase account with API keys configured
+
+### Quick Start
+
+1. **Download configuration files**
+   ```bash
+   curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/docker-compose.prod.yml
+   curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/.env.docker.example
+   ```
+
+2. **Configure environment**
+   ```bash
+   cp .env.docker.example .env.docker
+   # Edit .env.docker with your API keys (see API Keys Setup section below)
+   ```
+
+3. **Start the application**
+   ```bash
+   docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+   ```
+
+4. **Access the application**
+
+   Visit [http://localhost:3000](http://localhost:3000)
+
+5. **Stop the application**
+   ```bash
+   docker-compose -f docker-compose.prod.yml down
+   ```
+
+### Docker Desktop GUI (Alternative)
+
+If you prefer using Docker Desktop GUI:
+1. Open Docker Desktop
+2. Go to "Images" tab and search for `ptnghia/chordminiapp-frontend` and `ptnghia/chordminiapp-backend`
+3. Pull both images
+4. Use the "Containers" tab to manage running containers
+
+### Required Environment Variables
+
+Edit `.env.docker` with these required values:
+- `NEXT_PUBLIC_FIREBASE_API_KEY` - Firebase API key
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID` - Firebase project ID
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` - Firebase storage bucket
+- `NEXT_PUBLIC_YOUTUBE_API_KEY` - YouTube Data API v3 key
+- `MUSIC_AI_API_KEY` - Music.AI API key
+- `GEMINI_API_KEY` - Google Gemini API key
+- `GENIUS_API_KEY` - Genius API key
+
+See the API Keys Setup section below for detailed instructions on obtaining these keys.
+
+---
+
+## 📋 Detailed Setup Instructions
+
+### Firebase Setup
+
 1. **Create Firebase project**
    - Visit [Firebase Console](https://console.firebase.google.com/)
    - Click "Create a project"

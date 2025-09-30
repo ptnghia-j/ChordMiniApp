@@ -1,0 +1,351 @@
+name: Docker Build and Publish
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOCKER_USERNAME: ptnghia
+  FRONTEND_IMAGE: ptnghia/chordminiapp-frontend
+  BACKEND_IMAGE: ptnghia/chordminiapp-backend
+
+jobs:
+  # Build and push frontend Docker image
+  build-frontend:
+    name: Build Frontend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Image digest
+        run: |
+          echo "Frontend image digest: ${{ steps.build.outputs.digest }}"
+
+  # Build and push backend Docker image
+  build-backend:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./python_backend
+          file: ./python_backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Image digest
+        run: |
+          echo "Backend image digest: ${{ steps.build.outputs.digest }}"
+
+  # Verify deployment (only on main branch)
+  verify-deployment:
+    name: Verify Docker Images
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Pull and verify frontend image
+        run: |
+          docker pull ${{ env.FRONTEND_IMAGE }}:latest
+          docker inspect ${{ env.FRONTEND_IMAGE }}:latest
+          echo "✅ Frontend image verified"
+
+      - name: Pull and verify backend image
+        run: |
+          docker pull ${{ env.BACKEND_IMAGE }}:latest
+          docker inspect ${{ env.BACKEND_IMAGE }}:latest
+          echo "✅ Backend image verified"
+
+      - name: Test docker-compose configuration
+        run: |
+          echo "Testing docker-compose.prod.yml configuration..."
+          docker-compose -f docker-compose.prod.yml config
+          echo "✅ Docker Compose configuration valid"
+
+      - name: Create deployment summary
+        run: |
+          echo "## 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Frontend Image" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** \`${{ env.FRONTEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pull:** \`docker pull ${{ env.FRONTEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Backend Image" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** \`${{ env.BACKEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pull:** \`docker pull ${{ env.BACKEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Start" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Download docker-compose.prod.yml and .env.docker.example" >> $GITHUB_STEP_SUMMARY
+          echo "curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/docker-compose.prod.yml" >> $GITHUB_STEP_SUMMARY
+          echo "curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/.env.docker.example" >> $GITHUB_STEP_SUMMARY
+          echo "cp .env.docker.example .env.docker" >> $GITHUB_STEP_SUMMARY
+          echo "# Edit .env.docker with your API keys" >> $GITHUB_STEP_SUMMARY
+          echo "docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # Create GitHub Release (only for version tags)
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend, verify-deployment]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log $PREV_TAG..$VERSION --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log $VERSION --pretty=format:"- %s (%h)" --no-merges | head -20)
+          fi
+
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## 🎉 ChordMiniApp $VERSION
+
+          ### 🐳 Docker Images
+
+          **Frontend:**
+          \`\`\`bash
+          docker pull ${{ env.FRONTEND_IMAGE }}:$VERSION
+          docker pull ${{ env.FRONTEND_IMAGE }}:latest
+          \`\`\`
+
+          **Backend:**
+          \`\`\`bash
+          docker pull ${{ env.BACKEND_IMAGE }}:$VERSION
+          docker pull ${{ env.BACKEND_IMAGE }}:latest
+          \`\`\`
+
+          ### 🚀 Quick Start
+
+          \`\`\`bash
+          # Download configuration
+          curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
+          curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/.env.docker.example
+
+          # Configure environment
+          cp .env.docker.example .env.docker
+          # Edit .env.docker with your API keys
+
+          # Start application
+          docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+
+          # Access application
+          open http://localhost:3000
+          \`\`\`
+
+          ### 📦 Docker Hub
+
+          - Frontend: https://hub.docker.com/r/${{ env.FRONTEND_IMAGE }}
+          - Backend: https://hub.docker.com/r/${{ env.BACKEND_IMAGE }}
+
+          ### 📝 Changes
+
+          $CHANGELOG
+
+          ### 📚 Documentation
+
+          - [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Docker Quick Start](https://github.com/${{ github.repository }}/blob/main/DOCKER_QUICK_START.md)
+          - [Docker Publishing Guide](https://github.com/${{ github.repository }}/blob/main/docs/DOCKER_PUBLISHING_GUIDE.md)
+          EOF
+
+          echo "Release notes generated"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ChordMiniApp ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            docker-compose.prod.yml
+            .env.docker.example
+            DOCKER_QUICK_START.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on related issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.version.outputs.version }}';
+
+            // Find issues closed in this release
+            const commits = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: context.payload.before || 'HEAD~10',
+              head: context.sha
+            });
+
+            const issueNumbers = new Set();
+            commits.data.commits.forEach(commit => {
+              const matches = commit.commit.message.match(/#(\d+)/g);
+              if (matches) {
+                matches.forEach(match => {
+                  issueNumbers.add(match.replace('#', ''));
+                });
+              }
+            });
+
+            // Comment on each issue
+            for (const issueNumber of issueNumbers) {
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: parseInt(issueNumber),
+                  body: `🎉 This issue has been resolved in [${version}](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${version})!\n\n**Docker Images:**\n- Frontend: \`${{ env.FRONTEND_IMAGE }}:${version}\`\n- Backend: \`${{ env.BACKEND_IMAGE }}:${version}\``
+                });
+              } catch (error) {
+                console.log(`Could not comment on issue #${issueNumber}: ${error.message}`);
+              }
+            }
+
+  # Notify on failure
+  notify-failure:
+    name: Notify Build Failure
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    if: failure() && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Create issue for build failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Docker Build Failed - ${context.sha.substring(0, 7)}`,
+              body: `**Docker image build failed for commit:** ${context.sha}
+
+              **Branch:** ${context.ref}
+              **Workflow:** ${context.workflow}
+              **Run ID:** ${context.runId}
+
+              **Action Required:**
+              1. Check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+              2. Fix any Docker build issues
+              3. Push a new commit to trigger rebuild
+
+              **Quick Links:**
+              - [View Logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+              - [Docker Hub](https://hub.docker.com/u/${process.env.DOCKER_USERNAME})`,
+              labels: ['bug', 'docker', 'ci/cd', 'urgent']
+            })
+

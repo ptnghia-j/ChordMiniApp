@@ -10,6 +10,12 @@ import {
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getAuth, Auth, signInAnonymously, onAuthStateChanged, User, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirebaseConfig, getFirebaseConfigSync } from '@/config/publicConfig';
+
+// RUNTIME CONFIG SUPPORT:
+// This file now loads Firebase configuration at runtime from /api/config endpoint
+// for Docker deployment compatibility. The initialization is deferred until the
+// config is loaded.
 
 // Enhanced authentication state management - Using object to avoid TDZ issues
 const authState = {
@@ -18,70 +24,100 @@ const authState = {
   user: null as User | null
 };
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-};
-
-// Firebase configuration validated
-
+// Firebase instances - initialized lazily
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 let auth: Auth | null = null;
 
-// Check if we have the required configuration
-const hasRequiredConfig =
-  !!firebaseConfig.apiKey &&
-  !!firebaseConfig.authDomain &&
-  !!firebaseConfig.projectId &&
-  !!firebaseConfig.storageBucket;
+// Initialization state
+let initializationPromise: Promise<void> | null = null;
+let isInitialized = false;
 
-if (hasRequiredConfig) {
-  try {
-    // Check if Firebase app already exists
-    const existingApps = getApps();
-    if (existingApps.length > 0) {
-      app = existingApps[0];
-    } else {
-      // Initialize Firebase
-      app = initializeApp(firebaseConfig);
-    }
-
-    db = getFirestore(app);
-    storage = getStorage(app);
-    auth = getAuth(app);
-
-    // Only set up client-side features when window is available
-    if (typeof window !== 'undefined') {
-      // Set up authentication persistence to survive page refreshes
-      setupAuthPersistence();
-
-      // Set up anonymous authentication
-      setupAnonymousAuth();
-    }
-  } catch (error) {
-    console.error('Error initializing Firebase:', error);
-
-    // Create a fallback implementation to prevent app crashes
-    db = null;
-    storage = null;
-    auth = null;
+/**
+ * Initialize Firebase with runtime configuration
+ * This function loads config from /api/config on client-side or process.env on server-side
+ */
+async function initializeFirebase(): Promise<void> {
+  // Return if already initialized
+  if (isInitialized && app && db && storage && auth) {
+    return;
   }
-} else {
-  console.warn('Missing required Firebase configuration. Firebase will not be initialized.');
-  console.warn('Please check your .env.local file for the following variables:');
-  console.warn('- NEXT_PUBLIC_FIREBASE_API_KEY');
-  console.warn('- NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN');
-  console.warn('- NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-  console.warn('- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+
+  // Return existing initialization promise if in progress
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+
+  initializationPromise = (async () => {
+    try {
+      // Load Firebase config at runtime (supports Docker environment variables)
+      const firebaseConfig = typeof window !== 'undefined'
+        ? await getFirebaseConfig()  // Client-side: load from /api/config
+        : getFirebaseConfigSync();    // Server-side: use process.env
+
+      // Validate configuration
+      const hasRequiredConfig =
+        !!firebaseConfig.apiKey &&
+        !!firebaseConfig.authDomain &&
+        !!firebaseConfig.projectId &&
+        !!firebaseConfig.storageBucket;
+
+      if (!hasRequiredConfig) {
+        console.warn('Missing required Firebase configuration. Firebase will not be initialized.');
+        console.warn('Required variables: NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID, NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET');
+        return;
+      }
+
+      // Check if Firebase app already exists
+      const existingApps = getApps();
+      if (existingApps.length > 0) {
+        app = existingApps[0];
+      } else {
+        // Initialize Firebase
+        app = initializeApp(firebaseConfig);
+      }
+
+      db = getFirestore(app);
+      storage = getStorage(app);
+      auth = getAuth(app);
+
+      isInitialized = true;
+
+      // Only set up client-side features when window is available
+      if (typeof window !== 'undefined') {
+        // Set up authentication persistence to survive page refreshes
+        setupAuthPersistence();
+
+        // Set up anonymous authentication
+        setupAnonymousAuth();
+      }
+
+      console.log('✅ Firebase initialized successfully with runtime config');
+    } catch (error) {
+      console.error('Error initializing Firebase:', error);
+
+      // Create a fallback implementation to prevent app crashes
+      db = null;
+      storage = null;
+      auth = null;
+      isInitialized = false;
+    } finally {
+      initializationPromise = null;
+    }
+  })();
+
+  return initializationPromise;
+}
+
+// Auto-initialize on client-side (deferred to allow runtime config to load)
+if (typeof window !== 'undefined') {
+  // Use setTimeout to defer initialization until after module loading
+  setTimeout(() => {
+    initializeFirebase().catch(error => {
+      console.error('Failed to auto-initialize Firebase:', error);
+    });
+  }, 0);
 }
 
 // Set up Firebase Auth persistence to survive page refreshes (client-side only)
@@ -351,4 +387,73 @@ export const waitForAuth = (): Promise<void> => {
   });
 };
 
-export { db, storage, auth };
+// Export Firebase instances and initialization function
+export { db, storage, auth, initializeFirebase };
+
+// Ensure Firebase is initialized before accessing instances
+// This helper can be used by services that need guaranteed initialization
+export async function ensureFirebaseInitialized() {
+  await initializeFirebase();
+  return { db, storage, auth };
+}
+
+/**
+ * MIGRATION: Async getters for backward compatibility with firebase-lazy.ts
+ * These functions provide the same API as firebase-lazy.ts but use the main firebase.ts system
+ */
+
+/**
+ * Get Firestore instance (ensures Firebase is initialized)
+ * Compatible with firebase-lazy.ts getFirestoreInstance()
+ */
+export async function getFirestoreInstance(): Promise<Firestore> {
+  await ensureFirebaseInitialized();
+  if (!db) {
+    throw new Error('Firestore initialization failed - db is null after initialization');
+  }
+  return db;
+}
+
+/**
+ * Get Storage instance (ensures Firebase is initialized)
+ * Compatible with firebase-lazy.ts getStorageInstance()
+ */
+export async function getStorageInstance(): Promise<FirebaseStorage> {
+  await ensureFirebaseInitialized();
+  if (!storage) {
+    throw new Error('Storage initialization failed - storage is null after initialization');
+  }
+  return storage;
+}
+
+/**
+ * Get Auth instance (ensures Firebase is initialized)
+ * Compatible with firebase-lazy.ts getAuthInstance()
+ */
+export async function getAuthInstance(): Promise<Auth> {
+  await ensureFirebaseInitialized();
+  if (!auth) {
+    throw new Error('Auth initialization failed - auth is null after initialization');
+  }
+  return auth;
+}
+
+/**
+ * Initialize Firebase App (ensures Firebase is initialized)
+ * Compatible with firebase-lazy.ts initializeFirebaseApp()
+ */
+export async function initializeFirebaseApp(): Promise<FirebaseApp> {
+  await ensureFirebaseInitialized();
+  if (!app) {
+    throw new Error('Firebase App initialization failed - app is null after initialization');
+  }
+  return app;
+}
+
+/**
+ * Preload Firebase (ensures Firebase is initialized)
+ * Compatible with firebase-lazy.ts preloadFirebase()
+ */
+export async function preloadFirebase(): Promise<void> {
+  await initializeFirebase();
+}

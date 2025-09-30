@@ -201,6 +201,12 @@ export default function YouTubeVideoAnalyzePage() {
     setInitialCacheCheckDone(false);
   }, [beatDetector, chordDetector]);
 
+  // REGRESSION FIX: Reset initialCacheCheckDone when videoId changes
+  // This ensures cache is checked for each new video in "Recently Transcribed"
+  useEffect(() => {
+    setInitialCacheCheckDone(false);
+  }, [videoId]);
+
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
 
   // STREAMLINED: Check cache before extraction with connection management
@@ -211,6 +217,12 @@ export default function YouTubeVideoAnalyzePage() {
 
     try {
       setInitialCacheCheckDone(true);
+
+      // CRITICAL FIX: Ensure Firebase is initialized before cache check
+      // The lazy initialization in firebase.ts means storage/db are null until initialized
+      const { ensureFirebaseInitialized } = await import('@/config/firebase');
+      await ensureFirebaseInitialized();
+      console.log('✅ Firebase initialized before cache check');
 
       // PERFORMANCE FIX: Use connection manager for reliable cache access
       const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');

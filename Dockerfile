@@ -32,8 +32,10 @@ COPY . .
 COPY --from=deps /app/node_modules ./node_modules
 
 # Set environment variables for build
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+# Increase Node.js heap size for build (4GB)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # Build the application
 RUN npm run build
@@ -46,9 +48,13 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Install runtime dependencies
+# Install runtime dependencies including yt-dlp and ffmpeg for audio extraction
 RUN apk add --no-cache \
     curl \
+    python3 \
+    py3-pip \
+    ffmpeg \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp \
     && rm -rf /var/cache/apk/*
 
 # Copy built application
@@ -67,10 +73,10 @@ USER nextjs
 EXPOSE 3000
 
 # Set environment variables
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

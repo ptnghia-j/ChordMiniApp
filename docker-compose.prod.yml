@@ -1,16 +1,20 @@
-# ChordMiniApp Docker Compose Configuration
-# For local development and testing
+# ChordMiniApp Production Docker Compose Configuration
+# Uses pre-built images from Docker Hub
 #
-# Usage:
-#   1. Copy .env.docker.example to .env.docker and fill in your values
-#   2. Run: docker-compose -f docker/docker-compose.yml --env-file .env.docker up
+# Quick Start:
+#   1. Copy .env.docker.example to .env.docker and configure your values
+#   2. Run: docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+#   3. Access: http://localhost:3000
+#
+# Stop:
+#   docker-compose -f docker-compose.prod.yml down
 
 version: '3.8'
 
 services:
   # Frontend - Next.js Application
   frontend:
-    image: chordminiapp:test
+    image: ptnghia/chordminiapp-frontend:latest
     container_name: chordmini-frontend
     ports:
       - "3000:3000"
@@ -34,7 +38,7 @@ services:
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
 
       # Feature Flags (Public)
-      - NEXT_PUBLIC_AUDIO_STRATEGY=${NEXT_PUBLIC_AUDIO_STRATEGY:-auto}
+      - NEXT_PUBLIC_AUDIO_STRATEGY=${NEXT_PUBLIC_AUDIO_STRATEGY:-ytdlp}
       - NEXT_PUBLIC_ENABLE_TRUE_STREAMING=${NEXT_PUBLIC_ENABLE_TRUE_STREAMING:-false}
       - NEXT_DISABLE_DEV_OVERLAY=${NEXT_DISABLE_DEV_OVERLAY:-true}
 
@@ -61,7 +65,7 @@ services:
 
   # Backend - Python Flask ML Service
   backend:
-    image: chordminiapp-backend:test
+    image: ptnghia/chordminiapp-backend:latest
     container_name: chordmini-backend
     ports:
       - "8080:8080"
@@ -75,9 +79,7 @@ services:
       - MAX_CONTENT_LENGTH=104857600
       - UPLOAD_TIMEOUT=600
     volumes:
-      # Optional: Mount models directory for development
-      # - ../python_backend/models:/app/models:ro
-      # Optional: Mount cache directory
+      # Optional: Mount cache directory for model caching
       - backend-cache:/tmp/model_cache
     networks:
       - chordmini-network
@@ -89,19 +91,6 @@ services:
       retries: 3
       start_period: 60s
 
-  # Optional: Redis for caching (if needed)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: chordmini-redis
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis-data:/data
-  #   networks:
-  #     - chordmini-network
-  #   restart: unless-stopped
-  #   command: redis-server --appendonly yes
-
 networks:
   chordmini-network:
     driver: bridge
@@ -110,5 +99,4 @@ networks:
 volumes:
   backend-cache:
     name: chordmini-backend-cache
-  # redis-data:
-  #   name: chordmini-redis-data
+

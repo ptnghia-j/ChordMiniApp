@@ -164,10 +164,11 @@ export const preloadCriticalChunks = () => {
 };
 
 // Optimized Firebase service loading
+// MIGRATION: Updated to use @/config/firebase instead of @/lib/firebase-lazy
 export const loadFirebaseService = () => import(
   /* webpackChunkName: "firebase-service" */
   /* webpackPreload: true */
-  '@/lib/firebase-lazy'
+  '@/config/firebase'
 );
 
 // Optimized Chart.js loading with smaller chunks

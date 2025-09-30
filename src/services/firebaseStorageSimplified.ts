@@ -218,8 +218,9 @@ export class FirebaseStorageSimplified {
   async getCachedAudioMetadata(videoId: string): Promise<SimplifiedAudioData | null> {
     if (!db) {
       // PERFORMANCE FIX: Try to initialize Firebase if not ready (race condition fix)
+      // MIGRATION: Updated to use @/config/firebase instead of @/lib/firebase-lazy
       try {
-        const { getFirestoreInstance } = await import('@/lib/firebase-lazy');
+        const { getFirestoreInstance } = await import('@/config/firebase');
         const firestoreInstance = await getFirestoreInstance();
         if (!firestoreInstance) {
           console.warn('Firebase not initialized and initialization failed');
