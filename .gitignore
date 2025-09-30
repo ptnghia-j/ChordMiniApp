@@ -229,6 +229,7 @@ checkpoints/
 **/*.der
 **/*.pfx
 
+!.env.docker.example
 # Cloud deployment configurations with sensitive info
 python_backend/cloudbuild.yaml
 
