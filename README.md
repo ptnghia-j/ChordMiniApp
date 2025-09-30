@@ -123,7 +123,7 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
 3. **Start the application**
    ```bash
-   docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+   docker compose -f docker-compose.prod.yml --env-file .env.docker up -d
    ```
 
 4. **Access the application**
@@ -132,8 +132,10 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 
 5. **Stop the application**
    ```bash
-   docker-compose -f docker-compose.prod.yml down
+   docker compose -f docker-compose.prod.yml down
    ```
+
+> **Note:** If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
 
 ### Docker Desktop GUI (Alternative)
 
@@ -560,7 +562,7 @@ ChordMiniApp provides production-ready Docker images for easy deployment:
 ```bash
 # Production deployment with Docker Compose
 curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/docker-compose.prod.yml
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 **Available on multiple registries:**

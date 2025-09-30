@@ -13,10 +13,10 @@ From the root directory:
 
 ```bash
 # Development
-docker-compose -f docker/docker-compose.dev.yml up
+docker compose -f docker/docker-compose.dev.yml up
 
 # Production
-docker-compose -f docker/docker-compose.yml up
+docker compose -f docker/docker-compose.yml up
 ```
 
 ## Note

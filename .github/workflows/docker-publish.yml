@@ -179,7 +179,7 @@ jobs:
       - name: Test docker-compose configuration
         run: |
           echo "Testing docker-compose.prod.yml configuration..."
-          docker-compose -f docker-compose.prod.yml config
+          docker compose -f docker-compose.prod.yml config
           echo "✅ Docker Compose configuration valid"
 
       - name: Create deployment summary
