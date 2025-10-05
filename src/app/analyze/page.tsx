@@ -58,6 +58,10 @@ const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { FiSkipBack, FiSkipForward } from 'react-icons/fi';
 import { useMetronomeSync } from '@/hooks/useMetronomeSync';
+// Import context providers to match YouTube video analysis flow
+import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
+import { UIProvider } from '@/contexts/UIContext';
+import { PlaybackProvider } from '@/contexts/PlaybackContext';
 // import { useTheme } from '@/contexts/ThemeContext';
 
 export default function LocalAudioAnalyzePage() {
@@ -172,6 +176,36 @@ export default function LocalAudioAnalyzePage() {
       }>;
     };
   } | null), []);
+
+  // Additional state for context providers (matching YouTube page pattern)
+  const [simplifyChords, setSimplifyChords] = useState(false);
+  const [showRomanNumerals, setShowRomanNumerals] = useState(false);
+  const romanNumeralsRequested = false; // Not used in upload page, but required by context
+  const [romanNumeralData, setRomanNumeralData] = useState<{
+    analysis: string[];
+    keyContext: string;
+    temporalShifts?: Array<{
+      chordIndex: number;
+      targetKey: string;
+      romanNumeral: string;
+    }>;
+  } | null>(null);
+
+  // Cache and model state (stub values for upload page)
+  const cacheAvailable = false;
+  const cacheCheckCompleted = true;
+  const cacheCheckInProgress = false;
+  const modelsInitialized = true;
+
+  // Lyrics state (stub values - not used in upload page)
+  const lyrics = null;
+  const showLyrics = false;
+  const hasCachedLyrics = false;
+  const isTranscribingLyrics = false;
+  const lyricsError = null;
+
+  // Segmentation state (stub - not used in upload page)
+  const showSegmentation = false;
 
   // Persist model preferences to localStorage
   useEffect(() => {
@@ -565,9 +599,109 @@ export default function LocalAudioAnalyzePage() {
     audioDuration: duration // Use duration from audio element instead of analysisResults
   });
 
-
+  // Beat click handler for PlaybackProvider
+  const handleBeatClick = (beatIndex: number) => {
+    if (chordGridData.beats && chordGridData.beats[beatIndex] !== null) {
+      const beatTime = chordGridData.beats[beatIndex] as number;
+      if (audioRef.current) {
+        audioRef.current.currentTime = beatTime;
+      }
+    }
+  };
 
   return (
+    <AnalysisDataProvider
+      analysisState={{
+        analysisResults,
+        isAnalyzing: audioProcessingState.isAnalyzing,
+        analysisError: audioProcessingState.error || null,
+        cacheAvailable,
+        cacheCheckCompleted,
+        cacheCheckInProgress,
+        keySignature,
+        isDetectingKey,
+        chordCorrections,
+        showCorrectedChords,
+      }}
+      modelState={{
+        beatDetector,
+        chordDetector,
+        modelsInitialized,
+      }}
+      lyricsState={{
+        lyrics,
+        showLyrics,
+        hasCachedLyrics,
+        isTranscribingLyrics,
+        lyricsError,
+      }}
+      chordProcessingState={{
+        simplifyChords,
+        showRomanNumerals,
+        romanNumeralsRequested,
+        romanNumeralData,
+      }}
+      operations={{
+        // Analysis operations
+        startAnalysis: () => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: true, error: null })),
+        completeAnalysis: (results) => { setAnalysisResults(results); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: true })); },
+        failAnalysis: (error) => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, error })),
+        resetAnalysis: () => { setAnalysisResults(null); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: false, error: null })); },
+        // Model operations
+        setBeatDetector: (d: string) => setBeatDetector(d as BeatDetectorType),
+        setChordDetector: (d: string) => setChordDetector(d as ChordDetectorType),
+        // Lyrics operations (stubs for upload page)
+        startLyricsTranscription: () => {},
+        completeLyricsTranscription: () => {},
+        failLyricsTranscription: () => {},
+        toggleLyricsVisibility: () => {},
+        // Chord processing operations
+        toggleChordSimplification: () => setSimplifyChords(v => !v),
+        toggleRomanNumerals: () => setShowRomanNumerals(v => !v),
+        updateRomanNumeralData: (data) => setRomanNumeralData(data),
+      }}
+    >
+      <UIProvider
+        initialVideoTitle={audioFile?.name || 'Audio Upload'}
+        controlledShowRomanNumerals={showRomanNumerals}
+        onShowRomanNumeralsChange={setShowRomanNumerals}
+        controlledRomanNumeralData={romanNumeralData}
+        onRomanNumeralDataChange={setRomanNumeralData}
+        initialShowSegmentation={showSegmentation}
+        controlledSimplifyChords={simplifyChords}
+        onSimplifyChordsChange={setSimplifyChords}
+      >
+        <PlaybackProvider
+          audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
+          audioRef={audioRef as React.RefObject<HTMLAudioElement>}
+          youtubePlayer={null}
+          playbackControls={{
+            play: () => { audioRef.current?.play(); setIsPlaying(true); },
+            pause: () => { audioRef.current?.pause(); setIsPlaying(false); },
+            seek: (time: number) => { if (audioRef.current) audioRef.current.currentTime = time; setCurrentTime(time); },
+            setPlayerPlaybackRate: (rate: number) => { if (audioRef.current) audioRef.current.playbackRate = rate; setPlaybackRate(rate); },
+          }}
+          beatState={{ currentBeatIndex }}
+          beatHandlers={{
+            onBeatClick: handleBeatClick,
+            setCurrentBeatIndex,
+            setCurrentDownbeatIndex: () => {} // Not used in upload page
+          }}
+          videoUIState={{ isVideoMinimized: false, isFollowModeEnabled }}
+          videoUIControls={{
+            toggleVideoMinimization: () => {}, // Not used in upload page
+            toggleFollowMode: () => setIsFollowModeEnabled(v => !v)
+          }}
+          setters={{
+            setIsPlaying,
+            setCurrentTime,
+            setDuration,
+            setPlaybackRate,
+            setYoutubePlayer: () => {}, // Not used in upload page
+            setIsVideoMinimized: () => {}, // Not used in upload page
+            setIsFollowModeEnabled,
+          }}
+        >
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
@@ -945,5 +1079,8 @@ export default function LocalAudioAnalyzePage() {
       )}
 
     </div>
+        </PlaybackProvider>
+      </UIProvider>
+    </AnalysisDataProvider>
   );
 }

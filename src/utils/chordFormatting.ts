@@ -435,6 +435,17 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // Normalize root note for lookup (handle Unicode symbols)
   const normalizedRoot = root.replace(/♯/g, '#').replace(/♭/g, 'b');
 
+  // FIXED: Handle rare enharmonic equivalents (Fb = E, Cb = B, E# = F, B# = C)
+  const enharmonicRootMap: Record<string, string> = {
+    'Fb': 'E',
+    'Cb': 'B',
+    'E#': 'F',
+    'B#': 'C'
+  };
+
+  // Map rare enharmonic roots to their standard equivalents for calculation
+  const calculationRoot = enharmonicRootMap[normalizedRoot] || normalizedRoot;
+
   // FIXED: Use consistent note array for both root lookup and bass note calculation
   // to prevent enharmonic spelling errors like G#m/b7 -> G#m/Gb instead of G#m/F#
 
@@ -442,10 +453,10 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // This ensures consistent enharmonic spelling throughout the chord
   const primaryNoteArray = usesFlats ? notesWithFlats : notes;
 
-  // Find the root note index in the primary array
+  // Find the root note index in the primary array using the calculation root
   let rootIndex = -1;
   for (let i = 0; i < primaryNoteArray.length; i++) {
-    if (primaryNoteArray[i] === normalizedRoot) {
+    if (primaryNoteArray[i] === calculationRoot) {
       rootIndex = i;
       break;
     }
@@ -546,10 +557,53 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
     }
   } else if (root.includes('b') || root.includes('♭')) {
     // In flat keys, prefer flat spellings to maintain consistency
-    // No special cases needed yet, but structure is ready for future additions
+    // FIXED: Handle flat-based chords with proper enharmonic spelling
+
+    // Fb/3 should be Fb/Ab (not Fb/G#)
+    if (root.startsWith('Fb') && inversion === '3') {
+      result = 'Ab'; // Fb/3 = Fb/Ab (major third from Fb)
+    }
+    // Fb/5 should be Fb/Cb (not Fb/B)
+    else if (root.startsWith('Fb') && inversion === '5') {
+      result = 'Cb'; // Fb/5 = Fb/Cb (perfect fifth from Fb)
+    }
+    // Cb/3 should be Cb/Eb (not Cb/D#)
+    else if (root.startsWith('Cb') && inversion === '3') {
+      result = 'Eb'; // Cb/3 = Cb/Eb (major third from Cb)
+    }
+    // Cb/5 should be Cb/Gb (not Cb/F#)
+    else if (root.startsWith('Cb') && inversion === '5') {
+      result = 'Gb'; // Cb/5 = Cb/Gb (perfect fifth from Cb)
+    }
+    // For other flat-based chords, ensure we use flat notation
+    else if (result.includes('#')) {
+      // Convert sharp to flat equivalent for consistency
+      const enharmonicMap: Record<string, string> = {
+        'C#': 'Db',
+        'D#': 'Eb',
+        'F#': 'Gb',
+        'G#': 'Ab',
+        'A#': 'Bb'
+      };
+      result = enharmonicMap[result] || result;
+    }
   } else {
-    // For natural root notes, apply context-aware enharmonic spelling
-    result = getEnharmonicSpelling(result, root);
+    // For natural root notes (C, D, E, F, G, A, B)
+    // FIXED: For minor chords, prefer flat notation for consistency
+    if (isMinor && result.includes('#')) {
+      // Convert sharp to flat equivalent for minor chords
+      const enharmonicMap: Record<string, string> = {
+        'C#': 'Db',
+        'D#': 'Eb',
+        'F#': 'Gb',
+        'G#': 'Ab',
+        'A#': 'Bb'
+      };
+      result = enharmonicMap[result] || result;
+    } else {
+      // For major chords with natural roots, apply context-aware enharmonic spelling
+      result = getEnharmonicSpelling(result, root);
+    }
   }
 
   // FIXED: For flat inversions, only convert to flat notation if the root doesn't use sharps
