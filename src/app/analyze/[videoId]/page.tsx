@@ -116,6 +116,8 @@ import { useChordProcessing } from '@/hooks/useChordProcessing';
 import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
 import { PlaybackProvider } from '@/contexts/PlaybackContext';
 import { UIProvider } from '@/contexts/UIContext';
+import PitchShiftAudioManager from '@/components/PitchShiftAudioManager';
+import KeySignatureSync from '@/components/KeySignatureSync';
 
 
 
@@ -1108,13 +1110,23 @@ export default function YouTubeVideoAnalyzePage() {
 
   const chordGridData = useMemo(() => getChordGridDataService(analysisResults as any) as any, [analysisResults]);
 
-  // Create simplified chord grid data when simplification is enabled
+  // Create simplified and/or transposed chord grid data
   const simplifiedChordGridData = useMemo(() => {
-    if (!chordGridData || !simplifyChords) return chordGridData;
+    if (!chordGridData) return chordGridData;
+
+    let processedChords = chordGridData.chords || [];
+
+    // Apply simplification if enabled
+    if (simplifyChords) {
+      processedChords = simplifyChordArray(processedChords);
+    }
+
+    // Apply pitch shift transposition if enabled (will be accessed via context in child components)
+    // Note: Transposition is applied in the ChordGrid component to access UIContext
 
     return {
       ...chordGridData,
-      chords: simplifyChordArray(chordGridData.chords || [])
+      chords: processedChords
     };
   }, [chordGridData, simplifyChords]);
 
@@ -1347,6 +1359,8 @@ export default function YouTubeVideoAnalyzePage() {
         initialShowSegmentation={showSegmentation}
         controlledSimplifyChords={simplifyChords}
         onSimplifyChordsChange={setSimplifyChords}
+        initialOriginalKey={keySignature || 'C'}
+        initialIsFirebaseAudioAvailable={!!audioProcessingState.audioUrl}
       >
         <PlaybackProvider
           audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
@@ -1372,6 +1386,21 @@ export default function YouTubeVideoAnalyzePage() {
             setIsFollowModeEnabled,
           }}
         >
+    {/* Pitch Shift Audio Manager - must be inside UIProvider */}
+    <PitchShiftAudioManager
+      youtubePlayer={youtubePlayer}
+      audioRef={audioRef}
+      firebaseAudioUrl={audioProcessingState.audioUrl || null}
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      playbackRate={playbackRate}
+      setIsPlaying={setIsPlaying}
+      setCurrentTime={setCurrentTime}
+    />
+
+    {/* Key Signature Sync - syncs detected key with UIContext originalKey */}
+    <KeySignatureSync keySignature={keySignature} />
+
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
       {/* Use the Navigation component */}
       <Navigation />
@@ -1630,6 +1659,7 @@ export default function YouTubeVideoAnalyzePage() {
           }
         />
       )}
+
     </div>
     </PlaybackProvider>
     </UIProvider>

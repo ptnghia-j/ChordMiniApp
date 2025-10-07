@@ -8,6 +8,10 @@ export interface YouTubePlayer {
   setPlaybackRate: (rate: number) => void;
   getCurrentTime: () => number;
   muted: boolean;
+  // YouTube IFrame API mute/unmute methods
+  mute?: () => void;
+  unMute?: () => void;
+  isMuted?: () => boolean;
 }
 
 // YouTube search result interface

@@ -8,6 +8,8 @@ import { useChordGridContext } from '@/hooks/useChordGridContext';
 import { useAnalysisData } from '@/contexts/AnalysisDataContext';
 import { usePlayback } from '@/contexts/PlaybackContext';
 import { useRomanNumeralsSelector, useSegmentationSelector } from '@/contexts/selectors';
+import { useTransposedChordData } from '@/hooks/useTransposedChordData';
+import { useUI } from '@/contexts/UIContext';
 // import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
@@ -106,40 +108,80 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   // Segmentation toggle from UI context
   const { showSegmentation } = useSegmentationSelector();
 
+  // Get pitch shift state for key signature display
+  const { isPitchShiftEnabled, targetKey } = useUI();
+
+  // Apply pitch shift transposition if enabled
+  const { transposedChordGridData } = useTransposedChordData({
+    chordGridData,
+  });
+
+  // Use transposed data if available, otherwise use original
+  const effectiveChordGridData = transposedChordGridData || chordGridData;
+
   const stableProps = React.useMemo(() => {
     const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
 
+    // Use targetKey when pitch shift is enabled, otherwise use original keySignature
+    // When pitch shift is enabled, add the quality suffix (major/minor) back to the transposed key
+    let displayKey = mergedKeySignature;
+    if (isPitchShiftEnabled && targetKey && mergedKeySignature) {
+      // Extract quality from original key signature (e.g., "E♭ major" -> "major")
+      const qualityMatch = mergedKeySignature.match(/\s+(major|minor)$/i);
+      const quality = qualityMatch ? qualityMatch[1] : '';
+      // Combine transposed note with original quality
+      displayKey = quality ? `${targetKey} ${quality}` : targetKey;
+    }
+
+    console.log(`🎹 Key display logic: isPitchShiftEnabled=${isPitchShiftEnabled}, targetKey=${targetKey}, mergedKeySignature=${mergedKeySignature}, displayKey=${displayKey}`);
+
+    // When pitch shift is enabled, disable ALL chord corrections to show transposed chords
+    // Chord corrections are based on the original key and would override transposition
+    const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
+    const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
+    const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
+
+    // Debug logging for slash chords (exclude N/C and N.C. which are not real slash chords)
+    if (isPitchShiftEnabled && effectiveChordGridData.chords) {
+      const slashChords = effectiveChordGridData.chords.filter(c =>
+        c.includes('/') && !c.match(/^N[./]C$/i)
+      );
+      if (slashChords.length > 0) {
+        console.log(`🎸 Real slash chords in transposed data (first 10):`, slashChords.slice(0, 10));
+      }
+    }
+
     return {
-      chords: chordGridData.chords,
-      beats: chordGridData.beats,
+      chords: effectiveChordGridData.chords,
+      beats: effectiveChordGridData.beats,
       timeSignature,
-      keySignature: mergedKeySignature,
+      keySignature: displayKey,
       isDetectingKey: mergedIsDetectingKey,
-      hasPickupBeats: chordGridData.hasPickupBeats,
-      pickupBeatsCount: chordGridData.pickupBeatsCount,
-      hasPadding: chordGridData.hasPadding,
-      paddingCount: chordGridData.paddingCount,
-      shiftCount: chordGridData.shiftCount,
+      hasPickupBeats: effectiveChordGridData.hasPickupBeats,
+      pickupBeatsCount: effectiveChordGridData.pickupBeatsCount,
+      hasPadding: effectiveChordGridData.hasPadding,
+      paddingCount: effectiveChordGridData.paddingCount,
+      shiftCount: effectiveChordGridData.shiftCount,
       beatTimeRangeStart: mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start || 0,
-      originalAudioMapping: chordGridData.originalAudioMapping,
+      originalAudioMapping: effectiveChordGridData.originalAudioMapping,
       isUploadPage,
-      showCorrectedChords: mergedShowCorrectedChords,
-      chordCorrections: mergedChordCorrections,
-      sequenceCorrections,
+      showCorrectedChords: effectiveShowCorrectedChords,
+      chordCorrections: effectiveChordCorrections,
+      sequenceCorrections: effectiveSequenceCorrections,
       segmentationData,
       showSegmentation,
       showRomanNumerals: mergedShowRomanNumerals,
       romanNumeralData: mergedRomanNumeralData
     };
   }, [
-    chordGridData.chords,
-    chordGridData.beats,
-    chordGridData.hasPickupBeats,
-    chordGridData.pickupBeatsCount,
-    chordGridData.hasPadding,
-    chordGridData.paddingCount,
-    chordGridData.shiftCount,
-    chordGridData.originalAudioMapping,
+    effectiveChordGridData.chords,
+    effectiveChordGridData.beats,
+    effectiveChordGridData.hasPickupBeats,
+    effectiveChordGridData.pickupBeatsCount,
+    effectiveChordGridData.hasPadding,
+    effectiveChordGridData.paddingCount,
+    effectiveChordGridData.shiftCount,
+    effectiveChordGridData.originalAudioMapping,
     mergedAnalysisResults?.beatDetectionResult?.time_signature,
     mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start,
     mergedKeySignature,
@@ -151,7 +193,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     segmentationData,
     showSegmentation,
     mergedShowRomanNumerals,
-    mergedRomanNumeralData
+    mergedRomanNumeralData,
+    isPitchShiftEnabled,
+    targetKey
   ]);
 
   // Get beat state and click handler from PlaybackContext

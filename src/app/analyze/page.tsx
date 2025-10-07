@@ -62,6 +62,7 @@ import { useMetronomeSync } from '@/hooks/useMetronomeSync';
 import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
 import { UIProvider } from '@/contexts/UIContext';
 import { PlaybackProvider } from '@/contexts/PlaybackContext';
+import { usePitchShiftAudio } from '@/hooks/usePitchShiftAudio';
 // import { useTheme } from '@/contexts/ThemeContext';
 
 export default function LocalAudioAnalyzePage() {
@@ -206,6 +207,18 @@ export default function LocalAudioAnalyzePage() {
 
   // Segmentation state (stub - not used in upload page)
   const showSegmentation = false;
+
+  // Use pitch shift audio hook
+  usePitchShiftAudio({
+    youtubePlayer: null, // No YouTube player in upload page
+    audioRef,
+    firebaseAudioUrl: audioProcessingState.audioUrl,
+    isPlaying,
+    currentTime,
+    playbackRate,
+    setIsPlaying,
+    setCurrentTime,
+  });
 
   // Persist model preferences to localStorage
   useEffect(() => {
@@ -670,6 +683,8 @@ export default function LocalAudioAnalyzePage() {
         initialShowSegmentation={showSegmentation}
         controlledSimplifyChords={simplifyChords}
         onSimplifyChordsChange={setSimplifyChords}
+        initialOriginalKey={keySignature || 'C'}
+        initialIsFirebaseAudioAvailable={!!audioProcessingState.audioUrl}
       >
         <PlaybackProvider
           audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
@@ -872,6 +887,7 @@ export default function LocalAudioAnalyzePage() {
                       />
                     )}
                   </div>
+
                 </div>
               )}
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
+import { calculateTargetKey } from '@/utils/chordTransposition';
 
 // UI state types
 type ActiveTab = 'beatChordMap' | 'guitarChords' | 'lyricsChords';
@@ -51,6 +52,22 @@ interface UIState {
   setSimplifyChords: (val: boolean) => void;
   toggleSimplifyChords: () => void;
 
+  // Pitch shift
+  isPitchShiftEnabled: boolean;
+  pitchShiftSemitones: number;
+  isProcessingPitchShift: boolean;
+  pitchShiftError: string | null;
+  isFirebaseAudioAvailable: boolean;
+  originalKey: string;
+  targetKey: string;
+  togglePitchShift: () => void;
+  setPitchShiftSemitones: (semitones: number) => void;
+  resetPitchShift: () => void;
+  setIsProcessingPitchShift: (processing: boolean) => void;
+  setPitchShiftError: (error: string | null) => void;
+  setIsFirebaseAudioAvailable: (available: boolean) => void;
+  setOriginalKey: (key: string) => void;
+
   // Editing handlers
   handleEditModeToggle: () => void;
   handleTitleSave: () => void;
@@ -69,6 +86,10 @@ interface UIProviderProps {
   initialRomanNumeralData?: RomanNumeralData | null;
   initialShowSegmentation?: boolean;
   initialSimplifyChords?: boolean;
+
+  // Pitch shift initialization
+  initialOriginalKey?: string;
+  initialIsFirebaseAudioAvailable?: boolean;
 
   // Controlled props (optional): allow parent to drive state and be notified on changes
   controlledShowRomanNumerals?: boolean;
@@ -89,6 +110,8 @@ export const UIProvider: React.FC<UIProviderProps> = ({
   initialRomanNumeralData = null,
   initialShowSegmentation = false,
   initialSimplifyChords = false,
+  initialOriginalKey = 'C',
+  initialIsFirebaseAudioAvailable = false,
   controlledShowRomanNumerals,
   onShowRomanNumeralsChange,
   controlledRomanNumeralData,
@@ -139,6 +162,14 @@ export const UIProvider: React.FC<UIProviderProps> = ({
   const [romanNumeralData, setRomanNumeralData] = useState<RomanNumeralData | null>(initialRomanNumeralData);
   const [showSegmentation, setShowSegmentation] = useState<boolean>(initialShowSegmentation);
   const [simplifyChords, setSimplifyChords] = useState<boolean>(initialSimplifyChords);
+
+  // Pitch shift state
+  const [isPitchShiftEnabled, setIsPitchShiftEnabled] = useState<boolean>(false);
+  const [pitchShiftSemitones, setPitchShiftSemitones] = useState<number>(0);
+  const [isProcessingPitchShift, setIsProcessingPitchShift] = useState<boolean>(false);
+  const [pitchShiftError, setPitchShiftError] = useState<string | null>(null);
+  const [isFirebaseAudioAvailable, setIsFirebaseAudioAvailable] = useState<boolean>(initialIsFirebaseAudioAvailable);
+  const [originalKey, setOriginalKey] = useState<string>(initialOriginalKey);
 
 
   // Panel toggle handlers with mutual exclusivity
@@ -220,6 +251,32 @@ export const UIProvider: React.FC<UIProviderProps> = ({
     });
   }, [onSimplifyChordsChange]);
 
+  // Pitch shift handlers
+  const togglePitchShift = useCallback(() => {
+    setIsPitchShiftEnabled(prev => !prev);
+    // Reset error when toggling
+    setPitchShiftError(null);
+  }, []);
+
+  const handleSetPitchShiftSemitones = useCallback((semitones: number) => {
+    // Clamp to valid range (-6 to +6)
+    const clamped = Math.max(-6, Math.min(6, semitones));
+    setPitchShiftSemitones(clamped);
+    // Clear error when changing semitones
+    setPitchShiftError(null);
+  }, []);
+
+  const resetPitchShift = useCallback(() => {
+    setPitchShiftSemitones(0);
+    setPitchShiftError(null);
+  }, []);
+
+  // Compute target key based on original key and semitones
+  const targetKey = useMemo(() => {
+    if (pitchShiftSemitones === 0) return originalKey;
+    return calculateTargetKey(originalKey, pitchShiftSemitones);
+  }, [originalKey, pitchShiftSemitones]);
+
   // Memoized context value to prevent unnecessary re-renders
   const contextValue = useMemo((): UIState => ({
     // Tab management
@@ -255,6 +312,22 @@ export const UIProvider: React.FC<UIProviderProps> = ({
     setSimplifyChords,
     toggleSimplifyChords,
 
+    // Pitch shift
+    isPitchShiftEnabled,
+    pitchShiftSemitones,
+    isProcessingPitchShift,
+    pitchShiftError,
+    isFirebaseAudioAvailable,
+    originalKey,
+    targetKey,
+    togglePitchShift,
+    setPitchShiftSemitones: handleSetPitchShiftSemitones,
+    resetPitchShift,
+    setIsProcessingPitchShift,
+    setPitchShiftError,
+    setIsFirebaseAudioAvailable,
+    setOriginalKey,
+
     // Editing handlers
     handleEditModeToggle,
     handleTitleSave,
@@ -284,6 +357,16 @@ export const UIProvider: React.FC<UIProviderProps> = ({
     updateRomanNumeralData,
     simplifyChords,
     toggleSimplifyChords,
+    isPitchShiftEnabled,
+    pitchShiftSemitones,
+    isProcessingPitchShift,
+    pitchShiftError,
+    isFirebaseAudioAvailable,
+    originalKey,
+    targetKey,
+    togglePitchShift,
+    handleSetPitchShiftSemitones,
+    resetPitchShift,
   ]);
 
   return (

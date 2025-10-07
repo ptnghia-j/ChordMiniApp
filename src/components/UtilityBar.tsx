@@ -8,6 +8,7 @@ import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
+import PitchShiftPopover from '@/components/PitchShiftPopover';
 import { useUI } from '@/contexts/UIContext';
 import { useSimplifySelector } from '@/contexts/selectors';
 
@@ -120,6 +121,9 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
               isEnabled={simplifyChords}
               onClick={toggleSimplifyChords}
             />
+
+            {/* Pitch Shift */}
+            <PitchShiftPopover />
 
             {/* Metronome */}
             {metronome && (
