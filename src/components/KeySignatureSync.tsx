@@ -22,7 +22,6 @@ export const KeySignatureSync: React.FC<KeySignatureSyncProps> = ({ keySignature
       // Extract just the note name from the key signature
       // e.g., "E♭ major" -> "E♭", "C# minor" -> "C#"
       const noteName = keySignature.split(' ')[0];
-      console.log(`🎹 Syncing original key: ${keySignature} -> ${noteName}`);
       setOriginalKey(noteName);
     }
   }, [keySignature, setOriginalKey]);

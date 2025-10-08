@@ -133,23 +133,11 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       displayKey = quality ? `${targetKey} ${quality}` : targetKey;
     }
 
-    console.log(`🎹 Key display logic: isPitchShiftEnabled=${isPitchShiftEnabled}, targetKey=${targetKey}, mergedKeySignature=${mergedKeySignature}, displayKey=${displayKey}`);
-
     // When pitch shift is enabled, disable ALL chord corrections to show transposed chords
     // Chord corrections are based on the original key and would override transposition
     const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
     const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
     const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
-
-    // Debug logging for slash chords (exclude N/C and N.C. which are not real slash chords)
-    if (isPitchShiftEnabled && effectiveChordGridData.chords) {
-      const slashChords = effectiveChordGridData.chords.filter(c =>
-        c.includes('/') && !c.match(/^N[./]C$/i)
-      );
-      if (slashChords.length > 0) {
-        console.log(`🎸 Real slash chords in transposed data (first 10):`, slashChords.slice(0, 10));
-      }
-    }
 
     return {
       chords: effectiveChordGridData.chords,

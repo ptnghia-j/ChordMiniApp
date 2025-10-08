@@ -66,24 +66,26 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const dragRef = useRef<HTMLDivElement>(null);
   const audioMixer = useRef<ReturnType<typeof getAudioMixerService> | null>(null);
 
-  // Handle button click - toggle chord playback and show/hide controls
-  const handleButtonClick = () => {
-    // Check the current state to determine what will happen after the toggle
-    const willBeEnabled = !isEnabled;
-
-    onClick(); // Toggle chord playback
-
-    if (willBeEnabled) {
-      // If we're enabling chord playback, show the control panel
+  // CRITICAL FIX: Sync showControls with isEnabled state
+  // The button click handler can't reliably predict the new isEnabled value
+  // because onClick() triggers async state updates through the parent
+  // Instead, watch isEnabled and update showControls accordingly
+  useEffect(() => {
+    if (isEnabled) {
+      // Chord playback is enabled, show the control panel
       setShowControls(true);
-      // Reset panel visibility to true when chord playback is enabled
       setIsControlPanelVisible(true);
     } else {
-      // If we're disabling chord playback, hide the control panel
+      // Chord playback is disabled, hide the control panel
       setShowControls(false);
-      // Reset panel visibility to true for next time chord playback is enabled
       setIsControlPanelVisible(true);
     }
+  }, [isEnabled]);
+
+  // Handle button click - just toggle chord playback
+  // The effect above will handle showing/hiding the panel
+  const handleButtonClick = () => {
+    onClick(); // Toggle chord playback (state update happens in parent)
   };
 
   // Handle clicking outside the control panel to close it

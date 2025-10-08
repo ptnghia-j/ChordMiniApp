@@ -56,12 +56,9 @@ export const useTransposedChordData = ({
       return chordGridData;
     }
 
-    console.log(`🎵 Transposing ${chordGridData.chords.length} chords by ${pitchShiftSemitones} semitones to key ${targetKey}`);
-
     // Transpose all chords in the grid
     const transposedChords = chordGridData.chords.map((chord, index) => {
       const transposed = transposeChord(chord, pitchShiftSemitones, targetKey);
-      // Log real slash chords for debugging (exclude N/C and N.C.)
       if (chord.includes('/') && !chord.match(/^N[./]C$/i) && index < 10) {
         console.log(`  ${chord} → ${transposed}`);
       }

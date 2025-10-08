@@ -65,6 +65,16 @@ export const usePitchShiftAudio = ({
   const isInitializing = useRef(false);
   const lastSemitones = useRef(pitchShiftSemitones);
 
+  // Track if time update is from pitch shift service (to prevent seek feedback loop)
+  const isTimeUpdateFromService = useRef(false);
+
+  // Track the last known playing state from the service (to prevent auto-pause)
+  const lastServicePlayingState = useRef(false);
+
+  // CRITICAL FIX: Track the last time we synced to prevent seek feedback loop
+  // This prevents the seek effect from triggering on every time update from the service
+  const lastSyncedTime = useRef(0);
+
   // Register service instance globally for volume control access
   useEffect(() => {
     setGlobalPitchShiftService(pitchShiftService.current);
@@ -78,7 +88,6 @@ export const usePitchShiftAudio = ({
    */
   useEffect(() => {
     const isAvailable = !!firebaseAudioUrl;
-    console.log(`🎵 Audio URL ${isAvailable ? 'available' : 'not available'} for pitch shift:`, firebaseAudioUrl);
     setIsFirebaseAudioAvailable(isAvailable);
   }, [firebaseAudioUrl, setIsFirebaseAudioAvailable]);
 
@@ -93,7 +102,6 @@ export const usePitchShiftAudio = ({
     }
 
     if (isInitializing.current) {
-      console.log('⏳ Pitch shift already initializing...');
       return;
     }
 
@@ -102,14 +110,26 @@ export const usePitchShiftAudio = ({
       setIsProcessingPitchShift(true);
       setPitchShiftError(null);
 
-      console.log('🎵 Initializing pitch shift service with audio URL:', firebaseAudioUrl);
+      // CRITICAL: Reset tracking refs before initialization
+      // This ensures playback sync works correctly even if user toggles multiple times
+      lastServicePlayingState.current = false;
+      isTimeUpdateFromService.current = false;
+      lastSyncedTime.current = 0;
 
       // Load audio with current pitch shift amount
       await pitchShiftService.current.loadAudio(firebaseAudioUrl, pitchShiftSemitones);
 
       // Set up time update callback
+      // CRITICAL FIX: Mark time updates from service to prevent seek feedback loop
       pitchShiftService.current.setOnTimeUpdate((time) => {
+        isTimeUpdateFromService.current = true;
+        lastSyncedTime.current = time;
         setCurrentTime(time);
+        // Reset flag after React has processed the state update
+        // Use a shorter delay to allow legitimate seeks to happen quickly
+        setTimeout(() => {
+          isTimeUpdateFromService.current = false;
+        }, 50);
       });
 
       // Set up playback ended callback
@@ -120,8 +140,6 @@ export const usePitchShiftAudio = ({
       setIsPitchShiftReady(true);
       setIsFirebaseAudioAvailable(true);
       lastSemitones.current = pitchShiftSemitones;
-
-      console.log('✅ Pitch shift service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize pitch shift:', error);
       setPitchShiftError('Failed to load pitch-shifted audio. Please try again.');
@@ -143,10 +161,33 @@ export const usePitchShiftAudio = ({
 
   /**
    * Cleanup pitch shift service
+   *
+   * CRITICAL FIX: Reset the singleton instance AND all tracking refs
+   * The issue is that dispose() destroys audio nodes but keeps the same instance.
+   * Additionally, we need to reset all tracking refs (lastServicePlayingState, lastSemitones)
+   * so that playback state sync works correctly on the next toggle.
    */
-  const cleanupPitchShift = useCallback(() => {
-    console.log('🧹 Cleaning up pitch shift service');
-    pitchShiftService.current.dispose();
+  const cleanupPitchShift = useCallback(async () => {
+    // Import the reset function dynamically
+    const { resetPitchShiftService } = await import('@/services/pitchShiftService');
+
+    // Reset the singleton instance (disposes and sets to null)
+    resetPitchShiftService();
+
+    // Get a fresh instance for next time
+    const { getPitchShiftService } = await import('@/services/pitchShiftService');
+    pitchShiftService.current = getPitchShiftService();
+
+    // Register the new instance globally
+    setGlobalPitchShiftService(pitchShiftService.current);
+
+    // CRITICAL: Reset all tracking refs so playback sync works on next toggle
+    lastServicePlayingState.current = false;
+    lastSemitones.current = 0;
+    isTimeUpdateFromService.current = false;
+    lastSyncedTime.current = 0;
+
+    // Mark as not ready so we re-initialize on next toggle
     setIsPitchShiftReady(false);
     isInitializing.current = false;
   }, []);
@@ -157,20 +198,18 @@ export const usePitchShiftAudio = ({
    */
   useEffect(() => {
     if (isPitchShiftEnabled && firebaseAudioUrl) {
-      // Pitch shift enabled: mute YouTube, initialize pitch shift
-      console.log('🎚️ Pitch shift enabled, switching to pitch-shifted audio');
-
+      // Pitch shift enabled: mute YouTube (but keep it playing for visual sync)
       if (youtubePlayer) {
         // Use YouTube IFrame API mute() method
         if (typeof youtubePlayer.mute === 'function') {
           youtubePlayer.mute();
-          console.log('🔇 YouTube player muted via mute() method');
         } else {
           youtubePlayer.muted = true;
-          console.log('🔇 YouTube player muted via muted property');
         }
-        // Optionally pause YouTube to save bandwidth
-        // youtubePlayer.pauseVideo();
+
+        // CRITICAL: DO NOT pause YouTube - keep it playing for visual sync
+        // The YouTube video timeline should stay synchronized with the pitch-shifted audio
+        // Only the audio is muted, the video continues playing
       }
 
       if (audioRef.current) {
@@ -183,16 +222,12 @@ export const usePitchShiftAudio = ({
       }
     } else {
       // Pitch shift disabled: unmute YouTube, cleanup pitch shift
-      console.log('🎚️ Pitch shift disabled, switching to YouTube audio');
-
       if (youtubePlayer) {
         // Use YouTube IFrame API unMute() method
         if (typeof youtubePlayer.unMute === 'function') {
           youtubePlayer.unMute();
-          console.log('🔊 YouTube player unmuted via unMute() method');
         } else {
           youtubePlayer.muted = false;
-          console.log('🔊 YouTube player unmuted via muted property');
         }
       }
 
@@ -200,9 +235,11 @@ export const usePitchShiftAudio = ({
         audioRef.current.muted = true; // Keep extracted audio muted
       }
 
-      // Cleanup pitch shift service
+      // Cleanup pitch shift service (async)
       if (isPitchShiftReady) {
-        cleanupPitchShift();
+        cleanupPitchShift().catch((error) => {
+          console.error('❌ Failed to cleanup pitch shift:', error);
+        });
       }
     }
   }, [
@@ -216,16 +253,38 @@ export const usePitchShiftAudio = ({
   ]);
 
   /**
-   * Handle semitone changes
-   * Update pitch without reloading audio
+   * Handle semitone changes WITHOUT debouncing
+   * Update pitch immediately to prevent multiple audio sources
+   *
+   * CRITICAL FIX:
+   * - NO debouncing - update pitch IMMEDIATELY
+   * - Debouncing was causing the cleanup to cancel pitch updates
+   * - This left old PitchShift nodes playing with different pitches
+   * - Result: Multiple audio sources playing simultaneously
+   *
+   * - Tone.js PitchShift.pitch is a simple parameter update
+   * - It does NOT create new audio nodes or restart playback
+   * - Safe to update on every slider change
+   *
+   * ADDITIONAL FIX: Ensure playback continues after pitch change
+   * - If audio was playing before pitch change, ensure it continues playing
+   * - This prevents auto-pause when sliding the pitch slider
    */
   useEffect(() => {
     if (isPitchShiftEnabled && isPitchShiftReady && pitchShiftSemitones !== lastSemitones.current) {
-      console.log(`🎚️ Updating pitch shift: ${pitchShiftSemitones} semitones`);
-      
       try {
-        pitchShiftService.current.setPitch(pitchShiftSemitones);
+        const service = pitchShiftService.current;
+
+        // Update pitch IMMEDIATELY - no debouncing
+        // CRITICAL: setPitch() only changes the pitch parameter
+        // It does NOT stop or restart playback
+        // The audio continues playing at the new pitch seamlessly
+        service.setPitch(pitchShiftSemitones);
         lastSemitones.current = pitchShiftSemitones;
+
+        // NOTE: No need to call service.play() here!
+        // setPitch() is a simple parameter update that doesn't affect playback state
+        // The playback sync effect will handle any necessary play/pause operations
       } catch (error) {
         console.error('❌ Failed to update pitch:', error);
         setPitchShiftError('Failed to update pitch shift amount.');
@@ -235,21 +294,10 @@ export const usePitchShiftAudio = ({
 
   /**
    * Sync playback state with pitch shift service
-   */
-  useEffect(() => {
-    if (!isPitchShiftEnabled || !isPitchShiftReady) return;
-
-    const service = pitchShiftService.current;
-
-    if (isPlaying) {
-      service.play();
-    } else {
-      service.pause();
-    }
-  }, [isPitchShiftEnabled, isPitchShiftReady, isPlaying]);
-
-  /**
-   * Sync seek position with pitch shift service
+   *
+   * CRITICAL FIX: Prevent auto-pause during pitch changes
+   * - Only sync if the playing state has actually changed
+   * - This prevents the effect from pausing audio during re-renders
    */
   useEffect(() => {
     if (!isPitchShiftEnabled || !isPitchShiftReady) return;
@@ -257,8 +305,51 @@ export const usePitchShiftAudio = ({
     const service = pitchShiftService.current;
     const serviceState = service.getState();
 
+    // CRITICAL: Only sync if playing state has actually changed
+    // This prevents auto-pause during pitch changes or other re-renders
+    if (isPlaying !== lastServicePlayingState.current) {
+      lastServicePlayingState.current = isPlaying;
+
+      if (isPlaying) {
+        // Only call play() if service is not already playing
+        if (!serviceState.isPlaying) {
+          service.play();
+        }
+      } else {
+        // Only call pause() if service is actually playing
+        if (serviceState.isPlaying) {
+          service.pause();
+        }
+      }
+    }
+  }, [isPitchShiftEnabled, isPitchShiftReady, isPlaying]);
+
+  /**
+   * Sync seek position with pitch shift service
+   *
+   * CRITICAL FIX: Prevent seek feedback loop
+   * - Only seek if time update is NOT from the pitch shift service itself
+   * - This prevents the service from seeking to its own time updates
+   * - Use lastSyncedTime to track the last time we synced from the service
+   */
+  useEffect(() => {
+    if (!isPitchShiftEnabled || !isPitchShiftReady) return;
+
+    const service = pitchShiftService.current;
+    const serviceState = service.getState();
+    const timeDiff = Math.abs(serviceState.currentTime - currentTime);
+
+    // CRITICAL: Skip if time update came from pitch shift service
+    // This prevents feedback loop where service updates time -> triggers seek -> updates time -> ...
+    if (isTimeUpdateFromService.current) {
+      return;
+    }
+
     // Only seek if there's a significant difference (> 0.5 seconds)
-    if (Math.abs(serviceState.currentTime - currentTime) > 0.5) {
+    // This allows user-initiated seeks (from YouTube player, seek bar, etc.)
+    // while preventing seeks from service's own time updates
+    if (timeDiff > 0.5) {
+      lastSyncedTime.current = currentTime;
       service.seek(currentTime);
     }
   }, [isPitchShiftEnabled, isPitchShiftReady, currentTime]);
@@ -278,7 +369,9 @@ export const usePitchShiftAudio = ({
    */
   useEffect(() => {
     return () => {
-      cleanupPitchShift();
+      cleanupPitchShift().catch((error) => {
+        console.error('❌ Failed to cleanup pitch shift on unmount:', error);
+      });
     };
   }, [cleanupPitchShift]);
 

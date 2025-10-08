@@ -25,6 +25,10 @@ interface UtilityBarProps {
   };
   youtubePlayer?: Parameters<typeof ChordPlaybackToggle>[0]['youtubePlayer'];
 
+  // Playback rate for pitch shift
+  playbackRate: number;
+  setPlaybackRate: (rate: number) => void;
+
   // Handlers
   toggleFollowMode: () => void;
 
@@ -55,6 +59,8 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isFollowModeEnabled,
   chordPlayback,
   youtubePlayer,
+  playbackRate,
+  setPlaybackRate,
   toggleFollowMode,
   isCountdownEnabled,
   isCountingDown,
@@ -123,7 +129,10 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             />
 
             {/* Pitch Shift */}
-            <PitchShiftPopover />
+            <PitchShiftPopover
+              playbackRate={playbackRate}
+              setPlaybackRate={setPlaybackRate}
+            />
 
             {/* Metronome */}
             {metronome && (

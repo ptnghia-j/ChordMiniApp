@@ -1,7 +1,7 @@
 /**
  * Pitch Shift Popover Component
- * 
- * Simplified popover control for pitch shifting with just a slider.
+ *
+ * Simplified popover control for pitch shifting with semitone and playback speed sliders.
  * Appears as a popover above/below the pitch shift toggle button.
  */
 
@@ -14,7 +14,15 @@ import { TbMusicUp } from 'react-icons/tb';
 import { useUI } from '@/contexts/UIContext';
 import { formatSemitones } from '@/utils/chordTransposition';
 
-export const PitchShiftPopover: React.FC = () => {
+interface PitchShiftPopoverProps {
+  playbackRate: number;
+  setPlaybackRate: (rate: number) => void;
+}
+
+export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
+  playbackRate,
+  setPlaybackRate,
+}) => {
   const {
     isPitchShiftEnabled,
     togglePitchShift,
@@ -29,13 +37,22 @@ export const PitchShiftPopover: React.FC = () => {
   // Local state to control popover visibility independently from pitch shift state
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
-  // Slider change handler
+  // Pitch shift slider change handler
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = parseInt(e.target.value, 10);
       setPitchShiftSemitones(value);
     },
     [setPitchShiftSemitones]
+  );
+
+  // Playback speed slider change handler
+  const handlePlaybackRateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = parseFloat(e.target.value);
+      setPlaybackRate(value);
+    },
+    [setPlaybackRate]
   );
 
   // Handle toggle button click
@@ -65,38 +82,45 @@ export const PitchShiftPopover: React.FC = () => {
       }}
     >
       <PopoverTrigger>
-        <motion.button
-          onClick={handleToggleClick}
-          disabled={isDisabled}
-          className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-            isPitchShiftEnabled
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-          } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          whileHover={!isDisabled ? { scale: 1.02 } : {}}
-          whileTap={!isDisabled ? { scale: 0.98 } : {}}
-          aria-label={
-            isDisabled
-              ? 'Pitch Shift: Audio not available'
-              : isPitchShiftEnabled
-              ? 'Disable pitch shift'
-              : 'Enable pitch shift'
-          }
-          aria-pressed={isPitchShiftEnabled}
-          title={
-            isDisabled
-              ? 'Pitch Shift: Audio not available'
-              : isPitchShiftEnabled
-              ? 'Disable pitch shift'
-              : 'Enable pitch shift'
-          }
-        >
-          <TbMusicUp className="h-5 w-5" />
-        </motion.button>
+        <div className="relative inline-block">
+          <motion.button
+            onClick={handleToggleClick}
+            disabled={isDisabled}
+            className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+              isPitchShiftEnabled
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+            } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            whileHover={!isDisabled ? { scale: 1.02 } : {}}
+            whileTap={!isDisabled ? { scale: 0.98 } : {}}
+            aria-label={
+              isDisabled
+                ? 'Pitch Shift: Audio not available'
+                : isPitchShiftEnabled
+                ? 'Disable pitch shift'
+                : 'Enable pitch shift'
+            }
+            aria-pressed={isPitchShiftEnabled}
+            title={
+              isDisabled
+                ? 'Pitch Shift: Audio not available'
+                : isPitchShiftEnabled
+                ? 'Disable pitch shift'
+                : 'Enable pitch shift'
+            }
+          >
+            <TbMusicUp className="h-5 w-5" />
+          </motion.button>
+
+          {/* Beta tag */}
+          <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold">
+            BETA
+          </div>
+        </div>
       </PopoverTrigger>
       
       <PopoverContent>
-        <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg min-w-[280px]">
+        <div className="bg-white/60 dark:bg-content-bg/60 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg min-w-[280px] backdrop-blur-sm">
           {/* Slider with value display */}
           <div className="space-y-3">
             {/* Value display */}
@@ -139,6 +163,55 @@ export const PitchShiftPopover: React.FC = () => {
                 <span>-6</span>
                 <span>0</span>
                 <span>+6</span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-gray-200 dark:border-gray-700 my-3" />
+
+            {/* Playback Speed Control */}
+            <div className="space-y-2">
+              {/* Value display */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Playback Speed
+                </span>
+                <span className="text-sm font-semibold text-green-600 dark:text-green-400 min-w-[3rem] text-right">
+                  {playbackRate.toFixed(2)}x
+                </span>
+              </div>
+
+              {/* Slider */}
+              <div className="relative">
+                <input
+                  type="range"
+                  min="0.25"
+                  max="2.0"
+                  step="0.25"
+                  value={playbackRate}
+                  onChange={handlePlaybackRateChange}
+                  disabled={isProcessingPitchShift}
+                  className={`
+                    w-full h-2 rounded-lg appearance-none cursor-pointer
+                    bg-gray-200 dark:bg-gray-700
+                    ${isProcessingPitchShift ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  style={{
+                    background: `linear-gradient(to right,
+                      #10b981 0%,
+                      #10b981 ${((playbackRate - 0.25) / 1.75) * 100}%,
+                      #e5e7eb ${((playbackRate - 0.25) / 1.75) * 100}%,
+                      #e5e7eb 100%)`,
+                  }}
+                  aria-label="Playback speed rate"
+                />
+
+                {/* Slider markers */}
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1 px-1">
+                  <span>0.25x</span>
+                  <span>1.0x</span>
+                  <span>2.0x</span>
+                </div>
               </div>
             </div>
 
