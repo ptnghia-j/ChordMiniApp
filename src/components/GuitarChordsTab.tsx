@@ -118,7 +118,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       return chordGridData;
     }
 
-    console.log(`🎸 GuitarChordsTab: Applying pitch shift transposition (+${pitchShiftSemitones} semitones)`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🎸 GuitarChordsTab: Applying pitch shift transposition (+${pitchShiftSemitones} semitones)`);
+    }
 
     // Transpose all chords in the grid
     const transposedChords = chordGridData.chords.map((chord, index) => {
@@ -126,7 +128,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         return chord;
       }
       const transposed = transposeChord(chord, pitchShiftSemitones, targetKey ?? undefined);
-      if (index < 5) {
+      if (process.env.NODE_ENV === 'development' && index < 5) {
         console.log(`  Chord ${index}: "${chord}" → "${transposed}"`);
       }
       return transposed;

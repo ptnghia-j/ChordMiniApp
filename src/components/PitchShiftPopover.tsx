@@ -11,6 +11,7 @@ import React, { useCallback, useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
+import { MIN_SEMITONES, MAX_SEMITONES } from '@/utils/chordTransposition';
 import { useUI } from '@/contexts/UIContext';
 import { formatSemitones } from '@/utils/chordTransposition';
 
@@ -137,8 +138,8 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
             <div className="relative">
               <input
                 type="range"
-                min="-6"
-                max="6"
+                min={MIN_SEMITONES}
+                max={MAX_SEMITONES}
                 step="1"
                 value={pitchShiftSemitones}
                 onChange={handleSliderChange}
@@ -151,8 +152,8 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
                 style={{
                   background: `linear-gradient(to right,
                     #10b981 0%,
-                    #10b981 ${((pitchShiftSemitones + 6) / 12) * 100}%,
-                    #e5e7eb ${((pitchShiftSemitones + 6) / 12) * 100}%,
+                    #10b981 ${((pitchShiftSemitones - MIN_SEMITONES) / (MAX_SEMITONES - MIN_SEMITONES)) * 100}%,
+                    #e5e7eb ${((pitchShiftSemitones - MIN_SEMITONES) / (MAX_SEMITONES - MIN_SEMITONES)) * 100}%,
                     #e5e7eb 100%)`,
                 }}
                 aria-label="Pitch shift amount in semitones"
@@ -160,9 +161,9 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
 
               {/* Slider markers */}
               <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1 px-1">
-                <span>-6</span>
+                <span>{MIN_SEMITONES}</span>
                 <span>0</span>
-                <span>+6</span>
+                <span>+{MAX_SEMITONES}</span>
               </div>
             </div>
 

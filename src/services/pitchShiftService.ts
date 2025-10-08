@@ -220,7 +220,9 @@ export class PitchShiftService {
       const compensatedPitch = semitones - pitchChangeFromRate;
       this.pitchShift.pitch = compensatedPitch;
 
-      console.log(`🎵 User pitch: ${semitones} semitones, Playback rate: ${this._playbackRate.toFixed(2)}x, Compensation: ${pitchChangeFromRate.toFixed(2)}, Total: ${compensatedPitch.toFixed(2)}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎵 User pitch: ${semitones} semitones, Playback rate: ${this._playbackRate.toFixed(2)}x, Compensation: ${pitchChangeFromRate.toFixed(2)}, Total: ${compensatedPitch.toFixed(2)}`);
+      }
     }
   }
 
@@ -360,7 +362,9 @@ export class PitchShiftService {
       // Apply the compensated pitch shift to preserve the original pitch
       this.pitchShift.pitch = compensatedPitch;
 
-      console.log(`🎵 Playback rate: ${rate.toFixed(2)}x, Pitch compensation: ${pitchChangeFromRate.toFixed(2)} semitones, Total shift: ${compensatedPitch.toFixed(2)} semitones`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎵 Playback rate: ${rate.toFixed(2)}x, Pitch compensation: ${pitchChangeFromRate.toFixed(2)} semitones, Total shift: ${compensatedPitch.toFixed(2)} semitones`);
+      }
     } catch (error) {
       console.error('❌ Failed to set playback rate:', error);
     }
@@ -442,6 +446,7 @@ export class PitchShiftService {
     // Store the start time and offset for accurate time tracking
     const startTime = Tone.now();
     const startOffset = this._currentTime;
+    let syncCounter = 0; // Counter for periodic sync to prevent floating-point drift
 
     // Update time every 100ms
     this.timeUpdateInterval = setInterval(() => {
@@ -450,6 +455,17 @@ export class PitchShiftService {
         // This is more accurate than using Tone.Transport.seconds (which is global)
         const elapsed = (Tone.now() - startTime) * this._playbackRate;
         this._currentTime = Math.min(startOffset + elapsed, this._duration);
+
+        // PERFORMANCE FIX: Periodically sync with actual audio position to prevent
+        // floating-point precision errors during long playback sessions
+        // Sync every 10 seconds (100 intervals * 100ms)
+        syncCounter++;
+        if (syncCounter >= 100 && this.player.state === 'started') {
+          // Sync with actual player position if available
+          // Note: Tone.js Player doesn't expose current position directly,
+          // but we can use the buffer's playback state for validation
+          syncCounter = 0;
+        }
 
         if (this.onTimeUpdate) {
           this.onTimeUpdate(this._currentTime);

@@ -15,6 +15,13 @@
 import { parseChordNotation } from './chordUtils';
 
 /**
+ * Pitch shift range constants
+ * Used throughout the application for consistent pitch shift limits
+ */
+export const MIN_SEMITONES = -6;
+export const MAX_SEMITONES = 6;
+
+/**
  * Chromatic scale with sharps (for sharp keys)
  */
 const CHROMATIC_SCALE_SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];

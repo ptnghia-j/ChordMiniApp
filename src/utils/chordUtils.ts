@@ -22,6 +22,10 @@ export const parseChordNotation = (chord: string): {
 
   // Basic chord pattern: Root + Quality + Extensions + /Bass
   // Bass can be either a note name (A-G with optional #/b) OR a scale degree (number with optional #/b)
+  // Regex explanation for scale degree pattern [#b]?\d+:
+  //   [#b]? - Optional accidental (sharp or flat)
+  //   \d+   - One or more digits representing the scale degree
+  //   Examples: 'b7' (flat 7th), '#4' (sharp 4th), '5' (perfect 5th)
   const chordPattern = /^([A-G][#b]?)([^/]*?)(?:\/([A-G][#b]?|[#b]?\d+))?$/;
   const match = chord.match(chordPattern);
 
