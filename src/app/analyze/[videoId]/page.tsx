@@ -105,7 +105,8 @@ import ProcessingBanners from '@/components/ProcessingBanners';
 import AnalysisSplitLayout from '@/components/layout/AnalysisSplitLayout';
 
 import UtilityBar from '@/components/UtilityBar';
-import { useChordPlayback } from '@/hooks/useChordPlayback';
+import type { UseChordPlaybackReturn } from '@/hooks/useChordPlayback';
+import { ChordPlaybackManager } from '@/components/ChordPlaybackManager';
 // Import new hooks and contexts
 import { useFirebaseReadiness } from '@/hooks/useFirebaseReadiness';
 import { useYouTubeSetup } from '@/hooks/useYouTubeSetup';
@@ -116,6 +117,9 @@ import { useChordProcessing } from '@/hooks/useChordProcessing';
 import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
 import { PlaybackProvider } from '@/contexts/PlaybackContext';
 import { UIProvider } from '@/contexts/UIContext';
+import PitchShiftAudioManager from '@/components/PitchShiftAudioManager';
+import KeySignatureSync from '@/components/KeySignatureSync';
+import ConditionalPlaybackControls from '@/components/ConditionalPlaybackControls';
 
 
 
@@ -1108,24 +1112,42 @@ export default function YouTubeVideoAnalyzePage() {
 
   const chordGridData = useMemo(() => getChordGridDataService(analysisResults as any) as any, [analysisResults]);
 
-  // Create simplified chord grid data when simplification is enabled
+  // Create simplified and/or transposed chord grid data
   const simplifiedChordGridData = useMemo(() => {
-    if (!chordGridData || !simplifyChords) return chordGridData;
+    if (!chordGridData) return chordGridData;
+
+    let processedChords = chordGridData.chords || [];
+
+    // Apply simplification if enabled
+    if (simplifyChords) {
+      processedChords = simplifyChordArray(processedChords);
+    }
+
+    // Apply pitch shift transposition if enabled (will be accessed via context in child components)
+    // Note: Transposition is applied in the ChordGrid component to access UIContext
 
     return {
       ...chordGridData,
-      chords: simplifyChordArray(chordGridData.chords || [])
+      chords: processedChords
     };
   }, [chordGridData, simplifyChords]);
 
-  // Setup chord playback hook for UtilityBar controls
-  const chordPlayback = useChordPlayback({
-    currentBeatIndex,
-    chords: simplifiedChordGridData?.chords || [],
-    beats: simplifiedChordGridData?.beats || [],
-    isPlaying,
-    currentTime
+  // CRITICAL FIX: Chord playback state managed by ChordPlaybackManager component
+  // ChordPlaybackManager is inside UIProvider and handles transposition
+  const [chordPlayback, setChordPlayback] = useState<UseChordPlaybackReturn>({
+    isEnabled: false,
+    pianoVolume: 50,
+    guitarVolume: 30,
+    isReady: false,
+    togglePlayback: () => {},
+    setPianoVolume: () => {},
+    setGuitarVolume: () => {}
   });
+
+  // CRITICAL FIX: Memoize the callback to prevent infinite re-renders
+  const handleChordPlaybackChange = useCallback((newChordPlayback: UseChordPlaybackReturn) => {
+    setChordPlayback(newChordPlayback);
+  }, []);
 
   // Countdown state
   const [isCountdownEnabled, setIsCountdownEnabled] = useState<boolean>(false);
@@ -1286,6 +1308,15 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [youtubePlayer, audioRef]);
 
+  // Callbacks for ProcessingBanners
+  const handleDismissExtraction = useCallback(() => {
+    setShowExtractionNotification(false);
+  }, []);
+
+  const handleRefreshExtraction = useCallback(() => {
+    extractAudioFromYouTube(true);
+  }, [extractAudioFromYouTube]);
+
   return (
     <AnalysisDataProvider
       analysisState={{
@@ -1347,31 +1378,60 @@ export default function YouTubeVideoAnalyzePage() {
         initialShowSegmentation={showSegmentation}
         controlledSimplifyChords={simplifyChords}
         onSimplifyChordsChange={setSimplifyChords}
+        initialOriginalKey={keySignature || 'C'}
+        initialIsFirebaseAudioAvailable={!!audioProcessingState.audioUrl}
       >
-        <PlaybackProvider
-          audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
-          audioRef={audioRef as any}
+        {/* Conditional Playback Controls - must be inside UIProvider to access isPitchShiftEnabled */}
+        <ConditionalPlaybackControls
           youtubePlayer={youtubePlayer}
-          playbackControls={{
-            play: () => { try { (youtubePlayer as any)?.playVideo?.(); } catch {} setIsPlaying(true); },
-            pause: () => { try { (youtubePlayer as any)?.pauseVideo?.(); } catch {} setIsPlaying(false); },
-            seek: (time: number) => { try { (youtubePlayer as any)?.seekTo?.(time, 'seconds'); } catch {} setCurrentTime(time); },
-            setPlayerPlaybackRate: (rate: number) => { try { (youtubePlayer as any)?.setPlaybackRate?.(rate); } catch {} setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })); },
-          }}
-          beatState={{ currentBeatIndex }}
-          beatHandlers={{ onBeatClick: handleBeatClick, setCurrentBeatIndex, setCurrentDownbeatIndex }}
-          videoUIState={{ isVideoMinimized, isFollowModeEnabled }}
-          videoUIControls={{ toggleVideoMinimization, toggleFollowMode }}
-          setters={{
-            setIsPlaying,
-            setCurrentTime,
-            setDuration,
-            setPlaybackRate: (rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })),
-            setYoutubePlayer: (player: unknown) => setYoutubePlayer(player as any),
-            setIsVideoMinimized,
-            setIsFollowModeEnabled,
-          }}
+          setIsPlaying={setIsPlaying}
+          setCurrentTime={setCurrentTime}
+          setAudioPlayerState={setAudioPlayerState}
         >
+          {(playbackControls) => (
+            <PlaybackProvider
+              audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
+              audioRef={audioRef as any}
+              youtubePlayer={youtubePlayer}
+              playbackControls={playbackControls}
+              beatState={{ currentBeatIndex }}
+              beatHandlers={{ onBeatClick: handleBeatClick, setCurrentBeatIndex, setCurrentDownbeatIndex }}
+              videoUIState={{ isVideoMinimized, isFollowModeEnabled }}
+              videoUIControls={{ toggleVideoMinimization, toggleFollowMode }}
+              setters={{
+                setIsPlaying,
+                setCurrentTime,
+                setDuration,
+                setPlaybackRate: (rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })),
+                setYoutubePlayer: (player: unknown) => setYoutubePlayer(player as any),
+                setIsVideoMinimized,
+                setIsFollowModeEnabled,
+              }}
+            >
+    {/* Pitch Shift Audio Manager - must be inside UIProvider */}
+    <PitchShiftAudioManager
+      youtubePlayer={youtubePlayer}
+      audioRef={audioRef}
+      firebaseAudioUrl={audioProcessingState.audioUrl || null}
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      playbackRate={playbackRate}
+      setIsPlaying={setIsPlaying}
+      setCurrentTime={setCurrentTime}
+    />
+
+    {/* Key Signature Sync - syncs detected key with UIContext originalKey */}
+    <KeySignatureSync keySignature={keySignature} />
+
+    {/* Chord Playback Manager - handles transposition for chord playback */}
+    <ChordPlaybackManager
+      currentBeatIndex={currentBeatIndex}
+      chordGridData={simplifiedChordGridData}
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      onChordPlaybackChange={handleChordPlaybackChange}
+    />
+
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
       {/* Use the Navigation component */}
       <Navigation />
@@ -1381,8 +1441,8 @@ export default function YouTubeVideoAnalyzePage() {
         isDownloading={audioProcessingState.isDownloading}
         fromCache={audioProcessingState.fromCache}
         showExtractionNotification={showExtractionNotification}
-        onDismissExtraction={useCallback(() => setShowExtractionNotification(false), [])}
-        onRefreshExtraction={useCallback(() => extractAudioFromYouTube(true), [extractAudioFromYouTube])}
+        onDismissExtraction={handleDismissExtraction}
+        onRefreshExtraction={handleRefreshExtraction}
         analysisResults={analysisResults}
         audioDuration={duration}
         audioUrl={audioProcessingState.audioUrl || undefined}
@@ -1590,7 +1650,12 @@ export default function YouTubeVideoAnalyzePage() {
                 }
                 setIsPlaying(true);
               }}
-              onPause={() => setIsPlaying(false)}
+              onPause={() => {
+                // CRITICAL FIX: Always update isPlaying state, even when pitch shift is enabled
+                // This ensures pitch-shifted audio pauses when YouTube player is paused
+                // The pitch shift sync effect in usePitchShiftAudio will handle pausing the audio
+                setIsPlaying(false);
+              }}
               onProgress={handleYouTubeProgress}
               onSeek={(time: number) => {
                 if (youtubePlayer && youtubePlayer.seekTo) {
@@ -1613,6 +1678,8 @@ export default function YouTubeVideoAnalyzePage() {
               isFollowModeEnabled={isFollowModeEnabled}
               chordPlayback={chordPlayback}
               youtubePlayer={youtubePlayer}
+              playbackRate={playbackRate}
+              setPlaybackRate={(rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }))}
               toggleFollowMode={toggleFollowMode}
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}
@@ -1630,8 +1697,11 @@ export default function YouTubeVideoAnalyzePage() {
           }
         />
       )}
+
     </div>
     </PlaybackProvider>
+          )}
+        </ConditionalPlaybackControls>
     </UIProvider>
 
     </AnalysisDataProvider>

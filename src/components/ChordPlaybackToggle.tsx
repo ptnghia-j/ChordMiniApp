@@ -8,6 +8,8 @@ import { MdPiano, MdRefresh } from 'react-icons/md';
 import { GiGuitarBassHead } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/audioMixerService';
+import { getPitchShiftService } from '@/services/pitchShiftServiceInstance';
+import { useUI } from '@/contexts/UIContext';
 
 interface ChordPlaybackToggleProps {
   isEnabled: boolean;
@@ -54,6 +56,9 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const controlsRef = useRef<HTMLDivElement>(null);
   const [audioSettings, setAudioSettings] = useState<AudioMixerSettings | null>(null);
 
+  // Get pitch shift state to determine audio source label
+  const { isPitchShiftEnabled } = useUI();
+
   // Draggable state
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -61,24 +66,26 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const dragRef = useRef<HTMLDivElement>(null);
   const audioMixer = useRef<ReturnType<typeof getAudioMixerService> | null>(null);
 
-  // Handle button click - toggle chord playback and show/hide controls
-  const handleButtonClick = () => {
-    // Check the current state to determine what will happen after the toggle
-    const willBeEnabled = !isEnabled;
-
-    onClick(); // Toggle chord playback
-
-    if (willBeEnabled) {
-      // If we're enabling chord playback, show the control panel
+  // CRITICAL FIX: Sync showControls with isEnabled state
+  // The button click handler can't reliably predict the new isEnabled value
+  // because onClick() triggers async state updates through the parent
+  // Instead, watch isEnabled and update showControls accordingly
+  useEffect(() => {
+    if (isEnabled) {
+      // Chord playback is enabled, show the control panel
       setShowControls(true);
-      // Reset panel visibility to true when chord playback is enabled
       setIsControlPanelVisible(true);
     } else {
-      // If we're disabling chord playback, hide the control panel
+      // Chord playback is disabled, hide the control panel
       setShowControls(false);
-      // Reset panel visibility to true for next time chord playback is enabled
       setIsControlPanelVisible(true);
     }
+  }, [isEnabled]);
+
+  // Handle button click - just toggle chord playback
+  // The effect above will handle showing/hiding the panel
+  const handleButtonClick = () => {
+    onClick(); // Toggle chord playback (state update happens in parent)
   };
 
   // Handle clicking outside the control panel to close it
@@ -420,12 +427,12 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                       />
                     </div>
 
-                    {/* YouTube Volume */}
+                    {/* YouTube / Pitch-Shifted Audio Volume */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
                           <HiVideoCamera className="h-4 w-4" />
-                          YouTube Video
+                          {isPitchShiftEnabled ? 'Pitch-Shifted Audio' : 'YouTube Video'}
                         </label>
                         <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
                           {Math.round(audioSettings.youtubeVolume)}%
@@ -437,13 +444,28 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         minValue={0}
                         maxValue={100}
                         value={audioSettings.youtubeVolume}
-                        onChange={(value) => audioMixer.current?.setYouTubeVolume(Array.isArray(value) ? value[0] : value)}
+                        onChange={(value) => {
+                          const vol = Array.isArray(value) ? value[0] : value;
+                          if (isPitchShiftEnabled) {
+                            // Control pitch-shifted audio volume
+                            const pitchShiftService = getPitchShiftService();
+                            if (pitchShiftService) {
+                              pitchShiftService.setVolume(vol);
+                              console.log(`🔊 Pitch-shifted audio volume set to ${vol}%`);
+                              // Update the audioSettings state to sync the slider UI
+                              setAudioSettings(prev => prev ? { ...prev, youtubeVolume: vol } : null);
+                            }
+                          } else {
+                            // Control YouTube volume
+                            audioMixer.current?.setYouTubeVolume(vol);
+                          }
+                        }}
                         className="w-full"
-                        aria-label="YouTube video volume control"
+                        aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : "YouTube video volume control"}
                         classNames={{
                           base: "max-w-full",
                           track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-red-500 dark:bg-red-400",
+                          filler: isPitchShiftEnabled ? "bg-green-500 dark:bg-green-400" : "bg-red-500 dark:bg-red-400",
                           thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                         }}
                       />

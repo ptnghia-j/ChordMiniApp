@@ -236,17 +236,6 @@ const PerformanceMonitor: React.FC = () => {
           FCP: metricsRef.current.fcp ? `${metricsRef.current.fcp.toFixed(2)}ms` : 'Not measured',
           TTFB: metricsRef.current.ttfb ? `${metricsRef.current.ttfb.toFixed(2)}ms` : 'Not measured'
         });
-
-        // Performance score estimation
-        const lcpScore = metricsRef.current.lcp ? (metricsRef.current.lcp <= 2500 ? 'Good' : metricsRef.current.lcp <= 4000 ? 'Needs Improvement' : 'Poor') : 'Unknown';
-        const fidScore = metricsRef.current.fid ? (metricsRef.current.fid <= 100 ? 'Good' : metricsRef.current.fid <= 300 ? 'Needs Improvement' : 'Poor') : 'Unknown';
-        const clsScore = metricsRef.current.cls ? (metricsRef.current.cls <= 0.1 ? 'Good' : metricsRef.current.cls <= 0.25 ? 'Needs Improvement' : 'Poor') : 'Unknown';
-
-        console.log('🎯 Performance Scores:', {
-          LCP: lcpScore,
-          FID: fidScore,
-          CLS: clsScore
-        });
       }
     }, 10000);
 

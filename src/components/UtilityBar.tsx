@@ -8,6 +8,7 @@ import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
+import PitchShiftPopover from '@/components/PitchShiftPopover';
 import { useUI } from '@/contexts/UIContext';
 import { useSimplifySelector } from '@/contexts/selectors';
 
@@ -23,6 +24,10 @@ interface UtilityBarProps {
     setGuitarVolume: (v: number) => void;
   };
   youtubePlayer?: Parameters<typeof ChordPlaybackToggle>[0]['youtubePlayer'];
+
+  // Playback rate for pitch shift
+  playbackRate: number;
+  setPlaybackRate: (rate: number) => void;
 
   // Handlers
   toggleFollowMode: () => void;
@@ -54,6 +59,8 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isFollowModeEnabled,
   chordPlayback,
   youtubePlayer,
+  playbackRate,
+  setPlaybackRate,
   toggleFollowMode,
   isCountdownEnabled,
   isCountingDown,
@@ -119,6 +126,12 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             <ChordSimplificationToggle
               isEnabled={simplifyChords}
               onClick={toggleSimplifyChords}
+            />
+
+            {/* Pitch Shift */}
+            <PitchShiftPopover
+              playbackRate={playbackRate}
+              setPlaybackRate={setPlaybackRate}
             />
 
             {/* Metronome */}

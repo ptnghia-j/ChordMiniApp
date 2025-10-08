@@ -9,6 +9,40 @@ export interface UseChordPlaybackProps {
   currentTime: number;
 }
 
+/**
+ * Convert simplified chord notation back to playback-compatible format
+ *
+ * Simplified chords use Unicode symbols (♯, ♭) and generic "sus" which the audio parser cannot handle.
+ * This function converts them back to ASCII format (#, b) and preserves sus2/sus4 distinction.
+ *
+ * IMPORTANT: This conversion is ONLY for playback. Display should continue using simplified format.
+ *
+ * @param chord - Simplified chord string (e.g., "F♯m", "B♭", "Csus")
+ * @returns Playback-compatible chord string (e.g., "F#m", "Bb", "Csus4")
+ */
+function convertSimplifiedChordForPlayback(chord: string): string {
+  if (!chord || chord === 'N.C.' || chord === 'N/C' || chord === 'N' || chord === '') {
+    return chord;
+  }
+
+  let converted = chord;
+
+  // Convert Unicode accidentals to ASCII
+  // ♯ (U+266F) → # (ASCII)
+  // ♭ (U+266D) → b (ASCII)
+  converted = converted.replace(/♯/g, '#').replace(/♭/g, 'b');
+
+  // Handle generic "sus" - default to "sus4" for playback
+  // Note: We can't distinguish between original sus2 and sus4 after simplification,
+  // so we default to sus4 which is more common
+  // This is a limitation of the simplification process
+  if (converted.endsWith('sus') && !converted.endsWith('sus2') && !converted.endsWith('sus4')) {
+    converted = converted.replace(/sus$/, 'sus4');
+  }
+
+  return converted;
+}
+
 export interface UseChordPlaybackReturn {
   isEnabled: boolean;
   pianoVolume: number;
@@ -119,10 +153,14 @@ export const useChordPlayback = ({
         ? calculateChordDuration(currentBeatIndex, nextChordChange.index)
         : 2.0;
 
-      // Play the chord
-      chordPlaybackService.current.playChord(currentChord, duration);
+      // Convert simplified chord notation to playback-compatible format
+      // This handles Unicode symbols (♯, ♭) and generic "sus" that the audio parser can't handle
+      const playbackChord = convertSimplifiedChordForPlayback(currentChord);
 
-      // Update tracking variables
+      // Play the chord (using converted format for audio parsing)
+      chordPlaybackService.current.playChord(playbackChord, duration);
+
+      // Update tracking variables (using original chord for comparison)
       lastPlayedChordIndex.current = currentBeatIndex;
       lastPlayedChord.current = currentChord;
     }

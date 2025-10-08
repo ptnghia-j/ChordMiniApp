@@ -30,6 +30,34 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.0',
+      date: 'October 8, 2025',
+      title: 'Pitch Shift Feature with Tempo Control',
+      description: 'Introduces real-time pitch shifting for YouTube and uploaded audio with automatic chord transposition, playback speed control that preserves pitch, and seamless integration with existing chord playback features.',
+      features: [
+        'NEW: Real-time pitch shifting using Tone.js library for both YouTube and uploaded audio',
+        'NEW: Pitch shift control panel with slider (-6 to +6 semitones) and visual feedback',
+        'NEW: Automatic chord label transposition when pitch is shifted',
+        'NEW: Chord playback (piano/guitar) automatically adapts to match shifted pitch',
+        'NEW: Playback speed control (0.25x to 2.0x) with pitch preservation algorithm',
+        'NEW: Pitch shift toggle button in utility bar with BETA badge',
+        'UI: Semi-transparent pitch shift popover matching audio mixer design',
+        'PERFORMANCE: Pitch compensation algorithm prevents chipmunk/deep voice effects during speed changes',
+      ],
+      technical: [
+        'ARCHITECTURE: Tone.js integration for professional-grade pitch shifting with granular synthesis',
+        'ARCHITECTURE: Pitch compensation formula (12 × log₂(rate)) for tempo changes without pitch changes',
+        'ARCHITECTURE: Audio-source agnostic design supporting YouTube, Firebase Storage, and blob URLs',
+        'ARCHITECTURE: Singleton pitch shift service with proper cleanup and memory management',
+        'PERFORMANCE: Playback state synchronization (play/pause/seek) between YouTube and pitch-shifted audio',
+        'PERFORMANCE: Beat-aligned time tracking with independent interval-based updates',
+        'STABILITY: Ref-based tracking to prevent playback sync issues on toggle',
+        'STABILITY: Automatic YouTube player muting when pitch shift is enabled (visual sync maintained)',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.4.5',
       date: 'September 29, 2025',
       title: 'Context Migration, Corrections Visuals, and Faster UI',
