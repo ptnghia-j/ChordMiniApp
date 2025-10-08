@@ -8,7 +8,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { Popover, PopoverTrigger, PopoverContent } from '@heroui/react';
+import { Popover, PopoverTrigger, PopoverContent, Tooltip } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
 import { MIN_SEMITONES, MAX_SEMITONES } from '@/utils/chordTransposition';
@@ -84,37 +84,44 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
     >
       <PopoverTrigger>
         <div className="relative inline-block">
-          <motion.button
-            onClick={handleToggleClick}
-            disabled={isDisabled}
-            className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-              isPitchShiftEnabled
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-            } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            whileHover={!isDisabled ? { scale: 1.02 } : {}}
-            whileTap={!isDisabled ? { scale: 0.98 } : {}}
-            aria-label={
+          <Tooltip
+            content={
               isDisabled
                 ? 'Pitch Shift: Audio not available'
                 : isPitchShiftEnabled
                 ? 'Disable pitch shift'
                 : 'Enable pitch shift'
             }
-            aria-pressed={isPitchShiftEnabled}
-            title={
-              isDisabled
-                ? 'Pitch Shift: Audio not available'
-                : isPitchShiftEnabled
-                ? 'Disable pitch shift'
-                : 'Enable pitch shift'
-            }
+            placement="top"
+            classNames={{
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
           >
-            <TbMusicUp className="h-5 w-5" />
-          </motion.button>
+            <motion.button
+              onClick={handleToggleClick}
+              disabled={isDisabled}
+              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+                isPitchShiftEnabled
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              whileHover={!isDisabled ? { scale: 1.02 } : {}}
+              whileTap={!isDisabled ? { scale: 0.98 } : {}}
+              aria-label={
+                isDisabled
+                  ? 'Pitch Shift: Audio not available'
+                  : isPitchShiftEnabled
+                  ? 'Disable pitch shift'
+                  : 'Enable pitch shift'
+              }
+              aria-pressed={isPitchShiftEnabled}
+            >
+              <TbMusicUp className="h-5 w-5" />
+            </motion.button>
+          </Tooltip>
 
           {/* Beta tag */}
-          <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold">
+          <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold pointer-events-none">
             BETA
           </div>
         </div>
