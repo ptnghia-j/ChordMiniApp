@@ -98,7 +98,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleFollowMode}
-                className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle auto-scroll"
               >
                 {isFollowModeEnabled ? <HiArrowPath className="h-5 w-5"/> : <HiOutlineArrowPath className="h-5 w-5"/>}
@@ -145,7 +145,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
               >
                 <button
                   onClick={metronome.toggleMetronomeWithSync}
-                  className={`p-2 rounded-full transition-colors ${metronome.isEnabled ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                  className={`p-2 rounded-full transition-colors ${metronome.isEnabled ? 'bg-orange-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                   aria-label="Toggle metronome"
                 >
                   {metronome.isEnabled ? <PiMetronomeBold className="h-5 w-5"/> : <PiMetronome className="h-5 w-5"/>}
@@ -163,7 +163,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleCountdown}
-                className={`p-2 rounded-full transition-colors ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                className={`p-2 rounded-full transition-colors ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle countdown"
               >
                 {/* Simple timer glyph */}
@@ -194,7 +194,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleLyricsPanel}
-                className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle lyrics panel"
               >
                 <FaRegFileLines className="h-5 w-5"/>
@@ -210,7 +210,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleChatbot}
-                className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100'}`}
+                className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle AI chat"
               >
                 <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>

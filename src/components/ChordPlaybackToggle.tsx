@@ -313,7 +313,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
             className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
               isEnabled
                 ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+                : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
             } ${className}`}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
