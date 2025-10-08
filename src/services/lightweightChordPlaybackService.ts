@@ -137,6 +137,7 @@ function generateChordFrequencies(root: string, chordType: string, bassNote?: st
 export interface LightweightChordPlaybackOptions {
   pianoVolume: number;
   guitarVolume: number;
+  violinVolume?: number; // Optional for backward compatibility (not used in lightweight service)
   enabled: boolean;
 }
 

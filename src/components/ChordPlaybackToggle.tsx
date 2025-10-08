@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitarBassHead } from 'react-icons/gi';
+import { GiGuitarBassHead, GiViolin } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/audioMixerService';
 import { getPitchShiftService } from '@/services/pitchShiftServiceInstance';
@@ -16,8 +16,10 @@ interface ChordPlaybackToggleProps {
   onClick: () => void;
   pianoVolume: number;
   guitarVolume: number;
+  violinVolume: number;
   onPianoVolumeChange: (volume: number) => void;
   onGuitarVolumeChange: (volume: number) => void;
+  onViolinVolumeChange: (volume: number) => void;
   className?: string;
   // Optional YouTube player for volume control
   youtubePlayer?: {
@@ -46,8 +48,10 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   onClick,
   pianoVolume: _pianoVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
   guitarVolume: _guitarVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
+  violinVolume: _violinVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
   onPianoVolumeChange,
   onGuitarVolumeChange,
+  onViolinVolumeChange,
   className = '',
   youtubePlayer
 }) => {
@@ -130,6 +134,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
           chordPlaybackVolume: 60,
           pianoVolume: 50,
           guitarVolume: 30,
+          violinVolume: 60,
           metronomeVolume: 70
         });
         return;
@@ -146,6 +151,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
+        violinVolume: 60,
         metronomeVolume: 70
       });
       return;
@@ -156,13 +162,23 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       mixer.setYouTubePlayer(youtubePlayer);
     }
 
-    // Register chord playback service with audio mixer for volume control integration
+    // Register soundfont chord playback service with audio mixer for volume control integration
     try {
-      const { getLightweightChordPlaybackService } = await import('@/services/lightweightChordPlaybackService');
-      const chordPlaybackService = getLightweightChordPlaybackService();
+      const { getSoundfontChordPlaybackService } = await import('@/services/soundfontChordPlaybackService');
+      const chordPlaybackService = getSoundfontChordPlaybackService();
       mixer.setChordPlaybackService(chordPlaybackService);
+      console.log('🎵 Soundfont chord playback service registered');
     } catch (error) {
-      console.error('🎵 Failed to register chord playback service:', error);
+      console.error('🎵 Failed to register soundfont chord playback service:', error);
+      // Fallback to lightweight service
+      try {
+        const { getLightweightChordPlaybackService } = await import('@/services/lightweightChordPlaybackService');
+        const fallbackService = getLightweightChordPlaybackService();
+        mixer.setChordPlaybackService(fallbackService);
+        console.log('🎵 Fallback to lightweight chord playback service');
+      } catch (fallbackError) {
+        console.error('🎵 Failed to register fallback chord playback service:', fallbackError);
+      }
     }
 
     // Get initial settings and set them in state
@@ -178,6 +194,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
+        violinVolume: 60,
         metronomeVolume: 70
       });
     }
@@ -233,6 +250,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
+        violinVolume: 60,
         metronomeVolume: 70
       });
     }
@@ -566,6 +584,39 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                         className="w-full"
                         aria-label="Guitar volume control"
+                        classNames={{
+                          base: "max-w-full",
+                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                          filler: "bg-green-500 dark:bg-green-400",
+                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                        }}
+                      />
+                    </div>
+
+                    {/* Violin volume control */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                          <GiViolin className="h-4 w-4" />
+                          Violin
+                        </label>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                          {Math.round(audioSettings.violinVolume)}%
+                        </span>
+                      </div>
+                      <Slider
+                        size="sm"
+                        step={1}
+                        minValue={0}
+                        maxValue={100}
+                        value={audioSettings.violinVolume}
+                        onChange={(value) => {
+                          const vol = Array.isArray(value) ? value[0] : value;
+                          audioMixer.current?.setViolinVolume(vol);
+                          onViolinVolumeChange(vol);
+                        }}
+                        className="w-full"
+                        aria-label="Violin volume control"
                         classNames={{
                           base: "max-w-full",
                           track: "bg-gray-200 dark:bg-gray-600 h-1.5",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getLightweightChordPlaybackService } from '@/services/lightweightChordPlaybackService';
+import { getSoundfontChordPlaybackService } from '@/services/soundfontChordPlaybackService';
 
 export interface UseChordPlaybackProps {
   currentBeatIndex: number;
@@ -47,10 +47,12 @@ export interface UseChordPlaybackReturn {
   isEnabled: boolean;
   pianoVolume: number;
   guitarVolume: number;
+  violinVolume: number;
   isReady: boolean;
   togglePlayback: () => void;
   setPianoVolume: (volume: number) => void;
   setGuitarVolume: (volume: number) => void;
+  setViolinVolume: (volume: number) => void;
 }
 
 /**
@@ -67,9 +69,10 @@ export const useChordPlayback = ({
   const [isEnabled, setIsEnabled] = useState(false);
   const [pianoVolume, setPianoVolumeState] = useState(50);
   const [guitarVolume, setGuitarVolumeState] = useState(30);
+  const [violinVolume, setViolinVolumeState] = useState(60);
   const [isReady, setIsReady] = useState(false);
-  
-  const chordPlaybackService = useRef(getLightweightChordPlaybackService());
+
+  const chordPlaybackService = useRef(getSoundfontChordPlaybackService());
   const lastPlayedChordIndex = useRef(-1);
   const lastPlayedChord = useRef<string | null>(null);
 
@@ -92,9 +95,10 @@ export const useChordPlayback = ({
     chordPlaybackService.current.updateOptions({
       enabled: isEnabled,
       pianoVolume,
-      guitarVolume
+      guitarVolume,
+      violinVolume
     });
-  }, [isEnabled, pianoVolume, guitarVolume]);
+  }, [isEnabled, pianoVolume, guitarVolume, violinVolume]);
 
   // Find the next chord change from current beat index
   const findNextChordChange = useCallback((fromIndex: number): { index: number; chord: string } | null => {
@@ -192,6 +196,12 @@ export const useChordPlayback = ({
     setGuitarVolumeState(clampedVolume);
   }, []);
 
+  // Update violin volume
+  const setViolinVolume = useCallback((volume: number) => {
+    const clampedVolume = Math.max(0, Math.min(100, volume));
+    setViolinVolumeState(clampedVolume);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     const service = chordPlaybackService.current;
@@ -204,9 +214,11 @@ export const useChordPlayback = ({
     isEnabled,
     pianoVolume,
     guitarVolume,
+    violinVolume,
     isReady,
     togglePlayback,
     setPianoVolume,
-    setGuitarVolume
+    setGuitarVolume,
+    setViolinVolume
   };
 };

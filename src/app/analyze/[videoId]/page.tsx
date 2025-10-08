@@ -1138,10 +1138,12 @@ export default function YouTubeVideoAnalyzePage() {
     isEnabled: false,
     pianoVolume: 50,
     guitarVolume: 30,
+    violinVolume: 60,
     isReady: false,
     togglePlayback: () => {},
     setPianoVolume: () => {},
-    setGuitarVolume: () => {}
+    setGuitarVolume: () => {},
+    setViolinVolume: () => {}
   });
 
   // CRITICAL FIX: Memoize the callback to prevent infinite re-renders

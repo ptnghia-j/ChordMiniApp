@@ -30,6 +30,35 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.1',
+      date: 'October 9, 2025',
+      title: 'Real Instrument Soundfonts for Chord Playback',
+      description: 'Replaces synthetic chord playback sounds with professional-quality instrument soundfonts (Piano, Guitar, Violin) using the smplr library. Features lazy loading for optimal performance and seamless integration with the existing audio mixer.',
+      features: [
+        'NEW: Real instrument soundfonts for chord playback (Acoustic Grand Piano, Acoustic Guitar, Violin)',
+        'NEW: Violin volume control added to audio mixer panel with independent slider',
+        'NEW: Lazy loading - soundfonts only load when chord playback is first enabled (~3s load time)',
+        'IMPROVED: Enhanced chord playback quality with authentic instrument timbres',
+        'IMPROVED: Comprehensive chord support including slash chords (e.g., C/G, Am/E)',
+        'UI: New violin volume slider with violin icon in audio mixer',
+        'UI: Consistent green color scheme for all instrument volume controls',
+        'PERFORMANCE: Fast playback latency (~6ms) after initial soundfont loading',
+      ],
+      technical: [
+        'ARCHITECTURE: New SoundfontChordPlaybackService wrapping smplr library for production use',
+        'ARCHITECTURE: Lazy initialization - soundfonts load on first playback, not on page load',
+        'ARCHITECTURE: Graceful fallback to lightweight synthetic service if soundfonts fail to load',
+        'ARCHITECTURE: Updated AudioMixerService to support three-instrument volume hierarchy',
+        'ARCHITECTURE: Comprehensive chord parsing supporting major, minor, 7th, 9th, 11th, 13th, sus, dim, aug chords',
+        'PERFORMANCE: Soundfonts cached after first load for instant subsequent playback',
+        'PERFORMANCE: Octave transposition per instrument (Piano: C4, Guitar: C3, Violin: C5)',
+        'STABILITY: Backward compatible - existing lightweight service updated with optional violin parameter',
+        'STABILITY: Error handling with automatic fallback ensures chord playback always works',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.0',
       date: 'October 8, 2025',
       title: 'Pitch Shift Feature with Tempo Control',
@@ -505,6 +534,18 @@ export default function ChangelogPage() {
           <p className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
             Follow the journey of our product. Here’s a detailed log of every feature, fix, and improvement we’ve shipped.
           </p>
+        </div>
+
+        {/* Announcement Banner */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-300"></div>
+            <div className="relative flex items-center justify-center px-8 py-4 bg-black dark:bg-gray-900 rounded-full border border-gray-700">
+              <span className="text-white font-mono text-sm md:text-base tracking-wide">
+                🎵 PITCH SHIFTING & REAL INSTRUMENT SOUNDFONTS NOW AVAILABLE! →
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Timeline Container */}
