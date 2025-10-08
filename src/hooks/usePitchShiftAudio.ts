@@ -9,7 +9,7 @@
 
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
-import { getPitchShiftService } from '@/services/pitchShiftService';
+import { getGrainPlayerPitchShiftService } from '@/services/grainPlayerPitchShiftService';
 import { setPitchShiftService as setGlobalPitchShiftService } from '@/services/pitchShiftServiceInstance';
 import { useUI } from '@/contexts/UIContext';
 
@@ -61,7 +61,7 @@ export const usePitchShiftAudio = ({
   } = useUI();
 
   const [isPitchShiftReady, setIsPitchShiftReady] = useState(false);
-  const pitchShiftService = useRef(getPitchShiftService());
+  const pitchShiftService = useRef(getGrainPlayerPitchShiftService());
   const isInitializing = useRef(false);
   const lastSemitones = useRef(pitchShiftSemitones);
 
@@ -74,6 +74,10 @@ export const usePitchShiftAudio = ({
   // CRITICAL FIX: Track the last time we synced to prevent seek feedback loop
   // This prevents the seek effect from triggering on every time update from the service
   const lastSyncedTime = useRef(0);
+
+  // REGRESSION FIX: Store pending playback rate to apply when service becomes ready
+  // This prevents race conditions when playback rate is changed before service initialization completes
+  const pendingPlaybackRate = useRef<number | null>(null);
 
   // Register service instance globally for volume control access
   useEffect(() => {
@@ -169,14 +173,14 @@ export const usePitchShiftAudio = ({
    */
   const cleanupPitchShift = useCallback(async () => {
     // Import the reset function dynamically
-    const { resetPitchShiftService } = await import('@/services/pitchShiftService');
+    const { resetGrainPlayerPitchShiftService } = await import('@/services/grainPlayerPitchShiftService');
 
     // Reset the singleton instance (disposes and sets to null)
-    resetPitchShiftService();
+    resetGrainPlayerPitchShiftService();
 
     // Get a fresh instance for next time
-    const { getPitchShiftService } = await import('@/services/pitchShiftService');
-    pitchShiftService.current = getPitchShiftService();
+    const { getGrainPlayerPitchShiftService } = await import('@/services/grainPlayerPitchShiftService');
+    pitchShiftService.current = getGrainPlayerPitchShiftService();
 
     // Register the new instance globally
     setGlobalPitchShiftService(pitchShiftService.current);
@@ -356,13 +360,46 @@ export const usePitchShiftAudio = ({
 
   /**
    * Sync playback rate with pitch shift service
+   *
+   * REGRESSION FIX: Store pending playback rate changes and apply when service is ready
+   * This prevents race conditions when user changes playback rate before initialization completes
    */
   useEffect(() => {
-    if (!isPitchShiftEnabled || !isPitchShiftReady) return;
+    if (!isPitchShiftEnabled) {
+      // Pitch shift disabled - clear pending rate
+      pendingPlaybackRate.current = null;
+      return;
+    }
 
-    const service = pitchShiftService.current;
-    service.setPlaybackRate(playbackRate);
+    if (isPitchShiftReady) {
+      // Service is ready - apply playback rate immediately
+      const service = pitchShiftService.current;
+      service.setPlaybackRate(playbackRate);
+      pendingPlaybackRate.current = null;
+    } else {
+      // Service not ready - store for later application
+      pendingPlaybackRate.current = playbackRate;
+    }
   }, [isPitchShiftEnabled, isPitchShiftReady, playbackRate]);
+
+  /**
+   * Apply pending playback rate when service becomes ready
+   *
+   * REGRESSION FIX: This ensures playback rate changes made before initialization
+   * are applied as soon as the service is ready
+   */
+  useEffect(() => {
+    if (isPitchShiftEnabled && isPitchShiftReady && pendingPlaybackRate.current !== null) {
+      const service = pitchShiftService.current;
+      const rate = pendingPlaybackRate.current;
+      service.setPlaybackRate(rate);
+      pendingPlaybackRate.current = null;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ Applied pending playback rate: ${rate.toFixed(2)}x (service now ready)`);
+      }
+    }
+  }, [isPitchShiftEnabled, isPitchShiftReady]);
 
   /**
    * Cleanup on unmount

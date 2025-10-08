@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Slider, Card, CardBody, CardHeader, Divider, Select, SelectItem, Textarea, Checkbox } from '@heroui/react';
 import { HiPlay, HiPause, HiStop, HiArrowUpTray, HiCheckCircle, HiXMark } from 'react-icons/hi2';
-import { PitchShiftService } from '@/services/pitchShiftService';
+import { GrainPlayerPitchShiftService } from '@/services/grainPlayerPitchShiftService';
 import { PhazePitchShiftService } from '@/services/phazePitchShiftService';
 
 // Sample audio URLs for testing
@@ -43,7 +43,7 @@ const QUALITY_CHECKLIST = [
 
 export default function PitchShiftComparison() {
   // Services
-  const toneServiceRef = useRef<PitchShiftService | null>(null);
+  const toneServiceRef = useRef<GrainPlayerPitchShiftService | null>(null);
   const phazeServiceRef = useRef<PhazePitchShiftService | null>(null);
 
   // Audio selection
@@ -76,7 +76,7 @@ export default function PitchShiftComparison() {
 
   // Initialize services
   useEffect(() => {
-    toneServiceRef.current = new PitchShiftService();
+    toneServiceRef.current = new GrainPlayerPitchShiftService();
     phazeServiceRef.current = new PhazePitchShiftService();
 
     return () => {

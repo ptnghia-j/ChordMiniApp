@@ -1308,6 +1308,18 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [youtubePlayer, audioRef]);
 
+  // CRITICAL FIX: Sync playback rate with audio element
+  // The audioRef is used for time tracking and must match the YouTube player's playback rate
+  // Without this, the audio element continues at 1.0x speed while YouTube plays at the selected rate
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎵 Synced audio element playback rate to ${playbackRate}x`);
+      }
+    }
+  }, [playbackRate]);
+
   // Callbacks for ProcessingBanners
   const handleDismissExtraction = useCallback(() => {
     setShowExtractionNotification(false);
@@ -1679,7 +1691,9 @@ export default function YouTubeVideoAnalyzePage() {
               chordPlayback={chordPlayback}
               youtubePlayer={youtubePlayer}
               playbackRate={playbackRate}
-              setPlaybackRate={(rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }))}
+              setPlaybackRate={(rate: number) => {
+                setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
+              }}
               toggleFollowMode={toggleFollowMode}
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}

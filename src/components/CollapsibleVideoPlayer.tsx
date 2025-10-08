@@ -47,6 +47,21 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   const [isMobile, setIsMobile] = useState(false);
   const playerRef = useRef<ReactPlayer>(null);
 
+  // Sync playback rate with YouTube player
+  useEffect(() => {
+    if (playerRef.current) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const internalPlayer = (playerRef.current as any).getInternalPlayer();
+        if (internalPlayer && typeof internalPlayer.setPlaybackRate === 'function') {
+          internalPlayer.setPlaybackRate(playbackRate);
+        }
+      } catch (error) {
+        console.error('Error setting playback rate:', error);
+      }
+    }
+  }, [playbackRate]);
+
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => {

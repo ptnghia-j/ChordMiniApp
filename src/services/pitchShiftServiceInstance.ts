@@ -1,18 +1,18 @@
 /**
  * Pitch Shift Service Instance
- * 
- * Global singleton instance of PitchShiftService for volume control access
+ *
+ * Global singleton instance of GrainPlayerPitchShiftService for volume control access
  */
 
-import { PitchShiftService } from './pitchShiftService';
+import { GrainPlayerPitchShiftService } from './grainPlayerPitchShiftService';
 
-let pitchShiftServiceInstance: PitchShiftService | null = null;
+let pitchShiftServiceInstance: GrainPlayerPitchShiftService | null = null;
 
-export function getPitchShiftService(): PitchShiftService | null {
+export function getPitchShiftService(): GrainPlayerPitchShiftService | null {
   return pitchShiftServiceInstance;
 }
 
-export function setPitchShiftService(service: PitchShiftService | null): void {
+export function setPitchShiftService(service: GrainPlayerPitchShiftService | null): void {
   pitchShiftServiceInstance = service;
 }
 
