@@ -63,6 +63,7 @@
     "react-resizable-panels": "^2.1.9",
     "react-window": "^1.8.11",
     "react-youtube": "^10.1.0",
+    "smplr": "^0.16.3",
     "stream-http": "^3.2.0",
     "tailwind-merge": "^2.2.1",
     "tone": "^15.1.22",
