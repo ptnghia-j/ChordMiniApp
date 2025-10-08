@@ -9,9 +9,9 @@ import { detectEnvironment } from '@/utils/environmentDetection';
  * - Uses YouTube search metadata directly (no filename guessing)
  * - Video ID-based caching and storage
  * - Environment-aware service selection:
- *   - Production: ytdown.io (reliable, works from datacenter IPs)
+ *   - Production: yt-mp3-go (lukavukanovic.xyz - reliable, works from datacenter IPs)
  *   - Local Development: yt-dlp
- *   - Fallback: yt-mp3-go (non-functional but preserved)
+ *   - Deprecated: ytdown-io (blocked by Cloudflare bot protection)
  * - Leverages existing search results for metadata
  */
 

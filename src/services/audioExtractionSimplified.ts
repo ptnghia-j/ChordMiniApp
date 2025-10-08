@@ -91,10 +91,9 @@ export class AudioExtractionServiceSimplified {
 
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
-      case 'ytdown-io':
-        return await this.extractAudioWithYtdownIo(videoMetadata, forceRedownload);
-
-
+      case 'yt-mp3-go':
+        // Use yt-mp3-go service (lukavukanovic.xyz) - now the primary production service
+        return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
 
       case 'ytdlp':
         // Allow yt-dlp in production when explicitly configured
@@ -107,18 +106,16 @@ export class AudioExtractionServiceSimplified {
           };
         }
 
-      // PRESERVED FOR REFERENCE - yt-mp3-go integration
-      // case 'ytmp3go':
-      //   return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
-
-      // PRESERVED FOR REFERENCE - QuickTube integration
-      // case 'quicktube':
-      //   return await this.extractAudioWithQuickTube(videoMetadata, forceRedownload);
+      case 'ytdown-io':
+        // DEPRECATED: ytdown-io is blocked by Cloudflare bot protection
+        // Fallback to yt-mp3-go instead
+        console.warn(`⚠️ ytdown-io is deprecated (Cloudflare blocked), using yt-mp3-go fallback`);
+        return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
 
       default:
-        // Fallback to ytdown.io for unknown strategies
-        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to ytdown.io`);
-        return await this.extractAudioWithYtdownIo(videoMetadata, forceRedownload);
+        // Fallback to yt-mp3-go for unknown strategies
+        console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to yt-mp3-go`);
+        return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
     }
   }
 

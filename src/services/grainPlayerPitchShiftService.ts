@@ -17,8 +17,11 @@ import * as Tone from 'tone';
 
 export interface GrainPlayerPitchShiftOptions {
   semitones: number; // -12 to +12
-  grainSize?: number; // Default: 0.1 (100ms)
-  overlap?: number; // Default: 0.1 (100ms)
+  grainSize?: number; // Default: 0.2 (200ms) - Duration of each grain
+  overlap?: number; // Default: 0.1 (100ms) - Crossfade duration between grains
+  // Note: 'overlap' in Tone.js is the CROSSFADE DURATION, not the interval!
+  // Grain start interval = grainSize - overlap
+  // For 50% overlap: overlap = grainSize * 0.5
 }
 
 export interface PitchShiftPlaybackState {
@@ -97,9 +100,11 @@ export class GrainPlayerPitchShiftService {
       this.gainNode = new Tone.Gain(0.9);
 
       // Create a low-pass filter to remove high-frequency artifacts
+      // Use adaptive cutoff based on pitch shift amount to prevent aliasing
+      const filterCutoff = this.getAdaptiveFilterCutoff(semitones);
       this.lowPassFilter = new Tone.Filter({
         type: 'lowpass',
-        frequency: 16000,
+        frequency: filterCutoff,
         rolloff: -12
       });
 
@@ -112,16 +117,35 @@ export class GrainPlayerPitchShiftService {
       this.limiter.toDestination();
 
       // Create GrainPlayer with optimized settings
-      // 
-      // GRAINPLAYER PARAMETERS:
-      // - grainSize: 0.1s (100ms) - Size of each audio chunk
-      // - overlap: 0.1s (100ms) - Crossfade duration between grains
+      //
+      // GRAINPLAYER PARAMETERS (from official Tone.js documentation):
+      // - grainSize: Duration of each audio grain (chunk)
+      // - overlap: CROSSFADE DURATION between successive grains (NOT interval!)
+      //   * overlap is the amount of time grains crossfade with each other
+      //   * Grain start interval = grainSize - overlap
       // - detune: Pitch adjustment in cents (100 cents = 1 semitone)
       // - playbackRate: Speed multiplier (independent of pitch)
+      //
+      // CORRECTED IMPLEMENTATION:
+      // Using Tone.js recommended defaults for smooth, artifact-free playback
+      // - grainSize: 0.2s (200ms) - Standard grain duration
+      // - overlap: 0.1s (100ms) - 50% crossfade for smooth transitions
+      //
+      // Grain timeline visualization:
+      // Grain 1: [0ms ==================== 200ms]
+      // Grain 2:           [100ms ==================== 300ms]
+      // Grain 3:                     [200ms ==================== 400ms]
+      //          ^^^^^^^^^^CROSSFADE^^^^^^^^^^CROSSFADE^^^^^^^^^^
+      //          (100ms overlap)     (100ms overlap)
+      //
+      // Grain start interval = grainSize - overlap = 200ms - 100ms = 100ms
+      const grainSize = 0.2;  // 200ms grains (Tone.js default)
+      const overlap = 0.1;    // 100ms crossfade (50% overlap - industry standard)
+
       this.grainPlayer = new Tone.GrainPlayer({
         url: finalUrl,
-        grainSize: 0.1, // 100ms grains for smooth playback
-        overlap: 0.1, // 100ms overlap for smooth transitions
+        grainSize: grainSize,  // 200ms grains
+        overlap: overlap,      // 100ms crossfade duration ✅
         detune: semitones * 100, // Convert semitones to cents
         playbackRate: this._playbackRate,
         loop: false,
@@ -164,6 +188,30 @@ export class GrainPlayerPitchShiftService {
   }
 
   /**
+   * Calculate adaptive filter cutoff based on pitch shift amount
+   *
+   * When pitch shifting up, frequencies are multiplied by the pitch factor.
+   * To prevent aliasing, we need to lower the filter cutoff accordingly.
+   *
+   * Example: +12 semitones (octave up) doubles all frequencies
+   * - Original 15kHz content becomes 30kHz (above Nyquist)
+   * - Filter cutoff should be halved to prevent aliasing
+   */
+  private getAdaptiveFilterCutoff(semitones: number): number {
+    const baseCutoff = 16000; // 16kHz base cutoff
+
+    // For pitch shift up, reduce cutoff to prevent aliasing
+    if (semitones > 0) {
+      const pitchFactor = Math.pow(2, semitones / 12);
+      // Reduce cutoff by pitch factor, with minimum of 8kHz
+      return Math.max(8000, Math.min(baseCutoff, baseCutoff / pitchFactor));
+    }
+
+    // For pitch shift down or no shift, use base cutoff
+    return baseCutoff;
+  }
+
+  /**
    * Handle player load event
    */
   private handlePlayerLoad(): void {
@@ -177,9 +225,11 @@ export class GrainPlayerPitchShiftService {
 
   /**
    * Update pitch shift amount without reloading audio
-   * 
+   *
    * GrainPlayer uses `detune` property (in cents) for pitch control.
    * This is INDEPENDENT of playbackRate - no compensation needed!
+   *
+   * Also updates the low-pass filter cutoff adaptively to prevent aliasing.
    */
   setPitch(semitones: number): void {
     if (this.grainPlayer) {
@@ -192,7 +242,12 @@ export class GrainPlayerPitchShiftService {
       // Apply pitch shift via detune (independent of playbackRate)
       this.grainPlayer.detune = cents;
 
-
+      // Update filter cutoff adaptively based on pitch shift amount
+      if (this.lowPassFilter) {
+        const filterCutoff = this.getAdaptiveFilterCutoff(semitones);
+        // Ramp to new cutoff over 100ms for smooth transition
+        this.lowPassFilter.frequency.rampTo(filterCutoff, 0.1);
+      }
     }
   }
 

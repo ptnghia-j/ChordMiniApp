@@ -58,24 +58,24 @@ export function detectEnvironment(): EnvironmentConfig {
   }
 
   // Determine strategy based on manual override or URL detection
-  // Priority: manual override > ytdown-io (production) > ytdlp (localhost) > yt-mp3-go (fallback)
+  // Priority: manual override > yt-mp3-go (production) > ytdlp (localhost)
+  // NOTE: ytdown-io is deprecated due to Cloudflare bot protection (403 errors)
   let strategy: AudioProcessingStrategy;
 
   // Check for manual strategy override
   const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY;
-  // Allow forcing ytdown.io in dev without changing manual override
-  const devForceYtdown = process.env.NEXT_PUBLIC_DEV_USE_YTDOWN_IO === 'true';
 
   if (manualStrategy && manualStrategy !== 'auto' &&
       ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
     strategy = manualStrategy as AudioProcessingStrategy;
     console.log(`🔧 Using manual audio strategy override: ${strategy}`);
   } else if (isLocalhost) {
-    // For local development, allow switching to ytdown.io for debugging upload/403 issues
-    strategy = devForceYtdown ? 'ytdown-io' : 'ytdlp';
+    // For local development, use yt-dlp (most reliable for localhost)
+    strategy = 'ytdlp';
   } else {
-    // Use ytdown.io for production (more reliable than downr.org, no 403 errors)
-    strategy = 'ytdown-io';
+    // Use yt-mp3-go for production (lukavukanovic.xyz service)
+    // This replaces ytdown-io which is now blocked by Cloudflare
+    strategy = 'yt-mp3-go';
   }
 
   return {
@@ -121,21 +121,24 @@ export async function detectEnvironmentAsync(): Promise<EnvironmentConfig> {
   const baseUrl = window.location.origin;
 
   // Determine strategy based on manual override or URL detection
+  // Priority: manual override > yt-mp3-go (production) > ytdlp (localhost)
+  // NOTE: ytdown-io is deprecated due to Cloudflare bot protection (403 errors)
   let strategy: AudioProcessingStrategy;
 
   // Check for manual strategy override
   const manualStrategy = config.NEXT_PUBLIC_AUDIO_STRATEGY;
-  // Allow forcing ytdown.io in dev without changing manual override
-  const devForceYtdown = config.NEXT_PUBLIC_DEV_USE_YTDOWN_IO === 'true';
 
   if (manualStrategy && manualStrategy !== 'auto' &&
       ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
     strategy = manualStrategy as AudioProcessingStrategy;
     console.log(`🔧 Using manual audio strategy override: ${strategy}`);
   } else if (isLocalhost) {
-    strategy = devForceYtdown ? 'ytdown-io' : 'ytdlp';
+    // For local development, use yt-dlp (most reliable for localhost)
+    strategy = 'ytdlp';
   } else {
-    strategy = 'ytdown-io';
+    // Use yt-mp3-go for production (lukavukanovic.xyz service)
+    // This replaces ytdown-io which is now blocked by Cloudflare
+    strategy = 'yt-mp3-go';
   }
 
   return {
