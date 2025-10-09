@@ -10,6 +10,7 @@ import {
 import {
   getChordStyle
 } from '@/utils/chordStyling';
+import { createShiftedChords } from '@/utils/chordProcessing';
 import { useChordGridLayout } from '@/hooks/useChordGridLayout';
 import { useChordDataProcessing } from '@/hooks/useChordDataProcessing';
 import { useChordInteractions } from '@/hooks/useChordInteractions';
@@ -36,7 +37,7 @@ interface AudioMappingItem {
 }
 
 interface ChordGridProps {
-  chords: string[]; // Array of chord labels (e.g., 'C', 'Am')
+  chords: string[]; // Array of chord labels (e.g., 'C', 'Am') - may be transposed
   beats: (number | null)[]; // Array of corresponding beat timestamps (in seconds) - Updated to match service type
   currentBeatIndex?: number; // Current beat index for highlighting, optional
   timeSignature?: number; // Time signature (beats per measure), defaults to 4
@@ -93,6 +94,8 @@ interface ChordGridProps {
       romanNumeral: string;
     }>;
   } | null;
+  // CRITICAL FIX: Original chords for Roman numeral mapping (not transposed)
+  originalChordsForRomanNumerals?: string[]; // Original chords before transposition for Roman numeral alignment
 }
 
 const ChordGrid: React.FC<ChordGridProps> = React.memo(({
@@ -122,7 +125,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   editedChords = {},
   onChordEdit,
   showRomanNumerals = false,
-  romanNumeralData = null
+  romanNumeralData = null,
+  originalChordsForRomanNumerals // CRITICAL FIX: Original chords for Roman numeral mapping
 }) => {
 
   // Get theme for dark mode detection
@@ -254,15 +258,35 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return calculatedRows;
   }, [groupedByMeasure, dynamicMeasuresPerRow]);
 
-  // Use utility function for beat to chord sequence mapping
+  // CRITICAL FIX: Use original chords for Roman numeral mapping to prevent misalignment during pitch shift
+  // Roman numerals are key-relative and should remain constant regardless of transposition
+  // Only chord labels should change during pitch shift, not the Roman numeral analysis
   const beatToChordSequenceMap = useMemo(() => {
+    // Use original chords if available (when pitch shift is active), otherwise use shifted chords
+    const chordsForMapping = originalChordsForRomanNumerals || chords;
+
+    // Process original chords through the same shifting logic to get the correct sequence
+    const originalShiftedChords = originalChordsForRomanNumerals
+      ? createShiftedChords(originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount)
+      : shiftedChords;
+
+    // DEBUG: Log the chords being used for mapping
+    if (process.env.NODE_ENV === 'development' && showRomanNumerals) {
+      console.log('🔍 Roman Numeral Mapping Debug:');
+      console.log('  originalChordsForRomanNumerals provided?', !!originalChordsForRomanNumerals);
+      console.log('  Chords for mapping (first 10):', chordsForMapping.slice(0, 10));
+      console.log('  Shifted chords for mapping (first 10):', originalShiftedChords.slice(0, 10));
+      console.log('  Display chords (first 10):', chords.slice(0, 10));
+      console.log('  Roman numeral data:', romanNumeralData?.analysis?.slice(0, 10));
+    }
+
     return buildBeatToChordSequenceMap(
-      chords.length,
-      shiftedChords,
+      chordsForMapping.length,
+      originalShiftedChords,
       romanNumeralData,
       sequenceCorrections
     );
-  }, [chords.length, shiftedChords, romanNumeralData, sequenceCorrections]);
+  }, [chords, shiftedChords, romanNumeralData, sequenceCorrections, originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount, showRomanNumerals]);
 
   // Early return if no chords available
   if (chords.length === 0) {

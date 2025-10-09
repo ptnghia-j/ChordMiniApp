@@ -119,6 +119,17 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   // Use transposed data if available, otherwise use original
   const effectiveChordGridData = transposedChordGridData || chordGridData;
 
+  // DEBUG: Log pitch shift state and chord data
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && mergedShowRomanNumerals) {
+      console.log('🎵 ChordGridContainer Debug:');
+      console.log('  isPitchShiftEnabled:', isPitchShiftEnabled);
+      console.log('  Original chords (first 10):', chordGridData.chords.slice(0, 10));
+      console.log('  Effective chords (first 10):', effectiveChordGridData.chords.slice(0, 10));
+      console.log('  Are they different?', chordGridData.chords[0] !== effectiveChordGridData.chords[0]);
+    }
+  }, [isPitchShiftEnabled, chordGridData.chords, effectiveChordGridData.chords, mergedShowRomanNumerals]);
+
   const stableProps = React.useMemo(() => {
     const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
 
@@ -133,15 +144,19 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       displayKey = quality ? `${targetKey} ${quality}` : targetKey;
     }
 
-    // When pitch shift is enabled, disable ALL chord corrections to show transposed chords
-    // Chord corrections are based on the original key and would override transposition
-    const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
+    // CRITICAL FIX: Keep sequenceCorrections active even when pitch shift is enabled
+    // sequenceCorrections is used for Roman numeral mapping and should NOT be disabled
+    // Only disable visual chord correction display, not the underlying sequence data
+    const effectiveSequenceCorrections = sequenceCorrections; // Always use sequence corrections for Roman numeral mapping
     const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
     const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
 
     return {
       chords: effectiveChordGridData.chords,
       beats: effectiveChordGridData.beats,
+      // CRITICAL FIX: Pass original chords for Roman numeral mapping
+      // Roman numerals should be based on original key, not transposed chords
+      originalChordsForRomanNumerals: chordGridData.chords,
       timeSignature,
       keySignature: displayKey,
       isDetectingKey: mergedIsDetectingKey,
@@ -170,6 +185,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     effectiveChordGridData.paddingCount,
     effectiveChordGridData.shiftCount,
     effectiveChordGridData.originalAudioMapping,
+    chordGridData.chords, // Add original chords to dependencies
     mergedAnalysisResults?.beatDetectionResult?.time_signature,
     mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start,
     mergedKeySignature,
