@@ -24,15 +24,15 @@ export default function AnimatedTitle({ text, className = '' }: AnimatedTitlePro
   return (
     <div className={`relative inline-block ${className}`}>
       {/* Base text */}
-      <h2 
+      <h2
         className={`text-4xl md:text-5xl font-bold transition-colors duration-300 ${
           theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
         }`}
       >
         {text}
       </h2>
-      
-      {/* Animated overlay text with gradient sweep */}
+
+      {/* Animated overlay text with gradient sweep - Optimized with will-change */}
       <h2
         key={animationKey}
         className={`absolute inset-0 text-4xl md:text-5xl font-bold bg-gradient-to-r ${
@@ -41,7 +41,8 @@ export default function AnimatedTitle({ text, className = '' }: AnimatedTitlePro
             : 'from-transparent via-blue-600 to-transparent'
         } bg-clip-text text-transparent animate-sweep-text`}
         style={{
-          backgroundSize: '200% 100%'
+          backgroundSize: '200% 100%',
+          willChange: 'background-position, opacity'
         }}
       >
         {text}
