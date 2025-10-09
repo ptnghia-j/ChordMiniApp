@@ -57,12 +57,8 @@ export const useTransposedChordData = ({
     }
 
     // Transpose all chords in the grid
-    const transposedChords = chordGridData.chords.map((chord, index) => {
-      const transposed = transposeChord(chord, pitchShiftSemitones, targetKey);
-      if (chord.includes('/') && !chord.match(/^N[./]C$/i) && index < 10) {
-        console.log(`  ${chord} → ${transposed}`);
-      }
-      return transposed;
+    const transposedChords = chordGridData.chords.map((chord) => {
+      return transposeChord(chord, pitchShiftSemitones, targetKey);
     });
 
     return {
