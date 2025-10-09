@@ -119,17 +119,6 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   // Use transposed data if available, otherwise use original
   const effectiveChordGridData = transposedChordGridData || chordGridData;
 
-  // DEBUG: Log pitch shift state and chord data
-  React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && mergedShowRomanNumerals) {
-      console.log('🎵 ChordGridContainer Debug:');
-      console.log('  isPitchShiftEnabled:', isPitchShiftEnabled);
-      console.log('  Original chords (first 10):', chordGridData.chords.slice(0, 10));
-      console.log('  Effective chords (first 10):', effectiveChordGridData.chords.slice(0, 10));
-      console.log('  Are they different?', chordGridData.chords[0] !== effectiveChordGridData.chords[0]);
-    }
-  }, [isPitchShiftEnabled, chordGridData.chords, effectiveChordGridData.chords, mergedShowRomanNumerals]);
-
   const stableProps = React.useMemo(() => {
     const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
 

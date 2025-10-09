@@ -270,23 +270,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       ? createShiftedChords(originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount)
       : shiftedChords;
 
-    // DEBUG: Log the chords being used for mapping
-    if (process.env.NODE_ENV === 'development' && showRomanNumerals) {
-      console.log('🔍 Roman Numeral Mapping Debug:');
-      console.log('  originalChordsForRomanNumerals provided?', !!originalChordsForRomanNumerals);
-      console.log('  Chords for mapping (first 10):', chordsForMapping.slice(0, 10));
-      console.log('  Shifted chords for mapping (first 10):', originalShiftedChords.slice(0, 10));
-      console.log('  Display chords (first 10):', chords.slice(0, 10));
-      console.log('  Roman numeral data:', romanNumeralData?.analysis?.slice(0, 10));
-    }
-
     return buildBeatToChordSequenceMap(
       chordsForMapping.length,
       originalShiftedChords,
       romanNumeralData,
       sequenceCorrections
     );
-  }, [chords, shiftedChords, romanNumeralData, sequenceCorrections, originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount, showRomanNumerals]);
+  }, [chords, shiftedChords, romanNumeralData, sequenceCorrections, originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount]);
 
   // Early return if no chords available
   if (chords.length === 0) {
