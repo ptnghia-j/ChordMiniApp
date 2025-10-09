@@ -520,6 +520,8 @@
   animation: borderRotate 5s linear infinite;
   z-index: 1;
   filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  will-change: transform;
+  transform: translateZ(0); /* Force GPU acceleration */
 }
 
 .shooting-star-border::after {

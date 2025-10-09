@@ -119,54 +119,18 @@ function NewHomePageContentInner() {
             </div>
             
           ) : (
-            // Light Mode: Half-circle sunrise effect at horizon
-            // <div className="w-full h-full relative">
-            //   {/* Main sunrise half-circle at bottom */}
-            //   <div
-            //     className="absolute inset-0"
-            //     style={{
-            //       background: `
-            //         radial-gradient(circle at 50% 100%,
-            //           rgba(255, 235, 59, 0.4) 0%,
-            //           rgba(255, 193, 7, 0.3) 15%,
-            //           rgba(255, 167, 38, 0.2) 30%,
-            //           rgba(255, 235, 59, 0.1) 45%,
-            //           transparent 60%
-            //         )
-            //       `,
-            //     }}
-            //   />
-            //   {/* Subtle light rays extending upward */}
-            //   <div
-            //     className="absolute inset-0"
-            //     style={{
-            //       background: `
-            //         linear-gradient(0deg,
-            //           rgba(255, 235, 59, 0.08) 0%,
-            //           transparent 40%
-            //         )
-            //       `,
-            //     }}
-            //   />
-            // </div>
-            <div className="min-h-screen w-full relative bg-white">
-              {/* Cool Blue Glow Right */}
+            // Light Mode: Blue Corner Glow Background (NO BLUR for performance)
+            <div className="min-h-screen w-full bg-white relative overflow-hidden">
+              {/* Blue Corner Glow Background */}
               <div
                 className="absolute inset-0 z-0"
                 style={{
-                  background: "#ffffff",
                   backgroundImage: `
-                    radial-gradient(
-                      circle at top right,
-                      rgba(70, 130, 180, 0.5),
-                      transparent 70%
-                    )
+                    radial-gradient(circle 600px at 0% 200px, #bfdbfe, transparent),
+                    radial-gradient(circle 600px at 100% 200px, #bfdbfe, transparent)
                   `,
-                  filter: "blur(80px)",
-                  backgroundRepeat: "no-repeat",
                 }}
               />
-                {/* Your Content/Components */}
             </div>
           )}
         </div>
@@ -337,8 +301,8 @@ function NewHomePageContentInner() {
             {/* Left Column: Title and Subtitle (40%) */}
             <div className="lg:col-span-2 lg:text-right">
               <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
               >
@@ -354,8 +318,8 @@ function NewHomePageContentInner() {
             {/* Right Column: Detailed Content (60%) */}
             <div className="lg:col-span-3">
               <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
@@ -392,8 +356,8 @@ function NewHomePageContentInner() {
             {/* Left Column: Title and Subtitle (40%) */}
             <div className="lg:col-span-2 lg:text-right">
               <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
               >
@@ -409,8 +373,8 @@ function NewHomePageContentInner() {
             {/* Right Column: Detailed Content (60%) */}
             <div className="lg:col-span-3">
               <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
@@ -451,8 +415,8 @@ function NewHomePageContentInner() {
             {/* Left Column: Title and Subtitle (40%) */}
             <div className="lg:col-span-2 lg:text-right">
               <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
               >
@@ -468,8 +432,8 @@ function NewHomePageContentInner() {
             {/* Right Column: Detailed Content (60%) */}
             <div className="lg:col-span-3">
               <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6"
@@ -638,8 +602,8 @@ function NewHomePageContentInner() {
             {/* Left Column: Description (40%) */}
             <div className="lg:col-span-2 lg:text-left">
               <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
               >
@@ -664,8 +628,8 @@ function NewHomePageContentInner() {
             {/* Right Column: Support Actions and Research Project (60%) */}
             <div className="lg:col-span-3 w-full">
               <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="space-y-6 w-full"
