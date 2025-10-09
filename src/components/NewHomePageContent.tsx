@@ -192,7 +192,7 @@ function NewHomePageContentInner() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    delay: 0, 
+                    delay: 0,
                     duration: 2.0,
                     ease: "easeOut",
                   }}
@@ -498,6 +498,120 @@ function NewHomePageContentInner() {
                     <li className="flex items-start space-x-3">
                       <span className="text-purple-500 mt-1.5 text-xs">●</span>
                       <span>Visual chord change indicators and progression flow</span>
+                    </li>
+                  </ul>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          {/* Feature 4: Interactive Music Tools */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
+            {/* Left Column: Title and Subtitle (40%) */}
+            <div className="lg:col-span-2 lg:text-right">
+              <motion.div
+                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
+                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+              >
+                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
+                  Interactive Music Tools
+                </h2>
+                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+                  Comprehensive toolkit for learning, practicing, and mastering songs
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Right Column: Detailed Content (60%) */}
+            <div className="lg:col-span-3">
+              <motion.div
+                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
+                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="space-y-6"
+              >
+                <div className="prose prose-gray dark:prose-invert max-w-none">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Access a powerful suite of interactive tools designed to enhance your music learning experience. From harmonic analysis to real-time playback control, everything you need is at your fingertips.
+                  </p>
+                  <ul className="space-y-2 text-gray-600 dark:text-gray-400 mt-6">
+                    <li className="flex items-start space-x-3">
+                      <span className="text-green-500 mt-1.5 text-xs">●</span>
+                      <span>Roman Numeral Analysis</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-green-500 mt-1.5 text-xs">●</span>
+                      <span>Multi-Instrument Chord Playback</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-green-500 mt-1.5 text-xs">●</span>
+                      <span>Pitch Shift & Speed Control</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-green-500 mt-1.5 text-xs">●</span>
+                      <span>Beat-Synced Metronome</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-green-500 mt-1.5 text-xs">●</span>
+                      <span>Chord Simplification</span>
+                    </li>
+                  </ul>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          {/* Feature 5: AI Chat Assistant */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
+            {/* Left Column: Title and Subtitle (40%) */}
+            <div className="lg:col-span-2 lg:text-right">
+              <motion.div
+                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
+                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+              >
+                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
+                  AI Chat Assistant
+                </h2>
+                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+                  Get instant help with music theory and chord analysis
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Right Column: Detailed Content (60%) */}
+            <div className="lg:col-span-3">
+              <motion.div
+                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
+                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="space-y-6"
+              >
+                <div className="prose prose-gray dark:prose-invert max-w-none">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Ask questions about chord progressions, music theory concepts, and get personalized explanations. The AI assistant understands the context of your current song analysis.
+                  </p>
+                  <ul className="space-y-2 text-gray-600 dark:text-gray-400">
+                    <li className="flex items-start space-x-3">
+                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
+                      <span>Context-aware responses based on current song analysis</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
+                      <span>Explains chord functions and harmonic relationships</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
+                      <span>Provides music theory insights and learning tips</span>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
+                      <span>Answers questions about progressions and song structure</span>
                     </li>
                   </ul>
                 </div>

@@ -1138,10 +1138,14 @@ export default function YouTubeVideoAnalyzePage() {
     isEnabled: false,
     pianoVolume: 50,
     guitarVolume: 30,
+    violinVolume: 60,
+    fluteVolume: 50,
     isReady: false,
     togglePlayback: () => {},
     setPianoVolume: () => {},
-    setGuitarVolume: () => {}
+    setGuitarVolume: () => {},
+    setViolinVolume: () => {},
+    setFluteVolume: () => {}
   });
 
   // CRITICAL FIX: Memoize the callback to prevent infinite re-renders
@@ -1436,9 +1440,10 @@ export default function YouTubeVideoAnalyzePage() {
     <KeySignatureSync keySignature={keySignature} />
 
     {/* Chord Playback Manager - handles transposition for chord playback */}
+    {/* IMPORTANT: Use original chordGridData (not simplified) to preserve chord details for accurate playback */}
     <ChordPlaybackManager
       currentBeatIndex={currentBeatIndex}
-      chordGridData={simplifiedChordGridData}
+      chordGridData={chordGridData}
       isPlaying={isPlaying}
       currentTime={currentTime}
       onChordPlaybackChange={handleChordPlaybackChange}

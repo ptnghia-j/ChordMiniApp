@@ -242,8 +242,12 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
               onClick={chordPlayback.togglePlayback}
               pianoVolume={chordPlayback.pianoVolume}
               guitarVolume={chordPlayback.guitarVolume}
+              violinVolume={chordPlayback.violinVolume}
+              fluteVolume={chordPlayback.fluteVolume}
               onPianoVolumeChange={chordPlayback.setPianoVolume}
               onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+              onViolinVolumeChange={chordPlayback.setViolinVolume}
+              onFluteVolumeChange={chordPlayback.setFluteVolume}
               youtubePlayer={youtubePlayer}
             />
           </div>

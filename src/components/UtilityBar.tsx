@@ -20,8 +20,12 @@ interface UtilityBarProps {
     togglePlayback: () => void;
     pianoVolume: number;
     guitarVolume: number;
+    violinVolume: number;
+    fluteVolume: number;
     setPianoVolume: (v: number) => void;
     setGuitarVolume: (v: number) => void;
+    setViolinVolume: (v: number) => void;
+    setFluteVolume: (v: number) => void;
   };
   youtubePlayer?: Parameters<typeof ChordPlaybackToggle>[0]['youtubePlayer'];
 
@@ -117,8 +121,12 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
               onClick={chordPlayback.togglePlayback}
               pianoVolume={chordPlayback.pianoVolume}
               guitarVolume={chordPlayback.guitarVolume}
+              violinVolume={chordPlayback.violinVolume}
+              fluteVolume={chordPlayback.fluteVolume}
               onPianoVolumeChange={chordPlayback.setPianoVolume}
               onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+              onViolinVolumeChange={chordPlayback.setViolinVolume}
+              onFluteVolumeChange={chordPlayback.setFluteVolume}
               youtubePlayer={youtubePlayer || null}
             />
 

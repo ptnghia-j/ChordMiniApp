@@ -10,6 +10,8 @@ export interface AudioMixerSettings {
   chordPlaybackVolume: number; // 0-100
   pianoVolume: number; // 0-100
   guitarVolume: number; // 0-100
+  violinVolume: number; // 0-100
+  fluteVolume: number; // 0-100
   metronomeVolume: number; // 0-100
 }
 
@@ -35,11 +37,13 @@ export class AudioMixerService {
     chordPlaybackVolume: 60,
     pianoVolume: 50,
     guitarVolume: 30,
+    violinVolume: 60,
+    fluteVolume: 50,
     metronomeVolume: 70
   };
 
   private youtubePlayer: YouTubePlayer | null = null;
-  private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number }) => void } | null = null;
+  private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number }) => void } | null = null;
   private metronomeService: { setVolume: (volume: number) => void } | null = null;
   private listeners: Array<(settings: AudioMixerSettings) => void> = [];
 
@@ -82,7 +86,7 @@ export class AudioMixerService {
     }
   }
 
-  setChordPlaybackService(service: { updateOptions: (options: { pianoVolume: number; guitarVolume: number }) => void } | null) {
+  setChordPlaybackService(service: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number }) => void } | null) {
     this.chordPlaybackService = service;
     this.applyChordPlaybackVolume();
   }
@@ -177,6 +181,26 @@ export class AudioMixerService {
   }
 
   /**
+   * Set violin volume
+   */
+  setViolinVolume(volume: number) {
+    this.settings.violinVolume = Math.max(0, Math.min(100, volume));
+    this.applyChordPlaybackVolume();
+    this.saveSettings();
+    this.notifyListeners();
+  }
+
+  /**
+   * Set flute volume
+   */
+  setFluteVolume(volume: number) {
+    this.settings.fluteVolume = Math.max(0, Math.min(100, volume));
+    this.applyChordPlaybackVolume();
+    this.saveSettings();
+    this.notifyListeners();
+  }
+
+  /**
    * Set metronome volume
    */
   setMetronomeVolume(volume: number) {
@@ -204,10 +228,14 @@ export class AudioMixerService {
       const effectiveChordVolume = this.calculateEffectiveVolume(this.settings.chordPlaybackVolume);
       const effectivePianoVolume = (this.settings.pianoVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveGuitarVolume = (this.settings.guitarVolume / 100) * (effectiveChordVolume / 100) * 100;
-      
+      const effectiveViolinVolume = (this.settings.violinVolume / 100) * (effectiveChordVolume / 100) * 100;
+      const effectiveFluteVolume = (this.settings.fluteVolume / 100) * (effectiveChordVolume / 100) * 100;
+
       this.chordPlaybackService.updateOptions({
         pianoVolume: effectivePianoVolume,
-        guitarVolume: effectiveGuitarVolume
+        guitarVolume: effectiveGuitarVolume,
+        violinVolume: effectiveViolinVolume,
+        fluteVolume: effectiveFluteVolume
       });
     }
   }
@@ -241,6 +269,8 @@ export class AudioMixerService {
       chordPlaybackVolume: 60,
       pianoVolume: 50,
       guitarVolume: 30,
+      violinVolume: 60,
+      fluteVolume: 50,
       metronomeVolume: 70
     };
     this.applyAllVolumes();
@@ -271,6 +301,8 @@ export class AudioMixerService {
       chordPlayback: this.calculateEffectiveVolume(this.settings.chordPlaybackVolume),
       piano: (this.settings.pianoVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
       guitar: (this.settings.guitarVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
+      violin: (this.settings.violinVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
+      flute: (this.settings.fluteVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
       metronome: this.calculateEffectiveVolume(this.settings.metronomeVolume)
     };
   }

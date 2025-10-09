@@ -36,10 +36,14 @@ interface ChordPlaybackManagerProps {
     isEnabled: boolean;
     pianoVolume: number;
     guitarVolume: number;
+    violinVolume: number;
+    fluteVolume: number;
     isReady: boolean;
     togglePlayback: () => void;
     setPianoVolume: (volume: number) => void;
     setGuitarVolume: (volume: number) => void;
+    setViolinVolume: (volume: number) => void;
+    setFluteVolume: (volume: number) => void;
   }) => void;
 }
 
@@ -73,18 +77,26 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
     isEnabled: chordPlayback.isEnabled,
     pianoVolume: chordPlayback.pianoVolume,
     guitarVolume: chordPlayback.guitarVolume,
+    violinVolume: chordPlayback.violinVolume,
+    fluteVolume: chordPlayback.fluteVolume,
     isReady: chordPlayback.isReady,
     togglePlayback: chordPlayback.togglePlayback,
     setPianoVolume: chordPlayback.setPianoVolume,
-    setGuitarVolume: chordPlayback.setGuitarVolume
+    setGuitarVolume: chordPlayback.setGuitarVolume,
+    setViolinVolume: chordPlayback.setViolinVolume,
+    setFluteVolume: chordPlayback.setFluteVolume
   }), [
     chordPlayback.isEnabled,
     chordPlayback.pianoVolume,
     chordPlayback.guitarVolume,
+    chordPlayback.violinVolume,
+    chordPlayback.fluteVolume,
     chordPlayback.isReady,
     chordPlayback.togglePlayback,
     chordPlayback.setPianoVolume,
-    chordPlayback.setGuitarVolume
+    chordPlayback.setGuitarVolume,
+    chordPlayback.setViolinVolume,
+    chordPlayback.setFluteVolume
   ]);
 
   // Always pass the latest stable object to parent
