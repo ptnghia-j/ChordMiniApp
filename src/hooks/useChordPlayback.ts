@@ -9,50 +9,18 @@ export interface UseChordPlaybackProps {
   currentTime: number;
 }
 
-/**
- * Convert simplified chord notation back to playback-compatible format
- *
- * Simplified chords use Unicode symbols (♯, ♭) and generic "sus" which the audio parser cannot handle.
- * This function converts them back to ASCII format (#, b) and preserves sus2/sus4 distinction.
- *
- * IMPORTANT: This conversion is ONLY for playback. Display should continue using simplified format.
- *
- * @param chord - Simplified chord string (e.g., "F♯m", "B♭", "Csus")
- * @returns Playback-compatible chord string (e.g., "F#m", "Bb", "Csus4")
- */
-function convertSimplifiedChordForPlayback(chord: string): string {
-  if (!chord || chord === 'N.C.' || chord === 'N/C' || chord === 'N' || chord === '') {
-    return chord;
-  }
-
-  let converted = chord;
-
-  // Convert Unicode accidentals to ASCII
-  // ♯ (U+266F) → # (ASCII)
-  // ♭ (U+266D) → b (ASCII)
-  converted = converted.replace(/♯/g, '#').replace(/♭/g, 'b');
-
-  // Handle generic "sus" - default to "sus4" for playback
-  // Note: We can't distinguish between original sus2 and sus4 after simplification,
-  // so we default to sus4 which is more common
-  // This is a limitation of the simplification process
-  if (converted.endsWith('sus') && !converted.endsWith('sus2') && !converted.endsWith('sus4')) {
-    converted = converted.replace(/sus$/, 'sus4');
-  }
-
-  return converted;
-}
-
 export interface UseChordPlaybackReturn {
   isEnabled: boolean;
   pianoVolume: number;
   guitarVolume: number;
   violinVolume: number;
+  fluteVolume: number;
   isReady: boolean;
   togglePlayback: () => void;
   setPianoVolume: (volume: number) => void;
   setGuitarVolume: (volume: number) => void;
   setViolinVolume: (volume: number) => void;
+  setFluteVolume: (volume: number) => void;
 }
 
 /**
@@ -70,6 +38,7 @@ export const useChordPlayback = ({
   const [pianoVolume, setPianoVolumeState] = useState(50);
   const [guitarVolume, setGuitarVolumeState] = useState(30);
   const [violinVolume, setViolinVolumeState] = useState(60);
+  const [fluteVolume, setFluteVolumeState] = useState(50);
   const [isReady, setIsReady] = useState(false);
 
   const chordPlaybackService = useRef(getSoundfontChordPlaybackService());
@@ -96,9 +65,10 @@ export const useChordPlayback = ({
       enabled: isEnabled,
       pianoVolume,
       guitarVolume,
-      violinVolume
+      violinVolume,
+      fluteVolume
     });
-  }, [isEnabled, pianoVolume, guitarVolume, violinVolume]);
+  }, [isEnabled, pianoVolume, guitarVolume, violinVolume, fluteVolume]);
 
   // Find the next chord change from current beat index
   const findNextChordChange = useCallback((fromIndex: number): { index: number; chord: string } | null => {
@@ -157,14 +127,10 @@ export const useChordPlayback = ({
         ? calculateChordDuration(currentBeatIndex, nextChordChange.index)
         : 2.0;
 
-      // Convert simplified chord notation to playback-compatible format
-      // This handles Unicode symbols (♯, ♭) and generic "sus" that the audio parser can't handle
-      const playbackChord = convertSimplifiedChordForPlayback(currentChord);
+      // Play the chord directly (no conversion needed - using original chord data)
+      chordPlaybackService.current.playChord(currentChord, duration);
 
-      // Play the chord (using converted format for audio parsing)
-      chordPlaybackService.current.playChord(playbackChord, duration);
-
-      // Update tracking variables (using original chord for comparison)
+      // Update tracking variables
       lastPlayedChordIndex.current = currentBeatIndex;
       lastPlayedChord.current = currentChord;
     }
@@ -202,6 +168,12 @@ export const useChordPlayback = ({
     setViolinVolumeState(clampedVolume);
   }, []);
 
+  // Update flute volume
+  const setFluteVolume = useCallback((volume: number) => {
+    const clampedVolume = Math.max(0, Math.min(100, volume));
+    setFluteVolumeState(clampedVolume);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     const service = chordPlaybackService.current;
@@ -215,10 +187,12 @@ export const useChordPlayback = ({
     pianoVolume,
     guitarVolume,
     violinVolume,
+    fluteVolume,
     isReady,
     togglePlayback,
     setPianoVolume,
     setGuitarVolume,
-    setViolinVolume
+    setViolinVolume,
+    setFluteVolume
   };
 };

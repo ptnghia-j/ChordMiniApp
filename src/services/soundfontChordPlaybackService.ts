@@ -1,8 +1,8 @@
 /**
  * Soundfont Chord Playback Service - Production
- * 
+ *
  * Real instrument soundfont playback using smplr library
- * Supports Piano, Guitar, and Violin with lazy loading and error handling
+ * Supports Piano, Guitar, Violin, and Flute with lazy loading and error handling
  * Compatible with existing AudioMixerService interface
  */
 
@@ -15,6 +15,7 @@ export interface SoundfontChordPlaybackOptions {
   pianoVolume: number; // 0-100
   guitarVolume: number; // 0-100
   violinVolume: number; // 0-100
+  fluteVolume: number; // 0-100
   enabled: boolean;
 }
 
@@ -130,6 +131,7 @@ export class SoundfontChordPlaybackService {
     pianoVolume: 70,
     guitarVolume: 50,
     violinVolume: 60,
+    fluteVolume: 50,
     enabled: false
   };
 
@@ -165,21 +167,23 @@ export class SoundfontChordPlaybackService {
 
     try {
       console.log('🎵 Loading soundfonts...');
-      
-      // Load all three instruments in parallel
-      const [piano, guitar, violin] = await Promise.all([
+
+      // Load all four instruments in parallel
+      const [piano, guitar, violin, flute] = await Promise.all([
         this.loadInstrument('piano', 'acoustic_grand_piano'),
         this.loadInstrument('guitar', 'acoustic_guitar_nylon'),
-        this.loadInstrument('violin', 'violin')
+        this.loadInstrument('violin', 'violin'),
+        this.loadInstrument('flute', 'flute')
       ]);
 
       this.instruments.set('piano', piano);
       this.instruments.set('guitar', guitar);
       this.instruments.set('violin', violin);
+      this.instruments.set('flute', flute);
 
       this.isInitialized = true;
       const loadingTime = performance.now() - startTime;
-      
+
       console.log(`✅ Soundfonts loaded in ${loadingTime.toFixed(0)}ms`);
     } catch (error) {
       this.initializationError = error as Error;
@@ -213,6 +217,12 @@ export class SoundfontChordPlaybackService {
   /**
    * Play a chord with all enabled instruments
    * Compatible with existing chord playback interface
+   *
+   * Instrument behavior:
+   * - Piano (C3): Plays full chord with inversions
+   * - Guitar (C3): Plays full chord with inversions
+   * - Violin (C5): Plays only the chord root (before slash in C/E)
+   * - Flute (C4): Plays only the bass note (after slash in C/E, or root if no slash)
    */
   async playChord(chordName: string, duration: number = 2.0): Promise<void> {
     // Lazy initialization on first playback
@@ -236,17 +246,39 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
+    // Extract chord root and bass note for single-note instruments
+    const parts = chordName.split('/');
+    const baseChord = parts[0];
+    const bassNote = parts[1];
+
+    // Get chord root (the note before slash, or the root of the chord)
+    const rootMatch = baseChord.match(/^([A-G][#b]?)/);
+    const chordRoot = rootMatch ? rootMatch[1] : null;
+
     // Play chord on each instrument with volume > 0
     const promises: Promise<void>[] = [];
 
+    // Piano and Guitar: Play full chord (all notes including inversions)
     if (this.options.pianoVolume > 0) {
-      promises.push(this.playInstrument('piano', notes, duration, this.options.pianoVolume, 4));
+      promises.push(this.playInstrument('piano', notes, duration, this.options.pianoVolume, 3));
     }
     if (this.options.guitarVolume > 0) {
       promises.push(this.playInstrument('guitar', notes, duration, this.options.guitarVolume, 3));
     }
-    if (this.options.violinVolume > 0) {
-      promises.push(this.playInstrument('violin', notes, duration, this.options.violinVolume, 5));
+
+    // Violin: Play only the chord root (note before slash)
+    if (this.options.violinVolume > 0 && chordRoot) {
+      const violinNote = [`${chordRoot}5`]; // Single note at octave 5
+      promises.push(this.playInstrument('violin', violinNote, duration, this.options.violinVolume, 5));
+    }
+
+    // Flute: Play only the bass note (note after slash, or root if no slash)
+    if (this.options.fluteVolume > 0) {
+      const fluteNoteRoot = bassNote || chordRoot;
+      if (fluteNoteRoot) {
+        const fluteNote = [`${fluteNoteRoot}4`]; // Single note at octave 4
+        promises.push(this.playInstrument('flute', fluteNote, duration, this.options.fluteVolume, 4));
+      }
     }
 
     await Promise.all(promises);

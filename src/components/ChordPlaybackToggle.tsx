@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitarBassHead, GiViolin } from 'react-icons/gi';
+import { GiGuitar, GiViolin, GiFlute } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/audioMixerService';
 import { getPitchShiftService } from '@/services/pitchShiftServiceInstance';
@@ -17,9 +17,11 @@ interface ChordPlaybackToggleProps {
   pianoVolume: number;
   guitarVolume: number;
   violinVolume: number;
+  fluteVolume: number;
   onPianoVolumeChange: (volume: number) => void;
   onGuitarVolumeChange: (volume: number) => void;
   onViolinVolumeChange: (volume: number) => void;
+  onFluteVolumeChange: (volume: number) => void;
   className?: string;
   // Optional YouTube player for volume control
   youtubePlayer?: {
@@ -49,9 +51,11 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   pianoVolume: _pianoVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
   guitarVolume: _guitarVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
   violinVolume: _violinVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
+  fluteVolume: _fluteVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
   onPianoVolumeChange,
   onGuitarVolumeChange,
   onViolinVolumeChange,
+  onFluteVolumeChange,
   className = '',
   youtubePlayer
 }) => {
@@ -135,6 +139,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
           pianoVolume: 50,
           guitarVolume: 30,
           violinVolume: 60,
+          fluteVolume: 50,
           metronomeVolume: 70
         });
         return;
@@ -152,6 +157,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pianoVolume: 50,
         guitarVolume: 30,
         violinVolume: 60,
+        fluteVolume: 50,
         metronomeVolume: 70
       });
       return;
@@ -195,6 +201,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pianoVolume: 50,
         guitarVolume: 30,
         violinVolume: 60,
+        fluteVolume: 50,
         metronomeVolume: 70
       });
     }
@@ -251,6 +258,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pianoVolume: 50,
         guitarVolume: 30,
         violinVolume: 60,
+        fluteVolume: 50,
         metronomeVolume: 70
       });
     }
@@ -564,7 +572,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <GiGuitarBassHead className="h-4 w-4" />
+                          <GiGuitar className="h-4 w-4" />
                           Guitar
                         </label>
                         <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
@@ -617,6 +625,39 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                         className="w-full"
                         aria-label="Violin volume control"
+                        classNames={{
+                          base: "max-w-full",
+                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                          filler: "bg-green-500 dark:bg-green-400",
+                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                        }}
+                      />
+                    </div>
+
+                    {/* Flute volume control */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                          <GiFlute className="h-4 w-4" />
+                          Flute
+                        </label>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                          {Math.round(audioSettings.fluteVolume)}%
+                        </span>
+                      </div>
+                      <Slider
+                        size="sm"
+                        step={1}
+                        minValue={0}
+                        maxValue={100}
+                        value={audioSettings.fluteVolume}
+                        onChange={(value) => {
+                          const vol = Array.isArray(value) ? value[0] : value;
+                          audioMixer.current?.setFluteVolume(vol);
+                          onFluteVolumeChange(vol);
+                        }}
+                        className="w-full"
+                        aria-label="Flute volume control"
                         classNames={{
                           base: "max-w-full",
                           track: "bg-gray-200 dark:bg-gray-600 h-1.5",
