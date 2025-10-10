@@ -188,7 +188,7 @@ export async function analyzeAudioWithRateLimit(
   }
 
   // PERFORMANCE OPTIMIZATION: Parallelize beat detection and chord recognition
-  // These operations are independent and can run simultaneously, reducing total processing time by 30-50%
+  // These operations are independent and can run simultaneously, reducing total processing time.
   const [beatResults, chordResults] = await Promise.all([
     // Beat detection (rate limited path)
     (async (): Promise<BeatDetectionBackendResponse> => {
