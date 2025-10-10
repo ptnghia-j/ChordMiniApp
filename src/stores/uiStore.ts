@@ -290,7 +290,19 @@ export const useUIStore = create<UIStore>()(
       initializeVideoTitle: (title) => set({ videoTitle: title, editedTitle: title }, false, 'initializeVideoTitle'),
 
       initializeOriginalKey: (key) =>
-        set({ originalKey: key, targetKey: key }, false, 'initializeOriginalKey'),
+        set(
+          (state) => {
+            // Recalculate targetKey based on current pitch shift semitones
+            const newTargetKey =
+              state.pitchShiftSemitones === 0 ? key : calculateTargetKey(key, state.pitchShiftSemitones);
+            return {
+              originalKey: key,
+              targetKey: newTargetKey,
+            };
+          },
+          false,
+          'initializeOriginalKey'
+        ),
 
       initializeFirebaseAudioAvailable: (available) =>
         set({ isFirebaseAudioAvailable: available }, false, 'initializeFirebaseAudioAvailable'),
