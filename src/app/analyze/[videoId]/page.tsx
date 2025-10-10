@@ -113,13 +113,13 @@ import { useYouTubeSetup } from '@/hooks/useYouTubeSetup';
 import { useSegmentationState } from '@/hooks/useSegmentationState';
 import { useTabsAndEditing } from '@/hooks/useTabsAndEditing';
 import { useLyricsState } from '@/hooks/useLyricsState';
-import { useChordProcessing } from '@/hooks/useChordProcessing';
-import { AnalysisDataProvider } from '@/contexts/AnalysisDataContext';
-import { PlaybackProvider } from '@/contexts/PlaybackContext';
-import { UIProvider } from '@/contexts/UIContext';
 import PitchShiftAudioManager from '@/components/PitchShiftAudioManager';
 import KeySignatureSync from '@/components/KeySignatureSync';
 import ConditionalPlaybackControls from '@/components/ConditionalPlaybackControls';
+// Import Zustand stores for direct initialization
+import { useAnalysisStore } from '@/stores/analysisStore';
+import { useUIStore } from '@/stores/uiStore';
+import { usePlaybackStore } from '@/stores/playbackStore';
 
 
 
@@ -327,19 +327,13 @@ export default function YouTubeVideoAnalyzePage() {
     handleSegmentationResult,
   } = useSegmentationState();
 
-  // Use chord processing hook
-  const {
-    simplifyChords,
-    showRomanNumerals,
-    romanNumeralsRequested,
-    romanNumeralData,
-    setRomanNumeralsRequested,
-    setRomanNumeralData,
+  // Get chord processing state from Zustand stores
+  const simplifyChords = useUIStore((state) => state.simplifyChords);
+  const showRomanNumerals = useUIStore((state) => state.showRomanNumerals);
+  const updateRomanNumeralData = useUIStore((state) => state.updateRomanNumeralData);
 
-
-    setShowRomanNumerals,
-    setSimplifyChords,
-  } = useChordProcessing();
+  // Track Roman numerals request state locally (not in Zustand since it's page-specific)
+  const [romanNumeralsRequested, setRomanNumeralsRequested] = useState(false);
 
 
 
@@ -435,9 +429,7 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Use extracted audio interactions hook
   const {
-    handleBeatClick,
     toggleEnharmonicCorrection,
-
   } = useAudioInteractions({
     audioRef,
     youtubePlayer,
@@ -694,7 +686,7 @@ export default function YouTubeVideoAnalyzePage() {
             }
             // Load cached Roman numeral data
             if (cachedTranscription.romanNumerals) {
-              setRomanNumeralData(cachedTranscription.romanNumerals);
+              updateRomanNumeralData(cachedTranscription.romanNumerals);
 
             }
           } else if (cachedTranscription && cachedTranscription.originalChords && cachedTranscription.correctedChords) {
@@ -715,7 +707,7 @@ export default function YouTubeVideoAnalyzePage() {
             }
             // Load cached Roman numeral data (backward compatibility)
             if (cachedTranscription.romanNumerals) {
-              setRomanNumeralData(cachedTranscription.romanNumerals);
+              updateRomanNumeralData(cachedTranscription.romanNumerals);
 
             }
           } else {
@@ -785,9 +777,9 @@ export default function YouTubeVideoAnalyzePage() {
 
             // Handle Roman numeral analysis (separate from sequence corrections)
             if (result.romanNumerals) {
-              setRomanNumeralData(result.romanNumerals);
+              updateRomanNumeralData(result.romanNumerals);
             } else {
-              setRomanNumeralData(null);
+              updateRomanNumeralData(null);
             }
 
             // Update the transcription cache with key signature and enharmonic correction data
@@ -1333,121 +1325,108 @@ export default function YouTubeVideoAnalyzePage() {
     extractAudioFromYouTube(true);
   }, [extractAudioFromYouTube]);
 
+  // Initialize Zustand stores with page state
+  // CRITICAL FIX: This useEffect should only run on initial mount or when non-Zustand state changes
+  // Do NOT include Zustand-managed state (showRomanNumerals, simplifyChords, romanNumeralData) in dependencies
+  // as that creates a circular loop causing race conditions during playback
+  useEffect(() => {
+    const analysisStore = useAnalysisStore.getState();
+    const uiStore = useUIStore.getState();
+    const playbackStore = usePlaybackStore.getState();
+
+    // Initialize AnalysisStore
+    analysisStore.setAnalysisResults(analysisResults);
+    if (audioProcessingState.isAnalyzing) {
+      analysisStore.startAnalysis();
+    }
+    analysisStore.setAnalysisError(audioProcessingState.error || null);
+    analysisStore.setCacheAvailable(cacheAvailable);
+    analysisStore.setCacheCheckCompleted(cacheCheckCompleted);
+    analysisStore.setCacheCheckInProgress(cacheCheckInProgress);
+    analysisStore.setKeySignature(keySignature);
+    analysisStore.setIsDetectingKey(isDetectingKey);
+    analysisStore.setChordCorrections(chordCorrections);
+    analysisStore.setShowCorrectedChords(showCorrectedChords);
+    analysisStore.setBeatDetector(beatDetector);
+    analysisStore.setChordDetector(chordDetector);
+    analysisStore.setModelsInitialized(modelsInitialized);
+    analysisStore.setLyrics(lyrics);
+    analysisStore.setShowLyrics(showLyrics);
+    analysisStore.setHasCachedLyrics(hasCachedLyrics);
+    if (isTranscribingLyrics) {
+      analysisStore.startLyricsTranscription();
+    }
+    analysisStore.setLyricsError(lyricsError);
+
+    // Initialize UIStore
+    uiStore.setVideoTitle(videoTitle);
+    // NOTE: Do NOT set showRomanNumerals, simplifyChords, or romanNumeralData here
+    // These are managed by Zustand and user toggles - setting them here creates race conditions
+    uiStore.setShowSegmentation(showSegmentation);
+    uiStore.setIsChatbotOpen(isChatbotOpen);
+    uiStore.setIsLyricsPanelOpen(isLyricsPanelOpen);
+    uiStore.initializeOriginalKey(keySignature || 'C');
+    uiStore.initializeFirebaseAudioAvailable(!!audioProcessingState.audioUrl);
+
+    // Initialize PlaybackStore
+    playbackStore.setIsPlaying(isPlaying);
+    playbackStore.setCurrentTime(currentTime);
+    playbackStore.setDuration(duration);
+    playbackStore.setPlaybackRate(playbackRate);
+    playbackStore.setYoutubePlayer(youtubePlayer);
+    playbackStore.setAudioRef(audioRef as any);
+    playbackStore.setCurrentBeatIndex(currentBeatIndex);
+    playbackStore.setIsVideoMinimized(isVideoMinimized);
+    playbackStore.setIsFollowModeEnabled(isFollowModeEnabled);
+  }, [
+    // CRITICAL: Do NOT include showRomanNumerals, simplifyChords, or romanNumeralData
+    // These are Zustand-managed and including them causes circular updates during playback
+    analysisResults, audioProcessingState.isAnalyzing, audioProcessingState.error, audioProcessingState.audioUrl,
+    cacheAvailable, cacheCheckCompleted, cacheCheckInProgress,
+    keySignature, isDetectingKey, chordCorrections, showCorrectedChords,
+    beatDetector, chordDetector, modelsInitialized,
+    lyrics, showLyrics, hasCachedLyrics, isTranscribingLyrics, lyricsError,
+    videoTitle, showSegmentation,
+    isChatbotOpen, isLyricsPanelOpen,
+    isPlaying, currentTime, duration, playbackRate, youtubePlayer, currentBeatIndex,
+    isVideoMinimized, isFollowModeEnabled
+  ]);
+
   return (
-    <AnalysisDataProvider
-      analysisState={{
-        analysisResults,
-        isAnalyzing: audioProcessingState.isAnalyzing,
-        analysisError: audioProcessingState.error || null,
-        cacheAvailable,
-        cacheCheckCompleted,
-        cacheCheckInProgress,
-        keySignature,
-        isDetectingKey,
-        chordCorrections,
-        showCorrectedChords,
-      }}
-      modelState={{
-        beatDetector,
-        chordDetector,
-        modelsInitialized,
-      }}
-      lyricsState={{
-        lyrics,
-        showLyrics,
-        hasCachedLyrics,
-        isTranscribingLyrics,
-        lyricsError,
-      }}
-      chordProcessingState={{
-        simplifyChords,
-        showRomanNumerals: showRomanNumerals,
-        romanNumeralsRequested,
-        romanNumeralData,
-      }}
-      operations={{
-        // Analysis operations
-        startAnalysis: () => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: true, error: null })),
-        completeAnalysis: (results) => { setAnalysisResults(results); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: true })); },
-        failAnalysis: (error) => setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, error })),
-        resetAnalysis: () => { setAnalysisResults(null as any); setAudioProcessingState(prev => ({ ...prev, isAnalyzing: false, isAnalyzed: false, error: null })); },
-        // Model operations
-        setBeatDetector: (d: string) => setBeatDetector(d as any),
-        setChordDetector: (d: string) => setChordDetector(d as any),
-        // Lyrics operations
-        startLyricsTranscription: () => setIsTranscribingLyrics(true),
-        completeLyricsTranscription: (lyricsData) => { setLyrics(lyricsData); setIsTranscribingLyrics(false); setShowLyrics(true); },
-        failLyricsTranscription: (error) => { setLyricsError(error); setIsTranscribingLyrics(false); },
-        toggleLyricsVisibility: () => setShowLyrics(v => !v),
-        // Chord processing operations
-        toggleChordSimplification: () => setSimplifyChords(v => !v),
-        toggleRomanNumerals: () => setShowRomanNumerals(v => !v),
-        updateRomanNumeralData: (data) => setRomanNumeralData(data),
-      }}
-    >
-      <UIProvider
-        initialVideoTitle={videoTitle}
-        controlledShowRomanNumerals={showRomanNumerals}
-        onShowRomanNumeralsChange={setShowRomanNumerals}
-        controlledRomanNumeralData={romanNumeralData}
-        onRomanNumeralDataChange={setRomanNumeralData}
-        initialShowSegmentation={showSegmentation}
-        controlledSimplifyChords={simplifyChords}
-        onSimplifyChordsChange={setSimplifyChords}
-        initialOriginalKey={keySignature || 'C'}
-        initialIsFirebaseAudioAvailable={!!audioProcessingState.audioUrl}
+    <div className="min-h-screen bg-white dark:bg-gray-900">
+      {/* Conditional Playback Controls */}
+      <ConditionalPlaybackControls
+        youtubePlayer={youtubePlayer}
+        setIsPlaying={setIsPlaying}
+        setCurrentTime={setCurrentTime}
+        setAudioPlayerState={setAudioPlayerState}
       >
-        {/* Conditional Playback Controls - must be inside UIProvider to access isPitchShiftEnabled */}
-        <ConditionalPlaybackControls
-          youtubePlayer={youtubePlayer}
-          setIsPlaying={setIsPlaying}
-          setCurrentTime={setCurrentTime}
-          setAudioPlayerState={setAudioPlayerState}
-        >
-          {(playbackControls) => (
-            <PlaybackProvider
-              audioPlayerState={{ isPlaying, currentTime, duration, playbackRate }}
-              audioRef={audioRef as any}
+        {() => (
+          <>
+            {/* Pitch Shift Audio Manager */}
+            <PitchShiftAudioManager
               youtubePlayer={youtubePlayer}
-              playbackControls={playbackControls}
-              beatState={{ currentBeatIndex }}
-              beatHandlers={{ onBeatClick: handleBeatClick, setCurrentBeatIndex, setCurrentDownbeatIndex }}
-              videoUIState={{ isVideoMinimized, isFollowModeEnabled }}
-              videoUIControls={{ toggleVideoMinimization, toggleFollowMode }}
-              setters={{
-                setIsPlaying,
-                setCurrentTime,
-                setDuration,
-                setPlaybackRate: (rate: number) => setAudioPlayerState(prev => ({ ...prev, playbackRate: rate })),
-                setYoutubePlayer: (player: unknown) => setYoutubePlayer(player as any),
-                setIsVideoMinimized,
-                setIsFollowModeEnabled,
-              }}
-            >
-    {/* Pitch Shift Audio Manager - must be inside UIProvider */}
-    <PitchShiftAudioManager
-      youtubePlayer={youtubePlayer}
-      audioRef={audioRef}
-      firebaseAudioUrl={audioProcessingState.audioUrl || null}
-      isPlaying={isPlaying}
-      currentTime={currentTime}
-      playbackRate={playbackRate}
-      setIsPlaying={setIsPlaying}
-      setCurrentTime={setCurrentTime}
-    />
+              audioRef={audioRef}
+              firebaseAudioUrl={audioProcessingState.audioUrl || null}
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              playbackRate={playbackRate}
+              setIsPlaying={setIsPlaying}
+              setCurrentTime={setCurrentTime}
+            />
 
-    {/* Key Signature Sync - syncs detected key with UIContext originalKey */}
-    <KeySignatureSync keySignature={keySignature} />
+            {/* Key Signature Sync - syncs detected key with Zustand store */}
+            <KeySignatureSync keySignature={keySignature} />
 
-    {/* Chord Playback Manager - handles transposition for chord playback */}
-    {/* IMPORTANT: Use original chordGridData (not simplified) to preserve chord details for accurate playback */}
-    <ChordPlaybackManager
-      currentBeatIndex={currentBeatIndex}
-      chordGridData={chordGridData}
-      isPlaying={isPlaying}
-      currentTime={currentTime}
-      onChordPlaybackChange={handleChordPlaybackChange}
-    />
+            {/* Chord Playback Manager - handles transposition for chord playback */}
+            {/* IMPORTANT: Use original chordGridData (not simplified) to preserve chord details for accurate playback */}
+            <ChordPlaybackManager
+              currentBeatIndex={currentBeatIndex}
+              chordGridData={chordGridData}
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              onChordPlaybackChange={handleChordPlaybackChange}
+            />
 
     <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
       {/* Use the Navigation component */}
@@ -1717,14 +1696,11 @@ export default function YouTubeVideoAnalyzePage() {
         />
       )}
 
+          </div>
+          </>
+        )}
+      </ConditionalPlaybackControls>
     </div>
-    </PlaybackProvider>
-          )}
-        </ConditionalPlaybackControls>
-    </UIProvider>
-
-    </AnalysisDataProvider>
-
   );
 }
 

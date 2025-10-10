@@ -9,8 +9,7 @@ import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
 import PitchShiftPopover from '@/components/PitchShiftPopover';
-import { useUI } from '@/contexts/UIContext';
-import { useSimplifySelector } from '@/contexts/selectors';
+import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useToggleSimplifyChords } from '@/stores/uiStore';
 
 interface UtilityBarProps {
   // States
@@ -78,10 +77,12 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   maxWidth = '1200px',
   className = ''
 }) => {
-  // Roman numerals from UIContext
-  const { showRomanNumerals, toggleRomanNumerals } = useUI();
-  // Simplify from UIContext selector
-  const { simplifyChords, toggleSimplifyChords } = useSimplifySelector();
+  // Roman numerals from Zustand store
+  const showRomanNumerals = useShowRomanNumerals();
+  const toggleRomanNumerals = useToggleRomanNumerals();
+  // Simplify from Zustand store
+  const simplifyChords = useSimplifyChords();
+  const toggleSimplifyChords = useToggleSimplifyChords();
 
   return (
     <div className={`w-full ${className}`}>

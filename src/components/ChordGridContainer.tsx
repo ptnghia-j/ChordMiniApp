@@ -5,11 +5,10 @@ import ChordGrid from '@/components/ChordGrid';
 import { RefactoredChordGrid } from './RefactoredChordGrid';
 import { ChordGridProvider } from '@/contexts/ChordGridContext';
 import { useChordGridContext } from '@/hooks/useChordGridContext';
-import { useAnalysisData } from '@/contexts/AnalysisDataContext';
-import { usePlayback } from '@/contexts/PlaybackContext';
-import { useRomanNumeralsSelector, useSegmentationSelector } from '@/contexts/selectors';
+import { useAnalysisResults, useKeySignature, useIsDetectingKey, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
+import { useCurrentBeatIndex, useBeatHandlers } from '@/stores/playbackStore';
+import { useRomanNumerals, useShowSegmentation, useIsPitchShiftEnabled, useTargetKey } from '@/stores/uiStore';
 import { useTransposedChordData } from '@/hooks/useTransposedChordData';
-import { useUI } from '@/contexts/UIContext';
 // import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
@@ -96,20 +95,28 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
-  const analysisCtx = useAnalysisData();
-  const mergedAnalysisResults = analysisResults ?? analysisCtx.analysisResults;
-  const mergedKeySignature = (keySignature !== undefined ? keySignature : analysisCtx.keySignature) || undefined;
-  const mergedIsDetectingKey = isDetectingKey ?? analysisCtx.isDetectingKey;
-  const mergedShowCorrectedChords = showCorrectedChords ?? analysisCtx.showCorrectedChords;
-  const mergedChordCorrections = chordCorrections ?? analysisCtx.chordCorrections;
-  // Use selector to subscribe to only Roman numerals slice
-  const { showRomanNumerals: mergedShowRomanNumerals, romanNumeralData: mergedRomanNumeralData } = useRomanNumeralsSelector();
+  // Use Zustand selectors for automatic optimization
+  const storeAnalysisResults = useAnalysisResults();
+  const storeKeySignature = useKeySignature();
+  const storeIsDetectingKey = useIsDetectingKey();
+  const storeShowCorrectedChords = useShowCorrectedChords();
+  const storeChordCorrections = useChordCorrections();
 
-  // Segmentation toggle from UI context
-  const { showSegmentation } = useSegmentationSelector();
+  const mergedAnalysisResults = analysisResults ?? storeAnalysisResults;
+  const mergedKeySignature = (keySignature !== undefined ? keySignature : storeKeySignature) || undefined;
+  const mergedIsDetectingKey = isDetectingKey ?? storeIsDetectingKey;
+  const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
+  const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
 
-  // Get pitch shift state for key signature display
-  const { isPitchShiftEnabled, targetKey } = useUI();
+  // Use Zustand selectors to subscribe to only Roman numerals slice
+  const { showRomanNumerals: mergedShowRomanNumerals, romanNumeralData: mergedRomanNumeralData } = useRomanNumerals();
+
+  // Segmentation toggle from Zustand store
+  const showSegmentation = useShowSegmentation();
+
+  // Get pitch shift state for key signature display from Zustand store
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const targetKey = useTargetKey();
 
   // Apply pitch shift transposition if enabled
   const { transposedChordGridData } = useTransposedChordData({
@@ -191,8 +198,9 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     targetKey
   ]);
 
-  // Get beat state and click handler from PlaybackContext
-  const { currentBeatIndex, onBeatClick } = usePlayback();
+  // Get beat state and click handler from Zustand store
+  const currentBeatIndex = useCurrentBeatIndex();
+  const { onBeatClick } = useBeatHandlers();
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
   const memoizedOnBeatClick = React.useCallback((beatIndex: number, timestamp: number) => {
     onBeatClick(beatIndex, timestamp);

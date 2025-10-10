@@ -257,12 +257,15 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
   // PERFORMANCE OPTIMIZATION: RequestAnimationFrame for smooth 60fps updates
   const rafRef = useRef<number | undefined>(undefined);
+  // PERFORMANCE OPTIMIZATION: Debounce state updates to reduce re-renders
+  const lastStateUpdateTimeRef = useRef<number>(0);
+  const STATE_UPDATE_INTERVAL = 50; // Update at most every 50ms (20fps) instead of 60fps
 
   // Update current time and check for current beat
   useEffect(() => {
-    // CRITICAL FIX: Always set up the animation loop, but only run when conditions are met
-    // This ensures the loop starts when isPlaying becomes true
-    if (!youtubePlayer || !analysisResults) {
+    // CRITICAL FIX: Only set up animation loop when playing
+    // This prevents unnecessary CPU usage when paused
+    if (!youtubePlayer || !analysisResults || !isPlaying) {
       return;
     }
 
@@ -270,11 +273,9 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     // This provides 60fps updates instead of fixed 20Hz, reducing jitter
     const updateBeatTracking = () => {
       // CRITICAL FIX: Check current playing state dynamically
-      // This allows the animation to respond to play/pause without restarting the entire loop
+      // If paused, stop the loop immediately (don't schedule next frame)
       if (!youtubePlayer || !youtubePlayer.getCurrentTime || !isPlaying) {
-        // If not playing, schedule next frame to check again
-        rafRef.current = requestAnimationFrame(updateBeatTracking);
-        return;
+        return; // Stop the loop when paused
       }
       const time = youtubePlayer.getCurrentTime();
       setCurrentTime(time);
@@ -582,16 +583,26 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               }
             }
 
-            // ANTI-JITTER: Single consolidated state update with downbeat
-            unstable_batchedUpdates(() => {
-              if (currentBeatIndexRef.current !== stableFinalBeat) {
-                currentBeatIndexRef.current = stableFinalBeat;
-                setCurrentBeatIndex(stableFinalBeat);
-                lastEmittedBeatRef.current = stableFinalBeat;
-                lastEmitTimeRef.current = time;
-              }
-              setCurrentDownbeatIndex(currentDownbeat);
-            });
+            // PERFORMANCE OPTIMIZATION: Debounce state updates to reduce re-renders
+            // Only update state if enough time has passed OR if beat index changed
+            const now = Date.now();
+            const shouldUpdate =
+              (now - lastStateUpdateTimeRef.current >= STATE_UPDATE_INTERVAL) ||
+              (currentBeatIndexRef.current !== stableFinalBeat);
+
+            if (shouldUpdate) {
+              // ANTI-JITTER: Single consolidated state update with downbeat
+              unstable_batchedUpdates(() => {
+                if (currentBeatIndexRef.current !== stableFinalBeat) {
+                  currentBeatIndexRef.current = stableFinalBeat;
+                  setCurrentBeatIndex(stableFinalBeat);
+                  lastEmittedBeatRef.current = stableFinalBeat;
+                  lastEmitTimeRef.current = time;
+                }
+                setCurrentDownbeatIndex(currentDownbeat);
+              });
+              lastStateUpdateTimeRef.current = now;
+            }
 
 
           }
@@ -599,21 +610,23 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       }
 
       // PERFORMANCE OPTIMIZATION: Schedule next frame for smooth 60fps updates
-      // Always schedule next frame - the loop will check isPlaying state dynamically
+      // Only schedule if still playing (checked at start of next frame)
       prevTimeRef.current = time;
       rafRef.current = requestAnimationFrame(updateBeatTracking);
     };
 
-    // Start the animation loop
+    // Start the animation loop only when playing
     rafRef.current = requestAnimationFrame(updateBeatTracking);
 
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
+        rafRef.current = undefined;
       }
     };
-  // CRITICAL FIX: Include isPlaying to ensure animation starts when YouTube playback begins
-  // The animation loop handles play/pause gracefully by checking state dynamically
+  // CRITICAL FIX: Include isPlaying to ensure animation starts/stops when playback changes
+  // The effect will restart the loop when isPlaying becomes true
+  // and cleanup will stop it when isPlaying becomes false
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely]); // Updated to use centralized beat updates
 

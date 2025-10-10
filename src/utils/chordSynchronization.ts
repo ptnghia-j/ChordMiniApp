@@ -17,8 +17,6 @@ function alignChordsToBeatsDirectly(
     return [];
   }
 
-  const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-
   const beatToChordMap = new Map<number, string>();
   let beatIndex = 0; // Two-pointer technique: maintain beat position
 
@@ -47,13 +45,6 @@ function alignChordsToBeatsDirectly(
     const chordName = beatToChordMap.get(i) || lastChord;
     synchronizedChords.push({ chord: chordName, beatIndex: i });
     lastChord = chordName;
-  }
-
-  const endTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-  if (process.env.NODE_ENV === 'development') {
-    const elapsed = (endTime as number) - (startTime as number);
-    // eslint-disable-next-line no-console
-    console.log(`Optimized chord alignment: ${elapsed.toFixed(2)}ms for ${chords.length} chords × ${beats.length} beats`);
   }
 
   return synchronizedChords;

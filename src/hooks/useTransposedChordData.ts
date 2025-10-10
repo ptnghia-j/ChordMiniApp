@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react';
-import { useUI } from '@/contexts/UIContext';
+import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
 
 interface ChordGridData {
@@ -41,11 +41,9 @@ export interface UseTransposedChordDataReturn {
 export const useTransposedChordData = ({
   chordGridData,
 }: UseTransposedChordDataProps): UseTransposedChordDataReturn => {
-  const {
-    isPitchShiftEnabled,
-    pitchShiftSemitones,
-    targetKey,
-  } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const targetKey = useTargetKey();
 
   // Determine if transposition should be applied
   const shouldTranspose = isPitchShiftEnabled && pitchShiftSemitones !== 0;

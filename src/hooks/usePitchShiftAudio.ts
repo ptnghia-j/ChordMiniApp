@@ -11,7 +11,13 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
 import { getGrainPlayerPitchShiftService } from '@/services/grainPlayerPitchShiftService';
 import { setPitchShiftService as setGlobalPitchShiftService } from '@/services/pitchShiftServiceInstance';
-import { useUI } from '@/contexts/UIContext';
+import {
+  useIsPitchShiftEnabled,
+  usePitchShiftSemitones,
+  useSetIsProcessingPitchShift,
+  useSetPitchShiftError,
+  useSetIsFirebaseAudioAvailable
+} from '@/stores/uiStore';
 
 export interface UsePitchShiftAudioProps {
   youtubePlayer: YouTubePlayer | null;
@@ -52,13 +58,11 @@ export const usePitchShiftAudio = ({
   setIsPlaying,
   setCurrentTime,
 }: UsePitchShiftAudioProps): UsePitchShiftAudioReturn => {
-  const {
-    isPitchShiftEnabled,
-    pitchShiftSemitones,
-    setIsProcessingPitchShift,
-    setPitchShiftError,
-    setIsFirebaseAudioAvailable,
-  } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const setIsProcessingPitchShift = useSetIsProcessingPitchShift();
+  const setPitchShiftError = useSetPitchShiftError();
+  const setIsFirebaseAudioAvailable = useSetIsFirebaseAudioAvailable();
 
   const [isPitchShiftReady, setIsPitchShiftReady] = useState(false);
   const pitchShiftService = useRef(getGrainPlayerPitchShiftService());
@@ -236,7 +240,9 @@ export const usePitchShiftAudio = ({
       }
 
       if (audioRef.current) {
-        audioRef.current.muted = true; // Keep extracted audio muted
+        // CRITICAL FIX: Unmute audio element when pitch shift is disabled
+        // This allows normal audio playback for local audio upload page
+        audioRef.current.muted = false;
       }
 
       // Cleanup pitch shift service (async)

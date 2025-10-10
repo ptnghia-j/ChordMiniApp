@@ -9,7 +9,7 @@ import { GiGuitar, GiViolin, GiFlute } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/audioMixerService';
 import { getPitchShiftService } from '@/services/pitchShiftServiceInstance';
-import { useUI } from '@/contexts/UIContext';
+import { useIsPitchShiftEnabled } from '@/stores/uiStore';
 
 interface ChordPlaybackToggleProps {
   isEnabled: boolean;
@@ -65,7 +65,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const [audioSettings, setAudioSettings] = useState<AudioMixerSettings | null>(null);
 
   // Get pitch shift state to determine audio source label
-  const { isPitchShiftEnabled } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
 
   // Draggable state
   const [isDragging, setIsDragging] = useState(false);
