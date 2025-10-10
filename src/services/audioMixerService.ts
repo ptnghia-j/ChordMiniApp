@@ -6,7 +6,8 @@
 
 export interface AudioMixerSettings {
   masterVolume: number; // 0-100
-  youtubeVolume: number; // 0-100
+  youtubeVolume: number; // 0-100 (YouTube video playback)
+  pitchShiftedAudioVolume: number; // 0-100 (Pitch-shifted audio from Firebase/local upload)
   chordPlaybackVolume: number; // 0-100
   pianoVolume: number; // 0-100
   guitarVolume: number; // 0-100
@@ -33,8 +34,9 @@ export interface YouTubePlayer {
 export class AudioMixerService {
   private settings: AudioMixerSettings = {
     masterVolume: 80,
-    youtubeVolume: 100,
-    chordPlaybackVolume: 60,
+    youtubeVolume: 100, // YouTube video defaults to 100%
+    pitchShiftedAudioVolume: 30, // Pitch-shifted audio defaults to 40% for balance
+    chordPlaybackVolume: 70,
     pianoVolume: 50,
     guitarVolume: 30,
     violinVolume: 60,
@@ -148,6 +150,24 @@ export class AudioMixerService {
     this.applyYouTubeVolume();
     this.saveSettings();
     this.notifyListeners();
+  }
+
+  /**
+   * Set pitch-shifted audio volume (separate from YouTube video)
+   */
+  setPitchShiftedAudioVolume(volume: number) {
+    this.settings.pitchShiftedAudioVolume = Math.max(0, Math.min(100, volume));
+    // Note: Pitch-shifted audio volume is applied by the pitch shift service directly
+    // This just stores the setting for UI display and persistence
+    this.saveSettings();
+    this.notifyListeners();
+  }
+
+  /**
+   * Get pitch-shifted audio volume
+   */
+  getPitchShiftedAudioVolume(): number {
+    return this.settings.pitchShiftedAudioVolume;
   }
 
   /**
@@ -266,6 +286,7 @@ export class AudioMixerService {
     this.settings = {
       masterVolume: 80,
       youtubeVolume: 100,
+      pitchShiftedAudioVolume: 40,
       chordPlaybackVolume: 60,
       pianoVolume: 50,
       guitarVolume: 30,

@@ -48,7 +48,7 @@ export class GrainPlayerPitchShiftService {
   private _currentTime = 0;
   private _duration = 0;
   private _playbackRate = 1;
-  private _volume = 90; // 0-100
+  private _volume = 30; // 0-100 (default 30% for balanced audio with YouTube)
 
   // Time tracking
   private timeTrackingInterval: ReturnType<typeof setInterval> | null = null;

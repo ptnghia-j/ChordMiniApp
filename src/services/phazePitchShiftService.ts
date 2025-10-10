@@ -35,7 +35,7 @@ export class PhazePitchShiftService {
 
   // Playback state
   private _isPlaying = false;
-  private _volume = 90; // 0-100
+  private _volume = 40; // 0-100 (default 40% for balanced audio with YouTube)
 
   // Callbacks for state updates
   private onTimeUpdate: ((time: number) => void) | null = null;

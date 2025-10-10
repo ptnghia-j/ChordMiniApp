@@ -109,8 +109,19 @@ export const useChordPlayback = ({
 
     const currentChord = chords[currentBeatIndex];
 
+    // Check if current beat is a "No Chord" marker
+    const isNoChord = !currentChord || currentChord === 'N.C.' || currentChord === 'N/C' || currentChord === 'NC' || currentChord === 'N' || currentChord === '';
+
+    // If we encounter N.C and we were previously playing a chord, stop with fade-out
+    if (isNoChord && lastPlayedChord.current !== null) {
+      chordPlaybackService.current.stopAll();
+      lastPlayedChord.current = null;
+      lastPlayedChordIndex.current = currentBeatIndex;
+      return;
+    }
+
     // Skip if no chord or it's a rest
-    if (!currentChord || currentChord === 'N.C.' || currentChord === 'N/C' || currentChord === 'N' || currentChord === '') {
+    if (isNoChord) {
       return;
     }
 
