@@ -246,7 +246,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   }, [youtubePlayer]); // Re-run effect only when youtubePlayer prop changes
 
   // CRITICAL FIX: Sync pitch shift service volume to audio settings when pitch shift is enabled
-  // This ensures the slider displays the correct default volume 30%) for pitch-shifted audio
+  // This ensures the slider displays the correct default volume 30% for pitch-shifted audio
   // and preserves YouTube video volume (100%) separately
   useEffect(() => {
     if (isPitchShiftEnabled && audioSettings) {

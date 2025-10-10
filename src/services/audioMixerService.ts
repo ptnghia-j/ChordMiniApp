@@ -286,7 +286,7 @@ export class AudioMixerService {
     this.settings = {
       masterVolume: 80,
       youtubeVolume: 100,
-      pitchShiftedAudioVolume: 40,
+      pitchShiftedAudioVolume: 30,
       chordPlaybackVolume: 60,
       pianoVolume: 50,
       guitarVolume: 30,
