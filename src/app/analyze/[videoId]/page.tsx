@@ -1365,10 +1365,10 @@ export default function YouTubeVideoAnalyzePage() {
     uiStore.setShowSegmentation(showSegmentation);
     uiStore.setIsChatbotOpen(isChatbotOpen);
     uiStore.setIsLyricsPanelOpen(isLyricsPanelOpen);
-    // CRITICAL FIX: Extract just the note name from key signature to prevent duplicate "major/minor" text
-    // e.g., "B major" -> "B", "C# minor" -> "C#"
-    const noteNameOnly = keySignature ? keySignature.split(' ')[0] : 'C';
-    uiStore.initializeOriginalKey(noteNameOnly);
+    // CRITICAL FIX: Extract just the note name from key signature (e.g., "E♭ major" -> "E♭")
+    // to prevent duplicate "major/minor" text when pitch shift is enabled
+    const noteName = keySignature ? keySignature.split(' ')[0] : 'C';
+    uiStore.initializeOriginalKey(noteName);
     uiStore.initializeFirebaseAudioAvailable(!!audioProcessingState.audioUrl);
 
     // Initialize PlaybackStore
