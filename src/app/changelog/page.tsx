@@ -30,6 +30,30 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.2',
+      date: 'January 10, 2025',
+      title: 'Zustand State Management Migration & Performance Optimizations (In Development)',
+      description: 'Completes migration from React Context API to Zustand for global state management, fixing critical race conditions and audio playback bugs while improving performance.',
+      features: [
+        'PERFORMANCE: Migrated from Context API to Zustand for all state management',
+        'PERFORMANCE: Bundle size reduced by 7.1% for YouTube analysis page (50.4 kB → 46.8 kB)',
+        'PERFORMANCE: Expected 50-70% reduction in unnecessary re-renders',
+        'FIX: Toggle buttons (Roman Numerals, Simplify Chords) now work with single click during playback',
+        'FIX: Audio playback now works correctly in local audio upload page',
+        'UI: Removed verbose console logs (chord recognition, alignment, key detection, duration)',
+      ],
+      technical: [
+        'ARCHITECTURE: Removed 4 Context Provider files (AnalysisDataContext, UIContext, PlaybackContext, ZustandSynchronizer)',
+        'ARCHITECTURE: Migrated both YouTube analysis and local upload pages to Zustand',
+        'ARCHITECTURE: Fixed circular dependency in Zustand initialization causing race conditions',
+        'ARCHITECTURE: Fixed pitch shift hook incorrectly muting audio element',
+        'STABILITY: Removed deprecated useChordProcessing hook',
+        'STABILITY: Components now subscribe to specific Zustand state slices for optimal re-renders',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.1',
       date: 'October 9, 2025',
       title: 'Real Instrument Soundfonts for Chord Playback',

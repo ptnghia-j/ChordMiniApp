@@ -8,14 +8,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useUI } from '@/contexts/UIContext';
+import { useUIStore } from '@/stores/uiStore';
 
 interface KeySignatureSyncProps {
   keySignature: string | null;
 }
 
 export const KeySignatureSync: React.FC<KeySignatureSyncProps> = ({ keySignature }) => {
-  const { setOriginalKey } = useUI();
+  const setOriginalKey = useUIStore((state) => state.setOriginalKey);
 
   useEffect(() => {
     if (keySignature) {

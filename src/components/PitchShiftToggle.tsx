@@ -12,14 +12,12 @@ import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
 import { Tooltip } from '@heroui/react';
-import { useUI } from '@/contexts/UIContext';
+import { useIsPitchShiftEnabled, useTogglePitchShift, useIsFirebaseAudioAvailable } from '@/stores/uiStore';
 
 export const PitchShiftToggle: React.FC = () => {
-  const {
-    isPitchShiftEnabled,
-    togglePitchShift,
-    isFirebaseAudioAvailable,
-  } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const togglePitchShift = useTogglePitchShift();
+  const isFirebaseAudioAvailable = useIsFirebaseAudioAvailable();
 
   const isDisabled = !isFirebaseAudioAvailable;
 

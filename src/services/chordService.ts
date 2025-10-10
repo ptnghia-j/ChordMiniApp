@@ -76,7 +76,6 @@ export async function recognizeChordsWithRateLimit(
 
     // Timeout
     const timeoutValue = 800000; // 13+ minutes
-    console.log(`🔍 Chord recognition timeout value: ${timeoutValue} (type: ${typeof timeoutValue}, isInteger: ${Number.isInteger(timeoutValue)})`);
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
     // Request

@@ -9,7 +9,16 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { TbRefresh, TbAlertTriangle } from 'react-icons/tb';
-import { useUI } from '@/contexts/UIContext';
+import {
+  useIsPitchShiftEnabled,
+  usePitchShiftSemitones,
+  useIsProcessingPitchShift,
+  usePitchShiftError,
+  useOriginalKey,
+  useTargetKey,
+  useSetPitchShiftSemitones,
+  useResetPitchShift
+} from '@/stores/uiStore';
 import {
   formatSemitones,
   getIntervalName,
@@ -17,16 +26,14 @@ import {
 } from '@/utils/chordTransposition';
 
 export const PitchShiftPanel: React.FC = () => {
-  const {
-    isPitchShiftEnabled,
-    pitchShiftSemitones,
-    isProcessingPitchShift,
-    pitchShiftError,
-    originalKey,
-    targetKey,
-    setPitchShiftSemitones,
-    resetPitchShift,
-  } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const isProcessingPitchShift = useIsProcessingPitchShift();
+  const pitchShiftError = usePitchShiftError();
+  const originalKey = useOriginalKey();
+  const targetKey = useTargetKey();
+  const setPitchShiftSemitones = useSetPitchShiftSemitones();
+  const resetPitchShift = useResetPitchShift();
 
   // Debounced semitone change handler
   const handleSliderChange = useCallback(

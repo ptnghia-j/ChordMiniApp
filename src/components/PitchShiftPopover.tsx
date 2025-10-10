@@ -12,7 +12,14 @@ import { Popover, PopoverTrigger, PopoverContent, Tooltip } from '@heroui/react'
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
 import { MIN_SEMITONES, MAX_SEMITONES } from '@/utils/chordTransposition';
-import { useUI } from '@/contexts/UIContext';
+import {
+  useIsPitchShiftEnabled,
+  useTogglePitchShift,
+  usePitchShiftSemitones,
+  useIsProcessingPitchShift,
+  useIsFirebaseAudioAvailable,
+  useSetPitchShiftSemitones
+} from '@/stores/uiStore';
 import { formatSemitones } from '@/utils/chordTransposition';
 
 interface PitchShiftPopoverProps {
@@ -24,14 +31,12 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
   playbackRate,
   setPlaybackRate,
 }) => {
-  const {
-    isPitchShiftEnabled,
-    togglePitchShift,
-    pitchShiftSemitones,
-    isProcessingPitchShift,
-    isFirebaseAudioAvailable,
-    setPitchShiftSemitones,
-  } = useUI();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const togglePitchShift = useTogglePitchShift();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const isProcessingPitchShift = useIsProcessingPitchShift();
+  const isFirebaseAudioAvailable = useIsFirebaseAudioAvailable();
+  const setPitchShiftSemitones = useSetPitchShiftSemitones();
 
   const isDisabled = !isFirebaseAudioAvailable;
 

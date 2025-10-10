@@ -9,10 +9,10 @@ import { chordMappingService } from '@/services/chordMappingService';
 import { ChordGridContainer } from '@/components/ChordGridContainer';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
-import { useAnalysisData } from '@/contexts/AnalysisDataContext';
-import { usePlayback } from '@/contexts/PlaybackContext';
-import { useSegmentationSelector } from '@/contexts/selectors';
-import { useUI } from '@/contexts/UIContext';
+import { useAnalysisResults, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
+import { useCurrentBeatIndex } from '@/stores/playbackStore';
+import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zustand internally
+import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
 
 
@@ -97,10 +97,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   sequenceCorrections = null,
   segmentationData = null,
 }) => {
-  const { currentBeatIndex } = usePlayback();
+  const currentBeatIndex = useCurrentBeatIndex();
 
-  // Get pitch shift state from UIContext
-  const { isPitchShiftEnabled, pitchShiftSemitones, targetKey } = useUI();
+  // Get pitch shift state from Zustand store
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const targetKey = useTargetKey();
 
   const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
@@ -165,14 +167,17 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
 
 
-  // Pull analysis toggles and data from context when not provided via props
-  // Segmentation toggle from UIContext
+  // Pull analysis toggles and data from Zustand stores when not provided via props
+  // Segmentation toggle from UIStore
   const { showSegmentation } = useSegmentationSelector();
 
-  const analysisCtx = useAnalysisData();
-  const mergedAnalysisResults = analysisResults ?? analysisCtx.analysisResults;
-  const mergedShowCorrectedChords = showCorrectedChords ?? analysisCtx.showCorrectedChords;
-  const mergedChordCorrections = chordCorrections ?? analysisCtx.chordCorrections;
+  const storeAnalysisResults = useAnalysisResults();
+  const storeShowCorrectedChords = useShowCorrectedChords();
+  const storeChordCorrections = useChordCorrections();
+
+  const mergedAnalysisResults = analysisResults ?? storeAnalysisResults;
+  const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
+  const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
 
   // Chord correction for guitar diagrams (always applies corrections when available for consistent display)
   const applyCorrectedChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {

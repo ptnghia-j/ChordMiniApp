@@ -7,7 +7,7 @@ import { HiOutlineArrowPath, HiArrowPath } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { useChordPlayback } from '@/hooks/useChordPlayback';
-import { useUI } from '@/contexts/UIContext';
+import { useShowRomanNumerals, useToggleRomanNumerals } from '@/stores/uiStore';
 
 // Dynamic imports for heavy components
 const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
@@ -21,7 +21,7 @@ const ChordSimplificationToggle = dynamic(() => import('@/components/ChordSimpli
 });
 
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
-import { useSimplifySelector } from '@/contexts/selectors';
+import { useSimplifySelector } from '@/contexts/selectors'; // Now uses Zustand internally
 
 const RomanNumeralToggle = dynamic(() => import('@/components/RomanNumeralToggle'), {
   loading: () => <div className="h-8 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -134,8 +134,9 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   isCountingDown = false,
   countdownDisplay
 }) => {
-  // Roman numerals from UI Context
-  const { showRomanNumerals, toggleRomanNumerals } = useUI();
+  // Roman numerals from Zustand store
+  const showRomanNumerals = useShowRomanNumerals();
+  const toggleRomanNumerals = useToggleRomanNumerals();
 
   // Chord playback hook - keep active regardless of top toggles so UtilityBar can still control playback
   // Simplify selector from UIContext

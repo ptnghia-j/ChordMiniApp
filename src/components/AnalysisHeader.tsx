@@ -3,7 +3,7 @@
 import React from 'react';
 import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
 import SegmentationToggleButton from '@/components/SegmentationToggleButton';
-import { useUI } from '@/contexts/UIContext';
+import { useShowSegmentation, useToggleSegmentation } from '@/stores/uiStore';
 
 interface AnalysisHeaderProps {
   // Title and editing
@@ -51,7 +51,8 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
   hasSegmentationData,
   lyricsError
 }) => {
-  const { showSegmentation, toggleSegmentation } = useUI();
+  const showSegmentation = useShowSegmentation();
+  const toggleSegmentation = useToggleSegmentation();
   return (
     <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
       {/* Mobile: buttons next to title, Desktop: buttons on right side */}

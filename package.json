@@ -1,6 +1,6 @@
 {
   "name": "chord-mini-app",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "private": true,
   "sideEffects": [
     "*.css",

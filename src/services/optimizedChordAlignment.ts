@@ -46,9 +46,6 @@ export function alignChordsToBeatsOptimized(
     return [];
   }
 
-  // Performance monitoring (can be removed in production)
-  const startTime = performance.now();
-
   const beatToChordMap = new Map<number, string>();
   let beatIndex = 0;
 
@@ -100,11 +97,6 @@ export function alignChordsToBeatsOptimized(
       beatIndex: i
     });
   }
-
-  // Performance logging (can be removed in production)
-  const endTime = performance.now();
-  console.log(`Optimized chord alignment completed in ${(endTime - startTime).toFixed(2)}ms`);
-  console.log(`Processed ${chords.length} chords and ${beats.length} beats`);
 
   return synchronizedChords;
 }

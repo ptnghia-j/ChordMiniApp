@@ -62,14 +62,11 @@ export async function getAudioDurationFromUrl(audioUrl: string, videoId?: string
  */
 export async function getAudioDurationFromFile(audioFile: File): Promise<number> {
   try {
-    console.log(`🎵 Detecting duration for uploaded file: ${audioFile.name}`);
-
     return new Promise((resolve, reject) => {
       const audio = new Audio();
-      
+
       audio.addEventListener('loadedmetadata', () => {
         if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-          console.log(`✅ File duration detected: ${audio.duration} seconds`);
           resolve(audio.duration);
         } else {
           reject(new Error('Invalid duration detected from file'));
