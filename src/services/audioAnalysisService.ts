@@ -187,51 +187,60 @@ export async function analyzeAudioWithRateLimit(
     throw new Error('Invalid audio input: must be either File object, AudioBuffer, or URL string');
   }
 
-  // Beat detection (rate limited path)
-  let beatResults: BeatDetectionBackendResponse;
-  try {
-    if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
-      beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
-    } else {
-      beatResults = await detectBeatsWithRateLimit(audioFile, beatDetector);
-    }
-    if (!beatResults || !beatResults.beats) throw new Error('Beat detection failed: missing beats data');
-    if (!Array.isArray(beatResults.beats)) throw new Error('Invalid beat detection results: beats is not an array');
-    if (beatResults.beats.length === 0) throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
-    // filter invalid
-    beatResults.beats = beatResults.beats.filter((t: number) => typeof t === 'number' && !isNaN(t) && t >= 0 && t <= 3600);
-    if (beatResults.beats.length === 0) throw new Error('All detected beats have invalid timestamps');
-  } catch (e) {
-    console.error('Error in beat detection with rate limiting:', e);
-    if (e instanceof Error) {
-      if (e.message.includes('Rate limited')) throw new Error(`Beat detection rate limited: ${e.message}`);
-      if (e.message.includes('too large')) throw new Error('Audio file is too large for beat detection. Try a shorter clip or the madmom detector.');
-      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits. Please use a smaller file or try the madmom detector.');
-      if (e.message.includes('timeout')) throw new Error('Beat detection timed out. Try a shorter clip or the madmom detector.');
-      throw new Error(`Beat detection failed: ${e.message}`);
-    }
-    throw new Error(`Beat detection failed: ${String(e) || 'Unknown error'}`);
-  }
+  // PERFORMANCE OPTIMIZATION: Parallelize beat detection and chord recognition
+  // These operations are independent and can run simultaneously, reducing total processing time.
+  const [beatResults, chordResults] = await Promise.all([
+    // Beat detection (rate limited path)
+    (async (): Promise<BeatDetectionBackendResponse> => {
+      try {
+        let results: BeatDetectionBackendResponse;
+        if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+          results = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
+        } else {
+          results = await detectBeatsWithRateLimit(audioFile, beatDetector);
+        }
+        if (!results || !results.beats) throw new Error('Beat detection failed: missing beats data');
+        if (!Array.isArray(results.beats)) throw new Error('Invalid beat detection results: beats is not an array');
+        if (results.beats.length === 0) throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
+        // filter invalid
+        results.beats = results.beats.filter((t: number) => typeof t === 'number' && !isNaN(t) && t >= 0 && t <= 3600);
+        if (results.beats.length === 0) throw new Error('All detected beats have invalid timestamps');
+        return results;
+      } catch (e) {
+        console.error('Error in beat detection with rate limiting:', e);
+        if (e instanceof Error) {
+          if (e.message.includes('Rate limited')) throw new Error(`Beat detection rate limited: ${e.message}`);
+          if (e.message.includes('too large')) throw new Error('Audio file is too large for beat detection. Try a shorter clip or the madmom detector.');
+          if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits. Please use a smaller file or try the madmom detector.');
+          if (e.message.includes('timeout')) throw new Error('Beat detection timed out. Try a shorter clip or the madmom detector.');
+          throw new Error(`Beat detection failed: ${e.message}`);
+        }
+        throw new Error(`Beat detection failed: ${String(e) || 'Unknown error'}`);
+      }
+    })(),
+
+    // Chord recognition (rate limited path)
+    (async (): Promise<ChordDetectionResult[]> => {
+      try {
+        let results = await recognizeChordsWithRateLimit(audioFile, chordDetector);
+        // filter invalid chords
+        results = results.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number' && !isNaN(c.start) && !isNaN(c.end) && c.start >= 0 && c.end >= 0 && c.start < c.end && c.end <= 3600);
+        return results;
+      } catch (e) {
+        console.error('Error in chord recognition with rate limiting:', e);
+        if (e instanceof Error) {
+          if (e.message.includes('Rate limited')) throw new Error(`Chord recognition rate limited: ${e.message}`);
+          if (e.message.includes('too large')) throw new Error('Audio file is too large for chord recognition. Try a shorter clip.');
+          if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits for chord recognition. Please use a smaller file.');
+          if (e.message.includes('timeout')) throw new Error('Chord recognition timed out. Try a shorter clip.');
+          throw new Error(`Chord recognition failed: ${e.message}`);
+        }
+        throw new Error('Chord recognition failed with unknown error');
+      }
+    })()
+  ]);
 
   const beats = toBeatInfo(beatResults);
-
-  // Chords
-  let chordResults: ChordDetectionResult[];
-  try {
-    chordResults = await recognizeChordsWithRateLimit(audioFile, chordDetector);
-    // filter invalid chords
-    chordResults = chordResults.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number' && !isNaN(c.start) && !isNaN(c.end) && c.start >= 0 && c.end >= 0 && c.start < c.end && c.end <= 3600);
-  } catch (e) {
-    console.error('Error in chord recognition with rate limiting:', e);
-    if (e instanceof Error) {
-      if (e.message.includes('Rate limited')) throw new Error(`Chord recognition rate limited: ${e.message}`);
-      if (e.message.includes('too large')) throw new Error('Audio file is too large for chord recognition. Try a shorter clip.');
-      if (e.message.includes('413')) throw new Error('Audio file size exceeds server limits for chord recognition. Please use a smaller file.');
-      if (e.message.includes('timeout')) throw new Error('Chord recognition timed out. Try a shorter clip.');
-      throw new Error(`Chord recognition failed: ${e.message}`);
-    }
-    throw new Error('Chord recognition failed with unknown error');
-  }
 
   // Synchronize
   let synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
