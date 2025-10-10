@@ -126,6 +126,9 @@ export class SoundfontChordPlaybackService {
   private isInitialized = false;
   private isInitializing = false;
   private initializationError: Error | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private activeNotes: Map<string, any[]> = new Map(); // Track active note stop functions per instrument
+  private releaseTime = 0.3; // Release/fade-out time in seconds
   
   private options: SoundfontChordPlaybackOptions = {
     pianoVolume: 70,
@@ -297,6 +300,9 @@ export class SoundfontChordPlaybackService {
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
 
+    // Stop previous notes on this instrument with fade-out
+    this.stopInstrumentNotes(instrumentName);
+
     // Calculate volume (0-1 scale)
     const velocity = (volume / 100) * 127; // Convert to MIDI velocity (0-127)
 
@@ -308,14 +314,48 @@ export class SoundfontChordPlaybackService {
       return `${noteName}${octave}`;
     });
 
-    // Play all notes of the chord
+    // Track active notes for this instrument
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const activeNotesForInstrument: any[] = [];
+
+    // Play all notes of the chord with sustain (no duration = infinite sustain)
+    // Notes will be stopped when next chord plays or when stopAll() is called
     transposedNotes.forEach(note => {
-      instrument.start({
+      const stopFn = instrument.start({
         note,
         velocity,
-        duration
+        // No duration parameter = note sustains indefinitely until stopped
       });
+
+      if (stopFn) {
+        activeNotesForInstrument.push(stopFn);
+      }
     });
+
+    // Store active notes for later cleanup
+    this.activeNotes.set(instrumentName, activeNotesForInstrument);
+  }
+
+  /**
+   * Stop all notes on a specific instrument with fade-out
+   */
+  private stopInstrumentNotes(instrumentName: string): void {
+    const activeNotesForInstrument = this.activeNotes.get(instrumentName);
+
+    if (!activeNotesForInstrument || activeNotesForInstrument.length === 0) {
+      return;
+    }
+
+    // Stop each note with release time for natural fade-out
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    activeNotesForInstrument.forEach((stopFn: any) => {
+      // Call stop function with fade-out time
+      // smplr stop function accepts a time parameter for fade-out
+      stopFn(this.releaseTime);
+    });
+
+    // Clear the active notes for this instrument
+    this.activeNotes.set(instrumentName, []);
   }
 
   /**
@@ -347,11 +387,12 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Stop all playing notes
+   * Stop all playing notes with fade-out
    */
   stopAll(): void {
-    this.instruments.forEach(instrument => {
-      instrument.stop();
+    // Stop notes on each instrument with fade-out
+    this.instruments.forEach((instrument, instrumentName) => {
+      this.stopInstrumentNotes(instrumentName);
     });
   }
 
@@ -360,6 +401,7 @@ export class SoundfontChordPlaybackService {
    */
   dispose(): void {
     this.stopAll();
+    this.activeNotes.clear();
     this.instruments.clear();
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();

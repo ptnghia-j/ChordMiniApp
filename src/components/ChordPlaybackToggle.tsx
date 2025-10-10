@@ -74,6 +74,9 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const dragRef = useRef<HTMLDivElement>(null);
   const audioMixer = useRef<ReturnType<typeof getAudioMixerService> | null>(null);
 
+  // Track which slider is being actively dragged to prevent race conditions
+  const [activeSlider, setActiveSlider] = useState<string | null>(null);
+
   // CRITICAL FIX: Sync showControls with isEnabled state
   // The button click handler can't reliably predict the new isEnabled value
   // because onClick() triggers async state updates through the parent
@@ -135,6 +138,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         setAudioSettings({
           masterVolume: 80,
           youtubeVolume: 100,
+          pitchShiftedAudioVolume: 30,
           chordPlaybackVolume: 60,
           pianoVolume: 50,
           guitarVolume: 30,
@@ -153,6 +157,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
@@ -197,6 +202,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
@@ -239,6 +245,22 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
     };
   }, [youtubePlayer]); // Re-run effect only when youtubePlayer prop changes
 
+  // CRITICAL FIX: Sync pitch shift service volume to audio settings when pitch shift is enabled
+  // This ensures the slider displays the correct default volume 30% for pitch-shifted audio
+  // and preserves YouTube video volume (100%) separately
+  useEffect(() => {
+    if (isPitchShiftEnabled && audioSettings) {
+      const pitchShiftService = getPitchShiftService();
+      if (pitchShiftService) {
+        const pitchShiftVolume = pitchShiftService.getVolume();
+        // Only update if the volume is different to avoid infinite loops
+        if (pitchShiftVolume !== audioSettings.pitchShiftedAudioVolume) {
+          setAudioSettings(prev => prev ? { ...prev, pitchShiftedAudioVolume: pitchShiftVolume } : null);
+        }
+      }
+    }
+  }, [isPitchShiftEnabled, audioSettings]);
+
   // Effect to hide control panel when chord playback is disabled
   useEffect(() => {
     if (!isEnabled) {
@@ -254,6 +276,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
@@ -435,22 +458,35 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.masterVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.masterVolume}
-                        onChange={(value) => audioMixer.current?.setMasterVolume(Array.isArray(value) ? value[0] : value)}
-                        className="w-full"
-                        aria-label="Master volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                      <div
+                        onMouseDown={() => setActiveSlider('master')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          // Only clear if this slider was active
+                          if (activeSlider === 'master') setActiveSlider(null);
                         }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.masterVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'master' || activeSlider === null) {
+                              audioMixer.current?.setMasterVolume(Array.isArray(value) ? value[0] : value);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Master volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* YouTube / Pitch-Shifted Audio Volume */}
@@ -461,40 +497,52 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {isPitchShiftEnabled ? 'Pitch-Shifted Audio' : 'YouTube Video'}
                         </label>
                         <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
-                          {Math.round(audioSettings.youtubeVolume)}%
+                          {Math.round(isPitchShiftEnabled ? audioSettings.pitchShiftedAudioVolume : audioSettings.youtubeVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.youtubeVolume}
-                        onChange={(value) => {
-                          const vol = Array.isArray(value) ? value[0] : value;
-                          if (isPitchShiftEnabled) {
-                            // Control pitch-shifted audio volume
-                            const pitchShiftService = getPitchShiftService();
-                            if (pitchShiftService) {
-                              pitchShiftService.setVolume(vol);
-                              console.log(`🔊 Pitch-shifted audio volume set to ${vol}%`);
-                              // Update the audioSettings state to sync the slider UI
-                              setAudioSettings(prev => prev ? { ...prev, youtubeVolume: vol } : null);
+                      <div
+                        onMouseDown={() => setActiveSlider('youtube')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'youtube') setActiveSlider(null);
+                        }}
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={isPitchShiftEnabled ? audioSettings.pitchShiftedAudioVolume : audioSettings.youtubeVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'youtube' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              if (isPitchShiftEnabled) {
+                                // Control pitch-shifted audio volume
+                                const pitchShiftService = getPitchShiftService();
+                                if (pitchShiftService) {
+                                  pitchShiftService.setVolume(vol);
+                                  console.log(`🔊 Pitch-shifted audio volume set to ${vol}%`);
+                                  // Update the pitch-shifted audio volume in audio mixer
+                                  audioMixer.current?.setPitchShiftedAudioVolume(vol);
+                                  // Update the audioSettings state to sync the slider UI
+                                  setAudioSettings(prev => prev ? { ...prev, pitchShiftedAudioVolume: vol } : null);
+                                }
+                              } else {
+                                // Control YouTube volume
+                                audioMixer.current?.setYouTubeVolume(vol);
+                              }
                             }
-                          } else {
-                            // Control YouTube volume
-                            audioMixer.current?.setYouTubeVolume(vol);
-                          }
-                        }}
-                        className="w-full"
-                        aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : "YouTube video volume control"}
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: isPitchShiftEnabled ? "bg-green-500 dark:bg-green-400" : "bg-red-500 dark:bg-red-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
-                        }}
-                      />
+                          }}
+                          className="w-full"
+                          aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : "YouTube video volume control"}
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: isPitchShiftEnabled ? "bg-green-500 dark:bg-green-400" : "bg-red-500 dark:bg-red-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* Chord Playback Master Volume */}
@@ -508,22 +556,34 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.chordPlaybackVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.chordPlaybackVolume}
-                        onChange={(value) => audioMixer.current?.setChordPlaybackVolume(Array.isArray(value) ? value[0] : value)}
-                        className="w-full"
-                        aria-label="Chord playback master volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                      <div
+                        onMouseDown={() => setActiveSlider('chordPlayback')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'chordPlayback') setActiveSlider(null);
                         }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.chordPlaybackVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'chordPlayback' || activeSlider === null) {
+                              audioMixer.current?.setChordPlaybackVolume(Array.isArray(value) ? value[0] : value);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Chord playback master volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -546,26 +606,36 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.pianoVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.pianoVolume}
-                        onChange={(value) => {
-                          const vol = Array.isArray(value) ? value[0] : value;
-                          audioMixer.current?.setPianoVolume(vol);
-                          onPianoVolumeChange(vol);
+                      <div
+                        onMouseDown={() => setActiveSlider('piano')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'piano') setActiveSlider(null);
                         }}
-                        className="w-full"
-                        aria-label="Piano volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
-                        }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.pianoVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'piano' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setPianoVolume(vol);
+                              onPianoVolumeChange(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Piano volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* Guitar volume control */}
@@ -579,26 +649,36 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.guitarVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.guitarVolume}
-                        onChange={(value) => {
-                          const vol = Array.isArray(value) ? value[0] : value;
-                          audioMixer.current?.setGuitarVolume(vol);
-                          onGuitarVolumeChange(vol);
+                      <div
+                        onMouseDown={() => setActiveSlider('guitar')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'guitar') setActiveSlider(null);
                         }}
-                        className="w-full"
-                        aria-label="Guitar volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
-                        }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.guitarVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'guitar' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setGuitarVolume(vol);
+                              onGuitarVolumeChange(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Guitar volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* Violin volume control */}
@@ -612,26 +692,36 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.violinVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.violinVolume}
-                        onChange={(value) => {
-                          const vol = Array.isArray(value) ? value[0] : value;
-                          audioMixer.current?.setViolinVolume(vol);
-                          onViolinVolumeChange(vol);
+                      <div
+                        onMouseDown={() => setActiveSlider('violin')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'violin') setActiveSlider(null);
                         }}
-                        className="w-full"
-                        aria-label="Violin volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
-                        }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.violinVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'violin' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setViolinVolume(vol);
+                              onViolinVolumeChange(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Violin volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* Flute volume control */}
@@ -645,26 +735,36 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           {Math.round(audioSettings.fluteVolume)}%
                         </span>
                       </div>
-                      <Slider
-                        size="sm"
-                        step={1}
-                        minValue={0}
-                        maxValue={100}
-                        value={audioSettings.fluteVolume}
-                        onChange={(value) => {
-                          const vol = Array.isArray(value) ? value[0] : value;
-                          audioMixer.current?.setFluteVolume(vol);
-                          onFluteVolumeChange(vol);
+                      <div
+                        onMouseDown={() => setActiveSlider('flute')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'flute') setActiveSlider(null);
                         }}
-                        className="w-full"
-                        aria-label="Flute volume control"
-                        classNames={{
-                          base: "max-w-full",
-                          track: "bg-gray-200 dark:bg-gray-600 h-1.5",
-                          filler: "bg-green-500 dark:bg-green-400",
-                          thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
-                        }}
-                      />
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.fluteVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'flute' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setFluteVolume(vol);
+                              onFluteVolumeChange(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Flute volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
 
