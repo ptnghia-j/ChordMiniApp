@@ -287,7 +287,7 @@ export class AudioMixerService {
       masterVolume: 80,
       youtubeVolume: 100,
       pitchShiftedAudioVolume: 30,
-      chordPlaybackVolume: 60,
+      chordPlaybackVolume: 70,
       pianoVolume: 50,
       guitarVolume: 30,
       violinVolume: 60,
