@@ -35,7 +35,7 @@ export class AudioMixerService {
   private settings: AudioMixerSettings = {
     masterVolume: 80,
     youtubeVolume: 100, // YouTube video defaults to 100%
-    pitchShiftedAudioVolume: 30, // Pitch-shifted audio defaults to 40% for balance
+    pitchShiftedAudioVolume: 30, // Pitch-shifted audio defaults to 30% for balance
     chordPlaybackVolume: 70,
     pianoVolume: 50,
     guitarVolume: 30,

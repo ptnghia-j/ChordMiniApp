@@ -138,7 +138,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         setAudioSettings({
           masterVolume: 80,
           youtubeVolume: 100,
-          pitchShiftedAudioVolume: 40,
+          pitchShiftedAudioVolume: 30,
           chordPlaybackVolume: 60,
           pianoVolume: 50,
           guitarVolume: 30,
@@ -157,7 +157,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
-        pitchShiftedAudioVolume: 40,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
@@ -202,7 +202,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
-        pitchShiftedAudioVolume: 40,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
@@ -246,7 +246,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   }, [youtubePlayer]); // Re-run effect only when youtubePlayer prop changes
 
   // CRITICAL FIX: Sync pitch shift service volume to audio settings when pitch shift is enabled
-  // This ensures the slider displays the correct default volume (40%) for pitch-shifted audio
+  // This ensures the slider displays the correct default volume 30%) for pitch-shifted audio
   // and preserves YouTube video volume (100%) separately
   useEffect(() => {
     if (isPitchShiftEnabled && audioSettings) {
@@ -276,7 +276,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       setAudioSettings({
         masterVolume: 80,
         youtubeVolume: 100,
-        pitchShiftedAudioVolume: 40,
+        pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
         guitarVolume: 30,
