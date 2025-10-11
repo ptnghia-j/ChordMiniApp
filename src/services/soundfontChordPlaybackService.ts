@@ -128,8 +128,9 @@ export class SoundfontChordPlaybackService {
   private initializationError: Error | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private activeNotes: Map<string, any[]> = new Map(); // Track active note stop functions per instrument
+  private scheduledTimeouts: Map<string, NodeJS.Timeout> = new Map(); // Track scheduled timeouts for cleanup
   private releaseTime = 0.3; // Release/fade-out time in seconds
-  
+
   private options: SoundfontChordPlaybackOptions = {
     pianoVolume: 70,
     guitarVolume: 50,
@@ -300,6 +301,13 @@ export class SoundfontChordPlaybackService {
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
 
+    // Clear any existing scheduled timeout for this instrument
+    const existingTimeout = this.scheduledTimeouts.get(instrumentName);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      this.scheduledTimeouts.delete(instrumentName);
+    }
+
     // Stop previous notes on this instrument with fade-out
     this.stopInstrumentNotes(instrumentName);
 
@@ -318,13 +326,19 @@ export class SoundfontChordPlaybackService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const activeNotesForInstrument: any[] = [];
 
-    // Play all notes of the chord with sustain (no duration = infinite sustain)
-    // Notes will be stopped when next chord plays or when stopAll() is called
+    // Calculate smplr duration with buffer to prevent race conditions
+    const smplrDuration = duration + 0.2;
+
+    // Enable looping for instruments that support it or for sustained instruments
+    const shouldLoop = instrument.hasLoops === true || instrumentName === 'violin' || instrumentName === 'flute';
+
+    // Play all notes of the chord with duration and optional looping
     transposedNotes.forEach(note => {
       const stopFn = instrument.start({
         note,
         velocity,
-        // No duration parameter = note sustains indefinitely until stopped
+        duration: smplrDuration,
+        loop: shouldLoop,
       });
 
       if (stopFn) {
@@ -334,6 +348,20 @@ export class SoundfontChordPlaybackService {
 
     // Store active notes for later cleanup
     this.activeNotes.set(instrumentName, activeNotesForInstrument);
+
+    // Schedule safety timeout (fires slightly before smplr's internal timeout)
+    if (duration > 0) {
+      const timeoutDuration = duration + 0.15;
+      const timeoutId = setTimeout(() => {
+        this.scheduledTimeouts.delete(instrumentName);
+        const currentActiveNotes = this.activeNotes.get(instrumentName);
+        if (currentActiveNotes === activeNotesForInstrument) {
+          this.stopInstrumentNotes(instrumentName);
+        }
+      }, timeoutDuration * 1000);
+
+      this.scheduledTimeouts.set(instrumentName, timeoutId);
+    }
   }
 
   /**
@@ -390,6 +418,12 @@ export class SoundfontChordPlaybackService {
    * Stop all playing notes with fade-out
    */
   stopAll(): void {
+    // Clear all scheduled timeouts
+    this.scheduledTimeouts.forEach((timeoutId) => {
+      clearTimeout(timeoutId);
+    });
+    this.scheduledTimeouts.clear();
+
     // Stop notes on each instrument with fade-out
     this.instruments.forEach((instrument, instrumentName) => {
       this.stopInstrumentNotes(instrumentName);
@@ -402,6 +436,7 @@ export class SoundfontChordPlaybackService {
   dispose(): void {
     this.stopAll();
     this.activeNotes.clear();
+    this.scheduledTimeouts.clear();
     this.instruments.clear();
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
