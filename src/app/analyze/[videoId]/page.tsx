@@ -1428,6 +1428,7 @@ export default function YouTubeVideoAnalyzePage() {
               chordGridData={chordGridData}
               isPlaying={isPlaying}
               currentTime={currentTime}
+              bpm={bpm}
               onChordPlaybackChange={handleChordPlaybackChange}
             />
 
