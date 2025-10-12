@@ -141,7 +141,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
           pitchShiftedAudioVolume: 30,
           chordPlaybackVolume: 60,
           pianoVolume: 50,
-          guitarVolume: 30,
+          guitarVolume: 60,
           violinVolume: 60,
           fluteVolume: 50,
           metronomeVolume: 70
@@ -160,7 +160,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
-        guitarVolume: 30,
+        guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
         metronomeVolume: 70
@@ -205,7 +205,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
-        guitarVolume: 30,
+        guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
         metronomeVolume: 70
@@ -279,7 +279,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         pitchShiftedAudioVolume: 30,
         chordPlaybackVolume: 60,
         pianoVolume: 50,
-        guitarVolume: 30,
+        guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
         metronomeVolume: 70

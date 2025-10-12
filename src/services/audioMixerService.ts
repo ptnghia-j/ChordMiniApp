@@ -38,7 +38,7 @@ export class AudioMixerService {
     pitchShiftedAudioVolume: 30, // Pitch-shifted audio defaults to 30% for balance
     chordPlaybackVolume: 70,
     pianoVolume: 50,
-    guitarVolume: 30,
+    guitarVolume: 60,
     violinVolume: 60,
     fluteVolume: 50,
     metronomeVolume: 70
@@ -289,7 +289,7 @@ export class AudioMixerService {
       pitchShiftedAudioVolume: 30,
       chordPlaybackVolume: 70,
       pianoVolume: 50,
-      guitarVolume: 30,
+      guitarVolume: 60,
       violinVolume: 60,
       fluteVolume: 50,
       metronomeVolume: 70

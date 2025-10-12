@@ -7,6 +7,7 @@ export interface UseChordPlaybackProps {
   beats: (number | null)[];
   isPlaying: boolean;
   currentTime: number;
+  bpm?: number; // Beats per minute for dynamic timing (optional, defaults to 120)
 }
 
 export interface UseChordPlaybackReturn {
@@ -32,11 +33,12 @@ export const useChordPlayback = ({
   chords,
   beats,
   isPlaying,
-  currentTime: _currentTime // eslint-disable-line @typescript-eslint/no-unused-vars
+  currentTime: _currentTime, // eslint-disable-line @typescript-eslint/no-unused-vars
+  bpm = 120 // Default to 120 BPM if not provided
 }: UseChordPlaybackProps): UseChordPlaybackReturn => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [pianoVolume, setPianoVolumeState] = useState(50);
-  const [guitarVolume, setGuitarVolumeState] = useState(30);
+  const [guitarVolume, setGuitarVolumeState] = useState(60);
   const [violinVolume, setViolinVolumeState] = useState(60);
   const [fluteVolume, setFluteVolumeState] = useState(50);
   const [isReady, setIsReady] = useState(false);
@@ -138,8 +140,8 @@ export const useChordPlayback = ({
         ? calculateChordDuration(currentBeatIndex, nextChordChange.index)
         : 2.0;
 
-      // Play the chord directly (no conversion needed - using original chord data)
-      chordPlaybackService.current.playChord(currentChord, duration);
+      // Play the chord with BPM information for dynamic timing
+      chordPlaybackService.current.playChord(currentChord, duration, bpm);
 
       // Update tracking variables
       lastPlayedChordIndex.current = currentBeatIndex;
