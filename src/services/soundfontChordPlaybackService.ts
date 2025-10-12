@@ -467,9 +467,10 @@ export class SoundfontChordPlaybackService {
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
 
-    // Validate BPM to prevent invalid values
-    if (bpm <= 0 || !isFinite(bpm)) {
-      console.error(`❌ Invalid BPM value: ${bpm}. Using default ${SoundfontChordPlaybackService.DEFAULT_BPM} BPM.`);
+    // Validate BPM to prevent invalid values and unrealistic high values
+    const MAX_BPM = 400;
+    if (bpm <= 0 || !isFinite(bpm) || bpm > MAX_BPM) {
+      console.error(`❌ Invalid BPM value: ${bpm}. Using default ${SoundfontChordPlaybackService.DEFAULT_BPM} BPM. (Allowed range: 1-${MAX_BPM})`);
       bpm = SoundfontChordPlaybackService.DEFAULT_BPM;
     }
 
