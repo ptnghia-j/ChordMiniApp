@@ -68,7 +68,6 @@ interface ChordGridContainerProps {
   isEditMode?: boolean;
   editedChords?: Record<number, string>;
   onChordEdit?: (index: number, newChord: string) => void;
-  // NEW: Enable refactored version with context and performance optimizations
   useRefactoredVersion?: boolean;
   enableVirtualization?: boolean;
   virtualizationThreshold?: number;
@@ -89,7 +88,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   isEditMode = false,
   editedChords = {},
   onChordEdit,
-  useRefactoredVersion = false,
+  useRefactoredVersion = false, 
   enableVirtualization = true,
   virtualizationThreshold = 100,
 }) => {
