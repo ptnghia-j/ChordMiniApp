@@ -74,35 +74,108 @@ const CHORD_TYPE_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Convert interval notation to semitones
+ * The Python backend uses delta notation where numbers represent semitone intervals:
+ * delta_dict=['1','b2','2','b3','3','4','b5','5','b6','6','b7','7']
+ * This maps to: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] semitones
+ *
+ * Examples:
+ * - "1" = 0 semitones (root)
+ * - "b2" = 1 semitone
+ * - "2" = 2 semitones
+ * - "3" = 4 semitones (major third)
+ * - "4" = 5 semitones (perfect fourth)
+ * - "5" = 7 semitones (perfect fifth)
+ * - "b7" = 10 semitones (minor seventh)
+ * - "7" = 11 semitones (major seventh)
+ */
+function intervalToSemitones(interval: string): number {
+  // Parse the interval string to extract accidental and number
+  const match = interval.match(/^([#b]?)(\d+)$/);
+  if (!match) return 0;
+
+  const [, accidental, intervalNum] = match;
+  const intervalNumber = parseInt(intervalNum);
+
+  // Map interval numbers to semitones (based on major scale intervals)
+  // 1=0, 2=2, 3=4, 4=5, 5=7, 6=9, 7=11, 9=14, 11=17, 13=21
+  const intervalMap: Record<number, number> = {
+    1: 0,   // Root
+    2: 2,   // Major second
+    3: 4,   // Major third
+    4: 5,   // Perfect fourth
+    5: 7,   // Perfect fifth
+    6: 9,   // Major sixth
+    7: 11,  // Major seventh
+    9: 14,  // Major ninth (octave + major second)
+    11: 17, // Perfect eleventh (octave + perfect fourth)
+    13: 21  // Major thirteenth (octave + major sixth)
+  };
+
+  let semitones = intervalMap[intervalNumber] || 0;
+
+  // Apply accidental
+  if (accidental === '#') semitones += 1;
+  if (accidental === 'b') semitones -= 1;
+
+  return semitones;
+}
+
+/**
  * Parse chord name to get note names with octaves
  */
 function parseChordToNotes(chordName: string): string[] {
-  // Handle slash chords (e.g., "C/G", "Am/E")
+  // Handle slash chords (e.g., "C/G", "Am/E", "Eb:maj/4")
   const parts = chordName.split('/');
   const baseChord = parts[0];
-  const bassNote = parts[1];
+  const bassSpecifier = parts[1]; // Could be note name (E, G) or interval (3, 4, b7)
 
   // Extract root note and chord type
   const match = baseChord.match(/^([A-G][#b]?)(.*)$/);
-  if (!match) return [];
+  if (!match) {
+    return [];
+  }
 
   const [, root, chordType] = match;
   const rootIndex = NOTE_INDEX_MAP[root];
-  if (rootIndex === undefined) return [];
+  if (rootIndex === undefined) {
+    return [];
+  }
 
   // Normalize chord type
   const cleanedType = chordType.replace(/^[^A-Za-z0-9#b]+/, '').replace(/\s+/g, '');
   const normalizedChordType = CHORD_TYPE_ALIASES[cleanedType.toLowerCase()] || 'major';
   const intervals = CHORD_STRUCTURES[normalizedChordType];
-  if (!intervals) return [];
+  if (!intervals) {
+    return [];
+  }
+
+  // Convert bass specifier to actual note name
+  let bassNoteName: string | undefined;
+
+  if (bassSpecifier) {
+    // Check if it's a note name (A-G with optional #/b) or an interval (number with optional #/b)
+    const isNoteName = /^[A-G][#b]?$/.test(bassSpecifier);
+    const isInterval = /^[#b]?\d+$/.test(bassSpecifier);
+
+    if (isNoteName) {
+      // It's already a note name (e.g., "E", "G", "Bb")
+      bassNoteName = bassSpecifier;
+    } else if (isInterval) {
+      // It's an interval (e.g., "3", "4", "b7") - convert to note name
+      const semitones = intervalToSemitones(bassSpecifier);
+      const bassNoteIndex = (rootIndex + semitones) % 12;
+      bassNoteName = CHROMATIC_SCALE[bassNoteIndex];
+    }
+  }
 
   // Generate chord notes
   const notes: string[] = [];
-  const isRootPosition = !bassNote || bassNote === root;
+  const isRootPosition = !bassNoteName || bassNoteName === root;
 
-  if (!isRootPosition && bassNote) {
+  if (!isRootPosition && bassNoteName) {
     // Add bass note in lower octave (C2-B2 range)
-    notes.push(`${bassNote}2`);
+    notes.push(`${bassNoteName}2`);
   }
 
   // Add chord tones in C4-C6 range
@@ -110,8 +183,10 @@ function parseChordToNotes(chordName: string): string[] {
     const noteIndex = (rootIndex + interval) % 12;
     const noteName = CHROMATIC_SCALE[noteIndex];
     // Skip bass note if it's already added
-    if (!isRootPosition && noteName === bassNote) return;
-    
+    if (!isRootPosition && noteName === bassNoteName) {
+      return;
+    }
+
     // Determine octave based on interval
     const octave = interval < 12 ? 4 : 5;
     notes.push(`${noteName}${octave}`);
@@ -223,10 +298,10 @@ export class SoundfontChordPlaybackService {
    * Compatible with existing chord playback interface
    *
    * Instrument behavior:
-   * - Piano (C3): Plays full chord with inversions
-   * - Guitar (C3): Plays full chord with inversions
+   * - Piano (C3): Plays full chord with inversions, bass notes 1.25x louder
+   * - Guitar (C3): Plays full chord with inversions, bass notes 1.25x louder
    * - Violin (C5): Plays only the chord root (before slash in C/E)
-   * - Flute (C4): Plays only the bass note (after slash in C/E, or root if no slash)
+   * - Flute (C4): Plays the bass note for inverted chords (e.g., E for C/E), or root for root position
    */
   async playChord(chordName: string, duration: number = 2.0): Promise<void> {
     // Lazy initialization on first playback
@@ -250,14 +325,17 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
-    // Extract chord root and bass note for single-note instruments
+    // Extract chord root for single-note instruments
     const parts = chordName.split('/');
     const baseChord = parts[0];
-    const bassNote = parts[1];
 
     // Get chord root (the note before slash, or the root of the chord)
     const rootMatch = baseChord.match(/^([A-G][#b]?)/);
     const chordRoot = rootMatch ? rootMatch[1] : null;
+
+    // Detect if chord is inverted by checking for bass note at octave 2
+    const bassNoteMatch = notes.find(note => note.match(/^([A-G][#b]?)2$/));
+    const bassNoteName = bassNoteMatch ? bassNoteMatch.match(/^([A-G][#b]?)2$/)![1] : null;
 
     // Play chord on each instrument with volume > 0
     const promises: Promise<void>[] = [];
@@ -276,9 +354,9 @@ export class SoundfontChordPlaybackService {
       promises.push(this.playInstrument('violin', violinNote, duration, this.options.violinVolume, 5));
     }
 
-    // Flute: Play only the bass note (note after slash, or root if no slash)
+    // Flute: Play the bass note for inverted chords, or root for root position
     if (this.options.fluteVolume > 0) {
-      const fluteNoteRoot = bassNote || chordRoot;
+      const fluteNoteRoot = bassNoteName || chordRoot;
       if (fluteNoteRoot) {
         const fluteNote = [`${fluteNoteRoot}4`]; // Single note at octave 4
         promises.push(this.playInstrument('flute', fluteNote, duration, this.options.fluteVolume, 4));
@@ -311,15 +389,36 @@ export class SoundfontChordPlaybackService {
     // Stop previous notes on this instrument with fade-out
     this.stopInstrumentNotes(instrumentName);
 
-    // Calculate volume (0-1 scale)
-    const velocity = (volume / 100) * 127; // Convert to MIDI velocity (0-127)
+    // Calculate base velocity (0-127 MIDI scale)
+    const baseVelocity = (volume / 100) * 127;
 
-    // Transpose notes to the correct octave
-    const transposedNotes = notes.map(note => {
+    // Transpose notes to the correct octave, preserving bass notes (octave 2)
+    // and tracking which notes are bass notes for velocity boost
+    interface NoteWithVelocity {
+      note: string;
+      velocity: number;
+    }
+
+    const notesWithVelocity: NoteWithVelocity[] = notes.map(note => {
       const match = note.match(/^([A-G][#b]?)(\d)$/);
-      if (!match) return note;
-      const [, noteName] = match;
-      return `${noteName}${octave}`;
+      if (!match) return { note, velocity: baseVelocity };
+
+      const [, noteName, originalOctave] = match;
+      const octaveNum = parseInt(originalOctave);
+
+      // Bass notes (octave 2) are preserved and get 1.25x velocity boost
+      if (octaveNum === 2) {
+        return {
+          note: `${noteName}${originalOctave}`, // Preserve bass octave
+          velocity: Math.min(baseVelocity * 1.25, 127) // 1.25x louder, capped at 127
+        };
+      }
+
+      // Chord tones (octave 4+) are transposed to instrument octave
+      return {
+        note: `${noteName}${octave}`,
+        velocity: baseVelocity
+      };
     });
 
     // Track active notes for this instrument
@@ -333,7 +432,7 @@ export class SoundfontChordPlaybackService {
     const shouldLoop = instrument.hasLoops === true || instrumentName === 'violin' || instrumentName === 'flute';
 
     // Play all notes of the chord with duration and optional looping
-    transposedNotes.forEach(note => {
+    notesWithVelocity.forEach(({ note, velocity }) => {
       const stopFn = instrument.start({
         note,
         velocity,
