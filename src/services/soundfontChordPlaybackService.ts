@@ -307,12 +307,12 @@ export class SoundfontChordPlaybackService {
    *
    * Instrument behavior:
    * - Piano (C3): Bass-first pattern for long chords (>=2 beats, full beat delay), cluster for short chords, bass notes 1.25x louder
-   * - Guitar (C3): Dynamic arpeggiation patterns based on duration:
+   * - Guitar (C3): Octave-aware arpeggiation patterns based on duration:
    *   * Short (<2 beats): Cluster at 0.75x volume
-   *   * Medium (2-3 beats): Simple ascending (A → C# → E)
-   *   * Long (3-5 beats): Circular ascending-descending (A → C# → E → C#)
-   *   * Very Long (5-7 beats): Extended with octave jump (A3 → C#3 → E3 → A4 → C#4 → E4)
-   *   * Extra Long (>=7 beats): Full circular loop (A3 → C#3 → E3 → A4 → C#4 → E4 → C#3 → A3 → E3)
+   *   * Medium (2-3 beats): Root(2) → Fifth(3) → Third(4) - e.g., A2 → E3 → C#4
+   *   * Long (3-5 beats): Root(2) → Fifth(3) → Third(4) → Root(3) - e.g., A2 → E3 → C#4 → A3
+   *   * Very Long (5-7 beats): Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) - e.g., A2 → E3 → C#4 → E4 → A4
+   *   * Extra Long (>=7 beats): Ascend then descend - Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) → Fifth(4) → Third(4) → Root(3) → Root(2)
    *   Bass notes 1.25x louder, all notes sustain for full duration
    * - Violin (C5): Plays only the chord root (before slash in C/E)
    * - Flute (C4): Plays the bass note for inverted chords (e.g., E for C/E), or root for root position
@@ -581,82 +581,71 @@ export class SoundfontChordPlaybackService {
 
     // Determine playback pattern based on instrument and chord duration
     if (instrumentName === 'guitar' && isLongChord) {
-      // GUITAR ARPEGGIATION with circular patterns based on duration
+      // GUITAR ARPEGGIATION with octave-aware patterns based on duration
       // Pre-allocate array for better performance
       let arpeggioPattern: typeof notesWithVelocity;
 
+      // Helper function to create note at specific octave
+      const createNoteAtOctave = (noteIndex: number, targetOctave: number) => {
+        const { note, velocity } = notesWithVelocity[noteIndex];
+        const noteName = note.match(/^([A-G][#b]?)/)?.[1] || '';
+        return {
+          note: `${noteName}${targetOctave}`,
+          velocity,
+          octaveNum: targetOctave
+        };
+      };
+
+      // Identify chord tones: root (index 0), third, fifth
+      // For triads: [root, third, fifth] = [0, 1, 2]
+      // For 7th chords: [root, third, fifth, seventh] = [0, 1, 2, 3]
+      const noteCount = notesWithVelocity.length;
+      const rootIdx = 0;
+      const thirdIdx = noteCount >= 2 ? 1 : 0;
+      const fifthIdx = noteCount >= 3 ? 2 : (noteCount >= 2 ? 1 : 0);
+
       if (isMediumChord) {
-        // MEDIUM CHORDS (2-3 beats): Simple ascending pattern
-        // Example: A → C# → E
-        arpeggioPattern = notesWithVelocity; // Direct reference, no copy needed
+        // MEDIUM CHORDS (2-3 beats): Root(2) → Fifth(3) → Third(4)
+        // Example: A2 → E3 → C#4
+        arpeggioPattern = [
+          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
+          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
+          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
+        ];
       } else if (isLongCircularChord) {
-        // LONG CHORDS (3-5 beats): Circular pattern - ascend then descend to second note
-        // Example: A → C# → E → C#
-        const noteCount = notesWithVelocity.length;
-        const middleNoteCount = noteCount - 2; // Exclude first and last
-        const patternLength = noteCount + middleNoteCount;
-        arpeggioPattern = new Array(patternLength);
-
-        // Ascending: copy all notes
-        for (let i = 0; i < noteCount; i++) {
-          arpeggioPattern[i] = notesWithVelocity[i];
-        }
-        // Descending: copy middle notes in reverse
-        for (let i = 0; i < middleNoteCount; i++) {
-          arpeggioPattern[noteCount + i] = notesWithVelocity[noteCount - 2 - i];
-        }
-      } else if (isVeryLongChord || isExtraLongChord) {
-        // VERY LONG CHORDS (5-7 beats) & EXTRA LONG CHORDS (>= 7 beats)
-        // Pre-calculate higher octave notes once
-        const noteCount = notesWithVelocity.length;
-        const higherOctaveNotes = new Array(noteCount);
-
-        for (let i = 0; i < noteCount; i++) {
-          const { note, velocity, octaveNum } = notesWithVelocity[i];
-          const noteName = note.match(/^([A-G][#b]?)/)?.[1] || '';
-          const newOctave = octaveNum + 1;
-          higherOctaveNotes[i] = {
-            note: `${noteName}${newOctave}`,
-            velocity,
-            octaveNum: newOctave
-          };
-        }
-
-        if (isVeryLongChord) {
-          // VERY LONG: Base octave + Higher octave
-          // Example: A(3) → C#(3) → E(3) → A(4) → C#(4) → E(4)
-          const patternLength = noteCount * 2;
-          arpeggioPattern = new Array(patternLength);
-
-          for (let i = 0; i < noteCount; i++) {
-            arpeggioPattern[i] = notesWithVelocity[i];
-            arpeggioPattern[noteCount + i] = higherOctaveNotes[i];
-          }
-        } else {
-          // EXTRA LONG: Full circular pattern
-          // Example: A(3) → C#(3) → E(3) → A(4) → C#(4) → E(4) → C#(3) → A(3) → E(3)
-          const middleNoteCount = noteCount - 2;
-          const patternLength = noteCount * 2 + middleNoteCount + 2;
-          arpeggioPattern = new Array(patternLength);
-
-          let idx = 0;
-          // Ascending base: A(3), C#(3), E(3)
-          for (let i = 0; i < noteCount; i++) {
-            arpeggioPattern[idx++] = notesWithVelocity[i];
-          }
-          // Higher octave: A(4), C#(4), E(4)
-          for (let i = 0; i < noteCount; i++) {
-            arpeggioPattern[idx++] = higherOctaveNotes[i];
-          }
-          // Descending middle: C#(3)
-          for (let i = 0; i < middleNoteCount; i++) {
-            arpeggioPattern[idx++] = notesWithVelocity[noteCount - 2 - i];
-          }
-          // Back to root: A(3)
-          arpeggioPattern[idx++] = notesWithVelocity[0];
-          // End on fifth: E(3)
-          arpeggioPattern[idx] = notesWithVelocity[noteCount - 1];
-        }
+        // LONG CHORDS (3-5 beats): Root(2) → Fifth(3) → Third(4) → Root(3)
+        // Example: A2 → E3 → C#4 → A3
+        arpeggioPattern = [
+          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
+          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
+          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
+          createNoteAtOctave(rootIdx, 3),   // Root at octave 3
+        ];
+      } else if (isVeryLongChord) {
+        // VERY LONG CHORDS (5-7 beats): Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4)
+        // Example: A2 → E3 → C#4 → E4 → A4
+        arpeggioPattern = [
+          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
+          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
+          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
+          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4
+          createNoteAtOctave(rootIdx, 4),   // Root at octave 4
+        ];
+      } else if (isExtraLongChord) {
+        // EXTRA LONG CHORDS (>=7 beats): Ascend then descend
+        // Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) → Fifth(4) → Third(4) → Root(3) → Root(2)
+        // Example: A2 → E3 → C#4 → E4 → A4 → E4 → C#4 → A3 → A2
+        arpeggioPattern = [
+          createNoteAtOctave(rootIdx, 2),   // Root at octave 2 (start)
+          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3 (ascending)
+          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4 (ascending)
+          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4 (ascending)
+          createNoteAtOctave(rootIdx, 4),   // Root at octave 4 (peak)
+          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4 (descending)
+          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4 (descending)
+          createNoteAtOctave(rootIdx, 3),   // Root at octave 3 (descending)
+          createNoteAtOctave(rootIdx, 2),   // Root at octave 2 (end)
+        ];
       } else {
         // Fallback (should not reach here due to conditions above)
         arpeggioPattern = notesWithVelocity;
