@@ -61,7 +61,7 @@ services:
 
   # Backend - Python Flask ML Service
   backend:
-    image: chordminiapp-backend:test
+    image: chordminiapp-backend:spleeter
     container_name: chordmini-backend
     ports:
       - "8080:8080"

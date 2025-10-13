@@ -12,10 +12,10 @@ scipy==1.13.1
 # ============================================================================
 # Core Flask Web Application
 # ============================================================================
-flask==2.3.2
+flask==3.0.3
 flask-cors==4.0.0
 flask-limiter==3.5.0
-werkzeug==2.3.4
+werkzeug==3.0.3
 gunicorn==21.2.0
 python-dotenv==1.0.0
 limits==5.2.0
@@ -44,7 +44,7 @@ torchaudio==2.6.0
 # ============================================================================
 # Spleeter - Real 5-stems Audio Separation (GPU Accelerated)
 # ============================================================================
-# spleeter==2.3.2  # Commented out due to dependency conflicts with Flask
+spleeter==2.3.2
 norbert==0.2.1
 ffmpeg-python==0.2.0
 
@@ -81,6 +81,7 @@ pumpp==0.6.0
 # ============================================================================
 requests==2.31.0
 httpx==0.28.1
+h2==4.1.0  # Required for Spleeter model downloads via HTTP/2
 Pillow==10.0.0
 lyricsgenius==3.6.2
 PyYAML==6.0.2
@@ -107,6 +108,8 @@ packaging==25.0
 typing_extensions==4.10.0
 six==1.17.0
 click==8.2.1
+typer==0.9.0
+
 cachetools==5.5.2
 certifi==2025.1.31
 charset-normalizer==3.4.1
