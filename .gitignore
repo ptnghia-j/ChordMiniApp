@@ -275,3 +275,6 @@ scripts/package.json
 scripts/package-lock.json
 scripts/testing
 scripts/utilities
+
+__tests__/
+__test-results__/
