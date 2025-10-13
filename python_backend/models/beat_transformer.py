@@ -353,11 +353,12 @@ class BeatTransformerDetector:
             self.use_gpu_audio_processing = True
             print("🚀 Local development mode: GPU optimizations enabled")
         else:
-            # Production (Google Cloud Run): CPU-only for stability
-            self.use_real_spleeter = False  # Too memory intensive for production
-            self.enable_spleeter_gpu = False
+            # Production (Google Cloud Run): Use Spleeter with CPU
+            # CHANGED: Now using Spleeter for production instead of librosa fallback
+            self.use_real_spleeter = True  # Enable real Spleeter for better beat detection
+            self.enable_spleeter_gpu = False  # CPU-only for production stability
             self.use_gpu_audio_processing = False
-            print("🏭 Production mode: CPU-only processing for stability")
+            print("🏭 Production mode: Spleeter enabled with CPU-only processing")
 
     def _configure_spleeter_gpu(self):
         """Configure Spleeter GPU usage based on environment"""
@@ -540,22 +541,27 @@ class BeatTransformerDetector:
         return info
 
     def demix_audio_to_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
-        """Enhanced demixing with real Spleeter when available, fallback to librosa-based approach
+        """Enhanced demixing with real Spleeter - now used for both local and production
 
-        This method now integrates real Spleeter 5-stems separation for local development
-        and falls back to the previous librosa-based approach for production or when Spleeter fails.
+        This method uses real Spleeter 5-stems separation for better beat detection accuracy.
+        Librosa fallback is commented out to ensure Spleeter is always used.
         """
-        if self.use_real_spleeter:
-            try:
-                print("🎵 Attempting real Spleeter 5-stems separation...")
-                return self._demix_with_real_spleeter(audio_file, sr, n_fft, n_mels, fmin, fmax)
-            except Exception as e:
-                print(f"⚠️  Spleeter separation failed: {e}")
-                print("🔄 Falling back to librosa-based approach...")
-                return self._demix_with_librosa_fallback(audio_file, sr, n_fft, n_mels, fmin, fmax)
-        else:
-            print("🎼 Using librosa-based spectrogram creation (production mode)")
-            return self._demix_with_librosa_fallback(audio_file, sr, n_fft, n_mels, fmin, fmax)
+        # CHANGED: Always use Spleeter, no fallback to librosa
+        print("🎵 Using real Spleeter 5-stems separation...")
+        return self._demix_with_real_spleeter(audio_file, sr, n_fft, n_mels, fmin, fmax)
+
+        # COMMENTED OUT: Librosa fallback - we now require Spleeter for production
+        # if self.use_real_spleeter:
+        #     try:
+        #         print("🎵 Attempting real Spleeter 5-stems separation...")
+        #         return self._demix_with_real_spleeter(audio_file, sr, n_fft, n_mels, fmin, fmax)
+        #     except Exception as e:
+        #         print(f"⚠️  Spleeter separation failed: {e}")
+        #         print("🔄 Falling back to librosa-based approach...")
+        #         return self._demix_with_librosa_fallback(audio_file, sr, n_fft, n_mels, fmin, fmax)
+        # else:
+        #     print("🎼 Using librosa-based spectrogram creation (production mode)")
+        #     return self._demix_with_librosa_fallback(audio_file, sr, n_fft, n_mels, fmin, fmax)
 
     def _demix_with_real_spleeter(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
         """Real Spleeter-based demixing implementation"""
@@ -584,8 +590,20 @@ class BeatTransformerDetector:
             print(f"📁 Loaded audio with shape: {waveform.shape}")
 
             # Initialize Spleeter for 5-stems demixing
+            # Use local model path to avoid GitHub download issues
             print("🔧 Initializing Spleeter 5-stems separator...")
-            separator = Separator('spleeter:5stems')
+            import os
+            model_path = os.path.expanduser('~/.cache/spleeter/5stems')
+            if os.path.exists(model_path):
+                print(f"📁 Using cached Spleeter model from: {model_path}")
+                # Use local model provider to avoid HTTP redirect issues
+                from spleeter.model.provider import ModelProvider
+                separator = Separator('spleeter:5stems', multiprocess=False)
+                # Override the model directory to use our pre-downloaded model
+                separator._params['model_dir'] = model_path
+            else:
+                print(f"⚠️  Model not found at {model_path}, will attempt download...")
+                separator = Separator('spleeter:5stems')
 
             # Separate the audio into 5 stems
             print("🎛️  Separating audio with Spleeter...")

@@ -25,7 +25,9 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  const baseUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+  // Use environment variable for backend URL (supports runtime configuration)
+  // Fallback to localhost:5001 for local development
+  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
   
   useEffect(() => {
     // Check immediately on page load

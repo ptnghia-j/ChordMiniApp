@@ -31,7 +31,9 @@ class ApiService {
   private clientLimiter: ClientRateLimiter;
 
   constructor() {
-    this.backendUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+    // Use environment variable for backend URL (supports runtime configuration)
+    // Fallback to localhost:5001 for local development (avoids macOS AirPlay port 5000 conflict)
+    this.backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
     this.frontendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
     // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)

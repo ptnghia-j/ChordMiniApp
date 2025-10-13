@@ -2,7 +2,7 @@
 # Multi-stage build for optimized Flask ML service deployment
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.10-slim as builder
 
 # Set working directory
 WORKDIR /app
@@ -28,10 +28,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir Cython>=0.29.0 numpy==1.26.4
 RUN pip install --no-cache-dir madmom>=0.16.1
-RUN pip install --no-cache-dir -r requirements.txt
+# Install all requirements except Spleeter first, then install Spleeter without deps to avoid resolver conflicts with librosa/httpx
+RUN grep -v '^spleeter==' requirements.txt | grep -v '^typer==' > requirements_nospleeter.txt \
+    && pip install --no-cache-dir -r requirements_nospleeter.txt \
+    && pip install --no-cache-dir --no-deps typer==0.9.0 \
+    && pip install --no-cache-dir --no-deps spleeter==2.3.2
 
 # Stage 2: Runtime
-FROM python:3.11-slim as runtime
+FROM python:3.10-slim as runtime
 
 # Install only runtime system dependencies
 RUN apt-get update && apt-get install -y \
@@ -63,10 +67,26 @@ COPY scipy_patch.py .
 COPY compat/ compat/
 # Note: BTC models and large Beat-Transformer files excluded via .dockerignore to reduce container size
 
-# Create non-root user for security
+# Create non-root user for security BEFORE downloading models
 RUN useradd --create-home --shell /bin/bash --uid 1001 app \
     && chown -R app:app /app
+
+# Switch to app user to download Spleeter models with correct permissions
 USER app
+
+# Pre-download Spleeter models manually using curl (httpx redirect issue workaround)
+# Download the 5-stems model (~200MB) and extract to the correct cache location
+# Spleeter expects models in /home/app/.cache/spleeter/5stems/ directory
+RUN mkdir -p /home/app/.cache/spleeter/5stems && \
+    cd /home/app/.cache/spleeter/5stems && \
+    echo "⬇️  Downloading Spleeter 5-stems model..." && \
+    curl -L -o 5stems.tar.gz https://github.com/deezer/spleeter/releases/download/v1.4.0/5stems.tar.gz && \
+    echo "📦 Extracting model files..." && \
+    tar -xzf 5stems.tar.gz && \
+    rm 5stems.tar.gz && \
+    echo "✅ Spleeter 5-stems model downloaded and extracted successfully" && \
+    echo "📁 Model files in /home/app/.cache/spleeter/5stems/:" && \
+    ls -la /home/app/.cache/spleeter/5stems/
 
 # Expose port
 EXPOSE 8080

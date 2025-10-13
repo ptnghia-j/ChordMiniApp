@@ -39,7 +39,9 @@ export default function DocsPage() {
   // no-op read to satisfy linter while keeping reactive subscription
   void theme;
 
-  const backendUrl = 'https://chordmini-backend-full-191567167632.us-central1.run.app';
+  // Use environment variable for backend URL (supports runtime configuration)
+  // Fallback to localhost:5001 for local development
+  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
 
   useEffect(() => {
     const sectionIds = [
