@@ -64,32 +64,37 @@ interface AudioProcessingServiceDependencies {
   setActiveTab: (tab: 'beatChordMap' | 'lyricsChords') => void;
   setIsTranscribingLyrics: (transcribing: boolean) => void;
   setLyricsError: (error: string | null) => void;
-  
+
   // Processing context
   processingContext: ProcessingContextType;
-  
+
   // Audio processing service
   analyzeAudioFromService: (audioUrl: string, beatDetector: BeatDetectorType, chordDetector: ChordDetectorType) => Promise<AnalysisResult>;
-  
+
   // Refs and state
   audioRef: React.RefObject<HTMLAudioElement>;
   extractionLockRef: React.MutableRefObject<boolean>;
   beatDetectorRef: React.MutableRefObject<BeatDetectorType>;
   chordDetectorRef: React.MutableRefObject<ChordDetectorType>;
-  
+
   // URL parameters
   videoId: string;
   titleFromSearch: string | null;
   durationFromSearch: string | null;
   channelFromSearch: string | null;
   thumbnailFromSearch: string | null;
-  
+
   // Current state values
   audioProcessingState: AudioProcessingState;
   beatDetector: BeatDetectorType;
   chordDetector: ChordDetectorType;
   progress: number;
   lyrics: LyricsData | null; // Current lyrics state for confirmation check
+
+  // Request cancellation & staleness control
+  requestId: string;
+  abortSignal?: AbortSignal;
+  isRequestStillCurrent: (id: string) => boolean;
 }
 
 /**
@@ -339,7 +344,12 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
     setShowExtractionNotification,
     extractionLockRef,
     progress: _progress, // eslint-disable-line @typescript-eslint/no-unused-vars
-    processingContext
+    processingContext,
+
+    // Cancellation & staleness controls
+    requestId,
+    abortSignal,
+    isRequestStillCurrent,
   } = deps;
 
   // Prevent concurrent extractions
@@ -393,12 +403,20 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
         forceRefresh,
         videoMetadata,
         originalTitle: titleFromSearch
+      }, {
+        signal: abortSignal
       });
 
       // Clear progress interval
       clearInterval(progressInterval);
 
       const data = await response.json();
+
+      // Ignore stale responses (user switched videos mid-flight)
+      if (!isRequestStillCurrent(requestId)) {
+        console.log('🔁 Stale extraction response ignored', { requestId, videoId });
+        return;
+      }
 
       if (data.success) {
         // console.log(`✅ Audio extraction successful: ${data.audioUrl}`);
@@ -458,6 +476,12 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
     }
 
   } catch (error) {
+    // If this request was aborted or became stale, do not update state
+    if (abortSignal?.aborted || !isRequestStillCurrent(requestId)) {
+      console.log('\u26d4 Extraction aborted or stale; skipping state updates', { requestId, videoId });
+      return;
+    }
+
     console.error('Audio extraction failed:', error);
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
