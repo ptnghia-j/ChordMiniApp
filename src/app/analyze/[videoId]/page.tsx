@@ -1049,8 +1049,8 @@ export default function YouTubeVideoAnalyzePage() {
     const controller = new AbortController();
     audioExtractionAbortControllerRef.current = controller;
 
-    const requestId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
-      ? (crypto as any).randomUUID()
+    const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
       : `${Date.now()}-${Math.random()}`;
 
     // Mark this request as the latest
