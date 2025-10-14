@@ -1,9 +1,9 @@
 /**
  * GrainPlayer Pitch Shift Service
- * 
+ *
  * Provides real-time pitch shifting and time-stretching using Tone.js GrainPlayer.
  * GrainPlayer uses granular synthesis to enable INDEPENDENT pitch and playback speed control.
- * 
+ *
  * Features:
  * - Independent pitch shifting (±12 semitones) via `detune` property
  * - Independent speed control (0.25x - 2.0x) via `playbackRate` property
@@ -11,9 +11,18 @@
  * - Audio buffer loading from Firebase Storage URLs
  * - Playback controls (play, pause, seek)
  * - Memory management and proper cleanup
+ * - Lazy loading of Tone.js library (~150KB) for better initial bundle size
  */
 
-import * as Tone from 'tone';
+// Lazy load Tone.js to reduce initial bundle size
+let ToneModule: typeof import('tone') | null = null;
+
+async function getTone() {
+  if (!ToneModule) {
+    ToneModule = await import('tone');
+  }
+  return ToneModule;
+}
 
 export interface GrainPlayerPitchShiftOptions {
   semitones: number; // -12 to +12
@@ -35,10 +44,14 @@ export interface PitchShiftPlaybackState {
  * Service for managing pitch-shifted audio playback using Tone.js GrainPlayer
  */
 export class GrainPlayerPitchShiftService {
-  private grainPlayer: Tone.GrainPlayer | null = null;
-  private gainNode: Tone.Gain | null = null;
-  private lowPassFilter: Tone.Filter | null = null;
-  private limiter: Tone.Limiter | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private grainPlayer: any | null = null; // Type will be Tone.GrainPlayer after lazy load
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private gainNode: any | null = null; // Type will be Tone.Gain after lazy load
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private lowPassFilter: any | null = null; // Type will be Tone.Filter after lazy load
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private limiter: any | null = null; // Type will be Tone.Limiter after lazy load
   private audioBuffer: AudioBuffer | null = null;
   private isInitialized = false;
   private currentSemitones = 0;
@@ -57,12 +70,15 @@ export class GrainPlayerPitchShiftService {
   private onEndedCallback: (() => void) | null = null;
 
   /**
-   * Initialize Tone.js context
+   * Initialize Tone.js context (lazy loads Tone.js on first use)
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
     try {
+      // Lazy load Tone.js
+      const Tone = await getTone();
+
       // Start Tone.js context
       if (Tone.getContext().state !== 'running') {
         await Tone.start();
@@ -84,6 +100,9 @@ export class GrainPlayerPitchShiftService {
     }
 
     try {
+      // Lazy load Tone.js
+      const Tone = await getTone();
+
       // Clean up existing player if any
       this.disposePlayer();
 
@@ -398,12 +417,16 @@ export class GrainPlayerPitchShiftService {
   /**
    * Start time tracking
    */
-  private startTimeTracking(): void {
+  private async startTimeTracking(): Promise<void> {
     this.stopTimeTracking();
+
+    // Lazy load Tone.js
+    const Tone = await getTone();
     this.lastUpdateTime = Tone.now();
 
-    this.timeTrackingInterval = setInterval(() => {
+    this.timeTrackingInterval = setInterval(async () => {
       if (this._isPlaying && this.grainPlayer) {
+        const Tone = await getTone();
         const now = Tone.now();
         const elapsed = (now - this.lastUpdateTime) * this._playbackRate;
         this._currentTime = Math.min(this._currentTime + elapsed, this._duration);

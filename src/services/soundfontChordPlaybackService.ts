@@ -4,9 +4,18 @@
  * Real instrument soundfont playback using smplr library
  * Supports Piano, Guitar, Violin, and Flute with lazy loading and error handling
  * Compatible with existing AudioMixerService interface
+ * Lazy loads smplr library (~100KB) for better initial bundle size
  */
 
-import { Soundfont } from 'smplr';
+// Lazy load smplr to reduce initial bundle size
+let SmplrModule: typeof import('smplr') | null = null;
+
+async function getSmplr() {
+  if (!SmplrModule) {
+    SmplrModule = await import('smplr');
+  }
+  return SmplrModule;
+}
 
 /**
  * Options interface compatible with AudioMixerService
@@ -204,7 +213,8 @@ export class SoundfontChordPlaybackService {
   private static readonly LOOP_OVERLAP = 0.1; // Overlap time for seamless looping (100ms crossfade)
 
   private audioContext: AudioContext | null = null;
-  private instruments: Map<string, Soundfont> = new Map();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private instruments: Map<string, any> = new Map(); // Type will be Soundfont after lazy load
   private isInitialized = false;
   private isInitializing = false;
   private initializationError: Error | null = null;
@@ -282,13 +292,17 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Load a single instrument
+   * Load a single instrument (lazy loads smplr library)
    */
   private async loadInstrument(
     name: string,
     instrumentName: string
-  ): Promise<Soundfont> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
     if (!this.audioContext) throw new Error('AudioContext not available');
+
+    // Lazy load smplr
+    const { Soundfont } = await getSmplr();
 
     console.log(`🎵 Loading ${name}...`);
     const instrument = new Soundfont(this.audioContext, {
@@ -392,7 +406,8 @@ export class SoundfontChordPlaybackService {
    * patterns already fill the duration. Only sustained single-note instruments need looping.
    */
   private scheduleSeamlessLoop(
-    instrument: Soundfont,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    instrument: any, // Type will be Soundfont after lazy load
     instrumentName: string,
     noteData: { note: string; velocity: number; octaveNum: number },
     startTime: number,
