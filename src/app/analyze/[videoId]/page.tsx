@@ -212,6 +212,16 @@ export default function YouTubeVideoAnalyzePage() {
   }, [videoId]);
 
   const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
+  const latestRequestIdRef = useRef<string | null>(null);
+  const audioExtractionAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Cancel in-flight audio extraction when video changes or component unmounts
+  useEffect(() => {
+    return () => {
+      audioExtractionAbortControllerRef.current?.abort();
+    };
+  }, [videoId]);
+
 
   // STREAMLINED: Check cache before extraction with connection management
   const checkCacheBeforeExtraction = useCallback(async (extractionFunction: (forceRefresh?: boolean) => Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void>) => {
@@ -1028,6 +1038,24 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Extract audio from YouTube using our API endpoint
   const extractAudioFromYouTube = useCallback(async (forceRefresh = false): Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void> => {
+    // Cancel any in-flight extraction tied to the previous request
+    if (audioExtractionAbortControllerRef.current) {
+      try { audioExtractionAbortControllerRef.current.abort(); } catch {}
+    }
+    // Unlock extraction (previous request was cancelled)
+    extractionLockRef.current = false;
+
+    // Create a new controller and request ID for this invocation
+    const controller = new AbortController();
+    audioExtractionAbortControllerRef.current = controller;
+
+    const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+
+    // Mark this request as the latest
+    latestRequestIdRef.current = requestId;
+
     // Create dependency object for extracted service
     const deps = {
       // State setters
@@ -1077,7 +1105,12 @@ export default function YouTubeVideoAnalyzePage() {
       },
       beatDetector,
       chordDetector,
-      progress: 0
+      progress: 0,
+
+      // Request cancellation & staleness control
+      requestId,
+      abortSignal: controller.signal,
+      isRequestStillCurrent: (id: string) => latestRequestIdRef.current === id,
     };
 
     // Call the extracted service function

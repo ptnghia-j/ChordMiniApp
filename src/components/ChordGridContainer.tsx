@@ -2,14 +2,10 @@
 
 import React from 'react';
 import ChordGrid from '@/components/ChordGrid';
-import { RefactoredChordGrid } from './RefactoredChordGrid';
-import { ChordGridProvider } from '@/contexts/ChordGridContext';
-import { useChordGridContext } from '@/hooks/useChordGridContext';
 import { useAnalysisResults, useKeySignature, useIsDetectingKey, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
 import { useCurrentBeatIndex, useBeatHandlers } from '@/stores/playbackStore';
 import { useRomanNumerals, useShowSegmentation, useIsPitchShiftEnabled, useTargetKey } from '@/stores/uiStore';
 import { useTransposedChordData } from '@/hooks/useTransposedChordData';
-// import { AnalysisSummary } from '@/components/AnalysisSummary';
 import { AnalysisResult } from '@/services/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
 
@@ -68,9 +64,6 @@ interface ChordGridContainerProps {
   isEditMode?: boolean;
   editedChords?: Record<number, string>;
   onChordEdit?: (index: number, newChord: string) => void;
-  useRefactoredVersion?: boolean;
-  enableVirtualization?: boolean;
-  virtualizationThreshold?: number;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
@@ -88,9 +81,6 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   isEditMode = false,
   editedChords = {},
   onChordEdit,
-  useRefactoredVersion = false, 
-  enableVirtualization = true,
-  virtualizationThreshold = 100,
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
@@ -200,56 +190,19 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   // Get beat state and click handler from Zustand store
   const currentBeatIndex = useCurrentBeatIndex();
   const { onBeatClick } = useBeatHandlers();
+
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
   const memoizedOnBeatClick = React.useCallback((beatIndex: number, timestamp: number) => {
     onBeatClick(beatIndex, timestamp);
   }, [onBeatClick]);
 
-  // Use context-based hook for refactored version
-  const { chordGridState, chordGridActions } = useChordGridContext({
-    chordGridData: {
-      chords: chordGridData.chords,
-      beats: chordGridData.beats,
-      hasPickupBeats: chordGridData.hasPickupBeats || false,
-      pickupBeatsCount: chordGridData.pickupBeatsCount || 0,
-      hasPadding: chordGridData.hasPadding,
-      paddingCount: chordGridData.paddingCount,
-      shiftCount: chordGridData.shiftCount,
-      originalAudioMapping: chordGridData.originalAudioMapping,
-    },
-    currentBeatIndex,
-    timeSignature: 4, // Default time signature, can be made configurable
-    isUploadPage,
-    onBeatClick: memoizedOnBeatClick,
-    onChordEdit: onChordEdit ? (originalChord: string, newChord: string) => {
-      // Convert from string-based to index-based for compatibility
-      const index = chordGridData.chords.findIndex(chord => chord === originalChord);
-      if (index !== -1) onChordEdit(index, newChord);
-    } : undefined,
-  });
-
-  // Render refactored version with context
-  if (useRefactoredVersion) {
-    return (
-      <ChordGridProvider
-        chordGridState={chordGridState}
-        chordGridActions={chordGridActions}
-      >
-        <RefactoredChordGrid
-          enableVirtualization={enableVirtualization}
-          virtualizationThreshold={virtualizationThreshold}
-        />
-      </ChordGridProvider>
-    );
-  }
-
-  // Render legacy version
+  // Render ChordGrid with optimized props
   return (
     <div>
       <ChordGrid
         // PERFORMANCE OPTIMIZATION: Use memoized stable props
         {...stableProps}
-        // Beat state and click handler now come from context
+        // Beat state and click handler from Zustand store
         currentBeatIndex={currentBeatIndex}
         isChatbotOpen={isChatbotOpen}
         isLyricsPanelOpen={isLyricsPanelOpen}
