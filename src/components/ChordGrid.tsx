@@ -98,6 +98,68 @@ interface ChordGridProps {
   originalChordsForRomanNumerals?: string[]; // Original chords before transposition for Roman numeral alignment
 }
 
+/**
+ * Custom comparison function for ChordGrid memoization
+ * Only re-render if props that actually affect the visual output change
+ *
+ * PERFORMANCE OPTIMIZATION: This prevents re-renders when only currentBeatIndex changes
+ * The ChordCell components will handle their own re-renders based on isCurrentBeat prop
+ */
+const areChordGridPropsEqual = (
+  prevProps: ChordGridProps,
+  nextProps: ChordGridProps
+): boolean => {
+  // Chord data - critical for visual output
+  if (prevProps.chords !== nextProps.chords) return false;
+  if (prevProps.beats !== nextProps.beats) return false;
+  if (prevProps.originalChordsForRomanNumerals !== nextProps.originalChordsForRomanNumerals) return false;
+
+  // Layout props
+  if (prevProps.timeSignature !== nextProps.timeSignature) return false;
+  if (prevProps.keySignature !== nextProps.keySignature) return false;
+  if (prevProps.isDetectingKey !== nextProps.isDetectingKey) return false;
+  if (prevProps.isChatbotOpen !== nextProps.isChatbotOpen) return false;
+  if (prevProps.isLyricsPanelOpen !== nextProps.isLyricsPanelOpen) return false;
+  if (prevProps.isUploadPage !== nextProps.isUploadPage) return false;
+
+  // Pickup beats and padding
+  if (prevProps.hasPickupBeats !== nextProps.hasPickupBeats) return false;
+  if (prevProps.pickupBeatsCount !== nextProps.pickupBeatsCount) return false;
+  if (prevProps.hasPadding !== nextProps.hasPadding) return false;
+  if (prevProps.paddingCount !== nextProps.paddingCount) return false;
+  if (prevProps.shiftCount !== nextProps.shiftCount) return false;
+  if (prevProps.beatTimeRangeStart !== nextProps.beatTimeRangeStart) return false;
+
+  // Chord corrections
+  if (prevProps.showCorrectedChords !== nextProps.showCorrectedChords) return false;
+  if (prevProps.sequenceCorrections !== nextProps.sequenceCorrections) return false;
+
+  // Segmentation
+  if (prevProps.segmentationData !== nextProps.segmentationData) return false;
+  if (prevProps.showSegmentation !== nextProps.showSegmentation) return false;
+
+  // Roman numerals
+  if (prevProps.showRomanNumerals !== nextProps.showRomanNumerals) return false;
+  if (prevProps.romanNumeralData !== nextProps.romanNumeralData) return false;
+
+  // Edit mode
+  if (prevProps.isEditMode !== nextProps.isEditMode) return false;
+  if (prevProps.editedChords !== nextProps.editedChords) return false;
+
+  // Audio mapping
+  if (prevProps.originalAudioMapping !== nextProps.originalAudioMapping) return false;
+
+  // CRITICAL: Allow currentBeatIndex to change without re-rendering the entire grid
+  // Individual ChordCell components will re-render based on their isCurrentBeat prop
+  // This reduces re-renders from entire grid (1000+ cells) to just 2 cells (prev + current)
+
+  // Ignore callback props (onBeatClick, onChordEdit)
+  // These are functions and shouldn't trigger re-renders if they're functionally equivalent
+
+  // If all visual props are the same, skip re-render
+  return true;
+};
+
 const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   chords,
   beats,
@@ -479,7 +541,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       </div> {/* Close card container */}
     </div>
   );
-});
+}, areChordGridPropsEqual);
 
 ChordGrid.displayName = 'ChordGrid';
 
