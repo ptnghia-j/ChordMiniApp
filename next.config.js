@@ -162,157 +162,90 @@ const nextConfig = {
   webpack: (config, { dev, isServer }) => {
     // Performance optimizations
     if (!dev && !isServer) {
-      // Advanced bundle splitting for better caching and loading
+      // Simplified bundle splitting strategy to reduce fragmentation
       config.optimization.splitChunks = {
         chunks: 'all',
-        minSize: 10000, // Reduced from 20000 for better granularity
-        maxSize: 150000, // Reduced from 244000 to prevent large chunks
-        maxAsyncSize: 200000,
-        maxInitialSize: 100000,
+        minSize: 30000, // Increased from 10000 to align with webpack defaults
+        maxSize: 0, // Disable forced micro-splitting
+        maxAsyncSize: 0, // Disable forced micro-splitting
+        maxInitialSize: 0, // Disable forced micro-splitting
         cacheGroups: {
-          // React core - separate from other framework code
-          react: {
-            test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
-            name: 'react',
+          // Framework: React core (priority 60)
+          'framework-react': {
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+            name: 'framework-react',
             chunks: 'all',
-            priority: 50,
+            priority: 60,
             enforce: true,
           },
-          // Next.js framework
-          nextjs: {
+          // Framework: Next.js (priority 55)
+          'framework-next': {
             test: /[\\/]node_modules[\\/]next[\\/]/,
-            name: 'nextjs',
+            name: 'framework-next',
             chunks: 'all',
-            priority: 45,
+            priority: 55,
             enforce: true,
           },
-          // Firebase core
-          firebaseCore: {
-            test: /[\\/]node_modules[\\/](@firebase\/app|firebase\/app)[\\/]/,
-            name: 'firebase-core',
+          // Vendor: Firebase (consolidated all Firebase packages, priority 40)
+          'vendor-firebase': {
+            test: /[\\/]node_modules[\\/](@firebase\/|firebase\/)[\\/]/,
+            name: 'vendor-firebase',
             chunks: 'all',
             priority: 40,
             enforce: true,
           },
-          // Firebase services (split into smaller chunks)
-          firebaseFirestore: {
-            test: /[\\/]node_modules[\\/](@firebase\/firestore|firebase\/firestore)[\\/]/,
-            name: 'firebase-firestore',
+          // Vendor: UI libraries (priority 35)
+          'vendor-ui': {
+            test: /[\\/]node_modules[\\/](@heroui|@headlessui\/react|@heroicons|@radix-ui\/|react-icons)[\\/]/,
+            name: 'vendor-ui',
             chunks: 'all',
             priority: 35,
-            enforce: true,
           },
-          firebaseAuth: {
-            test: /[\\/]node_modules[\\/](@firebase\/auth|firebase\/auth)[\\/]/,
-            name: 'firebase-auth',
+          // Vendor: Chart.js and related (priority 34)
+          'vendor-charts': {
+            test: /[\\/]node_modules[\\/](chart\.js|chartjs-.*|@kurkle|react-chartjs-2)[\\/]/,
+            name: 'vendor-charts',
             chunks: 'all',
-            priority: 35,
-            enforce: true,
+            priority: 34,
           },
-          firebaseStorage: {
-            test: /[\\/]node_modules[\\/](@firebase\/storage|firebase\/storage)[\\/]/,
-            name: 'firebase-storage',
+          // Vendor: Audio libraries (priority 33)
+          'vendor-audio': {
+            test: /[\\/]node_modules[\\/](tone|smplr|music-metadata|@distube\/ytdl-core|ytdl-core|lamejs)[\\/]/,
+            name: 'vendor-audio',
             chunks: 'all',
-            priority: 35,
-            enforce: true,
+            priority: 33,
           },
-          // Framer Motion - separate chunk for animations
-          framerMotion: {
-            test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
-            name: 'framer-motion',
-            chunks: 'all',
-            priority: 30,
-            enforce: true,
-          },
-          // Chart.js - separate chunk for visualizations
-          chartjs: {
-            test: /[\\/]node_modules[\\/](chart\.js|chartjs-.*|@kurkle)[\\/]/,
-            name: 'chartjs',
-            chunks: 'all',
-            priority: 25,
-            enforce: true,
-          },
-          // Audio processing libraries
-          audioLibs: {
-            test: /[\\/]node_modules[\\/](@music\.ai|ytdl-core|@distube|music-metadata)[\\/]/,
-            name: 'audio-libs',
-            chunks: 'all',
-            priority: 20,
-            enforce: true,
-          },
-          // UI component libraries
-          uiLibs: {
-            test: /[\\/]node_modules[\\/](@headlessui|@heroicons|react-icons)[\\/]/,
-            name: 'ui-libs',
-            chunks: 'all',
-            priority: 18,
-          },
-          // Utility libraries
-          utils: {
-            test: /[\\/]node_modules[\\/](lodash|date-fns|uuid|crypto-js|clsx)[\\/]/,
-            name: 'utils',
-            chunks: 'all',
-            priority: 15,
-          },
-          // React Query and state management
-          stateManagement: {
+          // Vendor: State management (priority 32)
+          'vendor-state': {
             test: /[\\/]node_modules[\\/](@tanstack\/react-query|zustand)[\\/]/,
-            name: 'state-management',
+            name: 'vendor-state',
             chunks: 'all',
-            priority: 12,
+            priority: 32,
           },
-          // Default vendor chunk for remaining libraries
-          vendor: {
+          // Vendor: Utility libraries (priority 31)
+          'vendor-utils': {
+            test: /[\\/]node_modules[\\/](lodash|date-fns|uuid|crypto-js|clsx)[\\/]/,
+            name: 'vendor-utils',
+            chunks: 'all',
+            priority: 31,
+          },
+          // Styles: CSS files (priority 20)
+          styles: {
+            name: 'styles',
+            test: /\.css$/,
+            chunks: 'all',
+            enforce: true,
+            priority: 20,
+          },
+          // Vendors: Catchall for remaining node_modules (priority 10)
+          vendors: {
             test: /[\\/]node_modules[\\/]/,
             name: 'vendors',
             chunks: 'all',
-            priority: 5,
+            priority: 10,
             minChunks: 2,
-            maxSize: 100000, // Keep vendor chunks smaller
           },
         },
-      };
-
-      
-        // CSS optimization for PageSpeed Insights
-        config.optimization.splitChunks.cacheGroups.styles = {
-          name: 'styles',
-          test: /\.css$/,
-          chunks: 'all',
-          enforce: true,
-          priority: 20,
-        };
-        
-        // Minimize CSS chunks to prevent render blocking
-        config.optimization.splitChunks.cacheGroups.criticalCSS = {
-          name: 'critical-css',
-          test: /\.(css|scss|sass)$/,
-          chunks: 'initial',
-          enforce: true,
-          priority: 30,
-          maxSize: 50000, // 50KB limit for critical CSS
-        };
-        // Advanced bundle optimization for desktop performance
-      config.optimization.splitChunks.maxSize = 120000; // Reduced from 150000
-      config.optimization.splitChunks.maxInitialSize = 80000; // Reduced from 100000
-
-      // More aggressive chunk splitting for React ecosystem
-      config.optimization.splitChunks.cacheGroups.reactVendor = {
-        test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
-        name: 'react-vendor',
-        chunks: 'all',
-        priority: 60,
-        enforce: true,
-        maxSize: 80000,
-      };
-
-      config.optimization.splitChunks.cacheGroups.nextVendor = {
-        test: /[\\/]node_modules[\\/]next[\\/]/,
-        name: 'next-vendor',
-        chunks: 'all',
-        priority: 55,
-        enforce: true,
-        maxSize: 100000,
       };
 
       // Enhanced tree shaking optimization
