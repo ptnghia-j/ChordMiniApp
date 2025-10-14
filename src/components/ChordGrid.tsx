@@ -102,8 +102,9 @@ interface ChordGridProps {
  * Custom comparison function for ChordGrid memoization
  * Only re-render if props that actually affect the visual output change
  *
- * PERFORMANCE OPTIMIZATION: This prevents re-renders when only currentBeatIndex changes
- * The ChordCell components will handle their own re-renders based on isCurrentBeat prop
+ * PERFORMANCE OPTIMIZATION: ChordGrid must re-render when currentBeatIndex changes
+ * to recalculate isCurrentBeat for each cell. The optimization happens at ChordCell level,
+ * where only cells with changed isCurrentBeat prop will re-render (prev + current beat).
  */
 const areChordGridPropsEqual = (
   prevProps: ChordGridProps,
@@ -149,9 +150,10 @@ const areChordGridPropsEqual = (
   // Audio mapping
   if (prevProps.originalAudioMapping !== nextProps.originalAudioMapping) return false;
 
-  // CRITICAL: Allow currentBeatIndex to change without re-rendering the entire grid
-  // Individual ChordCell components will re-render based on their isCurrentBeat prop
-  // This reduces re-renders from entire grid (1000+ cells) to just 2 cells (prev + current)
+  // CRITICAL FIX: Must check currentBeatIndex to allow beat animation
+  // When currentBeatIndex changes, ChordGrid re-renders to recalculate isCurrentBeat for each cell
+  // ChordCell memoization ensures only cells with changed isCurrentBeat actually re-render (2 cells)
+  if (prevProps.currentBeatIndex !== nextProps.currentBeatIndex) return false;
 
   // Ignore callback props (onBeatClick, onChordEdit)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
