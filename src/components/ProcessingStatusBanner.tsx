@@ -92,8 +92,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       const effectiveDuration = audioDuration || detectedDuration;
 
       if (effectiveDuration && effectiveDuration > 0) {
-        // Use 1:0.45 ratio: x minutes audio = 0.45 * x minutes processing
-        const estimatedTime = 0.45 * effectiveDuration;
+        // Use 1:0.35 ratio: x minutes audio = 0.35 * x minutes processing
+        const estimatedTime = 0.35 * effectiveDuration;
         const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 100);
         setEstimatedProgress(progress);
 
