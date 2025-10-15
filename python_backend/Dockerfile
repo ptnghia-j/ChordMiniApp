@@ -63,8 +63,10 @@ COPY models/ models/
 COPY utils/ utils/
 COPY extensions.py .
 COPY error_handlers.py .
-COPY scipy_patch.py .
+
 COPY compat/ compat/
+# Ensure legacy scipy_patch.py is not present (use compat/ patches instead)
+RUN rm -f /app/scipy_patch.py || true
 # Note: BTC models and large Beat-Transformer files excluded via .dockerignore to reduce container size
 
 # Create non-root user for security BEFORE downloading models
@@ -102,4 +104,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Run the application with optimized settings for ML processing
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "600", "--worker-class", "sync", "--max-requests", "1000", "--max-requests-jitter", "100", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "600", "--worker-class", "sync", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload", "app:app"]

@@ -70,7 +70,7 @@ export interface ChordGridRowProps {
  * Row component for ChordGrid that renders a row of measures
  * Handles measure grouping and coordination between measures
  */
-export const ChordGridRow: React.FC<ChordGridRowProps> = ({
+const ChordGridRowComponent: React.FC<ChordGridRowProps> = ({
   measures,
   rowIndex,
   timeSignature,
@@ -131,4 +131,24 @@ export const ChordGridRow: React.FC<ChordGridRowProps> = ({
   );
 };
 
+// Memo comparator: ignore function prop identity; compare only visual-affecting props
+const areChordGridRowPropsEqual = (prev: ChordGridRowProps, next: ChordGridRowProps): boolean => {
+  if (prev.measures !== next.measures) return false;
+  if (prev.rowIndex !== next.rowIndex) return false;
+  if (prev.timeSignature !== next.timeSignature) return false;
+  if (prev.currentBeatIndex !== next.currentBeatIndex) return false;
+  if (prev.isEditMode !== next.isEditMode) return false;
+  if (prev.editedChords !== next.editedChords) return false;
+  if (prev.showRomanNumerals !== next.showRomanNumerals) return false;
+  if (prev.romanNumeralData !== next.romanNumeralData) return false;
+  if (prev.sequenceCorrections !== next.sequenceCorrections) return false;
+  if (prev.cellSize !== next.cellSize) return false;
+  if (prev.isDarkMode !== next.isDarkMode) return false;
+  if (prev.beatToChordSequenceMap !== next.beatToChordSequenceMap) return false;
+  return true;
+};
+
+export const ChordGridRow = React.memo(ChordGridRowComponent, areChordGridRowPropsEqual);
 export default ChordGridRow;
+
+

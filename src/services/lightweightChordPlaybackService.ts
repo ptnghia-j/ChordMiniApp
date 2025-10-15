@@ -4,6 +4,8 @@
  * No external soundfont dependencies - generates synthetic sounds
  */
 
+import { audioContextManager } from './audioContextManager';
+
 // Debug helper available across this module
 function audioDebug(): boolean {
   try {
@@ -167,13 +169,11 @@ export class LightweightChordPlaybackService {
   private async initialize() {
     if (this.isInitialized) return;
     try {
-      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
+      this.audioContext = audioContextManager.getContext();
+      await audioContextManager.resume();
       this.isInitialized = true;
       if (this.debugEnabled || audioDebug()) {
-        console.log('[AudioDebug] Initialized AudioContext', {
+        console.log('[AudioDebug] Initialized shared AudioContext', {
           state: this.audioContext.state,
         });
       }
@@ -243,12 +243,12 @@ export class LightweightChordPlaybackService {
     const mainOscillator = this.audioContext.createOscillator();
     const harmonicOscillator = this.audioContext.createOscillator();
     const subOscillator = this.audioContext.createOscillator();
-    
+
     const mainGain = this.audioContext.createGain();
     const harmonicGain = this.audioContext.createGain();
     const subGain = this.audioContext.createGain();
     const masterGain = this.audioContext.createGain();
-    
+
     const filterNode = this.audioContext.createBiquadFilter();
     const dryGain = this.audioContext.createGain();
     const reverbGain = this.audioContext.createGain();
@@ -267,7 +267,7 @@ export class LightweightChordPlaybackService {
       filterNode.type = 'lowpass';
       filterNode.frequency.setValueAtTime(frequency * 6, now);
       filterNode.Q.setValueAtTime(0.5, now);
-      
+
       if (isBass) {
         mainGain.gain.setValueAtTime(volume * 0.4, now);
         harmonicGain.gain.setValueAtTime(volume * 0.1, now);
@@ -424,10 +424,8 @@ export class LightweightChordPlaybackService {
 
   dispose() {
     this.stopAll();
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+    // Do not close the shared AudioContext; just release local reference
+    this.audioContext = null;
     this.isInitialized = false;
   }
 }

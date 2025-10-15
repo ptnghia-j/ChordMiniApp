@@ -109,8 +109,8 @@ class BTCPLDetectorService:
         temp_lab_path = None
         
         try:
-            log_info(f"Running BTC-PL recognition on: {file_path}")
-            
+            log_debug(f"Running BTC-PL recognition on: {file_path}")
+
             # Create temporary lab file
             temp_lab_file = tempfile.NamedTemporaryFile(delete=False, suffix='.lab')
             temp_lab_path = temp_lab_file.name
@@ -134,7 +134,7 @@ class BTCPLDetectorService:
 
             processing_time = time.time() - start_time
 
-            log_info(f"BTC-PL recognition successful: {len(chord_data)} chords detected")
+            log_debug(f"BTC-PL recognition successful: {len(chord_data)} chords detected")
 
             return {
                 "success": True,

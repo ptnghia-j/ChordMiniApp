@@ -1,15 +1,17 @@
 /**
  * Phaze Pitch Shift Service (Proof of Concept)
- * 
+ *
  * Real-time pitch shifting using phaze AudioWorklet (phase vocoder algorithm).
  * This is a minimal POC implementation for A/B comparison with Tone.js.
- * 
+ *
  * Features:
  * - Real-time pitch shifting with phase vocoder (no processing delay)
  * - Instant pitch changes during playback
  * - Professional-grade audio quality
  * - Minimal API compatible with existing pitchShiftService
  */
+
+import { audioContextManager } from './audioContextManager';
 
 export interface PhazePitchShiftOptions {
   semitones: number; // -6 to +6
@@ -48,43 +50,35 @@ export class PhazePitchShiftService {
   }
 
   /**
-   * Initialize AudioContext and load AudioWorklet processor
+   * Initialize AudioContext and load AudioWorklet processor (shared context)
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
-    
     try {
-      console.log('🎵 [Phaze] Initializing AudioContext and AudioWorklet...');
-      
-      // Create AudioContext
-      this.audioContext = new AudioContext();
-      console.log(`🎵 [Phaze] AudioContext created (sample rate: ${this.audioContext.sampleRate}Hz)`);
-      
+      console.log('🎵 [Phaze] Initializing shared AudioContext and AudioWorklet...');
+      this.audioContext = audioContextManager.getContext();
+      await audioContextManager.resume();
+
       // Load AudioWorklet processor
       const workletUrl = '/phase-vocoder.js';
       await this.audioContext.audioWorklet.addModule(workletUrl);
       console.log('🎵 [Phaze] AudioWorklet processor loaded successfully');
-      
+
       // Create AudioWorklet node
-      this.audioWorkletNode = new AudioWorkletNode(
-        this.audioContext,
-        'phase-vocoder-processor',
-        {
-          numberOfInputs: 1,
-          numberOfOutputs: 1,
-          outputChannelCount: [2] // Stereo output
-        }
-      );
-      console.log('🎵 [Phaze] AudioWorklet node created');
-      
+      this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'phase-vocoder-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+      });
+
       // Create gain node for volume control
       this.gainNode = this.audioContext.createGain();
       this.gainNode.gain.value = this._volume / 100;
-      
+
       // Connect: AudioWorklet → Gain → Destination
       this.audioWorkletNode.connect(this.gainNode);
       this.gainNode.connect(this.audioContext.destination);
-      
+
       this.isInitialized = true;
       console.log('✅ [Phaze] Initialization complete');
     } catch (error) {
@@ -119,24 +113,24 @@ export class PhazePitchShiftService {
       this.audioElement = new Audio(finalUrl);
       this.audioElement.crossOrigin = 'anonymous';
       this.audioElement.preload = 'auto';
-      
+
       // Add event listeners
       this.audioElement.addEventListener('ended', this.handleAudioEnded);
       this.audioElement.addEventListener('timeupdate', this.handleTimeUpdate);
-      
+
       // Wait for audio to be ready
       await new Promise<void>((resolve, reject) => {
         if (!this.audioElement) {
           reject(new Error('Audio element is null'));
           return;
         }
-        
+
         this.audioElement.addEventListener('canplaythrough', () => resolve(), { once: true });
         this.audioElement.addEventListener('error', (e) => {
           console.error('❌ [Phaze] Audio loading error:', e);
           reject(new Error('Failed to load audio'));
         }, { once: true });
-        
+
         // Trigger loading
         this.audioElement.load();
       });
@@ -145,15 +139,15 @@ export class PhazePitchShiftService {
 
       // Create media element source node
       this.sourceNode = this.audioContext!.createMediaElementSource(this.audioElement);
-      
+
       // Connect: Source → AudioWorklet
       this.sourceNode.connect(this.audioWorkletNode!);
-      
+
       console.log('🔗 [Phaze] Audio pipeline connected: Source → AudioWorklet → Gain → Destination');
 
       // Set initial pitch
       this.setPitch(semitones);
-      
+
       console.log('✅ [Phaze] Audio ready for playback');
     } catch (error) {
       console.error('❌ [Phaze] Failed to load audio:', error);
@@ -231,7 +225,7 @@ export class PhazePitchShiftService {
    */
   setVolume(volume: number): void {
     this._volume = Math.max(0, Math.min(100, volume));
-    
+
     if (this.gainNode) {
       this.gainNode.gain.value = this._volume / 100;
       console.log(`🔊 [Phaze] Volume set to ${this._volume}%`);
@@ -246,7 +240,7 @@ export class PhazePitchShiftService {
     // Clamp to valid range
     const clampedSemitones = Math.max(-6, Math.min(6, semitones));
     this.currentSemitones = clampedSemitones;
-    
+
     if (!this.audioWorkletNode) {
       console.warn('⚠️ [Phaze] Cannot set pitch: AudioWorklet not initialized');
       return;
@@ -254,7 +248,7 @@ export class PhazePitchShiftService {
 
     // Convert semitones to pitch factor: pitchFactor = 2^(semitones/12)
     const pitchFactor = Math.pow(2, clampedSemitones / 12);
-    
+
     // Update AudioWorklet parameter (INSTANT!)
     const pitchParam = this.audioWorkletNode.parameters.get('pitchFactor');
     if (pitchParam) {
@@ -289,7 +283,7 @@ export class PhazePitchShiftService {
    */
   dispose(): void {
     console.log('🧹 [Phaze] Disposing resources...');
-    
+
     this.disposeAudio();
 
     if (this.audioWorkletNode) {
@@ -302,10 +296,8 @@ export class PhazePitchShiftService {
       this.gainNode = null;
     }
 
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+    // Do not close the shared AudioContext; just release local reference
+    this.audioContext = null;
 
     this.isInitialized = false;
     console.log('✅ [Phaze] Resources disposed');

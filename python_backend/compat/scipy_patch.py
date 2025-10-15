@@ -9,6 +9,11 @@ to the windows submodule.
 import importlib
 import warnings
 
+import os
+
+_DEBUG = (os.getenv('FLASK_ENV') == 'development' or str(os.getenv('DEBUG', 'false')).lower() == 'true')
+_PATCH_LOGGED = False
+
 
 def apply_scipy_patches():
     """
@@ -17,13 +22,16 @@ def apply_scipy_patches():
     Specifically, this patches the scipy.signal module to provide
     backward compatibility for functions that were moved to scipy.signal.windows.
     """
+    global _PATCH_LOGGED
+
     try:
         import scipy.signal
         import librosa.beat
 
         # Check if scipy.signal.hann exists
         if not hasattr(scipy.signal, 'hann') and hasattr(scipy.signal.windows, 'hann'):
-            print("Applying patch: scipy.signal.hann -> scipy.signal.windows.hann")
+            if _DEBUG and not _PATCH_LOGGED:
+                print("Applying patch: scipy.signal.hann -> scipy.signal.windows.hann")
 
             # Create a reference to the windows.hann function in the signal module
             scipy.signal.hann = scipy.signal.windows.hann
@@ -31,8 +39,10 @@ def apply_scipy_patches():
             # Reload librosa.beat to use the patched scipy.signal
             importlib.reload(librosa.beat)
 
+            _PATCH_LOGGED = True
             return True
 
     except Exception as e:
-        warnings.warn(f"Failed to apply scipy patch: {e}")
+        if _DEBUG:
+            warnings.warn(f"Failed to apply scipy patch: {e}")
         return False

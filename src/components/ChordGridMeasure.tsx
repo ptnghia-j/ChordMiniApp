@@ -72,7 +72,7 @@ export interface ChordGridMeasureProps {
  * Measure component for ChordGrid that renders a single measure with its beat cells
  * Handles measure-level styling and beat cell coordination
  */
-export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
+const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
   measure,
   measureIndex,
   rowIndex,
@@ -119,7 +119,7 @@ export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
 
           // Add beats from previous measures in current row
           globalIndex += measureIndex * timeSignature;
-          
+
           // Add current beat index
           globalIndex += beatIdx;
 
@@ -185,6 +185,30 @@ export const ChordGridMeasure: React.FC<ChordGridMeasureProps> = ({
       </div>
     </div>
   );
+
 };
 
+
+// Memo comparator for measure component
+const areChordGridMeasurePropsEqual = (prev: ChordGridMeasureProps, next: ChordGridMeasureProps): boolean => {
+  if (prev.measure !== next.measure) return false;
+  if (prev.measureIndex !== next.measureIndex) return false;
+  if (prev.rowIndex !== next.rowIndex) return false;
+  if (prev.timeSignature !== next.timeSignature) return false;
+  if (prev.currentBeatIndex !== next.currentBeatIndex) return false;
+  if (prev.isEditMode !== next.isEditMode) return false;
+  if (prev.editedChords !== next.editedChords) return false;
+  if (prev.showRomanNumerals !== next.showRomanNumerals) return false;
+  if (prev.romanNumeralData !== next.romanNumeralData) return false;
+  if (prev.sequenceCorrections !== next.sequenceCorrections) return false;
+  if (prev.cellSize !== next.cellSize) return false;
+  if (prev.isDarkMode !== next.isDarkMode) return false;
+  if (prev.beatToChordSequenceMap !== next.beatToChordSequenceMap) return false;
+  return true;
+};
+
+export const ChordGridMeasure = React.memo(ChordGridMeasureComponent, areChordGridMeasurePropsEqual);
 export default ChordGridMeasure;
+
+
+

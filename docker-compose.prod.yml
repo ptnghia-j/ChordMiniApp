@@ -14,7 +14,7 @@ version: '3.8'
 services:
   # Frontend - Next.js Application
   frontend:
-    image: ptnghia/chordminiapp-frontend:latest
+    image: chordmini-frontend:latest
     container_name: chordmini-frontend
     ports:
       - "3000:3000"
@@ -65,7 +65,7 @@ services:
 
   # Backend - Python Flask ML Service
   backend:
-    image: ptnghia/chordminiapp-backend:latest
+    image: chordmini-backend:latest
     container_name: chordmini-backend
     ports:
       - "8080:8080"

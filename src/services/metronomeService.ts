@@ -2,6 +2,8 @@
  * Metronome Service using Web Audio API for precise timing
  * Provides click sounds synchronized with beat detection results
  */
+import { audioContextManager } from './audioContextManager';
+
 
 export interface MetronomeOptions {
   volume: number; // 0.0 to 1.0
@@ -301,29 +303,14 @@ export class MetronomeService {
   }
 
   /**
-   * Initialize Web Audio API context
+   * Initialize Web Audio API context (shared via AudioContextManager)
    */
   private async initializeAudioContext(): Promise<void> {
     try {
-      // Check if we're in a browser environment
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      // Create AudioContext with optimal settings for metronome
-      this.audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-        latencyHint: 'interactive', // Low latency for precise timing
-        sampleRate: 44100
-      });
-
-      // Resume context if it's suspended (required by browser autoplay policies)
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
-
+      if (typeof window === 'undefined') return;
+      this.audioContext = audioContextManager.getContext();
+      await audioContextManager.resume();
       this.isInitialized = true;
-
-      // Load default sound style buffers
       await this.loadAudioBuffers(this.soundStyle);
     } catch (error) {
       console.error('Failed to initialize metronome AudioContext:', error);
@@ -336,20 +323,14 @@ export class MetronomeService {
    */
   private async ensureAudioContext(): Promise<boolean> {
     if (!this.audioContext) {
-      // Initialize AudioContext if not available
       await this.initializeAudioContext();
     }
-
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      // Resume suspended AudioContext
-      try {
-        await this.audioContext.resume();
-      } catch (error) {
-        console.error('Failed to resume AudioContext:', error);
-        return false;
-      }
+    try {
+      await audioContextManager.resume();
+    } catch (error) {
+      console.error('Failed to resume shared AudioContext:', error);
+      return false;
     }
-
     return this.isInitialized && this.audioContext !== null;
   }
 
@@ -760,10 +741,8 @@ export class MetronomeService {
     // Clear audio buffers
     this.audioBuffers.clear();
 
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+    // Do not close the shared AudioContext; just release local references
+    this.audioContext = null;
 
     this.isInitialized = false;
   }

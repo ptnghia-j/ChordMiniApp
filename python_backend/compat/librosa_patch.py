@@ -8,6 +8,7 @@ versions of SciPy and NumPy, particularly around beat tracking functionality.
 import inspect
 import warnings
 import numpy as np
+from utils.logging import log_debug, is_debug_enabled
 
 
 def patch_librosa_beat_tracker():
@@ -36,11 +37,13 @@ def patch_librosa_beat_tracker():
             # Replace the original function with our patched version
             librosa.beat.__trim_beats = new_locals['__trim_beats']
 
-            print("Successfully patched librosa.beat.__trim_beats")
+            if is_debug_enabled():
+                log_debug("Successfully patched librosa.beat.__trim_beats")
             return True
 
     except Exception as e:
-        warnings.warn(f"Failed to patch librosa.beat.__trim_beats: {e}")
+        if is_debug_enabled():
+            warnings.warn(f"Failed to patch librosa.beat.__trim_beats: {e}")
         return False
 
 
@@ -85,7 +88,8 @@ def monkey_patch_beat_track():
 
         # Replace the original function with our patched version
         librosa.beat.beat_track = patched_beat_track
-        print("Successfully monkey-patched librosa.beat.beat_track")
+        if is_debug_enabled():
+            log_debug("Successfully monkey-patched librosa.beat.beat_track")
         return True
 
     except Exception as e:

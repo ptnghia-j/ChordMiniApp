@@ -5,8 +5,9 @@ import re
 import time
 import logging
 
-# Import compatibility patches FIRST, before any other packages that use numpy
-import scipy_patch
+# Apply all compatibility patches early (NumPy, SciPy, madmom, librosa)
+from compat import apply_all as apply_compat_patches
+apply_compat_patches()
 
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
@@ -49,9 +50,9 @@ PRODUCTION_MODE = os.environ.get('FLASK_ENV', 'production') == 'production' or o
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    log_info("Loaded environment variables from .env file")
+    log_debug("Loaded environment variables from .env file")
 except ImportError:
-    log_info("python-dotenv not available, using system environment variables only")
+    log_debug("python-dotenv not available, using system environment variables only")
 
 # Audio processing utilities moved to utils/audio_utils.py
 
@@ -64,14 +65,14 @@ except ImportError:
 BEAT_TRANSFORMER_DIR = Path(__file__).parent / "models" / "Beat-Transformer"
 CHORD_CNN_LSTM_DIR = Path(__file__).parent / "models" / "Chord-CNN-LSTM"
 AUDIO_DIR = Path(__file__).parent.parent / "public" / "audio"
-log_info(f"Audio directory path: {AUDIO_DIR}")
+log_debug(f"Audio directory path: {AUDIO_DIR}")
 sys.path.insert(0, str(BEAT_TRANSFORMER_DIR))
 sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
 # Import the unified beat transformer implementation
 try:
     from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
-    log_info("Using unified beat_transformer implementation")
+    log_debug("Using unified beat_transformer implementation")
 
     # Create a simple wrapper function for the detect_beats endpoint
     def run_beat_tracking(audio_file):
@@ -96,7 +97,7 @@ try:
     import collections
     import collections.abc
     collections.MutableSequence = collections.abc.MutableSequence
-    log_info("Applied collections.MutableSequence patch for madmom compatibility")
+    log_debug("Applied collections.MutableSequence patch for madmom compatibility")
 except Exception as e:
     log_error(f"Failed to apply madmom compatibility patch: {e}")
 
@@ -106,9 +107,9 @@ try:
     import numpy as np
     np.float = float  # Use built-in float instead
     np.int = int      # Use built-in int instead
-    log_info("Applied NumPy compatibility fixes for np.float and np.int")
+    log_debug("Applied NumPy compatibility fixes for np.float and np.int")
 except Exception as e:
-    log_info(f"Note: NumPy compatibility patch not needed: {e}")
+    log_debug(f"Note: NumPy compatibility patch not needed: {e}")
 
 # Defer all heavy checks to runtime - just assume everything is available for startup
 SPLEETER_AVAILABLE = True  # Will check at runtime
@@ -116,7 +117,7 @@ USE_BEAT_TRANSFORMER = True  # Will check at runtime
 USE_CHORD_CNN_LSTM = True  # Will check at runtime
 GENIUS_AVAILABLE = True  # Will check at runtime
 
-log_info("Deferred model availability checks to runtime for faster startup")
+log_debug("Deferred model availability checks to runtime for faster startup")
 
 # Runtime model availability checks
 # Model availability check functions moved to utils/model_utils.py

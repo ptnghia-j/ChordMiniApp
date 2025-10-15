@@ -757,7 +757,8 @@ class BeatTransformerDetector:
 
         # Stack all channel spectrograms (shape: num_channels x time x mel_bins)
         result = np.stack(spectrograms, axis=0)
-        print(f"🎯 Librosa processing complete. Output shape: {result.shape}")
+        if DEBUG:
+            print(f"🎯 Librosa processing complete. Output shape: {result.shape}")
 
         return result
 
@@ -776,11 +777,13 @@ class BeatTransformerDetector:
             duration = librosa.get_duration(y=audio, sr=sr)
 
             # Step 1: Demix audio and create spectrograms
-            print(f"Demixing audio and creating spectrograms: {audio_file}")
+            if DEBUG:
+                print(f"Demixing audio and creating spectrograms: {audio_file}")
             demixed_spec = self.demix_audio_to_spectrogram(audio_file)
 
             # Step 2: Prepare input for the model with proper device handling
-            print(f"Preparing model input for device: {self.device}")
+            if DEBUG:
+                print(f"Preparing model input for device: {self.device}")
             model_input = torch.from_numpy(demixed_spec).unsqueeze(0)
 
             # Handle MPS float32 requirement and move to device
@@ -790,7 +793,8 @@ class BeatTransformerDetector:
                 model_input = model_input.float().to(self.device)
 
             # Step 3: Run inference with GPU acceleration
-            print(f"Running Beat Transformer inference on {self.device}")
+            if DEBUG:
+                print(f"Running Beat Transformer inference on {self.device}")
             with torch.no_grad():
                 # Clear GPU cache if available for memory efficiency
                 if self.device_manager and hasattr(self.device_manager, 'clear_cache'):
@@ -807,11 +811,13 @@ class BeatTransformerDetector:
                     self.device_manager.clear_cache()
 
             # Step 4: Process with DBN (enhanced for low activations)
-            print("Post-processing with enhanced DBN processors")
+            if DEBUG:
+                print("Post-processing with enhanced DBN processors")
 
             # Log activation statistics for debugging
-            print(f"Beat activation stats: min={beat_activation.min():.3f}, max={beat_activation.max():.3f}, mean={beat_activation.mean():.3f}, std={beat_activation.std():.3f}")
-            print(f"Downbeat activation stats: min={downbeat_activation.min():.3f}, max={downbeat_activation.max():.3f}, mean={downbeat_activation.mean():.3f}, std={downbeat_activation.std():.3f}")
+            if DEBUG:
+                print(f"Beat activation stats: min={beat_activation.min():.3f}, max={beat_activation.max():.3f}, mean={beat_activation.mean():.3f}, std={beat_activation.std():.3f}")
+                print(f"Downbeat activation stats: min={downbeat_activation.min():.3f}, max={downbeat_activation.max():.3f}, mean={downbeat_activation.mean():.3f}, std={downbeat_activation.std():.3f}")
 
             # Enhance activations for DBN compatibility with robust probability distribution normalization
             def condition_activation_for_madmom(activation, epsilon=1e-6, apply_smoothing=True,
@@ -868,8 +874,9 @@ class BeatTransformerDetector:
             beat_activation_conditioned = condition_activation_for_madmom(beat_activation, normalize_distribution=False)
             downbeat_activation_conditioned = condition_activation_for_madmom(downbeat_activation, normalize_distribution=False)
 
-            print(f"Conditioned beat activation stats: min={beat_activation_conditioned.min():.6f}, max={beat_activation_conditioned.max():.6f}")
-            print(f"Conditioned downbeat activation stats: min={downbeat_activation_conditioned.min():.6f}, max={downbeat_activation_conditioned.max():.6f}")
+            if DEBUG:
+                print(f"Conditioned beat activation stats: min={beat_activation_conditioned.min():.6f}, max={beat_activation_conditioned.max():.6f}")
+                print(f"Conditioned downbeat activation stats: min={downbeat_activation_conditioned.min():.6f}, max={downbeat_activation_conditioned.max():.6f}")
 
             # For backward compatibility, keep the enhanced versions for peak-picking fallback
             beat_activation_enhanced = condition_activation_for_madmom(beat_activation)
@@ -880,23 +887,27 @@ class BeatTransformerDetector:
 
             # Use enhanced DBN processors or peak-picking algorithm
             if not MADMOM_AVAILABLE:
-                print("Madmom not available, using GPU-accelerated peak-picking algorithm")
+                if DEBUG:
+                    print("Madmom not available, using GPU-accelerated peak-picking algorithm")
                 algorithm_used = "beat_transformer_gpu_peaks"
                 # GPU-ACCELERATED peak-picking algorithm with PyTorch operations
 
                 # Calculate frame rate and timing parameters
                 frame_rate = 44100 / 1024  # ~43.066 Hz
                 min_distance = int(frame_rate * 60 / 200)  # Minimum 200 BPM
-                print(f"GPU peak-picking parameters: frame_rate={frame_rate:.3f}Hz, min_distance={min_distance} frames")
+                if DEBUG:
+                    print(f"GPU peak-picking parameters: frame_rate={frame_rate:.3f}Hz, min_distance={min_distance} frames")
 
                 # Use GPU-accelerated peak detection when available
                 if self.device.type in ['cuda', 'mps']:
-                    print(f"🚀 Using GPU-accelerated peak detection on {self.device}")
+                    if DEBUG:
+                        print(f"🚀 Using GPU-accelerated peak detection on {self.device}")
                     dbn_beat_times, dbn_downbeat_times_raw = self._gpu_accelerated_peak_detection(
                         beat_activation_enhanced, downbeat_activation_enhanced, frame_rate, min_distance
                     )
                 else:
-                    print("Using CPU-based peak detection")
+                    if DEBUG:
+                        print("Using CPU-based peak detection")
                     dbn_beat_times, dbn_downbeat_times_raw = self._cpu_peak_detection(
                         beat_activation_enhanced, downbeat_activation_enhanced, frame_rate, min_distance
                     )
@@ -929,7 +940,8 @@ class BeatTransformerDetector:
                     if dbn_beat_times.size == 0:
                         dbn_beat_times = np.array([])
 
-                    print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
+                    if DEBUG:
+                        print(f"Enhanced DBN beat tracker returned {len(dbn_beat_times)} beats")
 
                     # Combined activation for downbeat tracking with proper probability distribution normalization
                     beat_only = np.maximum(beat_activation_conditioned - downbeat_activation_conditioned,
@@ -956,7 +968,8 @@ class BeatTransformerDetector:
                         # Normalize overflow rows to sum to max_sum_allowed
                         normalization_factors = max_sum_allowed / row_sums[overflow_mask]
                         combined_act_raw[overflow_mask] *= normalization_factors[:, np.newaxis]
-                        print(f"Normalized {np.sum(overflow_mask)} rows with sum overflow (max was {row_sums.max():.6f})")
+                        if DEBUG:
+                            print(f"Normalized {np.sum(overflow_mask)} rows with sum overflow (max was {row_sums.max():.6f})")
 
                     # Apply final epsilon clamping after normalization
                     combined_act = np.clip(combined_act_raw, epsilon, 1.0 - epsilon)
@@ -964,14 +977,16 @@ class BeatTransformerDetector:
                     # Final validation: ensure no row sum >= 1.0
                     final_sums = np.sum(combined_act, axis=1)
                     if np.any(final_sums >= 1.0):
-                        print(f"WARNING: {np.sum(final_sums >= 1.0)} rows still have sum >= 1.0, applying emergency normalization")
+                        if DEBUG:
+                            print(f"WARNING: {np.sum(final_sums >= 1.0)} rows still have sum >= 1.0, applying emergency normalization")
                         # Emergency normalization for any remaining problematic rows
                         emergency_mask = final_sums >= 1.0
                         combined_act[emergency_mask] = combined_act[emergency_mask] / final_sums[emergency_mask, np.newaxis] * max_sum_allowed
                         combined_act = np.clip(combined_act, epsilon, 1.0 - epsilon)
                         final_sums = np.sum(combined_act, axis=1)
 
-                    print(f"Final row sum stats: min={final_sums.min():.6f}, max={final_sums.max():.6f}, mean={final_sums.mean():.6f}")
+                    if DEBUG:
+                        print(f"Final row sum stats: min={final_sums.min():.6f}, max={final_sums.max():.6f}, mean={final_sums.mean():.6f}")
 
                     # CRITICAL DEBUG: Additional validation to prevent madmom divide by zero
                     # Check for edge cases that still cause mathematical errors
@@ -979,45 +994,53 @@ class BeatTransformerDetector:
                     near_zero_beat_only = combined_act[:, 0] <= 1e-5  # Very small beat_only values
                     near_zero_downbeat = combined_act[:, 1] <= 1e-5   # Very small downbeat values
 
-                    if np.any(problematic_rows):
-                        print(f"WARNING: {np.sum(problematic_rows)} rows have sums >= 0.999, may cause madmom issues")
-                    if np.any(near_zero_beat_only):
-                        print(f"WARNING: {np.sum(near_zero_beat_only)} rows have near-zero beat_only values")
-                    if np.any(near_zero_downbeat):
-                        print(f"WARNING: {np.sum(near_zero_downbeat)} rows have near-zero downbeat values")
+                    if DEBUG:
+                        if np.any(problematic_rows):
+                            print(f"WARNING: {np.sum(problematic_rows)} rows have sums >= 0.999, may cause madmom issues")
+                        if np.any(near_zero_beat_only):
+                            print(f"WARNING: {np.sum(near_zero_beat_only)} rows have near-zero beat_only values")
+                        if np.any(near_zero_downbeat):
+                            print(f"WARNING: {np.sum(near_zero_downbeat)} rows have near-zero downbeat values")
 
                     # Additional safety: ensure no values are exactly at epsilon boundaries
                     combined_act = np.clip(combined_act, 2*epsilon, 1.0 - 2*epsilon)
                     final_sums_safe = np.sum(combined_act, axis=1)
-                    print(f"After additional safety clipping: max_sum={final_sums_safe.max():.6f}")
+                    if DEBUG:
+                        print(f"After additional safety clipping: max_sum={final_sums_safe.max():.6f}")
 
-                    print(f"Combined activation shape: {combined_act.shape}, "
-                          f"beat_only range: [{combined_act[:, 0].min():.6f}, {combined_act[:, 0].max():.6f}], "
-                          f"downbeat range: [{combined_act[:, 1].min():.6f}, {combined_act[:, 1].max():.6f}]")
+                    if DEBUG:
+                        print(f"Combined activation shape: {combined_act.shape}, "
+                              f"beat_only range: [{combined_act[:, 0].min():.6f}, {combined_act[:, 0].max():.6f}], "
+                              f"downbeat range: [{combined_act[:, 1].min():.6f}, {combined_act[:, 1].max():.6f}]")
 
                     # CRITICAL FIX: Enhanced DBN call with comprehensive error handling
                     try:
-                        print(f"🔧 Calling enhanced DBN downbeat tracker with combined_act shape: {combined_act.shape}")
+                        if DEBUG:
+                            print(f"🔧 Calling enhanced DBN downbeat tracker with combined_act shape: {combined_act.shape}")
                         dbn_downbeat_results = enhanced_downbeat_tracker(combined_act)
-                        print(f"✅ Enhanced DBN call completed successfully")
+                        if DEBUG:
+                            print(f"✅ Enhanced DBN call completed successfully")
                     except Exception as dbn_call_error:
+                        # Keep error logging unconditional
                         print(f"❌ Enhanced DBN call failed: {dbn_call_error}")
                         raise dbn_call_error
 
                     # ENHANCED DEBUG: Investigate madmom result structure to fix inhomogeneous shape error
-                    print(f"🔍 DEBUG: madmom result type: {type(dbn_downbeat_results)}")
-                    print(f"🔍 DEBUG: madmom result shape/length: {getattr(dbn_downbeat_results, 'shape', len(dbn_downbeat_results) if hasattr(dbn_downbeat_results, '__len__') else 'no length')}")
+                    if DEBUG:
+                        print(f"🔍 DEBUG: madmom result type: {type(dbn_downbeat_results)}")
+                        print(f"🔍 DEBUG: madmom result shape/length: {getattr(dbn_downbeat_results, 'shape', len(dbn_downbeat_results) if hasattr(dbn_downbeat_results, '__len__') else 'no length')}")
 
                     # Safe inspection of result structure
-                    try:
-                        if hasattr(dbn_downbeat_results, '__len__') and len(dbn_downbeat_results) > 0:
-                            sample_size = min(3, len(dbn_downbeat_results))
-                            print(f"🔍 DEBUG: first {sample_size} elements: {dbn_downbeat_results[:sample_size]}")
+                    if DEBUG:
+                        try:
+                            if hasattr(dbn_downbeat_results, '__len__') and len(dbn_downbeat_results) > 0:
+                                sample_size = min(3, len(dbn_downbeat_results))
+                                print(f"🔍 DEBUG: first {sample_size} elements: {dbn_downbeat_results[:sample_size]}")
 
-                            if hasattr(dbn_downbeat_results[0], '__len__'):
-                                print(f"🔍 DEBUG: first element type/length: {type(dbn_downbeat_results[0])}, {len(dbn_downbeat_results[0]) if hasattr(dbn_downbeat_results[0], '__len__') else 'no length'}")
-                    except Exception as debug_error:
-                        print(f"🔍 DEBUG: Could not inspect result structure: {debug_error}")
+                                if hasattr(dbn_downbeat_results[0], '__len__'):
+                                    print(f"🔍 DEBUG: first element type/length: {type(dbn_downbeat_results[0])}, {len(dbn_downbeat_results[0]) if hasattr(dbn_downbeat_results[0], '__len__') else 'no length'}")
+                        except Exception as debug_error:
+                            print(f"🔍 DEBUG: Could not inspect result structure: {debug_error}")
 
                     # ENHANCED VALIDATION: Handle malformed results that cause "inhomogeneous shape" errors
                     try:
@@ -1028,7 +1051,8 @@ class BeatTransformerDetector:
                             pass
                         else:
                             # Complex structure - handle carefully without forcing array conversion
-                            print(f"DEBUG: Handling non-array madmom result structure")
+                            if DEBUG:
+                                print(f"DEBUG: Handling non-array madmom result structure")
 
                         # ROBUST PROCESSING: Handle complex madmom result structures
                         dbn_downbeat_times_raw = []
@@ -1062,28 +1086,34 @@ class BeatTransformerDetector:
                                                 # Single time value
                                                 dbn_downbeat_times_raw.append(float(item))
                                         except (IndexError, ValueError, TypeError) as item_error:
-                                            print(f"DEBUG: Skipping problematic item: {item}, error: {item_error}")
+                                            if DEBUG:
+                                                print(f"DEBUG: Skipping problematic item: {item}, error: {item_error}")
                                             continue
                             except Exception as structure_error:
-                                print(f"DEBUG: Complex structure processing failed: {structure_error}")
+                                if DEBUG:
+                                    print(f"DEBUG: Complex structure processing failed: {structure_error}")
                                 dbn_downbeat_times_raw = []
 
                         # Convert final result to numpy array
                         dbn_downbeat_times_raw = np.array(dbn_downbeat_times_raw)
 
                     except Exception as array_error:
+                        # Keep error logging unconditional
                         print(f"Enhanced DBN downbeat result validation failed: {array_error}")
                         dbn_downbeat_times_raw = np.array([])
 
-                    print(f"Enhanced DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
+                    if DEBUG:
+                        print(f"Enhanced DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
 
                 except Exception as e:
+                    # Keep error logging unconditional
                     print(f"Enhanced DBN processors failed: {e}")
                     # Fallback to original DBN with even lower thresholds
                     try:
                         # Use conditioned activations for fallback beat tracking
                         dbn_beat_times = self.beat_tracker(beat_activation_conditioned)
-                        print(f"Original DBN beat tracker returned {len(dbn_beat_times)} beats")
+                        if DEBUG:
+                            print(f"Original DBN beat tracker returned {len(dbn_beat_times)} beats")
 
                         # Combined activation for fallback downbeat tracking with proper normalization
                         beat_only = np.maximum(beat_activation_conditioned - downbeat_activation_conditioned,
@@ -1108,7 +1138,8 @@ class BeatTransformerDetector:
                         if np.any(overflow_mask):
                             normalization_factors = max_sum_allowed / row_sums[overflow_mask]
                             combined_act_raw[overflow_mask] *= normalization_factors[:, np.newaxis]
-                            print(f"Fallback: Normalized {np.sum(overflow_mask)} rows with sum overflow (max was {row_sums.max():.6f})")
+                            if DEBUG:
+                                print(f"Fallback: Normalized {np.sum(overflow_mask)} rows with sum overflow (max was {row_sums.max():.6f})")
 
                         # Apply final epsilon clamping after normalization
                         combined_act = np.clip(combined_act_raw, epsilon, 1.0 - epsilon)
@@ -1116,28 +1147,32 @@ class BeatTransformerDetector:
                         # Final validation for fallback processing
                         final_sums = np.sum(combined_act, axis=1)
                         if np.any(final_sums >= 1.0):
-                            print(f"Fallback WARNING: {np.sum(final_sums >= 1.0)} rows still have sum >= 1.0, applying emergency normalization")
+                            if DEBUG:
+                                print(f"Fallback WARNING: {np.sum(final_sums >= 1.0)} rows still have sum >= 1.0, applying emergency normalization")
                             emergency_mask = final_sums >= 1.0
                             combined_act[emergency_mask] = combined_act[emergency_mask] / final_sums[emergency_mask, np.newaxis] * max_sum_allowed
                             combined_act = np.clip(combined_act, epsilon, 1.0 - epsilon)
                             final_sums = np.sum(combined_act, axis=1)
 
-                        print(f"Fallback final row sum stats: min={final_sums.min():.6f}, max={final_sums.max():.6f}")
+                        if DEBUG:
+                            print(f"Fallback final row sum stats: min={final_sums.min():.6f}, max={final_sums.max():.6f}")
 
                         # CRITICAL DEBUG: Additional validation for fallback processing
                         problematic_rows = final_sums >= 0.999
-                        if np.any(problematic_rows):
+                        if DEBUG and np.any(problematic_rows):
                             print(f"Fallback WARNING: {np.sum(problematic_rows)} rows have sums >= 0.999")
 
                         # Additional safety for fallback processing
                         combined_act = np.clip(combined_act, 2*epsilon, 1.0 - 2*epsilon)
                         final_sums_safe = np.sum(combined_act, axis=1)
-                        print(f"Fallback after additional safety: max_sum={final_sums_safe.max():.6f}")
+                        if DEBUG:
+                            print(f"Fallback after additional safety: max_sum={final_sums_safe.max():.6f}")
 
                         dbn_downbeat_results = self.downbeat_tracker(combined_act)
 
                         # ROBUST PROCESSING: Apply same fix for fallback DBN processing
-                        print(f"Fallback DEBUG: madmom result type: {type(dbn_downbeat_results)}")
+                        if DEBUG:
+                            print(f"Fallback DEBUG: madmom result type: {type(dbn_downbeat_results)}")
 
                         dbn_downbeat_times_raw = []
 
@@ -1169,14 +1204,18 @@ class BeatTransformerDetector:
                             dbn_downbeat_times_raw = np.array(dbn_downbeat_times_raw)
 
                         except Exception as fallback_error:
+                            # Keep error logging unconditional
                             print(f"Fallback DBN result processing failed: {fallback_error}")
                             dbn_downbeat_times_raw = np.array([])
 
-                        print(f"Original DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
+                        if DEBUG:
+                            print(f"Original DBN downbeat tracker returned {len(dbn_downbeat_times_raw)} downbeats")
 
                     except Exception as e2:
+                        # Keep error logging unconditional
                         print(f"All madmom DBN approaches failed: {e2}")
-                        print("Falling back to peak-picking algorithm")
+                        if DEBUG:
+                            print("Falling back to peak-picking algorithm")
                         algorithm_used = "beat_transformer_fallback_peaks"
                         # Fallback to peak-picking when madmom fails
                         from scipy import signal as scipy_signal
@@ -1192,7 +1231,8 @@ class BeatTransformerDetector:
                             prominence=0.1
                         )
                         dbn_beat_times = beat_peaks / frame_rate
-                        print(f"Fallback peak-picking beat tracker found {len(dbn_beat_times)} beats")
+                        if DEBUG:
+                            print(f"Fallback peak-picking beat tracker found {len(dbn_beat_times)} beats")
 
                         downbeat_peaks, _ = scipy_signal.find_peaks(
                             downbeat_activation_enhanced,
@@ -1201,11 +1241,13 @@ class BeatTransformerDetector:
                             prominence=0.2  # Higher prominence
                         )
                         dbn_downbeat_times_raw = downbeat_peaks / frame_rate
-                        print(f"Fallback peak-picking downbeat tracker found {len(dbn_downbeat_times_raw)} downbeats")
+                        if DEBUG:
+                            print(f"Fallback peak-picking downbeat tracker found {len(dbn_downbeat_times_raw)} downbeats")
 
             # Use the raw downbeats directly (simplified approach)
             dbn_downbeat_times = dbn_downbeat_times_raw
-            print(f"Using {len(dbn_downbeat_times)} downbeats directly")
+            if DEBUG:
+                print(f"Using {len(dbn_downbeat_times)} downbeats directly")
 
             # Step 5: Process beats - determine their strength based on activation
             # For each beat time, find nearest frame in the beat activation
@@ -1302,8 +1344,9 @@ class BeatTransformerDetector:
                         denominator = 4
 
                     # OPTIMIZATION #2: Reduced logging for production (5-10% performance gain)
-                    # Always log final result (minimal)
-                    print(f"Detected time signature: {time_signature}/{denominator}")
+                    # Debug-only logging for time signature detection
+                    if DEBUG:
+                        print(f"Detected time signature: {time_signature}/{denominator}")
 
                     # OPTIMIZATION #2: Debug-only detailed logging
                     if DEBUG:
@@ -1357,7 +1400,8 @@ class BeatTransformerDetector:
             beat_tensor = torch.from_numpy(beat_activation).float().to(self.device)
             downbeat_tensor = torch.from_numpy(downbeat_activation).float().to(self.device)
 
-            print(f"🔥 Processing on {self.device}: beat_tensor.shape={beat_tensor.shape}")
+            if DEBUG:
+                print(f"🔥 Processing on {self.device}: beat_tensor.shape={beat_tensor.shape}")
 
             # GPU-accelerated smoothing using 1D convolution
             kernel_size = 3
@@ -1387,11 +1431,13 @@ class BeatTransformerDetector:
             beat_times = beat_peaks.cpu().numpy() / frame_rate
             downbeat_times = downbeat_peaks.cpu().numpy() / frame_rate
 
-            print(f"✅ GPU peak detection: {len(beat_times)} beats, {len(downbeat_times)} downbeats")
+            if DEBUG:
+                print(f"✅ GPU peak detection: {len(beat_times)} beats, {len(downbeat_times)} downbeats")
 
             return beat_times, downbeat_times
 
         except Exception as e:
+            # Keep error logging unconditional
             print(f"⚠️  GPU peak detection failed: {e}, falling back to CPU")
             return self._cpu_peak_detection(beat_activation, downbeat_activation, frame_rate, min_distance)
 
@@ -1455,7 +1501,8 @@ class BeatTransformerDetector:
         """CPU-based peak detection fallback using scipy"""
         from scipy import signal as scipy_signal
 
-        print("Using CPU-based peak detection")
+        if DEBUG:
+            print("Using CPU-based peak detection")
 
         # Beat detection
         beat_peaks, beat_properties = scipy_signal.find_peaks(
@@ -1476,6 +1523,7 @@ class BeatTransformerDetector:
         )
         downbeat_times = downbeat_peaks / frame_rate
 
-        print(f"✅ CPU peak detection: {len(beat_times)} beats, {len(downbeat_times)} downbeats")
+        if DEBUG:
+            print(f"✅ CPU peak detection: {len(beat_times)} beats, {len(downbeat_times)} downbeats")
 
         return beat_times, downbeat_times
