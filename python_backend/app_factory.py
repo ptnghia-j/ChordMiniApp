@@ -21,7 +21,7 @@ from extensions import init_extensions
 from error_handlers import register_error_handlers, register_custom_error_handlers
 
 # Import utilities
-from utils.logging import log_info
+from utils.logging import log_info, log_debug, is_debug_enabled
 
 
 def create_app(config_name: Optional[str] = None) -> Flask:

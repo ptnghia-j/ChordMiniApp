@@ -6,6 +6,7 @@ Specifically, it fixes the collections.MutableSequence issue.
 """
 
 import sys
+from utils.logging import log_debug, is_debug_enabled
 
 
 def patch_madmom_compatibility():
@@ -22,7 +23,8 @@ def patch_madmom_compatibility():
         # Fix collections.MutableSequence for madmom compatibility
         if not hasattr(collections, 'MutableSequence'):
             collections.MutableSequence = collections.abc.MutableSequence
-            print("Applied madmom patch: collections.MutableSequence -> collections.abc.MutableSequence")
+            if is_debug_enabled():
+                log_debug("Applied madmom patch: collections.MutableSequence -> collections.abc.MutableSequence")
 
         return True
 

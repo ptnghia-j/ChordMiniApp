@@ -14,6 +14,16 @@ PRODUCTION_MODE = (
     os.environ.get('FLASK_ENV', 'production') == 'production' or
     os.environ.get('PORT') is not None
 )
+# Unified debug switch across backend
+DEBUG_ENABLED = (
+    os.environ.get('FLASK_ENV') == 'development' or
+    str(os.environ.get('DEBUG', 'false')).lower() == 'true'
+)
+
+def is_debug_enabled() -> bool:
+    """Return True when debug logging should be enabled regardless of PROD/DEV."""
+    return DEBUG_ENABLED
+
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -46,13 +56,12 @@ def log_error(message: str) -> None:
 
 
 def log_debug(message: str) -> None:
-    """
-    Log debug message - only in development mode.
-
-    Args:
-        message: Debug message to log
-    """
-    if not PRODUCTION_MODE:
+    """Log debug messages when debug is enabled. No-op otherwise."""
+    if not DEBUG_ENABLED:
+        return
+    if PRODUCTION_MODE:
+        logger.debug(message)
+    else:
         print(f"DEBUG: {message}")
 
 

@@ -342,6 +342,21 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     );
   }, [chords, shiftedChords, romanNumeralData, sequenceCorrections, originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount]);
 
+  // Memoize Roman numeral formatting to avoid per-cell recomputation on toggles
+  const formatRomanNumeralMemo = useMemo(() => {
+    const cache = new Map<string, React.ReactElement | string>();
+    if (romanNumeralData?.analysis) {
+      romanNumeralData.analysis.forEach((rn) => {
+        if (rn && !cache.has(rn)) cache.set(rn, formatRomanNumeral(rn));
+      });
+    }
+    return (rn: string) => {
+      if (!rn) return '' as const;
+      const v = cache.get(rn);
+      return v !== undefined ? v : formatRomanNumeral(rn);
+    };
+  }, [romanNumeralData]);
+
   // Early return if no chords available
   if (chords.length === 0) {
     return (
@@ -492,7 +507,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       const rawRomanNumeral = showRomanNumerals && showChordLabel && romanNumeralData?.analysis && chordSequenceIndex !== undefined
                         ? romanNumeralData.analysis[chordSequenceIndex] || ''
                         : '';
-                      const romanNumeral = rawRomanNumeral ? formatRomanNumeral(rawRomanNumeral) : '';
+                      const romanNumeral = rawRomanNumeral ? formatRomanNumeralMemo(rawRomanNumeral) : '';
 
                       // Check for modulation at this chord index
                       const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(

@@ -7,6 +7,8 @@
  * Lazy loads smplr library (~100KB) for better initial bundle size
  */
 
+import { audioContextManager } from './audioContextManager';
+
 // Lazy load smplr to reduce initial bundle size
 let SmplrModule: typeof import('smplr') | null = null;
 
@@ -233,9 +235,7 @@ export class SoundfontChordPlaybackService {
   };
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      this.audioContext = new AudioContext();
-    }
+    // AudioContext will be acquired lazily via AudioContextManager during initialize()
   }
 
   /**
@@ -255,9 +255,14 @@ export class SoundfontChordPlaybackService {
     this.initializationError = null;
 
     if (!this.audioContext) {
-      this.initializationError = new Error('AudioContext not available');
-      this.isInitializing = false;
-      throw this.initializationError;
+      try {
+        this.audioContext = audioContextManager.getContext();
+        await audioContextManager.resume();
+      } catch (e) {
+        this.initializationError = e as Error;
+        this.isInitializing = false;
+        throw this.initializationError;
+      }
     }
 
     const startTime = performance.now();
@@ -818,7 +823,7 @@ export class SoundfontChordPlaybackService {
    */
   updateOptions(options: Partial<SoundfontChordPlaybackOptions>): void {
     this.options = { ...this.options, ...options };
-    
+
     // Lazy initialization when enabled
     if (options.enabled && !this.isInitialized && !this.isInitializing) {
       this.initialize().catch(error => {
@@ -871,9 +876,8 @@ export class SoundfontChordPlaybackService {
     this.activeNotes.clear();
     this.scheduledTimeouts.clear();
     this.instruments.clear();
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close();
-    }
+    // Do not close the shared AudioContext; just release local reference
+    this.audioContext = null;
     this.isInitialized = false;
     this.isInitializing = false;
   }

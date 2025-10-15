@@ -14,6 +14,8 @@
  * - Lazy loading of Tone.js library (~150KB) for better initial bundle size
  */
 
+import { audioContextManager } from './audioContextManager';
+
 // Lazy load Tone.js to reduce initial bundle size
 let ToneModule: typeof import('tone') | null = null;
 
@@ -74,16 +76,25 @@ export class GrainPlayerPitchShiftService {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
-
     try {
-      // Lazy load Tone.js
       const Tone = await getTone();
-
-      // Start Tone.js context
-      if (Tone.getContext().state !== 'running') {
-        await Tone.start();
+      const shared = audioContextManager.getContext();
+      // If Tone is not already using the shared AudioContext, set it
+      const ctxObj = Tone.getContext() as unknown as { rawContext?: AudioContext };
+      const currentRaw: AudioContext | undefined = ctxObj?.rawContext;
+      if (!currentRaw || currentRaw !== shared) {
+        const ToneWithCtx = Tone as unknown as {
+          Context: new (opts: { context: AudioContext }) => unknown;
+          setContext: (ctx: unknown) => void;
+        };
+        const toneCtx = new ToneWithCtx.Context({ context: shared });
+        ToneWithCtx.setContext(toneCtx);
       }
-
+      // Ensure context is running
+      const toneCtxState = Tone.getContext() as unknown as { state?: AudioContextState };
+      if (toneCtxState?.state !== 'running') {
+        await (Tone as unknown as { start: () => Promise<void> }).start();
+      }
       this.isInitialized = true;
     } catch (error) {
       console.error('❌ Failed to initialize GrainPlayer service:', error);
@@ -367,7 +378,7 @@ export class GrainPlayerPitchShiftService {
 
   /**
    * Set playback rate (speed) for the GrainPlayer
-   * 
+   *
    * GrainPlayer's `playbackRate` property is INDEPENDENT of pitch.
    * No compensation needed - this is the key advantage of GrainPlayer!
    */

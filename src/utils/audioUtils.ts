@@ -1,18 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Audio processing utilities extracted from analyze page component
 
+import { audioContextManager } from '@/services/audioContextManager';
+
 /**
+
+
  * Audio format validation and error handling utilities
  */
 export const validateAudioFormat = (audioUrl: string): boolean => {
   if (!audioUrl) return false;
-  
+
   // Check for common audio file extensions
   const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
-  const hasValidExtension = audioExtensions.some(ext => 
+  const hasValidExtension = audioExtensions.some(ext =>
     audioUrl.toLowerCase().includes(ext)
   );
-  
+
   return hasValidExtension || audioUrl.includes('blob:') || audioUrl.includes('data:audio');
 };
 
@@ -29,10 +33,10 @@ export const getRecommendedSampleRate = (): number => {
  */
 export const formatDuration = (seconds: number): string => {
   if (!seconds || isNaN(seconds)) return '0:00';
-  
+
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
-  
+
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
@@ -41,10 +45,10 @@ export const formatDuration = (seconds: number): string => {
  */
 export const parseDurationToSeconds = (durationString: string): number => {
   if (!durationString) return 0;
-  
+
   // Handle formats like "3:45", "1:23:45", or just "180" (seconds)
   const parts = durationString.split(':').map(part => parseInt(part, 10));
-  
+
   if (parts.length === 1) {
     // Just seconds
     return parts[0] || 0;
@@ -55,7 +59,7 @@ export const parseDurationToSeconds = (durationString: string): number => {
     // Hours:minutes:seconds
     return (parts[0] * 3600) + (parts[1] * 60) + (parts[2] || 0);
   }
-  
+
   return 0;
 };
 
@@ -69,8 +73,8 @@ export const extractAudioMetadata = (searchResult: any) => {
     title: searchResult.title || searchResult.snippet?.title || '',
     duration: searchResult.duration || searchResult.contentDetails?.duration || '',
     channelTitle: searchResult.channelTitle || searchResult.snippet?.channelTitle || '',
-    thumbnail: searchResult.thumbnail || 
-               searchResult.snippet?.thumbnails?.medium?.url || 
+    thumbnail: searchResult.thumbnail ||
+               searchResult.snippet?.thumbnails?.medium?.url ||
                searchResult.snippet?.thumbnails?.default?.url || ''
   };
 };
@@ -99,35 +103,35 @@ export const classifyAudioError = (error: string): {
   suggestion: string;
 } => {
   const errorLower = error.toLowerCase();
-  
+
   if (errorLower.includes('youtube short')) {
     return {
       type: 'format',
       suggestion: 'YouTube Shorts cannot be processed. Please try a regular YouTube video.'
     };
   }
-  
+
   if (errorLower.includes('restricted') || errorLower.includes('unavailable')) {
     return {
       type: 'restriction',
       suggestion: 'This video may be restricted or unavailable for download. Try a different video.'
     };
   }
-  
+
   if (errorLower.includes('network') || errorLower.includes('timeout')) {
     return {
       type: 'network',
       suggestion: 'Check your internet connection and try again.'
     };
   }
-  
+
   if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
     return {
       type: 'quota',
       suggestion: 'Service temporarily unavailable. Please try again in a few minutes.'
     };
   }
-  
+
   return {
     type: 'unknown',
     suggestion: 'An unexpected error occurred. Please try again or contact support.'
@@ -150,10 +154,10 @@ export const validateAudioProcessingState = (state: any): boolean => {
  */
 export const sanitizeAudioUrl = (url: string): string => {
   if (!url) return '';
-  
+
   // Remove any potential XSS attempts
   const sanitized = url.replace(/[<>'"]/g, '');
-  
+
   // Validate URL format
   try {
     new URL(sanitized);
@@ -173,7 +177,7 @@ export const sanitizeAudioUrl = (url: string): string => {
 export const estimateProcessingTime = (durationSeconds: number): string => {
   // Rough estimate: processing takes about 1.5x the audio duration
   const estimatedSeconds = Math.ceil(durationSeconds * 1.5);
-  
+
   if (estimatedSeconds < 60) {
     return `${estimatedSeconds} seconds`;
   } else if (estimatedSeconds < 300) {
@@ -192,14 +196,14 @@ export const assessAudioQuality = (audioUrl: string, duration: number): {
   recommendations: string[];
 } => {
   const recommendations: string[] = [];
-  
+
   // Check duration
   if (duration < 30) {
     recommendations.push('Audio is very short - results may be limited');
   } else if (duration > 600) {
     recommendations.push('Long audio may take several minutes to process');
   }
-  
+
   // Check URL type for quality hints
   if (audioUrl.includes('blob:')) {
     return {
@@ -207,14 +211,14 @@ export const assessAudioQuality = (audioUrl: string, duration: number): {
       recommendations: [...recommendations, 'Using extracted audio - quality depends on source']
     };
   }
-  
+
   if (audioUrl.includes('youtube')) {
     return {
       quality: 'medium',
       recommendations: [...recommendations, 'YouTube audio quality varies by video']
     };
   }
-  
+
   return {
     quality: 'unknown',
     recommendations
@@ -224,13 +228,12 @@ export const assessAudioQuality = (audioUrl: string, duration: number): {
 /**
  * Audio buffer utilities for Web Audio API
  */
-export const createAudioBuffer = async (audioUrl: string): Promise<AudioBuffer | null> => {
+export const createAudioBuffer = async (audioUrl: string, ctx?: AudioContext): Promise<AudioBuffer | null> => {
   try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = ctx ?? audioContextManager.getContext();
     const response = await fetch(audioUrl);
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    
     return audioBuffer;
   } catch (error) {
     console.error('Failed to create audio buffer:', error);

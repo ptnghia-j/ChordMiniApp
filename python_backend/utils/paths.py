@@ -8,7 +8,7 @@ for path resolution and validation.
 import os
 import sys
 from pathlib import Path
-from utils.logging import log_info
+from utils.logging import log_info, log_debug, is_debug_enabled
 
 
 # Base directories
@@ -58,7 +58,7 @@ def setup_model_paths():
     for model_dir in model_dirs:
         if model_dir not in sys.path:
             sys.path.insert(0, model_dir)
-            log_info(f"Added {model_dir} to Python path")
+            log_debug(f"Added {model_dir} to Python path")
 
 
 def get_model_checkpoint_path(model_name: str) -> Path:
@@ -114,7 +114,7 @@ def ensure_directories_exist():
 
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
-        log_info(f"Ensured directory exists: {directory}")
+        log_debug(f"Ensured directory exists: {directory}")
 
 
 def get_audio_file_path(filename: str) -> Path:
@@ -184,7 +184,8 @@ def validate_model_paths() -> dict:
     return results
 
 
-# Initialize paths on import
-log_info(f"Audio directory path: {AUDIO_DIR}")
-log_info(f"Beat Transformer directory: {BEAT_TRANSFORMER_DIR}")
-log_info(f"Chord CNN LSTM directory: {CHORD_CNN_LSTM_DIR}")
+# Initialize paths on import (debug-only)
+if is_debug_enabled():
+    log_debug(f"Audio directory path: {AUDIO_DIR}")
+    log_debug(f"Beat Transformer directory: {BEAT_TRANSFORMER_DIR}")
+    log_debug(f"Chord CNN LSTM directory: {CHORD_CNN_LSTM_DIR}")
