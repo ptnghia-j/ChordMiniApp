@@ -208,7 +208,7 @@ const areChordGridMeasurePropsEqual = (prev: ChordGridMeasureProps, next: ChordG
 };
 
 export const ChordGridMeasure = React.memo(ChordGridMeasureComponent, areChordGridMeasurePropsEqual);
-export default React.memo(ChordGridMeasureComponent, areChordGridMeasurePropsEqual);
+export default ChordGridMeasure;
 
 
 
