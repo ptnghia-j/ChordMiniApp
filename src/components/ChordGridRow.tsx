@@ -149,6 +149,6 @@ const areChordGridRowPropsEqual = (prev: ChordGridRowProps, next: ChordGridRowPr
 };
 
 export const ChordGridRow = React.memo(ChordGridRowComponent, areChordGridRowPropsEqual);
-export default React.memo(ChordGridRowComponent, areChordGridRowPropsEqual);
+export default ChordGridRow;
 
 
