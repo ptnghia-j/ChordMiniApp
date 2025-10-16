@@ -37,6 +37,9 @@ export interface ChordCellProps {
     fromKey?: string;
     toKey?: string;
   };
+  isLoopEnabled?: boolean;
+  isInLoopRange?: boolean;
+  onLoopBeatClick?: (beatIndex: number) => void;
 }
 
 /**
@@ -79,7 +82,11 @@ const areChordCellPropsEqual = (
   if (prevProps.isEditMode !== nextProps.isEditMode) return false;
   if (prevProps.isClickable !== nextProps.isClickable) return false;
 
-  // Ignore callback props (onBeatClick, getChordStyle, getDynamicFontSize, onChordEdit)
+  // Loop playback state
+  if (prevProps.isLoopEnabled !== nextProps.isLoopEnabled) return false;
+  if (prevProps.isInLoopRange !== nextProps.isInLoopRange) return false;
+
+  // Ignore callback props (onBeatClick, getChordStyle, getDynamicFontSize, onChordEdit, onLoopBeatClick)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
 
   // If all visual props are the same, skip re-render
@@ -113,7 +120,10 @@ export const ChordCell = React.memo<ChordCellProps>(({
   onChordEdit,
   showRomanNumerals = false,
   romanNumeral,
-  modulationInfo
+  modulationInfo,
+  isLoopEnabled = false,
+  isInLoopRange = false,
+  onLoopBeatClick
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -128,10 +138,13 @@ export const ChordCell = React.memo<ChordCellProps>(({
   const handleClick = useCallback(() => {
     if (isEditMode && !isEmpty) {
       setIsEditing(true);
+    } else if (isLoopEnabled && onLoopBeatClick) {
+      // Loop mode: handle beat selection for loop range
+      onLoopBeatClick(globalIndex);
     } else if (isClickable) {
       onBeatClick(globalIndex);
     }
-  }, [isEditMode, isEmpty, isClickable, onBeatClick, globalIndex]);
+  }, [isEditMode, isEmpty, isLoopEnabled, onLoopBeatClick, isClickable, onBeatClick, globalIndex]);
 
   // Handle edit save
   const handleEditSave = useCallback(() => {
@@ -165,10 +178,14 @@ export const ChordCell = React.memo<ChordCellProps>(({
           : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
       } chord-cell`}
       style={{
-        // Priority order: current beat > modulation > segmentation
+        // Priority order: current beat > loop range > modulation > segmentation
         // Current beat styling takes priority over all other background colors
         ...(
           isCurrentBeat ? {} : // Current beat uses CSS classes, no background override
+          isInLoopRange ? {
+            backgroundColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)', // Light blue with opacity (blue-500 base)
+            border: isDarkMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(59, 130, 246, 0.3)'
+          } :
           modulationInfo?.isModulation ? {
             backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)', // Light green with opacity (green-500 base)
             border: isDarkMode ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(34, 197, 94, 0.3)'

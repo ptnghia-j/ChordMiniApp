@@ -8,7 +8,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { Popover, PopoverTrigger, PopoverContent, Tooltip } from '@heroui/react';
+import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
 import { MIN_SEMITONES, MAX_SEMITONES } from '@/utils/chordTransposition';
@@ -45,18 +45,18 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
 
   // Pitch shift slider change handler
   const handleSliderChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = parseInt(e.target.value, 10);
-      setPitchShiftSemitones(value);
+    (value: number | number[]) => {
+      const numValue = Array.isArray(value) ? value[0] : value;
+      setPitchShiftSemitones(numValue);
     },
     [setPitchShiftSemitones]
   );
 
   // Playback speed slider change handler
   const handlePlaybackRateChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = parseFloat(e.target.value);
-      setPlaybackRate(value);
+    (value: number | number[]) => {
+      const numValue = Array.isArray(value) ? value[0] : value;
+      setPlaybackRate(numValue);
     },
     [setPlaybackRate]
   );
@@ -75,18 +75,19 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
   }, [isPitchShiftEnabled, togglePitchShift]);
 
   return (
-    <Popover
-      placement="top"
-      offset={10}
-      isOpen={isPopoverOpen && isPitchShiftEnabled && !isDisabled}
-      onOpenChange={(open) => {
-        // Allow popover to close without disabling pitch shift
-        setIsPopoverOpen(open);
-      }}
-      classNames={{
-        content: 'p-0 border-none bg-transparent shadow-none'
-      }}
-    >
+    <>
+      <Popover
+        placement="top"
+        offset={10}
+        isOpen={isPopoverOpen && isPitchShiftEnabled && !isDisabled}
+        onOpenChange={(open) => {
+          // Allow popover to close without disabling pitch shift
+          setIsPopoverOpen(open);
+        }}
+        classNames={{
+          content: 'p-0 border-none bg-transparent shadow-none'
+        }}
+      >
       <PopoverTrigger>
         <div className="relative inline-block">
           <Tooltip
@@ -133,99 +134,72 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
       </PopoverTrigger>
       
       <PopoverContent>
-        <div className="bg-white/60 dark:bg-content-bg/60 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg min-w-[280px] backdrop-blur-sm">
+        <div className="bg-white/60 dark:bg-content-bg/60 border border-gray-300 dark:border-gray-600 rounded-lg p-4 pb-6 shadow-lg min-w-[280px] backdrop-blur-sm">
           {/* Slider with value display */}
           <div className="space-y-3">
-            {/* Value display */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Pitch Shift
-              </span>
-              <span className="text-sm font-semibold text-green-600 dark:text-green-400 min-w-[3rem] text-right">
-                {formatSemitones(pitchShiftSemitones)}
-              </span>
-            </div>
-            
-            {/* Slider */}
-            <div className="relative">
-              <input
-                type="range"
-                min={MIN_SEMITONES}
-                max={MAX_SEMITONES}
-                step="1"
+            {/* Pitch Shift Slider */}
+            <div className="pb-2 pitch-shift-slider">
+              <Slider
+                label="Pitch Shift"
+                size="sm"
+                color="success"
+                step={1}
+                minValue={MIN_SEMITONES}
+                maxValue={MAX_SEMITONES}
                 value={pitchShiftSemitones}
                 onChange={handleSliderChange}
-                disabled={isProcessingPitchShift}
-                className={`
-                  w-full h-2 rounded-lg appearance-none cursor-pointer
-                  bg-gray-200 dark:bg-gray-700
-                  ${isProcessingPitchShift ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
-                style={{
-                  background: `linear-gradient(to right,
-                    #10b981 0%,
-                    #10b981 ${((pitchShiftSemitones - MIN_SEMITONES) / (MAX_SEMITONES - MIN_SEMITONES)) * 100}%,
-                    #e5e7eb ${((pitchShiftSemitones - MIN_SEMITONES) / (MAX_SEMITONES - MIN_SEMITONES)) * 100}%,
-                    #e5e7eb 100%)`,
+                isDisabled={isProcessingPitchShift}
+                showTooltip={true}
+                getValue={(value) => formatSemitones(Array.isArray(value) ? value[0] : value)}
+                marks={[
+                  { value: MIN_SEMITONES, label: `${MIN_SEMITONES}` },
+                  { value: 0, label: '0' },
+                  { value: MAX_SEMITONES, label: `+${MAX_SEMITONES}` }
+                ]}
+                classNames={{
+                  base: 'max-w-full mb-2',
+                  label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                  value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                  track: 'bg-gray-200 dark:bg-gray-700',
+                  filler: 'bg-green-500',
+                  thumb: 'shadow-md border-2 border-green-500 dark:border-green-500',
+                  mark: 'text-xs'
                 }}
-                aria-label="Pitch shift amount in semitones"
               />
-
-              {/* Slider markers */}
-              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1 px-1">
-                <span>{MIN_SEMITONES}</span>
-                <span>0</span>
-                <span>+{MAX_SEMITONES}</span>
-              </div>
             </div>
 
             {/* Divider */}
             <div className="border-t border-gray-200 dark:border-gray-700 my-3" />
 
-            {/* Playback Speed Control */}
-            <div className="space-y-2">
-              {/* Value display */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Playback Speed
-                </span>
-                <span className="text-sm font-semibold text-green-600 dark:text-green-400 min-w-[3rem] text-right">
-                  {playbackRate.toFixed(2)}x
-                </span>
-              </div>
-
-              {/* Slider */}
-              <div className="relative">
-                <input
-                  type="range"
-                  min="0.25"
-                  max="2.0"
-                  step="0.25"
-                  value={playbackRate}
-                  onChange={handlePlaybackRateChange}
-                  disabled={isProcessingPitchShift}
-                  className={`
-                    w-full h-2 rounded-lg appearance-none cursor-pointer
-                    bg-gray-200 dark:bg-gray-700
-                    ${isProcessingPitchShift ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                  style={{
-                    background: `linear-gradient(to right,
-                      #10b981 0%,
-                      #10b981 ${((playbackRate - 0.25) / 1.75) * 100}%,
-                      #e5e7eb ${((playbackRate - 0.25) / 1.75) * 100}%,
-                      #e5e7eb 100%)`,
-                  }}
-                  aria-label="Playback speed rate"
-                />
-
-                {/* Slider markers */}
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1 px-1">
-                  <span>0.25x</span>
-                  <span>1.0x</span>
-                  <span>2.0x</span>
-                </div>
-              </div>
+            {/* Playback Speed Slider */}
+            <div className="pb-2 pitch-shift-slider">
+              <Slider
+                label="Playback Speed"
+                size="sm"
+                color="success"
+                step={0.25}
+                minValue={0.25}
+                maxValue={2.0}
+                value={playbackRate}
+                onChange={handlePlaybackRateChange}
+                isDisabled={isProcessingPitchShift}
+                showTooltip={true}
+                getValue={(value) => `${(Array.isArray(value) ? value[0] : value).toFixed(2)}x`}
+                marks={[
+                  { value: 0.25, label: '0.25x' },
+                  { value: 1.0, label: '1.0x' },
+                  { value: 2.0, label: '2.0x' }
+                ]}
+                classNames={{
+                  base: 'max-w-full mb-2',
+                  label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                  value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                  track: 'bg-gray-200 dark:bg-gray-700',
+                  filler: 'bg-green-500',
+                  thumb: 'shadow-md border-2 border-green-500 dark:border-green-500',
+                  mark: 'text-xs'
+                }}
+              />
             </div>
 
             {/* Processing indicator */}
@@ -236,61 +210,10 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
               </div>
             )}
           </div>
-
-          {/* CSS for slider thumb - Safari compatible */}
-          <style jsx>{`
-            input[type='range'] {
-              -webkit-appearance: none;
-              appearance: none;
-            }
-
-            input[type='range']::-webkit-slider-thumb {
-              -webkit-appearance: none;
-              appearance: none;
-              width: 20px;
-              height: 20px;
-              border-radius: 50%;
-              background: white;
-              border: 2px solid #10b981;
-              cursor: pointer;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            }
-
-            input[type='range']::-moz-range-thumb {
-              width: 20px;
-              height: 20px;
-              border-radius: 50%;
-              background: white;
-              border: 2px solid #10b981;
-              cursor: pointer;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-              border: none;
-            }
-
-            input[type='range']::-webkit-slider-runnable-track {
-              height: 8px;
-              border-radius: 4px;
-            }
-
-            input[type='range']::-moz-range-track {
-              height: 8px;
-              border-radius: 4px;
-              background: transparent;
-            }
-
-            input[type='range']:disabled::-webkit-slider-thumb {
-              cursor: not-allowed;
-              opacity: 0.5;
-            }
-
-            input[type='range']:disabled::-moz-range-thumb {
-              cursor: not-allowed;
-              opacity: 0.5;
-            }
-          `}</style>
         </div>
       </PopoverContent>
     </Popover>
+    </>
   );
 };
 

@@ -55,6 +55,16 @@ interface UIStore {
   setSimplifyChords: (val: boolean) => void;
   toggleSimplifyChords: () => void;
 
+  // Loop playback
+  isLoopEnabled: boolean;
+  loopStartBeat: number;
+  loopEndBeat: number;
+  setIsLoopEnabled: (enabled: boolean) => void;
+  toggleLoop: () => void;
+  setLoopStartBeat: (beat: number) => void;
+  setLoopEndBeat: (beat: number) => void;
+  setLoopRange: (start: number, end: number) => void;
+
   // Pitch shift
   isPitchShiftEnabled: boolean;
   pitchShiftSemitones: number;
@@ -100,6 +110,9 @@ export const useUIStore = create<UIStore>()(
       romanNumeralData: null,
       showSegmentation: false,
       simplifyChords: false,
+      isLoopEnabled: false,
+      loopStartBeat: -1,
+      loopEndBeat: -1,
       isPitchShiftEnabled: false,
       pitchShiftSemitones: 0,
       isProcessingPitchShift: false,
@@ -224,6 +237,19 @@ export const useUIStore = create<UIStore>()(
       toggleSimplifyChords: () =>
         set((state) => ({ simplifyChords: !state.simplifyChords }), false, 'toggleSimplifyChords'),
 
+      // Loop playback
+      setIsLoopEnabled: (enabled) => set({ isLoopEnabled: enabled }, false, 'setIsLoopEnabled'),
+
+      toggleLoop: () =>
+        set((state) => ({ isLoopEnabled: !state.isLoopEnabled }), false, 'toggleLoop'),
+
+      setLoopStartBeat: (beat) => set({ loopStartBeat: beat }, false, 'setLoopStartBeat'),
+
+      setLoopEndBeat: (beat) => set({ loopEndBeat: beat }, false, 'setLoopEndBeat'),
+
+      setLoopRange: (start, end) =>
+        set({ loopStartBeat: start, loopEndBeat: end }, false, 'setLoopRange'),
+
       // Pitch shift
       togglePitchShift: () =>
         set(
@@ -344,6 +370,14 @@ export const useToggleSegmentation = () => useUIStore((state) => state.toggleSeg
 
 export const useSimplifyChords = () => useUIStore((state) => state.simplifyChords);
 export const useToggleSimplifyChords = () => useUIStore((state) => state.toggleSimplifyChords);
+
+export const useIsLoopEnabled = () => useUIStore((state) => state.isLoopEnabled);
+export const useLoopStartBeat = () => useUIStore((state) => state.loopStartBeat);
+export const useLoopEndBeat = () => useUIStore((state) => state.loopEndBeat);
+export const useToggleLoop = () => useUIStore((state) => state.toggleLoop);
+export const useSetLoopStartBeat = () => useUIStore((state) => state.setLoopStartBeat);
+export const useSetLoopEndBeat = () => useUIStore((state) => state.setLoopEndBeat);
+export const useSetLoopRange = () => useUIStore((state) => state.setLoopRange);
 
 export const usePitchShift = () =>
   useUIStore((state) => ({

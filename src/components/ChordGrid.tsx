@@ -14,6 +14,7 @@ import { createShiftedChords } from '@/utils/chordProcessing';
 import { useChordGridLayout } from '@/hooks/useChordGridLayout';
 import { useChordDataProcessing } from '@/hooks/useChordDataProcessing';
 import { useChordInteractions } from '@/hooks/useChordInteractions';
+import { useLoopBeatSelection } from '@/hooks/useLoopBeatSelection';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
@@ -240,6 +241,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     chords,
     originalAudioMapping
   );
+
+  // Use custom hook for loop beat selection
+  const {
+    isLoopEnabled,
+    handleLoopBeatClick,
+    isInLoopRange
+  } = useLoopBeatSelection();
 
   // Use custom hook for layout calculations
   const {
@@ -542,6 +550,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           showRomanNumerals={showRomanNumerals}
                           romanNumeral={romanNumeral}
                           modulationInfo={modulationMarker}
+                          isLoopEnabled={isLoopEnabled}
+                          isInLoopRange={isInLoopRange(globalIndex)}
+                          onLoopBeatClick={handleLoopBeatClick}
                         />
                       );
                     })}

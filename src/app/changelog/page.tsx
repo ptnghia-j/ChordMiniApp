@@ -35,18 +35,27 @@ export default function ChangelogPage() {
       title: 'Zustand State Management Migration & Performance Optimizations (In Development)',
       description: 'Completes migration from React Context API to Zustand for global state management, fixing critical race conditions and audio playback bugs while improving performance.',
       features: [
+        'NEW: Loop Playback - Set start/end beats to loop specific sections of songs',
+        'NEW: Loop range selection via popover panel with manual beat input or click-to-select beats',
+        'NEW: Visual feedback with blue backgrounds for loop range and beat numbering overlay',
+        'NEW: Automatic looping - YouTube player seeks back to start beat when end beat is reached',
         'PERFORMANCE: Migrated from Context API to Zustand for all state management',
         'PERFORMANCE: Bundle size reduced by 7.1% for YouTube analysis page (50.4 kB → 46.8 kB)',
         'PERFORMANCE: Expected 50-70% reduction in unnecessary re-renders',
         'FIX: Toggle buttons (Roman Numerals, Simplify Chords) now work with single click during playback',
         'FIX: Audio playback now works correctly in local audio upload page',
+        'UI: Improved icon clarity - auto-scroll now uses chevron icon instead of arrow path',
         'UI: Removed verbose console logs (chord recognition, alignment, key detection, duration)',
       ],
       technical: [
+        'ARCHITECTURE: New useLoopBeatSelection hook for sequential beat selection with range expansion',
+        'ARCHITECTURE: New useLoopPlayback hook for automatic YouTube player looping',
+        'ARCHITECTURE: Loop state managed in Zustand uiStore with selector hooks for performance',
         'ARCHITECTURE: Removed 4 Context Provider files (AnalysisDataContext, UIContext, PlaybackContext, ZustandSynchronizer)',
         'ARCHITECTURE: Migrated both YouTube analysis and local upload pages to Zustand',
         'ARCHITECTURE: Fixed circular dependency in Zustand initialization causing race conditions',
         'ARCHITECTURE: Fixed pitch shift hook incorrectly muting audio element',
+        'STABILITY: Loop cooldown mechanism (500ms) prevents rapid looping edge cases',
         'STABILITY: Removed deprecated useChordProcessing hook',
         'STABILITY: Components now subscribe to specific Zustand state slices for optimal re-renders',
       ],
@@ -561,7 +570,7 @@ export default function ChangelogPage() {
         </div>
 
         {/* Announcement Banner */}
-        <div className="max-w-4xl mx-auto mb-12">
+        <div className="max-w-6xl mx-auto mb-12">
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-300"></div>
             <div className="relative flex items-center justify-center px-8 py-4 bg-black dark:bg-gray-900 rounded-full border border-gray-700">
@@ -573,7 +582,7 @@ export default function ChangelogPage() {
         </div>
 
         {/* Timeline Container */}
-        <div className="relative max-w-4xl mx-auto">
+        <div className="relative max-w-6xl mx-auto">
           {/* The vertical line in the middle of the timeline */}
           <div className="absolute left-6 top-2 h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></div>
 
