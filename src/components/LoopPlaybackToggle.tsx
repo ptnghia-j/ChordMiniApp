@@ -43,8 +43,9 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   // Initialize loop range to full song when first enabled
+  // Use -1 as sentinel value to detect uninitialized state (0 is a valid beat index)
   useEffect(() => {
-    if (isLoopEnabled && loopEndBeat === 0 && totalBeats > 0) {
+    if (isLoopEnabled && loopEndBeat === -1 && totalBeats > 0) {
       setLoopRange(0, totalBeats - 1);
     }
   }, [isLoopEnabled, loopEndBeat, totalBeats, setLoopRange]);
@@ -73,8 +74,8 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
     // Validate range
     const clampedValue = Math.max(0, Math.min(numValue, totalBeats - 1));
 
-    // If new start > current end, set end = start
-    if (clampedValue > loopEndBeat) {
+    // If new start > current end (and end is initialized), set end = start
+    if (loopEndBeat >= 0 && clampedValue > loopEndBeat) {
       setLoopRange(clampedValue, clampedValue);
     } else {
       setLoopStartBeat(clampedValue);
@@ -89,8 +90,8 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
     // Validate range
     const clampedValue = Math.max(0, Math.min(numValue, totalBeats - 1));
 
-    // If new end < current start, set start = end
-    if (clampedValue < loopStartBeat) {
+    // If new end < current start (and start is initialized), set start = end
+    if (loopStartBeat >= 0 && clampedValue < loopStartBeat) {
       setLoopRange(clampedValue, clampedValue);
     } else {
       setLoopEndBeat(clampedValue);
@@ -168,7 +169,7 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
                 type="number"
                 label="Start Beat"
                 labelPlacement="outside"
-                value={loopStartBeat.toString()}
+                value={(loopStartBeat >= 0 ? loopStartBeat : 0).toString()}
                 onValueChange={handleStartBeatChange}
                 min={0}
                 max={totalBeats - 1}
@@ -188,7 +189,7 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
                 type="number"
                 label="End Beat"
                 labelPlacement="outside"
-                value={loopEndBeat.toString()}
+                value={(loopEndBeat >= 0 ? loopEndBeat : Math.max(0, totalBeats - 1)).toString()}
                 onValueChange={handleEndBeatChange}
                 min={0}
                 max={totalBeats - 1}
