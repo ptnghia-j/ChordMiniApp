@@ -2,13 +2,14 @@
 
 import React, { memo } from 'react';
 import { Tooltip } from '@heroui/react';
-import { HiArrowPath, HiOutlineArrowPath, HiOutlineChatBubbleLeftRight } from 'react-icons/hi2';
+import { HiOutlineChatBubbleLeftRight, HiChevronDoubleDown, HiOutlineChevronDoubleDown } from 'react-icons/hi2';
 import { FaRegFileLines } from 'react-icons/fa6';
 import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import RomanNumeralToggle from '@/components/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/ChordSimplificationToggle';
 import PitchShiftPopover from '@/components/PitchShiftPopover';
+import LoopPlaybackToggle from '@/components/LoopPlaybackToggle';
 import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useToggleSimplifyChords } from '@/stores/uiStore';
 
 interface UtilityBarProps {
@@ -53,6 +54,9 @@ interface UtilityBarProps {
     toggleMetronomeWithSync: () => Promise<boolean>;
   };
 
+  // Loop playback
+  totalBeats?: number;
+
   // Layout
   maxWidth?: string | number;
   className?: string;
@@ -74,6 +78,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   toggleChatbot,
   toggleLyricsPanel,
   metronome,
+  totalBeats = 0,
   maxWidth = '1200px',
   className = ''
 }) => {
@@ -106,7 +111,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle auto-scroll"
               >
-                {isFollowModeEnabled ? <HiArrowPath className="h-5 w-5"/> : <HiOutlineArrowPath className="h-5 w-5"/>}
+                {isFollowModeEnabled ? <HiChevronDoubleDown className="h-5 w-5"/> : <HiOutlineChevronDoubleDown className="h-5 w-5"/>}
               </button>
             </Tooltip>
 
@@ -141,6 +146,11 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             <PitchShiftPopover
               playbackRate={playbackRate}
               setPlaybackRate={setPlaybackRate}
+            />
+
+            {/* Loop Playback */}
+            <LoopPlaybackToggle
+              totalBeats={totalBeats}
             />
 
             {/* Metronome */}

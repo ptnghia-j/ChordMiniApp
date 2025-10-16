@@ -46,6 +46,7 @@ import {
 import { useAudioInteractions } from '@/hooks/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
+import { useLoopPlayback } from '@/hooks/useLoopPlayback';
 import { useApiKeys } from '@/hooks/useApiKeys';
 
 
@@ -1157,6 +1158,14 @@ export default function YouTubeVideoAnalyzePage() {
     };
   }, [chordGridData, simplifyChords]);
 
+  // Use loop playback hook for automatic looping
+  useLoopPlayback({
+    youtubePlayer,
+    beats: simplifiedChordGridData?.beats || [],
+    currentTime,
+    isPlaying
+  });
+
   // CRITICAL FIX: Chord playback state managed by ChordPlaybackManager component
   // ChordPlaybackManager is inside UIProvider and handles transposition
   const [chordPlayback, setChordPlayback] = useState<UseChordPlaybackReturn>({
@@ -1728,6 +1737,7 @@ export default function YouTubeVideoAnalyzePage() {
                 isEnabled: isMetronomeEnabled,
                 toggleMetronomeWithSync: handleMetronomeToggle
               }}
+              totalBeats={simplifiedChordGridData?.beats?.length || 0}
             />
           }
         />

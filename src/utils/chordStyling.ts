@@ -80,7 +80,8 @@ export const getChordStyle = (
   pickupBeatsCount: number
 ): string => {
   // Clean base classes with minimal styling
-  const baseClasses = `flex flex-col items-start justify-center aspect-square transition-colors duration-150 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden ${
+  // CRITICAL: relative positioning required for absolute positioned beat number overlay
+  const baseClasses = `relative flex flex-col items-start justify-center aspect-square transition-colors duration-150 border border-gray-300 dark:border-gray-600 rounded-sm overflow-hidden ${
     isClickable ? 'cursor-pointer hover:border-gray-400 dark:hover:border-gray-500' : ''
   }`;
 
