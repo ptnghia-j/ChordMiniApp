@@ -16,13 +16,15 @@ interface UseLoopPlaybackProps {
   beats: (number | null)[];
   currentTime: number;
   isPlaying: boolean;
+  setLastClickInfo: (info: { visualIndex: number; timestamp: number; clickTime: number }) => void;
 }
 
 export const useLoopPlayback = ({
   youtubePlayer,
   beats,
   currentTime,
-  isPlaying
+  isPlaying,
+  setLastClickInfo
 }: UseLoopPlaybackProps) => {
   const isLoopEnabled = useIsLoopEnabled();
   const loopStartBeat = useLoopStartBeat();
@@ -58,7 +60,7 @@ export const useLoopPlayback = ({
     // Check if we've reached the end of the loop range
     if (currentTime >= endBoundary) {
       const now = Date.now();
-      
+
       // Cooldown check to prevent rapid looping
       if (now - lastLoopTimeRef.current < LOOP_COOLDOWN_MS) {
         return;
@@ -69,11 +71,19 @@ export const useLoopPlayback = ({
         try {
           youtubePlayer.seekTo(startTimestamp, 'seconds');
           lastLoopTimeRef.current = now;
+
+          // CRITICAL FIX: Trigger click-like positioning so the animation loop
+          // centrally updates both ref and state (avoids external ref mutation)
+          setLastClickInfo({
+            visualIndex: loopStartBeat,
+            timestamp: startTimestamp,
+            clickTime: Date.now()
+          });
         } catch (error) {
           console.warn('Failed to loop playback:', error);
         }
       }
     }
-  }, [isLoopEnabled, youtubePlayer, beats, currentTime, isPlaying, loopStartBeat, loopEndBeat]);
+  }, [isLoopEnabled, youtubePlayer, beats, currentTime, isPlaying, loopStartBeat, loopEndBeat, setLastClickInfo]);
 };
 

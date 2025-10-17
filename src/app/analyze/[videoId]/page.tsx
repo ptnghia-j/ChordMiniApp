@@ -1163,7 +1163,8 @@ export default function YouTubeVideoAnalyzePage() {
     youtubePlayer,
     beats: simplifiedChordGridData?.beats || [],
     currentTime,
-    isPlaying
+    isPlaying,
+    setLastClickInfo
   });
 
   // CRITICAL FIX: Chord playback state managed by ChordPlaybackManager component

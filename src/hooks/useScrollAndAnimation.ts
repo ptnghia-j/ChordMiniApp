@@ -198,6 +198,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // Guard constants
   const PHASE_SWITCH_BUFFER = 0.03; // 30ms buffer between pre-beat and model phase
   const OFF_DWELL_SECONDS = 0.08; // require 80ms before turning highlight off (-1)
+  const CLICK_OVERRIDE_WINDOW_MS = 800; // extended window to cover seek latency
 
   // ANTI-JITTER: Centralized state update function to prevent multiple conflicting updates
   const updateBeatIndexSafely = useCallback((newBeatIndex: number) => {
@@ -402,15 +403,19 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
             if (lastClickInfo) {
               const timeSinceClick = Date.now() - lastClickInfo.clickTime;
               const timeDifference = Math.abs(time - lastClickInfo.timestamp);
+              const prevTime = prevTimeRef.current;
+              const isRewinding = time + 1e-6 < prevTime;
 
-              // PHASE 1: Initial positioning (first 200ms after click)
-              if (timeSinceClick < 200 && timeDifference < 1.0) {
+              // Immediate snap for first 200ms to ensure visual reset
+              // Extended window to cover seek latency until player time reflects target or rewind is detected
+              const withinInitialSnap = timeSinceClick < 200;
+              const withinExtendedWindow = timeSinceClick < CLICK_OVERRIDE_WINDOW_MS;
+              const playerNotAtTargetYet = timeDifference > 0.25; // YT seek can lag; keep override until close
+
+              if (withinInitialSnap || (withinExtendedWindow && (isRewinding || playerNotAtTargetYet))) {
                 updateBeatIndexSafely(lastClickInfo.visualIndex);
                 lastEmitTimeRef.current = time;
-                useClickPosition = true; // Flag to skip normal beat tracking for this frame
-              } else if (timeSinceClick >= 200) {
-                // DEBUG: Log when animation resumes after click
-                // console.log(`🎯 ANIMATION RESUMED: Resuming normal beat tracking after click (${timeSinceClick}ms elapsed)`);
+                useClickPosition = true; // skip normal tracking this frame
               }
             }
 
