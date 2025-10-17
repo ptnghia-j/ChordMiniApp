@@ -187,8 +187,10 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     return result;
   }, []);
 
-  // Throttle consecutive scrollIntoView calls to avoid conflicting smooth scrolls
+  // PERFORMANCE FIX #3: Auto-scroll optimization
+  // Track last scroll time and beat index to reduce scroll frequency
   const lastScrollTimeRef = useRef(0);
+  const lastScrolledBeatIndexRef = useRef(-1);
 
   // JITTER GUARDS: Track last emitted beat and timing to apply dwell/hysteresis
   const lastEmittedBeatRef = useRef(-1);
@@ -214,38 +216,60 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     }
   }, [setCurrentBeatIndex, currentBeatIndexRef]);
 
-  // FIXED: Improved auto-scrolling with layout stability
+  // PERFORMANCE FIX #3: Optimized auto-scrolling with reduced frequency
   const scrollToCurrentBeat = useCallback(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
     const now = Date.now();
-    // Throttle to avoid overlapping smooth scrolls from multiple sources
-    if (now - lastScrollTimeRef.current < 120) {
+
+    // OPTIMIZATION 1: Increased throttle from 120ms to 200ms (max 5 scrolls/second)
+    // This reduces scroll frequency while maintaining smooth experience
+    if (now - lastScrollTimeRef.current < 200) {
+      return;
+    }
+
+    // OPTIMIZATION 2: Position-based debouncing - only scroll if beat changed significantly
+    // Skip scrolling if we're still on the same beat or just moved 1 beat
+    // This prevents excessive scrolling for consecutive beats that are visually close
+    const beatIndexDelta = Math.abs(currentBeatIndex - lastScrolledBeatIndexRef.current);
+    if (beatIndexDelta === 0) {
+      return; // Same beat, no need to scroll
+    }
+
+    // For small beat changes (1-2 beats), only scroll if enough time has passed
+    // This reduces scroll frequency for fast-tempo songs
+    if (beatIndexDelta <= 2 && now - lastScrollTimeRef.current < 400) {
       return;
     }
 
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
       const rect = beatElement.getBoundingClientRect();
-      const viewportCenter = window.innerHeight / 2;
+      const viewportHeight = window.innerHeight;
+      const viewportCenter = viewportHeight / 2;
       const elementCenter = rect.top + rect.height / 2;
       const delta = elementCenter - viewportCenter;
 
-      // Skip micro-adjustments if already near center
-      if (Math.abs(delta) < 32) {
-        return;
+      // OPTIMIZATION 3: Viewport boundary check - only scroll if element is outside comfortable zone
+      // Expanded from 32px to 80px to reduce unnecessary micro-scrolls
+      // Also check if element is completely outside viewport (more urgent)
+      const isOutsideViewport = rect.bottom < 0 || rect.top > viewportHeight;
+      const isOutsideComfortZone = Math.abs(delta) > 80;
+
+      if (!isOutsideViewport && !isOutsideComfortZone) {
+        return; // Element is visible and reasonably centered, skip scroll
       }
 
-      // CRITICAL: Wait for any pending layout changes to complete before scrolling
+      // OPTIMIZATION 4: Single RAF instead of double RAF
+      // The double RAF was for layout stability but adds latency
+      // Single RAF is sufficient for smooth scrolling
       requestAnimationFrame(() => {
-        // Double RAF to ensure layout is fully stable
-        requestAnimationFrame(() => {
-          lastScrollTimeRef.current = Date.now();
-          beatElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest' // Prevent horizontal scrolling that can cause jitter
-          });
+        lastScrollTimeRef.current = Date.now();
+        lastScrolledBeatIndexRef.current = currentBeatIndex;
+        beatElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'nearest' // Prevent horizontal scrolling that can cause jitter
         });
       });
     }
@@ -256,8 +280,10 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     scrollToCurrentBeat();
   }, [currentBeatIndex, scrollToCurrentBeat, isFollowModeEnabled]); // Include isFollowModeEnabled dependency
 
-  // PERFORMANCE OPTIMIZATION: RequestAnimationFrame for smooth 60fps updates
+  // PERFORMANCE OPTIMIZATION: RequestAnimationFrame with frame skipping
   const rafRef = useRef<number | undefined>(undefined);
+  const frameCounterRef = useRef<number>(0);
+  const FRAME_SKIP = 2; // Run every 3rd frame (60fps / 3 = 20fps)
   // PERFORMANCE OPTIMIZATION: Debounce state updates to reduce re-renders
   const lastStateUpdateTimeRef = useRef<number>(0);
   const STATE_UPDATE_INTERVAL = 50; // Update at most every 50ms (20fps) instead of 60fps
@@ -270,14 +296,24 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       return;
     }
 
-    // PERFORMANCE OPTIMIZATION: Use RequestAnimationFrame for smoother updates
-    // This provides 60fps updates instead of fixed 20Hz, reducing jitter
+    // PERFORMANCE OPTIMIZATION: Use RequestAnimationFrame with frame skipping
+    // This provides 20fps updates (every 3rd frame) to match state update throttle
     const updateBeatTracking = () => {
       // CRITICAL FIX: Check current playing state dynamically
       // If paused, stop the loop immediately (don't schedule next frame)
       if (!youtubePlayer || !youtubePlayer.getCurrentTime || !isPlaying) {
         return; // Stop the loop when paused
       }
+
+      // PERFORMANCE FIX #1: Frame skipping to reduce CPU usage
+      // Increment frame counter and skip frames that don't match our target rate
+      frameCounterRef.current++;
+      if (frameCounterRef.current % (FRAME_SKIP + 1) !== 0) {
+        // Skip this frame, but schedule next one to maintain loop
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+        return;
+      }
+
       const time = youtubePlayer.getCurrentTime();
       setCurrentTime(time);
 
@@ -628,6 +664,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         cancelAnimationFrame(rafRef.current);
         rafRef.current = undefined;
       }
+      // Reset frame counter when effect cleanup runs
+      frameCounterRef.current = 0;
     };
   // CRITICAL FIX: Include isPlaying to ensure animation starts/stops when playback changes
   // The effect will restart the loop when isPlaying becomes true

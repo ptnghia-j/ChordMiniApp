@@ -217,6 +217,8 @@ export class SoundfontChordPlaybackService {
   private audioContext: AudioContext | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private instruments: Map<string, any> = new Map(); // Type will be Soundfont after lazy load
+  private loadedInstruments: Set<string> = new Set(); // Track which instruments are loaded
+  private loadingInstruments: Set<string> = new Set(); // Track which instruments are currently loading
   private isInitialized = false;
   private isInitializing = false;
   private initializationError: Error | null = null;
@@ -225,6 +227,8 @@ export class SoundfontChordPlaybackService {
   private scheduledTimeouts: Map<string, NodeJS.Timeout> = new Map(); // Track scheduled timeouts for cleanup
   private releaseTime = 0.3; // Release/fade-out time in seconds
   private loopIntervals: Map<string, NodeJS.Timeout> = new Map(); // Track loop intervals for cleanup
+  private unloadTimers: Map<string, NodeJS.Timeout> = new Map(); // Track scheduled instrument unloads
+  private readonly UNLOAD_DELAY_MS = 30000; // 30 seconds before unloading unused instrument
 
   private options: SoundfontChordPlaybackOptions = {
     pianoVolume: 50,
@@ -239,7 +243,8 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Initialize and load all instruments (lazy loading)
+   * Initialize AudioContext only (instruments loaded on-demand)
+   * PERFORMANCE FIX #4: Changed from loading all instruments upfront to lazy per-instrument loading
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -265,31 +270,12 @@ export class SoundfontChordPlaybackService {
       }
     }
 
-    const startTime = performance.now();
-
     try {
-      console.log('🎵 Loading soundfonts...');
-
-      // Load all four instruments in parallel
-      const [piano, guitar, violin, flute] = await Promise.all([
-        this.loadInstrument('piano', 'acoustic_grand_piano'),
-        this.loadInstrument('guitar', 'acoustic_guitar_nylon'),
-        this.loadInstrument('violin', 'violin'),
-        this.loadInstrument('flute', 'flute')
-      ]);
-
-      this.instruments.set('piano', piano);
-      this.instruments.set('guitar', guitar);
-      this.instruments.set('violin', violin);
-      this.instruments.set('flute', flute);
-
+      console.log('🎵 AudioContext initialized (instruments will load on-demand)');
       this.isInitialized = true;
-      const loadingTime = performance.now() - startTime;
-
-      console.log(`✅ Soundfonts loaded in ${loadingTime.toFixed(0)}ms`);
     } catch (error) {
       this.initializationError = error as Error;
-      console.error('❌ Failed to load soundfonts:', error);
+      console.error('❌ Failed to initialize AudioContext:', error);
       throw error;
     } finally {
       this.isInitializing = false;
@@ -298,6 +284,7 @@ export class SoundfontChordPlaybackService {
 
   /**
    * Load a single instrument (lazy loads smplr library)
+   * PERFORMANCE FIX #4: Now called on-demand when instrument is first needed
    */
   private async loadInstrument(
     name: string,
@@ -309,15 +296,102 @@ export class SoundfontChordPlaybackService {
     // Lazy load smplr
     const { Soundfont } = await getSmplr();
 
+    const startTime = performance.now();
     console.log(`🎵 Loading ${name}...`);
     const instrument = new Soundfont(this.audioContext, {
       instrument: instrumentName
     });
 
     await instrument.loaded();
-    console.log(`✅ ${name} loaded`);
+    const loadTime = performance.now() - startTime;
+    console.log(`✅ ${name} loaded in ${loadTime.toFixed(0)}ms`);
 
     return instrument;
+  }
+
+  /**
+   * Ensure an instrument is loaded before use
+   * PERFORMANCE FIX #4: Per-instrument lazy loading
+   */
+  private async ensureInstrumentLoaded(instrumentName: string): Promise<void> {
+    // Already loaded
+    if (this.loadedInstruments.has(instrumentName)) {
+      // Cancel any pending unload
+      const unloadTimer = this.unloadTimers.get(instrumentName);
+      if (unloadTimer) {
+        clearTimeout(unloadTimer);
+        this.unloadTimers.delete(instrumentName);
+      }
+      return;
+    }
+
+    // Currently loading - wait for it
+    if (this.loadingInstruments.has(instrumentName)) {
+      while (this.loadingInstruments.has(instrumentName)) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+
+    // Load the instrument
+    this.loadingInstruments.add(instrumentName);
+    try {
+      const instrumentMap: Record<string, string> = {
+        'piano': 'acoustic_grand_piano',
+        'guitar': 'acoustic_guitar_nylon',
+        'violin': 'violin',
+        'flute': 'flute'
+      };
+
+      const smplrInstrumentName = instrumentMap[instrumentName];
+      if (!smplrInstrumentName) {
+        throw new Error(`Unknown instrument: ${instrumentName}`);
+      }
+
+      const instrument = await this.loadInstrument(instrumentName, smplrInstrumentName);
+      this.instruments.set(instrumentName, instrument);
+      this.loadedInstruments.add(instrumentName);
+    } finally {
+      this.loadingInstruments.delete(instrumentName);
+    }
+  }
+
+  /**
+   * Unload an instrument to free memory
+   * PERFORMANCE FIX #4: Unload unused instruments after delay
+   */
+  private unloadInstrument(instrumentName: string): void {
+    if (!this.loadedInstruments.has(instrumentName)) return;
+
+    console.log(`🗑️ Unloading ${instrumentName} to free memory`);
+
+    // Stop any active notes
+    this.stopInstrumentNotes(instrumentName);
+
+    // Remove from maps
+    this.instruments.delete(instrumentName);
+    this.loadedInstruments.delete(instrumentName);
+    this.activeNotes.delete(instrumentName);
+  }
+
+  /**
+   * Schedule instrument unload after delay if volume is 0
+   * PERFORMANCE FIX #4: Automatic memory management
+   */
+  private scheduleInstrumentUnload(instrumentName: string): void {
+    // Cancel any existing unload timer
+    const existingTimer = this.unloadTimers.get(instrumentName);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Schedule new unload
+    const timer = setTimeout(() => {
+      this.unloadInstrument(instrumentName);
+      this.unloadTimers.delete(instrumentName);
+    }, this.UNLOAD_DELAY_MS);
+
+    this.unloadTimers.set(instrumentName, timer);
   }
 
   /**
@@ -475,6 +549,7 @@ export class SoundfontChordPlaybackService {
   /**
    * Play notes on a specific instrument
    * Guitar uses arpeggiation (notes played sequentially), other instruments play as chords
+   * PERFORMANCE FIX #4: Ensures instrument is loaded before playing
    */
   private async playInstrument(
     instrumentName: string,
@@ -484,6 +559,9 @@ export class SoundfontChordPlaybackService {
     octave: number,
     bpm: number = 120
   ): Promise<void> {
+    // PERFORMANCE FIX #4: Ensure instrument is loaded on-demand
+    await this.ensureInstrumentLoaded(instrumentName);
+
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
 
@@ -820,6 +898,7 @@ export class SoundfontChordPlaybackService {
 
   /**
    * Update options (compatible with AudioMixerService interface)
+   * PERFORMANCE FIX #4: Schedule instrument unload when volume is set to 0
    */
   updateOptions(options: Partial<SoundfontChordPlaybackOptions>): void {
     this.options = { ...this.options, ...options };
@@ -829,6 +908,20 @@ export class SoundfontChordPlaybackService {
       this.initialize().catch(error => {
         console.error('❌ Failed to initialize soundfonts:', error);
       });
+    }
+
+    // PERFORMANCE FIX #4: Schedule unload for instruments with volume = 0
+    if (options.pianoVolume === 0 && this.loadedInstruments.has('piano')) {
+      this.scheduleInstrumentUnload('piano');
+    }
+    if (options.guitarVolume === 0 && this.loadedInstruments.has('guitar')) {
+      this.scheduleInstrumentUnload('guitar');
+    }
+    if (options.violinVolume === 0 && this.loadedInstruments.has('violin')) {
+      this.scheduleInstrumentUnload('violin');
+    }
+    if (options.fluteVolume === 0 && this.loadedInstruments.has('flute')) {
+      this.scheduleInstrumentUnload('flute');
     }
   }
 
@@ -870,12 +963,23 @@ export class SoundfontChordPlaybackService {
 
   /**
    * Cleanup resources
+   * PERFORMANCE FIX #4: Also clear unload timers and tracking sets
    */
   dispose(): void {
     this.stopAll();
+
+    // PERFORMANCE FIX #4: Clear unload timers
+    this.unloadTimers.forEach((timer) => {
+      clearTimeout(timer);
+    });
+    this.unloadTimers.clear();
+
     this.activeNotes.clear();
     this.scheduledTimeouts.clear();
     this.instruments.clear();
+    this.loadedInstruments.clear();
+    this.loadingInstruments.clear();
+
     // Do not close the shared AudioContext; just release local reference
     this.audioContext = null;
     this.isInitialized = false;

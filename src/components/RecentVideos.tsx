@@ -7,6 +7,7 @@ import { db } from '@/config/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, doc, getDoc } from 'firebase/firestore';
 import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
 import { Card, CardBody, CardHeader, Button, Chip, Skeleton } from '@heroui/react';
+import { useIsVisible } from '@/hooks/useIntersectionObserver';
 
 interface TranscribedVideo {
   videoId: string;
@@ -40,6 +41,13 @@ export default function RecentVideos() {
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true); // State to track if more videos can be loaded
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // PERFORMANCE FIX #5: Lazy load using Intersection Observer
+  const [containerRef, isVisible] = useIsVisible<HTMLDivElement>({
+    threshold: 0.1,
+    rootMargin: '100px', // Start loading 100px before component enters viewport
+    freezeOnceVisible: true // Only load once
+  });
 
   interface AudioFileMetadata {
     audioFilename: string;
@@ -113,6 +121,30 @@ export default function RecentVideos() {
   }, []);
 
   const fetchVideos = useCallback(async (isLoadMore = false) => {
+    // PERFORMANCE FIX #5: Check cache first for initial load
+    if (!isLoadMore) {
+      try {
+        const { recentVideosCache } = await import('@/services/smartFirebaseCache');
+        const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
+
+        const cachedData = await recentVideosCache.get(
+          cacheKey,
+          async () => null, // Don't fetch yet, just check cache
+          () => true
+        );
+
+        if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+          console.log('✅ Using cached recent videos data');
+          setVideos(cachedData as unknown as TranscribedVideo[]);
+          setLoading(false);
+          setHasMore(cachedData.length >= INITIAL_LOAD_COUNT);
+          return;
+        }
+      } catch (cacheError) {
+        console.warn('Cache check failed, proceeding with Firebase query:', cacheError);
+      }
+    }
+
     // CRITICAL FIX: Ensure Firebase is initialized before fetching
     // Race condition: Component mounts before setTimeout(0) in firebase.ts completes
     // This ensures db is initialized before attempting to fetch data
@@ -159,7 +191,7 @@ export default function RecentVideos() {
           transcriptionsRef,
           orderBy('createdAt', 'desc'),
           startAfter(lastDoc),
-          limit(LOAD_MORE_COUNT) 
+          limit(LOAD_MORE_COUNT)
         );
       } else {
         q = query(
@@ -232,6 +264,20 @@ export default function RecentVideos() {
         setVideos(prev => [...prev, ...transcribedVideos]);
       } else {
         setVideos(transcribedVideos);
+
+        // PERFORMANCE FIX #5: Cache the initial load results
+        try {
+          const { recentVideosCache } = await import('@/services/smartFirebaseCache');
+          const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
+          await recentVideosCache.get(
+            cacheKey,
+            async () => transcribedVideos as unknown as Record<string, unknown>[],
+            () => true
+          );
+          console.log('✅ Cached recent videos data');
+        } catch (cacheError) {
+          console.warn('Failed to cache recent videos:', cacheError);
+        }
       }
 
       const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
@@ -252,13 +298,14 @@ export default function RecentVideos() {
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
 
-  // Initial load effect - run only once using a ref guard (satisfies exhaustive-deps)
+  // PERFORMANCE FIX #5: Only fetch when component is visible (Intersection Observer)
   const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (hasLoadedRef.current) return;
+    if (hasLoadedRef.current || !isVisible) return;
     hasLoadedRef.current = true;
+    console.log('🔍 RecentVideos component is visible, loading data...');
     void fetchVideos(false);
-  }, [fetchVideos]);
+  }, [fetchVideos, isVisible]);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -304,9 +351,16 @@ export default function RecentVideos() {
     return serviceMap[service] || service;
   };
 
+  // PERFORMANCE FIX #5: Show placeholder until component is visible
+  if (!isVisible) {
+    return (
+      <div ref={containerRef} className="w-full h-96 bg-content1 dark:bg-content1 border border-divider dark:border-divider rounded-lg" />
+    );
+  }
+
   if (loading) {
     return (
-      <Card className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+      <Card ref={containerRef} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
         <CardHeader className="flex justify-between items-center pb-2">
           <h3 className="text-xl font-medium">Recently Transcribed Songs</h3>
           <Chip size="md" variant="flat" color="default">Loading...</Chip>
@@ -331,7 +385,7 @@ export default function RecentVideos() {
   }
 
   return (
-    <Card className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+    <Card ref={containerRef} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
       <CardHeader className="flex justify-between items-center pb-2">
         <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
         <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
