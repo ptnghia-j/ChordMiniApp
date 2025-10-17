@@ -68,6 +68,7 @@ interface FloatingVideoDockProps {
   onPause: () => void;
   onProgress: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek: (time: number) => void;
+  onEnded?: () => void;
 
   // URLs
   youtubeEmbedUrl?: string;
@@ -125,6 +126,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   onPause,
   onProgress,
   onSeek,
+  onEnded,
   youtubeEmbedUrl,
   videoUrl,
   youtubePlayer,
@@ -308,6 +310,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
               onPause={onPause}
               onProgress={onProgress}
               onSeek={onSeek}
+              onEnded={onEnded}
             />
           </div>
         )}
