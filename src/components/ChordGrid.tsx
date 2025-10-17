@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   getSegmentationColorForBeatIndex,
   formatRomanNumeral,
@@ -198,6 +198,11 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
 
+  // PERFORMANCE FIX #2: CSS-based beat highlighting
+  // Track previous beat for efficient CSS class updates
+  const previousBeatRef = useRef<number>(-1);
+  const gridElementRef = useRef<HTMLDivElement | null>(null);
+
   // Use simple time signature - no complex beat source logic
   const actualBeatsPerMeasure = timeSignature;
 
@@ -264,12 +269,56 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     isLyricsPanelOpen
   );
 
+  // Merged ref callback to handle both layout hook ref and our element ref
+  const mergedGridRef = useCallback((node: HTMLDivElement | null) => {
+    // Store in our ref for CSS class updates
+    gridElementRef.current = node;
+    // Call the layout hook's ref callback
+    if (gridContainerRef) {
+      gridContainerRef(node);
+    }
+  }, [gridContainerRef]);
+
+  // PERFORMANCE FIX #2: CSS-based beat highlighting
+  // Update CSS class for current beat (no React re-renders, pure CSS)
+  useEffect(() => {
+    if (currentBeatIndex === undefined || currentBeatIndex < 0) return;
+    if (!gridElementRef.current) return;
+
+    // Defensive cleanup: remove any stale highlights first (e.g., after theme/loop toggles)
+    const highlighted = gridElementRef.current.querySelectorAll('.chord-cell.current-beat-highlight');
+    highlighted.forEach((el) => {
+      const idx = (el as HTMLElement).getAttribute('data-beat-index');
+      if (idx === null || Number(idx) !== currentBeatIndex) {
+        el.classList.remove('current-beat-highlight');
+      }
+    });
+
+    // Remove highlight from previously tracked beat (redundant but cheap)
+    if (previousBeatRef.current >= 0 && previousBeatRef.current !== currentBeatIndex) {
+      const prevCell = gridElementRef.current.querySelector(
+        `.chord-cell[data-beat-index="${previousBeatRef.current}"]`
+      );
+      if (prevCell) prevCell.classList.remove('current-beat-highlight');
+    }
+
+    // Add highlight to current beat
+    const currentCell = gridElementRef.current.querySelector(
+      `.chord-cell[data-beat-index="${currentBeatIndex}"]`
+    );
+    if (currentCell) {
+      currentCell.classList.add('current-beat-highlight');
+    }
+
+    previousBeatRef.current = currentBeatIndex;
+  }, [currentBeatIndex, theme, isLoopEnabled]);
+
   // PERFORMANCE OPTIMIZATION: Extract layout values from memoized config
   const { measuresPerRow: dynamicMeasuresPerRow } = gridLayoutConfig;
 
   // Use utility function for chord styling
-  const getChordStyleLocal = useCallback((chord: string, isCurrentBeat: boolean, beatIndex: number, isClickable: boolean = true) => {
-    return getChordStyle(chord, isCurrentBeat, beatIndex, isClickable, hasPickupBeats, timeSignature, pickupBeatsCount);
+  const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
+    return getChordStyle(chord, beatIndex, isClickable, hasPickupBeats, timeSignature, pickupBeatsCount);
   }, [hasPickupBeats, timeSignature, pickupBeatsCount]);
 
   // Memoized measure grouping with proper pickup beat handling using shifted chords
@@ -420,7 +469,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   }
 
   return (
-    <div ref={gridContainerRef} className="chord-grid-container mx-auto px-0.5 sm:px-1 relative" style={{ maxWidth: "99%" }}>
+    <div
+      ref={mergedGridRef}
+      className="chord-grid-container mx-auto px-0.5 sm:px-1 relative"
+      style={{ maxWidth: "99%" }}
+      data-current-beat={currentBeatIndex !== undefined && currentBeatIndex >= 0 ? currentBeatIndex : undefined}
+    >
       {/* Clean card container with minimal styling */}
       <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
 

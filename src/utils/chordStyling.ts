@@ -72,7 +72,6 @@ export const getGridColumnsClass = (beatsPerMeasure: number): string => {
  */
 export const getChordStyle = (
   chord: string,
-  isCurrentBeat: boolean,
   beatIndex: number,
   isClickable: boolean,
   hasPickupBeats: boolean,
@@ -123,17 +122,8 @@ export const getChordStyle = (
     }
   }
 
-  // Current beat: single border color and subtle background, no double borders
-  if (isCurrentBeat) {
-    const highlightBase = `${baseClasses} ${isEmpty ? '' : ''}`;
-    if (isEmpty) {
-      classes = `${highlightBase} bg-gray-200 dark:bg-gray-600 border-blue-600 dark:border-blue-400`;
-      textColor = "text-gray-600 dark:text-gray-300";
-    } else {
-      classes = `${highlightBase} bg-blue-100 dark:bg-blue-800 border-blue-600 dark:border-blue-400`;
-      textColor = "text-blue-900 dark:text-blue-100";
-    }
-  }
+  // NOTE: Current beat highlighting is handled purely via CSS class 'current-beat-highlight'
+  // added by ChordGrid effect to avoid React re-renders. Do not style current beat here.
 
   return `${classes} ${textColor}`;
 };

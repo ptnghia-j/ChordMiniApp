@@ -109,6 +109,8 @@ export default function OptimizedVideoDemo({
             onError={handlePosterError}
             loading="eager"
             fetchPriority="high"
+            priority={true}
+            quality={85}
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 40vw"
             style={{
               objectFit: 'cover'

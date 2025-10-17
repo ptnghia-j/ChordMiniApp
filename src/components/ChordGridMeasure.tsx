@@ -52,7 +52,7 @@ export interface ChordGridMeasureProps {
   getSegmentationColorForBeatIndex: (beatIndex: number) => string | undefined;
   handleBeatClick: (globalIndex: number) => void;
   isClickable: (globalIndex: number, chord: string) => boolean;
-  getChordStyle: (chord: string, isCurrentBeat: boolean, beatIndex: number, isClickable: boolean) => string;
+  getChordStyle: (chord: string, globalIndex: number, isClickable: boolean) => string;
   getDynamicFontSize: (chordLength: number) => string;
   getGridColumnsClass: () => string;
   formatRomanNumeral: (romanNumeral: string) => React.ReactElement | string;
