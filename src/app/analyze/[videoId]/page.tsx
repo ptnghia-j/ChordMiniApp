@@ -120,6 +120,8 @@ import ConditionalPlaybackControls from '@/components/ConditionalPlaybackControl
 // Import Zustand stores for direct initialization
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useIsLoopEnabled, useLoopStartBeat } from '@/stores/uiStore';
+
 import { usePlaybackStore } from '@/stores/playbackStore';
 
 
@@ -422,6 +424,10 @@ export default function YouTubeVideoAnalyzePage() {
     clickTime: number;
   } | null>(null);
   const [globalSpeedAdjustment, setGlobalSpeedAdjustment] = useState<number | null>(null); // Store calculated speed adjustment
+  // Loop controls from UI store
+  const isLoopEnabled = useIsLoopEnabled();
+  const loopStartBeat = useLoopStartBeat();
+
 
   // YouTube player state
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
@@ -1163,7 +1169,7 @@ export default function YouTubeVideoAnalyzePage() {
     youtubePlayer,
     beats: simplifiedChordGridData?.beats || [],
     currentTime,
-    isPlaying,
+    duration,
     setLastClickInfo
   });
 
@@ -1705,6 +1711,18 @@ export default function YouTubeVideoAnalyzePage() {
                   youtubePlayer.seekTo(time, 'seconds');
                 }
               }}
+              onEnded={() => {
+                if (!isLoopEnabled) return;
+                const beats = simplifiedChordGridData?.beats || [];
+                if (!beats.length) return;
+                if (loopStartBeat < 0 || loopStartBeat >= beats.length) return;
+                const startTimestamp = beats[loopStartBeat] ?? 0;
+                try { (youtubePlayer as any)?.seekTo?.(startTimestamp, 'seconds'); } catch {}
+                setLastClickInfo({ visualIndex: loopStartBeat, timestamp: startTimestamp ?? 0, clickTime: Date.now() });
+                try { (youtubePlayer as any)?.playVideo?.(); } catch {}
+                setIsPlaying(true);
+              }}
+
               youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
               videoUrl={audioProcessingState.videoUrl}
               youtubePlayer={youtubePlayer}

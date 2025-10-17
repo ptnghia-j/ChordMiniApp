@@ -29,6 +29,7 @@ interface CollapsibleVideoPlayerProps {
   onPause?: () => void;
   onProgress?: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek?: (time: number) => void;
+  onEnded?: () => void;
 }
 
 export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
@@ -41,7 +42,8 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   onPlay,
   onPause,
   onProgress,
-  onSeek
+  onSeek,
+  onEnded
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -163,6 +165,8 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 onReady={handleReady}
                 onPlay={onPlay}
                 onPause={onPause}
+                onEnded={onEnded}
+
                 onProgress={onProgress}
                 progressInterval={100}
                 muted={false}
@@ -267,6 +271,8 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           onReady={handleReady}
           onPlay={onPlay}
           onPause={onPause}
+          onEnded={onEnded}
+
           onProgress={onProgress}
           progressInterval={100}
           muted={false}
