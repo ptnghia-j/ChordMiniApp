@@ -9,22 +9,18 @@
  * Battery impact: 10-15% reduction in battery drain
  */
 
-/* 
- * Current Beat Highlighting - CSS Attribute Selector Approach
- * 
- * How it works:
- * 1. ChordGrid container has data-current-beat="5" attribute
- * 2. Each ChordCell has data-beat-index="5" attribute
- * 3. CSS matches when both attributes have the same value
- * 4. Only the container's data-current-beat updates during playback
- * 5. No React re-renders needed for highlighting
+/*
+ * Current Beat Highlighting - Class-Based Approach
+ *
+ * How it works (actual implementation):
+ * 1. JavaScript updates the DOM by adding/removing the `current-beat-highlight` class
+ *    on the chord cell whose `data-beat-index` matches the current beat.
+ * 2. This avoids React re-renders entirely; only classList operations occur per beat.
+ * 3. CSS below styles `.current-beat-highlight` for both light and dark themes.
+ *
+ * Note: Earlier drafts considered an attribute-matching approach using
+ * `data-current-beat`, but the final implementation uses a class for clarity and control.
  */
-
-/* Current beat highlighting for normal (non-empty) cells */
-.chord-grid-container[data-current-beat] .chord-cell[data-beat-index][data-is-empty="false"] {
-  /* Match when data-beat-index equals data-current-beat */
-  /* This is handled by JavaScript adding a class, see below */
-}
 
 /* Current beat highlighting - Light mode */
 .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {

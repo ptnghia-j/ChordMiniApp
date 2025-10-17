@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 
 interface UseIntersectionObserverOptions {
   threshold?: number;
@@ -16,7 +17,7 @@ interface UseIntersectionObserverOptions {
  */
 export function useIntersectionObserver<T extends Element = HTMLDivElement>(
   options: UseIntersectionObserverOptions = {}
-): [React.RefObject<T | null>, boolean, IntersectionObserverEntry | null] {
+): [RefObject<T | null>, boolean, IntersectionObserverEntry | null] {
   const {
     threshold = 0.1,
     root = null,
@@ -67,7 +68,7 @@ export function useIntersectionObserver<T extends Element = HTMLDivElement>(
  */
 export function useIsVisible<T extends Element = HTMLDivElement>(
   options: UseIntersectionObserverOptions = {}
-): [React.RefObject<T | null>, boolean] {
+): [RefObject<T | null>, boolean] {
   const [ref, isIntersecting] = useIntersectionObserver<T>(options);
   return [ref, isIntersecting];
 }

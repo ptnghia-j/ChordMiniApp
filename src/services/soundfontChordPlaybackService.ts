@@ -219,6 +219,7 @@ export class SoundfontChordPlaybackService {
   private instruments: Map<string, any> = new Map(); // Type will be Soundfont after lazy load
   private loadedInstruments: Set<string> = new Set(); // Track which instruments are loaded
   private loadingInstruments: Set<string> = new Set(); // Track which instruments are currently loading
+  private instrumentLoadPromises: Map<string, Promise<void>> = new Map(); // Track in-flight instrument loads
   private isInitialized = false;
   private isInitializing = false;
   private initializationError: Error | null = null;
@@ -325,35 +326,40 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
-    // Currently loading - wait for it
-    if (this.loadingInstruments.has(instrumentName)) {
-      while (this.loadingInstruments.has(instrumentName)) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+    // If a load is already in-flight, await it
+    const existingPromise = this.instrumentLoadPromises.get(instrumentName);
+    if (existingPromise) {
+      await existingPromise;
       return;
     }
 
-    // Load the instrument
-    this.loadingInstruments.add(instrumentName);
-    try {
-      const instrumentMap: Record<string, string> = {
-        'piano': 'acoustic_grand_piano',
-        'guitar': 'acoustic_guitar_nylon',
-        'violin': 'violin',
-        'flute': 'flute'
-      };
+    // Begin a new load and store the in-flight promise
+    const loadPromise = (async () => {
+      this.loadingInstruments.add(instrumentName);
+      try {
+        const instrumentMap: Record<string, string> = {
+          'piano': 'acoustic_grand_piano',
+          'guitar': 'acoustic_guitar_nylon',
+          'violin': 'violin',
+          'flute': 'flute'
+        };
 
-      const smplrInstrumentName = instrumentMap[instrumentName];
-      if (!smplrInstrumentName) {
-        throw new Error(`Unknown instrument: ${instrumentName}`);
+        const smplrInstrumentName = instrumentMap[instrumentName];
+        if (!smplrInstrumentName) {
+          throw new Error(`Unknown instrument: ${instrumentName}`);
+        }
+
+        const instrument = await this.loadInstrument(instrumentName, smplrInstrumentName);
+        this.instruments.set(instrumentName, instrument);
+        this.loadedInstruments.add(instrumentName);
+      } finally {
+        this.loadingInstruments.delete(instrumentName);
+        this.instrumentLoadPromises.delete(instrumentName);
       }
+    })();
 
-      const instrument = await this.loadInstrument(instrumentName, smplrInstrumentName);
-      this.instruments.set(instrumentName, instrument);
-      this.loadedInstruments.add(instrumentName);
-    } finally {
-      this.loadingInstruments.delete(instrumentName);
-    }
+    this.instrumentLoadPromises.set(instrumentName, loadPromise);
+    await loadPromise;
   }
 
   /**
@@ -979,6 +985,7 @@ export class SoundfontChordPlaybackService {
     this.instruments.clear();
     this.loadedInstruments.clear();
     this.loadingInstruments.clear();
+    this.instrumentLoadPromises.clear();
 
     // Do not close the shared AudioContext; just release local reference
     this.audioContext = null;
