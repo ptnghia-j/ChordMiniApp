@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { audioExtractionServiceSimplified } from '@/services/audioExtractionSimplified';
+import { audioExtractionServiceSimplified } from '@/services/audio/audioExtractionSimplified';
 
 /**
  * Async Audio Extraction Job API Route

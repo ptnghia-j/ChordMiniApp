@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { detectBeatsFromFirebaseUrl } from '@/services/beatDetectionService';
+import { detectBeatsFromFirebaseUrl } from '@/services/audio/beatDetectionService';
 
 /**
  * Test endpoint to verify the new Firebase URL beat detection approach

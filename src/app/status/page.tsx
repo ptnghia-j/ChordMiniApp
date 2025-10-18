@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Navigation from '@/components/Navigation';
-import { useStatusMonitoring } from '@/hooks/useRateLimiting';
+import Navigation from '@/components/common/Navigation';
+import { useStatusMonitoring } from '@/hooks/api/useRateLimiting';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Tooltip } from '@heroui/react';
 import { FiActivity, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
 

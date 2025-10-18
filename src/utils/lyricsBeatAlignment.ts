@@ -1,5 +1,5 @@
 import type { LyricsData } from '@/types/musicAiTypes';
-import type { BeatInfo } from '@/services/beatDetectionService';
+import type { BeatInfo } from '@/services/audio/beatDetectionService';
 
 /**
  * Snap lyric line boundaries to nearest beat timestamps, enforcing non-overlap.

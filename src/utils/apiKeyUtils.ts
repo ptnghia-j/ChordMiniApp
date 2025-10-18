@@ -9,7 +9,7 @@
  */
 export const getMusicAiApiKey = async (): Promise<string | null> => {
   try {
-    const { apiKeyStorage } = await import('@/services/apiKeyStorageService');
+    const { apiKeyStorage } = await import('@/services/cache/apiKeyStorageService');
     return await apiKeyStorage.getApiKey('musicAi');
   } catch (error) {
     console.error('Failed to retrieve Music.AI API key:', error);
@@ -57,7 +57,7 @@ export const getMusicAiApiKeyWithValidation = async (): Promise<{
  */
 export const getGeminiApiKey = async (): Promise<string | null> => {
   try {
-    const { apiKeyStorage } = await import('@/services/apiKeyStorageService');
+    const { apiKeyStorage } = await import('@/services/cache/apiKeyStorageService');
     return await apiKeyStorage.getApiKey('gemini');
   } catch (error) {
     console.error('Failed to retrieve Gemini API key:', error);

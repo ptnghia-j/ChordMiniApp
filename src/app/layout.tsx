@@ -4,16 +4,16 @@ import './globals.css';
 import '../styles/analysis-embedded.css';
 import '../styles/chord-grid.css';
 import { Providers } from './providers';
-import ClientErrorBoundary from '../components/ClientErrorBoundary';
-import FirebaseInitializer from '../components/FirebaseInitializer';
-import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
-import Footer from '../components/Footer';
-import PerformanceMonitor from '../components/PerformanceMonitor';
-import CriticalPerformanceOptimizer from '../components/CriticalPerformanceOptimizer';
-import DesktopPerformanceOptimizer from '../components/DesktopPerformanceOptimizer';
-import CriticalCSS from '../components/CriticalCSS';
-import CorsErrorSuppression from '../components/CorsErrorSuppression';
-import DevIndicatorHider from '../components/DevIndicatorHider';
+import ClientErrorBoundary from '@/components/common/ClientErrorBoundary';
+import FirebaseInitializer from '@/components/layout/FirebaseInitializer';
+import ServiceWorkerRegistration from '@/components/layout/ServiceWorkerRegistration';
+import Footer from '@/components/common/Footer';
+import PerformanceMonitor from '@/components/layout/PerformanceMonitor';
+import CriticalPerformanceOptimizer from '@/components/layout/CriticalPerformanceOptimizer';
+import DesktopPerformanceOptimizer from '@/components/layout/DesktopPerformanceOptimizer';
+import CriticalCSS from '@/components/layout/CriticalCSS';
+import CorsErrorSuppression from '@/components/layout/CorsErrorSuppression';
+import DevIndicatorHider from '@/components/layout/DevIndicatorHider';
 
 // Configure Google Fonts
 const robotoMono = Roboto_Mono({

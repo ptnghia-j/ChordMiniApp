@@ -5,7 +5,7 @@
  * and identifies any remaining issues with the 4-fret display constraint.
  */
 
-import { loadChordDatabase } from '@/services/chordMappingService';
+import { loadChordDatabase } from '@/services/chord-analysis/chordMappingService';
 import { checkReactChordsCompatibility } from './chordDiagramTest';
 
 /**

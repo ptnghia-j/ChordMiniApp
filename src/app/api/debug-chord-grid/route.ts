@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getChordGridData } from '@/services/chordGridProcessor';
+import { getChordGridData } from '@/services/chord-analysis/chordGridProcessor';
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Audio processing utilities extracted from analyze page component
 
-import { audioContextManager } from '@/services/audioContextManager';
+import { audioContextManager } from '@/services/audio/audioContextManager';
 
 /**
 

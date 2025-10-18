@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { audioMetadataService } from '@/services/audioMetadataService';
+import { audioMetadataService } from '@/services/audio/audioMetadataService';
 import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 /**
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
     if (videoId && isFirebaseUrl) {
       try {
-        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/api/parallelPipelineService');
         const meta = getCachedAudioMeta(videoId);
         console.log(`🔎 cache-meta:`, meta);
         const cachedFile = getCachedAudioFile(videoId);

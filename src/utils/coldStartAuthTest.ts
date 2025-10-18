@@ -6,7 +6,7 @@
  */
 
 import { firebaseAuthDiagnostics } from './firebaseAuthDiagnostics';
-import { firebaseStorageSimplified } from '@/services/firebaseStorageSimplified';
+import { firebaseStorageSimplified } from '@/services/firebase/firebaseStorageSimplified';
 
 export interface ColdStartTestResult {
   testId: string;
@@ -232,7 +232,7 @@ export class ColdStartAuthTest {
       
       // This test is more observational - we check if the retry logic
       // is properly implemented by examining the code structure
-      const { firebaseStorageSimplified } = await import('@/services/firebaseStorageSimplified');
+      const { firebaseStorageSimplified } = await import('@/services/firebase/firebaseStorageSimplified');
       
       // Check if the service has the retry logic
       const hasRetryLogic = firebaseStorageSimplified.saveAudioMetadata.toString().includes('maxRetries');

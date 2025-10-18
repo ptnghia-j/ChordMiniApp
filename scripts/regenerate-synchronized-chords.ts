@@ -5,9 +5,9 @@
  * This fixes the blob API synchronization bug by re-processing cached data
  */
 
-import { getVideoTranscriptions, saveTranscription } from '../src/services/firestoreService';
+import { getVideoTranscriptions, saveTranscription } from '../src/services/firebase/firestoreService';
 import { synchronizeChords } from '../src/utils/chordSynchronization';
-import type { TranscriptionData } from '../src/services/firestoreService';
+import type { TranscriptionData } from '../src/services/firebase/firestoreService';
 
 // Define interfaces locally since they're not exported
 interface BeatInfo {

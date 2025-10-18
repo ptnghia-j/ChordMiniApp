@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { detectEnvironment, logEnvironmentConfig } from '@/utils/environmentDetection';
 import { isLocalBackend, getBackendUrl } from '@/utils/backendConfig';
-import { vercelBlobUploadService } from '@/services/vercelBlobUploadService';
+import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
 
 export async function GET() {
   try {

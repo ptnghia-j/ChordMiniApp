@@ -3,15 +3,15 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@heroui/react';
-import Navigation from '@/components/Navigation';
-import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chordRecognitionService';
-import { ProcessingStatusSkeleton } from '@/components/SkeletonLoaders';
+import Navigation from '@/components/common/Navigation';
+import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
+import { ProcessingStatusSkeleton } from '@/components/common/SkeletonLoaders';
 import {
   getChordGridData as getChordGridDataService
-} from '@/services/chordGridCalculationService';
+} from '@/services/chord-analysis/chordGridCalculationService';
 
 // Dynamic imports for heavy components with better loading states
-const HeroUIBeatModelSelector = dynamic(() => import('@/components/HeroUIBeatModelSelector'), {
+const HeroUIBeatModelSelector = dynamic(() => import('@/components/analysis/HeroUIBeatModelSelector'), {
   loading: () => (
     <div className="space-y-2">
       <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -21,7 +21,7 @@ const HeroUIBeatModelSelector = dynamic(() => import('@/components/HeroUIBeatMod
   ssr: false
 });
 
-const HeroUIChordModelSelector = dynamic(() => import('@/components/HeroUIChordModelSelector'), {
+const HeroUIChordModelSelector = dynamic(() => import('@/components/analysis/HeroUIChordModelSelector'), {
   loading: () => (
     <div className="space-y-2">
       <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -31,36 +31,36 @@ const HeroUIChordModelSelector = dynamic(() => import('@/components/HeroUIChordM
   ssr: false
 });
 
-const ProcessingStatusBanner = dynamic(() => import('@/components/ProcessingStatusBanner'), {
+const ProcessingStatusBanner = dynamic(() => import('@/components/analysis/ProcessingStatusBanner'), {
   loading: () => <ProcessingStatusSkeleton />,
   ssr: true
 });
 
-const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
+const AnalysisSummary = dynamic(() => import('@/components/analysis/AnalysisSummary'), {
   loading: () => <div className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const MetronomeControls = dynamic(() => import('@/components/MetronomeControls'), {
+const MetronomeControls = dynamic(() => import('@/components/chord-playback/MetronomeControls'), {
   loading: () => <div className="h-20 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const ChordGridContainer = dynamic(() => import('@/components/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
+const ChordGridContainer = dynamic(() => import('@/components/chord-analysis/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
+const GuitarChordsTab = dynamic(() => import('@/components/chord-analysis/GuitarChordsTab'), {
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { FiSkipBack, FiSkipForward } from 'react-icons/fi';
-import { useMetronomeSync } from '@/hooks/useMetronomeSync';
+import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { usePlaybackStore } from '@/stores/playbackStore';
-import { usePitchShiftAudio } from '@/hooks/usePitchShiftAudio';
+import { usePitchShiftAudio } from '@/hooks/chord-playback/usePitchShiftAudio';
 
 export default function LocalAudioAnalyzePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -464,7 +464,7 @@ export default function LocalAudioAnalyzePage() {
 
 
       // Import and call key detection service with enharmonic correction
-      import('@/services/keyDetectionService').then(({ detectKey }) => {
+      import('@/services/audio/keyDetectionService').then(({ detectKey }) => {
         // Use cache for sequence corrections (no bypass)
         detectKey(chordData, true, false) // Request enharmonic correction, use cache
           .then(result => {

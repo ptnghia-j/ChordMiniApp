@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
-import musicAiService from '@/services/musicAiService';
+import musicAiService from '@/services/lyrics/musicAiService';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { firebaseApp } from '@/services/firebaseService';
+import { firebaseApp } from '@/services/firebase/firebaseService';
 
 interface CachedLyricsData {
   lyrics?: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Navigation from '@/components/Navigation';
+import Navigation from '@/components/common/Navigation';
 
 const HelpPage: React.FC = () => {
   // const { theme } = useTheme();

@@ -2,8 +2,8 @@
  * Types for AI Chatbot functionality
  */
 
-import { ChordDetectionResult } from '@/services/chordRecognitionService';
-import { BeatInfo, DownbeatInfo, BeatPosition } from '@/services/beatDetectionService';
+import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
+import { BeatInfo, DownbeatInfo, BeatPosition } from '@/services/audio/beatDetectionService';
 import { LyricsData } from '@/types/musicAiTypes';
 
 /**

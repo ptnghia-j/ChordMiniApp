@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import axios from 'axios';
-import LyricsPlayer from '@/components/LyricsPlayer';
+import LyricsPlayer from '@/components/lyrics/LyricsPlayer';
 import { LyricsData } from '@/types/musicAiTypes';
 import Link from 'next/link';
 

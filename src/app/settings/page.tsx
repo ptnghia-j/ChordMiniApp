@@ -2,9 +2,9 @@
 
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useApiKeys } from '@/hooks/useApiKeys';
-import ApiKeySettings from '@/components/ApiKeySettings';
-import Navigation from '@/components/Navigation';
+import { useApiKeys } from '@/hooks/settings/useApiKeys';
+import ApiKeySettings from '@/components/settings/ApiKeySettings';
+import Navigation from '@/components/common/Navigation';
 import { Card, CardBody, CardHeader, Switch, Tabs, Tab, Spinner } from '@heroui/react';
 import { FiSettings, FiKey, FiLock } from 'react-icons/fi';
 

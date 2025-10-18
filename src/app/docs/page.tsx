@@ -2,9 +2,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navigation from '@/components/Navigation';
+import Navigation from '@/components/common/Navigation';
 import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
-import { CodeBlock } from '@/components/CodeBlock';
+import { CodeBlock } from '@/components/common/CodeBlock';
 import { useTheme } from '@/contexts/ThemeContext';
 
 import {
