@@ -244,32 +244,60 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
-      const rect = beatElement.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const viewportCenter = viewportHeight / 2;
-      const elementCenter = rect.top + rect.height / 2;
-      const delta = elementCenter - viewportCenter;
+      // Find nearest scrollable container (fallback to window viewport)
+      const getNearestScrollContainer = (el: HTMLElement | null): HTMLElement | null => {
+        let node: HTMLElement | null = el?.parentElement || null;
+        while (node) {
+          const style = window.getComputedStyle(node);
+          const overflowY = style.overflowY;
+          const hasScrollableY = (overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight;
+          if (hasScrollableY) return node;
+          node = node.parentElement;
+        }
+        return null;
+      };
 
-      // OPTIMIZATION 3: Viewport boundary check - only scroll if element is outside comfortable zone
-      // Expanded from 32px to 80px to reduce unnecessary micro-scrolls
-      // Also check if element is completely outside viewport (more urgent)
-      const isOutsideViewport = rect.bottom < 0 || rect.top > viewportHeight;
-      const isOutsideComfortZone = Math.abs(delta) > 80;
+      const containerEl = getNearestScrollContainer(beatElement);
+      const elementRect = beatElement.getBoundingClientRect();
 
-      if (!isOutsideViewport && !isOutsideComfortZone) {
-        return; // Element is visible and reasonably centered, skip scroll
+      if (containerEl) {
+        const containerRect = containerEl.getBoundingClientRect();
+        const containerHeight = containerRect.height;
+        const containerCenter = containerRect.top + containerHeight / 2;
+        const elementCenter = elementRect.top + elementRect.height / 2;
+        const deltaFromCenter = elementCenter - containerCenter;
+
+        // Viewport boundary check relative to the scroll container
+        const isOutsideViewport = elementRect.bottom < containerRect.top || elementRect.top > containerRect.bottom;
+
+        // Comfort zone scaled by container size: 20% of container height, clamped to [24, 80] px
+        const comfortZone = Math.min(80, Math.max(24, containerHeight * 0.2));
+        const isOutsideComfortZone = Math.abs(deltaFromCenter) > comfortZone;
+
+        if (!isOutsideViewport && !isOutsideComfortZone) {
+          return; // Element is visible and reasonably centered within container, skip scroll
+        }
+      } else {
+        // Fallback: window viewport logic
+        const viewportHeight = window.innerHeight;
+        const viewportCenter = viewportHeight / 2;
+        const elementCenter = elementRect.top + elementRect.height / 2;
+        const delta = elementCenter - viewportCenter;
+        const isOutsideViewport = elementRect.bottom < 0 || elementRect.top > viewportHeight;
+        const isOutsideComfortZone = Math.abs(delta) > 80;
+        if (!isOutsideViewport && !isOutsideComfortZone) {
+          return;
+        }
       }
 
       // OPTIMIZATION 4: Single RAF instead of double RAF
-      // The double RAF was for layout stability but adds latency
-      // Single RAF is sufficient for smooth scrolling
       requestAnimationFrame(() => {
         lastScrollTimeRef.current = Date.now();
         lastScrolledBeatIndexRef.current = currentBeatIndex;
         beatElement.scrollIntoView({
           behavior: 'smooth',
           block: 'center',
-          inline: 'nearest' // Prevent horizontal scrolling that can cause jitter
+          inline: 'nearest'
         });
       });
     }
