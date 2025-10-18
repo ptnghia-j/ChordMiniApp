@@ -36,6 +36,7 @@ export default function ChangelogPage() {
       description: 'Improve app stability, performance, user experience, and UI consistency.',
       features:[
         'UI: changed tabs UI to HeroUI component',
+        'FIX: chord labels consistency and based on correction from gemini models'
       ],
       technical: [
         'REFACTORING: moved files into subfolders for better structure and organization'

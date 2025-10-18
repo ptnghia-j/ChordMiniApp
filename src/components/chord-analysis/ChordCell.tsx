@@ -40,6 +40,7 @@ export interface ChordCellProps {
   isLoopEnabled?: boolean;
   isInLoopRange?: boolean;
   onLoopBeatClick?: (beatIndex: number) => void;
+  accidentalPreference?: 'sharp' | 'flat';
 }
 
 /**
@@ -69,6 +70,7 @@ const areChordCellPropsEqual = (
   if (prevProps.isEmpty !== nextProps.isEmpty) return false;
   if (prevProps.wasCorrected !== nextProps.wasCorrected) return false;
   if (prevProps.segmentationColor !== nextProps.segmentationColor) return false;
+  if (prevProps.accidentalPreference !== nextProps.accidentalPreference) return false;
 
   // Roman numerals and modulation
   if (prevProps.showRomanNumerals !== nextProps.showRomanNumerals) return false;
@@ -125,7 +127,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
   modulationInfo,
   isLoopEnabled = false,
   isInLoopRange = false,
-  onLoopBeatClick
+  onLoopBeatClick,
+  accidentalPreference
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -251,7 +254,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
                 dangerouslySetInnerHTML={{
                   __html: editedChord
                     ? editedChord // Show raw edited value without formatting
-                    : formatChordWithMusicalSymbols(displayChord, isDarkMode)
+                    : formatChordWithMusicalSymbols(displayChord, isDarkMode, accidentalPreference)
                 }}
               />
 

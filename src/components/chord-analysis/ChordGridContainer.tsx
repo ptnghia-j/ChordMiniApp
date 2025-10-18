@@ -110,6 +110,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   // Apply pitch shift transposition if enabled
   const { transposedChordGridData } = useTransposedChordData({
     chordGridData,
+    correctedSequence: sequenceCorrections?.correctedSequence || null,
   });
 
   // Use transposed data if available, otherwise use original

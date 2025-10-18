@@ -28,6 +28,7 @@ interface ChordGridData {
 
 export interface UseTransposedChordDataProps {
   chordGridData: ChordGridData | null;
+  correctedSequence?: string[] | null; // Gemini-corrected chords to use as source when available
 }
 
 export interface UseTransposedChordDataReturn {
@@ -40,6 +41,7 @@ export interface UseTransposedChordDataReturn {
  */
 export const useTransposedChordData = ({
   chordGridData,
+  correctedSequence,
 }: UseTransposedChordDataProps): UseTransposedChordDataReturn => {
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const pitchShiftSemitones = usePitchShiftSemitones();
@@ -54,8 +56,13 @@ export const useTransposedChordData = ({
       return chordGridData;
     }
 
+    // Choose source chords: prefer Gemini-corrected sequence when available
+    const sourceChords = Array.isArray(correctedSequence) && correctedSequence.length === chordGridData.chords.length
+      ? correctedSequence
+      : chordGridData.chords;
+
     // Transpose all chords in the grid
-    const transposedChords = chordGridData.chords.map((chord) => {
+    const transposedChords = sourceChords.map((chord) => {
       return transposeChord(chord, pitchShiftSemitones, targetKey);
     });
 
@@ -63,7 +70,7 @@ export const useTransposedChordData = ({
       ...chordGridData,
       chords: transposedChords,
     };
-  }, [chordGridData, shouldTranspose, pitchShiftSemitones, targetKey]);
+  }, [chordGridData, correctedSequence, shouldTranspose, pitchShiftSemitones, targetKey]);
 
   return {
     transposedChordGridData,

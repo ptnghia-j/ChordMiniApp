@@ -19,6 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
+import { computeAccidentalPreference } from '@/utils/chordUtils';
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -231,6 +232,15 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     showCorrectedChords,
     sequenceCorrections
   );
+
+  // Heuristic: when corrections are not shown (e.g., during pitch shift),
+  // compute a global accidental preference for consistent rendering.
+  const accidentalPreference = useMemo(() => {
+    if (!showCorrectedChords && Array.isArray(shiftedChords) && shiftedChords.length > 0) {
+      return computeAccidentalPreference(shiftedChords) || undefined;
+    }
+    return undefined;
+  }, [showCorrectedChords, shiftedChords]);
 
   // Use utility function for grid columns class (already imported)
 
@@ -607,6 +617,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           isLoopEnabled={isLoopEnabled}
                           isInLoopRange={isInLoopRange(globalIndex)}
                           onLoopBeatClick={handleLoopBeatClick}
+                          accidentalPreference={accidentalPreference}
                         />
                       );
                     })}
