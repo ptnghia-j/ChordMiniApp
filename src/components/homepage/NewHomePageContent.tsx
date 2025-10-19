@@ -20,7 +20,31 @@ import SupportChordMini from '@/components/homepage/SupportChordMini'
 
 // Dynamic imports for heavy components
 const RecentVideos = dynamic(() => import('@/components/homepage/LazyRecentVideos'), {
-  loading: () => <div className="animate-pulse bg-gray-200 dark:bg-slate-700 rounded-lg h-32"></div>,
+  loading: () => (
+    <div className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider rounded-lg">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-divider dark:border-divider">
+        <div className="h-5 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+        <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      </div>
+      <div className="h-96 overflow-hidden p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider rounded-md">
+              <div className="p-3">
+                <div className="flex gap-3">
+                  <div className="w-20 h-12 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                    <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ),
   ssr: false
 });
 
@@ -258,10 +282,9 @@ function NewHomePageContentInner() {
         {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-6">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -273,10 +296,9 @@ function NewHomePageContentInner() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
           >
             <RecentVideos />
           </motion.div>
