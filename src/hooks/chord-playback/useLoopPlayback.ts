@@ -43,7 +43,7 @@ export const useLoopPlayback = ({
     // Get timestamps for loop boundaries
     const startTimestamp = beats[loopStartBeat];
     const endTimestamp = beats[loopEndBeat];
-    if (startTimestamp == null || endTimestamp == null) return;
+    if (startTimestamp === null || endTimestamp === null) return;
 
     // Calculate end boundary with small buffer to account for timing precision
     // Use next beat's timestamp if available
