@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { YtdownIoCompatService } from '@/services/ytdownIoCompatService';
+import { YtdownIoCompatService } from '@/services/youtube/ytdownIoCompatService';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;

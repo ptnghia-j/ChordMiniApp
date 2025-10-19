@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ytMp3GoService } from '@/services/ytMp3GoService';
+import { ytMp3GoService } from '@/services/youtube/ytMp3GoService';
 
 /**
  * Debug API endpoint for yt-mp3-go service testing

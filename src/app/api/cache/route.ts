@@ -6,8 +6,8 @@ import { promises as fs } from 'fs';
 async function getCacheServices() {
   try {
     const [cacheService, localCacheService] = await Promise.all([
-      import('@/services/cacheService'),
-      import('@/services/localCacheService')
+      import('@/services/cache/cacheService'),
+      import('@/services/cache/localCacheService')
     ]);
     return {
       getCacheIndex: cacheService.getCacheIndex,

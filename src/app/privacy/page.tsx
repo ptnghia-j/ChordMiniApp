@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Navigation from '@/components/Navigation';
+import Navigation from '@/components/common/Navigation';
 
 const PrivacyPage: React.FC = () => {
   // const { theme } = useTheme();

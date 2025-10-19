@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SegmentationRequest, SegmentationResult } from '@/types/chatbotTypes';
-import { analyzeSongSegmentation } from '@/services/songSegmentationService';
+import { analyzeSongSegmentation } from '@/services/lyrics/songSegmentationService';
 
 /**
  * POST /api/segmentation

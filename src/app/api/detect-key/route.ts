@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { firestoreDb } from '@/services/firebaseService';
+import { firestoreDb } from '@/services/firebase/firebaseService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 

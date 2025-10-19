@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AnalysisResult } from '@/services/chordRecognitionService';
+import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { LyricsData } from '@/types/musicAiTypes';
 
 interface AnalysisStore {

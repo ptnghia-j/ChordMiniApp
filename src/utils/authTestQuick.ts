@@ -59,7 +59,7 @@ export async function quickCacheTest(): Promise<boolean> {
     console.log('🧪 Running quick cache operation test...');
     
     // Import the cache service
-    const { firebaseStorageSimplified } = await import('@/services/firebaseStorageSimplified');
+    const { firebaseStorageSimplified } = await import('@/services/firebase/firebaseStorageSimplified');
     
     // Test data
     const testData = {

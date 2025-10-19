@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { audioMetadataService } from '@/services/audioMetadataService';
+import { audioMetadataService } from '@/services/audio/audioMetadataService';
 
 /**
  * API route to detect beats using Vercel Blob URL

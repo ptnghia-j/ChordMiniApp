@@ -46,7 +46,7 @@ function getQuarterRestSymbol(isDarkMode: boolean): string {
  * @param isDarkMode Whether dark mode is active (for theme-aware SVG selection)
  * @returns Formatted chord name with proper musical symbols and professional notation
  */
-export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boolean = false): string {
+export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boolean = false, accidentalPreference?: 'sharp' | 'flat'): string {
   if (!chordName) return chordName;
 
 
@@ -58,7 +58,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     if (chordName === 'N/C' || chordName === 'N' || chordName === 'N.C.') {
       return getQuarterRestSymbol(isDarkMode);
     }
-    
+
     return chordName;
   }
 
@@ -123,6 +123,17 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     quality = 'm' + quality.substring(3);
   }
 
+  // Apply global accidental preference to root if provided
+  if (accidentalPreference) {
+    if (accidentalPreference === 'flat' && root.includes('#')) {
+      const sharpToFlat: Record<string, string> = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
+      root = sharpToFlat[root] || root;
+    } else if (accidentalPreference === 'sharp' && root.includes('b')) {
+      const flatToSharp: Record<string, string> = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
+      root = flatToSharp[root] || root;
+    }
+  }
+
   // Process inversion if present
   if (inversion) {
 
@@ -138,7 +149,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
           inversion === '#2' || inversion === '#3' || inversion === '#4' || inversion === '#5' ||
           inversion === '#6' || inversion === '#7' || inversion === '#9') {
         // Use chord tone intervals for standard inversions
-        bassNote = getBassNoteFromInversion(root, quality, inversion);
+        bassNote = getBassNoteFromInversion(root, quality, inversion, accidentalPreference);
       } else {
         // Use scale degree translation for unusual inversions (like /8, /10, /11, /13)
         bassNote = translateScaleDegreeInversion(root, quality, inversion);
@@ -405,7 +416,7 @@ function getEnharmonicSpelling(note: string, keyContext: string): string {
  * @param inversion The inversion number (3, 5, 7, etc.)
  * @returns The bass note as a string with proper enharmonic spelling
  */
-export function getBassNoteFromInversion(root: string, quality: string, inversion: string): string {
+export function getBassNoteFromInversion(root: string, quality: string, inversion: string, accidentalPreference?: 'sharp' | 'flat'): string {
   // Define the notes in order
   const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const notesWithFlats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -451,7 +462,9 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
 
   // Determine the primary note array based on root note's accidental preference
   // This ensures consistent enharmonic spelling throughout the chord
-  const primaryNoteArray = usesFlats ? notesWithFlats : notes;
+  const preferSharps = accidentalPreference === 'sharp';
+  const preferFlats = accidentalPreference === 'flat';
+  const primaryNoteArray = preferFlats ? notesWithFlats : preferSharps ? notes : (usesFlats ? notesWithFlats : notes);
 
   // Find the root note index in the primary array using the calculation root
   let rootIndex = -1;
@@ -589,19 +602,19 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
     }
   } else {
     // For natural root notes (C, D, E, F, G, A, B)
-    // FIXED: For minor chords, prefer flat notation for consistency
-    if (isMinor && result.includes('#')) {
-      // Convert sharp to flat equivalent for minor chords
+    // Respect optional accidental preference when provided
+    if (preferFlats && result.includes('#')) {
       const enharmonicMap: Record<string, string> = {
-        'C#': 'Db',
-        'D#': 'Eb',
-        'F#': 'Gb',
-        'G#': 'Ab',
-        'A#': 'Bb'
+        'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb'
+      };
+      result = enharmonicMap[result] || result;
+    } else if (preferSharps && result.includes('b')) {
+      const enharmonicMap: Record<string, string> = {
+        'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
       };
       result = enharmonicMap[result] || result;
     } else {
-      // For major chords with natural roots, apply context-aware enharmonic spelling
+      // Default: keep computed spelling or apply context-aware enhancement
       result = getEnharmonicSpelling(result, root);
     }
   }

@@ -39,11 +39,11 @@ export const parseChordNotation = (chord: string): {
   }
 
   const [, root, qualityAndExtensions, bass] = match;
-  
+
   // Parse quality and extensions
   let quality = '';
   let extensions: string[] = [];
-  
+
   if (qualityAndExtensions) {
     // Common chord qualities
     if (qualityAndExtensions.startsWith('maj') || qualityAndExtensions.startsWith('M')) {
@@ -99,7 +99,7 @@ export const getEnharmonicEquivalent = (note: string, preferSharps: boolean = fa
   if (!enharmonicMap[note]) return note;
 
   const equivalents = enharmonicMap[note];
-  return preferSharps ? 
+  return preferSharps ?
     equivalents.find(n => n.includes('#')) || note :
     equivalents.find(n => n.includes('b')) || note;
 };
@@ -112,22 +112,22 @@ export const applyEnharmonicCorrection = (
   corrections: Record<string, string>
 ): string => {
   if (!chord || !corrections) return chord;
-  
+
   // Direct chord correction
   if (corrections[chord]) {
     return corrections[chord];
   }
-  
+
   // Parse chord and apply corrections to root and bass
   const parsed = parseChordNotation(chord);
   if (!parsed.isValid) return chord;
-  
+
   let correctedRoot = corrections[parsed.root] || parsed.root;
   let correctedBass = parsed.bass ? (corrections[parsed.bass] || parsed.bass) : undefined;
-  
+
   // Reconstruct chord
   let result = correctedRoot;
-  
+
   // Add quality and extensions
   if (parsed.quality === 'minor') {
     result += 'm';
@@ -136,17 +136,17 @@ export const applyEnharmonicCorrection = (
   } else if (parsed.quality === 'augmented') {
     result += 'aug';
   }
-  
+
   // Add extensions
   if (parsed.extensions.length > 0) {
     result += parsed.extensions.join('');
   }
-  
+
   // Add bass note
   if (correctedBass) {
     result += '/' + correctedBass;
   }
-  
+
   return result;
 };
 
@@ -209,7 +209,7 @@ export const analyzeChordProgression = (chords: string[]): {
 } => {
   const changes: Array<{ index: number; from: string; to: string }> = [];
   const uniqueChords = Array.from(new Set(chords));
-  
+
   for (let i = 1; i < chords.length; i++) {
     if (chords[i] !== chords[i - 1]) {
       changes.push({
@@ -219,7 +219,7 @@ export const analyzeChordProgression = (chords: string[]): {
       });
     }
   }
-  
+
   // Create a simplified progression pattern
   const progressionPattern = chords
     .reduce((acc, chord, index) => {
@@ -229,7 +229,7 @@ export const analyzeChordProgression = (chords: string[]): {
       return acc;
     }, [] as string[])
     .join(' - ');
-  
+
   return {
     changes,
     uniqueChords,
@@ -337,10 +337,10 @@ export const simplifyChordNotation = (chord: string): string => {
   // Major chords don't need 'maj' suffix in simplified notation
 
   // Keep important extensions but simplify
-  const importantExtensions = parsed.extensions.filter(ext => 
+  const importantExtensions = parsed.extensions.filter(ext =>
     ext.includes('7') || ext.includes('9') || ext.includes('sus')
   );
-  
+
   if (importantExtensions.length > 0) {
     simplified += importantExtensions.join('');
   }
@@ -393,3 +393,29 @@ export const validateChordSequence = (chords: string[]): {
     warnings
   };
 };
+
+
+/**
+ * Analyze a list of chord labels and decide an overall accidental preference.
+ * Counts sharp vs flat occurrences on note tokens like A#, Bb, etc.
+ */
+export function computeAccidentalPreference(chords: string[]): 'sharp' | 'flat' | null {
+  if (!Array.isArray(chords) || chords.length === 0) return null;
+  let sharpCount = 0;
+  let flatCount = 0;
+  const noteTokenRegex = /[A-G](?:#|b)/g; // matches A#, Bb, etc.
+
+  for (const ch of chords) {
+    if (!ch) continue;
+    const tokens = ch.match(noteTokenRegex);
+    if (!tokens) continue;
+    for (const t of tokens) {
+      if (t.includes('#')) sharpCount++;
+      if (t.includes('b')) flatCount++;
+    }
+  }
+
+  if (sharpCount > flatCount) return 'sharp';
+  if (flatCount > sharpCount) return 'flat';
+  return null;
+}

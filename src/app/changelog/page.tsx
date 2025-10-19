@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Navigation from '@/components/Navigation';
+import Navigation from '@/components/common/Navigation';
 
 // Helper function to parse and style change items with badges
 const renderChangeItem = (item: string, colorClass: string) => {
@@ -30,9 +30,24 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.3',
+      date: 'October 18, 2025',
+      title: 'App improvements (In Development)',
+      description: 'Improve app stability, performance, user experience, and UI consistency.',
+      features:[
+        'UI: changed tabs UI to HeroUI component',
+        'FIX: chord labels consistency and based on correction from gemini models'
+      ],
+      technical: [
+        'REFACTORING: moved files into subfolders for better structure and organization'
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.2',
-      date: 'January 10, 2025',
-      title: 'Zustand State Management Migration & Performance Optimizations (In Development)',
+      date: 'October 17, 2025',
+      title: 'Zustand State Management Migration & Performance Optimizations',
       description: 'Completes migration from React Context API to Zustand for global state management, fixing critical race conditions and audio playback bugs while improving performance.',
       features: [
         'NEW: Loop Playback - Set start/end beats to loop specific sections of songs',
@@ -570,7 +585,7 @@ export default function ChangelogPage() {
         </div>
 
         {/* Announcement Banner */}
-        <div className="max-w-6xl mx-auto mb-12">
+        {/* <div className="max-w-6xl mx-auto mb-12">
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-300"></div>
             <div className="relative flex items-center justify-center px-8 py-4 bg-black dark:bg-gray-900 rounded-full border border-gray-700">
@@ -579,7 +594,7 @@ export default function ChangelogPage() {
               </span>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Timeline Container */}
         <div className="relative max-w-6xl mx-auto">

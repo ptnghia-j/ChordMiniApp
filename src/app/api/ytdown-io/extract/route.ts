@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { YtdownIoAudioService } from '@/services/ytdownIoAudioService';
+import { YtdownIoAudioService } from '@/services/youtube/ytdownIoAudioService';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;

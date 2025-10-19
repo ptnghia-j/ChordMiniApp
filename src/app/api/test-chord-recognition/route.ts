@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const startTime = Date.now();
     
     // Import the chord recognition service
-    const { analyzeAudioWithRateLimit } = await import('@/services/chordRecognitionService');
+    const { analyzeAudioWithRateLimit } = await import('@/services/chord-analysis/chordRecognitionService');
     
     // Download the audio file first (simulating the same flow as the main app)
     const encodedUrl = encodeURIComponent(audioUrl);

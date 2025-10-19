@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 Debug: Testing blob upload for file: ${file.name} (${fileSizeMB.toFixed(2)}MB)`);
 
     // Import Vercel Blob service
-    const { vercelBlobUploadService } = await import('@/services/vercelBlobUploadService');
+    const { vercelBlobUploadService } = await import('@/services/storage/vercelBlobUploadService');
 
     // Check if blob upload should be used
     const shouldUseBlob = vercelBlobUploadService.shouldUseBlobUpload(file.size);

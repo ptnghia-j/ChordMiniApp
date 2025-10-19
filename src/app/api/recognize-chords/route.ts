@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     console.log(`📁 Processing audio file: ${file.name} (${fileSizeMB.toFixed(2)}MB)`);
 
     // Import Vercel Blob service to use environment-aware logic
-    const { vercelBlobUploadService } = await import('@/services/vercelBlobUploadService');
+    const { vercelBlobUploadService } = await import('@/services/storage/vercelBlobUploadService');
 
     // Use environment-aware blob upload decision (same as beat detection)
     if (vercelBlobUploadService.shouldUseBlobUpload(file.size)) {

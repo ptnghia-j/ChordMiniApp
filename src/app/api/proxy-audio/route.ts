@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
     if (videoId && isFirebaseUrl) {
       try {
-        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/api/parallelPipelineService');
         const meta = getCachedAudioMeta(videoId);
         console.log(`🔎 cache-meta:`, meta);
         const cachedFile = getCachedAudioFile(videoId);
@@ -417,7 +417,7 @@ export async function HEAD(request: NextRequest) {
 
     if (videoId && isFirebaseUrl) {
       try {
-        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/parallelPipelineService');
+        const { getCachedAudioFile, getCachedAudioMeta } = await import('@/services/api/parallelPipelineService');
         const meta = getCachedAudioMeta(videoId);
         const cachedFile = getCachedAudioFile(videoId);
         if (cachedFile) {

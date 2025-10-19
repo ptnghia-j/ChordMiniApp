@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVideoTranscriptions } from '@/services/firestoreService';
+import { getVideoTranscriptions } from '@/services/firebase/firestoreService';
 
 export async function GET(request: NextRequest) {
   try {

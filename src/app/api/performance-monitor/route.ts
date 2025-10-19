@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { performanceMonitor } from '@/services/performanceMonitor';
+import { performanceMonitor } from '@/services/performance/performanceMonitor';
 
 export async function GET(request: NextRequest) {
   try {

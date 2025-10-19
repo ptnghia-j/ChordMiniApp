@@ -6,7 +6,7 @@ import type {
   BeatPosition,
   DownbeatInfo,
   // BeatDetectionBackendResponse, // type re-export only; avoid local unused import
-} from '@/services/beatDetectionService';
+} from '@/services/audio/beatDetectionService';
 
 // Re-export beat detection types for convenience
 export type {
@@ -14,7 +14,7 @@ export type {
   BeatPosition,
   DownbeatInfo,
   BeatDetectionBackendResponse,
-} from '@/services/beatDetectionService';
+} from '@/services/audio/beatDetectionService';
 
 // Chord detection result from backend
 export interface ChordDetectionResult {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { ChatbotRequest, ChatbotResponse, ChatMessage } from '@/types/chatbotTypes';
-import { formatSongContextForAI, validateSongContext } from '@/services/chatbotService';
+import { formatSongContextForAI, validateSongContext } from '@/services/api/chatbotService';
 
 // Get the API key from environment variables
 const apiKey = process.env.GEMINI_API_KEY;

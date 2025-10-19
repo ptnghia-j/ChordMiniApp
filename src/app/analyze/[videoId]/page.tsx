@@ -7,22 +7,22 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 import { useParams, useSearchParams } from 'next/navigation';
 // Import types are used in type annotations and interfaces
-import { getTranscription, saveTranscription } from '@/services/firestoreService';
-import Navigation from '@/components/Navigation';
+import { getTranscription, saveTranscription } from '@/services/firebase/firestoreService';
+import Navigation from '@/components/common/Navigation';
 
 // Dynamic imports for heavy components to improve initial bundle size
-const AnalysisSummary = dynamic(() => import('@/components/AnalysisSummary'), {
+const AnalysisSummary = dynamic(() => import('@/components/analysis/AnalysisSummary'), {
   loading: () => <div className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const ResponsiveVideoUtilityLayout = dynamic(() => import('@/components/ResponsiveVideoUtilityLayout'), {
+const ResponsiveVideoUtilityLayout = dynamic(() => import('@/components/layout/ResponsiveVideoUtilityLayout'), {
   loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
 
-const LyricsPanel = dynamic(() => import('@/components/LyricsPanel'), {
+const LyricsPanel = dynamic(() => import('@/components/lyrics/LyricsPanel'), {
   loading: () => <div className="fixed right-4 bottom-16 w-96 h-96 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
@@ -30,24 +30,24 @@ import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SongContext } from '@/types/chatbotTypes';
 
-import { useMetronomeSync } from '@/hooks/useMetronomeSync';
-import { useAudioProcessing } from '@/hooks/useAudioProcessing';
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
-import { useModelState } from '@/hooks/useModelState';
-import { useNavigationHelpers } from '@/hooks/useNavigationHelpers';
+import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
+import { useAudioProcessing } from '@/hooks/audio/useAudioProcessing';
+import { useAudioPlayer } from '@/hooks/chord-playback/useAudioPlayer';
+import { useModelState } from '@/hooks/chord-analysis/useModelState';
+import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
 import {
   handleAudioAnalysis as handleAudioAnalysisService,
   transcribeLyricsWithAI as transcribeLyricsWithAIService,
   extractAudioFromYouTube as extractAudioFromYouTubeService
-} from '@/services/audioProcessingExtracted';
+} from '@/services/audio/audioProcessingExtracted';
 import {
   getChordGridData as getChordGridDataService
-} from '@/services/chordGridCalculationService';
-import { useAudioInteractions } from '@/hooks/useAudioInteractions';
-import { useScrollAndAnimation } from '@/hooks/useScrollAndAnimation';
-import { usePlaybackState } from '@/hooks/usePlaybackState';
-import { useLoopPlayback } from '@/hooks/useLoopPlayback';
-import { useApiKeys } from '@/hooks/useApiKeys';
+} from '@/services/chord-analysis/chordGridCalculationService';
+import { useAudioInteractions } from '@/hooks/chord-playback/useAudioInteractions';
+import { useScrollAndAnimation } from '@/hooks/scroll/useScrollAndAnimation';
+import { usePlaybackState } from '@/hooks/chord-playback/usePlaybackState';
+import { useLoopPlayback } from '@/hooks/chord-playback/useLoopPlayback';
+import { useApiKeys } from '@/hooks/settings/useApiKeys';
 
 
 
@@ -57,10 +57,10 @@ import {
   ChordGridSkeleton,
   LyricsSkeleton,
   ChatbotSkeleton
-} from '@/components/SkeletonLoaders';
+} from '@/components/common/SkeletonLoaders';
 
 // Load analysis controls immediately as they're needed for user interaction
-const AnalysisControls = dynamic(() => import('@/components/AnalysisControls').then(mod => ({ default: mod.AnalysisControls })), {
+const AnalysisControls = dynamic(() => import('@/components/analysis/AnalysisControls').then(mod => ({ default: mod.AnalysisControls })), {
 
 
   loading: () => <AnalysisControlsSkeleton />,
@@ -68,55 +68,55 @@ const AnalysisControls = dynamic(() => import('@/components/AnalysisControls').t
 });
 
 // Heavy analysis components - load only when analysis results are available
-const ChordGridContainer = dynamic(() => import('@/components/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
+const ChordGridContainer = dynamic(() => import('@/components/chord-analysis/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
   loading: () => <ChordGridSkeleton />,
   ssr: false
 });
 
 // Lyrics section - load only when tab is active or lyrics are requested
-const LyricsSection = dynamic(() => import('@/components/LyricsSection').then(mod => ({ default: mod.LyricsSection })), {
+const LyricsSection = dynamic(() => import('@/components/lyrics/LyricsSection').then(mod => ({ default: mod.LyricsSection })), {
   loading: () => <LyricsSkeleton />,
   ssr: false
 });
 
 // Guitar chords tab - load only when tab is active
-const GuitarChordsTab = dynamic(() => import('@/components/GuitarChordsTab'), {
+const GuitarChordsTab = dynamic(() => import('@/components/chord-analysis/GuitarChordsTab'), {
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
 // Chatbot interface - load only when user opens the chatbot
-const ChatbotInterfaceDyn = dynamic(() => import('@/components/ChatbotInterface'), {
+const ChatbotInterfaceDyn = dynamic(() => import('@/components/chatbot/ChatbotInterface'), {
   loading: () => <ChatbotSkeleton />, ssr: false
 });
 
 import dynamic from 'next/dynamic';
-import BeatTimeline from '@/components/BeatTimeline';
+import BeatTimeline from '@/components/analysis/BeatTimeline';
 import {
   simplifyChordArray,
   simplifySequenceCorrections
 } from '@/utils/chordSimplification';
 
 // Import new sub-components
-import FloatingVideoDock from '@/components/FloatingVideoDock';
-import AnalysisHeader from '@/components/AnalysisHeader';
-import ResultsTabs from '@/components/ResultsTabs';
-import ProcessingBanners from '@/components/ProcessingBanners';
+import FloatingVideoDock from '@/components/analysis/FloatingVideoDock';
+import AnalysisHeader from '@/components/analysis/AnalysisHeader';
+import ResultsTabs from '@/components/homepage/ResultsTabs';
+import ProcessingBanners from '@/components/analysis/ProcessingBanners';
 
 import AnalysisSplitLayout from '@/components/layout/AnalysisSplitLayout';
 
-import UtilityBar from '@/components/UtilityBar';
-import type { UseChordPlaybackReturn } from '@/hooks/useChordPlayback';
-import { ChordPlaybackManager } from '@/components/ChordPlaybackManager';
+import UtilityBar from '@/components/analysis/UtilityBar';
+import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
+import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 // Import new hooks and contexts
-import { useFirebaseReadiness } from '@/hooks/useFirebaseReadiness';
-import { useYouTubeSetup } from '@/hooks/useYouTubeSetup';
-import { useSegmentationState } from '@/hooks/useSegmentationState';
-import { useTabsAndEditing } from '@/hooks/useTabsAndEditing';
-import { useLyricsState } from '@/hooks/useLyricsState';
-import PitchShiftAudioManager from '@/components/PitchShiftAudioManager';
-import KeySignatureSync from '@/components/KeySignatureSync';
-import ConditionalPlaybackControls from '@/components/ConditionalPlaybackControls';
+import { useFirebaseReadiness } from '@/hooks/firebase/useFirebaseReadiness';
+import { useYouTubeSetup } from '@/hooks/youtube/useYouTubeSetup';
+import { useSegmentationState } from '@/hooks/lyrics/useSegmentationState';
+import { useTabsAndEditing } from '@/hooks/ui/useTabsAndEditing';
+import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
+import PitchShiftAudioManager from '@/components/chord-playback/PitchShiftAudioManager';
+import KeySignatureSync from '@/components/analysis/KeySignatureSync';
+import ConditionalPlaybackControls from '@/components/chord-playback/ConditionalPlaybackControls';
 // Import Zustand stores for direct initialization
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -245,7 +245,7 @@ export default function YouTubeVideoAnalyzePage() {
       const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
 
       const cachedAudio = await withFirebaseConnectionCheck(async () => {
-        const { getCachedAudioFile } = await import('@/services/firebaseStorageService');
+        const { getCachedAudioFile } = await import('@/services/firebase/firebaseStorageService');
         return await getCachedAudioFile(videoId);
       }, 'cached audio check');
 
@@ -772,7 +772,7 @@ export default function YouTubeVideoAnalyzePage() {
 
       // Import and call key detection service with enharmonic correction
 
-      import('@/services/keyDetectionService').then(({ detectKey }) => {
+      import('@/services/audio/keyDetectionService').then(({ detectKey }) => {
         // Use cache for sequence corrections (no bypass)
         detectKey(chordData, true, false, showRomanNumerals) // Request enharmonic correction, use cache, include Roman numerals if enabled
           .then(result => {
@@ -1328,7 +1328,7 @@ export default function YouTubeVideoAnalyzePage() {
   useEffect(() => {
     const syncMetronomeState = async () => {
       if (typeof window !== 'undefined') {
-        const { metronomeService } = await import('@/services/metronomeService');
+        const { metronomeService } = await import('@/services/chord-playback/metronomeService');
         setIsMetronomeEnabled(metronomeService.isMetronomeEnabled());
       }
     };

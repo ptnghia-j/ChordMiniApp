@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audioExtractionSimplified';
+import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audio/audioExtractionSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { isLocalBackend, getBackendUrl } from '@/utils/backendConfig';
-import { vercelBlobUploadService } from '@/services/vercelBlobUploadService';
+import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
 
 /**
  * Test environment detection and blob upload logic

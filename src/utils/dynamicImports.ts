@@ -7,59 +7,59 @@
 export const loadAudioProcessor = () => import(
   /* webpackChunkName: "audio-processor" */
   /* webpackPreload: true */
-  '@/services/audioProcessingService'
+  '@/services/audio/audioProcessingService'
 );
 export const loadChordRecognition = () => import(
   /* webpackChunkName: "chord-recognition" */
   /* webpackPrefetch: true */
-  '@/services/chordRecognitionService'
+  '@/services/chord-analysis/chordRecognitionService'
 );
 export const loadBeatDetection = () => import(
   /* webpackChunkName: "beat-detection" */
   /* webpackPrefetch: true */
-  '@/services/beatDetectionService'
+  '@/services/audio/beatDetectionService'
 );
 
 // Heavy UI components - split into separate chunks
 export const loadChordGrid = () => import(
   /* webpackChunkName: "chord-grid" */
   /* webpackPrefetch: true */
-  '@/components/ChordGrid'
+  '@/components/chord-analysis/ChordGrid'
 );
 
 // Lazy-loaded components for better bundle splitting
 export const loadLazyRecentVideos = () => import(
   /* webpackChunkName: "recent-videos" */
   /* webpackPrefetch: true */
-  '@/components/LazyRecentVideos'
+  '@/components/homepage/LazyRecentVideos'
 );
 
 export const loadLazySearchContainer = () => import(
   /* webpackChunkName: "search-container" */
   /* webpackPrefetch: true */
-  '@/components/LazyIntegratedSearchContainer'
+  '@/components/homepage/LazyIntegratedSearchContainer'
 );
 export const loadLeadSheetDisplay = () => import(
   /* webpackChunkName: "lead-sheet" */
-  '@/components/LeadSheetDisplay'
+  '@/components/chord-analysis/LeadSheetDisplay'
 );
 export const loadLyricsSection = () => import(
   /* webpackChunkName: "lyrics-section" */
-  '@/components/LyricsSection'
+  '@/components/lyrics/LyricsSection'
 );
 export const loadChatbotSection = () => import(
   /* webpackChunkName: "chatbot-section" */
-  '@/components/ChatbotSection'
+  '@/components/chatbot/ChatbotSection'
 );
 
 // Analysis components
-export const loadAnalysisControls = () => import('@/components/AnalysisControls');
-export const loadChordGridContainer = () => import('@/components/ChordGridContainer');
-export const loadProcessingStatusBanner = () => import('@/components/ProcessingStatusBanner');
+export const loadAnalysisControls = () => import('@/components/analysis/AnalysisControls');
+export const loadChordGridContainer = () => import('@/components/chord-analysis/ChordGridContainer');
+export const loadProcessingStatusBanner = () => import('@/components/analysis/ProcessingStatusBanner');
 
 // Model selectors
-export const loadBeatModelSelector = () => import('@/components/BeatModelSelector');
-export const loadChordModelSelector = () => import('@/components/ChordModelSelector');
+export const loadBeatModelSelector = () => import('@/components/analysis/BeatModelSelector');
+export const loadChordModelSelector = () => import('@/components/analysis/ChordModelSelector');
 
 // Utility libraries (lazy loaded with chunk names)
 export const loadChartJS = () => import(
