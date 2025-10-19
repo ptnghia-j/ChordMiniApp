@@ -351,16 +351,10 @@ export default function RecentVideos() {
     return serviceMap[service] || service;
   };
 
-  // PERFORMANCE FIX #5: Show placeholder until component is visible
-  if (!isVisible) {
-    return (
-      <div ref={containerRef} className="w-full h-96 bg-content1 dark:bg-content1 border border-divider dark:border-divider rounded-lg" />
-    );
-  }
 
   if (loading) {
     return (
-      <Card ref={containerRef} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+      <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
         <CardHeader className="flex justify-between items-center pb-2">
           <h3 className="text-xl font-medium">Recently Transcribed Songs</h3>
           <Chip size="md" variant="flat" color="default">Loading...</Chip>
@@ -381,11 +375,32 @@ export default function RecentVideos() {
   }
 
   if (error || videos.length === 0) {
-    return null;
+    return (
+      <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+        <CardHeader className="flex justify-between items-center pb-2">
+          <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
+          <Chip size="sm" variant="flat" color={error ? "danger" : "default"}>
+            {error ? "Error" : "Empty"}
+          </Chip>
+        </CardHeader>
+        <CardBody className="p-0">
+          <div className="h-96 flex items-center justify-center p-6">
+            <div className="text-center">
+              <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 mb-1">
+                {error ? 'Failed to load transcribed videos' : 'No recent transcriptions yet'}
+              </h4>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {error ? 'Please retry or check your connection.' : 'New analyses will appear here as they are created.'}
+              </p>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+    );
   }
 
   return (
-    <Card ref={containerRef} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+    <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
       <CardHeader className="flex justify-between items-center pb-2">
         <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
         <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
@@ -394,7 +409,7 @@ export default function RecentVideos() {
       </CardHeader>
 
       <CardBody className="p-0">
-        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-all duration-300 ease-in-out`}>
+        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-opacity duration-300 ease-in-out`}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
             {videos.map((video) => (
               <Card

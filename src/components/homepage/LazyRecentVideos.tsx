@@ -7,25 +7,27 @@ const RecentVideos = lazy(() => import('./RecentVideos'));
 
 // Loading skeleton component
 const RecentVideosLoading = () => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 animate-pulse"></div>
-      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 animate-pulse"></div>
+  <div className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider rounded-lg">
+    <div className="flex items-center justify-between px-4 py-3 border-b border-divider dark:border-divider">
+      <div className="h-5 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+      <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
     </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden animate-pulse">
-          <div className="aspect-video bg-gray-200 dark:bg-gray-700"></div>
-          <div className="p-4 space-y-3">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-            <div className="flex items-center space-x-2">
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-12"></div>
+    <div className="h-96 overflow-hidden p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider rounded-md">
+            <div className="p-3">
+              <div className="flex gap-3">
+                <div className="w-20 h-12 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                  <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   </div>
 );
