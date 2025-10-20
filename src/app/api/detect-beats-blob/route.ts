@@ -103,36 +103,69 @@ export async function POST(request: NextRequest) {
     backendFormData.append('file', audioBlob, filename);
 
     // Add detector parameter if provided
-    const detector = formData.get('detector');
-    if (detector) {
-      backendFormData.append('detector', detector as string);
-    }
+    const detector = (formData.get('detector') as string) || 'madmom';
+    backendFormData.append('detector', detector);
+
+    // Forward 'force' parameter if provided (used to allow Beat-Transformer on larger files)
+    const force = formData.get('force') as string | null;
+    if (force) backendFormData.append('force', force);
 
     console.log(`🔍 Sending to Python backend: ${backendUrl}/api/detect-beats (timeout: ${timeoutValue}ms)`);
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
-    // Forward the request to the Python backend's regular beat detection endpoint
-    const response = await fetch(`${backendUrl}/api/detect-beats`, {
-      method: 'POST',
-      body: backendFormData,
-      headers: {
-        // Don't set Content-Type - let the browser set it with boundary for FormData
-      },
-      signal: abortSignal,
-    });
+    // Helper to call backend
+    async function callBackend(det: string) {
+      const fd = new FormData();
+      for (const [k, v] of backendFormData.entries()) {
+        if (k === 'detector') continue;
+        if (typeof v === 'string') {
+          fd.append(k, v);
+        } else {
+          // v is File (extends Blob) or Blob
+          const fileVal = v as File;
+          // Preserve filename if available
+          const name = typeof fileVal.name === 'string' ? fileVal.name : undefined;
+          if (name) {
+            fd.append(k, fileVal, name);
+          } else {
+            fd.append(k, fileVal);
+          }
+        }
+      }
+      fd.append('detector', det);
+      return fetch(`${backendUrl}/api/detect-beats`, {
+        method: 'POST',
+        body: fd,
+        headers: {},
+        signal: abortSignal,
+      });
+    }
 
+    // First attempt with requested detector
+    let response = await callBackend(detector);
+
+    // On specific Beat-Transformer load errors, retry with madmom as fallback
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ Backend error: ${response.status} ${response.statusText} - ${errorText}`);
-      
-      return NextResponse.json(
-        { 
-          error: `Backend processing failed: ${response.status} ${response.statusText}`,
-          details: errorText
-        },
-        { status: response.status }
-      );
+
+      const isCheckpointError = errorText.includes("Can't load save_path") || errorText.includes('Beat Transformer is not available');
+      if (detector === 'beat-transformer' && isCheckpointError) {
+        console.warn('⚠️ Beat-Transformer checkpoint unavailable. Retrying with madmom...');
+        response = await callBackend('madmom');
+      }
+
+      if (!response.ok) {
+        const err2 = await response.text();
+        return NextResponse.json(
+          {
+            error: `Backend processing failed: ${response.status} ${response.statusText}`,
+            details: err2
+          },
+          { status: response.status }
+        );
+      }
     }
 
     const result = await response.json();

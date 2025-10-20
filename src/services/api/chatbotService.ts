@@ -205,7 +205,10 @@ export async function sendChatMessageWithLyricsRetrieval(
   try {
     // Check if lyrics are missing and try to retrieve them
     if (!songContext.lyrics || songContext.lyrics.lines.length === 0) {
-      const retrievedLyrics = await retrieveLyricsForChatbot(songContext.videoId);
+      const isUpload = !songContext.videoId && !!songContext.uploadId;
+      const retrievedLyrics = isUpload
+        ? null
+        : (songContext.videoId ? await retrieveLyricsForChatbot(songContext.videoId) : null);
 
       if (retrievedLyrics && retrievedLyrics.lines.length > 0) {
         // Update the song context with retrieved lyrics
@@ -230,14 +233,14 @@ export async function sendChatMessageWithLyricsRetrieval(
  * Validates if song context has sufficient data for chatbot interaction
  */
 export function validateSongContext(songContext: SongContext): boolean {
-  // At minimum, we need a video ID and either beats, chords, or lyrics
-  return !!(
-    songContext.videoId && (
-      (songContext.beats && songContext.beats.length > 0) ||
-      (songContext.chords && songContext.chords.length > 0) ||
-      (songContext.lyrics && songContext.lyrics.lines.length > 0)
-    )
+  // At minimum, we need an identifier (videoId OR uploadId) and either beats, chords, or lyrics
+  const hasIdentifier = !!(songContext.videoId || songContext.uploadId);
+  const hasData = !!(
+    (songContext.beats && songContext.beats.length > 0) ||
+    (songContext.chords && songContext.chords.length > 0) ||
+    (songContext.lyrics && songContext.lyrics.lines.length > 0)
   );
+  return hasIdentifier && hasData;
 }
 
 /**

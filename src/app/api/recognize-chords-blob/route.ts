@@ -60,11 +60,15 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData();
     backendFormData.append('file', audioBlob, filename);
 
-    // Add model parameter if provided
-    const model = formData.get('model');
-    if (model) {
-      backendFormData.append('model', model as string);
-    }
+    // Add model/detector parameters if provided
+    const model = formData.get('model') as string | null;
+    const detector = (formData.get('detector') as string | null) || model || null;
+    if (model) backendFormData.append('model', model);
+    if (detector) backendFormData.append('detector', detector);
+
+    // Ensure chord_dict is set because this route forwards directly to Python (skips Next.js logic)
+    const chordDict = (model === 'btc-sl' || model === 'btc-pl') ? 'large_voca' : 'full';
+    backendFormData.append('chord_dict', chordDict);
 
     // Create a safe timeout signal that works across environments
     const timeoutValue = 800000; // 13+ minutes timeout to match backend

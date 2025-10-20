@@ -134,9 +134,20 @@ export const usePlaybackStore = create<PlaybackStore>()(
       onBeatClick: (beatIndex, timestamp) => {
         const state = get();
         const player = state.youtubePlayer as { seekTo?: (time: number, allowSeekAhead: string) => void } | null;
+        const audioRef = state.audioRef as RefObject<HTMLAudioElement> | null;
+
+        // Prefer YouTube player when present
         if (player && typeof player.seekTo === 'function') {
-          player.seekTo(timestamp, 'seconds');
+          try { player.seekTo(timestamp, 'seconds'); } catch {}
+        } else if (audioRef?.current) {
+          // Fallback to HTMLAudioElement for the upload page
+          try {
+            audioRef.current.currentTime = timestamp;
+            // If paused, keep state consistent with click navigation expectations
+            // Do not auto-play here; leave play/pause to user controls
+          } catch {}
         }
+
         set(
           {
             currentBeatIndex: beatIndex,

@@ -9,6 +9,9 @@ export interface BeatDetectionBackendResponse {
   success: boolean;
   beats: number[];
   downbeats?: number[];
+  // New: optional dual-candidate downbeats (Madmom heuristic mode)
+  downbeat_candidates?: { [key: string]: number[] } | { "3"?: number[]; "4"?: number[] };
+  downbeat_candidates_meta?: { default?: number; strategy?: string };
   bpm?: number;
   BPM?: number; // Some responses use uppercase
   total_beats?: number;
@@ -133,14 +136,14 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
           'beat-transformer': {
             name: data.beat_model_info?.['beat-transformer']?.name || 'Beat-Transformer',
             description: data.beat_model_info?.['beat-transformer']?.description ||
-                        'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
+                        'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
             performance: data.beat_model_info?.['beat-transformer']?.performance || 'High accuracy, slower processing',
             uses_spleeter: data.beat_model_info?.['beat-transformer']?.uses_spleeter ?? true
           },
           'madmom': {
             name: data.beat_model_info?.['madmom']?.name || 'Madmom',
             description: data.beat_model_info?.['madmom']?.description ||
-                        'Neural network with good balance of accuracy and speed, best for common time signature, flexible in tempo changes',
+                        'Neural network with high accuracy and speed, best for common time signature',
             performance: data.beat_model_info?.['madmom']?.performance || 'Medium accuracy, medium speed',
             uses_spleeter: data.beat_model_info?.['madmom']?.uses_spleeter ?? false
           },
@@ -259,16 +262,21 @@ export async function detectBeatsWithRateLimit(
     }
 
     // Convert to expected format
-    return {
+    const backendData = data as Partial<BeatDetectionBackendResponse>;
+    const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
       success: true,
       beats: data.beats as number[],
       downbeats: (data.downbeats as number[]) || [],
+      // Pass through optional dual-candidate downbeats when present (Madmom)
+      downbeat_candidates: backendData.downbeat_candidates,
+      downbeat_candidates_meta: backendData.downbeat_candidates_meta,
       bpm: (data.BPM as number) || (data.bpm as number) || 120,
       total_beats: (data.beats as number[]).length,
       duration: (data.duration as number) || 0,
       time_signature: parseTimeSignature(data.time_signature),
       model: (data.model_used as string) || detector
     };
+    return normalized;
 
   } catch (error) {
     console.error('Error in beat detection with rate limiting:', error);
@@ -315,10 +323,13 @@ export async function detectBeatsFromFile(
           }
 
           // Normalize to BeatDetectionResult with numeric time_signature
-          const normalized: BeatDetectionResult = {
+          const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
             success: true,
             beats: backendResponse.beats || [],
             downbeats: backendResponse.downbeats || [],
+            // Pass through optional dual-candidate downbeats when present (Madmom)
+            downbeat_candidates: backendResponse.downbeat_candidates,
+            downbeat_candidates_meta: backendResponse.downbeat_candidates_meta,
             bpm: (backendResponse.BPM as number) || (backendResponse.bpm as number) || 120,
             total_beats: (backendResponse.beats || []).length,
             duration: (backendResponse.duration as number) || 0,
@@ -670,7 +681,7 @@ export async function detectBeatsFromFile(
  */
 export async function detectBeatsFromFirebaseUrl(
   firebaseUrl: string,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'madmom',
   videoId?: string
 ): Promise<BeatDetectionResult> {
   try {
@@ -713,16 +724,20 @@ export async function detectBeatsFromFirebaseUrl(
       const backendResponse = blobResult.data as BeatDetectionBackendResponse;
 
 
-      return {
+      const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
         success: true,
         beats: backendResponse.beats || [],
         downbeats: backendResponse.downbeats || [],
+        // Pass through optional dual-candidate downbeats when present (Madmom)
+        downbeat_candidates: backendResponse.downbeat_candidates,
+        downbeat_candidates_meta: backendResponse.downbeat_candidates_meta,
         bpm: backendResponse.BPM || backendResponse.bpm || 120,
         total_beats: (backendResponse.beats || []).length,
         duration: backendResponse.duration || 0,
         time_signature: parseTimeSignature(backendResponse.time_signature),
         model: backendResponse.model_used || detector
       };
+      return normalized;
     } else if (blobResult.error === 'USE_STANDARD_FLOW') {
       // Fallback to standard beat detection flow
 
@@ -748,7 +763,7 @@ export async function detectBeatsFromFirebaseUrl(
  */
 export async function detectBeatsFromPath(
   audioPath: string,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'madmom'
 ): Promise<BeatDetectionResult> {
   try {
     const formData = new FormData();
@@ -812,10 +827,13 @@ export async function detectBeatsFromPath(
 
       // Normalize and map to BeatDetectionResult
       const backendData: BeatDetectionBackendResponse = data as BeatDetectionBackendResponse;
-      const normalized: BeatDetectionResult = {
+      const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
         success: true,
         beats: backendData.beats || [],
         downbeats: backendData.downbeats || [],
+        // Pass through optional dual-candidate downbeats when present (Madmom)
+        downbeat_candidates: backendData.downbeat_candidates,
+        downbeat_candidates_meta: backendData.downbeat_candidates_meta,
         bpm: (backendData.BPM as number) || (backendData.bpm as number) || 120,
         total_beats: (backendData.beats || []).length,
         duration: (backendData.duration as number) || 0,

@@ -190,6 +190,11 @@ class VercelBlobUploadService {
       formData.append('blob_url', blobUrl);
       formData.append('detector', detector);
 
+      // Force Beat-Transformer when explicitly requested to mirror non-blob path behavior
+      if (detector === 'beat-transformer') {
+        formData.append('force', 'true');
+      }
+
       const response = await fetch(`/api/detect-beats-blob`, {
         method: 'POST',
         body: formData,
@@ -247,6 +252,10 @@ class VercelBlobUploadService {
       const formData = new FormData();
       formData.append('blob_url', blobUrl);
       formData.append('model', model);
+      // Ensure backend knows which detector to run; Python expects 'detector'
+      formData.append('detector', model);
+      // Provide chord_dict here because this path bypasses the Next.js route that normally injects it
+      formData.append('chord_dict', (model === 'btc-sl' || model === 'btc-pl') ? 'large_voca' : 'full');
 
       const response = await fetch(`/api/recognize-chords-blob`, {
         method: 'POST',

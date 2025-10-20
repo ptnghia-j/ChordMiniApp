@@ -128,7 +128,7 @@ export const useAnalysisState = ({
         return saved as BeatDetectorType;
       }
     }
-    return 'beat-transformer';
+    return 'madmom';
   });
 
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>(() => {

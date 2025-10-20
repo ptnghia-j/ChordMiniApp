@@ -140,14 +140,8 @@ export const calculateGridLayout = (
   isChatbotOpen: boolean,
   isLyricsPanelOpen: boolean
 ): GridLayoutConfig => {
-  // Special case for upload page: use 4 measures (16 cells) per row for better spacing
-  if (isUploadPage) {
-    return {
-      measuresPerRow: 4,
-      cellsPerRow: 4 * timeSignature,
-      totalRows: Math.ceil(chordsLength / (4 * timeSignature))
-    };
-  }
+  // Previously: upload page forced 4 measures per row which under-utilized wide layouts.
+  // Change: use the same responsive algorithm across pages so large screens can display more cells per row.
 
   // Determine container size category based on actual container width
   const effectiveWidth = containerWidth > 0 ? containerWidth : screenWidth;

@@ -636,25 +636,79 @@ class BeatTransformerDetector:
             # Use local model path to avoid GitHub download issues
             if DEBUG:
                 print("🔧 Initializing Spleeter 5-stems separator...")
-            import os
-            model_path = os.path.expanduser('~/.cache/spleeter/5stems')
-            if os.path.exists(model_path):
+            from pathlib import Path
+            # Note: Spleeter caches to ~/.cache/spleeter/pretrained_models/5stems by default
+            cache_candidates = [
+                Path.home() / ".cache" / "spleeter" / "pretrained_models" / "5stems",
+                Path.home() / ".cache" / "spleeter" / "5stems",  # legacy/misplaced
+            ]
+            if DEBUG:
+                print("🔧 Initializing Spleeter 5-stems separator...")
+                print("🔎 Spleeter cache candidates:")
+                for p in cache_candidates:
+                    print(f"   - {p} (exists={p.exists()})")
+
+            # Pre-check: is the default pretrained cache present?
+            default_dir = cache_candidates[0]
+            checkpoint_files = list(default_dir.glob("**/checkpoint")) if default_dir.exists() else []
+
+            # Try to use local cached model first to avoid GitHub download issues
+            if default_dir.exists() and checkpoint_files:
                 if DEBUG:
-                    print(f"📁 Using cached Spleeter model from: {model_path}")
-                # Use local model provider to avoid HTTP redirect issues
-                from spleeter.model.provider import ModelProvider
-                separator = Separator('spleeter:5stems', multiprocess=False)
-                # Override the model directory to use our pre-downloaded model
-                separator._params['model_dir'] = model_path
+                    print(f"✅ Found Spleeter model in cache: {default_dir}")
+                # Use local model path directly to avoid ModelProvider download
+                separator = Separator(f'spleeter:5stems', multiprocess=False)
+                # Override model_dir to use cached model
+                separator._params['model_dir'] = str(default_dir)
             else:
-                if DEBUG:
-                    print(f"⚠️  Model not found at {model_path}, will attempt download...")
-                separator = Separator('spleeter:5stems')
+                print("⚠️  Spleeter pretrained 5stems model not found locally; will attempt provider-managed download...")
+                # Let Spleeter manage model discovery/download by default
+                separator = Separator('spleeter:5stems', multiprocess=False)
+
+            # Prefer a bundled local model if present to avoid network/download issues.
+            # IMPORTANT: ModelProvider expects model_dir to be the actual model folder (e.g., '<root>/5stems')
+            local_model_root = (Path(__file__).resolve().parent.parent / 'pretrained_models')
+            local_model_dir = local_model_root / '5stems'
+            if local_model_dir.exists() and (local_model_dir / 'checkpoint').exists():
+                try:
+                    # Create Spleeter probe file so ModelProvider doesn't try to download
+                    probe = local_model_dir / '.probe'
+                    if not probe.exists():
+                        probe.write_text('OK')
+                    separator._params['model_dir'] = str(local_model_dir)
+                    if DEBUG:
+                        print(f"📁 Using bundled Spleeter model at: {local_model_dir}")
+                except Exception as e:
+                    if DEBUG:
+                        print(f"⚠️ Could not set bundled model_dir: {e}")
+            else:
+                # If user cache exists, optionally log it for diagnostics
+                default_dir = cache_candidates[0]
+                if default_dir.exists():
+                    if DEBUG:
+                        print(f"📁 Using default Spleeter cache at: {default_dir}")
 
             # Separate the audio into 5 stems
             if DEBUG:
                 print("🎛️  Separating audio with Spleeter...")
-            demixed = separator.separate(waveform)
+            try:
+                demixed = separator.separate(waveform)
+            except Exception as e:
+                # Provide a precise, actionable message about likely root causes
+                from pathlib import Path
+                details = []
+                default_dir = Path.home() / ".cache" / "spleeter" / "pretrained_models" / "5stems"
+                details.append(f"expected_cache={default_dir} exists={default_dir.exists()}")
+                ckpt = list(default_dir.glob("**/checkpoint")) if default_dir.exists() else []
+                details.append(f"checkpoint_files_found={len(ckpt)}")
+                raise RuntimeError(
+                    "Spleeter failed to load its 5-stems model checkpoint. "
+                    "This usually means the pretrained model is missing or the cache is corrupt. "
+                    f"({' ; '.join(details)})\n"
+                    "How to fix: (1) ensure internet so Spleeter can download on first use; "
+                    "(2) or pre-download models by running `spleeter separate -p spleeter:5stems -o /tmp/test` once; "
+                    "(3) or copy the 5stems model directory into ~/.cache/spleeter/pretrained_models/5stems."
+                ) from e
             stems = list(demixed.keys())
             if DEBUG:
                 print(f"✅ Separation complete. Got {len(demixed)} stems: {stems}")

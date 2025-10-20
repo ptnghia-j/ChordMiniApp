@@ -19,10 +19,10 @@ interface ModelOption {
   available: boolean;
 }
 
-const HeroUIBeatModelSelector = ({ 
-  onChange, 
-  defaultValue = 'beat-transformer', 
-  className = '' 
+const HeroUIBeatModelSelector = ({
+  onChange,
+  defaultValue = 'madmom',
+  className = ''
 }: HeroUIBeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
@@ -67,20 +67,20 @@ const HeroUIBeatModelSelector = ({
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'DL model with 5-channel audio separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
+                  'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
       available: modelInfo?.beat_transformer_available || false
     },
     {
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                        'Neural network with good balance of accuracy and speed, best for common time signatures, flexible in tempo changes',
+                        'Neural network with high accuracy and speed, best for common time signature',
       available: modelInfo?.madmom_available || false
     }
   ], [modelInfo]);
 
   const availableModels = useMemo(() => modelOptions.filter(model =>
-    model.available || model.id === 'beat-transformer'
+    model.available || model.id === 'madmom'
   ), [modelOptions]);
   
   const selectedModelObject = availableModels.find(model => model.id === selectedModel);

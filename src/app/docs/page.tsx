@@ -336,11 +336,11 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-slate-900">
                     <div className="flex items-center gap-3 mb-3">
                       <StatusIcon status="Operational" />
-                      <h4 className="font-semibold text-gray-900 dark:text-white">Beat-Transformer</h4>
+                      <h4 className="font-semibold text-gray-900 dark:text-white">Madmom</h4>
                       <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Default</span>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                      Deep learning model for beat tracking with downbeat detection. Provides high accuracy for modern music genres.
+                      Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4).
                     </p>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       <strong>Best for:</strong> Pop, Rock, Electronic music
@@ -349,13 +349,13 @@ export default function DocsPage() {
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-slate-900">
                     <div className="flex items-center gap-3 mb-3">
                       <StatusIcon status="Operational" />
-                      <h4 className="font-semibold text-gray-900 dark:text-white">Madmom</h4>
+                      <h4 className="font-semibold text-gray-900 dark:text-white">Beat-Transformer</h4>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                      Classical beat tracking algorithm with neural network components. Reliable for complex rhythmic patterns.
+                      DL model with 5-channel audio separation, flexible in time signatures, slow processing speed.
                     </p>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      <strong>Best for:</strong> Jazz, Classical, Complex rhythms
+                      <strong>Best for:</strong> Complex mixes, layered instrumentation
                     </div>
                   </div>
                 </div>

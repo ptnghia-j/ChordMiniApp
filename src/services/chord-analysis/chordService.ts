@@ -60,18 +60,21 @@ export async function recognizeChordsWithRateLimit(
       throw new Error('Audio file is too large for chord recognition (>100MB)');
     }
 
-    // Build form data
+    // Endpoint selection helpers and safe model resolution first (we need it for form fields)
+    const { getChordRecognitionEndpoint, getSafeChordModel } = await import('@/utils/modelFiltering');
+    const safeModel = getSafeChordModel(model);
+
+    // Build form data (include explicit detector/model so backend doesn't default to 'auto')
     const formData = new FormData();
     formData.append('file', audioFile);
-    if (model !== 'chord-cnn-lstm') {
+    formData.append('detector', safeModel); // Explicitly tell backend which detector to run
+    formData.append('model', safeModel);    // Kept for compatibility with intermediate proxies
+    if (safeModel !== 'chord-cnn-lstm') {
       formData.append('chord_dict', 'large_voca'); // BTC models use large_voca
     } else {
       formData.append('chord_dict', 'full'); // CNN-LSTM uses full
     }
 
-    // Endpoint selection
-    const { getChordRecognitionEndpoint, getSafeChordModel } = await import('@/utils/modelFiltering');
-    const safeModel = getSafeChordModel(model);
     const endpoint = getChordRecognitionEndpoint(safeModel);
 
     // Timeout

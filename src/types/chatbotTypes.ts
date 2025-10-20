@@ -28,11 +28,13 @@ export interface ConversationHistory {
  * Represents the complete song context for the AI
  */
 export interface SongContext {
+  // Source identifier - at least one must be present
+  videoId?: string;      // Present for YouTube sources
+  uploadId?: string;     // Present for upload sources
   // Basic metadata
-  videoId: string;
   title?: string;
   duration?: number;
-  
+
   // Beat detection results
   beats?: BeatInfo[];
   downbeats?: number[];

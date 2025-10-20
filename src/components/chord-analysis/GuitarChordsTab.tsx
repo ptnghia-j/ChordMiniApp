@@ -14,6 +14,7 @@ import { useCurrentBeatIndex } from '@/stores/playbackStore';
 import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zustand internally
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
+import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 
 
 // Lazy load heavy guitar chord diagram component
@@ -383,11 +384,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             </div>
           </div>
         </div>
-        <div className="chord-grid-window bg-white dark:bg-content-bg rounded-lg overflow-hidden">
-          <div className="h-24 sm:h-32 md:h-40 lg:h-48 overflow-y-auto">
-            <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
-          </div>
-        </div>
+        <ScrollableTabContainer heightClass="h-24 sm:h-32 md:h-40 lg:h-48">
+          <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
+        </ScrollableTabContainer>
       </div>
 
       {/* Guitar Chord Diagrams Section */}

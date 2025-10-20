@@ -7,6 +7,7 @@ handling model selection, file size policies, and fallback strategies.
 
 import os
 import time
+from collections import Counter
 from typing import Dict, Any, List, Optional
 from utils.logging import log_info, log_error, log_debug
 from services.detectors.beat_transformer_detector import BeatTransformerDetectorService
@@ -106,18 +107,20 @@ class BeatDetectionService:
         Returns:
             str: Selected detector name
         """
-        # Preference order: beat-transformer > madmom > librosa
+        # Preference order: madmom > beat-transformer > librosa
         # But consider file size limits
 
-        if file_size_mb <= 50:  # Small files - prefer Beat Transformer
-            if 'beat-transformer' in available_detectors:
+        if file_size_mb <= 50:  # Small files - prefer Madmom
+            if 'madmom' in available_detectors:
+                return 'madmom'
+            elif 'beat-transformer' in available_detectors:
                 return 'beat-transformer'
 
-        if file_size_mb <= 100:  # Medium files - Beat Transformer or madmom
-            if 'beat-transformer' in available_detectors:
-                return 'beat-transformer'
-            elif 'madmom' in available_detectors:
+        if file_size_mb <= 100:  # Medium files - Madmom or Beat Transformer
+            if 'madmom' in available_detectors:
                 return 'madmom'
+            elif 'beat-transformer' in available_detectors:
+                return 'beat-transformer'
 
         # Large files - prefer madmom or librosa
         if 'madmom' in available_detectors and file_size_mb <= self.size_limits['madmom']:
@@ -224,6 +227,74 @@ class BeatDetectionService:
                         f"{result['total_downbeats']} downbeats, "
                         f"BPM: {result['bpm']:.1f}, "
                         f"Time: {total_time:.2f}s")
+
+                # Beat-per-measure logging (does not alter response)
+                try:
+                    file_id = os.path.basename(file_path)
+                    time_sig = result.get('time_signature', '4/4')
+
+                    # Parse beats-per-measure from time signature
+                    beats_per_measure = None
+                    if isinstance(time_sig, str) and '/' in time_sig:
+                        beats_per_measure = int(str(time_sig).split('/')[0])
+                    elif isinstance(time_sig, (int, float)):
+                        beats_per_measure = int(time_sig)
+
+                    beats = result.get('beats') or []
+                    downbeats = result.get('downbeats') or []
+                    measure_counts = []  # type: List[int]
+
+                    # Skip redundant grouping for Madmom heuristic candidates (downbeats derived deterministically)
+                    is_madmom_heuristic = (
+                        str(result.get('model_used')) == 'madmom' and
+                        isinstance(result.get('downbeat_candidates_meta'), dict) and
+                        result.get('downbeat_candidates_meta', {}).get('strategy') == 'heuristic_slices_from_beats'
+                    )
+
+                    if not is_madmom_heuristic and isinstance(beats, list) and isinstance(downbeats, list) and len(downbeats) >= 2:
+                        # Two-pointer O(n) measure counting since beats/downbeats are sorted
+                        # Advance a beat index across the beats list while walking consecutive downbeat windows [start, end)
+                        bi = 0
+                        n_beats = len(beats)
+                        for i in range(len(downbeats) - 1):
+                            start, end = float(downbeats[i]), float(downbeats[i + 1])
+                            # Move beat pointer to start of window
+                            while bi < n_beats and float(beats[bi]) < start:
+                                bi += 1
+                            # Count beats within [start, end)
+                            count = 0
+                            while bi < n_beats and float(beats[bi]) < end:
+                                count += 1
+                                bi += 1
+                            if 2 <= count <= 12:
+                                measure_counts.append(int(count))
+
+                    dist = Counter(measure_counts) if measure_counts else {}
+                    confidence = None
+                    if dist:
+                        dominant_beats = max(dist.items(), key=lambda kv: kv[1])[0]
+                        confidence = dist[dominant_beats] / max(1, len(measure_counts))
+
+                    # Reduce verbosity: single concise info log; include note if skipped for heuristic
+                    if is_madmom_heuristic:
+                        log_debug(
+                            f"[Beat-Per-Measure] file={file_id} skipped_for=madmom_heuristic_slices distribution=derived"
+                        )
+                    else:
+                        if confidence is not None:
+                            log_info(
+                                f"[Beat-Per-Measure] file={file_id} time_signature={time_sig} "
+                                f"beats_per_measure={beats_per_measure} measures={len(measure_counts)} "
+                                f"distribution={dict(dist)} confidence={confidence:.2f}"
+                            )
+                        else:
+                            log_info(
+                                f"[Beat-Per-Measure] file={file_id} time_signature={time_sig} "
+                                f"beats_per_measure={beats_per_measure} measures={len(measure_counts)} "
+                                f"distribution={dict(dist)}"
+                            )
+                except Exception as e:
+                    log_debug(f"Beat-per-measure logging skipped due to error: {e}")
             else:
                 log_error(f"Beat detection failed: {result.get('error', 'Unknown error')}")
 
@@ -270,8 +341,8 @@ class BeatDetectionService:
     def _get_detector_description(self, detector_name: str) -> str:
         """Get description for a detector."""
         descriptions = {
-            'beat-transformer': "Deep learning model for beat tracking with downbeat detection",
-            'madmom': "Neural network with good balance of accuracy and speed",
+            'beat-transformer': "DL model with 5-channel audio separation, flexible in time signatures, slow processing speed",
+            'madmom': "Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4)",
             'librosa': "Classical signal processing approach, fast but less accurate"
         }
         return descriptions.get(detector_name, "Unknown detector")

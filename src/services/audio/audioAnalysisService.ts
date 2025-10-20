@@ -29,6 +29,42 @@ function toBeatInfo(beatResults: BeatDetectionBackendResponse): BeatInfo[] {
   return beats;
 }
 
+// Heuristic: reward chord changes that occur on downbeats and penalize changes off-downbeat
+// This avoids bias toward shorter meters (e.g., 3) that can artificially increase changes when sampling.
+function scoreDownbeatAlignment(chordSeries: string[], timeSignature: number): { score: number; bestShift: number } {
+  if (!Array.isArray(chordSeries) || chordSeries.length < 2) return { score: 0, bestShift: 0 };
+  const isValid = (c: string) => c && c !== '' && c !== 'N.C.' && c !== 'N/C' && c !== 'N';
+  // changeAt[i] indicates a chord change occurs at beat i (from i-1 -> i) with valid chords
+  const changeAt: boolean[] = new Array(chordSeries.length).fill(false);
+  for (let i = 1; i < chordSeries.length; i++) {
+    const prev = chordSeries[i - 1];
+    const curr = chordSeries[i];
+    if (isValid(prev as string) && isValid(curr as string) && prev !== curr) changeAt[i] = true;
+  }
+
+  let bestShift = 0;
+  let bestScore = -Infinity;
+  const onWeight = 2;   // reward for a change on a downbeat
+  const offPenalty = 1; // penalty for a change off a downbeat
+
+  for (let shift = 0; shift < timeSignature; shift++) {
+    let onDown = 0;
+    let offDown = 0;
+    for (let i = 1; i < chordSeries.length; i++) {
+      if (!changeAt[i]) continue;
+      const isDownbeatPos = ((i - shift) % timeSignature + timeSignature) % timeSignature === 0;
+      if (isDownbeatPos) onDown++; else offDown++;
+    }
+    const score = onDown * onWeight - offDown * offPenalty;
+    if (score > bestScore) {
+      bestScore = score;
+      bestShift = shift;
+    }
+  }
+
+  return { score: bestScore === -Infinity ? 0 : bestScore, bestShift };
+}
+
 async function fetchFileFromUrl(url: string, videoId?: string): Promise<File> {
   // PRIORITY FIX: Check for cached complete audio file first (from parallel pipeline)
   if (videoId) {
@@ -121,6 +157,25 @@ async function handleBlobPath(
     beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
   }
 
+  // If backend provided dual downbeat candidates (Madmom), auto-select best (3/4 vs 4/4) using chord-change heuristic
+  try {
+    const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
+    if (candidates && Array.isArray(beatResults.beats) && beatResults.beats.length > 0) {
+      const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
+      const tempSync = synchronizeChords(chordResults, beatsForSync);
+      const chordSeries = tempSync.map((s) => s.chord);
+      const s3 = scoreDownbeatAlignment(chordSeries, 3);
+      const s4 = scoreDownbeatAlignment(chordSeries, 4);
+      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie → prefer 4
+      beatResults.downbeats = candidates[String(winner)] || [];
+      beatResults.time_signature = winner;
+      // Optional debug
+      console.log(`Auto-selected meter (blob path): 3/4 score=${s3.score}, 4/4 score=${s4.score} → ${winner}/4`);
+    }
+  } catch (selErr) {
+    console.warn('Downbeat candidate selection (blob path) skipped due to error:', selErr);
+  }
+
   const beats = toBeatInfo(beatResults);
   let synchronizedChords;
   try {
@@ -194,11 +249,13 @@ export async function analyzeAudioWithRateLimit(
     (async (): Promise<BeatDetectionBackendResponse> => {
       try {
         let results: BeatDetectionBackendResponse;
+
         if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
           results = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
         } else {
           results = await detectBeatsWithRateLimit(audioFile, beatDetector);
         }
+
         if (!results || !results.beats) throw new Error('Beat detection failed: missing beats data');
         if (!Array.isArray(results.beats)) throw new Error('Invalid beat detection results: beats is not an array');
         if (results.beats.length === 0) throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
@@ -240,6 +297,24 @@ export async function analyzeAudioWithRateLimit(
     })()
   ]);
 
+// Auto-select downbeats (3/4 vs 4/4) if candidates provided (Madmom)
+try {
+  const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
+  if (candidates) {
+    const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
+    const tempSync = synchronizeChords(chordResults, beatsForSync);
+    const chordSeries = tempSync.map((s) => s.chord);
+    const s3 = scoreDownbeatAlignment(chordSeries, 3);
+    const s4 = scoreDownbeatAlignment(chordSeries, 4);
+    const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie -> prefer 4
+    beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+    beatResults.time_signature = winner;
+    console.log(`Auto-selected meter: 3/4 score=${s3.score}, 4/4 score=${s4.score} -> ${winner}/4`);
+  }
+} catch (selErr) {
+  console.warn('Downbeat candidate selection skipped due to error:', selErr);
+}
+
   const beats = toBeatInfo(beatResults);
 
   // Synchronize
@@ -259,6 +334,8 @@ export async function analyzeAudioWithRateLimit(
       bpm: beatResults.bpm
     }
   };
+
+
 }
 
 export async function analyzeAudio(
@@ -320,8 +397,8 @@ export async function analyzeAudio(
     }
     throw new Error('Beat detection failed with unknown error');
   }
+// (beats will be computed after chordResults so we can evaluate candidates with chord context)
 
-  const beats = toBeatInfo(beatResults);
 
   // Chords
   let chordResults: ChordDetectionResult[];
@@ -340,6 +417,26 @@ export async function analyzeAudio(
     throw new Error('Chord recognition failed with unknown error');
   }
 
+  // Auto-select downbeats (3/4 vs 4/4) if candidates provided (Madmom)
+  try {
+    const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
+    if (candidates) {
+      const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
+      const tempSync = synchronizeChords(chordResults, beatsForSync);
+      const chordSeries = tempSync.map((s) => s.chord);
+      const s3 = scoreDownbeatAlignment(chordSeries, 3);
+      const s4 = scoreDownbeatAlignment(chordSeries, 4);
+      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie -> prefer 4
+      beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+      beatResults.time_signature = winner;
+      console.log(`Auto-selected meter: 3/4 score=${s3.score}, 4/4 score=${s4.score} -> ${winner}/4`);
+    }
+  } catch (selErr) {
+    console.warn('Downbeat candidate selection skipped due to error:', selErr);
+  }
+
+  const beats = toBeatInfo(beatResults);
+
   // Synchronize
   const synchronizedChords = synchronizeChords(chordResults, beats);
 
@@ -357,4 +454,5 @@ export async function analyzeAudio(
     }
   };
 }
+
 

@@ -67,7 +67,7 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
   };
 
   return (
-    <div className="mt-4 border-t border-gray-200 pt-4">
+    <div className="mt-2 pt-2">
       <div
         className="flex justify-between items-center cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}

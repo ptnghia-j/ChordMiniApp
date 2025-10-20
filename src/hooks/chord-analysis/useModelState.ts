@@ -27,12 +27,12 @@ export const useModelState = (): ModelState => {
       if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
         return saved as BeatDetectorType;
       }
-      // If saved value was 'auto', default to 'beat-transformer'
+      // If saved value was 'auto', default to 'madmom'
       if (saved === 'auto') {
-        localStorage.setItem('chordmini_beat_detector', 'beat-transformer');
+        localStorage.setItem('chordmini_beat_detector', 'madmom');
       }
     }
-    return 'beat-transformer';
+    return 'madmom';
   });
 
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>(() => {

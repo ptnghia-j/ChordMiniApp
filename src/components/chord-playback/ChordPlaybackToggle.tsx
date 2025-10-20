@@ -8,6 +8,7 @@ import { MdPiano, MdRefresh } from 'react-icons/md';
 import { GiGuitar, GiViolin, GiFlute } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
+import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { useIsPitchShiftEnabled } from '@/stores/uiStore';
 
@@ -71,6 +72,8 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const audioRef = usePlaybackStore((s) => s.audioRef);
+
   const dragRef = useRef<HTMLDivElement>(null);
   const audioMixer = useRef<ReturnType<typeof getAudioMixerService> | null>(null);
 
@@ -494,7 +497,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
                           <HiVideoCamera className="h-4 w-4" />
-                          {isPitchShiftEnabled ? 'Pitch-Shifted Audio' : 'YouTube Video'}
+                          {isPitchShiftEnabled ? 'Pitch-Shifted Audio' : (youtubePlayer ? 'YouTube Video' : 'Original Audio')}
                         </label>
                         <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
                           {Math.round(isPitchShiftEnabled ? audioSettings.pitchShiftedAudioVolume : audioSettings.youtubeVolume)}%
@@ -528,13 +531,23 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                                   setAudioSettings(prev => prev ? { ...prev, pitchShiftedAudioVolume: vol } : null);
                                 }
                               } else {
-                                // Control YouTube volume
-                                audioMixer.current?.setYouTubeVolume(vol);
+                                // Control original source: YouTube if available, otherwise HTML audio (upload page)
+                                if (youtubePlayer) {
+                                  audioMixer.current?.setYouTubeVolume(vol);
+                                } else {
+                                  // Upload page: set HTMLAudioElement volume (0-1)
+                                  if (audioRef?.current) {
+                                    const v = Math.max(0, Math.min(1, (typeof vol === 'number' ? vol : Number(vol)) / 100));
+                                    try { audioRef.current.volume = v; } catch {}
+                                  }
+                                  // Persist UI value in mixer for consistency (safe even without YT player)
+                                  audioMixer.current?.setYouTubeVolume(vol);
+                                }
                               }
                             }
                           }}
                           className="w-full"
-                          aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : "YouTube video volume control"}
+                          aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : (youtubePlayer ? "YouTube video volume control" : "Original audio volume control")}
                           classNames={{
                             base: "max-w-full",
                             track: "bg-gray-200 dark:bg-gray-600 h-1.5",

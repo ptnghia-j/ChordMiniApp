@@ -79,8 +79,6 @@ def register_blueprints(app: Flask, config) -> None:
     from blueprints.beats import beats_bp
     from blueprints.chords import chords_bp
     from blueprints.lyrics import lyrics_bp
-    from blueprints.audio import audio_bp
-    from blueprints.youtube import youtube_bp
     from blueprints.debug import debug_bp
 
     # Register blueprints
@@ -89,8 +87,6 @@ def register_blueprints(app: Flask, config) -> None:
     app.register_blueprint(beats_bp)
     app.register_blueprint(chords_bp)
     app.register_blueprint(lyrics_bp)
-    app.register_blueprint(audio_bp)
-    app.register_blueprint(youtube_bp)
 
     # Register debug blueprint only in non-production mode
     if not config.PRODUCTION_MODE:
@@ -147,23 +143,7 @@ def init_services(app: Flask, config) -> None:
         # Create a dummy service that returns errors
         services['lyrics'] = None
 
-    # Initialize audio extraction service
-    try:
-        from services.extraction.audio_extraction_service import AudioExtractionService
-        services['audio_extraction'] = AudioExtractionService(config)
-        log_info("Audio extraction service initialized")
-    except Exception as e:
-        log_info(f"Failed to initialize audio extraction service: {e}")
-        services['audio_extraction'] = None
 
-    # Initialize YouTube search service
-    try:
-        from services.youtube.youtube_search_service import YouTubeSearchService
-        services['youtube'] = YouTubeSearchService(config)
-        log_info("YouTube search service initialized")
-    except Exception as e:
-        log_info(f"Failed to initialize YouTube search service: {e}")
-        services['youtube'] = None
 
     # Store services in app extensions
     app.extensions['services'] = services

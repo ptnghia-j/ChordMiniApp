@@ -104,7 +104,8 @@ export async function POST(request: NextRequest) {
 
     // Forward the request to the backend with extended timeout
     console.log(`📡 Making fetch request to Python backend...`);
-    const response = await fetch(targetUrl, {
+    const requestedDetector = (formData.get('detector') as string) || 'madmom';
+    let response = await fetch(targetUrl, {
       method: 'POST',
       body: formData,
       headers: {
@@ -117,8 +118,36 @@ export async function POST(request: NextRequest) {
     console.log(`📋 Response headers:`, Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = await response.text();
       console.error(`❌ Backend beat detection failed: ${response.status} ${response.statusText} - ${errorText}`);
+
+      // Retry with madmom if Beat-Transformer checkpoint is unavailable
+      const isCheckpointError = errorText.includes("Can't load save_path") || errorText.includes('Beat Transformer is not available');
+      if (requestedDetector === 'beat-transformer' && isCheckpointError) {
+        console.warn('⚠️ Beat-Transformer checkpoint unavailable. Retrying with madmom...');
+        const fd = new FormData();
+        for (const [k, v] of formData.entries()) {
+          if (k === 'detector') continue;
+          if (typeof v === 'string') {
+            fd.append(k, v);
+          } else if (v instanceof File) {
+            fd.append(k, v, v.name ?? undefined);
+          } else {
+            // Fallback: append as Blob
+            fd.append(k, v as Blob);
+          }
+        }
+        fd.append('detector', 'madmom');
+        response = await fetch(targetUrl, { method: 'POST', body: fd, signal: abortSignal });
+        if (!response.ok) {
+          errorText = await response.text();
+          console.error(`❌ Fallback to madmom also failed: ${response.status} ${response.statusText} - ${errorText}`);
+        } else {
+          const result = await response.json();
+          console.log(`✅ Beat detection successful after fallback to madmom`);
+          return NextResponse.json(result);
+        }
+      }
 
       // Check if this is a 413 error (payload too large)
       if (response.status === 413) {

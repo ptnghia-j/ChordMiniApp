@@ -4,17 +4,19 @@ import subprocess
 import re
 import time
 import logging
+import numpy as np
 
 # Apply all compatibility patches early (NumPy, SciPy, madmom, librosa)
 from compat import apply_all as apply_compat_patches
 apply_compat_patches()
 
+from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import tempfile
-import numpy as np
 # import soundfile as sf  # Optional dependency
 import traceback
 import sys
@@ -25,8 +27,6 @@ import random
 # Import the new app factory and utilities
 from app_factory import create_app
 from utils.logging import log_info, log_error, log_debug
-from utils.audio_utils import trim_silence_from_audio
-from utils.music_theory_utils import detect_time_signature_from_pattern
 from utils.import_utils import lazy_import_librosa
 from utils.model_utils import (
     check_spleeter_availability, check_beat_transformer_availability,
@@ -48,7 +48,6 @@ PRODUCTION_MODE = os.environ.get('FLASK_ENV', 'production') == 'production' or o
 
 # Load environment variables from .env file
 try:
-    from dotenv import load_dotenv
     load_dotenv()
     log_debug("Loaded environment variables from .env file")
 except ImportError:
@@ -71,7 +70,6 @@ sys.path.insert(0, str(CHORD_CNN_LSTM_DIR))
 
 # Import the unified beat transformer implementation
 try:
-    from models.beat_transformer import BeatTransformerDetector, run_beat_tracking_wrapper
     log_debug("Using unified beat_transformer implementation")
 
     # Create a simple wrapper function for the detect_beats endpoint
@@ -104,7 +102,7 @@ except Exception as e:
 # Fix for NumPy 1.20+ compatibility
 # These attributes are deprecated in newer NumPy versions
 try:
-    import numpy as np
+    
     np.float = float  # Use built-in float instead
     np.int = int      # Use built-in int instead
     log_debug("Applied NumPy compatibility fixes for np.float and np.int")

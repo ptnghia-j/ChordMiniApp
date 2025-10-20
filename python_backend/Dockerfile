@@ -78,17 +78,20 @@ USER app
 
 # Pre-download Spleeter models manually using curl (httpx redirect issue workaround)
 # Download the 5-stems model (~200MB) and extract to the correct cache location
-# Spleeter expects models in /home/app/.cache/spleeter/5stems/ directory
-RUN mkdir -p /home/app/.cache/spleeter/5stems && \
-    cd /home/app/.cache/spleeter/5stems && \
+# Spleeter expects models in /home/app/.cache/spleeter/pretrained_models/5stems/ directory
+# The tar.gz contains: checkpoint, model.data-00000-of-00001, model.index, model.meta
+RUN mkdir -p /home/app/.cache/spleeter/pretrained_models/5stems && \
+    cd /home/app/.cache/spleeter/pretrained_models/5stems && \
     echo "⬇️  Downloading Spleeter 5-stems model..." && \
     curl -L -o 5stems.tar.gz https://github.com/deezer/spleeter/releases/download/v1.4.0/5stems.tar.gz && \
     echo "📦 Extracting model files..." && \
     tar -xzf 5stems.tar.gz && \
     rm 5stems.tar.gz && \
     echo "✅ Spleeter 5-stems model downloaded and extracted successfully" && \
-    echo "📁 Model files in /home/app/.cache/spleeter/5stems/:" && \
-    ls -la /home/app/.cache/spleeter/5stems/
+    echo "📁 Model files in /home/app/.cache/spleeter/pretrained_models/5stems/:" && \
+    ls -la /home/app/.cache/spleeter/pretrained_models/5stems/ && \
+    echo "🔍 Verifying checkpoint file exists:" && \
+    test -f /home/app/.cache/spleeter/pretrained_models/5stems/checkpoint && echo "✅ checkpoint file found" || echo "❌ checkpoint file NOT found"
 
 # Expose port
 EXPOSE 8080

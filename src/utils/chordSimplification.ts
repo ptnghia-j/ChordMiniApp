@@ -70,8 +70,8 @@ export function simplifyChord(chordName: string): string {
 
   const { root, quality } = parsed;
   
-  // Convert flat symbols to proper Unicode
-  const formattedRoot = root.replace(/([A-G])b/g, '$1♭').replace(/([A-G])#/g, '$1♯');
+  // Preserve original enharmonic spelling exactly as provided (e.g., Gb stays Gb)
+  const formattedRoot = root;
 
   // Determine the basic chord type based on quality
   const lowerQuality = quality.toLowerCase();
