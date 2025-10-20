@@ -63,16 +63,16 @@ def api_docs_json():
                             "models": {
                                 "beat": [
                                     {
-                                        "id": "beat-transformer",
-                                        "name": "Beat-Transformer",
-                                        "description": "Deep learning model for beat tracking with downbeat detection",
+                                        "id": "madmom",
+                                        "name": "Madmom",
+                                        "description": "Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4)",
                                         "default": True,
                                         "available": True
                                     },
                                     {
-                                        "id": "madmom",
-                                        "name": "Madmom",
-                                        "description": "Classical beat tracking algorithm",
+                                        "id": "beat-transformer",
+                                        "name": "Beat-Transformer",
+                                        "description": "DL model with 5-channel audio separation, flexible in time signatures, slow processing speed",
                                         "default": False,
                                         "available": True
                                     }

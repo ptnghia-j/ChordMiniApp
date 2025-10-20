@@ -148,6 +148,19 @@ export const usePitchShiftAudio = ({
       setIsPitchShiftReady(true);
       setIsFirebaseAudioAvailable(true);
       lastSemitones.current = pitchShiftSemitones;
+
+      // Ensure service is aligned with current page state immediately
+      try {
+        // Apply playback rate and seek position before starting
+        pitchShiftService.current.setPlaybackRate(playbackRate);
+        pitchShiftService.current.seek(currentTime || 0);
+        if (isPlaying) {
+          // Start playback right away for upload page; YouTube visual sync not needed here
+          pitchShiftService.current.play();
+          lastServicePlayingState.current = true;
+        }
+      } catch {}
+
     } catch (error) {
       console.error('❌ Failed to initialize pitch shift:', error);
       setPitchShiftError('Failed to load pitch-shifted audio. Please try again.');
@@ -165,6 +178,9 @@ export const usePitchShiftAudio = ({
     setIsFirebaseAudioAvailable,
     setCurrentTime,
     setIsPlaying,
+    playbackRate,
+    currentTime,
+    isPlaying,
   ]);
 
   /**

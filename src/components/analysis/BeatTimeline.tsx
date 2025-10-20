@@ -88,13 +88,12 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
   }
 
   return (
-    <div className={`p-4 rounded-lg transition-colors duration-300 ${className}`}>
-      <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100">Beat Timeline</h3>
-      
+    <div className={`mt-2 transition-colors duration-300 ${className}`}>
+      {/* Compact: remove header to reclaim vertical space */}
       {/* Scrollable beat container */}
-      <div 
+      <div
         ref={scrollContainerRef}
-        className="relative h-20 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-500 rounded-md overflow-x-auto overflow-y-hidden transition-colors duration-300"
+        className="relative h-14 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-500 rounded-md overflow-x-auto overflow-y-hidden transition-colors duration-300"
         style={{ scrollbarWidth: 'thin' }}
       >
         {/* Beat timeline content */}
@@ -150,8 +149,8 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-gray-600 dark:text-gray-400">
+      {/* Legend (hidden by default to reduce vertical space) */}
+      <div className="hidden md:flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-1">
           <div className="w-1 h-3 bg-gray-500 dark:bg-gray-400"></div>
           <span>Regular beats (2,3,4)</span>

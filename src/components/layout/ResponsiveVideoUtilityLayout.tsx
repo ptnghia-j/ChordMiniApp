@@ -96,13 +96,15 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
   const panelsOpen = isChatbotOpen || isLyricsPanelOpen;
 
   // Compute dynamic overlap based on measured video height
-  const baseOverlap = Math.max(0, Math.min(Math.round(videoHeight * (panelsOpen ? 0.7 : 0.8)), 375));
+  const baseOverlap = Math.max(0, Math.min(Math.round(videoHeight * (panelsOpen ? 0.85 : 0.95)), 420));
+  const extraLift = 16; // small additional lift to close residual gap consistently
+
 
   return (
     <div
       ref={layoutContainerRef}
-      className={`flex flex-col md:flex-row md:items-end items-stretch gap-4 px-3 pb-1 sm:px-4 sm:pb-1.5 relative z-[60]`}
-      style={{ marginTop: baseOverlap ? -baseOverlap : (panelsOpen ? -16 : -48) }}
+      className={`flex flex-col md:flex-row md:items-end items-stretch gap-4 px-3 pb-0 sm:px-4 sm:pb-0 relative z-[60]`}
+      style={{ marginTop: baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -16 : -48) }}
     >
       {/* Utility bar container - LEFT on wide screens, first in order */}
       <div

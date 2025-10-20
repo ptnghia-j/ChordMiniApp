@@ -187,11 +187,11 @@ def model_info():
         # Format response to match existing API
         available_models = detector_info['available_detectors']
 
-        # Set default model
-        if 'beat-transformer' in available_models:
-            default_model = 'beat-transformer'
-        elif 'madmom' in available_models:
+        # Set default model: prefer Madmom by default, then Beat-Transformer, then Librosa
+        if 'madmom' in available_models:
             default_model = 'madmom'
+        elif 'beat-transformer' in available_models:
+            default_model = 'beat-transformer'
         elif 'librosa' in available_models:
             default_model = 'librosa'
         else:
@@ -213,13 +213,13 @@ def model_info():
             "beat_model_info": {
                 "beat-transformer": {
                     "name": "Beat-Transformer",
-                    "description": "Deep learning model for beat tracking with downbeat detection",
+                    "description": "DL model with 5-channel audio separation, flexible in time signatures, slow processing speed",
                     "performance": "High accuracy, slower processing",
                     "uses_spleeter": False
                 },
                 "madmom": {
                     "name": "Madmom",
-                    "description": "Neural network with good balance of accuracy and speed",
+                    "description": "Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4)",
                     "performance": "Medium accuracy, medium speed",
                     "uses_spleeter": False
                 },

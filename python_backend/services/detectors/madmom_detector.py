@@ -80,10 +80,9 @@ class MadmomDetectorService:
 
             # Import madmom modules
             from madmom.features.beats import RNNBeatProcessor, DBNBeatTrackingProcessor
-            from madmom.features.downbeats import RNNDownBeatProcessor, DBNDownBeatTrackingProcessor
             import librosa
 
-            # Process beat detection
+            # Process beat detection (beats only)
             beat_proc = RNNBeatProcessor()
             beat_activation = beat_proc(file_path)
 
@@ -91,18 +90,12 @@ class MadmomDetectorService:
             beat_tracker = DBNBeatTrackingProcessor(fps=100)
             beat_times = beat_tracker(beat_activation)
 
-            # Process downbeat detection
-            downbeat_times = []
-            try:
-                downbeat_proc = RNNDownBeatProcessor()
-                downbeat_activation = downbeat_proc(file_path)
+            # Heuristic downbeat candidates: assume either 3 or 4 beats per bar
+            downbeats4 = beat_times[::4]
+            downbeats3 = beat_times[::3]
 
-                downbeat_tracker = DBNDownBeatTrackingProcessor(fps=100)
-                downbeat_times = downbeat_tracker(downbeat_activation)
-            except Exception as e:
-                log_error(f"Error in downbeat tracking: {e}")
-                # Fall back to using every 4th beat as a downbeat
-                downbeat_times = beat_times[::4]
+            # For backward compatibility, expose a default downbeats array (4/4)
+            downbeat_times = downbeats4
 
             # Calculate BPM
             bpm = 120.0  # Default
@@ -115,21 +108,33 @@ class MadmomDetectorService:
             y, sr = librosa.load(file_path, sr=None)
             duration = librosa.get_duration(y=y, sr=sr)
 
-            # Detect time signature from beat pattern
-            time_signature = self._detect_time_signature(beat_times, downbeat_times)
+            # Time signature will be selected on the frontend via heuristic comparison of candidates.
+            # Keep a backward-compatible placeholder; default to 4/4 here.
+            # (Frontend will override and cache the selected meter.)
 
             processing_time = time.time() - start_time
 
-            log_info(f"Madmom detection successful: {len(beat_times)} beats, {len(downbeat_times)} downbeats")
+            log_info(
+                f"Madmom detection successful: {len(beat_times)} beats, "
+                f"{len(downbeat_times)} default-downbeats (4/4), candidates: 3/4={len(downbeats3)}, 4/4={len(downbeats4)}"
+            )
 
             return {
                 "success": True,
                 "beats": beat_times.tolist() if hasattr(beat_times, 'tolist') else list(beat_times),
                 "downbeats": downbeat_times.tolist() if hasattr(downbeat_times, 'tolist') else list(downbeat_times),
+                "downbeat_candidates": {
+                    "3": downbeats3.tolist() if hasattr(downbeats3, 'tolist') else list(downbeats3),
+                    "4": downbeats4.tolist() if hasattr(downbeats4, 'tolist') else list(downbeats4),
+                },
+                "downbeat_candidates_meta": {
+                    "default": 4,
+                    "strategy": "heuristic_slices_from_beats"
+                },
                 "total_beats": len(beat_times),
                 "total_downbeats": len(downbeat_times),
                 "bpm": float(bpm),
-                "time_signature": f"{time_signature}/4",
+                "time_signature": "4/4",
                 "duration": float(duration),
                 "model_used": "madmom",
                 "model_name": "Madmom",
@@ -147,36 +152,3 @@ class MadmomDetectorService:
                 "processing_time": time.time() - start_time
             }
 
-    def _detect_time_signature(self, beat_times: List[float], downbeat_times: List[float]) -> int:
-        """
-        Detect time signature from beat and downbeat patterns.
-
-        Args:
-            beat_times: List of beat positions in seconds
-            downbeat_times: List of downbeat positions in seconds
-
-        Returns:
-            int: Detected time signature (beats per measure)
-        """
-        # Default to 4/4
-        time_signature = 4
-
-        if len(downbeat_times) >= 2:
-            # Analyze beats between downbeats
-            time_signatures = []
-            for i in range(len(downbeat_times) - 1):
-                curr_downbeat = downbeat_times[i]
-                next_downbeat = downbeat_times[i + 1]
-
-                # Count beats in this measure
-                beats_in_measure = sum(1 for b in beat_times if curr_downbeat <= b < next_downbeat)
-                if 2 <= beats_in_measure <= 12:
-                    time_signatures.append(beats_in_measure)
-
-            # Use the most common time signature
-            if time_signatures:
-                from collections import Counter
-                time_signature = Counter(time_signatures).most_common(1)[0][0]
-                log_debug(f"Detected time signature from downbeat analysis: {time_signature}/4")
-
-        return time_signature

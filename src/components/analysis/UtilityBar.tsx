@@ -60,6 +60,9 @@ interface UtilityBarProps {
   // Layout
   maxWidth?: string | number;
   className?: string;
+
+  // Page context
+  isUploadPage?: boolean;
 }
 
 const UtilityBar: React.FC<UtilityBarProps> = ({
@@ -80,7 +83,8 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   metronome,
   totalBeats = 0,
   maxWidth = '1200px',
-  className = ''
+  className = '',
+  isUploadPage = false
 }) => {
   // Roman numerals from Zustand store
   const showRomanNumerals = useShowRomanNumerals();
@@ -202,40 +206,42 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             )}
           </div>
 
-          {/* Right group: Lyrics + Chat */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Tooltip
-              content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
-              placement="top"
-              classNames={{
-                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-              }}
-            >
-              <button
-                onClick={toggleLyricsPanel}
-                className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                aria-label="Toggle lyrics panel"
+          {/* Right group: Lyrics + Chat (hidden on upload page) */}
+          {!isUploadPage && (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Tooltip
+                content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
+                placement="top"
+                classNames={{
+                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                }}
               >
-                <FaRegFileLines className="h-5 w-5"/>
-              </button>
-            </Tooltip>
+                <button
+                  onClick={toggleLyricsPanel}
+                  className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                  aria-label="Toggle lyrics panel"
+                >
+                  <FaRegFileLines className="h-5 w-5"/>
+                </button>
+              </Tooltip>
 
-            <Tooltip
-              content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
-              placement="top"
-              classNames={{
-                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-              }}
-            >
-              <button
-                onClick={toggleChatbot}
-                className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                aria-label="Toggle AI chat"
+              <Tooltip
+                content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
+                placement="top"
+                classNames={{
+                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                }}
               >
-                <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
-              </button>
-            </Tooltip>
-          </div>
+                <button
+                  onClick={toggleChatbot}
+                  className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                  aria-label="Toggle AI chat"
+                >
+                  <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
+                </button>
+              </Tooltip>
+            </div>
+          )}
         </div>
       </div>
     </div>

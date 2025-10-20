@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@heroui/react';
 import Navigation from '@/components/common/Navigation';
@@ -31,20 +31,27 @@ const HeroUIChordModelSelector = dynamic(() => import('@/components/analysis/Her
   ssr: false
 });
 
+
+// Lyrics section (dynamic)
+const LyricsSectionDyn = dynamic(() => import('@/components/lyrics/LyricsSection').then(mod => ({ default: mod.LyricsSection })), {
+  loading: () => <div className="w-full h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 const ProcessingStatusBanner = dynamic(() => import('@/components/analysis/ProcessingStatusBanner'), {
   loading: () => <ProcessingStatusSkeleton />,
   ssr: true
 });
 
-const AnalysisSummary = dynamic(() => import('@/components/analysis/AnalysisSummary'), {
-  loading: () => <div className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+// Chatbot interface (dynamic)
+const ChatbotInterfaceDyn = dynamic(() => import('@/components/chatbot/ChatbotInterface'), {
+  loading: () => <div className="w-full h-96 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
-const MetronomeControls = dynamic(() => import('@/components/chord-playback/MetronomeControls'), {
-  loading: () => <div className="h-20 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: false
-});
+
+
+
 
 const ChordGridContainer = dynamic(() => import('@/components/chord-analysis/ChordGridContainer').then(mod => ({ default: mod.ChordGridContainer })), {
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
@@ -56,11 +63,23 @@ const GuitarChordsTab = dynamic(() => import('@/components/chord-analysis/Guitar
   ssr: false
 });
 import { useProcessing } from '@/contexts/ProcessingContext';
-import { FiSkipBack, FiSkipForward } from 'react-icons/fi';
+import BeatTimeline from '@/components/analysis/BeatTimeline';
+import { simplifyChordArray } from '@/utils/chordSimplification';
+import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
+
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
+import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useAnalysisStore } from '@/stores/analysisStore';
+import UtilityBar from '@/components/analysis/UtilityBar';
+import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
+import AudioPlaybackDock from '@/components/analysis/AudioPlaybackDock';
+import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
+import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { usePitchShiftAudio } from '@/hooks/chord-playback/usePitchShiftAudio';
+import ResultsTabs from '@/components/homepage/ResultsTabs';
+import { searchLyricsWithFallback } from '@/services/lyrics/lyricsService';
+import type { LyricsData } from '@/types/musicAiTypes';
 
 export default function LocalAudioAnalyzePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -68,8 +87,12 @@ export default function LocalAudioAnalyzePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [lyricSearchTitle, setLyricSearchTitle] = useState('');
+  const [lyricSearchArtist, setLyricSearchArtist] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+
+  const { lyrics, completeLyricsTranscription } = useLyricsState();
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -80,6 +103,48 @@ export default function LocalAudioAnalyzePage() {
       }
     };
   }, []);
+
+  type LyricsAPIResp = {
+    success?: boolean;
+    synchronized_lyrics?: Array<{ time: number; text: string }>;
+    plain_lyrics?: string;
+  };
+
+  const normalizeLyricsResponse = useCallback((resp: unknown): LyricsData | null => {
+    const r = resp as LyricsAPIResp | null | undefined;
+    if (!r || r.success === false) return null;
+    if (Array.isArray(r.synchronized_lyrics) && r.synchronized_lyrics.length) {
+      const lines = r.synchronized_lyrics.map((l: { time: number; text: string }, idx: number, arr: Array<{ time: number; text: string }>) => {
+        const start = typeof l.time === 'number' ? l.time : 0;
+        const next = arr[idx + 1]?.time;
+        const end = typeof next === 'number' && next > start ? next : start + 2;
+        return { startTime: start, endTime: end, text: l.text };
+      });
+      return { lines };
+    }
+    if (typeof r.plain_lyrics === 'string' && r.plain_lyrics.trim().length) {
+      const parts = r.plain_lyrics.split(/\r?\n/).filter((t: string) => t.trim().length);
+      const lines = parts.map((text: string, idx: number) => ({
+        startTime: idx * 2,
+        endTime: idx * 2 + 2,
+        text,
+      }));
+      return { lines };
+    }
+    return null;
+  }, []);
+
+  const handleManualLyricsSearch = useCallback(async () => {
+    try {
+      const resp = await searchLyricsWithFallback({ artist: lyricSearchArtist.trim(), title: lyricSearchTitle.trim(), prefer_synchronized: true });
+      const normalized = normalizeLyricsResponse(resp);
+      if (normalized) {
+        completeLyricsTranscription(normalized);
+      }
+    } catch (e) {
+      console.error('Manual lyrics search failed', e);
+    }
+  }, [lyricSearchArtist, lyricSearchTitle, normalizeLyricsResponse, completeLyricsTranscription]);
 
 
   // Use processing context
@@ -106,12 +171,12 @@ export default function LocalAudioAnalyzePage() {
       if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
         return saved as BeatDetectorType;
       }
-      // If saved value was 'auto', default to 'beat-transformer'
+      // If saved value was 'auto', default to 'madmom'
       if (saved === 'auto') {
-        localStorage.setItem('chordmini_beat_detector', 'beat-transformer');
+        localStorage.setItem('chordmini_beat_detector', 'madmom');
       }
     }
-    return 'beat-transformer';
+    return 'madmom';
   });
 
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>(() => {
@@ -134,20 +199,150 @@ export default function LocalAudioAnalyzePage() {
     audioBuffer: null as AudioBuffer | null,
     audioUrl: null as string | null,
   });
-
-  // Analysis results state
+  // Analysis results state (must be declared before dependent memos)
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult | null>(null);
 
+  // Lyrics state (before memos that depend on it)
+  const [fontSize, setFontSize] = useState<number>(16);
+  const theme = 'light';
+
+  // Stable upload session id for chatbot context
+  const uploadSessionId = useMemo(() => `upload_${Date.now().toString(36)}`, []);
+
+  // Build SongContext for Chatbot (upload source)
+  const uploadSongContext = useMemo(() => {
+    if (!analysisResults) return undefined;
+    return {
+      uploadId: uploadSessionId,
+      title: audioFile?.name || 'Uploaded Audio',
+      duration,
+      beats: analysisResults?.beats,
+      downbeats: analysisResults?.downbeats,
+      downbeats_with_measures: analysisResults?.downbeats_with_measures,
+      beats_with_positions: analysisResults?.beats_with_positions,
+      bpm: analysisResults?.beatDetectionResult?.bpm,
+      time_signature: analysisResults?.beatDetectionResult?.time_signature,
+      beatModel: analysisResults?.beatModel || beatDetector,
+      chords: analysisResults?.chords,
+      synchronizedChords: analysisResults?.synchronizedChords,
+      chordModel: analysisResults?.chordModel || chordDetector,
+      lyrics: lyrics || undefined,
+    } as const;
+  }, [analysisResults, uploadSessionId, audioFile?.name, duration, lyrics, beatDetector, chordDetector]);
+
+
+
+  // Chord playback state (will be managed by ChordPlaybackManager)
+  const [chordPlayback, setChordPlayback] = useState<UseChordPlaybackReturn>({
+    isEnabled: false,
+    pianoVolume: 50,
+    guitarVolume: 30,
+    violinVolume: 60,
+    fluteVolume: 50,
+    isReady: false,
+    togglePlayback: () => {},
+    setPianoVolume: () => {},
+    setGuitarVolume: () => {},
+    setViolinVolume: () => {},
+    setFluteVolume: () => {}
+  });
+
+  const handleChordPlaybackChange = useCallback((next: UseChordPlaybackReturn) => {
+    setChordPlayback(next);
+  }, []);
+
+  // Panels and countdown
+  const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState<boolean>(false);
+  const [isChatbotOpen, setIsChatbotOpen] = useState<boolean>(false);
+  const [isCountdownEnabled, setIsCountdownEnabled] = useState<boolean>(false);
+  const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
+  const [countdownDisplay, setCountdownDisplay] = useState<string>('');
+
+  // Tempo context
+  const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
+  const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
+
+  // Countdown controller state (HTML audio)
+  const countdownCtrlRef = useRef<{ intervalId: ReturnType<typeof setInterval> | null; aborted: boolean; token: number } | null>(null);
+  const countdownStateRef = useRef<{ inProgress: boolean; completed: boolean }>({ inProgress: false, completed: false });
+
+  const cancelCountdown = useCallback(() => {
+    const ctrl = countdownCtrlRef.current;
+    if (ctrl) {
+      ctrl.aborted = true;
+      if (ctrl.intervalId) clearInterval(ctrl.intervalId as unknown as number);
+      countdownCtrlRef.current = null;
+    }
+    countdownStateRef.current.inProgress = false;
+    setIsCountingDown(false);
+    setCountdownDisplay('');
+  }, []);
+
+  const runCountdown = useCallback(async () => {
+    if (!isCountdownEnabled) return true;
+    if (countdownStateRef.current.inProgress) return false;
+
+    const beatsPerMeasure = Math.max(2, Math.min(12, timeSignature || 4));
+    const beatDurationSec = 60 / Math.max(1, bpm || 120);
+    const totalMs = beatsPerMeasure * beatDurationSec * 1000;
+
+    const start = Date.now();
+    const token = Math.random();
+    const ctrl = { intervalId: null as ReturnType<typeof setInterval> | null, aborted: false, token };
+    countdownCtrlRef.current = ctrl;
+
+    // Prepare state and ensure audio paused
+    countdownStateRef.current.inProgress = true;
+    countdownStateRef.current.completed = false;
+    try { audioRef.current?.pause(); } catch {}
+    setIsCountingDown(true);
+    setCountdownDisplay(`${beatsPerMeasure}`);
+
+    const ok = await new Promise<boolean>((resolve) => {
+      ctrl.intervalId = setInterval(() => {
+        if (!countdownCtrlRef.current || countdownCtrlRef.current.token !== token || countdownCtrlRef.current.aborted) {
+          if (ctrl.intervalId) clearInterval(ctrl.intervalId as unknown as number);
+          countdownStateRef.current.inProgress = false;
+          setIsCountingDown(false);
+          setCountdownDisplay('');
+          resolve(false);
+          return;
+        }
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, totalMs - elapsed);
+        const remainingBeats = Math.ceil(remaining / (beatDurationSec * 1000));
+        setCountdownDisplay(`${remainingBeats}`);
+        if (remaining <= 0) {
+          if (ctrl.intervalId) clearInterval(ctrl.intervalId as unknown as number);
+          countdownCtrlRef.current = null;
+          countdownStateRef.current.inProgress = false;
+          countdownStateRef.current.completed = true;
+          setIsCountingDown(false);
+          setCountdownDisplay('');
+          resolve(true);
+        }
+      }, 100);
+    });
+
+    return ok;
+  }, [isCountdownEnabled, timeSignature, bpm]);
+
+
+  // Metronome state
+  const [isMetronomeEnabled, setIsMetronomeEnabled] = useState<boolean>(false);
+
+  const toggleFollowMode = () => setIsFollowModeEnabled(prev => !prev);
+  const toggleLyricsPanel = () => setIsLyricsPanelOpen(prev => !prev);
+  const toggleChatbot = () => setIsChatbotOpen(prev => !prev);
 
 
   // Current state for playback - FIXED: Add missing state variables for beat animation
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
   const currentBeatIndexRef = useRef(-1);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
-  const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords'>('beatChordMap');
+  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords' | 'lyricsChords'>('beatChordMap');
 
 
   // Key signature and chord correction states - now with proper key detection
@@ -284,6 +479,7 @@ export default function LocalAudioAnalyzePage() {
       setAudioProcessingState(prev => ({
         ...prev,
         isExtracted: true,
+        isExtracting: false,
         audioBuffer: null, // No longer using AudioBuffer
         isAnalyzing: true
       }));
@@ -308,6 +504,7 @@ export default function LocalAudioAnalyzePage() {
 
       setAudioProcessingState(prev => ({
         ...prev,
+        isExtracting: false,
         isAnalyzing: false,
         isAnalyzed: true
       }));
@@ -355,6 +552,19 @@ export default function LocalAudioAnalyzePage() {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
+      // Gate first play with optional 1-measure countdown
+      if (isCountdownEnabled && !countdownStateRef.current.inProgress && !countdownStateRef.current.completed) {
+        try { audioRef.current.pause(); } catch {}
+        // Run countdown asynchronously, then start playback if not aborted
+        void (async () => {
+          const ok = await runCountdown();
+          if (ok) {
+            countdownStateRef.current.completed = false; // consume
+            try { await audioRef.current?.play(); } catch {}
+          }
+        })();
+        return;
+      }
       audioRef.current.play();
     }
   };
@@ -365,24 +575,6 @@ export default function LocalAudioAnalyzePage() {
     audioRef.current.playbackRate = rate;
     setPlaybackRate(rate);
   };
-
-  // Advanced audio control functions
-  const skipForward = (seconds: number = 10) => {
-    if (!audioRef.current) return;
-    const newTime = Math.min(audioRef.current.currentTime + seconds, duration);
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
-
-  const skipBackward = (seconds: number = 10) => {
-    if (!audioRef.current) return;
-    const newTime = Math.max(audioRef.current.currentTime - seconds, 0);
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
-
-
-
 
 
   // Set up audio element event listeners
@@ -409,6 +601,7 @@ export default function LocalAudioAnalyzePage() {
     };
 
     audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+
     audioElement.addEventListener('play', handlePlay);
     audioElement.addEventListener('pause', handlePause);
     audioElement.addEventListener('timeupdate', handleTimeUpdate);
@@ -431,10 +624,13 @@ export default function LocalAudioAnalyzePage() {
         chords: [],
         beats: [],
         hasPadding: false,
+
+
         paddingCount: 0,
         shiftCount: 0,
         totalPaddingCount: 0,
         originalAudioMapping: []
+
       };
     }
     return getChordGridDataService(analysisResults);
@@ -447,8 +643,12 @@ export default function LocalAudioAnalyzePage() {
       setKeyDetectionAttempted(true);
 
       // Prepare chord data for key detection
+
+
       // CRITICAL FIX: Deduplicate consecutive identical chords to avoid beat-level analysis
       const rawChordData = analysisResults.chords
+
+
         .filter((chord) => chord.time !== undefined && chord.time !== null)
         .map((chord) => ({
           chord: chord.chord,
@@ -463,16 +663,21 @@ export default function LocalAudioAnalyzePage() {
 
 
 
-      // Import and call key detection service with enharmonic correction
+      // Import and call key detection service with enharmonic correction and Roman numerals
       import('@/services/audio/keyDetectionService').then(({ detectKey }) => {
-        // Use cache for sequence corrections (no bypass)
-        detectKey(chordData, true, false) // Request enharmonic correction, use cache
+        // Use cache for sequence corrections (no bypass); request Roman numerals
+        detectKey(chordData, true, false, true)
           .then(result => {
             setKeySignature(result.primaryKey);
+            // Update Roman numeral data in UI store for display
+            try {
+              useUIStore.getState().updateRomanNumeralData(result.romanNumerals ?? null);
+            } catch {}
           })
           .catch(error => {
             console.error('Failed to detect key:', error);
             setKeySignature(null);
+            try { useUIStore.getState().updateRomanNumeralData(null); } catch {}
           })
           .finally(() => {
             setIsDetectingKey(false);
@@ -480,6 +685,17 @@ export default function LocalAudioAnalyzePage() {
       });
     }
   }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted]);
+
+// Apply optional chord simplification (UI toggle)
+const simplifyChords = useUIStore((state) => state.simplifyChords);
+const simplifiedChordGridData = useMemo(() => {
+  if (!chordGridData) return chordGridData;
+  let processedChords = chordGridData.chords || [];
+  if (simplifyChords) {
+    processedChords = simplifyChordArray(processedChords);
+  }
+  return { ...chordGridData, chords: processedChords } as typeof chordGridData;
+}, [chordGridData, simplifyChords]);
 
   // Beat animation tracking for HTML audio elements
   useEffect(() => {
@@ -491,6 +707,8 @@ export default function LocalAudioAnalyzePage() {
 
     const updateBeatTracking = () => {
       // Continue animation loop even when not playing to maintain state
+
+
       if (!audioRef.current) {
         rafRef.current = requestAnimationFrame(updateBeatTracking);
         return;
@@ -547,6 +765,14 @@ export default function LocalAudioAnalyzePage() {
   }, [isPlaying, analysisResults]); // CRITICAL FIX: Intentionally limited dependencies to prevent animation loop restarts
 
   // FIXED: Auto-scroll with layout stability for superscript rendering
+
+  // UtilityBar metronome toggle handler
+  const handleMetronomeToggle = async (): Promise<boolean> => {
+    const newEnabled = await toggleMetronomeWithSync();
+    setIsMetronomeEnabled(newEnabled);
+    return newEnabled;
+  };
+
   useEffect(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
@@ -565,7 +791,7 @@ export default function LocalAudioAnalyzePage() {
     }
   }, [currentBeatIndex, isFollowModeEnabled]);
 
-  
+
 
   // Metronome synchronization hook - use duration from audio element
   const { toggleMetronomeWithSync } = useMetronomeSync({
@@ -584,6 +810,50 @@ export default function LocalAudioAnalyzePage() {
 
   // Note: Beat click handling is managed internally by ChordGrid component via Zustand
   // No need for explicit handleBeatClick prop in upload page
+
+
+  // Loop playback selectors (UI store)
+  const isLoopEnabled = useIsLoopEnabled();
+  const loopStartBeat = useLoopStartBeat();
+  const loopEndBeat = useLoopEndBeat();
+
+  // HTML Audio loop playback for upload page
+  useEffect(() => {
+    if (!isLoopEnabled || !audioRef.current) return;
+    const beats = (simplifiedChordGridData?.beats || []) as Array<number | null>;
+    if (!beats.length) return;
+    if (loopStartBeat < 0 || loopEndBeat < 0 || loopStartBeat >= beats.length) return;
+
+    const startTs = beats[loopStartBeat] ?? 0;
+    const endBeatTs = beats[loopEndBeat] ?? null;
+    const nextBeatTs = loopEndBeat + 1 < beats.length ? beats[loopEndBeat + 1] : null;
+    const boundary = nextBeatTs ?? (typeof duration === 'number' && duration > 0 ? Math.max(duration - 0.25, endBeatTs ?? 0) : (endBeatTs ?? 0) + 1);
+
+    if (typeof currentTime === 'number' && typeof boundary === 'number' && currentTime >= boundary) {
+      try {
+        audioRef.current.currentTime = startTs ?? 0;
+        // Maintain play state for seamless looping
+        if (isPlaying) audioRef.current.play?.();
+      } catch {}
+    }
+  }, [isLoopEnabled, loopStartBeat, loopEndBeat, currentTime, duration, simplifiedChordGridData?.beats, isPlaying]);
+
+  // Inform UI store about original audio availability (enables pitch shift/UI)
+  useEffect(() => {
+    try {
+      useUIStore.getState().initializeFirebaseAudioAvailable(Boolean(audioRef.current || audioProcessingState.audioUrl));
+    } catch {}
+  }, [audioProcessingState.audioUrl]);
+
+
+  // Reset countdown flags when playback is paused
+  useEffect(() => {
+    if (!isPlaying) {
+      cancelCountdown();
+      countdownStateRef.current.completed = false;
+      countdownStateRef.current.inProgress = false;
+    }
+  }, [isPlaying, cancelCountdown]);
 
   // Initialize Zustand stores with page state
   // CRITICAL: Do NOT include Zustand-managed state (showRomanNumerals, simplifyChords) in dependencies
@@ -638,17 +908,29 @@ export default function LocalAudioAnalyzePage() {
       />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white my-4 transition-colors duration-300">Upload Audio File</h2>
+        {/* Removed heading to reclaim vertical space */}
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left side - Chord Grid (80% width) */}
-          <div className="lg:w-4/5">
-            <div className="bg-white dark:bg-content-bg p-6 rounded-lg shadow-card h-full transition-colors duration-300">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-2xl font-heading font-bold text-gray-800 dark:text-white transition-colors duration-300">Chord Grid</h2>
+        <div className="flex flex-col gap-6">
+          {/* Main content - Chord Grid (full width) */}
+          <div className="w-full">
+            <div className="p-6 h-full transition-colors duration-300">
+              {/* Hidden audio element */}
+              <audio ref={audioRef} className="hidden" controls={false} />
+              <div className="flex flex-wrap items-center gap-4 md:gap-6 mb-4">
+                {/* LEFT: Tabs inline (wraps on small screens) */}
+                {analysisResults && (
+                  <div className="flex-1 min-w-[260px] md:min-w-[420px]">
+                    <ResultsTabs
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
+                      showLyrics={false}
+                      hasCachedLyrics={false}
+                    />
+                  </div>
+                )}
 
-                {/* File upload and Processing button */}
-                <div className="flex flex-col md:flex-row gap-2 items-center">
+                {/* RIGHT: File upload and Analyze controls */}
+                <div className="flex flex-row gap-2 items-center ml-auto pl-2 md:pl-6">
                   <div className="relative inline-block">
                     <label className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md cursor-pointer transition-colors">
                       {audioFile ? audioFile.name : 'Choose Audio File'}
@@ -728,67 +1010,108 @@ export default function LocalAudioAnalyzePage() {
                 </div>
               )}
 
-              {/* Analysis Results Tabs */}
+              {/* UtilityBar will be rendered inline below tabs together with the AudioPlaybackDock */}
+
+
+              {/* Analysis Results Tabs moved inline above with controls */}
               {analysisResults && (
-                <div className="mb-6">
-                  {/* Tabs */}
-                  <div className="border-b border-gray-200 mb-4">
-                    <div className="flex -mb-px">
-                      <button
-                        onClick={() => setActiveTab('beatChordMap')}
-                        className={`py-2 px-4 text-sm font-medium ${
-                          activeTab === 'beatChordMap'
-                            ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                        }`}
-                      >
-                        Beat & Chord Map
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('guitarChords')}
-                        className={`py-2 px-4 text-sm font-medium ${
-                          activeTab === 'guitarChords'
-                            ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                        }`}
-                      >
-                        <span className="flex items-center space-x-1">
-                          <span>Guitar Chords</span>
-                          <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
-                            beta
-                          </span>
-                        </span>
-                      </button>
-                    </div>
-                  </div>
+                <div className="mb-4">
 
                   {/* Tab content */}
                   <div className="tab-content">
                     {/* Beat & Chord Map Tab */}
                     {activeTab === 'beatChordMap' && (
-                      <ChordGridContainer
-                        analysisResults={analysisResults}
-                        chordGridData={chordGridData}
-                        keySignature={keySignature}
-                        isDetectingKey={isDetectingKey}
-                        isChatbotOpen={false}
-                        isLyricsPanelOpen={false}
-                        isUploadPage={true}
-                        showCorrectedChords={showCorrectedChords}
-                        chordCorrections={chordCorrections}
-                        sequenceCorrections={sequenceCorrections}
-                      />
+                      <ScrollableTabContainer variant="plain" heightClass="h-[60vh] md:h-[66vh]">
+                        <div className={`flex flex-col md:flex-row gap-4`}>
+                          {/* Grid area */}
+                          <div className={`w-full transition-all duration-200`}>
+                            <ChordGridContainer
+                              analysisResults={analysisResults}
+                              chordGridData={simplifiedChordGridData}
+                              keySignature={keySignature}
+                              isDetectingKey={isDetectingKey}
+                              isChatbotOpen={isChatbotOpen}
+                              isLyricsPanelOpen={isLyricsPanelOpen}
+                              isUploadPage={true}
+                              showCorrectedChords={showCorrectedChords}
+                              chordCorrections={chordCorrections}
+                              sequenceCorrections={sequenceCorrections}
+                            />
+                            <div className="mt-3">
+                              <BeatTimeline
+                                beats={analysisResults?.beats || []}
+                                downbeats={analysisResults?.downbeats || []}
+                                currentBeatIndex={currentBeatIndex}
+                                currentDownbeatIndex={-1}
+                                duration={duration}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Side panel area (md+) - disabled on upload page */}
+                          {false && (
+                            <div className="hidden md:block md:w-2/5">
+                              {/* Lyrics Panel with manual search */}
+                              {isLyricsPanelOpen && (
+                                <div className="space-y-3">
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      placeholder="Song title"
+                                      value={lyricSearchTitle}
+                                      onChange={(e) => setLyricSearchTitle(e.target.value)}
+                                      className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Artist"
+                                      value={lyricSearchArtist}
+                                      onChange={(e) => setLyricSearchArtist(e.target.value)}
+                                      className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    />
+                                    <Button color="primary" variant="solid" onPress={handleManualLyricsSearch}>Search</Button>
+                                  </div>
+                                  <LyricsSectionDyn
+                                    showLyrics={isLyricsPanelOpen}
+                                    lyrics={lyrics}
+                                    hasCachedLyrics={false}
+                                    currentTime={currentTime}
+                                    fontSize={fontSize}
+                                    theme={theme}
+                                    analysisResults={analysisResults}
+                                    onFontSizeChange={setFontSize}
+                                    segmentationData={null}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Chatbot Panel */}
+                              {isChatbotOpen && (
+                                <div className="mt-4">
+                                  <ChatbotInterfaceDyn
+                                    isOpen={isChatbotOpen}
+                                    onClose={() => setIsChatbotOpen(false)}
+                                    songContext={uploadSongContext}
+                                    className=""
+                                    embedded={false}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </ScrollableTabContainer>
                     )}
 
                     {/* Guitar Chords Tab */}
                     {activeTab === 'guitarChords' && (
                       <GuitarChordsTab
                         analysisResults={analysisResults}
-                        chordGridData={chordGridData}
+                        chordGridData={simplifiedChordGridData}
                         keySignature={keySignature}
                         isDetectingKey={isDetectingKey}
-                        isChatbotOpen={false}
-                        isLyricsPanelOpen={false}
+                        isChatbotOpen={isChatbotOpen}
+                        isLyricsPanelOpen={isLyricsPanelOpen}
                         isUploadPage={true}
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
@@ -800,208 +1123,81 @@ export default function LocalAudioAnalyzePage() {
                 </div>
               )}
 
-
-
-
-
-              {/* Advanced Analysis Summary */}
+              {/* Inline UtilityBar + AudioPlaybackDock (side-by-side, inline flow) */}
               {analysisResults && (
-                <AnalysisSummary
-                  analysisResults={analysisResults}
-                  audioDuration={duration}
-                />
+                <div className="mt-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex-1 min-w-[280px] overflow-x-auto">
+                      <div className="inline-flex w-max min-w-full">
+                        <UtilityBar
+                          isFollowModeEnabled={isFollowModeEnabled}
+                          chordPlayback={chordPlayback}
+                          youtubePlayer={undefined}
+                          playbackRate={playbackRate}
+                          setPlaybackRate={(rate: number) => changePlaybackRate(rate)}
+                          toggleFollowMode={toggleFollowMode}
+                          isCountdownEnabled={isCountdownEnabled}
+                          isCountingDown={isCountingDown}
+                          countdownDisplay={countdownDisplay}
+                          toggleCountdown={() => setIsCountdownEnabled(prev => !prev)}
+                          isChatbotOpen={isChatbotOpen}
+                          isLyricsPanelOpen={isLyricsPanelOpen}
+                          toggleChatbot={toggleChatbot}
+                          toggleLyricsPanel={toggleLyricsPanel}
+                          metronome={{
+                            isEnabled: isMetronomeEnabled,
+                            toggleMetronomeWithSync: handleMetronomeToggle,
+                          }}
+                          totalBeats={simplifiedChordGridData?.beats?.length || 0}
+                          isUploadPage={true}
+                        />
+                      </div>
+                    </div>
+
+                    <AudioPlaybackDock
+                      isPlaying={isPlaying}
+                      onTogglePlayPause={playPause}
+                      playbackRate={playbackRate}
+                      onChangePlaybackRate={changePlaybackRate}
+                      currentTime={currentTime}
+                      duration={duration}
+                      onSeek={(t: number) => {
+                        if (audioRef.current) {
+                          try { audioRef.current.currentTime = t; } catch {}
+                        }
+                      }}
+                      disabled={!audioFile}
+                      bpm={analysisResults?.beatDetectionResult?.bpm}
+                    />
+                  </div>
+
+                  {/* Chord Playback Manager: manages state for UtilityBar mixer */}
+                  <div className="mt-3">
+                    <ChordPlaybackManager
+                      currentBeatIndex={currentBeatIndex}
+                      chordGridData={simplifiedChordGridData}
+                      isPlaying={isPlaying}
+                      currentTime={currentTime}
+                      bpm={analysisResults?.beatDetectionResult?.bpm || 120}
+                      onChordPlaybackChange={handleChordPlaybackChange}
+                    />
+                  </div>
+
+                </div>
               )}
+
+
+
+
+
+
             </div>
           </div>
 
-          {/* Right side - Instructions section (20% width) */}
-          <div className="lg:w-1/5">
-            {/* Hidden audio element */}
-            <audio ref={audioRef} className="hidden" controls={false} />
 
-            {/* Instructions */}
-            <div className="bg-white dark:bg-content-bg p-4 rounded-lg shadow-card transition-colors duration-300">
-              <h3 className="text-lg font-medium text-gray-700 dark:text-white mb-2 transition-colors duration-300">Instructions</h3>
-              <ol className="text-sm text-gray-600 dark:text-gray-300 space-y-2 list-decimal pl-4 transition-colors duration-300">
-                <li>Upload an audio file (MP3, WAV, etc.)</li>
-                <li>Click &quot;Analyze Audio&quot; to process</li>
-                <li>Wait for chord detection to complete</li>
-                <li>Use playback controls to listen and see chords</li>
-              </ol>
-
-              <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 transition-colors duration-300">
-                <p>Note: Audio processing happens locally in your browser.</p>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
 
-      {/* Fixed Bottom-Right Audio Controls */}
-      {audioFile && (
-        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-content-bg p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 transition-colors duration-300 max-w-sm">
-          {/* Transport Controls */}
-          <div className="flex items-center justify-center space-x-2 mb-3">
-            {/* Skip Backward */}
-            <button
-              onClick={() => skipBackward(10)}
-              disabled={!audioFile}
-              className={`p-2 rounded-full transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-              title="Skip back 10 seconds"
-            >
-              <FiSkipBack className="w-4 h-4" />
-            </button>
-
-            {/* Play/Pause Button */}
-            <button
-              onClick={playPause}
-              disabled={!audioFile}
-              className={`font-medium py-2 px-6 rounded-full shadow-button transition-colors ${
-                !audioFile
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-primary-600 hover:bg-primary-700 text-white'
-              }`}
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-
-            {/* Skip Forward */}
-            <button
-              onClick={() => skipForward(10)}
-              disabled={!audioFile}
-              className={`p-2 rounded-full transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-              title="Skip forward 10 seconds"
-            >
-              <FiSkipForward className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Playback Position */}
-          <div className="text-gray-700 dark:text-gray-300 font-medium text-center text-sm mb-3 transition-colors duration-300">
-            {Math.floor(currentTime / 60)}:
-            {String(Math.floor(currentTime % 60)).padStart(2, '0')} /
-            {Math.floor(duration / 60)}:
-            {String(Math.floor(duration % 60)).padStart(2, '0')}
-          </div>
-
-          {/* Current Chord Display */}
-          {chordGridData.chords.length > 0 && currentBeatIndex >= 0 && currentBeatIndex < chordGridData.chords.length && (
-            <div className="text-center bg-primary-50 dark:bg-primary-900 py-2 px-4 rounded-lg mb-3 transition-colors duration-300">
-              <span className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-300">Current Chord</span>
-              <div className="text-xl font-bold text-primary-700 dark:text-primary-300 transition-colors duration-300">
-                {chordGridData.chords[currentBeatIndex]}
-              </div>
-            </div>
-          )}
-
-          {/* Playback Speed */}
-          <div className="flex flex-col items-center mb-3">
-            <span className="text-gray-600 dark:text-gray-300 text-xs mb-1 transition-colors duration-300">Speed:</span>
-            <div className="flex flex-wrap justify-center gap-1">
-              {playbackRates.map(rate => (
-                <button
-                  key={rate}
-                  onClick={() => changePlaybackRate(rate)}
-                  disabled={!audioFile}
-                  className={`px-2 py-1 text-xs rounded-full transition-colors ${
-                    !audioFile
-                      ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : playbackRate === rate
-                        ? 'bg-primary-600 text-white font-medium shadow-button'
-                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  {rate}x
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Auto-scroll Toggle */}
-          <div className="flex items-center justify-center space-x-2 mb-3">
-            <span className="text-gray-600 dark:text-gray-300 text-xs transition-colors duration-300">Auto-scroll:</span>
-            <button
-              onClick={() => setIsFollowModeEnabled(!isFollowModeEnabled)}
-              disabled={!audioFile}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : isFollowModeEnabled
-                    ? 'bg-primary-600 text-white font-medium shadow-button'
-                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-              title={isFollowModeEnabled ? 'Disable auto-scroll to current beat' : 'Enable auto-scroll to current beat'}
-            >
-              {isFollowModeEnabled ? 'ON' : 'OFF'}
-            </button>
-          </div>
-
-          {/* Metronome Controls */}
-          {analysisResults && (
-            <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
-              <MetronomeControls
-                onToggleWithSync={toggleMetronomeWithSync}
-              />
-            </div>
-          )}
-
-          {/* Quick Skip Buttons */}
-          <div className="flex justify-center space-x-1 mt-3">
-            <button
-              onClick={() => skipBackward(30)}
-              disabled={!audioFile}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-            >
-              -30s
-            </button>
-            <button
-              onClick={() => skipBackward(5)}
-              disabled={!audioFile}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-            >
-              -5s
-            </button>
-            <button
-              onClick={() => skipForward(5)}
-              disabled={!audioFile}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-            >
-              +5s
-            </button>
-            <button
-              onClick={() => skipForward(30)}
-              disabled={!audioFile}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                !audioFile
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200'
-              }`}
-            >
-              +30s
-            </button>
-          </div>
-        </div>
-      )}
 
       </div>
     </div>

@@ -19,7 +19,7 @@ interface ModelOption {
   available: boolean;
 }
 
-const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', className = '' }: BeatModelSelectorProps) => {
+const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }: BeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
   const [loading, setLoading] = useState(true);
@@ -92,14 +92,14 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'Transformer model with audio channel separation, good for music with multiple harmonic layers, supporting both simple and compound time signatures',
+                  'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
       available: modelInfo?.beat_transformer_available || false
     },
     {
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                  'Neural network with good balance of accuracy and speed, best for common time signature, flexible in tempo changes',
+                  'Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4)',
       available: modelInfo?.madmom_available || false
     }
   ];
@@ -107,9 +107,9 @@ const BeatModelSelector = ({ onChange, defaultValue = 'beat-transformer', classN
   // Get the currently selected model details
   const selectedModelOption = getModelOptions().find(option => option.id === selectedModel) || getModelOptions()[0];
 
-  // Filter available models - always show beat-transformer since it's the default
+  // Filter available models - always show madmom since it's the default
   const availableModels = getModelOptions().filter(model =>
-    model.available || model.id === 'beat-transformer'
+    model.available || model.id === 'madmom'
   );
 
   return (

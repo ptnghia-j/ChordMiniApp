@@ -6,7 +6,7 @@ import { detectBeatsFromFirebaseUrl } from '@/services/audio/beatDetectionServic
  */
 export async function POST(request: Request) {
   try {
-    const { firebaseUrl, detector = 'beat-transformer' } = await request.json();
+    const { firebaseUrl, detector = 'madmom' } = await request.json();
     
     if (!firebaseUrl) {
       return NextResponse.json(
@@ -84,7 +84,7 @@ export async function GET() {
     description: 'Test the new Firebase URL beat detection approach that avoids CSP issues',
     requestBody: {
       firebaseUrl: 'https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/audio%2Ffile.mp3?alt=media&token=...',
-      detector: 'beat-transformer' // optional, defaults to 'beat-transformer'
+      detector: 'madmom' // optional, defaults to 'madmom'
     },
     example: {
       curl: 'curl -X POST http://localhost:3000/api/test-beat-detection -H "Content-Type: application/json" -d \'{"firebaseUrl": "YOUR_FIREBASE_URL"}\''
