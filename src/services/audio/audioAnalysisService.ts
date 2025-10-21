@@ -13,6 +13,8 @@ import { synchronizeChords } from '@/utils/chordSynchronization';
 import { recognizeChordsWithRateLimit } from '@/services/chord-analysis/chordService';
 import type { AnalysisResult, BeatInfo, ChordDetectorType, ChordDetectionResult, BeatDetectionBackendResponse } from '@/types/audioAnalysis';
 
+import { getChordAnalysisWorker } from '@/workers/chordAnalysisClient';
+
 function toBeatInfo(beatResults: BeatDetectionBackendResponse): BeatInfo[] {
   const beats: BeatInfo[] = [];
   if (Array.isArray(beatResults.beats)) {
@@ -160,17 +162,41 @@ async function handleBlobPath(
   // If backend provided dual downbeat candidates (Madmom), auto-select best (3/4 vs 4/4) using chord-change heuristic
   try {
     const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
-    if (candidates && Array.isArray(beatResults.beats) && beatResults.beats.length > 0) {
-      const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
-      const tempSync = synchronizeChords(chordResults, beatsForSync);
-      const chordSeries = tempSync.map((s) => s.chord);
-      const s3 = scoreDownbeatAlignment(chordSeries, 3);
-      const s4 = scoreDownbeatAlignment(chordSeries, 4);
-      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie → prefer 4
-      beatResults.downbeats = candidates[String(winner)] || [];
-      beatResults.time_signature = winner;
-      // Optional debug
-      console.log(`Auto-selected meter (blob path): 3/4 score=${s3.score}, 4/4 score=${s4.score} → ${winner}/4`);
+    if (candidates) {
+      try {
+        const worker = getChordAnalysisWorker();
+        if (worker) {
+          const result = await worker.chooseMeterAndDownbeats(
+            chordResults,
+            beatResults.beats as number[],
+            candidates
+          );
+          beatResults.downbeats = result.downbeats;
+          beatResults.time_signature = result.timeSignature;
+          console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+        } else {
+          const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+          const tempSync = synchronizeChords(chordResults, beatsForSync);
+          const chordSeries = tempSync.map((s) => s.chord);
+          const s3 = scoreDownbeatAlignment(chordSeries, 3);
+          const s4 = scoreDownbeatAlignment(chordSeries, 4);
+          const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+          beatResults.downbeats = candidates[String(winner)] || [];
+          beatResults.time_signature = winner;
+          console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+        }
+      } catch (workerErr) {
+        console.warn('Worker computation failed, using main thread fallback:', workerErr);
+        const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+        const tempSync = synchronizeChords(chordResults, beatsForSync);
+        const chordSeries = tempSync.map((s) => s.chord);
+        const s3 = scoreDownbeatAlignment(chordSeries, 3);
+        const s4 = scoreDownbeatAlignment(chordSeries, 4);
+        const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+        beatResults.downbeats = candidates[String(winner)] || [];
+        beatResults.time_signature = winner;
+        console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+      }
     }
   } catch (selErr) {
     console.warn('Downbeat candidate selection (blob path) skipped due to error:', selErr);
@@ -179,7 +205,12 @@ async function handleBlobPath(
   const beats = toBeatInfo(beatResults);
   let synchronizedChords;
   try {
-    synchronizedChords = synchronizeChords(chordResults, beats);
+    const worker = getChordAnalysisWorker();
+    if (worker) {
+      synchronizedChords = await worker.synchronizeChords(chordResults, beats);
+    } else {
+      synchronizedChords = synchronizeChords(chordResults, beats);
+    }
     if (!synchronizedChords || !Array.isArray(synchronizedChords)) throw new Error('Chord synchronization failed: invalid result format');
   } catch (e) {
     console.error('Error in blob API chord synchronization:', e);
@@ -301,15 +332,40 @@ export async function analyzeAudioWithRateLimit(
 try {
   const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
   if (candidates) {
-    const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
-    const tempSync = synchronizeChords(chordResults, beatsForSync);
-    const chordSeries = tempSync.map((s) => s.chord);
-    const s3 = scoreDownbeatAlignment(chordSeries, 3);
-    const s4 = scoreDownbeatAlignment(chordSeries, 4);
-    const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie -> prefer 4
-    beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
-    beatResults.time_signature = winner;
-    console.log(`Auto-selected meter: 3/4 score=${s3.score}, 4/4 score=${s4.score} -> ${winner}/4`);
+    try {
+      const worker = getChordAnalysisWorker();
+      if (worker) {
+        const result = await worker.chooseMeterAndDownbeats(
+          chordResults,
+          beatResults.beats as number[],
+          candidates
+        );
+        beatResults.downbeats = result.downbeats;
+        beatResults.time_signature = result.timeSignature;
+        console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+      } else {
+        const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+        const tempSync = synchronizeChords(chordResults, beatsForSync);
+        const chordSeries = tempSync.map((s) => s.chord);
+        const s3 = scoreDownbeatAlignment(chordSeries, 3);
+        const s4 = scoreDownbeatAlignment(chordSeries, 4);
+        const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+        beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+        beatResults.time_signature = winner;
+        console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+      }
+    } catch (workerErr) {
+      console.warn('Worker computation failed, using main thread fallback:', workerErr);
+      const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+      const tempSync = synchronizeChords(chordResults, beatsForSync);
+      const chordSeries = tempSync.map((s) => s.chord);
+      const s3 = scoreDownbeatAlignment(chordSeries, 3);
+      const s4 = scoreDownbeatAlignment(chordSeries, 4);
+      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+      beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+      beatResults.time_signature = winner;
+      console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+    }
   }
 } catch (selErr) {
   console.warn('Downbeat candidate selection skipped due to error:', selErr);
@@ -318,7 +374,18 @@ try {
   const beats = toBeatInfo(beatResults);
 
   // Synchronize
-  let synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+  let synchronizedChords: { chord: string; beatIndex: number }[];
+  try {
+    const worker = getChordAnalysisWorker();
+    if (worker) {
+      synchronizedChords = await worker.synchronizeChords(chordResults, beats);
+    } else {
+      synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+    }
+  } catch (e) {
+    console.warn('Worker sync failed, using main thread fallback:', e);
+    synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+  }
   synchronizedChords = synchronizedChords.filter((sc) => sc && typeof sc.beatIndex === 'number' && !isNaN(sc.beatIndex) && sc.beatIndex >= 0 && sc.beatIndex < beats.length && typeof (sc as { chord?: string }).chord === 'string');
 
   return {
@@ -421,15 +488,40 @@ export async function analyzeAudio(
   try {
     const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
     if (candidates) {
-      const beatsForSync: BeatInfo[] = beatResults.beats.map((t) => ({ time: t, strength: 0.8 }));
-      const tempSync = synchronizeChords(chordResults, beatsForSync);
-      const chordSeries = tempSync.map((s) => s.chord);
-      const s3 = scoreDownbeatAlignment(chordSeries, 3);
-      const s4 = scoreDownbeatAlignment(chordSeries, 4);
-      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4; // tie -> prefer 4
-      beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
-      beatResults.time_signature = winner;
-      console.log(`Auto-selected meter: 3/4 score=${s3.score}, 4/4 score=${s4.score} -> ${winner}/4`);
+      try {
+        const worker = getChordAnalysisWorker();
+        if (worker) {
+          const result = await worker.chooseMeterAndDownbeats(
+            chordResults,
+            beatResults.beats as number[],
+            candidates
+          );
+          beatResults.downbeats = result.downbeats;
+          beatResults.time_signature = result.timeSignature;
+          console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+        } else {
+          const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+          const tempSync = synchronizeChords(chordResults, beatsForSync);
+          const chordSeries = tempSync.map((s) => s.chord);
+          const s3 = scoreDownbeatAlignment(chordSeries, 3);
+          const s4 = scoreDownbeatAlignment(chordSeries, 4);
+          const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+          beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+          beatResults.time_signature = winner;
+          console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+        }
+      } catch (workerErr) {
+        console.warn('Worker computation failed, using main thread fallback:', workerErr);
+        const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+        const tempSync = synchronizeChords(chordResults, beatsForSync);
+        const chordSeries = tempSync.map((s) => s.chord);
+        const s3 = scoreDownbeatAlignment(chordSeries, 3);
+        const s4 = scoreDownbeatAlignment(chordSeries, 4);
+        const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+        beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+        beatResults.time_signature = winner;
+        console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+      }
     }
   } catch (selErr) {
     console.warn('Downbeat candidate selection skipped due to error:', selErr);
@@ -438,7 +530,18 @@ export async function analyzeAudio(
   const beats = toBeatInfo(beatResults);
 
   // Synchronize
-  const synchronizedChords = synchronizeChords(chordResults, beats);
+  let synchronizedChords: { chord: string; beatIndex: number }[];
+  try {
+    const worker = getChordAnalysisWorker();
+    if (worker) {
+      synchronizedChords = await worker.synchronizeChords(chordResults, beats);
+    } else {
+      synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+    }
+  } catch (e) {
+    console.warn('Worker sync failed, using main thread fallback:', e);
+    synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
+  }
 
   return {
     chords: chordResults,

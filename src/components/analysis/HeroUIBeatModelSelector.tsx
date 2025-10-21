@@ -79,11 +79,10 @@ const HeroUIBeatModelSelector = ({
     }
   ], [modelInfo]);
 
-  const availableModels = useMemo(() => modelOptions.filter(model =>
-    model.available || model.id === 'madmom'
-  ), [modelOptions]);
-  
-  const selectedModelObject = availableModels.find(model => model.id === selectedModel);
+  // Always show all models; availability reflects backend warm/cold status only
+  const availableModels = useMemo(() => modelOptions, [modelOptions]);
+
+  const selectedModelObject = modelOptions.find(model => model.id === selectedModel);
   const baseDescription = selectedModelObject?.description || "Choose the beat detection model for audio analysis";
   const selectedModelDescription = loading
     ? `${baseDescription} (Loading detailed info...)`
@@ -159,24 +158,8 @@ const HeroUIBeatModelSelector = ({
         ))}
       </Select>
 
-      {loading && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 transition-colors duration-300">
-          <div className="animate-spin h-3 w-3 border border-blue-600 dark:border-blue-400 border-t-transparent rounded-full"></div>
-          <span>Loading detailed model information from backend...</span>
-        </div>
-      )}
 
-      {!loading && modelInfo && (
-        <div className="mt-2 text-xs text-green-600 dark:text-green-400 transition-colors duration-300">
-          ✓ Backend model information loaded
-        </div>
-      )}
 
-      {!loading && !modelInfo && (
-        <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 transition-colors duration-300">
-          ⚠ Using default model options (backend unavailable)
-        </div>
-      )}
     </div>
   );
 };
