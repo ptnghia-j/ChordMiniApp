@@ -905,6 +905,7 @@ const simplifiedChordGridData = useMemo(() => {
         analysisResults={analysisResults}
         audioDuration={duration}
         audioUrl={audioProcessingState.audioUrl || undefined}
+        beatDetector={beatDetector}
       />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>

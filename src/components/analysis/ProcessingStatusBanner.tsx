@@ -27,6 +27,7 @@ interface ProcessingStatusBannerProps {
   fromCache?: boolean;
   fromFirestoreCache?: boolean;
   videoId?: string; // Optional videoId to prefer cached file for duration detection
+  beatDetector?: 'madmom' | 'beat-transformer' | 'auto'; // Beat detection model being used
 }
 
 const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo(({
@@ -34,7 +35,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
   audioUrl,
   fromCache = false,
   fromFirestoreCache = false,
-  videoId
+  videoId,
+  beatDetector = 'madmom' // Default to madmom if not specified
 }) => {
   const { stage, statusMessage, getFormattedElapsedTime, elapsedTime } = useProcessing();
   const { theme } = useTheme();
@@ -92,8 +94,24 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       const effectiveDuration = audioDuration || detectedDuration;
 
       if (effectiveDuration && effectiveDuration > 0) {
-        // Use 1:0.35 ratio: x minutes audio = 0.35 * x minutes processing
-        const estimatedTime = 0.35 * effectiveDuration;
+        // Determine processing time ratio based on beat detector model
+        // Madmom: 1:0.35 ratio (35% of audio duration)
+        // Beat-Transformer: 1:0.45 ratio (45% of audio duration - slower due to Spleeter)
+        let processingRatio = 0.35; // Default for madmom
+
+        if (stage === 'beat-detection') {
+          // Use different ratios for different beat detectors
+          if (beatDetector === 'beat-transformer') {
+            processingRatio = 0.45; // Beat-Transformer is slower (uses Spleeter)
+          } else {
+            processingRatio = 0.35; // Madmom or auto (defaults to madmom)
+          }
+        } else {
+          // Chord recognition uses the same ratio regardless of beat detector
+          processingRatio = 0.35;
+        }
+
+        const estimatedTime = processingRatio * effectiveDuration;
         const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 100);
         setEstimatedProgress(progress);
 
@@ -109,7 +127,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     } else {
       setEstimatedProgress(0);
     }
-  }, [elapsedTime, stage, audioDuration, detectedDuration, isDurationDetecting]);
+  }, [elapsedTime, stage, audioDuration, detectedDuration, isDurationDetecting, beatDetector]);
 
 
 
