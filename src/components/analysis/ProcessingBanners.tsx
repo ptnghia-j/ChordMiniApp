@@ -37,6 +37,7 @@ interface ProcessingBannersProps {
   audioUrl?: string;
   fromFirestoreCache?: boolean;
   videoId?: string; // Optional for cache-aware duration detection
+  beatDetector?: 'madmom' | 'beat-transformer' | 'auto'; // Beat detection model
 
   // Error display
   error: string | null;
@@ -56,6 +57,7 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
   audioUrl,
   fromFirestoreCache,
   videoId,
+  beatDetector,
   error,
   suggestion,
   onTryAnotherVideo,
@@ -84,6 +86,7 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
         fromCache={fromCache}
         fromFirestoreCache={fromFirestoreCache}
         videoId={videoId}
+        beatDetector={beatDetector}
       />
 
       {/* Error message */}
