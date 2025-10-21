@@ -107,10 +107,8 @@ const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }
   // Get the currently selected model details
   const selectedModelOption = getModelOptions().find(option => option.id === selectedModel) || getModelOptions()[0];
 
-  // Filter available models - always show madmom since it's the default
-  const availableModels = getModelOptions().filter(model =>
-    model.available || model.id === 'madmom'
-  );
+  // Show all models; availability reflects backend warm/cold status only
+  const availableModels = getModelOptions();
 
   return (
     <div className={`model-selector-container ${className}`}>
@@ -129,17 +127,6 @@ const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }
       </div>
 
       {/* Loading Banner */}
-      {loading && (
-        <div className="mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 transition-colors duration-300">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-            <div>
-              <p className="font-medium text-blue-800 dark:text-blue-200 text-sm">Loading Beat Models</p>
-              <p className="text-blue-600 dark:text-blue-300 text-xs">Fetching available models from the backend...</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="relative" ref={dropdownRef}>
         {/* Dropdown button */}

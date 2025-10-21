@@ -43,6 +43,7 @@
     "@vercel/blob": "^1.1.1",
     "axios": "^1.9.0",
     "clsx": "^2.1.0",
+    "comlink": "^4.4.2",
     "crypto-browserify": "^3.12.1",
     "dotenv": "^16.5.0",
     "ffmpeg-static": "^5.2.0",

@@ -35,10 +35,16 @@ export default function ChangelogPage() {
       title: 'App improvements (In Development)',
       description: 'Improve app stability, performance, user experience, and UI consistency.',
       features:[
+        'IMPROVED: Madmom now automatically selects between 3/4 and 4/4 using chord-beat alignment scoring',
+        'IMPROVED: Madmom set as the default beat detection model (previously Beat-Transformer)',
+        'UI: Beat model selector always shows all models regardless of backend cold-start status',
+        'UI: Removed backend availability indicators from model selectors for cleaner UI',
         'UI: changed tabs UI to HeroUI component',
         'FIX: chord labels consistency and based on correction from gemini models'
       ],
       technical: [
+        'PERFORMANCE: Implemented Web Worker-based processing for chord-beat synchronization and downbeat alignment scoring to prevent UI blocking',
+        'PERFORMANCE: Offloaded synchronizeChords, scoreDownbeatAlignment, and chooseMeterAndDownbeats to a background thread using Comlink',
         'REFACTORING: moved files into subfolders for better structure and organization'
       ],
       breaking: []

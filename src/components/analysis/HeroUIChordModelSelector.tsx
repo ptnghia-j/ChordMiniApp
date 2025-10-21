@@ -49,7 +49,6 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
   const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
   const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(getAvailableChordModels());
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
@@ -98,10 +97,8 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
           const filteredModels = filterChordModels(modelIds.length > 0 ? modelIds : getAvailableChordModels());
           setAvailableModels(filteredModels);
         }
-        setError(null);
       } catch (err) {
         console.error('Error fetching model info (non-blocking):', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
         // Keep using fallback data on error - UI already rendered
       }
     };
@@ -241,36 +238,10 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
         </div>
       )}
 
-      {loading && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 transition-colors duration-300">
-          <div className="animate-spin h-3 w-3 border border-blue-600 dark:border-blue-400 border-t-transparent rounded-full"></div>
-          <span>Loading detailed model information from backend...</span>
-        </div>
-      )}
 
-      {!loading && Object.keys(modelInfo).length > 0 && !error && (
-        <div className="mt-2 text-xs text-green-600 dark:text-green-400 transition-colors duration-300">
-          ✓ Backend model information loaded
-        </div>
-      )}
 
-      {!loading && Object.keys(modelInfo).length === 0 && !error && (
-        <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 transition-colors duration-300">
-          ⚠ Using default model options (backend unavailable)
-        </div>
-      )}
 
-      {error && (
-        <div className="mt-2 text-sm text-red-500 dark:text-red-400 transition-colors duration-300">
-          Error: {error}
-        </div>
-      )}
 
-      {loading && (
-        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
-          Loading model information...
-        </div>
-      )}
     </div>
   );
 };
