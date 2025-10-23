@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/config/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, DocumentData, QuerySnapshot, doc, getDoc, where, documentId } from 'firebase/firestore';
 import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
 import { Card, CardBody, CardHeader, Button, Chip, Skeleton } from '@heroui/react';
 import { useIsVisible } from '@/hooks/scroll/useIntersectionObserver';
@@ -30,8 +30,13 @@ interface TranscribedVideo {
 
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
 const AUDIO_FILES_COLLECTION = 'audioFiles';
-const INITIAL_LOAD_COUNT = 6;
-const LOAD_MORE_COUNT = 6;
+// Quick Win constants for improved UX and batching
+const TARGET_UNIQUE = 12;      // ensure 12 unique items on first load
+const PAGE_SIZE = 20;          // fetch larger pages internally
+const MAX_PAGES = 3;           // cap to avoid excessive reads
+
+const INITIAL_LOAD_COUNT = 12; // show 12 on first paint
+const LOAD_MORE_COUNT = 6;     // keep load-more size unchanged for now
 
 export default function RecentVideos() {
   const [videos, setVideos] = useState<TranscribedVideo[]>([]);
@@ -79,35 +84,80 @@ export default function RecentVideos() {
     }
 
     const { audioMetadataCache } = await import('@/services/cache/smartFirebaseCache');
+
+    // Batched prefetch using Firestore `in` queries (chunks of 10)
+    const chunk = (arr: string[], size: number) => {
+      const out: string[][] = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+
+    const mapFirestoreToMeta = (audioData: {
+      extractionService?: string;
+      audioUrl?: string;
+      isStreamUrl?: boolean;
+      fileSize?: number;
+      streamExpiresAt?: number;
+      title?: string;
+      channelTitle?: string;
+    }): AudioFileMetadata => ({
+      audioFilename: audioData?.extractionService || 'cached-audio',
+      audioUrl: audioData?.audioUrl || '',
+      isStreamUrl: !!audioData?.isStreamUrl,
+      fromCache: true,
+      fileSize: audioData?.fileSize || 0,
+      streamExpiresAt: audioData?.streamExpiresAt,
+      title: audioData?.title,
+      channelTitle: audioData?.channelTitle
+    });
+
+    const prefetchMap = new Map<string, AudioFileMetadata | null>();
+    let prefetchDone = false;
+
+    const batchedPrefetch = async () => {
+      if (prefetchDone || !firestoreDb) return;
+      prefetchDone = true;
+      try {
+        const audioCol = collection(firestoreDb, AUDIO_FILES_COLLECTION);
+        const batches = chunk(videoIds, 10);
+        const qsPromises = batches.map(ids => getDocs(query(audioCol, where(documentId(), 'in', ids))));
+        const snapshots = await Promise.all(qsPromises);
+        snapshots.forEach((snap) => {
+          snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            prefetchMap.set(docSnap.id, data ? mapFirestoreToMeta(data) : null);
+          });
+        });
+        // Mark missing ids as null to avoid fallback
+        for (const id of videoIds) {
+          if (!prefetchMap.has(id)) prefetchMap.set(id, null);
+        }
+      } catch (e) {
+        console.warn('Batch audio prefetch failed, will fallback to per-doc fetch:', e);
+      }
+    };
+
     const audioFilesMap = await audioMetadataCache.getBatch(
       videoIds,
       async (videoId: string) => {
         try {
           if (!firestoreDb) return null;
+          if (!prefetchDone) await batchedPrefetch();
+          if (prefetchMap.has(videoId)) {
+            return prefetchMap.get(videoId) as unknown as Record<string, unknown> | null;
+          }
+          // Fallback to per-doc get if not found via prefetch
           const audioDocRef = doc(firestoreDb, AUDIO_FILES_COLLECTION, videoId);
           const audioDocSnap = await getDoc(audioDocRef);
-
           if (audioDocSnap.exists()) {
-            const audioData = audioDocSnap.data();
-            return {
-              audioFilename: audioData.extractionService || 'cached-audio',
-              audioUrl: audioData.audioUrl,
-              isStreamUrl: audioData.isStreamUrl || false,
-              fromCache: true,
-              fileSize: audioData.fileSize || 0,
-              streamExpiresAt: audioData.streamExpiresAt,
-              title: audioData.title || null,
-              channelTitle: audioData.channelTitle || null
-            };
+            return mapFirestoreToMeta(audioDocSnap.data()) as unknown as Record<string, unknown>;
           }
           return null;
         } catch {
           return null;
         }
       },
-      (data: Record<string, unknown>) => {
-        return !!(data.audioUrl && (data.audioFilename || data.title));
-      }
+      (data: Record<string, unknown>) => !!(data.audioUrl && (data.audioFilename || data.title))
     );
 
     const resultMap = new Map<string, AudioFileMetadata>();
@@ -120,9 +170,9 @@ export default function RecentVideos() {
     return resultMap;
   }, []);
 
-  const fetchVideos = useCallback(async (isLoadMore = false) => {
-    // PERFORMANCE FIX #5: Check cache first for initial load
-    if (!isLoadMore) {
+  const fetchVideos = useCallback(async (isLoadMore = false, skipCache = false) => {
+    // PERFORMANCE: Check cache first for initial load, then SWR-style background revalidate
+    if (!isLoadMore && !skipCache) {
       try {
         const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
         const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
@@ -134,10 +184,12 @@ export default function RecentVideos() {
         );
 
         if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
-          console.log('✅ Using cached recent videos data');
+          console.log('✅ Using cached recent videos data (SWR)');
           setVideos(cachedData as unknown as TranscribedVideo[]);
           setLoading(false);
           setHasMore(cachedData.length >= INITIAL_LOAD_COUNT);
+          // Background revalidate
+          setTimeout(() => { void fetchVideos(false, true); }, 0);
           return;
         }
       } catch (cacheError) {
@@ -183,89 +235,91 @@ export default function RecentVideos() {
       }
 
       const transcriptionsRef = collection(firestoreDb, TRANSCRIPTIONS_COLLECTION);
-      let q;
 
-
-      if (isLoadMore && lastDoc) {
-        q = query(
-          transcriptionsRef,
-          orderBy('createdAt', 'desc'),
-          startAfter(lastDoc),
-          limit(LOAD_MORE_COUNT)
-        );
-      } else {
-        q = query(
-          transcriptionsRef,
-          orderBy('createdAt', 'desc'),
-          limit(INITIAL_LOAD_COUNT)
-        );
-      }
-
-      const querySnapshot = await getDocs(q);
-
+      // Containers shared by both initial load and load-more paths
       const videoMap = new Map<string, TranscribedVideo>();
       const videoIds: string[] = [];
-
-      // Create a set of existing video IDs from the current state for deduplication on "load more"
       const existingVideoIds = new Set(isLoadMore ? videos.map(v => v.videoId) : []);
 
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-
-        if (data.videoId && data.beats?.length > 0 && data.chords?.length > 0) {
-          if (existingVideoIds.has(data.videoId) || videoMap.has(data.videoId)) {
-            return;
+      const addFromSnapshot = (snap: QuerySnapshot<DocumentData>) => {
+        snap.forEach((d) => {
+          const data = d.data() as {
+            videoId?: string;
+            beats?: unknown[];
+            chords?: unknown[];
+            createdAt?: { toMillis?: () => number; seconds?: number };
+            audioDuration?: number;
+            beatModel?: string;
+            chordModel?: string;
+            bpm?: number;
+            timeSignature?: number;
+            keySignature?: string;
+            title?: string;
+          };
+          if (data.videoId && (data.beats?.length ?? 0) > 0 && (data.chords?.length ?? 0) > 0) {
+            if (existingVideoIds.has(data.videoId) || videoMap.has(data.videoId)) return;
+            const processedAt = data.createdAt?.toMillis?.() || (data.createdAt?.seconds ? data.createdAt.seconds * 1000 : Date.now());
+            videoIds.push(data.videoId);
+            videoMap.set(data.videoId, {
+              videoId: data.videoId,
+              title: data.title || `Video ${data.videoId}`,
+              thumbnailUrl: `https://i.ytimg.com/vi/${data.videoId}/mqdefault.jpg`,
+              processedAt,
+              duration: data.audioDuration,
+              beatModel: data.beatModel,
+              chordModel: data.chordModel,
+              bpm: data.bpm,
+              timeSignature: data.timeSignature || 4,
+              keySignature: data.keySignature,
+              audioFilename: undefined,
+              audioUrl: undefined,
+              isStreamUrl: false,
+              fromCache: false
+            });
           }
+        });
+      };
 
-          videoIds.push(data.videoId);
-          videoMap.set(data.videoId, {
-            videoId: data.videoId,
-            title: data.title || `Video ${data.videoId}`,
-            thumbnailUrl: `https://i.ytimg.com/vi/${data.videoId}/mqdefault.jpg`,
-            processedAt: data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || Date.now(),
-            duration: data.audioDuration,
-            beatModel: data.beatModel,
-            chordModel: data.chordModel,
-            bpm: data.bpm,
-            timeSignature: data.timeSignature || 4,
-            keySignature: data.keySignature,
-            audioFilename: undefined,
-            audioUrl: undefined,
-            isStreamUrl: false,
-            fromCache: false
-          });
+      let lastVisibleLocal: DocumentSnapshot | null = null;
+
+      if (isLoadMore) {
+        // Keep existing load-more behavior (6 unique items)
+        const q = lastDoc
+          ? query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(LOAD_MORE_COUNT))
+          : query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(LOAD_MORE_COUNT));
+        const qs = await getDocs(q);
+        addFromSnapshot(qs);
+        lastVisibleLocal = qs.docs[qs.docs.length - 1] || null;
+      } else {
+        // Multi-page accumulation to ensure 12 unique items on first load
+        let page = 0;
+        let cursor: DocumentSnapshot | null = null;
+        while (videoMap.size < TARGET_UNIQUE && page < MAX_PAGES) {
+          let qs: QuerySnapshot<DocumentData>;
+          if (cursor) {
+            const q1 = query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
+            qs = await getDocs(q1);
+          } else {
+            const q2 = query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+            qs = await getDocs(q2);
+          }
+          addFromSnapshot(qs);
+          lastVisibleLocal = qs.docs[qs.docs.length - 1] || null;
+          if (!lastVisibleLocal || qs.empty) break;
+          cursor = lastVisibleLocal;
+          page++;
         }
-      });
+      }
 
-      const audioFilesMap = await fetchAudioFiles(videoIds);
-
-      audioFilesMap.forEach((audioData, videoId) => {
-        const video = videoMap.get(videoId);
-        if (video) {
-          video.audioFilename = audioData.audioFilename;
-          video.audioUrl = audioData.audioUrl;
-          video.isStreamUrl = audioData.isStreamUrl;
-          video.fromCache = audioData.fromCache;
-
-          if (audioData.title && video.title === `Video ${videoId}`) {
-            video.title = audioData.title;
-          }
-          if (audioData.channelTitle) {
-            video.channelTitle = audioData.channelTitle;
-          }
-        }
-      });
-
+      // Compute initial list and render immediately (audio metadata enrichment happens in background)
       const transcribedVideos = Array.from(videoMap.values())
         .slice(0, isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT);
 
-      // FIX: Use functional update to avoid `videos` dependency in useCallback
       if (isLoadMore) {
         setVideos(prev => [...prev, ...transcribedVideos]);
       } else {
         setVideos(transcribedVideos);
-
-        // PERFORMANCE FIX #5: Cache the initial load results
+        setLoading(false);
         try {
           const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
           const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
@@ -274,15 +328,64 @@ export default function RecentVideos() {
             async () => transcribedVideos as unknown as Record<string, unknown>[],
             () => true
           );
-          console.log('✅ Cached recent videos data');
+          console.log('✅ Cached recent videos data (initial list)');
         } catch (cacheError) {
           console.warn('Failed to cache recent videos:', cacheError);
         }
       }
 
-      const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
-      setLastDoc(lastVisible || null);
-      setHasMore(!!lastVisible); // If there's no last doc, we've reached the end
+      // Background enrich with audio file metadata
+      const targetIds = transcribedVideos.map(v => v.videoId);
+      void (async () => {
+        try {
+          const audioFilesMap = await fetchAudioFiles(targetIds);
+          if (audioFilesMap.size === 0) return;
+
+          setVideos(prev => {
+            const map = new Map(prev.map(v => [v.videoId, v] as const));
+            for (const id of targetIds) {
+              const audioData = audioFilesMap.get(id);
+              if (!audioData) continue;
+              const v = map.get(id);
+              if (!v) continue;
+              map.set(id, {
+                ...v,
+                audioFilename: audioData.audioFilename,
+                audioUrl: audioData.audioUrl,
+                isStreamUrl: audioData.isStreamUrl,
+                fromCache: audioData.fromCache,
+                title: (audioData.title && v.title === `Video ${v.videoId}`) ? audioData.title : v.title,
+                channelTitle: audioData.channelTitle || v.channelTitle
+              });
+            }
+            return Array.from(map.values());
+          });
+
+          if (!isLoadMore) {
+            try {
+              const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
+              const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
+              const enrichedList = transcribedVideos.map(v => {
+                const audio = audioFilesMap.get(v.videoId);
+                return audio ? {
+                  ...v,
+                  audioFilename: audio.audioFilename,
+                  audioUrl: audio.audioUrl,
+                  isStreamUrl: audio.isStreamUrl,
+                  fromCache: audio.fromCache,
+                  title: (audio.title && v.title === `Video ${v.videoId}`) ? audio.title : v.title,
+                  channelTitle: audio.channelTitle || v.channelTitle
+                } : v;
+              }) as unknown as Record<string, unknown>[];
+              await recentVideosCache.get(cacheKey, async () => enrichedList, () => true);
+              console.log('✅ Cached recent videos data (enriched)');
+            } catch {}
+          }
+        } catch {}
+      })();
+
+      setLastDoc(lastVisibleLocal || null);
+      setHasMore(!!lastVisibleLocal); // If there's no last doc, we've reached the end
 
     } catch (err) {
       console.error('Error fetching transcribed videos:', err);
@@ -361,7 +464,7 @@ export default function RecentVideos() {
         </CardHeader>
         <CardBody className="p-0">
           <div className="h-96 overflow-y-auto scrollbar-thin p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2">
               {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
                 <Card key={index} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
                   <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
@@ -410,7 +513,7 @@ export default function RecentVideos() {
 
       <CardBody className="p-0">
         <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-opacity duration-300 ease-in-out`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2">
             {videos.map((video) => (
               <Card
                 key={video.videoId}
@@ -455,7 +558,7 @@ export default function RecentVideos() {
               <Button onPress={() => fetchVideos(true)} color="primary" variant="flat">Load More</Button>
             )}
             {loadingMore && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
                 {[...Array(2)].map((_, index) => (
                   <Card key={`loading-${index}`} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>
                 ))}
@@ -465,7 +568,7 @@ export default function RecentVideos() {
         </div>
         
         {/* Show More / Show Less Button for container height */}
-        <div className="p-4 border-t border-divider dark:border-divider">
+        <div className="p-4">
           <Button onPress={isExpanded ? handleShowLess : handleShowMore} color="default" variant="bordered" size="md" className="w-full">
             {isExpanded ? "Show Less" : "Show More"}
           </Button>

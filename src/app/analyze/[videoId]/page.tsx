@@ -1363,7 +1363,7 @@ export default function YouTubeVideoAnalyzePage() {
         console.log(`🎵 Synced audio element playback rate to ${playbackRate}x`);
       }
     }
-  }, [playbackRate]);
+  }, [playbackRate, audioRef]);
 
   // Callbacks for ProcessingBanners
   const handleDismissExtraction = useCallback(() => {
@@ -1441,7 +1441,7 @@ export default function YouTubeVideoAnalyzePage() {
     videoTitle, showSegmentation,
     isChatbotOpen, isLyricsPanelOpen,
     isPlaying, currentTime, duration, playbackRate, youtubePlayer, currentBeatIndex,
-    isVideoMinimized, isFollowModeEnabled
+    isVideoMinimized, isFollowModeEnabled, audioRef
   ]);
 
   return (
