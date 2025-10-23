@@ -147,7 +147,7 @@ export const useChordPlayback = ({
       lastPlayedChordIndex.current = currentBeatIndex;
       lastPlayedChord.current = currentChord;
     }
-  }, [currentBeatIndex, chords, isEnabled, isReady, isPlaying, findNextChordChange, calculateChordDuration]);
+  }, [currentBeatIndex, chords, isEnabled, isReady, isPlaying, findNextChordChange, calculateChordDuration, bpm]);
 
   // Stop playback when paused or disabled
   useEffect(() => {

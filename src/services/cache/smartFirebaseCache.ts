@@ -301,7 +301,7 @@ export const transcriptionCache = new SmartFirebaseCache<Record<string, unknown>
 
 // PERFORMANCE FIX #5: Cache for homepage recent videos list
 export const recentVideosCache = new SmartFirebaseCache<Record<string, unknown>[]>({
-  ttl: 5 * 60 * 1000, // 5 minutes for homepage recent videos
+  ttl: 15 * 60 * 1000, // 15 minutes for homepage recent videos (reduce Firestore reads)
   incompleteRecordTtl: 10 * 60 * 1000, // 10 minutes for incomplete lists
   maxErrorCount: 3
 });

@@ -30,6 +30,22 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.4',
+      date: 'October 23, 2025',
+      title: 'Recently Transcribed Performance & Responsive Grid',
+      description: 'Faster homepage data fetch and improved responsive layout.',
+      features: [
+        'PERFORMANCE: Recently Transcribed — multi-page accumulation + batched audio metadata queries + SWR-style cache revalidation + increased TTL (15m)',
+        'UI: Homepage grid uses 3/2/1 columns (desktop/tablet/mobile) for Recently Transcribed'
+      ],
+      technical: [
+        "Firestore: orderBy(createdAt desc) with multi-page accumulation; audioFiles batched via where(documentId(), 'in', [...])",
+        'Caching: SWR-style stale-while-revalidate on list cache; recentVideosCache TTL 15 minutes'
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.3',
       date: 'October 18, 2025',
       title: 'App improvements (In Development)',

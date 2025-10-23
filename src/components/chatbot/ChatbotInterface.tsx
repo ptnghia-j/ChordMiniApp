@@ -295,7 +295,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             )}
 
             {/* Input: New design applied to original input and button */}
-            <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 shrink-0">
+            <div className="p-3 shrink-0">
               <div className="flex flex-col p-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
                 <textarea
                   ref={textareaRef}

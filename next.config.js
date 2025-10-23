@@ -166,9 +166,6 @@ const nextConfig = {
       config.optimization.splitChunks = {
         chunks: 'all',
         minSize: 30000, // Increased from 10000 to align with webpack defaults
-        maxSize: 0, // Disable forced micro-splitting
-        maxAsyncSize: 0, // Disable forced micro-splitting
-        maxInitialSize: 0, // Disable forced micro-splitting
         cacheGroups: {
           // Framework: React core (priority 60)
           'framework-react': {
