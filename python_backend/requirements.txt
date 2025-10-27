@@ -42,6 +42,7 @@ tensorflow==2.15.1
 protobuf==3.20.3
 
 # PyTorch CPU-only for production deployment (Updated version)
+# or torch==2.2.2
 torch==2.6.0
 torchaudio
 

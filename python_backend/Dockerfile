@@ -27,7 +27,7 @@ COPY requirements.txt .
 # Install build dependencies first for madmom compilation
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir Cython>=0.29.0 numpy==1.26.4
-RUN pip install --no-cache-dir madmom>=0.16.1
+RUN pip install --no-cache-dir git+https://github.com/CPJKU/madmom
 # Install all requirements except Spleeter first, then install Spleeter without deps to avoid resolver conflicts with librosa/httpx
 RUN grep -v '^spleeter==' requirements.txt | grep -v '^typer==' > requirements_nospleeter.txt \
     && pip install --no-cache-dir -r requirements_nospleeter.txt \
