@@ -13,6 +13,7 @@ export interface AudioMixerSettings {
   guitarVolume: number; // 0-100
   violinVolume: number; // 0-100
   fluteVolume: number; // 0-100
+  bassVolume: number; // 0-100 (new)
   metronomeVolume: number; // 0-100
 }
 
@@ -41,11 +42,12 @@ export class AudioMixerService {
     guitarVolume: 60,
     violinVolume: 60,
     fluteVolume: 50,
+    bassVolume: 40,
     metronomeVolume: 70
   };
 
   private youtubePlayer: YouTubePlayer | null = null;
-  private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number }) => void } | null = null;
+  private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; bassVolume: number }) => void } | null = null;
   private metronomeService: { setVolume: (volume: number) => void } | null = null;
   private listeners: Array<(settings: AudioMixerSettings) => void> = [];
 
@@ -88,7 +90,7 @@ export class AudioMixerService {
     }
   }
 
-  setChordPlaybackService(service: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number }) => void } | null) {
+  setChordPlaybackService(service: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; bassVolume: number }) => void } | null) {
     this.chordPlaybackService = service;
     this.applyChordPlaybackVolume();
   }
@@ -221,6 +223,16 @@ export class AudioMixerService {
   }
 
   /**
+   * Set bass volume
+   */
+  setBassVolume(volume: number) {
+    this.settings.bassVolume = Math.max(0, Math.min(100, volume));
+    this.applyChordPlaybackVolume();
+    this.saveSettings();
+    this.notifyListeners();
+  }
+
+  /**
    * Set metronome volume
    */
   setMetronomeVolume(volume: number) {
@@ -250,12 +262,14 @@ export class AudioMixerService {
       const effectiveGuitarVolume = (this.settings.guitarVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveViolinVolume = (this.settings.violinVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveFluteVolume = (this.settings.fluteVolume / 100) * (effectiveChordVolume / 100) * 100;
+      const effectiveBassVolume = (this.settings.bassVolume / 100) * (effectiveChordVolume / 100) * 100;
 
       this.chordPlaybackService.updateOptions({
         pianoVolume: effectivePianoVolume,
         guitarVolume: effectiveGuitarVolume,
         violinVolume: effectiveViolinVolume,
-        fluteVolume: effectiveFluteVolume
+        fluteVolume: effectiveFluteVolume,
+        bassVolume: effectiveBassVolume
       });
     }
   }
@@ -292,6 +306,7 @@ export class AudioMixerService {
       guitarVolume: 60,
       violinVolume: 60,
       fluteVolume: 50,
+      bassVolume: 40,
       metronomeVolume: 70
     };
     this.applyAllVolumes();
@@ -317,13 +332,15 @@ export class AudioMixerService {
    * Get effective volumes for display purposes
    */
   getEffectiveVolumes() {
+    const effChord = this.calculateEffectiveVolume(this.settings.chordPlaybackVolume);
     return {
       youtube: this.calculateEffectiveVolume(this.settings.youtubeVolume),
-      chordPlayback: this.calculateEffectiveVolume(this.settings.chordPlaybackVolume),
-      piano: (this.settings.pianoVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
-      guitar: (this.settings.guitarVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
-      violin: (this.settings.violinVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
-      flute: (this.settings.fluteVolume / 100) * (this.calculateEffectiveVolume(this.settings.chordPlaybackVolume) / 100) * 100,
+      chordPlayback: effChord,
+      piano: (this.settings.pianoVolume / 100) * (effChord / 100) * 100,
+      guitar: (this.settings.guitarVolume / 100) * (effChord / 100) * 100,
+      violin: (this.settings.violinVolume / 100) * (effChord / 100) * 100,
+      flute: (this.settings.fluteVolume / 100) * (effChord / 100) * 100,
+      bass: (this.settings.bassVolume / 100) * (effChord / 100) * 100,
       metronome: this.calculateEffectiveVolume(this.settings.metronomeVolume)
     };
   }

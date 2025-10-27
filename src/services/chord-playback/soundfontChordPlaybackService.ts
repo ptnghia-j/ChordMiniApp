@@ -27,6 +27,7 @@ export interface SoundfontChordPlaybackOptions {
   guitarVolume: number; // 0-100
   violinVolume: number; // 0-100
   fluteVolume: number; // 0-100
+  bassVolume: number; // 0-100 (new)
   enabled: boolean;
 }
 
@@ -59,7 +60,13 @@ const CHORD_STRUCTURES: Record<string, number[]> = {
   dom11:    [0, 4, 7, 10, 14, 17],
   dom13:    [0, 4, 7, 10, 14, 21],
   six:      [0, 4, 7, 9],
-  min6:     [0, 3, 7, 9]
+  min6:     [0, 3, 7, 9],
+  // Extended chords (added for playback parity with diagrams)
+  minmaj7:  [0, 3, 7, 11],          // Minor-major 7th (e.g., CmMaj7)
+  min11:    [0, 3, 7, 10, 14, 17],  // Minor 11th (e.g., Cm11)
+  min13:    [0, 3, 7, 10, 14, 21],  // Minor 13th (e.g., Cm13)
+  maj11:    [0, 4, 7, 11, 14, 17],  // Major 11th (e.g., Cmaj11)
+  maj13:    [0, 4, 7, 11, 14, 21],  // Major 13th (e.g., Cmaj13)
 };
 
 const CHORD_TYPE_ALIASES: Record<string, string> = {
@@ -81,7 +88,23 @@ const CHORD_TYPE_ALIASES: Record<string, string> = {
   '11': 'dom11', 'dom11': 'dom11',
   '13': 'dom13', 'dom13': 'dom13',
   '6': 'six',
-  'm6': 'min6', 'min6': 'min6'
+  'm6': 'min6', 'min6': 'min6',
+  // Minor-major 7th variants
+  'mmaj7': 'minmaj7',
+  'mMaj7': 'minmaj7',
+  'minmaj7': 'minmaj7',
+  'mM7': 'minmaj7',
+  'minMaj7': 'minmaj7',
+  // Minor 11th and 13th
+  'm11': 'min11',
+  'min11': 'min11',
+  'm13': 'min13',
+  'min13': 'min13',
+  // Major 11th and 13th
+  'maj11': 'maj11',
+  'Maj11': 'maj11',
+  'maj13': 'maj13',
+  'Maj13': 'maj13',
 };
 
 /**
@@ -236,6 +259,7 @@ export class SoundfontChordPlaybackService {
     guitarVolume: 60,
     violinVolume: 60,
     fluteVolume: 50,
+    bassVolume: 40,
     enabled: false
   };
 
@@ -341,7 +365,8 @@ export class SoundfontChordPlaybackService {
           'piano': 'acoustic_grand_piano',
           'guitar': 'acoustic_guitar_nylon',
           'violin': 'violin',
-          'flute': 'flute'
+          'flute': 'flute',
+          'bass': 'electric_bass_finger'
         };
 
         const smplrInstrumentName = instrumentMap[instrumentName];
@@ -480,6 +505,20 @@ export class SoundfontChordPlaybackService {
       }
     }
 
+    // Bass: single low note in E1–D#2 range (root or inversion bass)
+    if (this.options.bassVolume > 0) {
+      const bassRoot = bassNoteName || chordRoot;
+      if (bassRoot) {
+        const bassIdx = NOTE_INDEX_MAP[bassRoot];
+        if (bassIdx !== undefined) {
+          const canonical = CHROMATIC_SCALE[bassIdx];
+          const octaveForBass = bassIdx > NOTE_INDEX_MAP['D#'] ? 1 : 2; // E or higher -> octave 1; else octave 2
+          const bassNote = [`${canonical}${octaveForBass}`];
+          promises.push(this.playInstrument('bass', bassNote, duration, this.options.bassVolume, octaveForBass, bpm));
+        }
+      }
+    }
+
     await Promise.all(promises);
   }
 
@@ -606,12 +645,21 @@ export class SoundfontChordPlaybackService {
       const [, noteName, originalOctave] = match;
       const octaveNum = parseInt(originalOctave);
 
-      // Bass notes (octave 2) are preserved and get 1.25x velocity boost
+      // For dedicated bass instrument: preserve octave 1 or 2 exactly as provided
+      if (instrumentName === 'bass' && (octaveNum === 1 || octaveNum === 2)) {
+        return {
+          note: `${noteName}${originalOctave}`,
+          velocity: baseVelocity,
+          octaveNum
+        };
+      }
+
+      // Bass notes (octave 2) are preserved and get 1.25x velocity boost for other instruments
       if (octaveNum === 2) {
         return {
           note: `${noteName}${originalOctave}`, // Preserve bass octave
           velocity: Math.min(baseVelocity * 1.25, 127), // 1.25x louder, capped at 127
-          octaveNum: octaveNum
+          octaveNum
         };
       }
 
@@ -928,6 +976,9 @@ export class SoundfontChordPlaybackService {
     }
     if (options.fluteVolume === 0 && this.loadedInstruments.has('flute')) {
       this.scheduleInstrumentUnload('flute');
+    }
+    if (options.bassVolume === 0 && this.loadedInstruments.has('bass')) {
+      this.scheduleInstrumentUnload('bass');
     }
   }
 

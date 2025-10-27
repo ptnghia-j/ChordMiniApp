@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitar, GiViolin, GiFlute } from 'react-icons/gi';
+import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
 import { Tooltip, Slider, Divider } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { usePlaybackStore } from '@/stores/playbackStore';
@@ -147,6 +147,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
           guitarVolume: 60,
           violinVolume: 60,
           fluteVolume: 50,
+          bassVolume: 40,
           metronomeVolume: 70
         });
         return;
@@ -166,6 +167,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
+        bassVolume: 40,
         metronomeVolume: 70
       });
       return;
@@ -211,6 +213,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
+        bassVolume: 40,
         metronomeVolume: 70
       });
     }
@@ -285,6 +288,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         guitarVolume: 60,
         violinVolume: 60,
         fluteVolume: 50,
+        bassVolume: 40,
         metronomeVolume: 70
       });
     }
@@ -770,6 +774,48 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           }}
                           className="w-full"
                           aria-label="Flute volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bass volume control */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                          <GiGuitarBassHead className="h-4 w-4" />
+                          Bass
+                        </label>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                          {Math.round(audioSettings.bassVolume)}%
+                        </span>
+                      </div>
+                      <div
+                        onMouseDown={() => setActiveSlider('bass')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'bass') setActiveSlider(null);
+                        }}
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.bassVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'bass' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setBassVolume(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Bass volume control"
                           classNames={{
                             base: "max-w-full",
                             track: "bg-gray-200 dark:bg-gray-600 h-1.5",
