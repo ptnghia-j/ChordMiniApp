@@ -131,10 +131,25 @@ export class ChordMappingService {
     'maj9': 'maj9',
     'M9': 'maj9',
     'm9': 'm9',
+    // Extended chords (explicit)
     '11': '11',
     '13': '13',
+    'm11': 'm11',
+    'min11': 'm11',
+    // m13 often missing in DB; map but rely on fallbacks later
+    'm13': 'm13',
+    'min13': 'm13',
+    'maj11': 'maj11',
+    'maj13': 'maj13',
+    // Add9 variants
     'add9': 'add9',
     'madd9': 'madd9',
+    // Minor-major 7th variants
+    'mMaj7': 'mMaj7',
+    'mmaj7': 'mMaj7',
+    'minmaj7': 'mMaj7',
+    'mM7': 'mMaj7',
+    'minMaj7': 'mMaj7',
     // Colon notation (from ML models)
     'major': 'major',
     'minor': 'minor',
@@ -284,7 +299,34 @@ export class ChordMappingService {
       return chordData;
     }
 
-    // Fallback: try major chord if suffix not found
+    // Hierarchical fallbacks for extended/complex suffixes
+    const tried = new Set<string>([normalizedSuffix]);
+    let fallbackOrder: string[] = [];
+
+    if (normalizedSuffix === 'm13' || normalizedSuffix === 'm11') {
+      // Minor extensions: prefer specific, then simplify
+      fallbackOrder = ['m11', 'm9', 'm7', 'minor'];
+    } else if (normalizedSuffix === 'maj13' || normalizedSuffix === 'maj11') {
+      // Major extensions
+      fallbackOrder = ['maj13', 'maj9', 'maj7', 'major'];
+    } else if (normalizedSuffix === '13' || normalizedSuffix === '11') {
+      // Dominant extensions
+      fallbackOrder = [normalizedSuffix, '9', '7', 'major'];
+    } else if (normalizedSuffix === 'mMaj7' || normalizedSuffix === 'mmaj7') {
+      // Minor-major seventh
+      fallbackOrder = ['mMaj7', 'mmaj7', 'm7', 'minor'];
+    }
+
+    for (const candidate of fallbackOrder) {
+      if (tried.has(candidate)) continue;
+      const alt = rootChords.find(chord => chord.suffix === candidate);
+      if (alt) {
+        return alt;
+      }
+      tried.add(candidate);
+    }
+
+    // Final fallback: try major chord if still not found
     if (normalizedSuffix !== 'major') {
       const majorChord = rootChords.find(chord => chord.suffix === 'major');
       if (majorChord) {

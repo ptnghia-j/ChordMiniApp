@@ -38,6 +38,41 @@ const MAX_PAGES = 3;           // cap to avoid excessive reads
 const INITIAL_LOAD_COUNT = 12; // show 12 on first paint
 const LOAD_MORE_COUNT = 6;     // keep load-more size unchanged for now
 
+
+interface AudioFileMetadata {
+  audioFilename: string;
+  audioUrl: string;
+  isStreamUrl: boolean;
+  fromCache: boolean;
+  fileSize: number;
+  streamExpiresAt?: number;
+  title?: string;
+  channelTitle?: string;
+}
+
+// Helper: enrich a transcribed video with audio file metadata (pure, top-level)
+function enrichVideoWithAudioMetadata(
+  video: TranscribedVideo,
+  audioFilesMap: Map<string, AudioFileMetadata>
+): TranscribedVideo {
+  const audio = audioFilesMap.get(video.videoId);
+  return audio
+    ? {
+        ...video,
+        audioFilename: audio.audioFilename,
+        audioUrl: audio.audioUrl,
+        isStreamUrl: audio.isStreamUrl,
+        fromCache: audio.fromCache,
+        title:
+          audio.title && video.title === `Video ${video.videoId}`
+            ? audio.title
+            : video.title,
+        channelTitle: audio.channelTitle || video.channelTitle,
+      }
+    : video;
+}
+
+
 export default function RecentVideos() {
   const [videos, setVideos] = useState<TranscribedVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +89,7 @@ export default function RecentVideos() {
     freezeOnceVisible: true // Only load once
   });
 
-  interface AudioFileMetadata {
-    audioFilename: string;
-    audioUrl: string;
-    isStreamUrl: boolean;
-    fromCache: boolean;
-    fileSize: number;
-    streamExpiresAt?: number;
-    title?: string;
-    channelTitle?: string;
-  }
-
-  const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
+const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
     // Ensure Firebase is initialized
     let firestoreDb = db;
     if (!firestoreDb) {
@@ -80,6 +104,7 @@ export default function RecentVideos() {
     }
 
     if (!firestoreDb || videoIds.length === 0) {
+
       return new Map<string, AudioFileMetadata>();
     }
 
@@ -348,15 +373,7 @@ export default function RecentVideos() {
               if (!audioData) continue;
               const v = map.get(id);
               if (!v) continue;
-              map.set(id, {
-                ...v,
-                audioFilename: audioData.audioFilename,
-                audioUrl: audioData.audioUrl,
-                isStreamUrl: audioData.isStreamUrl,
-                fromCache: audioData.fromCache,
-                title: (audioData.title && v.title === `Video ${v.videoId}`) ? audioData.title : v.title,
-                channelTitle: audioData.channelTitle || v.channelTitle
-              });
+              map.set(id, enrichVideoWithAudioMetadata(v, audioFilesMap));
             }
             return Array.from(map.values());
           });
@@ -365,18 +382,7 @@ export default function RecentVideos() {
             try {
               const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
               const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
-              const enrichedList = transcribedVideos.map(v => {
-                const audio = audioFilesMap.get(v.videoId);
-                return audio ? {
-                  ...v,
-                  audioFilename: audio.audioFilename,
-                  audioUrl: audio.audioUrl,
-                  isStreamUrl: audio.isStreamUrl,
-                  fromCache: audio.fromCache,
-                  title: (audio.title && v.title === `Video ${v.videoId}`) ? audio.title : v.title,
-                  channelTitle: audio.channelTitle || v.channelTitle
-                } : v;
-              }) as unknown as Record<string, unknown>[];
+              const enrichedList = transcribedVideos.map(v => enrichVideoWithAudioMetadata(v, audioFilesMap)) as unknown as Record<string, unknown>[];
               await recentVideosCache.get(cacheKey, async () => enrichedList, () => true);
               console.log('✅ Cached recent videos data (enriched)');
             } catch {}
@@ -396,6 +402,7 @@ export default function RecentVideos() {
     }
     // FIX: Removed `videos` from dependency array. This hook now correctly depends
     // only on the functions and pagination state it needs to run.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastDoc, hasMore, fetchAudioFiles, videos]);
 
   const handleShowMore = () => setIsExpanded(true);
@@ -566,7 +573,7 @@ export default function RecentVideos() {
             )}
           </div>
         </div>
-        
+
         {/* Show More / Show Less Button for container height */}
         <div className="p-4">
           <Button onPress={isExpanded ? handleShowLess : handleShowMore} color="default" variant="bordered" size="md" className="w-full">

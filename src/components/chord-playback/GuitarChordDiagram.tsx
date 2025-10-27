@@ -156,16 +156,30 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   // For guitar chord diagrams, prioritize the actual chord data name over displayName
   // since guitar diagrams don't support inversions and should show the lookup name
   const getFormattedChordName = (): string => {
+    const deriveAccidentalPreference = (name?: string): 'sharp' | 'flat' | undefined => {
+      if (!name) return undefined;
+      if (/[b♭]/.test(name)) return 'flat';
+      if (/[#♯]/.test(name)) return 'sharp';
+      return undefined;
+    };
+
+    const accidentalPreference = deriveAccidentalPreference(displayName);
+
     if (chordData) {
-      // Reconstruct chord name from chord data and format it
-      // This represents the actual chord that was looked up (without bass note for slash chords)
+      // Map DB key conventions to standard enharmonics for display
+      const keyForDisplay = chordData.key === 'Csharp' ? 'C#'
+        : chordData.key === 'Fsharp' ? 'F#'
+        : chordData.key;
+
+      // Reconstruct chord name from chord data (lookup name without slash inversions)
       const reconstructedChord = chordData.suffix === 'major'
-        ? chordData.key
-        : `${chordData.key}:${chordData.suffix}`;
-      return formatChordWithMusicalSymbols(reconstructedChord, false); // Use light mode for guitar diagrams
+        ? keyForDisplay
+        : `${keyForDisplay}:${chordData.suffix}`;
+
+      return formatChordWithMusicalSymbols(reconstructedChord, false, accidentalPreference); // Light mode
     } else if (displayName) {
-      // Fallback to displayName if no chord data is available
-      return formatChordWithMusicalSymbols(displayName, false); // Use light mode for guitar diagrams
+      // Fallback to displayName; keep the grid's enharmonic preference
+      return formatChordWithMusicalSymbols(displayName, false, accidentalPreference);
     }
     return '';
   };
