@@ -607,17 +607,43 @@ export class MetronomeService {
    * PRE-GENERATED TRACK: Stop metronome track playback
    */
   public stopMetronomeTrack(): void {
+    // First, aggressively silence and cancel any gain automation (Chrome safety)
+    if (this.metronomeGainNode && this.audioContext) {
+      try {
+        const now = this.audioContext.currentTime;
+        this.metronomeGainNode.gain.cancelScheduledValues(now);
+        this.metronomeGainNode.gain.setValueAtTime(0, now);
+      } catch {
+        // Ignore automation cancellation errors
+      }
+    }
+
+    // Then, disconnect and stop the source node defensively
     if (this.metronomeSource) {
       try {
-        this.metronomeSource.stop();
+        // Prevent any pending end callbacks from re-mutating state
+        this.metronomeSource.onended = null;
+      } catch {}
+
+      try {
+        this.metronomeSource.disconnect();
+      } catch {
+        // Already disconnected or not connected
+      }
+
+      try {
+        this.metronomeSource.stop(0);
       } catch {
         // Source may already be stopped
       }
+
       this.metronomeSource = null;
     }
 
     if (this.metronomeGainNode) {
-      this.metronomeGainNode.disconnect();
+      try {
+        this.metronomeGainNode.disconnect();
+      } catch {}
       this.metronomeGainNode = null;
     }
   }

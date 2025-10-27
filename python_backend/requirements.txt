@@ -2,6 +2,7 @@
 # ChordMiniApp Python Backend Requirements
 # Updated to reflect working GPU acceleration environment
 # Compatible with both local development (GPU) and production (CPU)
+# python should be 3.10.16
 # ============================================================================
 
 # Core Python dependencies (Updated to match local environment)
@@ -11,6 +12,8 @@ scipy==1.13.1
 
 # ============================================================================
 # Core Flask Web Application
+# update gunicorn to 22.0.0
+# update python-dotenv to 1.0.1
 # ============================================================================
 flask==3.0.3
 flask-cors==4.0.0
@@ -31,15 +34,16 @@ soxr==0.5.0.post1
 pydub==0.25.1
 
 # ============================================================================
-# ML Frameworks - GPU Acceleration Support
+# ML Frameworks - GPU Acceleration Support, for macos use tensorflow-macos
 # ============================================================================
 # TensorFlow for production deployment (Updated version)
 tensorflow==2.15.1
+# tensorflow-macos==2.13.1
 protobuf==3.20.3
 
 # PyTorch CPU-only for production deployment (Updated version)
 torch==2.6.0
-torchaudio==2.6.0
+torchaudio
 
 # ============================================================================
 # Spleeter - Real 5-stems Audio Separation (GPU Accelerated)
@@ -49,10 +53,13 @@ norbert==0.2.1
 ffmpeg-python==0.2.0
 
 # ============================================================================
-# Beat Detection and Music Analysis
+# Beat Detection and Music Analysis,
+# should be installed separately either:
+# pip install git+https://github.com/CPJKU/madmom
+# pip install madmom --no-build-isolation
 # ============================================================================
 # madmom for DBN beat tracking (with Python 3.10+ compatibility fixes in code)
-madmom==0.16.1
+# madmom==0.16.1
 
 # Music analysis libraries
 pretty_midi==0.2.10
@@ -78,6 +85,8 @@ pumpp==0.6.0
 
 # ============================================================================
 # Utility Libraries
+# update requests to 2.32.3
+# update h2 to 4.2.0
 # ============================================================================
 requests==2.31.0
 httpx==0.28.1
@@ -90,9 +99,9 @@ tqdm==4.67.1
 # ============================================================================
 # Development and Jupyter Support (Optional for production)
 # ============================================================================
-ipython==8.36.0
-jupyter==1.1.1
-jupyterlab==4.4.4
+# ipython==8.36.0
+# jupyter==1.1.1
+# jupyterlab==4.4.4
 
 # ============================================================================
 # YouTube and Media Processing
