@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import BeatHighlighter from './BeatHighlighter';
 import {
   getSegmentationColorForBeatIndex,
   formatRomanNumeral,
@@ -41,7 +42,7 @@ interface AudioMappingItem {
 interface ChordGridProps {
   chords: string[]; // Array of chord labels (e.g., 'C', 'Am') - may be transposed
   beats: (number | null)[]; // Array of corresponding beat timestamps (in seconds) - Updated to match service type
-  currentBeatIndex?: number; // Current beat index for highlighting, optional
+  // currentBeatIndex removed: BeatHighlighter subscribes directly to store
   timeSignature?: number; // Time signature (beats per measure), defaults to 4
   keySignature?: string; // Key signature (e.g., 'C Major')
   isDetectingKey?: boolean; // Whether key detection is in progress
@@ -104,9 +105,8 @@ interface ChordGridProps {
  * Custom comparison function for ChordGrid memoization
  * Only re-render if props that actually affect the visual output change
  *
- * PERFORMANCE OPTIMIZATION: ChordGrid must re-render when currentBeatIndex changes
- * to recalculate isCurrentBeat for each cell. The optimization happens at ChordCell level,
- * where only cells with changed isCurrentBeat prop will re-render (prev + current beat).
+ * PERFORMANCE OPTIMIZATION: Beat highlighting is handled outside React by BeatHighlighter.
+ * ChordGrid no longer re-renders on beat changes, preventing grid-wide updates.
  */
 const areChordGridPropsEqual = (
   prevProps: ChordGridProps,
@@ -152,11 +152,6 @@ const areChordGridPropsEqual = (
   // Audio mapping
   if (prevProps.originalAudioMapping !== nextProps.originalAudioMapping) return false;
 
-  // CRITICAL FIX: Must check currentBeatIndex to allow beat animation
-  // When currentBeatIndex changes, ChordGrid re-renders to recalculate isCurrentBeat for each cell
-  // ChordCell memoization ensures only cells with changed isCurrentBeat actually re-render (2 cells)
-  if (prevProps.currentBeatIndex !== nextProps.currentBeatIndex) return false;
-
   // Ignore callback props (onBeatClick, onChordEdit)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
 
@@ -167,7 +162,7 @@ const areChordGridPropsEqual = (
 const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   chords,
   beats,
-  currentBeatIndex = -1,
+
   timeSignature = 4,
   keySignature,
   isDetectingKey = false,
@@ -199,10 +194,25 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
 
-  // PERFORMANCE FIX #2: CSS-based beat highlighting
-  // Track previous beat for efficient CSS class updates
-  const previousBeatRef = useRef<number>(-1);
   const gridElementRef = useRef<HTMLDivElement | null>(null);
+  // Cache: map beatIndex -> HTMLElement to eliminate per-beat querySelector
+  const cellRefsMapRef = useRef<Map<number, HTMLElement>>(new Map());
+
+  // Clear the cache when chord/beats references change (grid rebuilt)
+  useEffect(() => {
+    cellRefsMapRef.current.clear();
+  }, [chords, beats]);
+
+  // Ref callback factory: register/unregister a cell by its global beat index
+  const makeCellRef = useCallback((index: number) => (el: HTMLDivElement | null) => {
+    const map = cellRefsMapRef.current;
+    if (el) {
+      map.set(index, el);
+    } else {
+      map.delete(index);
+    }
+  }, []);
+
 
   // Use simple time signature - no complex beat source logic
   const actualBeatsPerMeasure = timeSignature;
@@ -289,39 +299,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     }
   }, [gridContainerRef]);
 
-  // PERFORMANCE FIX #2: CSS-based beat highlighting
-  // Update CSS class for current beat (no React re-renders, pure CSS)
-  useEffect(() => {
-    if (currentBeatIndex === undefined || currentBeatIndex < 0) return;
-    if (!gridElementRef.current) return;
 
-    // Defensive cleanup: remove any stale highlights first (e.g., after theme/loop toggles)
-    const highlighted = gridElementRef.current.querySelectorAll('.chord-cell.current-beat-highlight');
-    highlighted.forEach((el) => {
-      const idx = (el as HTMLElement).getAttribute('data-beat-index');
-      if (idx === null || Number(idx) !== currentBeatIndex) {
-        el.classList.remove('current-beat-highlight');
-      }
-    });
-
-    // Remove highlight from previously tracked beat (redundant but cheap)
-    if (previousBeatRef.current >= 0 && previousBeatRef.current !== currentBeatIndex) {
-      const prevCell = gridElementRef.current.querySelector(
-        `.chord-cell[data-beat-index="${previousBeatRef.current}"]`
-      );
-      if (prevCell) prevCell.classList.remove('current-beat-highlight');
-    }
-
-    // Add highlight to current beat
-    const currentCell = gridElementRef.current.querySelector(
-      `.chord-cell[data-beat-index="${currentBeatIndex}"]`
-    );
-    if (currentCell) {
-      currentCell.classList.add('current-beat-highlight');
-    }
-
-    previousBeatRef.current = currentBeatIndex;
-  }, [currentBeatIndex, theme, isLoopEnabled]);
 
   // PERFORMANCE OPTIMIZATION: Extract layout values from memoized config
   const { measuresPerRow: dynamicMeasuresPerRow } = gridLayoutConfig;
@@ -483,8 +461,10 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       ref={mergedGridRef}
       className="chord-grid-container mx-auto px-0.5 sm:px-1 relative"
       style={{ maxWidth: "99%" }}
-      data-current-beat={currentBeatIndex !== undefined && currentBeatIndex >= 0 ? currentBeatIndex : undefined}
     >
+      {/* Beat highlighter side-effect component (no UI) */}
+      <BeatHighlighter cellRefsMap={cellRefsMapRef} theme={theme} isLoopEnabled={isLoopEnabled} />
+
       {/* Clean card container with minimal styling */}
       <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
 
@@ -553,7 +533,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
                       // FIXED: Use currentBeatIndex directly - animation logic already accounts for shift/padding
                       // The analyze page animation logic handles shift and padding correctly
-                      const isCurrentBeat = globalIndex === currentBeatIndex;
+                      const isCurrentBeat = false; // Beat highlighting handled by BeatHighlighter (CSS class toggle)
                       const showChordLabel = shouldShowChordLabelLocal(globalIndex);
                       const isEmpty = chord === '';
 
@@ -618,6 +598,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           isInLoopRange={isInLoopRange(globalIndex)}
                           onLoopBeatClick={handleLoopBeatClick}
                           accidentalPreference={accidentalPreference}
+                          cellRef={makeCellRef(globalIndex)}
                         />
                       );
                     })}

@@ -41,6 +41,8 @@ export interface ChordCellProps {
   isInLoopRange?: boolean;
   onLoopBeatClick?: (beatIndex: number) => void;
   accidentalPreference?: 'sharp' | 'flat';
+  // ref callback to expose the root DOM element for this cell (used by BeatHighlighter)
+  cellRef?: (el: HTMLDivElement | null) => void;
 }
 
 /**
@@ -128,7 +130,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
   isLoopEnabled = false,
   isInLoopRange = false,
   onLoopBeatClick,
-  accidentalPreference
+  accidentalPreference,
+  cellRef
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -176,6 +179,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
 
   return (
     <div
+      ref={cellRef}
       id={`chord-${globalIndex}`}
       className={`${getChordStyle(chord, globalIndex, isClickable)} w-full h-full ${
         showRomanNumerals

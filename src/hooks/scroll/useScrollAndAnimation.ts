@@ -186,11 +186,36 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
     return result;
   }, []);
+  // Helper: find the downbeat index at or before a given time (binary search)
+  const findDownbeatIndexAtTime = useCallback((t: number): number => {
+    const downbeats = analysisResults?.downbeats || [];
+    if (!downbeats || downbeats.length === 0) return -1;
+
+    let left = 0;
+    let right = downbeats.length - 1;
+    let result = -1;
+
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      const dbTime = downbeats[mid];
+      if (t >= dbTime) {
+        result = mid;
+        left = mid + 1;
+      } else {
+        right = mid - 1;
+      }
+    }
+
+    return result;
+  }, [analysisResults]);
+
 
   // PERFORMANCE FIX #3: Auto-scroll optimization
   // Track last scroll time and beat index to reduce scroll frequency
   const lastScrollTimeRef = useRef(0);
   const lastScrolledBeatIndexRef = useRef(-1);
+  // Track last scrolled measure to trigger scrolls only on measure boundaries (downbeats)
+  const lastScrolledMeasureIndexRef = useRef(-1);
 
   // JITTER GUARDS: Track last emitted beat and timing to apply dwell/hysteresis
   const lastEmittedBeatRef = useRef(-1);
@@ -220,24 +245,37 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const scrollToCurrentBeat = useCallback(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
+    // Measure-boundary gating: only scroll when entering a new measure (downbeat)
+    const beatTime = (typeof chordGridData?.beats?.[currentBeatIndex] === 'number')
+      ? (chordGridData!.beats![currentBeatIndex] as number)
+      : null;
+    if (beatTime === null) return;
+
+    const measureIndex = findDownbeatIndexAtTime(beatTime);
+    if (measureIndex === -1) return;
+
+    const downbeats = analysisResults?.downbeats || [];
+    const downbeatTime = downbeats[measureIndex];
+    const DOWNBEAT_TOLERANCE = 0.12; // 120ms tolerance
+    const isAtDownbeat = Math.abs(beatTime - downbeatTime) <= DOWNBEAT_TOLERANCE;
+
+    // Only scroll exactly at downbeat and only once per measure
+    if (!isAtDownbeat || measureIndex === lastScrolledMeasureIndexRef.current) {
+      return;
+    }
+
     const now = Date.now();
 
-    // OPTIMIZATION 1: Increased throttle from 120ms to 200ms (max 5 scrolls/second)
-    // This reduces scroll frequency while maintaining smooth experience
+    // Preserve throttle: max 5 scrolls/second
     if (now - lastScrollTimeRef.current < 200) {
       return;
     }
 
-    // OPTIMIZATION 2: Position-based debouncing - only scroll if beat changed significantly
-    // Skip scrolling if we're still on the same beat or just moved 1 beat
-    // This prevents excessive scrolling for consecutive beats that are visually close
+    // Keep position-based debouncing as an extra guard
     const beatIndexDelta = Math.abs(currentBeatIndex - lastScrolledBeatIndexRef.current);
     if (beatIndexDelta === 0) {
       return; // Same beat, no need to scroll
     }
-
-    // For small beat changes (1-2 beats), only scroll if enough time has passed
-    // This reduces scroll frequency for fast-tempo songs
     if (beatIndexDelta <= 2 && now - lastScrollTimeRef.current < 400) {
       return;
     }
@@ -290,18 +328,20 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         }
       }
 
-      // OPTIMIZATION 4: Single RAF instead of double RAF
+      // OPTIMIZATION: Single RAF; set measure + beat tracking and choose scroll behavior
       requestAnimationFrame(() => {
         lastScrollTimeRef.current = Date.now();
         lastScrolledBeatIndexRef.current = currentBeatIndex;
+        lastScrolledMeasureIndexRef.current = measureIndex;
+        const isMobile = typeof window !== 'undefined' && ((window.innerWidth <= 768) || (/Mobi|Android/i.test(navigator.userAgent)));
         beatElement.scrollIntoView({
-          behavior: 'smooth',
+          behavior: isMobile ? 'auto' : 'smooth',
           block: 'center',
           inline: 'nearest'
         });
       });
     }
-  }, [currentBeatIndex, isFollowModeEnabled]);
+  }, [currentBeatIndex, isFollowModeEnabled, chordGridData, analysisResults, findDownbeatIndexAtTime]);
 
   // Auto-scroll when current beat changes
   useEffect(() => {
@@ -315,6 +355,10 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // PERFORMANCE OPTIMIZATION: Debounce state updates to reduce re-renders
   const lastStateUpdateTimeRef = useRef<number>(0);
   const STATE_UPDATE_INTERVAL = 50; // Update at most every 50ms (20fps) instead of 60fps
+
+  // PERFORMANCE OPTIMIZATION: Throttle currentTime writes to store to reduce re-renders
+  const lastTimeUpdateRef = useRef<number>(0);
+  const TIME_UPDATE_INTERVAL = 250; // Update currentTime at most every 250ms
 
   // Update current time and check for current beat
   useEffect(() => {
@@ -343,7 +387,11 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       }
 
       const time = youtubePlayer.getCurrentTime();
-      setCurrentTime(time);
+      const stamp = Date.now();
+      if (stamp - lastTimeUpdateRef.current >= TIME_UPDATE_INTERVAL) {
+        setCurrentTime(time);
+        lastTimeUpdateRef.current = stamp;
+      }
 
         // DEBUG: Log animation interval execution every 5 seconds
         // if (Math.floor(time) % 5 === 0 && Math.floor(time * 10) % 10 === 0) {
