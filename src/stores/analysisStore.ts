@@ -3,6 +3,13 @@ import { devtools } from 'zustand/middleware';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { LyricsData } from '@/types/musicAiTypes';
 
+// Identity wrapper to disable devtools middleware in production with proper typing
+function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
+  fn: import('zustand/vanilla').StateCreator<S, Mps, Mcs>
+) {
+  return fn;
+}
+
 interface AnalysisStore {
   // Analysis results
   analysisResults: AnalysisResult | null;
@@ -72,7 +79,7 @@ interface AnalysisStore {
 }
 
 export const useAnalysisStore = create<AnalysisStore>()(
-  devtools(
+  ((process.env.NODE_ENV !== 'production' ? devtools : identityDevtools) as unknown as typeof devtools)(
     (set) => ({
       // Initial state
       analysisResults: null,

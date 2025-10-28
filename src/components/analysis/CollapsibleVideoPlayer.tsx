@@ -147,9 +147,12 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   // Collapsed mobile view - enhanced bar with video frame
   if (isMobile && isCollapsed) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
-        {/* Enhanced control bar with video frame */}
-        <div className="flex items-center gap-3 px-4 py-3">
+      <>
+        {/* Spacer to preserve layout and prevent CLS when player is docked */}
+        <div aria-hidden="true" className="w-full aspect-video rounded-lg opacity-0 pointer-events-none select-none" />
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
+          {/* Enhanced control bar with video frame */}
+          <div className="flex items-center gap-3 px-4 py-3">
           {/* Left side - Video frame and controls */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Mini video frame */}
@@ -168,7 +171,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 onEnded={onEnded}
 
                 onProgress={onProgress}
-                progressInterval={100}
+                progressInterval={250}
                 muted={false}
                 config={{
                   playerVars: {
@@ -237,8 +240,9 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
               <FaExpand className="w-5 h-5" />
             </button>
           </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -274,7 +278,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           onEnded={onEnded}
 
           onProgress={onProgress}
-          progressInterval={100}
+          progressInterval={250}
           muted={false}
           config={{
             playerVars: {

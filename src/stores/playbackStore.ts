@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { RefObject } from 'react';
 
+// Identity wrapper to disable devtools middleware in production with proper typing
+function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
+  fn: import('zustand/vanilla').StateCreator<S, Mps, Mcs>
+) {
+  return fn;
+}
+
 interface PlaybackStore {
   // Audio player state
   isPlaying: boolean;
@@ -51,7 +58,7 @@ interface PlaybackStore {
 }
 
 export const usePlaybackStore = create<PlaybackStore>()(
-  devtools(
+  ((process.env.NODE_ENV !== 'production' ? devtools : identityDevtools) as unknown as typeof devtools)(
     (set, get) => ({
       // Initial state
       isPlaying: false,

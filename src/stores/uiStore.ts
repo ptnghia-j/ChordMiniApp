@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { calculateTargetKey } from '@/utils/chordTransposition';
 
+// Identity wrapper to disable devtools middleware in production with proper typing
+function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
+  fn: import('zustand/vanilla').StateCreator<S, Mps, Mcs>
+) {
+  return fn;
+}
+
 // UI state types
 export type ActiveTab = 'beatChordMap' | 'guitarChords' | 'lyricsChords';
 
@@ -96,7 +103,7 @@ interface UIStore {
 }
 
 export const useUIStore = create<UIStore>()(
-  devtools(
+  ((process.env.NODE_ENV !== 'production' ? devtools : identityDevtools) as unknown as typeof devtools)(
     (set, get) => ({
       // Initial state
       activeTab: 'beatChordMap',

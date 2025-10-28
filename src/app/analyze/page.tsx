@@ -339,6 +339,8 @@ export default function LocalAudioAnalyzePage() {
   // Current state for playback - FIXED: Add missing state variables for beat animation
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
   const currentBeatIndexRef = useRef(-1);
+  const lastScrollTimeRef = useRef(0);
+
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
 
   // Tab state
@@ -356,6 +358,7 @@ export default function LocalAudioAnalyzePage() {
     correctedSequence: string[];
     keyAnalysis?: {
       sections: Array<{
+
         startIndex: number;
         endIndex: number;
         key: string;
@@ -371,6 +374,10 @@ export default function LocalAudioAnalyzePage() {
   } | null), []);
 
   // Get state from Zustand stores (only what's actually used in this page)
+
+  // Track transient stage timeout for analysis status so we can clean it up on unmount
+  const stageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Note: simplifyChords, showRomanNumerals, showSegmentation are managed by Zustand
   // and accessed directly by child components via their own selectors
 
@@ -436,7 +443,7 @@ export default function LocalAudioAnalyzePage() {
   const processAudioFile = async () => {
     if (!audioFile) return;
 
-    let stageTimeout: NodeJS.Timeout | null = null;
+    stageTimeoutRef.current = null;
 
     try {
       // Start processing context
@@ -470,7 +477,7 @@ export default function LocalAudioAnalyzePage() {
       }
 
       // Update to chord recognition stage after duration is available
-      stageTimeout = setTimeout(() => {
+      stageTimeoutRef.current = setTimeout(() => {
         setStage('chord-recognition');
         // Don't set progress here - let ProcessingStatusBanner calculate it
         setStatusMessage('Recognizing chords and synchronizing with beats...');
@@ -489,9 +496,9 @@ export default function LocalAudioAnalyzePage() {
       const results = await analyzeAudioWithRateLimit(audioFile, beatDetector, chordDetector);
 
       // FIXED: Clear the stage timeout to prevent it from overriding completion
-      if (stageTimeout) {
-        clearTimeout(stageTimeout);
-        stageTimeout = null;
+      if (stageTimeoutRef.current) {
+        clearTimeout(stageTimeoutRef.current);
+        stageTimeoutRef.current = null;
       }
 
       // Store results
@@ -520,9 +527,9 @@ export default function LocalAudioAnalyzePage() {
       console.error('Error in audio processing:', error);
 
       // Clear timeout on error
-      if (stageTimeout) {
-        clearTimeout(stageTimeout);
-        stageTimeout = null;
+      if (stageTimeoutRef.current) {
+        clearTimeout(stageTimeoutRef.current);
+        stageTimeoutRef.current = null;
       }
 
       // Format error message more user-friendly
@@ -706,8 +713,10 @@ const simplifiedChordGridData = useMemo(() => {
     const rafRef = { current: undefined as number | undefined };
 
     const updateBeatTracking = () => {
-      // Continue animation loop even when not playing to maintain state
-
+      // Stop scheduling when not playing to save battery
+      if (!isPlaying) {
+        return;
+      }
 
       if (!audioRef.current) {
         rafRef.current = requestAnimationFrame(updateBeatTracking);
@@ -750,12 +759,15 @@ const simplifiedChordGridData = useMemo(() => {
         }
       }
 
-      rafRef.current = requestAnimationFrame(updateBeatTracking);
+      if (isPlaying) {
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+      }
     };
 
-    // Start the animation loop
-    rafRef.current = requestAnimationFrame(updateBeatTracking);
-
+    // Start the animation loop only when playing
+    if (isPlaying) {
+      rafRef.current = requestAnimationFrame(updateBeatTracking);
+    }
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
@@ -776,11 +788,18 @@ const simplifiedChordGridData = useMemo(() => {
   useEffect(() => {
     if (!isFollowModeEnabled || currentBeatIndex === -1) return;
 
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    // Throttle scrolls to at most ~1/sec to reduce layout thrashing
+    if (now - lastScrollTimeRef.current < 1000) {
+      return;
+    }
+
     const beatElement = document.getElementById(`chord-${currentBeatIndex}`);
     if (beatElement) {
       // Wait for layout stability before scrolling to prevent jitter
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          lastScrollTimeRef.current = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           beatElement.scrollIntoView({
             behavior: 'smooth',
             block: 'center',
@@ -854,6 +873,20 @@ const simplifiedChordGridData = useMemo(() => {
       countdownStateRef.current.inProgress = false;
     }
   }, [isPlaying, cancelCountdown]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any active countdown interval
+      cancelCountdown();
+      // Clear any pending stage timeout
+      if (stageTimeoutRef.current) {
+        clearTimeout(stageTimeoutRef.current);
+        stageTimeoutRef.current = null;
+      }
+    };
+  }, [cancelCountdown]);
+
 
   // Initialize Zustand stores with page state
   // CRITICAL: Do NOT include Zustand-managed state (showRomanNumerals, simplifyChords) in dependencies

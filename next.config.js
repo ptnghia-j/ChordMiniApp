@@ -78,7 +78,10 @@ const nextConfig = {
         hostname: 's3.us-east-1.amazonaws.com',
       }
     ],
+    qualities: [60, 75, 85, 90, 100],
   },
+
+
 
   // Headers for security and CORS
   async headers() {

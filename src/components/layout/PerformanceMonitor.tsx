@@ -26,6 +26,12 @@ const PerformanceMonitor: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+
+    if (process.env.NODE_ENV === 'development') {
+      // Development builds include extra overhead; use production for accurate Web Vitals.
+      console.info('ℹ️ PerformanceMonitor: Development metrics are slower by design. Check production for accurate Web Vitals.');
+    }
+
     // Track Largest Contentful Paint (LCP)
     const observeLCP = () => {
       try {
@@ -33,7 +39,7 @@ const PerformanceMonitor: React.FC = () => {
           const entries = entryList.getEntries();
           const lastEntry = entries[entries.length - 1];
           metricsRef.current.lcp = lastEntry.startTime;
-          
+
           if (process.env.NODE_ENV === 'development') {
             console.log('📊 LCP:', lastEntry.startTime.toFixed(2), 'ms');
             if (lastEntry.startTime > 2500) {
@@ -41,7 +47,7 @@ const PerformanceMonitor: React.FC = () => {
             }
           }
         });
-        
+
         observer.observe({ entryTypes: ['largest-contentful-paint'] });
         return observer;
       } catch {
@@ -58,7 +64,7 @@ const PerformanceMonitor: React.FC = () => {
           entries.forEach((entry: PerformanceEntry & { processingStart?: number }) => {
             const fid = (entry.processingStart || 0) - entry.startTime;
             metricsRef.current.fid = fid;
-            
+
             if (process.env.NODE_ENV === 'development') {
               console.log('📊 FID:', fid.toFixed(2), 'ms');
               if (fid > 100) {
@@ -67,7 +73,7 @@ const PerformanceMonitor: React.FC = () => {
             }
           });
         });
-        
+
         observer.observe({ entryTypes: ['first-input'] });
         return observer;
       } catch {
@@ -80,6 +86,8 @@ const PerformanceMonitor: React.FC = () => {
     const observeCLS = () => {
       try {
         let clsValue = 0;
+        let lastCLSLog = 0;
+        let warned = false;
         const observer = new PerformanceObserver((entryList) => {
           const entries = entryList.getEntries();
           entries.forEach((entry: PerformanceEntry & { value?: number; hadRecentInput?: boolean }) => {
@@ -87,17 +95,26 @@ const PerformanceMonitor: React.FC = () => {
               clsValue += entry.value || 0;
             }
           });
-          
+
           metricsRef.current.cls = clsValue;
-          
+
           if (process.env.NODE_ENV === 'development') {
-            console.log('📊 CLS:', clsValue.toFixed(4));
-            if (clsValue > 0.1) {
+            const now = performance.now();
+            // Throttle CLS logs to once every 2s to reduce console noise
+            if (now - lastCLSLog > 2000) {
+              // eslint-disable-next-line no-console
+              console.log('📊 CLS:', clsValue.toFixed(4));
+              lastCLSLog = now;
+            }
+            // Warn once after initial load window if threshold exceeded
+            if (!warned && clsValue > 0.1 && now > 5000) {
+              // eslint-disable-next-line no-console
               console.warn('⚠️ CLS is poor (>0.1). Target: <0.1');
+              warned = true;
             }
           }
         });
-        
+
         observer.observe({ entryTypes: ['layout-shift'] });
         return observer;
       } catch {
@@ -114,7 +131,7 @@ const PerformanceMonitor: React.FC = () => {
           entries.forEach((entry) => {
             if (entry.name === 'first-contentful-paint') {
               metricsRef.current.fcp = entry.startTime;
-              
+
               if (process.env.NODE_ENV === 'development') {
                 console.log('📊 FCP:', entry.startTime.toFixed(2), 'ms');
                 if (entry.startTime > 1800) {
@@ -124,7 +141,7 @@ const PerformanceMonitor: React.FC = () => {
             }
           });
         });
-        
+
         observer.observe({ entryTypes: ['paint'] });
         return observer;
       } catch {
@@ -140,7 +157,7 @@ const PerformanceMonitor: React.FC = () => {
         if (navigationEntry) {
           const ttfb = navigationEntry.responseStart - navigationEntry.requestStart;
           metricsRef.current.ttfb = ttfb;
-          
+
           if (process.env.NODE_ENV === 'development') {
             console.log('📊 TTFB:', ttfb.toFixed(2), 'ms');
             if (ttfb > 800) {
@@ -157,8 +174,8 @@ const PerformanceMonitor: React.FC = () => {
     const trackBundleSizes = () => {
       try {
         const resourceEntries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
-        const jsResources = resourceEntries.filter(entry => 
-          entry.name.includes('.js') && 
+        const jsResources = resourceEntries.filter(entry =>
+          entry.name.includes('.js') &&
           (entry.name.includes('_next') || entry.name.includes('chunk'))
         );
 
@@ -168,7 +185,7 @@ const PerformanceMonitor: React.FC = () => {
         jsResources.forEach(resource => {
           const size = resource.transferSize || 0;
           totalJSSize += size;
-          
+
           if (size > 50000) { // Log bundles larger than 50KB
             bundleInfo.push({
               name: resource.name.split('/').pop() || 'unknown',
@@ -182,7 +199,7 @@ const PerformanceMonitor: React.FC = () => {
           if (bundleInfo.length > 0) {
             console.log('📦 Large Bundles (>50KB):', bundleInfo);
           }
-          
+
           if (totalJSSize > 500000) { // 500KB
             console.warn('⚠️ Total JS bundle is large (>500KB). Consider code splitting.');
           }
@@ -197,7 +214,7 @@ const PerformanceMonitor: React.FC = () => {
       try {
         if ('memory' in performance) {
           const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
-          
+
           if (process.env.NODE_ENV === 'development' && memory) {
             console.log('🧠 Memory Usage:', {
               used: Math.round(memory.usedJSHeapSize / 1048576) + ' MB',
