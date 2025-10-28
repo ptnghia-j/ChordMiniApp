@@ -296,7 +296,9 @@ export class SoundfontChordPlaybackService {
     }
 
     try {
-      console.log('🎵 AudioContext initialized (instruments will load on-demand)');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🎵 AudioContext initialized (instruments will load on-demand)');
+      }
       this.isInitialized = true;
     } catch (error) {
       this.initializationError = error as Error;
@@ -322,14 +324,26 @@ export class SoundfontChordPlaybackService {
     const { Soundfont } = await getSmplr();
 
     const startTime = performance.now();
-    console.log(`🎵 Loading ${name}...`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🎵 Loading ${name}...`);
+    }
     const instrument = new Soundfont(this.audioContext, {
       instrument: instrumentName
     });
 
-    await instrument.loaded();
+    // Use recommended smplr API with safe typing
+    type LoadableInstrument = { load?: () => Promise<void>; loaded?: () => Promise<void> };
+    const loadable = instrument as unknown as LoadableInstrument;
+    if (typeof loadable.load === 'function') {
+      await loadable.load();
+    } else if (typeof loadable.loaded === 'function') {
+      // Backward compatibility fallback
+      await loadable.loaded();
+    }
     const loadTime = performance.now() - startTime;
-    console.log(`✅ ${name} loaded in ${loadTime.toFixed(0)}ms`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ ${name} loaded in ${loadTime.toFixed(0)}ms`);
+    }
 
     return instrument;
   }
@@ -394,7 +408,9 @@ export class SoundfontChordPlaybackService {
   private unloadInstrument(instrumentName: string): void {
     if (!this.loadedInstruments.has(instrumentName)) return;
 
-    console.log(`🗑️ Unloading ${instrumentName} to free memory`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🗑️ Unloading ${instrumentName} to free memory`);
+    }
 
     // Stop any active notes
     this.stopInstrumentNotes(instrumentName);
@@ -1013,7 +1029,7 @@ export class SoundfontChordPlaybackService {
     this.loopIntervals.clear();
 
     // Stop notes on each instrument with fade-out
-    this.instruments.forEach((instrument, instrumentName) => {
+    this.instruments.forEach((_instrument, instrumentName) => {
       this.stopInstrumentNotes(instrumentName);
     });
   }

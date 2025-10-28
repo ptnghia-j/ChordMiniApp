@@ -220,7 +220,9 @@ export class SmartFirebaseCache<T> {
    */
   private suppressWarning(key: string, message: string): void {
     if (!this.warningsSuppressed.has(key)) {
-      console.warn(`⚠️ ${message} (key: ${key})`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`⚠️ ${message} (key: ${key})`);
+      }
       this.warningsSuppressed.add(key);
       // Track warning suppression
       this.trackPerformance('warning_suppressed', 0);

@@ -22,13 +22,20 @@ interface AnalysisResults {
  */
 async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001'}/api/youtube/info`, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const response = await fetch(`${baseUrl}/api/youtube/info`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ videoId }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       return null;
@@ -43,7 +50,9 @@ async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
       thumbnailUrl: data.thumbnailUrl,
     };
   } catch (error) {
-    console.error('Failed to fetch video info for metadata:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Failed to fetch video info for metadata:', error);
+    }
     return null;
   }
 }

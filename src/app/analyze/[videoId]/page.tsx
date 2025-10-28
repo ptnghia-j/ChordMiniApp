@@ -1287,6 +1287,14 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [isPlaying, cancelCountdown]);
 
+  // Cleanup countdown timer on unmount
+  useEffect(() => {
+    return () => {
+      cancelCountdown();
+    };
+  }, [cancelCountdown]);
+
+
   const toggleCountdown = useCallback(() => {
     setIsCountdownEnabled(prev => !prev);
   }, []);
