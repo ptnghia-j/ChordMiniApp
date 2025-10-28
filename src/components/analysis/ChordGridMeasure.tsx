@@ -77,7 +77,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
   measureIndex,
   rowIndex,
   timeSignature,
-  currentBeatIndex,
+
   isEditMode,
   editedChords,
   showRomanNumerals,
@@ -123,7 +123,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
           // Add current beat index
           globalIndex += beatIdx;
 
-          const isCurrentBeat = currentBeatIndex === globalIndex;
+
           const isEmpty = chord === '';
 
           // Get display chord with corrections
@@ -161,7 +161,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
               key={`chord-${globalIndex}`}
                 chord={chord}
                 globalIndex={globalIndex}
-                isCurrentBeat={isCurrentBeat}
+
                 isClickable={isClickableCell}
                 cellSize={cellSize}
                 isDarkMode={isDarkMode}

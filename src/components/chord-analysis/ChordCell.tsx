@@ -15,7 +15,7 @@ const varelaRound = Varela_Round({
 export interface ChordCellProps {
   chord: string;
   globalIndex: number;
-  isCurrentBeat: boolean;
+
   isClickable: boolean;
   cellSize: number;
   isDarkMode: boolean;

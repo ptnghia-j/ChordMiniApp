@@ -533,7 +533,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
                       // FIXED: Use currentBeatIndex directly - animation logic already accounts for shift/padding
                       // The analyze page animation logic handles shift and padding correctly
-                      const isCurrentBeat = false; // Beat highlighting handled by BeatHighlighter (CSS class toggle)
+
                       const showChordLabel = shouldShowChordLabelLocal(globalIndex);
                       const isEmpty = chord === '';
 
@@ -576,7 +576,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           key={`chord-${globalIndex}`}
                           chord={chord}
                           globalIndex={globalIndex}
-                          isCurrentBeat={isCurrentBeat}
+
                           isClickable={isClickableCell}
                           cellSize={cellSize}
                           isDarkMode={isDarkMode}
