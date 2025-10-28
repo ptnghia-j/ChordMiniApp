@@ -13,7 +13,7 @@ interface ResultsTabsProps {
 // A small helper component to create the title with the beta badge
 const BetaTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="flex items-center space-x-1">
-    <span className="dark:text-white">{children}</span>
+    <span>{children}</span>
     <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
       beta
     </span>
@@ -40,13 +40,16 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
         className="px-2 sm:px-0"
         
         classNames={{
-          // Default: bg-gray-100
-          // Dark: Change to a dark gray
+          // Tab list container background
           tabList: "dark:bg-gray-800/50",
 
-          // Default: bg-white
-          // Dark: Change to a very dark gray (like your page bg)
+          // Selected pill cursor color
           cursor: "dark:bg-gray-900",
+
+          // Improve contrast for non-selected vs selected in dark mode
+          // Apply colors to both the tab wrapper and its inner content to cover custom titles
+          tab: "text-gray-700 data-[selected=true]:text-gray-900 dark:text-gray-300 dark:data-[selected=true]:text-white",
+          tabContent: "text-gray-700 data-[selected=true]:text-gray-900 dark:text-gray-300 dark:data-[selected=true]:text-white",
         }}
       >
         <Tab

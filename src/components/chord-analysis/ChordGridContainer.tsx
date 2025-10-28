@@ -3,7 +3,7 @@
 import React from 'react';
 import ChordGrid from '@/components/chord-analysis/ChordGrid';
 import { useAnalysisResults, useKeySignature, useIsDetectingKey, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
-import { useCurrentBeatIndex, useBeatHandlers } from '@/stores/playbackStore';
+import { useBeatHandlers } from '@/stores/playbackStore';
 import { useRomanNumerals, useShowSegmentation, useIsPitchShiftEnabled, useTargetKey } from '@/stores/uiStore';
 import { useTransposedChordData } from '@/hooks/chord-analysis/useTransposedChordData';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
@@ -188,8 +188,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     targetKey
   ]);
 
-  // Get beat state and click handler from Zustand store
-  const currentBeatIndex = useCurrentBeatIndex();
+  // Get click handler from Zustand store
   const { onBeatClick } = useBeatHandlers();
 
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
@@ -203,8 +202,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       <ChordGrid
         // PERFORMANCE OPTIMIZATION: Use memoized stable props
         {...stableProps}
-        // Beat state and click handler from Zustand store
-        currentBeatIndex={currentBeatIndex}
+        // Click handler from Zustand store
         isChatbotOpen={isChatbotOpen}
         isLyricsPanelOpen={isLyricsPanelOpen}
         onBeatClick={memoizedOnBeatClick}

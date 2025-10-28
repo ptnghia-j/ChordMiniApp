@@ -197,9 +197,8 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
       {/* Improved responsive toggle button container */}
       {showTopToggles && (
         <div
-          className="absolute -top-12 left-0 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+          className="absolute -top-12 left-0 right-2 md:right-12 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
           style={{
-            right: '48px', // Leave space for minimize/maximize button (40px width + 8px margin)
             maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
           }}
         >
@@ -277,7 +276,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
         {/* Minimize/Maximize button */}
         <button
           onClick={toggleVideoMinimization}
-          className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10 w-10 h-6 flex items-center justify-center hover:bg-gray-700 transition-colors"
+          className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10 w-10 h-6 hidden md:flex items-center justify-center hover:bg-gray-700 transition-colors"
           title={isVideoMinimized ? "Expand video player" : "Minimize video player"}
         >
           {isVideoMinimized ? (
