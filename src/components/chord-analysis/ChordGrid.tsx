@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import BeatHighlighter from './BeatHighlighter';
 import {
   getSegmentationColorForBeatIndex,
@@ -198,10 +198,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // Cache: map beatIndex -> HTMLElement to eliminate per-beat querySelector
   const cellRefsMapRef = useRef<Map<number, HTMLElement>>(new Map());
 
-  // Clear the cache when chord/beats references change (grid rebuilt)
-  useEffect(() => {
-    cellRefsMapRef.current.clear();
-  }, [chords, beats]);
+  // Reset the cache BEFORE rendering new cells when chord/beat arrays change
+  // This avoids clearing after children have registered their refs, which could
+  // leave the map empty (and freeze the highlighter) until another re-render.
+  const prevChordsRef = useRef<string[] | null>(null);
+  const prevBeatsRef = useRef<(number | null)[] | null>(null);
+  if (prevChordsRef.current !== chords || prevBeatsRef.current !== beats) {
+    cellRefsMapRef.current = new Map();
+    prevChordsRef.current = chords;
+    prevBeatsRef.current = beats;
+  }
 
   // Ref callback factory: register/unregister a cell by its global beat index
   const makeCellRef = useCallback((index: number) => (el: HTMLDivElement | null) => {
