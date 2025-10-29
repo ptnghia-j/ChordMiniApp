@@ -201,12 +201,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // Reset the cache BEFORE rendering new cells when chord/beat arrays change
   // This avoids clearing after children have registered their refs, which could
   // leave the map empty (and freeze the highlighter) until another re-render.
-  const prevChordsRef = useRef<string[] | null>(null);
-  const prevBeatsRef = useRef<(number | null)[] | null>(null);
-  if (prevChordsRef.current !== chords || prevBeatsRef.current !== beats) {
+  const prevLensRef = useRef<{ cl: number; bl: number }>({ cl: -1, bl: -1 });
+  if (
+    prevLensRef.current.cl !== chords.length ||
+    prevLensRef.current.bl !== beats.length
+  ) {
     cellRefsMapRef.current = new Map();
-    prevChordsRef.current = chords;
-    prevBeatsRef.current = beats;
+    prevLensRef.current = { cl: chords.length, bl: beats.length };
   }
 
   // Ref callback factory: register/unregister a cell by its global beat index
