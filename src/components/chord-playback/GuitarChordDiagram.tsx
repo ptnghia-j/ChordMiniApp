@@ -240,11 +240,12 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
       {/* Position selector for multiple chord positions */}
       {showPositionSelector && chordData && chordData.positions.length > 1 && (
-        <div className="flex items-center justify-center mt-1.5 space-x-2">
+        <div className="relative z-[70] flex items-center justify-center mt-1.5 space-x-2">
           <button
             onClick={() => onPositionChange && onPositionChange(positionIndex > 0 ? positionIndex - 1 : chordData.positions.length - 1)}
-            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-300/70 dark:hover:bg-gray-500/70 transition-colors"
             disabled={!onPositionChange}
+            aria-label="Previous chord position"
           >
             ‹
           </button>
@@ -253,8 +254,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           </span>
           <button
             onClick={() => onPositionChange && onPositionChange(positionIndex < chordData.positions.length - 1 ? positionIndex + 1 : 0)}
-            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="w-6 h-6 flex items-center justify-center text-xs bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-300/70 dark:hover:bg-gray-500/70 transition-colors"
             disabled={!onPositionChange}
+            aria-label="Next chord position"
           >
             ›
           </button>

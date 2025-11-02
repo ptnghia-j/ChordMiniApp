@@ -198,7 +198,24 @@ export const calculateGridLayout = (
     measuresPerRow = maxMeasuresWithMinSize;
   }
 
-  const finalMeasuresPerRow = Math.max(1, measuresPerRow);
+  let finalMeasuresPerRow = Math.max(1, measuresPerRow);
+
+  // Compact portrait phones lose too much context if we drop to a single measure
+  if (timeSignature > 0) {
+    const isPortraitPhone = screenWidth >= 375 && screenWidth < 600;
+    const isCompactContainer = effectiveWidth >= 300 && effectiveWidth < 520;
+    const MIN_COMPACT_CELL_SIZE = 34; // relaxed threshold to preserve two measures on narrow phones
+    if (finalMeasuresPerRow === 1 && isPortraitPhone && isCompactContainer) {
+      const desiredMeasures = 2;
+      const cellsNeeded = desiredMeasures * timeSignature;
+      const gapCount = Math.max(0, cellsNeeded - 1);
+      const requiredCellSize = (availableWidth - gapCount * gapSize) / cellsNeeded;
+
+      if (requiredCellSize >= MIN_COMPACT_CELL_SIZE) {
+        finalMeasuresPerRow = desiredMeasures;
+      }
+    }
+  }
 
   return {
     measuresPerRow: finalMeasuresPerRow,

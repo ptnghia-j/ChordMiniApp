@@ -16,7 +16,7 @@
     "test": "jest",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
-    "test:e2e": "playwright test --config tests/playwright.config.ts",
+    "test:e2e": "playwright test --config __tests__/playwright.config.ts",
     "test:e2e:ui": "playwright test --config tests/playwright.config.ts --ui",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:watch": "jest --watch",
