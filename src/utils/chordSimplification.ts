@@ -69,7 +69,7 @@ export function simplifyChord(chordName: string): string {
   }
 
   const { root, quality } = parsed;
-  
+
   // Preserve original enharmonic spelling exactly as provided (e.g., Gb stays Gb)
   const formattedRoot = root;
 

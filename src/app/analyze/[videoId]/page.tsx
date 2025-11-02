@@ -663,11 +663,11 @@ export default function YouTubeVideoAnalyzePage() {
   // Lyrics panel state
   const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
 
-  // Auto-minimize video when panels are open
+  // Auto-minimize video when panels are open or when Guitar Chords tab is active
   useEffect(() => {
-    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen;
+    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen || activeTab === 'guitarChords';
     setIsVideoMinimized(shouldMinimize);
-  }, [isChatbotOpen, isLyricsPanelOpen]);
+  }, [isChatbotOpen, isLyricsPanelOpen, activeTab]);
 
   // Create a wrapper for handleTitleSave that uses setVideoTitle from useAudioProcessing
   const handleTitleSave = useCallback(() => {
@@ -1735,7 +1735,7 @@ export default function YouTubeVideoAnalyzePage() {
               youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
               videoUrl={audioProcessingState.videoUrl}
               youtubePlayer={youtubePlayer}
-              showTopToggles={false} // Hide top toggles since they're in utility bar
+              showTopToggles={true} // Mobile-only via md:hidden inside FloatingVideoDock; desktop uses UtilityBar
               positionMode="relative" // Use relative positioning for responsive layout
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}
@@ -1744,7 +1744,7 @@ export default function YouTubeVideoAnalyzePage() {
             />
           }
           utilityBar={
-            <UtilityBar
+            <UtilityBar className="hidden md:block"
               isFollowModeEnabled={isFollowModeEnabled}
               chordPlayback={chordPlayback}
               youtubePlayer={youtubePlayer}

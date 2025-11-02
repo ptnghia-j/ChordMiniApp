@@ -390,7 +390,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       </div>
 
       {/* Guitar Chord Diagrams Section */}
-      <div className="chord-diagrams-section">
+      <div className="chord-diagrams-section relative">
         {isLoadingChords && viewMode === 'animated' && (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -458,7 +458,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             </div>
           </div>
         ) : !isLoadingChords && (
-          <div className="summary-chord-view bg-white dark:bg-content-bg rounded-lg p-6">
+          <div className="summary-chord-view relative bg-white dark:bg-content-bg rounded-lg p-6">
             <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-6 text-center">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4 md:gap-6 justify-items-center">
               {uniqueChordDataForGuitarDiagrams.map(({name, data}, index) => (

@@ -187,19 +187,23 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
 
   return (
     <div
-      className={`z-50 transition-all duration-300 shadow-xl ${
+      className={`transition-all duration-300 shadow-xl ${
         positionMode === 'relative'
-          ? 'w-full'
-          : `${isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'}`
+          ? 'w-full' // Remove z-index for inline positioning
+          : `z-50 ${isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'}` // Keep z-index for fixed positioning
       }`}
       style={containerStyles}
     >
-      {/* Improved responsive toggle button container */}
+      {/* FIXED: Responsive toggle button container - inline for mobile, absolute for fixed positioning */}
       {showTopToggles && (
         <div
-          className="absolute -top-12 left-0 right-2 md:right-12 z-60 flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300"
+          className={`${
+            positionMode === 'relative'
+              ? 'relative mb-2 w-full' // Inline positioning for responsive layout
+              : 'absolute -top-12 left-0 right-2 md:right-12 z-60' // Absolute positioning for fixed layout
+          } md:hidden flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300`}
           style={{
-            maxWidth: 'calc(100vw - 100px)' // Prevent overflow on small screens
+            maxWidth: positionMode === 'relative' ? '100%' : 'calc(100vw - 100px)' // Full width for inline, constrained for absolute
           }}
         >
           <Tooltip

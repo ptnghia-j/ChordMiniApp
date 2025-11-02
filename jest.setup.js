@@ -64,6 +64,87 @@ global.ResizeObserver = class ResizeObserver {
 // Mock fetch
 global.fetch = jest.fn()
 
+// Mock Web Audio API
+global.AudioContext = jest.fn().mockImplementation(() => ({
+  createOscillator: jest.fn(() => ({
+    connect: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
+    frequency: { value: 440 }
+  })),
+  createGain: jest.fn(() => ({
+    connect: jest.fn(),
+    gain: { value: 1 }
+  })),
+  destination: {},
+  sampleRate: 44100,
+  currentTime: 0,
+  state: 'running',
+  resume: jest.fn(() => Promise.resolve()),
+  suspend: jest.fn(() => Promise.resolve()),
+  close: jest.fn(() => Promise.resolve())
+}))
+
+global.webkitAudioContext = global.AudioContext
+
+// Mock Tone.js
+jest.mock('tone', () => {
+  const mockContext = {
+    dispose: jest.fn(),
+    resume: jest.fn(() => Promise.resolve()),
+    suspend: jest.fn(() => Promise.resolve()),
+    state: 'running',
+    currentTime: 0,
+    sampleRate: 44100,
+    destination: {}
+  };
+
+  return {
+    Context: jest.fn().mockImplementation(() => mockContext),
+    setContext: jest.fn(),
+    getContext: jest.fn(() => mockContext),
+    start: jest.fn().mockResolvedValue(undefined),
+    now: jest.fn(() => Date.now() / 1000),
+    GrainPlayer: jest.fn().mockImplementation((options) => ({
+      load: jest.fn(() => Promise.resolve()),
+      start: jest.fn(),
+      stop: jest.fn(),
+      dispose: jest.fn(),
+      connect: jest.fn(),
+      loaded: true,
+      buffer: {
+        duration: 180,
+        get: jest.fn(() => ({}))
+      },
+      pitch: 0,
+      playbackRate: 1,
+      volume: { value: 1 },
+      detune: 0,
+      onload: options?.onload
+    })),
+    Gain: jest.fn(() => ({
+      gain: {
+        rampTo: jest.fn(),
+        value: 1
+      },
+      connect: jest.fn(),
+      dispose: jest.fn()
+    })),
+    Filter: jest.fn(() => ({
+      frequency: {
+        rampTo: jest.fn(),
+        value: 16000
+      },
+      connect: jest.fn(),
+      dispose: jest.fn()
+    })),
+    Limiter: jest.fn(() => ({
+      toDestination: jest.fn(),
+      dispose: jest.fn()
+    }))
+  };
+});
+
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,

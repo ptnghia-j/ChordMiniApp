@@ -104,7 +104,7 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
     <div
       ref={layoutContainerRef}
       className={`flex flex-col md:flex-row md:items-end items-stretch gap-4 px-3 pb-0 sm:px-4 sm:pb-0 relative z-[60]`}
-      style={{ marginTop: baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -16 : -48) }}
+      style={{ marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -16 : -48)) : 0 }}
     >
       {/* Utility bar container - LEFT on wide screens, first in order */}
       <div
