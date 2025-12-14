@@ -6,8 +6,8 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
  * This bypasses Vercel's 4.5MB limit by processing files already uploaded to Vercel Blob
  */
 
-// Configure Vercel function timeout (up to 800 seconds for Pro plan)
-export const maxDuration = 800; // 13+ minutes for ML processing
+// Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
+export const maxDuration = 300; // 5 minutes for ML processing
 
 export async function POST(request: NextRequest) {
   try {

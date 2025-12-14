@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
  * This proxies the request to the Python backend
  */
 
-// Configure Vercel function timeout (up to 800 seconds for Pro plan)
+// Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
 // BTC chord recognition is heavy ML processing that can take several minutes
-export const maxDuration = 800; // 13+ minutes for ML processing
+export const maxDuration = 300; // 5 minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the form data from the request

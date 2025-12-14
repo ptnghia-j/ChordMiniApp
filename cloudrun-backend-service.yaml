@@ -1,0 +1,54 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: chordmini-backend
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '10'
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/startup-cpu-boost: 'true'
+        run.googleapis.com/cpu-throttling: 'false'
+    spec:
+      containerConcurrency: 640
+      timeoutSeconds: 600
+      containers:
+      - image: ptnghia/chordmini-backend:v0.5.3
+        ports:
+        - name: http1
+          containerPort: 8080
+        env:
+        - name: FLASK_ENV
+          value: production
+        - name: DEBUG
+          value: 'false'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: DEFAULT_BEAT_MODEL
+          value: madmom
+        - name: DEFAULT_CHORD_MODEL
+          value: chord-cnn-lstm
+        - name: MAX_CONTENT_LENGTH
+          value: '104857600'
+        - name: UPLOAD_TIMEOUT
+          value: '600'
+        resources:
+          limits:
+            cpu: '8'
+            memory: 16Gi
+        startupProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 0
+          timeoutSeconds: 10
+          periodSeconds: 60
+          failureThreshold: 30
+  traffic:
+  - percent: 100
+    latestRevision: true
+

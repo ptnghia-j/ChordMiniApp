@@ -7,8 +7,8 @@ import { audioMetadataService } from '@/services/audio/audioMetadataService';
  * This bypasses Vercel's 4.5MB limit by processing files already uploaded to Vercel Blob
  */
 
-// Configure Vercel function timeout (up to 800 seconds for Pro plan)
-export const maxDuration = 800; // 13+ minutes for ML processing
+// Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
+export const maxDuration = 300; // 5 minutes for ML processing
 
 /**
  * Calculate dynamic timeout based on audio duration
@@ -21,9 +21,9 @@ function calculateProcessingTimeout(audioDuration: number): number {
   // 75% of audio duration for processing (in milliseconds)
   const processingTime = Math.ceil(audioDuration * 0.75 * 1000);
 
-  // Minimum timeout of 2 minutes, maximum of 13 minutes (to stay within Vercel limits)
+  // Minimum timeout of 2 minutes, maximum of 5 minutes (to stay within Vercel 300s limit)
   const minTimeout = 120000; // 2 minutes
-  const maxTimeout = 780000; // 13 minutes (slightly less than maxDuration)
+  const maxTimeout = 290000; // ~5 minutes (slightly less than maxDuration of 300s)
 
   const calculatedTimeout = baseTimeout + processingTime;
   const finalTimeout = Math.max(minTimeout, Math.min(maxTimeout, calculatedTimeout));

@@ -3,27 +3,27 @@
   "framework": "nextjs",
   "functions": {
     "src/app/api/detect-beats/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/recognize-chords/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/recognize-chords-btc-pl/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/recognize-chords-btc-sl/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/detect-beats-blob/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/recognize-chords-blob/route.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "src/app/api/blob/upload/route.ts": {

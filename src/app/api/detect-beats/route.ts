@@ -9,9 +9,9 @@ import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
  * with proper timeout handling for long-running ML operations.
  */
 
-// Configure Vercel function timeout (up to 800 seconds for Pro plan)
+// Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
 // Beat detection is heavy ML processing that can take several minutes
-export const maxDuration = 800; // 13+ minutes for ML processing (matches vercel.json)
+export const maxDuration = 300; // 5 minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
