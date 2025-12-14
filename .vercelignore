@@ -14,8 +14,11 @@ venv/
 node_modules/
 .next/
 .cache/
-temp/
-cache/
+/temp/
+/cache/
+
+# Explicitly include src/services/cache (these are needed for build)
+!src/services/cache/
 
 # Documentation (exclude markdown files but keep API docs page)
 *.md
