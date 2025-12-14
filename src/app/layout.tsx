@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Roboto_Mono } from 'next/font/google';
+import { Roboto_Mono, Nunito } from 'next/font/google';
 import './globals.css';
 import '../styles/analysis-embedded.css';
 import '../styles/chord-grid.css';
@@ -20,6 +20,14 @@ const robotoMono = Roboto_Mono({
   subsets: ['latin'],
   variable: '--font-roboto-mono',
   display: 'swap',
+});
+
+// Nunito font for logo text - rounded, friendly font suitable for music apps
+export const nunito = Nunito({
+  subsets: ['latin'],
+  variable: '--font-nunito',
+  display: 'swap',
+  weight: ['700', '800'],
 });
 
 
@@ -130,7 +138,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={robotoMono.variable}>
+    <html lang="en" className={`${robotoMono.variable} ${nunito.variable}`}>
       <head>
         {/* Critical CSS inlined for performance - eliminates render blocking */}
         <style dangerouslySetInnerHTML={{

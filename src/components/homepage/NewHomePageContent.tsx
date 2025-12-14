@@ -174,20 +174,20 @@ function NewHomePageContentInner() {
           <div className="lg:col-span-3 space-y-8">
             {/* Title - Centered */}
             <div ref={titleRef} className="text-center">
-              <AnimatedTitle text="Chord Mini" className="mb-0" />
-              <div className="text-xl md:text-2xl lg:text-3xl text-gray-700 dark:text-gray-300 font-light mb-1 min-h-[2.5rem] flex items-center justify-center">
-                <motion.div
+              <AnimatedTitle text="Chord Mini" className="mb-3" />
+              <div className="min-h-[2rem] flex items-center justify-center mt-2">
+                <motion.p
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    delay: 0,
-                    duration: 2.0,
+                    delay: 0.3,
+                    duration: 1.2,
                     ease: "easeOut",
                   }}
-                  className="text-xl md:text-2xl lg:text-3xl text-gray-700 dark:text-gray-300 font-light mb-1 min-h-[2.5rem] text-center leading-relaxed"
+                  className="text-base md:text-lg text-gray-500 dark:text-gray-400 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
                 >
                   Open source chord & beat detection application. Get your favorite songs transcribed!
-                </motion.div>
+                </motion.p>
               </div>
             </div>
 

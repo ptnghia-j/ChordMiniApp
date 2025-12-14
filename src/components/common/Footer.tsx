@@ -67,7 +67,7 @@ const Footer: React.FC = () => {
                   />
                 </Link>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  <h3 className="text-xl font-nunito font-extrabold text-gray-900 dark:text-white tracking-tight">
                     ChordMini
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
