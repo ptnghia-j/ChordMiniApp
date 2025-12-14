@@ -19,19 +19,25 @@ interface AnalysisResults {
 
 /**
  * Fetch video information from YouTube API
+ *
+ * Uses the Next.js internal API route (/api/youtube/info) which handles
+ * video info extraction with fallback strategies.
  */
 async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-    const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
-    const response = await fetch(`${baseUrl}/api/youtube/info`, {
-      method: 'POST',
+    // Use the internal Next.js API route instead of directly calling Python backend
+    // The /api/youtube/info route handles proxying and fallbacks internally
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
+                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
+    const response = await fetch(`${baseUrl}/api/youtube/info?videoId=${encodeURIComponent(videoId)}`, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ videoId }),
       signal: controller.signal,
     });
 
@@ -42,12 +48,18 @@ async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
     }
 
     const data = await response.json();
+
+    // Handle the response format from /api/youtube/info route
+    if (!data.success) {
+      return null;
+    }
+
     return {
       title: data.title,
       description: data.description,
-      channelTitle: data.channelTitle,
-      duration: data.duration,
-      thumbnailUrl: data.thumbnailUrl,
+      channelTitle: data.uploader, // The API returns 'uploader' instead of 'channelTitle'
+      duration: data.duration?.toString(),
+      thumbnailUrl: data.thumbnail,
     };
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {

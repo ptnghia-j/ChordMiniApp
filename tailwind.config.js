@@ -86,6 +86,7 @@ module.exports = {
       fontFamily: {
         sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
         mono: ["var(--font-roboto-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"],
+        nunito: ["var(--font-nunito)", "Nunito", "system-ui", "sans-serif"],
       },
       boxShadow: {
         'card': '0 2px 10px rgba(0, 0, 0, 0.08)',

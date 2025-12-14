@@ -149,7 +149,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               style={{ width: '40px', height: '40px' }}
               priority
             />
-            <h1 className="text-xl font-bold text-primary transition-colors duration-300 group-hover:text-primary-600">
+            <h1 className="text-xl font-nunito font-extrabold text-primary transition-colors duration-300 group-hover:text-primary-600 tracking-tight">
               ChordMini
             </h1>
           </Link>

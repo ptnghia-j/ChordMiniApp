@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { db } from '@/config/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, DocumentData, QuerySnapshot, doc, getDoc, where, documentId } from 'firebase/firestore';
 import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
-import { Card, CardBody, CardHeader, Button, Chip, Skeleton } from '@heroui/react';
+import { Card, CardBody, Button, Chip, Skeleton } from '@heroui/react';
 import { useIsVisible } from '@/hooks/scroll/useIntersectionObserver';
 
 interface TranscribedVideo {
@@ -464,123 +464,119 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
 
   if (loading) {
     return (
-      <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
-        <CardHeader className="flex justify-between items-center pb-2">
-          <h3 className="text-xl font-medium">Recently Transcribed Songs</h3>
-          <Chip size="md" variant="flat" color="default">Loading...</Chip>
-        </CardHeader>
-        <CardBody className="p-0">
-          <div className="h-96 overflow-y-auto scrollbar-thin p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2">
-              {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
-                <Card key={index} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider">
-                  <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
-                </Card>
-              ))}
-            </div>
+      <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
+          <Chip size="sm" variant="flat" color="default">Loading...</Chip>
+        </div>
+        <div className="max-h-96 overflow-y-auto scrollbar-thin">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
+              <Card key={index} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+                <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
+              </Card>
+            ))}
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   if (error || videos.length === 0) {
     return (
-      <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
-        <CardHeader className="flex justify-between items-center pb-2">
-          <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
+      <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
           <Chip size="sm" variant="flat" color={error ? "danger" : "default"}>
             {error ? "Error" : "Empty"}
           </Chip>
-        </CardHeader>
-        <CardBody className="p-0">
-          <div className="h-96 flex items-center justify-center p-6">
-            <div className="text-center">
-              <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 mb-1">
-                {error ? 'Failed to load transcribed videos' : 'No recent transcriptions yet'}
-              </h4>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                {error ? 'Please retry or check your connection.' : 'New analyses will appear here as they are created.'}
-              </p>
-            </div>
+        </div>
+        <div className="h-48 flex items-center justify-center">
+          <div className="text-center">
+            <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 mb-1">
+              {error ? 'Failed to load transcribed videos' : 'No recent transcriptions yet'}
+            </h4>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {error ? 'Please retry or check your connection.' : 'New analyses will appear here as they are created.'}
+            </p>
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
-      <CardHeader className="flex justify-between items-center pb-2">
-        <h3 className="text-lg font-medium">Recently Transcribed Songs</h3>
+    <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
+      {/* Header row with title and count */}
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
         <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
           {videos.length} song{videos.length !== 1 ? 's' : ''}
         </Chip>
-      </CardHeader>
+      </div>
 
-      <CardBody className="p-0">
-        <div className={`${isExpanded ? 'h-[672px]' : 'h-96'} overflow-y-auto scrollbar-thin p-4 transition-opacity duration-300 ease-in-out`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2">
-            {videos.map((video) => (
-              <Card
-                key={video.videoId}
-                as={Link}
-                href={(() => {
-                  const baseUrl = `/analyze/${video.videoId}`;
-                  const params = new URLSearchParams();
-                  if (video.title && video.title !== `Video ${video.videoId}`) params.set('title', video.title);
-                  if (video.channelTitle) params.set('channel', video.channelTitle);
-                  if (video.thumbnailUrl) params.set('thumbnail', video.thumbnailUrl);
-                  const paramString = params.toString();
-                  return paramString ? `${baseUrl}?${paramString}` : baseUrl;
-                })()}
-                isPressable
-                className="group hover:scale-[1.02] transition-transform duration-200 bg-content2 dark:bg-content2 border border-divider dark:border-divider"
-              >
-                <CardBody className="p-3">
-                  <div className="flex gap-3">
-                    <div className={`relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 ${video.fromCache ? 'border-2 border-green-400 dark:border-green-500' : 'border border-gray-200 dark:border-gray-500'}`}>
-                      <Image src={video.thumbnailUrl || '/hero-image-placeholder.svg'} alt={video.title || 'Video thumbnail'} fill sizes="80px" className="object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/hero-image-placeholder.svg'; }} />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
-                      {video.duration && <div className="absolute bottom-0.5 right-0.5 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">{formatDuration(video.duration)}</div>}
-                      {video.fromCache && <div className="absolute top-1 left-1 w-2 h-2 bg-green-400 rounded-full border border-white shadow-sm" title="Cached"></div>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">{video.title}</h4>
-                      {(video.audioFilename || video.audioUrl) && (<div className="text-xs text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1">{(() => { const sourceInfo = getAudioSourceInfo(video); const IconComponent = sourceInfo.icon; return (<><IconComponent className={`w-3 h-3 ${sourceInfo.color}`} /> <span className={sourceInfo.color}>{sourceInfo.type}</span><span className="text-gray-500">•</span><span title={`Extracted using ${video.audioFilename || 'unknown service'}`}>{formatExtractionService(video.audioFilename)}</span></>);})()}</div>)}
-                      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                        <div className="flex items-center justify-between"><span>{formatDate(video.processedAt)}</span>{video.bpm && (<span className="text-blue-600 dark:text-blue-400 font-medium">{formatBPM(video.bpm)}</span>)}</div>
-                        <div className="flex items-center justify-between">{video.timeSignature && (<span className="text-green-600 dark:text-green-400">{formatTimeSignature(video.timeSignature)}</span>)}{video.keySignature && (<span className="text-purple-600 dark:text-purple-400 font-medium">{video.keySignature}</span>)}</div>
-                      </div>
+      {/* Song cards grid - no outer container box */}
+      <div className={`${isExpanded ? 'max-h-[672px]' : 'max-h-96'} overflow-y-auto scrollbar-thin transition-all duration-300 ease-in-out`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {videos.map((video) => (
+            <Card
+              key={video.videoId}
+              as={Link}
+              href={(() => {
+                const baseUrl = `/analyze/${video.videoId}`;
+                const params = new URLSearchParams();
+                if (video.title && video.title !== `Video ${video.videoId}`) params.set('title', video.title);
+                if (video.channelTitle) params.set('channel', video.channelTitle);
+                if (video.thumbnailUrl) params.set('thumbnail', video.thumbnailUrl);
+                const paramString = params.toString();
+                return paramString ? `${baseUrl}?${paramString}` : baseUrl;
+              })()}
+              isPressable
+              className="group hover:scale-[1.02] transition-all duration-200 bg-content1 dark:bg-content1 border border-divider dark:border-divider hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-lg"
+            >
+              <CardBody className="p-3">
+                <div className="flex gap-3">
+                  <div className={`relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 ${video.fromCache ? 'border-2 border-green-400 dark:border-green-500' : 'border border-gray-200 dark:border-gray-500'}`}>
+                    <Image src={video.thumbnailUrl || '/hero-image-placeholder.svg'} alt={video.title || 'Video thumbnail'} fill sizes="80px" className="object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/hero-image-placeholder.svg'; }} />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
+                    {video.duration && <div className="absolute bottom-0.5 right-0.5 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">{formatDuration(video.duration)}</div>}
+                    {video.fromCache && <div className="absolute top-1 left-1 w-2 h-2 bg-green-400 rounded-full border border-white shadow-sm" title="Cached"></div>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">{video.title}</h4>
+                    {(video.audioFilename || video.audioUrl) && (<div className="text-xs text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1">{(() => { const sourceInfo = getAudioSourceInfo(video); const IconComponent = sourceInfo.icon; return (<><IconComponent className={`w-3 h-3 ${sourceInfo.color}`} /> <span className={sourceInfo.color}>{sourceInfo.type}</span><span className="text-gray-500">•</span><span title={`Extracted using ${video.audioFilename || 'unknown service'}`}>{formatExtractionService(video.audioFilename)}</span></>);})()}</div>)}
+                    <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      <div className="flex items-center justify-between"><span>{formatDate(video.processedAt)}</span>{video.bpm && (<span className="text-blue-600 dark:text-blue-400 font-medium">{formatBPM(video.bpm)}</span>)}</div>
+                      <div className="flex items-center justify-between">{video.timeSignature && (<span className="text-green-600 dark:text-green-400">{formatTimeSignature(video.timeSignature)}</span>)}{video.keySignature && (<span className="text-purple-600 dark:text-purple-400 font-medium">{video.keySignature}</span>)}</div>
                     </div>
                   </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-
-          {/* "Load More" button and loading indicator inside the scrollable container */}
-          <div className="flex justify-center mt-4">
-            {hasMore && !loadingMore && (
-              <Button onPress={() => fetchVideos(true)} color="primary" variant="flat">Load More</Button>
-            )}
-            {loadingMore && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
-                {[...Array(2)].map((_, index) => (
-                  <Card key={`loading-${index}`} className="w-full bg-content2 dark:bg-content2 border border-divider dark:border-divider"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              </CardBody>
+            </Card>
+          ))}
         </div>
 
-        {/* Show More / Show Less Button for container height */}
-        <div className="p-4">
-          <Button onPress={isExpanded ? handleShowLess : handleShowMore} color="default" variant="bordered" size="md" className="w-full">
-            {isExpanded ? "Show Less" : "Show More"}
-          </Button>
+        {/* "Load More" button and loading indicator */}
+        <div className="flex justify-center mt-6">
+          {hasMore && !loadingMore && (
+            <Button onPress={() => fetchVideos(true)} color="primary" variant="flat">Load More</Button>
+          )}
+          {loadingMore && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+              {[...Array(2)].map((_, index) => (
+                <Card key={`loading-${index}`} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>
+              ))}
+            </div>
+          )}
         </div>
-      </CardBody>
-    </Card>
+      </div>
+
+      {/* Show More / Show Less Button */}
+      <div className="mt-4">
+        <Button onPress={isExpanded ? handleShowLess : handleShowMore} color="default" variant="bordered" size="md" className="w-full">
+          {isExpanded ? "Show Less" : "Show More"}
+        </Button>
+      </div>
+    </div>
   );
 }
