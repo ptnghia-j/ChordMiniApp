@@ -70,13 +70,14 @@ class BeatTransformerDetectorService:
 
         return self._detector
 
-    def detect_beats(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    def detect_beats(self, file_path: str, stems_folder: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
         Detect beats in an audio file using Beat Transformer.
 
         Args:
             file_path: Path to the audio file
-            **kwargs: Additional parameters (unused for Beat Transformer)
+            stems_folder: Optional path to folder containing pre-rendered stems
+            **kwargs: Additional parameters
 
         Returns:
             Dict containing normalized beat detection results:
@@ -106,9 +107,11 @@ class BeatTransformerDetectorService:
         try:
             detector = self._get_detector()
             log_info(f"Running Beat Transformer detection on: {file_path}")
+            if stems_folder:
+                log_info(f"Using pre-rendered stems from: {stems_folder}")
 
-            # Run beat detection
-            result = detector.detect_beats(file_path)
+            # Run beat detection with optional stems folder
+            result = detector.detect_beats(file_path, stems_folder=stems_folder)
 
             # Normalize the result format
             if result.get("success"):

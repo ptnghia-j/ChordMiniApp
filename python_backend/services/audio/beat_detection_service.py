@@ -161,7 +161,7 @@ class BeatDetectionService:
         return max(available_detectors, key=lambda d: self.size_limits[d])
 
     def detect_beats(self, file_path: str, detector: str = 'auto',
-                    force: bool = False) -> Dict[str, Any]:
+                    force: bool = False, stems_folder: Optional[str] = None) -> Dict[str, Any]:
         """
         Detect beats in an audio file.
 
@@ -169,6 +169,7 @@ class BeatDetectionService:
             file_path: Path to the audio file
             detector: Detector to use ('beat-transformer', 'madmom', 'librosa', 'auto')
             force: Force use of requested detector even if file is large
+            stems_folder: Optional path to folder containing pre-rendered stems (for beat-transformer)
 
         Returns:
             Dict containing beat detection results with normalized format
@@ -203,7 +204,13 @@ class BeatDetectionService:
 
             # Run detection
             detector_service = self.detectors[selected_detector]
-            result = detector_service.detect_beats(file_path)
+
+            # Pass stems_folder if using beat-transformer
+            if selected_detector == 'beat-transformer' and stems_folder:
+                log_info(f"Using pre-rendered stems from: {stems_folder}")
+                result = detector_service.detect_beats(file_path, stems_folder=stems_folder)
+            else:
+                result = detector_service.detect_beats(file_path)
 
             # Add metadata
             result['file_size_mb'] = file_size_mb

@@ -238,7 +238,8 @@ export async function analyzeAudioWithRateLimit(
   audioInput: File | AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
   chordDetector: ChordDetectorType = 'chord-cnn-lstm',
-  videoId?: string
+  videoId?: string,
+  stemsFolder?: string | null
 ): Promise<AnalysisResult> {
   const { isLocalBackend } = await import('@/utils/backendConfig');
   const isLocalhost = isLocalBackend();
@@ -284,7 +285,7 @@ export async function analyzeAudioWithRateLimit(
         if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
           results = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
         } else {
-          results = await detectBeatsWithRateLimit(audioFile, beatDetector);
+          results = await detectBeatsWithRateLimit(audioFile, beatDetector, stemsFolder);
         }
 
         if (!results || !results.beats) throw new Error('Beat detection failed: missing beats data');

@@ -102,6 +102,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check for stems_folder in the request
+    const stemsFolder = formData.get('stems_folder') as string;
+    if (stemsFolder) {
+      console.log(`🎵 Using pre-rendered stems from: ${stemsFolder}`);
+    }
+
     // Forward the request to the backend with extended timeout
     console.log(`📡 Making fetch request to Python backend...`);
     const requestedDetector = (formData.get('detector') as string) || 'madmom';
