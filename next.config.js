@@ -7,11 +7,12 @@ const nextConfig = {
   // Enable standalone output for Docker deployments
   output: 'standalone',
 
-  // Server external packages
-  serverExternalPackages: [],
+  // Server external packages - packages that should not be bundled
+  // @music.ai/sdk has a broken import for ../build.json that fails with Turbopack
+  serverExternalPackages: ['@music.ai/sdk'],
 
   // Transpile ES modules that need to be converted to CommonJS
-  transpilePackages: ['@music.ai/sdk'],
+  transpilePackages: [],
 
   // Environment variables
   env: {
