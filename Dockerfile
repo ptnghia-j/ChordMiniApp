@@ -8,8 +8,8 @@ WORKDIR /app
 # Install dependencies needed for node-gyp and native modules
 RUN apk add --no-cache libc6-compat python3 make g++
 
-# Copy package files
-COPY package.json package-lock.json ./
+# Copy package files and npm configuration
+COPY package.json package-lock.json .npmrc ./
 
 # Install dependencies with clean npm cache
 RUN npm ci --only=production --ignore-scripts && npm cache clean --force
@@ -21,8 +21,8 @@ WORKDIR /app
 # Install dependencies needed for building
 RUN apk add --no-cache libc6-compat python3 make g++
 
-# Copy package files and install all dependencies (including devDependencies)
-COPY package.json package-lock.json ./
+# Copy package files and npm configuration, install all dependencies (including devDependencies)
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci --ignore-scripts
 
 # Copy source code
