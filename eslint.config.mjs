@@ -1,0 +1,36 @@
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+});
+
+const eslintConfig = [
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    ignores: [
+      ".next/**/*",
+      "node_modules/**/*",
+      "dist/**/*",
+      "build/**/*",
+      "scripts/**/*",
+      "python_backend/**/*",
+      "public/sw.js",
+      "webpack-optimizations.js",
+      "*.config.js",
+      "*.config.mjs",
+      "*.config.ts",
+      "src/tests/**/*",
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "__tests__/**/*",
+    ],
+  },
+];
+
+export default eslintConfig;
+
