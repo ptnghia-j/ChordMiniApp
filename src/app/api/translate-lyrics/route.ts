@@ -4,22 +4,30 @@ import { db, TRANSLATIONS_COLLECTION } from '@/config/firebase';
 import { collection, doc, getDoc, setDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 
-// Get the API key from environment variables
-const apiKey = process.env.GEMINI_API_KEY;
-
-// Log API key status for debugging (without revealing the key)
-console.log('Gemini API Key status:', apiKey ? 'Provided' : 'Missing');
-
-// Initialize Gemini API with the API key and timeout configuration
-const ai = new GoogleGenAI({
-  apiKey: apiKey || '',
-  httpOptions: {
-    timeout: 120000 // 120 seconds timeout (maximum allowed)
-  }
-});
-
 // Define the model name to use (using stable Gemini 2.0 Flash for reliability)
 const MODEL_NAME = 'gemini-2.0-flash';
+
+// Lazy initialization of Gemini API client to avoid build-time errors
+let _ai: GoogleGenAI | null = null;
+
+function getGeminiClient(): GoogleGenAI | null {
+  if (_ai) return _ai;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('Gemini API Key not configured');
+    return null;
+  }
+
+  _ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      timeout: 120000 // 120 seconds timeout (maximum allowed)
+    }
+  });
+
+  return _ai;
+}
 
 // Translation cache collection is imported from firebase.ts
 
@@ -186,7 +194,7 @@ function cleanTranslationResponse(translatedText: string, originalLyrics: string
 /**
  * Detects the language of the lyrics using Gemini API
  */
-async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI = ai): Promise<string> {
+async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI): Promise<string> {
   try {
     // Check for Chinese characters using regex
     const chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff\ufe30-\ufe4f\uf900-\ufaff\u2f800-\u2fa1f]/;
@@ -219,7 +227,7 @@ async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI = ai): Promi
 /**
  * Translates lyrics using Gemini API
  */
-async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI = ai): Promise<string> {
+async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI): Promise<string> {
   try {
     // Create comprehensive prompt to ensure complete line-by-line translation
     let prompt = '';
@@ -325,20 +333,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which API key to use (user-provided key takes precedence)
-    const finalApiKey = geminiApiKey || apiKey;
-
-    // Check if Gemini API key is available
-    if (!finalApiKey) {
-      console.error('Gemini API key is missing');
-      return NextResponse.json(
-        { error: 'Translation service is not configured properly. Please provide a Gemini API key.' },
-        { status: 500 }
-      );
-    }
-
     // Create a Gemini AI instance with the appropriate API key
-    const geminiAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : ai;
+    // User-provided key takes precedence over environment variable
+    let geminiAI: GoogleGenAI;
+
+    if (geminiApiKey) {
+      // Use user-provided API key (BYOK)
+      geminiAI = new GoogleGenAI({ apiKey: geminiApiKey });
+    } else {
+      // Use server-configured API key
+      const serverClient = getGeminiClient();
+      if (!serverClient) {
+        console.error('Gemini API key is missing');
+        return NextResponse.json(
+          { error: 'Translation service is not configured properly. Please provide a Gemini API key.' },
+          { status: 500 }
+        );
+      }
+      geminiAI = serverClient;
+    }
 
     // Generate a cache key for this translation request
     const cacheKey = generateCacheKey(lyrics, sourceLanguage, targetLanguage, videoId);

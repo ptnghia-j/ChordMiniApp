@@ -3,26 +3,32 @@ import { GoogleGenAI } from '@google/genai';
 import { ChatbotRequest, ChatbotResponse, ChatMessage } from '@/types/chatbotTypes';
 import { formatSongContextForAI, validateSongContext } from '@/services/api/chatbotService';
 
-// Get the API key from environment variables
-const apiKey = process.env.GEMINI_API_KEY;
-
 export const maxDuration = 120; // 2 minutes for chatbot processing
-
-// Validate API key availability (production logging)
-if (!apiKey) {
-  console.error('CRITICAL: Gemini API Key not configured for chatbot service');
-}
-
-// Initialize Gemini API with the API key and timeout configuration
-const ai = new GoogleGenAI({
-  apiKey: apiKey || '',
-  httpOptions: {
-    timeout: 120000 // 120 seconds timeout (maximum allowed)
-  }
-});
 
 // Define the model name to use
 const MODEL_NAME = 'gemini-2.5-flash';
+
+// Lazy initialization of Gemini API client to avoid build-time errors
+let _ai: GoogleGenAI | null = null;
+
+function getGeminiClient(): GoogleGenAI | null {
+  if (_ai) return _ai;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('Gemini API Key not configured for chatbot service');
+    return null;
+  }
+
+  _ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      timeout: 120000 // 120 seconds timeout (maximum allowed)
+    }
+  });
+
+  return _ai;
+}
 
 /**
  * Generates a system prompt with song context for the AI chatbot
@@ -108,25 +114,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which API key to use (user-provided key takes precedence)
-    const finalApiKey = geminiApiKey || apiKey;
+    // Create a Gemini AI instance with the appropriate API key
+    // User-provided key takes precedence over environment variable
+    let geminiAI: GoogleGenAI;
 
-    // Check if Gemini API key is available
-    if (!finalApiKey) {
-      console.error('Gemini API key is missing');
-      return NextResponse.json(
-        { error: 'Chatbot service is not configured properly. Please provide a Gemini API key.' },
-        { status: 500 }
-      );
-    }
-
-    // Create a Gemini AI instance with the appropriate API key and timeout configuration
-    const geminiAI = geminiApiKey ? new GoogleGenAI({
-      apiKey: geminiApiKey,
-      httpOptions: {
-        timeout: 120000 // 120 seconds timeout (maximum allowed)
+    if (geminiApiKey) {
+      // Use user-provided API key (BYOK)
+      geminiAI = new GoogleGenAI({
+        apiKey: geminiApiKey,
+        httpOptions: {
+          timeout: 120000 // 120 seconds timeout (maximum allowed)
+        }
+      });
+    } else {
+      // Use server-configured API key
+      const serverClient = getGeminiClient();
+      if (!serverClient) {
+        console.error('Gemini API key is missing');
+        return NextResponse.json(
+          { error: 'Chatbot service is not configured properly. Please provide a Gemini API key.' },
+          { status: 500 }
+        );
       }
-    }) : ai;
+      geminiAI = serverClient;
+    }
 
     // Format song context for AI
     const songContextSummary = formatSongContextForAI(songContext);
