@@ -15,9 +15,10 @@ export async function analyzeAudioWithRateLimit(
   audioInput: File | AudioBuffer | string,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
   chordDetector: ChordDetectorType = 'chord-cnn-lstm',
-  videoId?: string
+  videoId?: string,
+  stemsFolder?: string | null
 ): Promise<AnalysisResult> {
-  return analyzeAudioWithRateLimitService(audioInput, beatDetector, chordDetector, videoId);
+  return analyzeAudioWithRateLimitService(audioInput, beatDetector, chordDetector, videoId, stemsFolder);
 }
 
 export async function analyzeAudio(

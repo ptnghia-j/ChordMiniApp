@@ -31,6 +31,13 @@ const HeroUIChordModelSelector = dynamic(() => import('@/components/analysis/Her
   ssr: false
 });
 
+const StemsFolderInput = dynamic(() => import('@/components/analysis/StemsFolderInput'), {
+  loading: () => (
+    <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />
+  ),
+  ssr: false
+});
+
 
 // Lyrics section (dynamic)
 const LyricsSectionDyn = dynamic(() => import('@/components/lyrics/LyricsSection').then(mod => ({ default: mod.LyricsSection })), {
@@ -89,6 +96,7 @@ export default function LocalAudioAnalyzePage() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [lyricSearchTitle, setLyricSearchTitle] = useState('');
   const [lyricSearchArtist, setLyricSearchArtist] = useState('');
+  const [stemsFolder, setStemsFolder] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
@@ -493,7 +501,7 @@ export default function LocalAudioAnalyzePage() {
 
       // Start chord and beat analysis with selected detectors using original File object
       // This avoids the 10x size bloat from AudioBuffer conversion (3.6MB → 41.7MB)
-      const results = await analyzeAudioWithRateLimit(audioFile, beatDetector, chordDetector);
+      const results = await analyzeAudioWithRateLimit(audioFile, beatDetector, chordDetector, undefined, stemsFolder);
 
       // FIXED: Clear the stage timeout to prevent it from overriding completion
       if (stageTimeoutRef.current) {
@@ -992,18 +1000,29 @@ const simplifiedChordGridData = useMemo(() => {
 
               {/* Model Selectors - Hide when analysis is complete */}
               {!analysisResults && (
-                <div className="flex flex-col md:flex-row gap-4 mb-4">
-                  <HeroUIBeatModelSelector
-                    onChange={setBeatDetector}
-                    defaultValue={beatDetector}
-                    className={audioProcessingState.isAnalyzing ? 'opacity-50 pointer-events-none' : ''}
-                  />
-                  <HeroUIChordModelSelector
-                    selectedModel={chordDetector}
-                    onModelChange={setChordDetector}
-                    disabled={audioProcessingState.isAnalyzing}
-                    className=""
-                  />
+                <div className="space-y-4 mb-4">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <HeroUIBeatModelSelector
+                      onChange={setBeatDetector}
+                      defaultValue={beatDetector}
+                      className={audioProcessingState.isAnalyzing ? 'opacity-50 pointer-events-none' : ''}
+                    />
+                    <HeroUIChordModelSelector
+                      selectedModel={chordDetector}
+                      onModelChange={setChordDetector}
+                      disabled={audioProcessingState.isAnalyzing}
+                      className=""
+                    />
+                  </div>
+
+                  {/* Pre-rendered Stems Input - Only show when beat-transformer is selected */}
+                  {beatDetector === 'beat-transformer' && (
+                    <StemsFolderInput
+                      onChange={setStemsFolder}
+                      disabled={audioProcessingState.isAnalyzing}
+                      className="mt-2"
+                    />
+                  )}
                 </div>
               )}
 

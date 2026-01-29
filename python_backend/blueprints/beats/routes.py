@@ -38,6 +38,7 @@ def detect_beats():
     - audio_path: Alternative to file, path to an existing audio file on the server
     - detector: 'beat-transformer', 'madmom', 'librosa', or 'auto' (default)
     - force: Set to 'true' to force using requested detector even for large files
+    - stems_folder: Optional path to folder containing pre-rendered stems (for beat-transformer)
 
     Returns:
     - JSON with beat and downbeat information
@@ -71,7 +72,8 @@ def detect_beats():
                     result = beat_service.detect_beats(
                         file_path=file_path,
                         detector=params['detector'],
-                        force=params['force']
+                        force=params['force'],
+                        stems_folder=params.get('stems_folder')
                     )
             else:
                 # Use provided audio path
@@ -83,7 +85,8 @@ def detect_beats():
                 result = beat_service.detect_beats(
                     file_path=file_path,
                     detector=params['detector'],
-                    force=params['force']
+                    force=params['force'],
+                    stems_folder=params.get('stems_folder')
                 )
 
             # Return result

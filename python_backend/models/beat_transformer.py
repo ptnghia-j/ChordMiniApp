@@ -580,13 +580,34 @@ class BeatTransformerDetector:
 
         return info
 
-    def demix_audio_to_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
-        """Enhanced demixing with real Spleeter - now used for both local and production
+    def demix_audio_to_spectrogram(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000, stems_folder=None):
+        """Enhanced demixing with real Spleeter or pre-rendered stems
 
-        This method uses real Spleeter 5-stems separation for better beat detection accuracy.
-        Librosa fallback is commented out to ensure Spleeter is always used.
+        This method can use either:
+        1. Pre-rendered stems from a specified folder (if stems_folder is provided)
+        2. Real Spleeter 5-stems separation (default)
+
+        Args:
+            audio_file: Path to the audio file
+            sr: Sample rate
+            n_fft: FFT window size
+            n_mels: Number of mel bins
+            fmin: Minimum frequency
+            fmax: Maximum frequency
+            stems_folder: Optional path to folder containing pre-rendered stems
         """
-        # CHANGED: Always use Spleeter, no fallback to librosa
+        # Check if pre-rendered stems are available
+        if stems_folder:
+            if DEBUG:
+                print(f"🎵 Checking for pre-rendered stems in: {stems_folder}")
+            try:
+                return self._use_prerendered_stems(stems_folder, sr, n_fft, n_mels, fmin, fmax)
+            except Exception as e:
+                if DEBUG:
+                    print(f"⚠️ Failed to use pre-rendered stems: {e}")
+                    print("🔄 Falling back to Spleeter...")
+
+        # Default: Use Spleeter
         if DEBUG:
             print("🎵 Using real Spleeter 5-stems separation...")
         return self._demix_with_real_spleeter(audio_file, sr, n_fft, n_mels, fmin, fmax)
@@ -603,6 +624,106 @@ class BeatTransformerDetector:
         # else:
         #     print("🎼 Using librosa-based spectrogram creation (production mode)")
         #     return self._demix_with_librosa_fallback(audio_file, sr, n_fft, n_mels, fmin, fmax)
+
+    def _use_prerendered_stems(self, stems_folder, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
+        """Use pre-rendered stems instead of running Spleeter
+
+        Args:
+            stems_folder: Path to folder containing pre-rendered stems
+            sr: Sample rate
+            n_fft: FFT window size
+            n_mels: Number of mel bins
+            fmin: Minimum frequency
+            fmax: Maximum frequency
+
+        Returns:
+            Stacked spectrograms from the pre-rendered stems
+        """
+        import os
+        from pathlib import Path
+
+        if DEBUG:
+            print(f"🎵 Loading pre-rendered stems from: {stems_folder}")
+
+        # Define expected stem files (Spleeter 5-stems naming)
+        stem_files = {
+            'vocals': 'vocals.mp3',
+            'drums': 'drums.mp3',
+            'bass': 'bass.mp3',
+            'piano': 'other.mp3',  # Spleeter calls it 'piano' but file might be 'other'
+            'other': 'other.mp3'   # Alternative naming
+        }
+
+        # Check if folder exists
+        if not os.path.exists(stems_folder):
+            raise ValueError(f"Stems folder does not exist: {stems_folder}")
+
+        # Load each stem and create spectrograms
+        spectrograms = []
+        loaded_stems = []
+
+        # Create Mel filter bank
+        mel_f = librosa.filters.mel(sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax).T
+
+        # Try to load stems in order (vocals, drums, bass, other, other)
+        # This matches Spleeter's 5-stem output order
+        stem_order = ['vocals', 'drums', 'bass', 'other', 'other']  # Use 'other' twice for 5 channels
+
+        for stem_name in stem_order:
+            stem_path = None
+
+            # Try different file naming conventions
+            possible_names = [f"{stem_name}.mp3", f"{stem_name}.wav"]
+            if stem_name == 'piano':
+                possible_names.extend(['other.mp3', 'other.wav'])
+
+            for filename in possible_names:
+                test_path = os.path.join(stems_folder, filename)
+                if os.path.exists(test_path):
+                    stem_path = test_path
+                    break
+
+            if not stem_path:
+                # For the 5th channel, we can duplicate 'other' if we already have 4 stems
+                if len(spectrograms) == 4:
+                    if DEBUG:
+                        print(f"⚠️ Using duplicated 'other' stem for 5th channel")
+                    # Duplicate the last spectrogram
+                    spectrograms.append(spectrograms[-1])
+                    loaded_stems.append(f"{stem_name} (duplicated)")
+                    continue
+                else:
+                    raise FileNotFoundError(f"Stem file not found for '{stem_name}' in {stems_folder}")
+
+            if DEBUG:
+                print(f"📁 Loading stem: {stem_path}")
+
+            # Load the stem audio
+            stem_audio, _ = librosa.load(stem_path, sr=sr, mono=True)
+
+            # Create spectrogram using same parameters as Spleeter processing
+            stft = librosa.stft(stem_audio, n_fft=n_fft, hop_length=n_fft//4)
+            stft_power = np.abs(stft)**2
+            spec = np.dot(stft_power.T, mel_f)
+            spec_db = librosa.power_to_db(spec, ref=np.max)
+            spectrograms.append(spec_db)
+            loaded_stems.append(os.path.basename(stem_path))
+
+        # Ensure we have exactly 5 channels for Beat-Transformer
+        while len(spectrograms) < 5:
+            if DEBUG:
+                print(f"⚠️ Padding with duplicated spectrogram to reach 5 channels")
+            spectrograms.append(spectrograms[-1])
+            loaded_stems.append("(duplicated)")
+
+        # Stack all stem spectrograms (shape: num_channels x time x mel_bins)
+        result = np.stack(spectrograms[:5], axis=0)  # Ensure exactly 5 channels
+
+        if DEBUG:
+            print(f"✅ Pre-rendered stems loaded successfully: {loaded_stems}")
+            print(f"🎯 Output shape: {result.shape}")
+
+        return result
 
     def _demix_with_real_spleeter(self, audio_file, sr=44100, n_fft=4096, n_mels=128, fmin=30, fmax=11000):
         """Real Spleeter-based demixing implementation"""
@@ -816,11 +937,12 @@ class BeatTransformerDetector:
 
         return result
 
-    def detect_beats(self, audio_file):
+    def detect_beats(self, audio_file, stems_folder=None):
         """Detect beats and downbeats from an audio file using Beat Transformer
 
         Args:
             audio_file (str): Path to audio file
+            stems_folder (str, optional): Path to folder containing pre-rendered stems
 
         Returns:
             dict: Dictionary containing beat and downbeat information
@@ -833,7 +955,9 @@ class BeatTransformerDetector:
             # Step 1: Demix audio and create spectrograms
             if DEBUG:
                 print(f"Demixing audio and creating spectrograms: {audio_file}")
-            demixed_spec = self.demix_audio_to_spectrogram(audio_file)
+                if stems_folder:
+                    print(f"Using pre-rendered stems from: {stems_folder}")
+            demixed_spec = self.demix_audio_to_spectrogram(audio_file, stems_folder=stems_folder)
 
             # Step 2: Prepare input for the model with proper device handling
             if DEBUG:
