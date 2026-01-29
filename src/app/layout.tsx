@@ -23,7 +23,7 @@ const robotoMono = Roboto_Mono({
 });
 
 // Nunito font for logo text - rounded, friendly font suitable for music apps
-export const nunito = Nunito({
+const nunito = Nunito({
   subsets: ['latin'],
   variable: '--font-nunito',
   display: 'swap',
