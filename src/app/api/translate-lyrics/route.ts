@@ -227,7 +227,7 @@ async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI): Promise<st
 /**
  * Translates lyrics using Gemini API
  */
-async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI): Promise<string> {
+async function translateLyrics(lyrics: string, geminiAI: GoogleGenAI, sourceLanguage?: string, targetLanguage: string = 'English'): Promise<string> {
   try {
     // Create comprehensive prompt to ensure complete line-by-line translation
     let prompt = '';
@@ -396,7 +396,7 @@ export async function POST(request: NextRequest) {
 
     // Translate the lyrics
     console.log(`Translating from ${finalSourceLanguage} to ${targetLanguage}`);
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
+    const translatedLyrics = await translateLyrics(lyrics, geminiAI, finalSourceLanguage, targetLanguage);
 
     if (!translatedLyrics || translatedLyrics.trim() === '') {
       console.error('Translation returned empty result');

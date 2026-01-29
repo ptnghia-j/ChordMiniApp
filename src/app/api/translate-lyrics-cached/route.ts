@@ -228,7 +228,7 @@ async function detectLanguage(lyrics: string, geminiAI: GoogleGenAI): Promise<st
 /**
  * Translates lyrics using Gemini API
  */
-async function translateLyrics(lyrics: string, sourceLanguage?: string, targetLanguage: string = 'English', geminiAI: GoogleGenAI): Promise<string> {
+async function translateLyrics(lyrics: string, geminiAI: GoogleGenAI, sourceLanguage?: string, targetLanguage: string = 'English'): Promise<string> {
   try {
     // Create comprehensive prompt to ensure complete line-by-line translation
     let prompt = '';
@@ -312,9 +312,9 @@ Respond with the complete ${targetLanguage} translation (same line count as orig
 async function performBackgroundTranslation(
   cacheKey: string,
   lyrics: string,
+  geminiAI: GoogleGenAI,
   sourceLanguage?: string,
   targetLanguage: string = 'English',
-  geminiAI: GoogleGenAI,
   videoId?: string
 ): Promise<void> {
   try {
@@ -349,7 +349,7 @@ async function performBackgroundTranslation(
     }
 
     // Perform the translation
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
+    const translatedLyrics = await translateLyrics(lyrics, geminiAI, finalSourceLanguage, targetLanguage);
 
     if (translatedLyrics && translatedLyrics.trim() !== '') {
       const response: TranslationResponse = {
@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
       if (!isBackgroundUpdateInProgress) {
         console.log('Starting new background update');
         setImmediate(() => {
-          performBackgroundTranslation(cacheKey, lyrics, sourceLanguage, targetLanguage, geminiAI, videoId)
+          performBackgroundTranslation(cacheKey, lyrics, geminiAI, sourceLanguage, targetLanguage, videoId)
             .catch(error => {
               console.error('Background translation failed:', error);
               // Background failures are non-critical since we already returned cached data
@@ -481,7 +481,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform fresh translation
-    const translatedLyrics = await translateLyrics(lyrics, finalSourceLanguage, targetLanguage, geminiAI);
+    const translatedLyrics = await translateLyrics(lyrics, geminiAI, finalSourceLanguage, targetLanguage);
 
     if (!translatedLyrics || translatedLyrics.trim() === '') {
       return NextResponse.json(
