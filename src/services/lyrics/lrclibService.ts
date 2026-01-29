@@ -34,64 +34,110 @@ export async function searchLRCLibLyrics(params: {
   title?: string;
   search_query?: string;
 }): Promise<LRCLibResponse> {
+  const searchUrl = 'https://lrclib.net/api/search';
+  const originalSearchQuery = params.search_query || '';
+
+  // Helper function to perform the actual API call and process results
+  const performSearch = async (urlParams: URLSearchParams): Promise<LRCLibResponse | null> => {
+    try {
+      const response = await fetch(`${searchUrl}?${urlParams.toString()}`);
+
+      if (!response.ok) {
+        console.warn(`LRClib API returned status ${response.status}`);
+        return null;
+      }
+
+      const searchResults = await response.json();
+
+      if (!searchResults || searchResults.length === 0) {
+        return null;
+      }
+
+      // Get the best match (first result)
+      const bestMatch = searchResults[0];
+
+      // Check if synchronized lyrics are available
+      const syncedLyrics = bestMatch.syncedLyrics;
+      const plainLyrics = bestMatch.plainLyrics;
+
+      if (!syncedLyrics && !plainLyrics) {
+        return null;
+      }
+
+      // Parse synchronized lyrics if available
+      const parsedLyrics = syncedLyrics ? parseLRCFormat(syncedLyrics) : null;
+
+      return {
+        success: true,
+        has_synchronized: !!syncedLyrics,
+        synchronized_lyrics: parsedLyrics || undefined,
+        plain_lyrics: plainLyrics,
+        metadata: {
+          title: bestMatch.trackName || '',
+          artist: bestMatch.artistName || '',
+          album: bestMatch.albumName || '',
+          duration: bestMatch.duration || 0,
+          lrclib_id: bestMatch.id,
+          instrumental: bestMatch.instrumental || false,
+        },
+        source: 'lrclib.net',
+      };
+    } catch (error) {
+      console.warn('LRClib search attempt failed:', error);
+      return null;
+    }
+  };
+
   try {
     // Parse search query to extract artist and title if not provided
     const parsedParams = params.artist && params.title
-      ? { artist: params.artist, title: params.title }
-      : parseVideoTitle(params.search_query || '');
+      ? { artist: params.artist, title: params.title, search_query: originalSearchQuery }
+      : parseVideoTitle(originalSearchQuery);
 
-    // Build LRClib API URL
-    const searchUrl = 'https://lrclib.net/api/search';
-    const urlParams = new URLSearchParams();
-
+    // Strategy 1: Try specific artist_name/track_name search if we have parsed values
     if (parsedParams.artist && parsedParams.title) {
-      urlParams.append('artist_name', parsedParams.artist);
-      urlParams.append('track_name', parsedParams.title);
-    } else {
-      urlParams.append('q', params.search_query || '');
+      console.log('🔍 LRClib: Trying specific search with artist:', parsedParams.artist, 'title:', parsedParams.title);
+
+      const specificParams = new URLSearchParams();
+      specificParams.append('artist_name', parsedParams.artist);
+      specificParams.append('track_name', parsedParams.title);
+
+      const result = await performSearch(specificParams);
+      if (result) {
+        console.log('✅ LRClib: Found lyrics with specific search');
+        return result;
+      }
+
+      // Strategy 2: Try with swapped artist/title (handles "Song - Artist" format)
+      console.log('🔄 LRClib: Trying swapped search with artist:', parsedParams.title, 'title:', parsedParams.artist);
+
+      const swappedParams = new URLSearchParams();
+      swappedParams.append('artist_name', parsedParams.title);
+      swappedParams.append('track_name', parsedParams.artist);
+
+      const swappedResult = await performSearch(swappedParams);
+      if (swappedResult) {
+        console.log('✅ LRClib: Found lyrics with swapped artist/title search');
+        return swappedResult;
+      }
     }
 
-    const response = await fetch(`${searchUrl}?${urlParams.toString()}`);
+    // Strategy 3: Fallback to general 'q' search parameter with original query
+    if (originalSearchQuery) {
+      console.log('🔍 LRClib: Falling back to general q search:', originalSearchQuery);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const generalParams = new URLSearchParams();
+      generalParams.append('q', originalSearchQuery);
+
+      const generalResult = await performSearch(generalParams);
+      if (generalResult) {
+        console.log('✅ LRClib: Found lyrics with general search');
+        return generalResult;
+      }
     }
 
-    const searchResults = await response.json();
-
-    if (!searchResults || searchResults.length === 0) {
-      throw new Error('No synchronized lyrics found on LRClib');
-    }
-
-    // Get the best match (first result)
-    const bestMatch = searchResults[0];
-
-    // Check if synchronized lyrics are available
-    const syncedLyrics = bestMatch.syncedLyrics;
-    const plainLyrics = bestMatch.plainLyrics;
-
-    if (!syncedLyrics && !plainLyrics) {
-      throw new Error('No lyrics content found in LRClib result');
-    }
-
-    // Parse synchronized lyrics if available
-    const parsedLyrics = syncedLyrics ? parseLRCFormat(syncedLyrics) : null;
-
-    return {
-      success: true,
-      has_synchronized: !!syncedLyrics,
-      synchronized_lyrics: parsedLyrics || undefined,
-      plain_lyrics: plainLyrics,
-      metadata: {
-        title: bestMatch.trackName || '',
-        artist: bestMatch.artistName || '',
-        album: bestMatch.albumName || '',
-        duration: bestMatch.duration || 0,
-        lrclib_id: bestMatch.id,
-        instrumental: bestMatch.instrumental || false,
-      },
-      source: 'lrclib.net',
-    };
+    // All strategies failed
+    throw new Error('No synchronized lyrics found on LRClib');
   } catch (error) {
     console.error('Error fetching LRClib lyrics:', error);
     throw error;

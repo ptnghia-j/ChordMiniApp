@@ -18,8 +18,8 @@ const ai = new GoogleGenAI({
   }
 });
 
-// Define the model name to use
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
+// Define the model name to use (using stable Gemini 2.0 Flash for reliability)
+const MODEL_NAME = 'gemini-2.0-flash';
 
 // Translation cache collection is imported from firebase.ts
 

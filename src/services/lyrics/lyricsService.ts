@@ -84,33 +84,30 @@ export async function searchLyricsWithFallback(params: LyricsSearchParams): Prom
   if (prefer_synchronized) {
     try {
       console.log('🔄 Attempting LRClib search...');
-      
-      // Quick availability check for LRClib
-      const lrclibAvailable = await checkServiceAvailability('https://lrclib.net/api/search', 3000);
-      
-      if (lrclibAvailable) {
-        const lrclibResponse = await searchLRCLibLyrics(parsedParams);
-        
-        if (lrclibResponse.success) {
-          console.log('✅ LRClib search successful');
-          return {
-            success: true,
-            has_synchronized: lrclibResponse.has_synchronized,
-            synchronized_lyrics: lrclibResponse.synchronized_lyrics,
-            plain_lyrics: lrclibResponse.plain_lyrics,
-            metadata: {
-              title: lrclibResponse.metadata.title,
-              artist: lrclibResponse.metadata.artist,
-              album: lrclibResponse.metadata.album,
-              duration: lrclibResponse.metadata.duration,
-              source: 'lrclib'
-            },
-            source: 'lrclib.net'
-          };
-        }
-      } else {
-        console.warn('⚠️ LRClib service appears to be unavailable');
-        console.log('🔍 LRClib availability check failed, proceeding to Genius fallback');
+
+      // Directly try LRClib search without availability check
+      // The searchLRCLibLyrics function handles errors gracefully with multiple fallback strategies
+      const lrclibResponse = await searchLRCLibLyrics({
+        ...parsedParams,
+        search_query: search_query || `${parsedParams.artist || ''} ${parsedParams.title || ''}`.trim()
+      });
+
+      if (lrclibResponse.success) {
+        console.log('✅ LRClib search successful');
+        return {
+          success: true,
+          has_synchronized: lrclibResponse.has_synchronized,
+          synchronized_lyrics: lrclibResponse.synchronized_lyrics,
+          plain_lyrics: lrclibResponse.plain_lyrics,
+          metadata: {
+            title: lrclibResponse.metadata.title,
+            artist: lrclibResponse.metadata.artist,
+            album: lrclibResponse.metadata.album,
+            duration: lrclibResponse.metadata.duration,
+            source: 'lrclib'
+          },
+          source: 'lrclib.net'
+        };
       }
     } catch (error) {
       console.warn('⚠️ LRClib search failed:', error);

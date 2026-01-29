@@ -149,7 +149,7 @@ OUTPUT FORMAT: Respond with ONLY a valid JSON object in this exact format:
   "metadata": {
     "totalDuration": ${duration || 0},
     "analysisTimestamp": ${Date.now()},
-    "model": "gemini-flash-preview-05-20"
+    "model": "gemini-2.5-pro"
   }
 }
 

@@ -26,7 +26,29 @@ const nextConfig = {
     } : false,
   },
 
-
+  // Turbopack configuration (Next.js 16+ default bundler)
+  // Empty config silences the webpack migration warning
+  turbopack: {
+    // Turbopack rules for audio files
+    rules: {
+      '*.mp3': {
+        loaders: ['file-loader'],
+        as: '*.js',
+      },
+      '*.wav': {
+        loaders: ['file-loader'],
+        as: '*.js',
+      },
+      '*.ogg': {
+        loaders: ['file-loader'],
+        as: '*.js',
+      },
+      '*.flac': {
+        loaders: ['file-loader'],
+        as: '*.js',
+      },
+    },
+  },
 
   // Target modern browsers to reduce bundle size
   experimental: {
@@ -343,12 +365,8 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
 
-  // ESLint configuration
-  eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors.
-    ignoreDuringBuilds: false,
-  },
+  // NOTE: ESLint configuration moved to eslint.config.mjs (Next.js 16+)
+  // Use `next lint` CLI options instead: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
 };
 
 module.exports = withBundleAnalyzer(nextConfig);

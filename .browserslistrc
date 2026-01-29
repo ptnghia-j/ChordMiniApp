@@ -13,6 +13,7 @@ Safari >= 13.1
 # Edge 80+ (Chromium-based)
 Edge >= 80
 
+
 # Mobile browsers
 iOS >= 13.4
 Android >= 81
