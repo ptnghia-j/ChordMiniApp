@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useEffect } from 'react';
+import { Card, CardBody } from '@heroui/react';
 
 interface BeatTimelineProps {
   beats: Array<{time: number, beatNum?: number} | number>;
@@ -9,52 +10,40 @@ interface BeatTimelineProps {
   currentDownbeatIndex: number;
   duration: number;
   className?: string;
+  /** When true, renders without its own Card wrapper (for embedding inside another Card) */
+  embedded?: boolean;
 }
 
-/**
- * BeatTimeline Component - Optimized beat visualization with horizontal scrolling
- * 
- * Features:
- * - Horizontal scrolling instead of cramming all beats
- * - Proportional beat sizing
- * - Better typography and contrast
- * - Improved dark mode support
- * - Performance optimized with memoization
- */
+const BEAT_WIDTH = 36;
+
 export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
   beats,
   downbeats = [],
   currentBeatIndex,
   currentDownbeatIndex,
   duration,
-  className = ''
+  className = '',
+  embedded = false,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Memoize beat processing for performance
   const processedBeats = useMemo(() => {
-    if (!beats || !beats.map) return [];
-    
+    if (!beats?.map) return [];
     return beats.map((beat, index) => {
       const beatTime = typeof beat === 'object' ? beat.time : beat;
       const beatNum = typeof beat === 'object' ? beat.beatNum : ((index % 4) + 1);
-      const isFirstBeat = beatNum === 1;
-      const isCurrent = index === currentBeatIndex;
-      
       return {
         time: beatTime,
         beatNum,
-        isFirstBeat,
-        isCurrent,
+        isDownbeat: beatNum === 1,
+        isCurrent: index === currentBeatIndex,
         index
       };
     });
   }, [beats, currentBeatIndex]);
 
-  // Memoize downbeat processing
   const processedDownbeats = useMemo(() => {
-    if (!downbeats || !downbeats.map) return [];
-
+    if (!downbeats?.map) return [];
     return downbeats.map((beatTime, index) => ({
       time: beatTime,
       index,
@@ -62,13 +51,10 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
     }));
   }, [downbeats, currentDownbeatIndex]);
 
-  // Auto-scroll to current beat
   useEffect(() => {
     if (scrollContainerRef.current && currentBeatIndex >= 0) {
       const container = scrollContainerRef.current;
-      const beatWidth = 40; // Approximate width per beat
-      const targetScroll = currentBeatIndex * beatWidth - container.clientWidth / 2;
-      
+      const targetScroll = currentBeatIndex * BEAT_WIDTH - container.clientWidth / 2;
       container.scrollTo({
         left: Math.max(0, targetScroll),
         behavior: 'smooth'
@@ -76,101 +62,121 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
     }
   }, [currentBeatIndex]);
 
-  if (!processedBeats.length) {
-    return (
-      <div className={`p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 transition-colors duration-300 ${className}`}>
-        <h3 className="font-medium text-lg mb-2 text-gray-800 dark:text-gray-100">Beat Timeline</h3>
-        <div className="flex items-center justify-center h-16 text-gray-500 dark:text-gray-400 text-sm bg-gray-50 dark:bg-gray-700 rounded-md">
-          No beat data available
-        </div>
-      </div>
-    );
-  }
+  const emptyState = (
+    <div className="flex items-center justify-center h-16 text-gray-500 dark:text-gray-400 text-sm bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+      No beat data available
+    </div>
+  );
 
-  return (
-    <div className={`mt-2 transition-colors duration-300 ${className}`}>
-      {/* Compact: remove header to reclaim vertical space */}
-      {/* Scrollable beat container */}
+  const content = !processedBeats.length ? emptyState : (
+    <div className="flex flex-col gap-2">
+      {/* Scrollable beat visualization */}
       <div
         ref={scrollContainerRef}
-        className="relative h-14 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-gray-500 rounded-md overflow-x-auto overflow-y-hidden transition-colors duration-300"
+        className="relative rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-600/50 overflow-x-auto overflow-y-hidden"
         style={{ scrollbarWidth: 'thin' }}
       >
-        {/* Beat timeline content */}
-        <div className="relative h-full flex items-end" style={{ minWidth: `${processedBeats.length * 40}px` }}>
-          
-          {/* Beat markers */}
-          {processedBeats.map(({ beatNum, isFirstBeat, isCurrent, index }) => (
+        <div
+          className="relative flex items-end h-16"
+          style={{ minWidth: `${processedBeats.length * BEAT_WIDTH}px` }}
+        >
+          {processedBeats.map(({ beatNum, isDownbeat, isCurrent, index }) => (
             <div
               key={`beat-${index}`}
               className="relative flex flex-col items-center justify-end h-full"
-              style={{ width: '40px', flexShrink: 0 }}
+              style={{ width: `${BEAT_WIDTH}px`, flexShrink: 0 }}
             >
-              {/* Beat number */}
-              <div className={`text-sm font-medium mb-1 ${
-                isFirstBeat 
-                  ? 'text-blue-700 dark:text-blue-300' 
-                  : 'text-gray-600 dark:text-gray-400'
-              } ${isCurrent ? 'text-blue-800 dark:text-blue-200 font-bold' : ''}`}>
-                {beatNum}
-              </div>
-              
-              {/* Beat bar */}
-              <div
-                className={`w-1 transition-all duration-200 ${
+              <span
+                className={`text-[11px] font-semibold mb-1 select-none transition-colors ${
                   isCurrent
-                    ? 'bg-blue-600 dark:bg-blue-400 h-12'
-                    : isFirstBeat
-                      ? 'bg-blue-500 dark:bg-blue-300 h-8'
-                      : 'bg-gray-500 dark:bg-gray-400 h-6'
+                    ? 'text-blue-600 dark:text-blue-300 font-bold'
+                    : isDownbeat
+                      ? 'text-blue-500 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {beatNum}
+              </span>
+
+              <div
+                className={`rounded-t-sm transition-all duration-150 ${
+                  isCurrent
+                    ? 'w-2 h-10 bg-blue-500 dark:bg-blue-400 shadow-sm shadow-blue-500/30'
+                    : isDownbeat
+                      ? 'w-1.5 h-7 bg-blue-300 dark:bg-blue-500/70'
+                      : 'w-1 h-5 bg-gray-300 dark:bg-gray-500'
                 }`}
               />
+
+              {isDownbeat && (
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] bg-blue-400/40 dark:bg-blue-500/30" />
+              )}
             </div>
           ))}
 
-          {/* Downbeat markers overlay */}
-          {processedDownbeats.map(({ time, index, isCurrent }) => (
+          {processedDownbeats.map(({ time, index: dbIndex, isCurrent }) => (
             <div
-              key={`downbeat-${index}`}
-              className={`absolute bottom-0 w-2 h-16 transform -translate-x-1/2 ${
-                isCurrent ? 'bg-red-600 dark:bg-red-400' : 'bg-red-500 dark:bg-red-300'
-              } opacity-80`}
-              style={{ 
-                left: `${(time / duration) * (processedBeats.length * 40)}px`
+              key={`db-${dbIndex}`}
+              className={`absolute bottom-0 w-[3px] rounded-t-full ${
+                isCurrent
+                  ? 'h-full bg-red-500/60 dark:bg-red-400/50'
+                  : 'h-full bg-red-400/25 dark:bg-red-300/20'
+              }`}
+              style={{
+                left: `${(time / duration) * (processedBeats.length * BEAT_WIDTH)}px`,
+                transform: 'translateX(-1.5px)',
               }}
-            >
-              <div className={`absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-bold ${
-                isCurrent ? 'text-red-700 dark:text-red-300' : 'text-red-600 dark:text-red-400'
-              }`}>
-                {index + 1}
-              </div>
-            </div>
+            />
           ))}
         </div>
       </div>
 
-      {/* Legend (hidden by default to reduce vertical space) */}
-      <div className="hidden md:flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
-        <div className="flex items-center gap-1">
-          <div className="w-1 h-3 bg-gray-500 dark:bg-gray-400"></div>
-          <span>Regular beats (2,3,4)</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-1 h-4 bg-blue-500 dark:bg-blue-300"></div>
-          <span>Measure start (downbeat)</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-1 h-5 bg-blue-600 dark:bg-blue-400"></div>
+      {/* Compact legend */}
+      <div className="hidden md:flex items-center gap-3 px-1">
+        <LegendItem>
+          <div className="w-1 h-3 rounded-sm bg-gray-300 dark:bg-gray-500" />
+          <span>Regular beat</span>
+        </LegendItem>
+        <LegendItem>
+          <div className="w-1.5 h-3.5 rounded-sm bg-blue-300 dark:bg-blue-500/70" />
+          <span>Downbeat</span>
+        </LegendItem>
+        <LegendItem>
+          <div className="w-2 h-4 rounded-sm bg-blue-500 dark:bg-blue-400 shadow-sm shadow-blue-500/30" />
           <span>Current beat</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-4 bg-red-500 dark:bg-red-300 opacity-80"></div>
-          <span>Measure start (downbeat)</span>
-        </div>
+        </LegendItem>
+        <LegendItem>
+          <div className="w-[3px] h-3.5 rounded-full bg-red-400/60" />
+          <span>Measure start</span>
+        </LegendItem>
       </div>
     </div>
   );
+
+  if (embedded) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <Card
+      shadow="sm"
+      radius="lg"
+      className={`mt-2 border border-gray-200 dark:border-gray-700 ${className}`}
+    >
+      <CardBody className="px-3 py-3">
+        {content}
+      </CardBody>
+    </Card>
+  );
 });
+
+function LegendItem({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
+      {children}
+    </div>
+  );
+}
 
 BeatTimeline.displayName = 'BeatTimeline';
 

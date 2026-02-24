@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/common/Navigation';
 import AnimatedTitle from '@/components/homepage/AnimatedTitle';
-import OptimizedVideoDemo from '@/components/homepage/OptimizedVideoDemo';
+import HeroChordGridMock from '@/components/homepage/HeroChordGridMock';
+import HeroLyricsSyncMock from '@/components/homepage/HeroLyricsSyncMock';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
@@ -17,6 +18,7 @@ import { Chip } from '@heroui/react';
 import { HiSparkles } from 'react-icons/hi2';
 // import { WarningBanner } from '@/components/WarningBanner';
 import SupportChordMini from '@/components/homepage/SupportChordMini'
+import FeaturesTabSection from '@/components/homepage/FeaturesTabSection';
 
 // Dynamic imports for heavy components
 const RecentVideos = dynamic(() => import('@/components/homepage/LazyRecentVideos'), {
@@ -224,42 +226,24 @@ function NewHomePageContentInner() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0, duration: 0 }}
-                  className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
+                  transition={{ delay: 0.2, duration: 0.6 }}
                 >
-                  <div className="relative w-full overflow-hidden">
-                    <OptimizedVideoDemo
-                      src="https://s3.us-east-1.amazonaws.com/remotionlambda-production/renders/jyz9tckw05/out.mp4?v=be04b2e1f43c43bec8e5a43b5252c76c"
-                      alt="ChordMini Beat and Chord Analysis Demo"
-                      className="transition-transform duration-300 group-hover:scale-105"
-                      posterLight="/demo1.webp"
-                      posterDark="/demo1_dark.webp"
-                    />
-                  </div>
+                  <HeroChordGridMock />
                   <div className="p-3">
                     <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Beat & Chord Analysis</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">Visualize chord progressions and beat patterns in real-time</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Visualize chord progressions with key changes and Roman numeral analysis</p>
                   </div>
                 </motion.div>
 
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0, duration: 0 }}
-                  className="bg-white/10 dark:bg-content-bg/10 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all duration-300 group"
+                  transition={{ delay: 0.4, duration: 0.6 }}
                 >
-                  <div className="relative w-full overflow-hidden">
-                    <OptimizedVideoDemo
-                      src="https://s3.us-east-1.amazonaws.com/remotionlambda-production/renders/hemrkftkqv/out.mp4?v=699a461ecf45812c072d16232bb01b21"
-                      alt="ChordMini Guitar Chord Diagrams Demo"
-                      className="transition-transform duration-300 group-hover:scale-105"
-                      posterLight="/demo2.webp"
-                      posterDark="/demo2_dark.webp"
-                    />
-                  </div>
+                  <HeroLyricsSyncMock />
                   <div className="p-3">
-                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Guitar Chord Diagrams</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">Interactive guitar chord diagrams with real-time progression</p>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Lyrics Sync</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Synchronized lyrics display with real-time highlighting</p>
                   </div>
                 </motion.div>
               </div>
@@ -305,307 +289,8 @@ function NewHomePageContentInner() {
         </div>
       </section>
 
-      {/* Animated Features Section - Light source at the top */}
-      <section className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
-        {/* Background Gradient */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          {theme === 'dark' ? (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%)` }} />
-          ) : (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 0%, rgba(255, 235, 59, 0.2) 0%, transparent 60%)` }} />
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 space-y-20">
-          {/* Feature 1: Advanced Chord Recognition */}
-          <div id="features" className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
-            {/* Left Column: Title and Subtitle (40%) */}
-            <div className="lg:col-span-2 lg:text-right">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-                  Advanced Chord Recognition
-                </h2>
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                  AI-powered chord detection with multiple model options for maximum accuracy
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Detailed Content (60%) */}
-            <div className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-6"
-              >
-                <div className="prose prose-gray dark:prose-invert max-w-none">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    ChordMini employs state-of-the-art machine learning models to identify chords in audio with exceptional precision. Our system supports multiple detection algorithms, each optimized for different musical styles and complexity levels.
-                  </p>
-                  <ul className="space-y-2 text-gray-600 dark:text-gray-400">
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Multiple AI models: Chord-CNN-LSTM and BTC (Bidirectional Transformer for Chord Recognition)</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Supports major, minor, all 7th chords, diminished, and augmented chords and their inversions</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Enharmonic correction with local key context using reasoning LLM (Gemini)</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Context-aware chord interpretation for modulation and segmentation using LLM</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Feature 2: Intelligent Beat Detection */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
-            {/* Left Column: Title and Subtitle (40%) */}
-            <div className="lg:col-span-2 lg:text-right">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-                  Intelligent Beat Detection
-                </h2>
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                  Precision rhythm analysis with BPM detection and time signature identification
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Detailed Content (60%) */}
-            <div className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-6"
-              >
-                <div className="prose prose-gray dark:prose-invert max-w-none">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Our advanced beat detection system uses cutting-edge algorithms to analyze musical timing, providing accurate beat tracking, tempo estimation, and rhythmic structure analysis for any audio input.
-                  </p>
-                  <ul className="space-y-2 text-gray-600 dark:text-gray-400">
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Beat-Transformer and Madmom algorithms for precise timing</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Automatic BPM (tempo) detection</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Time signature identification (4/4, 3/4, 6/8, 2/4)</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Downbeat detection for measure alignment</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Pickup beat and anacrusis handling</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Feature 3: Real-time Visualization */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
-            {/* Left Column: Title and Subtitle (40%) */}
-            <div className="lg:col-span-2 lg:text-right">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-                  Real-time Visualization
-                </h2>
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                  Interactive chord grids and beat maps that sync perfectly with audio playback
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Detailed Content (60%) */}
-            <div className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-6"
-              >
-                <div className="prose prose-gray dark:prose-invert max-w-none">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Experience music analysis like never before with our dynamic visualization system. Watch chords and beats come alive as they synchronize with the audio, providing an immersive and educational experience.
-                  </p>
-                  <ul className="space-y-2 text-gray-600 dark:text-gray-400">
-                    <li className="flex items-start space-x-3">
-                      <span className="text-purple-500 mt-1.5 text-xs">●</span>
-                      <span>Dynamic chord grid with measure-based layout</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-purple-500 mt-1.5 text-xs">●</span>
-                      <span>Real-time beat highlighting during playback</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-purple-500 mt-1.5 text-xs">●</span>
-                      <span>Interactive navigation - click any beat to jump to that time</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-purple-500 mt-1.5 text-xs">●</span>
-                      <span>Responsive design adapting to different time signatures</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-purple-500 mt-1.5 text-xs">●</span>
-                      <span>Visual chord change indicators and progression flow</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Feature 4: Interactive Music Tools */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
-            {/* Left Column: Title and Subtitle (40%) */}
-            <div className="lg:col-span-2 lg:text-right">
-              <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-                  Interactive Music Tools
-                </h2>
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                  Comprehensive toolkit for learning, practicing, and mastering songs
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Detailed Content (60%) */}
-            <div className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-6"
-              >
-                <div className="prose prose-gray dark:prose-invert max-w-none">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Access a powerful suite of interactive tools designed to enhance your music learning experience. From harmonic analysis to real-time playback control, everything you need is at your fingertips.
-                  </p>
-                  <ul className="space-y-2 text-gray-600 dark:text-gray-400 mt-6">
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Roman Numeral Analysis</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Multi-Instrument Chord Playback</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Pitch Shift & Speed Control</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Beat-Synced Metronome</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-green-500 mt-1.5 text-xs">●</span>
-                      <span>Chord Simplification</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Feature 5: AI Chat Assistant */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-start">
-            {/* Left Column: Title and Subtitle (40%) */}
-            <div className="lg:col-span-2 lg:text-right">
-              <motion.div
-                initial={{ opacity: 0, y: 20, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-                  AI Chat Assistant
-                </h2>
-                <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                  Get instant help with music theory and chord analysis
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Detailed Content (60%) */}
-            <div className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, x: 30, filter: "blur(4px)" }}
-                whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-6"
-              >
-                <div className="prose prose-gray dark:prose-invert max-w-none">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Ask questions about chord progressions, music theory concepts, and get personalized explanations. The AI assistant understands the context of your current song analysis.
-                  </p>
-                  <ul className="space-y-2 text-gray-600 dark:text-gray-400">
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Context-aware responses based on current song analysis</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Explains chord functions and harmonic relationships</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Provides music theory insights and learning tips</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="text-blue-500 mt-1.5 text-xs">●</span>
-                      <span>Answers questions about progressions and song structure</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Features Section - Tab-based design */}
+      <FeaturesTabSection />
 
       {/* Animated Support Section - Diffuse glow */}
       <section className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">

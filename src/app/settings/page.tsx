@@ -5,8 +5,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useApiKeys } from '@/hooks/settings/useApiKeys';
 import ApiKeySettings from '@/components/settings/ApiKeySettings';
 import Navigation from '@/components/common/Navigation';
-import { Card, CardBody, CardHeader, Switch, Tabs, Tab, Spinner } from '@heroui/react';
-import { FiSettings, FiKey, FiLock } from 'react-icons/fi';
+import { Card, CardBody, Switch, Tabs, Tab, Spinner, Divider } from '@heroui/react';
+import { FiSettings, FiKey, FiLock, FiMoon, FiShield, FiDatabase, FiBarChart2 } from 'react-icons/fi';
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
@@ -18,8 +18,7 @@ export default function SettingsPage() {
     refreshApiKeyStatus,
     isEncryptionSupported
   } = useApiKeys();
-  
-  // Handle API key updates
+
   const handleApiKeyUpdate = async (service: 'musicAi' | 'gemini', key: string | null) => {
     try {
       if (key) {
@@ -42,14 +41,12 @@ export default function SettingsPage() {
       <div className="min-h-screen bg-main-bg">
         <Navigation />
         <div className="container mx-auto px-4 py-8">
-          <Card className="max-w-2xl mx-auto border-l-4 border-l-danger">
-            <CardBody>
-              <h1 className="text-xl font-bold mb-4 text-danger">
-                Encryption Not Supported
-              </h1>
-              <p className="text-danger-600 dark:text-danger-400">
+          <Card className="max-w-2xl mx-auto" shadow="sm">
+            <CardBody className="gap-2">
+              <h1 className="text-xl font-bold text-danger">Encryption Not Supported</h1>
+              <p className="text-sm text-danger-600 dark:text-danger-400">
                 Your browser does not support the Web Crypto API, which is required for secure API key storage.
-                Please use a modern browser that supports encryption features.
+                Please use a modern browser.
               </p>
             </CardBody>
           </Card>
@@ -62,13 +59,10 @@ export default function SettingsPage() {
     <div className="min-h-screen dark:bg-dark-bg">
       <Navigation />
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-foreground">
-            Settings
-          </h1>
-          <p className="text-black dark:text-white">
-            Manage your application preferences and API configurations
+          <h1 className="text-3xl font-bold mb-2 text-foreground">Settings</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage your preferences and API configurations
           </p>
         </div>
 
@@ -81,9 +75,10 @@ export default function SettingsPage() {
               tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
               cursor: "w-full bg-primary",
               tab: "max-w-fit px-0 h-12 group",
-              tabContent: "text-black dark:text-white group-data-[selected=true]:text-primary group-data-[selected=true]:font-semibold group-data-[selected=true]:text-blue-500"
+              tabContent: "text-gray-600 dark:text-gray-400 group-data-[selected=true]:text-primary group-data-[selected=true]:font-semibold"
             }}
           >
+            {/* General Tab */}
             <Tab
               key="general"
               title={
@@ -93,30 +88,32 @@ export default function SettingsPage() {
                 </div>
               }
             >
-              <Card className="border-l-4 border-l-primary">
-                <CardHeader>
-                  <h3 className="text-lg font-medium text-foreground">Appearance</h3>
-                </CardHeader>
-                <CardBody>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-foreground">
-                        Dark Mode
-                      </label>
-                      <p className="text-sm text-black dark:text-white">
-                        Toggle between light and dark themes
-                      </p>
+              <div className="space-y-4 pt-1">
+                <Card shadow="sm" className="border border-gray-200 dark:border-gray-700">
+                  <CardBody className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20">
+                          <FiMoon className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Dark Mode</h4>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Toggle between light and dark themes</p>
+                        </div>
+                      </div>
+                      <Switch
+                        isSelected={theme === 'dark'}
+                        onValueChange={toggleTheme}
+                        color="primary"
+                        size="sm"
+                      />
                     </div>
-                    <Switch
-                      isSelected={theme === 'dark'}
-                      onValueChange={toggleTheme}
-                      color="primary"
-                    />
-                  </div>
-                </CardBody>
-              </Card>
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
 
+            {/* API Keys Tab */}
             <Tab
               key="apiKeys"
               title={
@@ -127,24 +124,27 @@ export default function SettingsPage() {
               }
             >
               {isLoading ? (
-                <Card>
+                <Card shadow="sm" className="border border-gray-200 dark:border-gray-700">
                   <CardBody>
                     <div className="flex items-center justify-center py-8">
-                      <Spinner color="primary" />
-                      <span className="ml-3 text-black dark:text-white">
+                      <Spinner color="primary" size="sm" />
+                      <span className="ml-3 text-sm text-gray-500 dark:text-gray-400">
                         Loading API key status...
                       </span>
                     </div>
                   </CardBody>
                 </Card>
               ) : (
-                <ApiKeySettings
-                  onApiKeyUpdate={handleApiKeyUpdate}
-                  apiKeyStatus={apiKeyStatus}
-                />
+                <div className="pt-1">
+                  <ApiKeySettings
+                    onApiKeyUpdate={handleApiKeyUpdate}
+                    apiKeyStatus={apiKeyStatus}
+                  />
+                </div>
               )}
             </Tab>
 
+            {/* Privacy Tab */}
             <Tab
               key="privacy"
               title={
@@ -154,45 +154,54 @@ export default function SettingsPage() {
                 </div>
               }
             >
-              <Card className="border-l-4 border-l-default-400">
-                <CardHeader>
-                  <h3 className="text-lg font-medium text-foreground">Data Storage</h3>
-                </CardHeader>
-                <CardBody>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        API Key Storage
-                      </h4>
-                      <p className="text-sm text-black dark:text-white">
-                        API keys are encrypted and stored locally in your browser using the Web Crypto API.
-                        They never leave your device and are not sent to our servers.
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        Cache Data
-                      </h4>
-                      <p className="text-sm text-black dark:text-white">
-                        Analysis results and transcriptions are cached in Firebase to improve performance.
-                        No personal information is stored.
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        Analytics
-                      </h4>
-                      <p className="text-sm text-black dark:text-white">
-                        We collect anonymous usage statistics to improve the application.
-                        No personal data or API keys are included in analytics.
-                      </p>
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
+              <div className="space-y-4 pt-1">
+                <Card shadow="sm" className="border border-gray-200 dark:border-gray-700">
+                  <CardBody className="p-4 gap-4">
+                    <PrivacyItem
+                      icon={<FiShield className="w-4 h-4 text-success" />}
+                      iconBg="bg-success-50 dark:bg-success-900/20"
+                      title="API Key Storage"
+                      description="Encrypted locally via Web Crypto API. Keys never leave your device."
+                    />
+                    <Divider />
+                    <PrivacyItem
+                      icon={<FiDatabase className="w-4 h-4 text-primary" />}
+                      iconBg="bg-primary-50 dark:bg-primary-900/20"
+                      title="Cache Data"
+                      description="Analysis results are cached in Firebase for performance. No personal data is stored."
+                    />
+                    <Divider />
+                    <PrivacyItem
+                      icon={<FiBarChart2 className="w-4 h-4 text-warning" />}
+                      iconBg="bg-warning-50 dark:bg-warning-900/20"
+                      title="Analytics"
+                      description="Anonymous usage statistics only. No personal data or API keys included."
+                    />
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
           </Tabs>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PrivacyItem({ icon, iconBg, title, description }: {
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className={`p-2 rounded-lg shrink-0 ${iconBg}`}>
+        {icon}
+      </div>
+      <div>
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h4>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
       </div>
     </div>
   );

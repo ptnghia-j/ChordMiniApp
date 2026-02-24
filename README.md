@@ -1,6 +1,27 @@
+## 📄 Citation
+
+If you use or reference ChordMini in your work, please cite:
+
+**BibTeX:**
+```bibtex
+@misc{phan2026enhancingautomaticchordrecognition,
+      title={Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation}, 
+      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},
+      year={2026},
+      eprint={2602.19778},
+      archivePrefix={arXiv},
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2602.19778}, 
+}
+```
+
+**Plain text (for non-LaTeX users):**
+> Nghia Phan, Rong Jin, Gang Liu, and Xiao Dong. "Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation." arXiv preprint arXiv:2602.19778, 2026. https://arxiv.org/abs/2602.19778
+
 # ChordMini
 
 **Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics.**
+
 
 ## Features Overview
 
@@ -220,9 +241,6 @@ NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
 NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
 ```
 
-### 🔧 Docker Setup
-To be added in next version...
-
 ## 🏗️ Backend Architecture
 
 ChordMiniApp uses a **hybrid backend architecture**:
@@ -368,109 +386,6 @@ myenv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-## 🏗️ Complete Application Flow
-
-ChordMini provides a comprehensive music analysis workflow from user input to visualization. This diagram shows the complete user journey and data processing pipeline:
-
-```mermaid
-graph TD
-    %% User Entry Points
-    A[User Input] --> B{Input Type}
-    B -->|YouTube URL/Search| C[YouTube Search Interface]
-    B -->|Direct Audio File| D[File Upload Interface]
-
-    %% YouTube Workflow
-    C --> E[YouTube Search API]
-    E --> F[Video Selection]
-    F --> G[Navigate to /analyze/videoId]
-
-    %% Direct Upload Workflow
-    D --> H[Vercel Blob Upload]
-    H --> I[Navigate to /analyze with blob URL]
-
-    %% Cache Check Phase
-    G --> J{Firebase Cache Check}
-    J -->|Cache Hit| K[Load Cached Results]
-    J -->|Cache Miss| L[Audio Extraction Pipeline]
-
-    %% Audio Extraction (Environment-Aware)
-    L --> M{Environment Detection}
-    M -->|Development| N[yt-dlp Service]
-    M -->|Production| O[yt-mp3-go Service]
-    N --> P[Audio URL Generation]
-    O --> P
-
-    %% ML Analysis Pipeline
-    P --> Q[Parallel ML Processing]
-    I --> Q
-    Q --> R[Beat Detection]
-    Q --> S[Chord Recognition]
-    Q --> T[Key Detection]
-
-    %% ML Backend Processing
-    R --> U[Beat-Transformer/madmom Models]
-    S --> V[Chord-CNN-LSTM/BTC Models]
-    T --> W[Gemini AI Key Analysis]
-
-    %% Results Processing
-    U --> X[Beat Data]
-    V --> Y[Chord Progression Data]
-    W --> Z[Musical Key & Corrections]
-
-    %% Synchronization & Caching
-    X --> AA[Chord-Beat Synchronization]
-    Y --> AA
-    Z --> AA
-    AA --> BB[Firebase Result Caching]
-    AA --> CC[Real-time Visualization]
-
-    %% Visualization Tabs
-    CC --> DD[Beat & Chord Map Tab]
-    CC --> EE[Guitar Chords Tab - Beta]
-    CC --> FF[Lyrics & Chords Tab - Beta]
-
-    %% Beat & Chord Map Features
-    DD --> GG[Interactive Chord Grid]
-    DD --> HH[Synchronized Audio Player]
-    DD --> II[Real-time Beat Highlighting]
-
-    %% Guitar Chords Features
-    EE --> JJ[Animated Chord Progression]
-    EE --> KK[Guitar Chord Diagrams]
-    EE --> LL[Responsive Design 7/5/3/2/1]
-
-    %% Lyrics Features
-    FF --> MM[Lyrics Transcription]
-    FF --> NN[Multi-language Translation]
-    FF --> OO[Word-level Synchronization]
-
-    %% External API Integration
-    MM --> PP[Music.ai Transcription]
-    NN --> QQ[Gemini AI Translation]
-
-    %% Cache Integration
-    K --> CC
-    BB --> RR[Enhanced Metadata Storage]
-
-    %% Error Handling & Fallbacks
-    L --> SS{Extraction Failed?}
-    SS -->|Yes| TT[Fallback Service]
-    SS -->|No| P
-    TT --> P
-
-    %% Styling
-    style A fill:#e1f5fe,stroke:#1976d2,stroke-width:3px
-    style CC fill:#c8e6c9,stroke:#388e3c,stroke-width:3px
-    style EE fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    style FF fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style Q fill:#ffebee,stroke:#d32f2f,stroke-width:2px
-    style AA fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
-
-    %% Environment Indicators
-    style N fill:#e3f2fd,stroke:#1976d2
-    style O fill:#e8f5e8,stroke:#4caf50
-```
-
 ### Key Workflow Features
 
 #### **Dual Input Support**
@@ -486,38 +401,11 @@ graph TD
 - **Cache Hit**: Instant loading of previous analyses
 - **Cache Miss**: Full ML processing pipeline
 
-#### **Advanced ML Pipeline**
+#### **ML Pipeline**
 - **Parallel Processing**: Beat detection + chord recognition + key analysis
 - **Multiple Models**: Beat-Transformer/madmom, Chord-CNN-LSTM/BTC variants
 - **AI Integration**: Gemini AI for key detection and enharmonic corrections
 
-#### **Rich Visualization**
-- **Beat & Chord Map**: Interactive grid with synchronized playback
-- **Guitar Chords [Beta]**: Responsive chord diagrams (7/5/3/2/1 layouts)
-- **Lyrics & Chords [Beta]**: Multi-language transcription with word-level sync
-
-## 🛠️ Tech Stack
-
-### Frontend Framework
-- **Next.js 15.3.1** - React framework with App Router
-- **React 19** - UI library with latest features
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-
-### UI Components & Visualization
-- **Framer Motion** - Smooth animations and transitions
-- **Chart.js** - Data visualization for audio analysis
-- **@tombatossals/react-chords** - Guitar chord diagram visualization with official chord database
-- **React Player** - Video playback integration
-
-### Backend & ML
-- **Python Flask** - Lightweight backend framework
-- **Google Cloud Run** - Serverless container deployment
-- **Custom ML Models** - Chord recognition and beat detection
-
-### Database & Storage
-- **Firebase Firestore** - NoSQL database for caching
-- **Vercel Blob** - File storage for audio processing
 
 ### External APIs & Services
 - **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api)
@@ -547,12 +435,7 @@ graph TD
 - **Multi-language Support** - Translation with Gemini AI
 - **Word-level Timing** - Precise synchronization with Music.ai
 
-### User Experience
-- **Dark/Light Mode** - Automatic theme switching
-- **Responsive Design** - Mobile-first approach
-- **Performance Optimized** - Lazy loading and code splitting
-- **Offline Support** - Service worker for caching
-
+<!-- 
 ## 🚀 Deployment Options
 
 ### Docker Deployment (Recommended for Production)
@@ -576,7 +459,8 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### Traditional Deployment
 
-For custom deployments, see the [Local Setup](#-quick-setup) section above.
+For custom deployments, see the [Local Setup](#-quick-setup) section above. -->
+
 
 ## 🤝 Contributing
 

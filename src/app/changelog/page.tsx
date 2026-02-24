@@ -30,9 +30,24 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
-      version: 'v0.5.4',
+      version: 'v0.5.3.2',
+      date: 'February 24, 2026',
+      title: 'UI Improvements',
+      description: 'UI improvements and dependency fixes',
+      features:[
+        'UI: Updated to HeroUI components for navigation bar, tabs, and buttons',
+        'UI: Updated homepage UI',
+      ],
+      technical: [
+        'FIX: Updated dependencies'
+      ],
+      breaking: []
+    }, 
+
+    {
+      version: 'v0.5.3.1',
       date: 'October 23, 2025',
-      title: 'Recently Transcribed Performance & Responsive Grid',
+      title: 'App improvements (In Development)',
       description: 'Faster homepage data fetch and improved responsive layout.',
       features: [
         'PERFORMANCE: Recently Transcribed — multi-page accumulation + batched audio metadata queries + SWR-style cache revalidation + increased TTL (15m)',

@@ -1588,7 +1588,16 @@ export default function YouTubeVideoAnalyzePage() {
                           <AnalysisSummary
                             analysisResults={analysisResults}
                             audioDuration={duration}
-                          />
+                          >
+                            <BeatTimeline
+                              beats={analysisResults?.beats || []}
+                              downbeats={analysisResults?.downbeats || []}
+                              currentBeatIndex={currentBeatIndex}
+                              currentDownbeatIndex={currentDownbeatIndex}
+                              duration={duration}
+                              embedded
+                            />
+                          </AnalysisSummary>
                         </div>
                       )}
 
@@ -1617,17 +1626,6 @@ export default function YouTubeVideoAnalyzePage() {
 	                        segmentationData={segmentationData}
 	                      />
 	                    )}
-
-
-                    {activeTab === 'beatChordMap' && (
-                      <BeatTimeline
-                        beats={analysisResults?.beats || []}
-                        downbeats={analysisResults?.downbeats || []}
-                        currentBeatIndex={currentBeatIndex}
-                        currentDownbeatIndex={currentDownbeatIndex}
-                        duration={duration}
-                      />
-                    )}
                   </div>
                 ) : (
                   <div className="text-gray-500 dark:text-gray-400 p-4">Run analysis to see results</div>

@@ -39,55 +39,47 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Run npm audit
+    - name: Run npm audit (production dependencies)
       id: audit
       run: |
-        echo "Running npm audit..."
+        echo "Running npm audit on production dependencies..."
 
         # Try to fix vulnerabilities first
         npm audit fix || echo "Some vulnerabilities require manual intervention"
 
-        # Run audit and capture results
-        npm audit --audit-level=moderate --json > audit-results.json || true
+        # Audit production dependencies only (--omit=dev)
+        # Dev-only vulnerabilities (eslint, jest, etc.) are tracked separately below
+        npm audit --omit=dev --audit-level=moderate --json > audit-results.json || true
 
-        # Check if there are any vulnerabilities
         VULNERABILITIES=$(cat audit-results.json | jq '.metadata.vulnerabilities.total // 0')
         echo "vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
 
         if [ "$VULNERABILITIES" -gt 0 ]; then
-          echo "Found $VULNERABILITIES vulnerabilities"
+          echo "Found $VULNERABILITIES production vulnerabilities"
 
-          # Check if vulnerabilities are only in non-critical packages
           HIGH_CRITICAL=$(cat audit-results.json | jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical')
 
           if [ "$HIGH_CRITICAL" -gt 0 ]; then
-            echo "❌ High or critical vulnerabilities found - requires immediate attention"
-            npm audit --audit-level=moderate
+            echo "❌ High or critical production vulnerabilities found - requires immediate attention"
+            npm audit --omit=dev --audit-level=moderate
             exit 1
           else
-            echo "⚠️  Only moderate vulnerabilities found"
-
-            # Check if vulnerabilities are in acceptable packages
-            ACCEPTABLE_PACKAGES="react-syntax-highlighter|prismjs|refractor|highlight.js|lowlight"
-
-            # Always allow moderate vulnerabilities with proper logging
+            echo "⚠️  Only moderate production vulnerabilities found"
             echo "✅ Moderate vulnerabilities detected - logging for review"
-            echo "📊 Risk Assessment: Acceptable for deployment"
-
-            # Log vulnerability details for monitoring
-            echo "📋 Vulnerability Details:"
-            npm audit --audit-level=moderate || echo "Moderate vulnerabilities logged for monitoring"
-
-            # Check if vulnerabilities are in acceptable packages
-            if npm audit --json | jq -r '.vulnerabilities | keys[]' | grep -E "^($ACCEPTABLE_PACKAGES)$" > /dev/null; then
-              echo "✅ Vulnerabilities confirmed in non-critical packages (code highlighting)"
-            else
-              echo "⚠️  Some vulnerabilities in other packages - monitoring required"
-            fi
+            npm audit --omit=dev --audit-level=moderate || echo "Moderate vulnerabilities logged for monitoring"
           fi
         else
-          echo "No vulnerabilities found"
+          echo "✅ No production vulnerabilities found"
         fi
+
+    - name: Run npm audit (all dependencies - informational)
+      if: always()
+      run: |
+        echo "📋 Full audit (including devDependencies) for monitoring:"
+        npm audit --audit-level=moderate 2>&1 || true
+        echo ""
+        echo "ℹ️  Dev dependency vulnerabilities (eslint, jest, etc.) do not affect production."
+        echo "ℹ️  These are tracked for awareness but do not block deployment."
         
     - name: Check for sensitive files
       run: |
@@ -273,13 +265,13 @@ jobs:
             console.log('Could not read audit results, assuming no vulnerabilities');
           }
 
-          // Only fail on high/critical vulnerabilities
+          // Only fail on high/critical production vulnerabilities
           const state = highCriticalCount > 0 ? 'failure' : 'success';
           const description = highCriticalCount > 0
-            ? `${highCriticalCount} high/critical vulnerabilities found`
+            ? `${highCriticalCount} high/critical production vulnerabilities found`
             : moderateCount > 0
-              ? `${moderateCount} moderate vulnerabilities (acceptable)`
-              : 'No significant vulnerabilities detected';
+              ? `${moderateCount} moderate production vulnerabilities (acceptable)`
+              : 'No production vulnerabilities detected';
 
           await github.rest.repos.createCommitStatus({
             owner: context.repo.owner,
