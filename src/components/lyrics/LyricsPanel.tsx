@@ -130,7 +130,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   const geniusUrl = enhancedLyricsData?.metadata?.genius_url;
 
   const syncedLyrics = enhancedLyricsData?.synchronized_lyrics || lrclibData?.synchronized_lyrics;
-  const plainLyrics = enhancedLyricsData?.plain_lyrics || lrclibData?.plain_lyrics;
   const hasAnyData = !!(lyricsData || lrclibData || enhancedLyricsData);
 
   const formatLyrics = (lyrics: string) =>

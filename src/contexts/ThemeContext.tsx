@@ -2,6 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+function getInitialTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'light';
+  const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+  if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  return 'light';
+}
+
 type Theme = 'light' | 'dark';
 
 interface ThemeContextType {
@@ -24,19 +32,7 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  // Initialize with 'light' theme, will be updated from localStorage in useEffect
-  const [theme, setTheme] = useState<Theme>('light');
-
-  // Load theme preference from localStorage on initial render
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    // Check if there's a saved theme preference or if user prefers dark mode
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
-    }
-  }, []);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
   // Update body class and localStorage when theme changes
   useEffect(() => {

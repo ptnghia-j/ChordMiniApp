@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { LuTriangle, LuCheck, LuX } from 'react-icons/lu';
 
 interface ServiceStatus {
@@ -17,13 +17,7 @@ export default function ServiceStatusBanner() {
     { name: 'Lyrics Transcription', status: 'operational' }
   ]);
 
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    // Show banner if any service has issues
-    const hasIssues = services.some(service => service.status !== 'operational');
-    setIsVisible(hasIssues);
-  }, [services]);
+  const isVisible = services.some(service => service.status !== 'operational');
 
   if (!isVisible) return null;
 

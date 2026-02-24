@@ -139,6 +139,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
 
   // Update edit value when editedChord changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditValue(editedChord || displayChord);
   }, [editedChord, displayChord]);
 

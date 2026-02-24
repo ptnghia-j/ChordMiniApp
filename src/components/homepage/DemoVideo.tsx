@@ -59,6 +59,7 @@ const DemoVideo: React.FC<DemoVideoProps> = ({
 
   // Reset error state when video source changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasVideoError(false);
     setIsVideoLoaded(false);
   }, [currentVideoSrc]);

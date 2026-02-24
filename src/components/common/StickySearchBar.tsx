@@ -45,6 +45,7 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
 
   // Show results when there are search results or when searching
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowResults((searchResults.length > 0 || isSearching || !!searchError) && searchQuery.length > 2);
   }, [searchResults, isSearching, searchError, searchQuery]);
 

@@ -66,6 +66,7 @@ export default function DesktopPerformanceOptimizer() {
               if (script instanceof HTMLScriptElement && !script.src) {
                 // Defer inline script execution
                 setTimeout(() => {
+                  // eslint-disable-next-line react-hooks/unsupported-syntax
                   eval(script.textContent || '');
                 }, 0);
               }

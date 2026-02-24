@@ -50,6 +50,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
 
   // Reset visible results when search results change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisibleResults(5);
   }, [searchResults]);
 

@@ -228,7 +228,7 @@ export const usePlaybackState = ({
   // Audio source management: Ensure YouTube is unmuted and extracted audio is muted
   useEffect(() => {
     if (youtubePlayer) {
-      youtubePlayer.muted = false;
+      youtubePlayer.unMute?.();
     }
     if (audioRef.current) {
       audioRef.current.muted = true;

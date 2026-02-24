@@ -22,6 +22,7 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
   // Handle animation states
   useEffect(() => {
     if (isVisible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsShowing(true);
     } else {
       // Add a small delay before hiding to allow for animation

@@ -30,6 +30,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
 
   // Handle client-side hydration and hash detection
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsClient(true);
     setCurrentHash(window.location.hash);
 
@@ -52,6 +53,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
 
   // Close mobile menu when route changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
@@ -99,7 +101,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
       // If we're not on the home page, navigate there first
       if (pathname !== '/') {
         if (isClient) {
-          window.location.href = '/#features';
+          window.location.assign('/#features');
         }
         return;
       }

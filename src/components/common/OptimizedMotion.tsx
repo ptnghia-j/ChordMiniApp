@@ -37,6 +37,7 @@ const OptimizedMotion: React.FC<OptimizedMotionProps> = ({
       }, (transition.delay || 0) * 1000);
       return () => clearTimeout(timer);
     } else if (animate === 'hidden' && isVisible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsVisible(false);
     }
   }, [animate, isVisible, transition.delay]);

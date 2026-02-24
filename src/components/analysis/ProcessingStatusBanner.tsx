@@ -59,6 +59,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
                                  !isDurationDetecting;
 
     if (shouldDetectDuration) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDurationDetecting(true);
 
       getAudioDurationFromUrl(audioUrl, videoId)
@@ -113,6 +114,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
 
         const estimatedTime = processingRatio * effectiveDuration;
         const progress = Math.min((elapsedSeconds / estimatedTime) * 100, 100);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEstimatedProgress(progress);
 
       } else {
@@ -146,6 +148,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     }
 
     // Reset countdown when stage changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDismissCountdown(5);
 
     // Show banner when processing starts

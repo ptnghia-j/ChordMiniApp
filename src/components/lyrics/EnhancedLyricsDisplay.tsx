@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { LyricsData, LyricLine } from '@/types/musicAiTypes';
 
 interface EnhancedLyricsDisplayProps {
@@ -17,20 +17,12 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
   onLineClick,
   autoScroll = true,
 }) => {
-  const [currentLine, setCurrentLine] = useState<LyricLine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentLineRef = useRef<HTMLDivElement>(null);
 
-  // Find the current line based on the current time
-  useEffect(() => {
-    const newCurrentLine = lyrics.lines.find(
-      line => currentTime >= line.startTime && currentTime <= line.endTime
-    ) || null;
-
-    if (newCurrentLine !== currentLine) {
-      setCurrentLine(newCurrentLine);
-    }
-  }, [currentTime, lyrics.lines, currentLine]);
+  const currentLine = lyrics.lines.find(
+    line => currentTime >= line.startTime && currentTime <= line.endTime
+  ) ?? null;
 
   // Auto-scroll to the current line
   useEffect(() => {

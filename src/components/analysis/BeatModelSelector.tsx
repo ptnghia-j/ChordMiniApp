@@ -22,7 +22,6 @@ interface ModelOption {
 const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }: BeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
-  const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -42,27 +41,8 @@ const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }
     };
   }, []);
 
-  // Check if dropdown would be cut off at the bottom
-  useEffect(() => {
-    if (isOpen && buttonRef.current && typeof window !== 'undefined') {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - buttonRect.bottom;
-
-      // If there's not enough space below (less than 300px), position dropdown above
-      if (spaceBelow < 300) {
-        setDropdownPosition('top');
-      } else {
-        setDropdownPosition('bottom');
-      }
-    }
-  }, [isOpen]);
-
   // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
-    // Immediately show UI without waiting for backend
-    setLoading(false);
-
     async function fetchModelInfo() {
       try {
         // Fetch model info in background without blocking UI
@@ -132,8 +112,16 @@ const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }
         {/* Dropdown button */}
         <button
           ref={buttonRef}
-          onClick={() => setIsOpen(!isOpen)}
-          disabled={loading}
+          onClick={() => {
+            const newIsOpen = !isOpen;
+            if (newIsOpen && buttonRef.current && typeof window !== 'undefined') {
+              const buttonRect = buttonRef.current.getBoundingClientRect();
+              const spaceBelow = window.innerHeight - buttonRect.bottom;
+              setDropdownPosition(spaceBelow < 300 ? 'top' : 'bottom');
+            }
+            setIsOpen(newIsOpen);
+          }}
+          disabled={false}
           className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-content-bg border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-left text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-300"
         >
           <div className="flex items-center">
@@ -166,11 +154,6 @@ const BeatModelSelector = ({ onChange, defaultValue = 'madmom', className = '' }
                 </span>
               )}
             </div>
-            {loading && (
-              <div className="ml-2">
-                <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-              </div>
-            )}
           </div>
           <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />

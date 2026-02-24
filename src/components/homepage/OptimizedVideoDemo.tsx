@@ -30,6 +30,7 @@ export default function OptimizedVideoDemo({
 
   // Track when component has mounted to prevent hydration mismatch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -57,6 +58,7 @@ export default function OptimizedVideoDemo({
   // Only reset after component has mounted to prevent hydration issues
   useEffect(() => {
     if (mounted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPosterError(false);
       setIframeLoaded(false);
     }

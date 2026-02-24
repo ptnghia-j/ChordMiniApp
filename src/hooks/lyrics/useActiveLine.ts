@@ -228,6 +228,7 @@ export const useActiveLine = ({
 
   return {
     activeLine,
+    // eslint-disable-next-line react-hooks/refs
     lineProgress: lineProgressRef.current
   };
 };

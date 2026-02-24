@@ -64,7 +64,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
       events.push({ time: beatTimes[idx], chord: chordLabel });
     });
     return events;
-  }, [analysisResults?.synchronizedChords, beatTimes, simplifyChords]);
+  }, [analysisResults, beatTimes, simplifyChords]);
 
   // Snap lyric line boundaries to nearest beat timestamps
   const snappedLyrics = useMemo(() => {

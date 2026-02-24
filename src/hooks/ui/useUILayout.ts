@@ -107,6 +107,7 @@ export const useUILayout = ({
   // Auto-minimize video when panels are open
   useEffect(() => {
     const shouldMinimize = isChatbotOpen || isLyricsPanelOpen;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsVideoMinimized(shouldMinimize);
   }, [isChatbotOpen, isLyricsPanelOpen]);
 
@@ -127,14 +128,14 @@ export const useUILayout = ({
     // Mute/unmute appropriate audio source
     if (preferredAudioSource === 'youtube' && youtubePlayer) {
       // If switching to extracted, mute YouTube
-      youtubePlayer.muted = true;
+      youtubePlayer.mute?.();
       if (audioRef.current) {
         audioRef.current.muted = false;
       }
     } else {
       // If switching to YouTube, mute extracted audio
       if (youtubePlayer) {
-        youtubePlayer.muted = false;
+        youtubePlayer.unMute?.();
       }
       if (audioRef.current) {
         audioRef.current.muted = true;

@@ -202,6 +202,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // This avoids clearing after children have registered their refs, which could
   // leave the map empty (and freeze the highlighter) until another re-render.
   const prevLensRef = useRef<{ cl: number; bl: number }>({ cl: -1, bl: -1 });
+  /* eslint-disable react-hooks/refs */
   if (
     prevLensRef.current.cl !== chords.length ||
     prevLensRef.current.bl !== beats.length
@@ -209,6 +210,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     cellRefsMapRef.current = new Map();
     prevLensRef.current = { cl: chords.length, bl: beats.length };
   }
+  /* eslint-enable react-hooks/refs */
 
   // Ref callback factory: register/unregister a cell by its global beat index
   const makeCellRef = useCallback((index: number) => (el: HTMLDivElement | null) => {

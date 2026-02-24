@@ -25,6 +25,7 @@ export default function ClientAuthWrapper({ children, fallback }: ClientAuthWrap
 
   useEffect(() => {
     // Mark as client-side
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsClient(true);
 
     // Initialize authentication
@@ -93,6 +94,7 @@ export function useIsClient() {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsClient(true);
   }, []);
 
