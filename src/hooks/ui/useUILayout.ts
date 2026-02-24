@@ -4,6 +4,8 @@ import { LyricsData } from '@/types/musicAiTypes';
 // Types for UI layout management
 interface YouTubePlayer {
   muted: boolean;
+  mute?: () => void;
+  unMute?: () => void;
 }
 
 interface UseUILayoutProps {

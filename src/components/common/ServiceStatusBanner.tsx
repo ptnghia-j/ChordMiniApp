@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { LuTriangle, LuCheck, LuX } from 'react-icons/lu';
 
 interface ServiceStatus {
@@ -17,9 +17,11 @@ export default function ServiceStatusBanner() {
     { name: 'Lyrics Transcription', status: 'operational' }
   ]);
 
-  const isVisible = services.some(service => service.status !== 'operational');
+  const [isDismissed, setIsDismissed] = useState(false);
+  const dismiss = useCallback(() => setIsDismissed(true), []);
 
-  if (!isVisible) return null;
+  const hasIssues = services.some(service => service.status !== 'operational');
+  if (!hasIssues || isDismissed) return null;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -64,7 +66,7 @@ export default function ServiceStatusBanner() {
               ))}
               
               <button
-                onClick={() => setIsVisible(false)}
+                onClick={dismiss}
                 className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
               >
                 Dismiss
