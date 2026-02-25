@@ -102,13 +102,11 @@ const PerformanceMonitor: React.FC = () => {
             const now = performance.now();
             // Throttle CLS logs to once every 2s to reduce console noise
             if (now - lastCLSLog > 2000) {
-              // eslint-disable-next-line no-console
               console.log('📊 CLS:', clsValue.toFixed(4));
               lastCLSLog = now;
             }
             // Warn once after initial load window if threshold exceeded
             if (!warned && clsValue > 0.1 && now > 5000) {
-              // eslint-disable-next-line no-console
               console.warn('⚠️ CLS is poor (>0.1). Target: <0.1');
               warned = true;
             }

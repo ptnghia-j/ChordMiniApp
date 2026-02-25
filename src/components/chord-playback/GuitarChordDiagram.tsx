@@ -29,6 +29,8 @@ interface GuitarChordDiagramProps {
   lite?: boolean; // Simplified rendering
   displayName?: string; // Override chord name display (for enharmonic corrections)
   isFocused?: boolean; // Whether this chord diagram is currently focused/active
+  customWidth?: number; // Override size preset width for responsive sizing
+  customHeight?: number; // Override size preset height for responsive sizing
   segmentationColor?: string; // Segmentation color for border styling
   showPositionSelector?: boolean; // Show position selector for multiple positions
   onPositionChange?: (positionIndex: number) => void; // Callback for position changes
@@ -60,6 +62,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   lite = false,
   displayName,
   isFocused = false,
+  customWidth,
+  customHeight,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   segmentationColor,
   showPositionSelector = false,
   onPositionChange,
@@ -75,20 +80,26 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     large: { width: 140, height: 175 }
   };
 
+  // Compute dimensions: use custom overrides for responsive sizing, or fall back to presets
+  const { width: presetWidth, height: presetHeight } = sizeConfig[size];
+  const width = customWidth ?? presetWidth;
+  const height = customHeight ?? presetHeight;
+
   // Return quarter rest SVG for N.C. (No Chord)
   if (!chordData || !chordData.positions || chordData.positions.length === 0) {
-    const { width, height } = sizeConfig[size];
     const restSize = Math.min(width * 0.6, height * 0.6); // Scale rest to 60% of container
 
     return (
       <div className={`flex flex-col items-center justify-center ${className}`}>
         <div
-          className="bg-white rounded-lg border flex items-center justify-center transition-colors duration-200 shadow-sm"
+          className={`flex items-center justify-center transition-all duration-200 rounded-lg ${
+            isFocused
+              ? 'ring-2 ring-blue-500/60 dark:ring-blue-400/60 bg-blue-50 dark:bg-blue-900/30'
+              : ''
+          }`}
           style={{
             width: `${width}px`,
             height: `${height}px`,
-            borderColor: segmentationColor || '#d1d5db', // Use segmentation color or default gray
-            borderWidth: segmentationColor ? '3px' : '1px' // Thicker border for segmentation
           }}
         >
           <Image
@@ -96,10 +107,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             alt="No Chord"
             width={restSize}
             height={restSize}
-            className="quarter-rest-responsive transition-opacity duration-200"
-            style={{
-              filter: 'brightness(0.4)' // Make it darker for better visibility
-            }}
+            className="quarter-rest-responsive transition-all duration-200 brightness-[0.4] dark:[filter:invert(1)_brightness(5)]"
           />
         </div>
         {showChordName && (
@@ -109,9 +117,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             'text-base'
           } ${
             isFocused
-              ? 'text-gray-600 dark:text-gray-300' // Focused: slightly darker
+              ? 'text-blue-600 dark:text-blue-400 font-semibold' // Focused: blue colored
               : 'text-gray-500 dark:text-gray-400' // Unfocused: lighter
-          } transition-colors duration-200 ${labelClassName || ''}`}>
+          } transition-all duration-200 ${labelClassName || ''}`}>
             No Chord
           </span>
         )}
@@ -150,8 +158,6 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     baseFret: position.baseFret || 1
   };
 
-  const { width, height } = sizeConfig[size];
-
   // Use the centralized chord formatting function for consistency with beat/chord grid
   // For guitar chord diagrams, prioritize the actual chord data name over displayName
   // since guitar diagrams don't support inversions and should show the lookup name
@@ -186,21 +192,25 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
-      {/* Chord diagram - White background for better readability */}
+      {/* Chord diagram - transparent, sits directly on parent background */}
       <div
-        className="chord-diagram-container relative bg-white rounded-lg overflow-hidden shadow-sm border transition-colors duration-200"
+        className={`chord-diagram-container relative overflow-hidden transition-all duration-200 rounded-lg ${
+          isFocused
+            ? 'ring-2 ring-blue-500/60 dark:ring-blue-400/60 bg-blue-50 dark:bg-blue-900/30'
+            : ''
+        }`}
         style={{
           width: `${width}px`,
           height: `${height}px`,
-          borderColor: segmentationColor || '#d1d5db', // Use segmentation color or default gray
-          borderWidth: segmentationColor ? '3px' : '1px' // Thicker border for segmentation
         }}
       >
-        <Chord
-          chord={chordForDiagram}
-          instrument={GUITAR_INSTRUMENT}
-          lite={lite}
-        />
+        <div className="dark:[filter:invert(1)_brightness(5)]">
+          <Chord
+            chord={chordForDiagram}
+            instrument={GUITAR_INSTRUMENT}
+            lite={lite}
+          />
+        </div>
       </div>
 
       {/* Chord name */}
@@ -212,9 +222,9 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             'text-base'
           } ${
             isFocused
-              ? 'text-gray-800 dark:text-white' // Focused: darker in light mode, white in dark mode
+              ? 'text-blue-600 dark:text-blue-400 font-semibold' // Focused: blue colored
               : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
-          } transition-colors duration-200 ${labelClassName || ''}`}
+          } transition-all duration-200 ${labelClassName || ''}`}
           dangerouslySetInnerHTML={{
             __html: getFormattedChordName()
           }}

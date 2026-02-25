@@ -31,15 +31,17 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.5.3.2',
-      date: 'February 24, 2026',
+      date: 'February 25, 2026',
       title: 'UI Improvements',
       description: 'UI improvements and dependency fixes',
       features:[
         'UI: Updated to HeroUI components for navigation bar, tabs, and buttons',
         'UI: Updated homepage UI',
+        'UI: Updated Guitar Chords tab UI'
       ],
       technical: [
-        'FIX: Updated dependencies'
+        'FIX: Updated dependencies',
+        'FIX: Partially addressed synchronization issue between chords and lyrics in Lyrics & Chords tab'
       ],
       breaking: []
     }, 

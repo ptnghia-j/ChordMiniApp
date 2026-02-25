@@ -402,7 +402,6 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
     }
     // FIX: Removed `videos` from dependency array. This hook now correctly depends
     // only on the functions and pagination state it needs to run.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastDoc, hasMore, fetchAudioFiles, videos]);
 
   const handleShowMore = () => setIsExpanded(true);
@@ -472,7 +471,7 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
         <div className="max-h-96 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
-              <Card key={index} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider">
+              <Card key={index} className="w-full bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10">
                 <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
               </Card>
             ))}
@@ -532,7 +531,7 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
                 return paramString ? `${baseUrl}?${paramString}` : baseUrl;
               })()}
               isPressable
-              className="group hover:scale-[1.02] transition-all duration-200 bg-content1 dark:bg-content1 border border-divider dark:border-divider hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-lg"
+              className="group hover:scale-[1.02] transition-all duration-200 bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10 hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-lg"
             >
               <CardBody className="p-3">
                 <div className="flex gap-3">
@@ -564,7 +563,7 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
           {loadingMore && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
               {[...Array(2)].map((_, index) => (
-                <Card key={`loading-${index}`} className="w-full bg-content1 dark:bg-content1 border border-divider dark:border-divider"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>
+                <Card key={`loading-${index}`} className="w-full bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>
               ))}
             </div>
           )}

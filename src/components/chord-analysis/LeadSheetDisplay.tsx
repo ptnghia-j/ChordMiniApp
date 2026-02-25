@@ -48,6 +48,7 @@ interface LeadSheetProps {
   segmentationData?: SegmentationResult | null; // Optional segmentation data for section labels and instrumental placeholders
   downbeatsOnly?: boolean;
   downbeatTimes?: number[];
+  accidentalPreference?: 'sharp' | 'flat'; // Enharmonic spelling preference for chord labels
 }
 
 /**
@@ -62,7 +63,8 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   chords = [],
   segmentationData = null,
   downbeatsOnly = false,
-  downbeatTimes = []
+  downbeatTimes = [],
+  accidentalPreference
 }) => {
   // Ref for the container element (used for auto-scrolling)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -176,7 +178,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
         fontSize={fontSize}
         onFontSizeChange={onFontSizeChange}
         darkMode={darkMode}
-        chords={chords}
         processedLyricsLength={processedAndMergedLyrics?.length || 0}
         isTranslating={isTranslating}
         translationError={translationError}
@@ -190,21 +191,20 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
         setIsLanguageMenuOpen={setIsLanguageMenuOpen}
       />
 
-      {/* Lyrics container with auto-scroll - using more vertical space */}
+      {/* Lyrics container with auto-scroll - transparent, inherits parent background */}
       <div
         ref={containerRef}
-        className="lyrics-container overflow-y-auto p-3 rounded-lg shadow-sm"
+        className="lyrics-container overflow-y-auto p-3"
         style={{
-          backgroundColor: textColors.background,
           lineHeight: '1.4',
           scrollBehavior: 'smooth',
-          height: 'calc(65vh - 20px)', // Significantly increased height for more content
-          maxHeight: '600px', // Increased maximum height
-          scrollPaddingTop: '15px', // Reduced top padding to show lyrics closer to the top
-          scrollPaddingBottom: '30px', // Reduced bottom padding
-          position: 'relative', // Ensure proper positioning
-          margin: '0 auto', // Center the container horizontally
-          paddingTop: '3px' // Minimal padding at the top of the visible container
+          height: 'calc(65vh - 20px)',
+          maxHeight: '600px',
+          scrollPaddingTop: '15px',
+          scrollPaddingBottom: '30px',
+          position: 'relative',
+          margin: '0 auto',
+          paddingTop: '3px'
         }}
       >
         {processedAndMergedLyrics.map((line, index) => (
@@ -223,6 +223,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
             processedLines={processedAndMergedLyrics}
             segmentationData={segmentationData}
             memoizedCharacterArrays={memoizedCharacterArrays}
+            accidentalPreference={accidentalPreference}
           />
         ))}
       </div>

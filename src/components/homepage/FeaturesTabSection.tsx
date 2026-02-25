@@ -256,8 +256,8 @@ function MiniChordDiagram({ frets, name, isActive, isDark }: {
   const pad = { top: 13, side: 7, bottom: 2 };
   const stringSp = (w - pad.side * 2) / 5;
   const fretSp = (h - pad.top - pad.bottom) / 4;
-  const stroke = isDark ? '#6b7280' : '#6b7280';
-  const dot = isActive ? '#3b82f6' : isDark ? '#9ca3af' : '#374151';
+  const stroke = isDark ? '#e5e7eb' : '#6b7280';
+  const dot = isActive ? '#3b82f6' : isDark ? '#d1d5db' : '#374151';
 
   return (
     <div className="flex flex-col items-center">

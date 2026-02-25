@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
 import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
-import { Tooltip, Slider, Divider } from '@heroui/react';
+import { Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
@@ -376,7 +376,6 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
             aria-label={isEnabled ? "Disable chord playback" : "Enable chord playback"}
             aria-pressed={isEnabled}
           >
-            {/* Icon */}
             {isEnabled ? (
               <HiMusicalNote className="h-4 w-4" />
             ) : (
@@ -428,14 +427,18 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                 <HiMusicalNote className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Audio Mixer</h3>
               </div>
-              <button
-                onClick={handleClosePanel}
+              <Button
+                isIconOnly
+                radius="sm"
+                size="sm"
+                variant="light"
+                onPress={handleClosePanel}
                 onMouseDown={(e) => e.stopPropagation()} // Prevent dragging when clicking close button
-                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 aria-label="Close audio mixer"
+                className="text-gray-500 dark:text-gray-400"
               >
-                <HiXMark className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-              </button>
+                <HiXMark className="h-5 w-5" />
+              </Button>
             </div>
 
             {/* Scrollable content area */}
@@ -831,28 +834,34 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
 
                   {/* Action buttons */}
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => {
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="success"
+                      onPress={() => {
                         // Test chord playback with lightweight service
                         import('@/services/chord-playback/lightweightChordPlaybackService').then(({ getLightweightChordPlaybackService }) => {
                           const service = getLightweightChordPlaybackService();
                           service.testPlayback();
                         });
                       }}
-                      className="flex-1 px-3 py-2 text-sm font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/60 transition-all duration-200 flex items-center justify-center gap-2"
+                      startContent={<HiMusicalNote className="h-4 w-4" />}
+                      className="flex-1"
                       aria-label="Test chord playback audio"
                     >
-                      <HiMusicalNote className="h-4 w-4" />
                       Test Audio
-                    </button>
-                    <button
-                      onClick={() => audioMixer.current?.resetToDefaults()}
-                      className="flex-1 px-3 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 flex items-center justify-center gap-2"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="default"
+                      onPress={() => audioMixer.current?.resetToDefaults()}
+                      startContent={<MdRefresh className="h-4 w-4" />}
+                      className="flex-1"
                       aria-label="Reset all volume controls to default values"
                     >
-                      <MdRefresh className="h-4 w-4" />
                       Reset
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Status indicator */}

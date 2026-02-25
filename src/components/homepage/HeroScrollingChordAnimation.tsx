@@ -61,10 +61,16 @@ const HeroScrollingChordAnimation: React.FC<HeroScrollingChordAnimationProps> = 
   }, [chordProgression]);
 
   return (
-    <div className={`relative overflow-hidden ${className}`}>
+    <div
+      className={`relative overflow-hidden ${className}`}
+      style={{
+        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)',
+        maskImage: 'linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)',
+      }}
+    >
       {/* Container with horizontal scrolling animation */}
       <motion.div
-        className="flex space-x-8"
+        className="flex space-x-8 will-change-transform"
         animate={{
           x: [0, -576] // Move left by width of 6 chord diagrams (96px each + 32px gap)
         }}
@@ -73,18 +79,16 @@ const HeroScrollingChordAnimation: React.FC<HeroScrollingChordAnimationProps> = 
           repeat: Infinity,
           ease: "linear"
         }}
+        style={{ backfaceVisibility: 'hidden' }}
       >
         {/* Render chords twice for seamless loop */}
         {[...chordProgression, ...chordProgression].map((chord, index) => {
           const chordData = chordDataCache.get(chord);
 
           return (
-            <motion.div
+            <div
               key={`${chord}-${index}`}
               className="flex-shrink-0 w-28 h-44 flex flex-col items-center justify-center"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1, duration: 0.5 }}
             >
               {chordData ? (
                 <GuitarChordDiagram
@@ -92,19 +96,15 @@ const HeroScrollingChordAnimation: React.FC<HeroScrollingChordAnimationProps> = 
                   size="large"
                   className="w-24 h-32"
                   showChordName={true}
-                  displayName={chord} // Pass the original chord name for consistent formatting
+                  displayName={chord}
                 />
               ) : (
                 <div className="w-24 h-32 bg-gray-200 dark:bg-blue-900/20 animate-pulse rounded-lg border border-gray-300 dark:border-blue-700" />
               )}
-            </motion.div>
+            </div>
           );
         })}
       </motion.div>
-
-      {/* Gradient overlays for smooth fade effect */}
-      <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white dark:from-content-bg to-transparent pointer-events-none z-10" />
-      <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white dark:from-content-bg to-transparent pointer-events-none z-10" />
     </div>
   );
 };

@@ -8,6 +8,8 @@ interface ResultsTabsProps {
   setActiveTab: (tab: 'beatChordMap' | 'guitarChords' | 'lyricsChords') => void;
   showLyrics: boolean;
   hasCachedLyrics: boolean;
+  /** Optional content rendered to the right of the tab pills (e.g. font slider) */
+  rightContent?: React.ReactNode;
 }
 
 // A small helper component to create the title with the beta badge
@@ -24,14 +26,15 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
   activeTab,
   setActiveTab,
   showLyrics,
-  hasCachedLyrics
+  hasCachedLyrics,
+  rightContent
 }) => {
   const handleSelectionChange = (key: React.Key) => {
     setActiveTab(key as 'beatChordMap' | 'guitarChords' | 'lyricsChords');
   };
 
   return (
-    <div className="mb-4 sticky top-0 z-[60] backdrop-blur rounded-full">
+    <div className="mb-4 sticky top-0 z-[60] backdrop-blur rounded-full flex items-center gap-2">
       <Tabs
         aria-label="Results navigation tabs"
         selectedKey={activeTab}
@@ -66,6 +69,13 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
           isDisabled={!showLyrics && !hasCachedLyrics}
         />
       </Tabs>
+
+      {/* Right-aligned controls (e.g. font slider when Lyrics & Chords is active) */}
+      {rightContent && (
+        <div className="ml-auto flex items-center shrink-0">
+          {rightContent}
+        </div>
+      )}
     </div>
   );
 };

@@ -144,14 +144,14 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     };
   }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey]);
 
-  // Responsive diagram sizing for animated view
+  // Responsive diagram sizing for animated view - diagram dimensions scale with screen
   const diagramConfig = useMemo(() => {
-    if (windowWidth >= 1536) return { size: 'large' as const, cellWidth: 136, marginX: 12, minH: 210, labelClass: '' };
-    if (windowWidth >= 1280) return { size: 'large' as const, cellWidth: 128, marginX: 10, minH: 205, labelClass: '' };
-    if (windowWidth >= 1024) return { size: 'medium' as const, cellWidth: 118, marginX: 9, minH: 198, labelClass: '' };
-    if (windowWidth >= 768) return { size: 'medium' as const, cellWidth: 108, marginX: 8, minH: 190, labelClass: '' };
-    if (windowWidth >= 640) return { size: 'small' as const, cellWidth: 96, marginX: 7, minH: 180, labelClass: 'text-[10px] leading-tight' };
-    return { size: 'small' as const, cellWidth: 90, marginX: 6, minH: 170, labelClass: 'text-[10px] leading-tight' };
+    if (windowWidth >= 1536) return { size: 'large' as const, diagramWidth: 125, diagramHeight: 160, cellWidth: 140, marginX: 10, labelClass: '' };
+    if (windowWidth >= 1280) return { size: 'large' as const, diagramWidth: 115, diagramHeight: 147, cellWidth: 130, marginX: 8, labelClass: '' };
+    if (windowWidth >= 1024) return { size: 'medium' as const, diagramWidth: 100, diagramHeight: 128, cellWidth: 115, marginX: 7, labelClass: '' };
+    if (windowWidth >= 768) return { size: 'medium' as const, diagramWidth: 90, diagramHeight: 115, cellWidth: 105, marginX: 6, labelClass: '' };
+    if (windowWidth >= 640) return { size: 'small' as const, diagramWidth: 78, diagramHeight: 100, cellWidth: 92, marginX: 5, labelClass: 'text-[10px] leading-tight' };
+    return { size: 'small' as const, diagramWidth: 70, diagramHeight: 90, cellWidth: 82, marginX: 4, labelClass: 'text-[10px] leading-tight' };
   }, [windowWidth]);
 
   // Handle chord position changes
@@ -399,8 +399,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         )}
 
         {!isLoadingChords && viewMode === 'animated' ? (
-          <div className="animated-chord-view relative bg-white dark:bg-content-bg overflow-visible">
-            <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.minH - 60, 100) }}>
+          <div className="animated-chord-view relative overflow-visible">
+            <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.diagramHeight + 50, 100) }}>
                 <AnimatePresence initial={false}>
                   {getVisibleChordRange.map((chordInfo) => {
                     // Get segmentation color for this chord position
@@ -439,6 +439,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                           chordData={chordDataCache.get(chordInfo.chord) || null}
                           positionIndex={chordPositions.get(chordInfo.chord) || 0}
                           size={diagramConfig.size}
+                          customWidth={diagramConfig.diagramWidth}
+                          customHeight={diagramConfig.diagramHeight}
                           showChordName={true}
                           displayName={chordInfo.chord}
                           isFocused={chordInfo.isCurrent}
@@ -458,7 +460,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             </div>
           </div>
         ) : !isLoadingChords && (
-          <div className="summary-chord-view relative bg-white dark:bg-content-bg rounded-lg p-6">
+          <div className="summary-chord-view relative p-6">
             <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-6 text-center">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4 md:gap-6 justify-items-center">
               {uniqueChordDataForGuitarDiagrams.map(({name, data}, index) => (

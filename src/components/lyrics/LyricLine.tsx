@@ -5,6 +5,7 @@ import {
   getResponsiveChordFontSize,
   getChordLabelStyles
 } from '@/utils/chordFormatting';
+import { normalizeChordForDedup } from '@/utils/chordNormalization';
 import { EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { SegmentationResult } from '@/types/chatbotTypes';
 
@@ -48,6 +49,7 @@ interface LyricLineProps {
     getCharArray: (text: string) => string[];
     clear: () => void;
   };
+  accidentalPreference?: 'sharp' | 'flat'; // Enharmonic spelling preference for chord labels
 }
 
 /**
@@ -89,6 +91,31 @@ const findWordAtPosition = (
     }
   }
   return -1;
+};
+
+/**
+ * Find the nearest word to a given character position (for gap/space positions).
+ * Prefers the word whose start is closest, biasing toward the next word
+ * (musically, chord changes usually land at word onsets).
+ */
+const findNearestWord = (
+  position: number,
+  words: { start: number; end: number }[]
+): number => {
+  if (words.length === 0) return -1;
+  let minDist = Infinity;
+  let nearestIdx = 0;
+  for (let i = 0; i < words.length; i++) {
+    const dist = Math.min(
+      Math.abs(position - words[i].start),
+      Math.abs(position - words[i].end)
+    );
+    if (dist < minDist) {
+      minDist = dist;
+      nearestIdx = i;
+    }
+  }
+  return nearestIdx;
 };
 
 /**
@@ -158,7 +185,8 @@ export const LyricLine: React.FC<LyricLineProps> = ({
   translatedLyrics,
   processedLines,
   segmentationData,
-  memoizedCharacterArrays
+  memoizedCharacterArrays,
+  accidentalPreference
 }) => {
   // Find all word boundaries in the line
   const words = findWordBoundaries(line.text);
@@ -175,30 +203,60 @@ export const LyricLine: React.FC<LyricLineProps> = ({
   });
 
   // CRITICAL FIX: Deduplicate chords at line level before word assignment
-  // This prevents the same chord from being assigned to multiple words
+  // Uses normalized display form so chords that render identically (e.g. B:maj and B)
+  // are treated as duplicates even if their raw strings differ.
   const lineDeduplicatedChords: { chord: string; position: number; time: number }[] = [];
-  let lastChordInLine = '';
+  let lastNormalizedInLine = '';
 
   sortedChords.forEach(chord => {
-    if (chord.chord !== lastChordInLine) {
+    const normalized = normalizeChordForDedup(chord.chord);
+    if (normalized !== lastNormalizedInLine) {
       lineDeduplicatedChords.push(chord);
-      lastChordInLine = chord.chord;
+      lastNormalizedInLine = normalized;
     }
   });
 
-  // Assign each deduplicated chord to a word
+  // Assign each deduplicated chord to a word, with cross-word dedup.
+  // Track the last chord shown across ALL words so that "E B" on word 0
+  // followed by "B" on word 1 collapses the second "B".
+  let lastAssignedNormalized = '';
   lineDeduplicatedChords.forEach(chord => {
-    const wordIndex = findWordAtPosition(chord.position, words);
+    let wordIndex = findWordAtPosition(chord.position, words);
+    // If chord falls on a gap between words, assign to nearest word
+    if (wordIndex < 0 && words.length > 0) {
+      wordIndex = findNearestWord(chord.position, words);
+    }
     if (wordIndex >= 0) {
       if (!chordsByWord[wordIndex]) {
         chordsByWord[wordIndex] = [];
       }
-      // Only add if this chord isn't already assigned to this word
-      if (!chordsByWord[wordIndex].includes(chord.chord)) {
-        chordsByWord[wordIndex].push(chord.chord);
-      }
+      const normalized = normalizeChordForDedup(chord.chord);
+      // Skip if this chord visually matches the last chord already assigned
+      // (either on this word or on a previous word)
+      if (normalized === lastAssignedNormalized) return;
+      // Also skip if already on THIS word (by visual form)
+      if (chordsByWord[wordIndex].some(c => normalizeChordForDedup(c) === normalized)) return;
+      chordsByWord[wordIndex].push(chord.chord);
+      lastAssignedNormalized = normalized;
     }
   });
+
+  // Inter-word boundary dedup: if the last chord on word N matches
+  // the first chord on word N+1, remove the leading duplicate from N+1.
+  const occupiedWords = Object.keys(chordsByWord).map(Number).sort((a, b) => a - b);
+  let prevBoundaryChord = '';
+  for (const wi of occupiedWords) {
+    const wChords = chordsByWord[wi];
+    while (wChords.length > 0 && normalizeChordForDedup(wChords[0]) === prevBoundaryChord) {
+      wChords.shift();
+    }
+    if (wChords.length > 0) {
+      prevBoundaryChord = normalizeChordForDedup(wChords[wChords.length - 1]);
+    }
+    if (wChords.length === 0) {
+      delete chordsByWord[wi];
+    }
+  }
 
   // Check if this is an instrumental placeholder or chord-only section
   const isInstrumental = line.isInstrumental;
@@ -208,26 +266,25 @@ export const LyricLine: React.FC<LyricLineProps> = ({
   // Create word segments with their associated chords
   const wordSegments: { text: string; chords: string[]; isChineseChar?: boolean }[] = [];
 
-  // SPECIAL HANDLING: For condensed chord-only sections, show musical notes below with chord labels above
+  // SPECIAL HANDLING: For condensed chord-only sections, create separate segments
+  // so each chord label is properly spaced above its own ♪ symbol.
   if (isChordOnly && isCondensed) {
-    // For condensed sections, show musical notes (♪) below and all unique chord labels above
-    // Extract unique chords from the line's chord data
-    const uniqueChords = line.chords ?
-      line.chords.reduce((acc: string[], chord) => {
-        const formattedChord = chord.chord.replace(/:maj$/, ''); // Remove :maj suffix
-        if (!acc.includes(formattedChord)) {
-          acc.push(formattedChord);
-        }
-        return acc;
-      }, []) : [];
+    // Use ALL chords in order (preserving repeated progressions like A-B-C-D-A-B-C-D).
+    // Previous code used globally-unique filtering which collapsed repeats to just A-B-C-D.
+    const allChords = (line.chords || []).map(c =>
+      normalizeChordForDedup(c.chord) // strips invisible quality markers (e.g. :maj)
+    );
 
-    // Generate dynamic number of musical notes based on actual chord changes
-    const numChordChanges = Math.max(1, uniqueChords.length);
-    const musicalNotes = '♪'.repeat(numChordChanges).split('').join(' ');
-
-    wordSegments.push({
-      text: musicalNotes, // Dynamic musical notes below based on chord changes
-      chords: uniqueChords // All unique chord labels above
+    // Create a separate segment for each chord/♪ pair
+    allChords.forEach((chord, idx) => {
+      if (idx > 0) {
+        // Add spacing between chord/♪ pairs
+        wordSegments.push({ text: '  ', chords: [] });
+      }
+      wordSegments.push({
+        text: '♪',
+        chords: [chord]
+      });
     });
   } else {
     // Regular processing for lyrics, instrumental, and non-condensed chord-only sections
@@ -272,20 +329,33 @@ export const LyricLine: React.FC<LyricLineProps> = ({
     } else {
       // For non-Chinese text, use the original word-based approach
       // Split the line into words and spaces
+      const maxChordsPerWord = 2;
       let lastIndex = 0;
       words.forEach((word, wordIndex) => {
-        // Add any space before this word
+        const wordChords = chordsByWord[wordIndex] || [];
+        const displayChords = wordChords.slice(0, maxChordsPerWord);
+        const excessChords = wordChords.slice(maxChordsPerWord);
+
+        // Add any space before this word (or ♪ for excess chords)
         if (word.start > lastIndex) {
-          wordSegments.push({
-            text: line.text.substring(lastIndex, word.start),
-            chords: []
-          });
+          if (excessChords.length > 0) {
+            // Insert ♪ segment carrying excess chords in the gap before this word
+            wordSegments.push({ text: '♪ ', chords: excessChords });
+          } else {
+            wordSegments.push({
+              text: line.text.substring(lastIndex, word.start),
+              chords: []
+            });
+          }
+        } else if (excessChords.length > 0) {
+          // No space before word but have excess chords - insert ♪ anyway
+          wordSegments.push({ text: '♪ ', chords: excessChords });
         }
 
-        // Add the word with its chords
+        // Add the word with its chords (capped at maxChordsPerWord)
         wordSegments.push({
           text: line.text.substring(word.start, word.end + 1),
-          chords: chordsByWord[wordIndex] || []
+          chords: displayChords
         });
 
         lastIndex = word.end + 1;
@@ -339,15 +409,11 @@ export const LyricLine: React.FC<LyricLineProps> = ({
 
       <div
         id={`line-${index}`}
-        className={`mb-4 ${isActive ? `active p-2 rounded-lg -mx-1 border-l-3 ${darkMode ? 'bg-blue-900 bg-opacity-20 border-blue-500' : 'bg-blue-50 border-blue-400'}` : ''} ${isPast ? 'past' : ''} ${
+        className={`mb-4 ${isActive ? 'active' : ''} ${isPast ? 'past' : ''} ${
           isInstrumental ? `${darkMode ? 'bg-yellow-900 bg-opacity-20 border-yellow-600' : 'bg-yellow-50 border-yellow-400'} border-l-3 italic` : ''
         } ${
           isChordOnly ? 'text-center' : ''
         }`}
-        style={isActive ? {
-          transform: 'scale(1.01)',
-          transition: 'all 0.3s ease-in-out'
-        } : {}}
       >
         <div className="flex flex-wrap">
           {wordSegments.map((segment, i) => (
@@ -355,10 +421,11 @@ export const LyricLine: React.FC<LyricLineProps> = ({
               key={i}
               className="relative inline-flex flex-col justify-end"
               style={{
-                alignItems: 'flex-start',
+                alignItems: isChordOnly ? 'center' : 'flex-start',
                 marginRight: segment.text === ' ' ? '0' : '0px', // No extra margin for spaces
                 letterSpacing: 'normal', // Use normal letter spacing for all text
-                whiteSpace: 'pre-wrap' // Preserve whitespace
+                whiteSpace: 'pre-wrap', // Preserve whitespace
+                ...(isChordOnly && segment.chords.length > 0 ? { minWidth: '2.5em' } : {})
               }}
             >
               {segment.chords.length > 0 && (
@@ -381,7 +448,7 @@ export const LyricLine: React.FC<LyricLineProps> = ({
                     <span
                       key={`chord-${chordIndex}`}
                       className="inline-block mx-0.5"
-                      dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord, darkMode) }}
+                      dangerouslySetInnerHTML={{ __html: formatChordWithMusicalSymbols(chord, darkMode, accidentalPreference) }}
                     ></span>
                   ).reduce((prev, curr, i) =>
                     i === 0 ? [curr] : [...prev, <span key={`space-${i}`}> </span>, curr], [] as React.ReactNode[]
@@ -404,7 +471,7 @@ export const LyricLine: React.FC<LyricLineProps> = ({
               {/* Render text with character-by-character animation for active lines */}
               <div
                 style={{
-                  fontSize: `${fontSize}px`,
+                  fontSize: `${isChordOnly ? fontSize * 1.15 : fontSize}px`,
                   paddingTop: segment.chords.length > 0 ? '2px' : '0',
                   display: 'inline-block',
                   whiteSpace: 'pre' // Preserve whitespace exactly as is

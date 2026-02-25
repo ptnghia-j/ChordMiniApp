@@ -96,7 +96,7 @@ const HeroGuitarChordAnimation: React.FC<HeroGuitarChordAnimationProps> = ({
                 size="medium"
                 showChordName={false}
                 displayName={chordProgression[currentChordIndex]}
-                isFocused={true}
+                isFocused={false}
               />
             </div>
             

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { enhanceLyricsWithCharacterTiming, EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
+import { normalizeChordForDedup } from '@/utils/chordNormalization';
 
 // Types: beat-aligned chord events
 export interface BeatAlignedChordEvent {
@@ -39,8 +40,8 @@ const deduplicateChords = (chords: BeatAlignedChordEvent[]): BeatAlignedChordEve
     const currentChord = chords[i];
     const previousChord = chords[i - 1];
 
-    // Only add chord if it's different from the previous one
-    if (currentChord.chord !== previousChord.chord) {
+    // Only add chord if its normalized display form differs from the previous one
+    if (normalizeChordForDedup(currentChord.chord) !== normalizeChordForDedup(previousChord.chord)) {
       deduplicated.push(currentChord);
     }
   }
@@ -89,21 +90,16 @@ const createChordOnlySection = (chords: BeatAlignedChordEvent[], isCondensed: bo
   // Use a small safety buffer to avoid overlapping into the next lyric line
   const endTime = chords[chords.length - 1].time + 0.5; // 0.5s buffer after last uncovered chord
 
-  // For condensed sections, show all unique chords in a single compact row with proper formatting
-  const displayText = isCondensed
-    ? deduplicatedChords.map(chord => {
-        // Apply chord formatting to remove :maj suffixes and standardize notation
-        const formattedChord = chord.chord.replace(/:maj$/, ''); // Remove :maj suffix
-        return formattedChord;
-      }).join(' ') // Show all unique chords together
-    : '♪'.repeat(Math.max(1, deduplicatedChords.length)).split('').join(' '); // Dynamic musical note symbols based on chord changes
+  // Generate ♪ symbols as display text, one per chord change, with spacing.
+  // Each ♪ is positioned to align with its corresponding chord label above.
+  const displayText = deduplicatedChords.map(() => '♪').join('  ');
 
   return {
     startTime,
     endTime,
     text: displayText,
-    chords: deduplicatedChords.map(chord => ({
-      position: 0, // Position at start of placeholder text
+    chords: deduplicatedChords.map((chord, idx) => ({
+      position: idx * 3, // Each '♪' + '  ' = 3 chars, matching the joined text positions
       chord: chord.chord,
       time: chord.time
     })),
@@ -192,15 +188,30 @@ export const useProcessedLyrics = ({
         error: lyrics.error
       };
 
-      // Map chords to lyrics lines and words
+      // Map chords to lyrics lines and words.
+      // Track the last displayed chord across lines to prevent cross-line duplicates
+      // (e.g., last chord of line N re-appearing as first chord of line N+1).
+      // Uses normalized display form so visually identical chords are caught.
+      let lastGlobalNormalized = '';
       lyricsWithChords.lines.forEach((line, lineIndex) => {
-        // Find chords that occur during this line's time range
+        // Inclusive boundaries [startTime, endTime]: every chord within the range is
+        // assigned to this line. Cross-line deduplication (below) prevents the same
+        // chord from appearing on both the ending and starting lines when boundaries
+        // coincide. This avoids the gap caused by half-open intervals where a chord
+        // at exactly endTime would be lost from both adjacent lines.
         const lineChords = memoizedChords.filter(chord =>
           chord.time >= line.startTime && chord.time <= line.endTime
         );
 
-        // Deduplicate chords to only show chord changes
-        const deduplicatedLineChords = deduplicateChords(lineChords);
+        // Cross-line deduplication: skip chords matching the last displayed chord (by visual form)
+        const deduplicatedLineChords: BeatAlignedChordEvent[] = [];
+        for (const chord of lineChords) {
+          const normalized = normalizeChordForDedup(chord.chord);
+          if (normalized !== lastGlobalNormalized) {
+            deduplicatedLineChords.push(chord);
+            lastGlobalNormalized = normalized;
+          }
+        }
 
         // Create chord markers for each chord
         const chordMarkers: ChordMarker[] = deduplicatedLineChords.map(chord => {
@@ -216,7 +227,7 @@ export const useProcessedLyrics = ({
 
           // Find which word this position falls into
           let currentPos = 0;
-          let wordIndex = 0;
+          let wordIndex = -1; // -1 = not found (falls on gap/space)
 
           for (let i = 0; i < words.length; i++) {
             const wordLength = words[i].length;
@@ -228,9 +239,26 @@ export const useProcessedLyrics = ({
             currentPos += wordLength + 1;
           }
 
+          // FIX: When charPosition falls on a gap between words, find the
+          // nearest word (by distance to word-start) instead of defaulting to
+          // word 0. This prevents orphaned chords from piling onto the first word.
+          if (wordIndex < 0 && words.length > 0) {
+            let minDist = Infinity;
+            wordIndex = 0;
+            currentPos = 0;
+            for (let i = 0; i < words.length; i++) {
+              const dist = Math.abs(charPosition - currentPos);
+              if (dist < minDist) {
+                minDist = dist;
+                wordIndex = i;
+              }
+              currentPos += words[i].length + 1;
+            }
+          }
+
           // Calculate the position at the start of the word
           let wordStartPos = 0;
-          for (let i = 0; i < wordIndex; i++) {
+          for (let i = 0; i < Math.max(0, wordIndex); i++) {
             wordStartPos += words[i].length + 1; // Add 1 for space
           }
 
@@ -241,8 +269,23 @@ export const useProcessedLyrics = ({
           };
         });
 
+        // Position-sorted dedup: remove consecutive same chord labels
+        // by display position. This catches cases where non-consecutive
+        // time-order duplicates (e.g. B→A→B where A maps to a gap) end
+        // up on adjacent word positions after the mapping above.
+        const sortedMarkers = [...chordMarkers].sort((a, b) => a.position - b.position);
+        const dedupedMarkers: ChordMarker[] = [];
+        let prevPosNorm = '';
+        for (const m of sortedMarkers) {
+          const norm = normalizeChordForDedup(m.chord);
+          if (norm !== prevPosNorm) {
+            dedupedMarkers.push(m);
+            prevPosNorm = norm;
+          }
+        }
+
         // Add chord markers to the line
-        lyricsWithChords.lines[lineIndex].chords = chordMarkers;
+        lyricsWithChords.lines[lineIndex].chords = dedupedMarkers;
       });
     }
 

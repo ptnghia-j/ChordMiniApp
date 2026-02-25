@@ -1624,6 +1624,7 @@ export default function YouTubeVideoAnalyzePage() {
 	                        theme={theme}
 	                        analysisResults={analysisResults}
 	                        segmentationData={segmentationData}
+	                        sequenceCorrections={simplifiedSequenceCorrections}
 	                      />
 	                    )}
                   </div>
