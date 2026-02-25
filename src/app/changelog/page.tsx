@@ -30,14 +30,15 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
-      version: 'v0.5.3.2',
+      version: 'v0.5.3.5',
       date: 'February 25, 2026',
       title: 'UI Improvements',
       description: 'UI improvements and dependency fixes',
       features:[
         'UI: Updated to HeroUI components for navigation bar, tabs, and buttons',
         'UI: Updated homepage UI',
-        'UI: Updated Guitar Chords tab UI'
+        'UI: Updated Guitar Chords tab UI',
+        'NEW: Analysis summary section with audio metadata and song metadata from MusicBrainz'
       ],
       technical: [
         'FIX: Updated dependencies',

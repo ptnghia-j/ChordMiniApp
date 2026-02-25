@@ -1588,6 +1588,7 @@ export default function YouTubeVideoAnalyzePage() {
                           <AnalysisSummary
                             analysisResults={analysisResults}
                             audioDuration={duration}
+                            videoTitle={videoTitle}
                           >
                             <BeatTimeline
                               beats={analysisResults?.beats || []}

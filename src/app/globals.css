@@ -561,3 +561,64 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* ======================================================
+   Guitar Chord Diagram — Dark Mode SVG Color Overrides
+   Directly targets inline SVG attributes from @tombatossals/react-chords
+   for crisp white lines and readable finger numbers.
+   ====================================================== */
+
+/* Neck grid lines & nut */
+.dark .chord-diagram-container svg path[stroke="#444"] {
+  stroke: #ffffff !important;
+}
+
+/* String & fret lines */
+.dark .chord-diagram-container svg line[stroke="#444"] {
+  stroke: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Nut (thick top bar) — keep fully white */
+.dark .chord-diagram-container svg path[stroke-width="2"] {
+  stroke: #ffffff !important;
+}
+
+/* Fret dots (pressed strings) — white fill & stroke */
+.dark .chord-diagram-container svg circle[fill="#444"] {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+.dark .chord-diagram-container svg circle[stroke="#444"] {
+  stroke: #ffffff !important;
+}
+
+/* Open string circles — white outline, keep transparent fill */
+.dark .chord-diagram-container svg circle[fill="transparent"] {
+  fill: transparent !important;
+  stroke: #ffffff !important;
+}
+
+/* Finger numbers inside dots — dark for contrast on white dots */
+.dark .chord-diagram-container svg text[fill="white"] {
+  fill: #1a1a2e !important;
+  font-weight: 700;
+}
+
+/* Muted string X, fret numbers, tuning labels — white text */
+.dark .chord-diagram-container svg text[fill="#444"] {
+  fill: #ffffff !important;
+}
+
+/* Barre rectangles */
+.dark .chord-diagram-container svg rect[fill="#444"] {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Capo/barre semi-transparent elements */
+.dark .chord-diagram-container svg rect[fill="#555"] {
+  fill: rgba(255, 255, 255, 0.3) !important;
+}
+.dark .chord-diagram-container svg path[fill="#555"] {
+  fill: rgba(255, 255, 255, 0.3) !important;
+}

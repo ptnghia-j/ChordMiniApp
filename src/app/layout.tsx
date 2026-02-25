@@ -138,8 +138,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${robotoMono.variable} ${nunito.variable}`}>
+    <html lang="en" className={`${robotoMono.variable} ${nunito.variable}`} suppressHydrationWarning>
       <head>
+        {/* Blocking script: apply dark class BEFORE first paint to prevent theme flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`
+          }}
+        />
         {/* Critical CSS inlined for performance - eliminates render blocking */}
         <style dangerouslySetInnerHTML={{
           __html: `

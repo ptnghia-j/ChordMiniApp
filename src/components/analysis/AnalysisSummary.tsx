@@ -1,9 +1,13 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardBody, Chip, Divider } from '@heroui/react';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
 import { BeatInfo } from '@/services/audio/beatDetectionService';
+import {
+  SongMetadata,
+  fetchSongMetadata,
+} from '@/services/musicbrainz/musicbrainzService';
 
 interface AnalysisSummaryProps {
   analysisResults: {
@@ -19,15 +23,28 @@ interface AnalysisSummaryProps {
     };
   };
   audioDuration?: number;
+  videoTitle?: string;
   children?: React.ReactNode;
 }
 
 const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
   analysisResults,
   audioDuration = 0,
+  videoTitle,
   children,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [songMetadata, setSongMetadata] = useState<SongMetadata | null>(null);
+
+  /* ---------- fetch MusicBrainz metadata when videoTitle is set ---------- */
+  useEffect(() => {
+    if (!videoTitle) return;
+    const controller = new AbortController();
+    fetchSongMetadata(videoTitle, controller.signal).then((data) => {
+      if (!controller.signal.aborted) setSongMetadata(data);
+    });
+    return () => controller.abort();
+  }, [videoTitle]);
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -84,6 +101,21 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
       : []),
   ];
 
+  /** Capitalise each word: "folk pop" → "Folk Pop" */
+  const capitalise = (s: string) =>
+    s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const metadataRows = useMemo(() => {
+    if (!songMetadata) return [];
+    const rows: { label: string; value: string }[] = [];
+    if (songMetadata.albumName) rows.push({ label: 'Album', value: songMetadata.albumName });
+    if (songMetadata.releaseDate) rows.push({ label: 'Released', value: songMetadata.releaseDate });
+    if (songMetadata.label) rows.push({ label: 'Label', value: songMetadata.label });
+    if (songMetadata.genres?.length)
+      rows.push({ label: 'Genres', value: songMetadata.genres.map(capitalise).join(', ') });
+    return rows;
+  }, [songMetadata]);
+
   return (
     <Card
       shadow="sm"
@@ -134,6 +166,27 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
         {isExpanded && (
           <>
             <Divider className="my-0.5" />
+
+            {/* Song metadata from MusicBrainz (only non-empty fields) */}
+            {metadataRows.length > 0 && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                  {metadataRows.map(({ label, value }) => (
+                    <div key={label} className="flex flex-col">
+                      <span className="text-[11px] font-medium text-emerald-500 dark:text-emerald-400 uppercase tracking-wider">
+                        {label}
+                      </span>
+                      <span className="text-gray-800 dark:text-gray-200 font-medium truncate">
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <Divider className="my-0.5" />
+              </>
+            )}
+
+            {/* Analysis detail rows */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
               {detailRows.map(({ label, value }) => (
                 <div key={label} className="flex flex-col">

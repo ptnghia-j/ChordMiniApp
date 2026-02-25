@@ -107,7 +107,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             alt="No Chord"
             width={restSize}
             height={restSize}
-            className="quarter-rest-responsive transition-all duration-200 brightness-[0.4] dark:[filter:invert(1)_brightness(5)]"
+            className="quarter-rest-responsive transition-all duration-200 brightness-[0.4] dark:brightness-100 dark:invert"
           />
         </div>
         {showChordName && (
@@ -204,7 +204,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           height: `${height}px`,
         }}
       >
-        <div className="dark:[filter:invert(1)_brightness(5)]">
+        <div className="chord-diagram-svg">
           <Chord
             chord={chordForDiagram}
             instrument={GUITAR_INSTRUMENT}
