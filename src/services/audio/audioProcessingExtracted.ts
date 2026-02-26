@@ -206,15 +206,15 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
   try {
     // Start processing context for new analysis
     processingContext.startProcessing();
-    processingContext.setStage('beat-detection');
+    processingContext.setStage('chord-recognition');
     processingContext.setProgress(0);
-    processingContext.setStatusMessage('Starting beat detection...');
+    processingContext.setStatusMessage('Recognizing chords and synchronizing with beats...');
 
-    // Update to chord recognition stage after a brief delay
+    // Update to beat detection stage after a brief delay
     stageTimeout = setTimeout(() => {
-      processingContext.setStage('chord-recognition');
+      processingContext.setStage('beat-detection');
       processingContext.setProgress(50);
-      processingContext.setStatusMessage('Recognizing chords and synchronizing with beats...');
+      processingContext.setStatusMessage('Analyzing beat patterns and timing...');
     }, 1000);
 
     // Call the audio processing service with current model values

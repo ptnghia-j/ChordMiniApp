@@ -448,9 +448,9 @@ export default function LocalAudioAnalyzePage() {
     try {
       // Start processing context
       startProcessing();
-      setStage('beat-detection');
+      setStage('chord-recognition');
       setProgress(0);
-      setStatusMessage('Starting beat detection...');
+      setStatusMessage('Recognizing chords and synchronizing with beats...');
 
       // Use existing object URL from audio element or create new one (track and cleanup)
       let audioUrl = audioRef.current?.src;
@@ -476,11 +476,11 @@ export default function LocalAudioAnalyzePage() {
         setDuration(audioRef.current.duration);
       }
 
-      // Update to chord recognition stage after duration is available
+      // Update to beat detection stage after duration is available
       stageTimeoutRef.current = setTimeout(() => {
-        setStage('chord-recognition');
+        setStage('beat-detection');
         // Don't set progress here - let ProcessingStatusBanner calculate it
-        setStatusMessage('Recognizing chords and synchronizing with beats...');
+        setStatusMessage('Analyzing beat patterns and timing...');
       }, 500); // Reduced delay since we now have duration
 
       setAudioProcessingState(prev => ({
@@ -935,8 +935,6 @@ const simplifiedChordGridData = useMemo(() => {
 
       {/* Processing Status Banner */}
       <ProcessingStatusBanner
-        analysisResults={analysisResults}
-        audioDuration={duration}
         audioUrl={audioProcessingState.audioUrl || undefined}
         beatDetector={beatDetector}
       />

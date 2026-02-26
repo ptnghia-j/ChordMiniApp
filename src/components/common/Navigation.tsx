@@ -151,7 +151,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               style={{ width: '40px', height: '40px' }}
               priority
             />
-            <h1 className="text-xl font-nunito font-extrabold text-primary transition-colors duration-300 group-hover:text-primary-600 tracking-tight">
+            <h1 className="text-xl font-nunito font-extrabold text-foreground transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 tracking-tight">
               ChordMini
             </h1>
           </Link>
@@ -174,12 +174,12 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
           <NavbarItem key={item.href} className="hidden sm:flex" suppressHydrationWarning>
             {item.isScroll ? (
               <Button
-                variant={isActiveRoute(item.href) ? "solid" : "ghost"}
-                color={isActiveRoute(item.href) ? "primary" : "default"}
+                variant="ghost"
+                color="default"
                 onPress={() => handleNavClick(item.href, item.isScroll)}
                 className={`font-medium text-sm transition-all duration-200 ${
                   isActiveRoute(item.href)
-                    ? 'bg-primary text-black dark:text-primary-foreground shadow-lg border border-primary'
+                    ? 'text-foreground border border-default-400 dark:border-default-300'
                     : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
                 }`}
                 size="sm"
@@ -191,11 +191,11 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               <Button
                 as={Link}
                 href={item.href}
-                variant={isActiveRoute(item.href) ? "solid" : "ghost"}
-                color={isActiveRoute(item.href) ? "primary" : "default"}
+                variant="ghost"
+                color="default"
                 className={`font-medium text-sm transition-all duration-200 ${
                   isActiveRoute(item.href)
-                    ? 'bg-primary text-black dark:text-primary-foreground border border-blue-500 dark:border-blue-300'
+                    ? 'text-foreground border border-default-400 dark:border-default-300'
                     : 'hover:bg-blue-50 dark:hover:bg-default-200/20 text-black dark:text-foreground bg-transparent border border-transparent hover:border-blue-300 dark:hover:border-default-300'
                 }`}
                 size="sm"

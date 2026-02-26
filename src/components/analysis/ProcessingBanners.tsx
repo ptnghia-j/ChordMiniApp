@@ -49,12 +49,11 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
   showExtractionNotification,
   onDismissExtraction,
   onRefreshExtraction,
-  analysisResults: _analysisResults,
   audioDuration: _audioDuration,
-  audioUrl: _audioUrl,
+  audioUrl,
   fromFirestoreCache,
-  videoId: _videoId,
-  beatDetector: _beatDetector,
+  videoId,
+  beatDetector,
   error,
   suggestion,
   onTryAnotherVideo,
@@ -79,6 +78,9 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
       <ProcessingStatusBanner
         fromCache={fromCache}
         fromFirestoreCache={fromFirestoreCache}
+        audioUrl={audioUrl}
+        videoId={videoId}
+        beatDetector={beatDetector}
       />
 
       {/* Error message */}

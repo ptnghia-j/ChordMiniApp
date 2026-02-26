@@ -55,7 +55,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
         <h3 className="text-lg font-semibold text-foreground">
           Select Models for Analysis
         </h3>
-        <p className="text-sm text-default-500">
+        <p className="text-sm text-default-500 dark:text-default-300">
           Choose beat and chord detection models to analyze the audio.
         </p>
 
