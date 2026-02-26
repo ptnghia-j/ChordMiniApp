@@ -400,7 +400,7 @@ export class MetronomeService {
    * @param timeSignature - Time signature for downbeat emphasis (default: 4)
    * @returns Promise<AudioBuffer> - Complete metronome track
    */
-  public async generateMetronomeTrack(duration: number, bpm: number, _timeSignature: number = 4): Promise<AudioBuffer | null> { // eslint-disable-line @typescript-eslint/no-unused-vars
+  public async generateMetronomeTrack(duration: number, bpm: number, _timeSignature: number = 4): Promise<AudioBuffer | null> {  
     if (!await this.ensureAudioContext()) {
       console.error('Cannot generate metronome track: AudioContext not available');
       return null;
@@ -473,7 +473,7 @@ export class MetronomeService {
    * @param isDownbeat - Whether this is a downbeat click
    * @param beatId - Unique identifier to prevent duplicate scheduling
    */
-  public scheduleClick(relativeTime: number, isDownbeat: boolean = false, _beatId?: string): void { // eslint-disable-line @typescript-eslint/no-unused-vars
+  public scheduleClick(relativeTime: number, isDownbeat: boolean = false, _beatId?: string): void {  
     // DEPRECATED: This method is no longer used with the pre-generated track approach
     console.log('scheduleClick called - deprecated in favor of pre-generated track approach');
 

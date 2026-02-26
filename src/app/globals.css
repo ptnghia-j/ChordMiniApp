@@ -327,12 +327,13 @@
 
 /* Lyrics Styles */
 .lyrics-container {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-varela-round), 'Varela Round', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.8;
 }
 
 .chord {
   color: #2563eb; /* Blue color to match theme */
+  font-family: var(--font-varela-round), 'Varela Round', system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.85em;
   position: absolute;

@@ -3,13 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useTheme } from '@/contexts/ThemeContext';
 import { HiMail, HiHeart } from 'react-icons/hi';
 import { SiGithub, SiArxiv } from 'react-icons/si';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 
 const Footer: React.FC = () => {
-  const { theme } = useTheme();
 
   const footerSections = {
     product: {
@@ -61,14 +59,23 @@ const Footer: React.FC = () => {
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
                 <Link href="/">
+                  {/* Light theme logo - hidden in dark mode */}
                   <Image
-                  src={theme === 'dark' ? "/chordMiniLogo-dark.webp" : "/chordMiniLogo.webp"}
-                  alt="ChordMini Logo"
-                  width={40}
-                  height={40}
-                  sizes="40px"
-                  priority={false}
-                  className="w-10 h-10"
+                    src="/chordMiniLogo.webp"
+                    alt="ChordMini Logo"
+                    width={40}
+                    height={40}
+                    sizes="40px"
+                    className="w-10 h-10 block dark:hidden"
+                  />
+                  {/* Dark theme logo - hidden in light mode */}
+                  <Image
+                    src="/chordMiniLogo-dark.webp"
+                    alt="ChordMini Logo"
+                    width={40}
+                    height={40}
+                    sizes="40px"
+                    className="w-10 h-10 hidden dark:block"
                   />
                 </Link>
                 <div>

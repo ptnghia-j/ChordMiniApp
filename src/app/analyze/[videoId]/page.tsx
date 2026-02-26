@@ -139,7 +139,7 @@ export default function YouTubeVideoAnalyzePage() {
 
   const {
     stage,
-    progress: _progress, // eslint-disable-line @typescript-eslint/no-unused-vars
+    progress: _progress,  
     setStage,
     setProgress,
     setStatusMessage,
@@ -165,8 +165,8 @@ export default function YouTubeVideoAnalyzePage() {
     state: audioPlayerState,
     audioRef,
     youtubePlayer,
-    handleTimeUpdate: _handleTimeUpdate, // eslint-disable-line @typescript-eslint/no-unused-vars
-    handleLoadedMetadata: _handleLoadedMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
+    handleTimeUpdate: _handleTimeUpdate,  
+    handleLoadedMetadata: _handleLoadedMetadata,  
     setState: setAudioPlayerState,
     setYoutubePlayer,
     setDuration

@@ -21,16 +21,16 @@ interface UseMetronomeSyncProps {
  * This approach generates a complete metronome track that plays alongside the main audio
  */
 export const useMetronomeSync = ({
-  beats: _beats, // eslint-disable-line @typescript-eslint/no-unused-vars
-  downbeats: _downbeats = [], // eslint-disable-line @typescript-eslint/no-unused-vars
+  beats: _beats,  
+  downbeats: _downbeats = [],  
   currentTime,
   isPlaying,
   timeSignature = 4,
   bpm = 120,
-  beatTimeRangeStart: _beatTimeRangeStart = 0, // eslint-disable-line @typescript-eslint/no-unused-vars
-  shiftCount: _shiftCount = 0, // eslint-disable-line @typescript-eslint/no-unused-vars
-  paddingCount: _paddingCount = 0, // eslint-disable-line @typescript-eslint/no-unused-vars
-  chordGridBeats: _chordGridBeats = [], // eslint-disable-line @typescript-eslint/no-unused-vars
+  beatTimeRangeStart: _beatTimeRangeStart = 0,  
+  shiftCount: _shiftCount = 0,  
+  paddingCount: _paddingCount = 0,  
+  chordGridBeats: _chordGridBeats = [],  
   audioDuration = 0
 }: UseMetronomeSyncProps) => {
   const isGeneratingTrack = useRef<boolean>(false);

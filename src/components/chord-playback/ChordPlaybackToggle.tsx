@@ -49,10 +49,10 @@ interface ChordPlaybackToggleProps {
 const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   isEnabled,
   onClick,
-  pianoVolume: _pianoVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
-  guitarVolume: _guitarVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
-  violinVolume: _violinVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
-  fluteVolume: _fluteVolume, // eslint-disable-line @typescript-eslint/no-unused-vars
+  pianoVolume: _pianoVolume,  
+  guitarVolume: _guitarVolume,  
+  violinVolume: _violinVolume,  
+  fluteVolume: _fluteVolume,  
   onPianoVolumeChange,
   onGuitarVolumeChange,
   onViolinVolumeChange,

@@ -4,9 +4,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Tabs, Tab, Tooltip } from '@heroui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Varela_Round } from 'next/font/google';
-
-const varelaRound = Varela_Round({ weight: '400', subsets: ['latin'], display: 'swap' });
 
 // ============================================================
 // Mock Data
@@ -176,12 +173,12 @@ function ChordGrid({
                   }`}
                 >
                   {showLabel && (
-                    <span className={`${varelaRound.className} text-[10px] sm:text-xs lg:text-sm leading-none`}>
+                    <span className={`font-varela text-[10px] sm:text-xs lg:text-sm leading-none`}>
                       {chord}
                     </span>
                   )}
                   {showRomanNumerals && roman && (
-                    <span className={`${varelaRound.className} font-semibold leading-none mt-0.5 ${
+                    <span className={`font-varela font-semibold leading-none mt-0.5 ${
                       isHighlighted ? 'text-blue-200 dark:text-blue-200' : 'text-blue-700 dark:text-blue-300'
                     }`} style={{ fontSize: '8px' }}>
                       {roman}
@@ -282,7 +279,7 @@ function MiniChordDiagram({ frets, name, isActive, isDark }: {
           })}
         </svg>
       </div>
-      <span className={`${varelaRound.className} text-[10px] sm:text-xs mt-0.5 transition-colors duration-300 ${
+      <span className={`font-varela text-[10px] sm:text-xs mt-0.5 transition-colors duration-300 ${
         isActive ? 'text-blue-500 dark:text-blue-400 font-semibold' : isDark ? 'text-gray-500' : 'text-gray-400'
       }`}>{name}</span>
     </div>
@@ -416,7 +413,7 @@ function LyricsMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: n
                         <div key={wi} className="relative inline-flex flex-col justify-end" style={{ whiteSpace: 'pre-wrap' }}>
                           {word.chord && (
                             <div className="relative mb-0.5">
-                              <span className={`${varelaRound.className} text-[10px] sm:text-xs font-semibold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                              <span className={`font-varela text-[10px] sm:text-xs font-semibold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
                                 {word.chord}
                               </span>
                               <div className="absolute bottom-0 left-0 right-0 h-px" style={{ backgroundColor: isDark ? '#475569' : '#94a3b8' }} />

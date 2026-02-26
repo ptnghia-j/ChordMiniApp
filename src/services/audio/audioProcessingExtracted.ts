@@ -343,7 +343,7 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
     setDuration,
     setShowExtractionNotification,
     extractionLockRef,
-    progress: _progress, // eslint-disable-line @typescript-eslint/no-unused-vars
+    progress: _progress,  
     processingContext,
 
     // Cancellation & staleness controls

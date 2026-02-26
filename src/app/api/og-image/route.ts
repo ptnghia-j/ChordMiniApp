@@ -8,15 +8,15 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   // Extract parameters for future dynamic image generation
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const _title = searchParams.get('title');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const _videoId = searchParams.get('videoId');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const _artist = searchParams.get('artist');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const _key = searchParams.get('key');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const _bpm = searchParams.get('bpm');
 
   try {

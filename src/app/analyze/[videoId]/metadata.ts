@@ -72,7 +72,7 @@ async function fetchVideoInfo(videoId: string): Promise<VideoInfo | null> {
 /**
  * Check if analysis results exist for this video
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 async function checkAnalysisResults(_videoId: string): Promise<AnalysisResults | null> {
   try {
     // This would typically check your cache/database for existing analysis

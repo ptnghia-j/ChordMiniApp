@@ -111,7 +111,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           />
         </div>
         {showChordName && (
-          <span className={`text-center font-medium mt-1 ${
+          <span className={`font-varela text-center font-medium mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
@@ -127,7 +127,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
         {/* Roman numeral display for No Chord */}
         {showRomanNumerals && romanNumeral && (
           <div
-            className={`text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
+            className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
               size === 'small' ? 'text-xs' :
               size === 'medium' ? 'text-sm' :
               'text-base'
@@ -216,7 +216,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
       {/* Chord name */}
       {showChordName && (
         <span
-          className={`text-center font-medium mt-1 ${
+          className={`font-varela text-center font-medium mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
@@ -234,7 +234,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
       {/* Roman numeral display */}
       {showRomanNumerals && romanNumeral && (
         <div
-          className={`text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
+          className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'

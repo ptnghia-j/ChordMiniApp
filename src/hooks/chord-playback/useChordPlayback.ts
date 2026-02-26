@@ -33,7 +33,7 @@ export const useChordPlayback = ({
   chords,
   beats,
   isPlaying,
-  currentTime: _currentTime, // eslint-disable-line @typescript-eslint/no-unused-vars
+  currentTime: _currentTime,  
   bpm = 120 // Default to 120 BPM if not provided
 }: UseChordPlaybackProps): UseChordPlaybackReturn => {
   const [isEnabled, setIsEnabled] = useState(false);

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Roboto_Mono, Nunito } from 'next/font/google';
+import { Roboto_Mono, Nunito, Varela_Round } from 'next/font/google';
 import './globals.css';
 import '../styles/analysis-embedded.css';
 import '../styles/chord-grid.css';
@@ -28,6 +28,14 @@ const nunito = Nunito({
   variable: '--font-nunito',
   display: 'swap',
   weight: ['700', '800'],
+});
+
+// Varela Round font for chord labels, guitar chord names, and lyrics chord annotations
+const varelaRound = Varela_Round({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-varela-round',
+  display: 'swap',
 });
 
 
@@ -138,12 +146,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${robotoMono.variable} ${nunito.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${robotoMono.variable} ${nunito.variable} ${varelaRound.variable}`} suppressHydrationWarning>
       <head>
         {/* Blocking script: apply dark class BEFORE first paint to prevent theme flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}setTimeout(function(){document.body.classList.add('theme-ready')},1500)})()`
           }}
         />
         {/* Critical CSS inlined for performance - eliminates render blocking */}
@@ -151,8 +159,11 @@ export default function RootLayout({
           __html: `
             /* Critical above-the-fold styles */
             html { font-family: ui-sans-serif, system-ui, sans-serif; }
-            body { margin: 0; padding: 0; background: #f8fafc; }
+            body { margin: 0; padding: 0; background: #f8fafc; visibility: hidden; }
+            body.theme-ready { visibility: visible; }
             .dark body { background: #1e252e; }
+            /* Fallback: ensure page is visible if JS fails or takes too long */
+            @media (scripting: none) { body { visibility: visible; } }
             .hero-container { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
             .critical-layout { contain: layout style paint; will-change: auto; transform: translateZ(0); }
             /* Prevent layout shifts */

@@ -1,16 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Varela_Round } from 'next/font/google';
 import {
   formatChordWithMusicalSymbols,
   getChordLabelStyles,
   getChordContainerStyles
 } from '@/utils/chordFormatting';
-
-const varelaRound = Varela_Round({
-  weight: '400',
-  subsets: ['latin'],
-  display: 'swap',
-});
 
 export interface ChordCellProps {
   chord: string;
@@ -228,7 +221,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleEditSave}
               onKeyDown={handleKeyDown}
-              className={`${varelaRound.className} ${getDynamicFontSize(cellSize, editValue.length)} leading-tight bg-transparent border-none outline-none text-center w-full`}
+              className={`font-varela ${getDynamicFontSize(cellSize, editValue.length)} leading-tight bg-transparent border-none outline-none text-center w-full`}
               style={{
                 ...getChordLabelStyles(),
                 maxWidth: '100%',
@@ -239,8 +232,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
             <div className="flex flex-col items-center justify-center h-full">
               {/* Chord label */}
               <div
-                // ✅ APPLY FONT: Add the varelaRound class and remove font-medium
-                className={`${varelaRound.className} ${
+                // ✅ APPLY FONT: Use font-varela Tailwind class
+                className={`font-varela ${
                   showRomanNumerals
                     ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
                     : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
@@ -266,7 +259,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
               {/* FIXED: Roman numeral display with stable layout */}
               {showRomanNumerals && romanNumeral && (
                 <div
-                  className={`${varelaRound.className} font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
+                  className={`font-varela font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
                   style={{
                     fontSize: `${Math.max(10, cellSize * 0.18)}px`, // Larger, more readable Roman numeral size
                     lineHeight: '1', // FIXED: Consistent line height to prevent layout shifts

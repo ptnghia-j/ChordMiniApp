@@ -681,7 +681,7 @@ export function getChordLabelStyles(): React.CSSProperties {
     alignItems: 'center',
     minHeight: '1.5rem', // Reduced min height
     minWidth: '2rem', // Reduced min width
-    fontFamily: '"Helvetica Neue", "Arial", sans-serif', // Use cleaner, more modern font like Chordify
+    fontFamily: 'var(--font-varela-round), "Varela Round", "Helvetica Neue", "Arial", sans-serif', // Use Varela Round to match demo page
     fontWeight: '400', // Slightly lighter base weight for better contrast with bold roots
     letterSpacing: '0.005em', // Minimal letter spacing for cleaner look
     fontSize: '0.95rem', // Slightly smaller for better proportion

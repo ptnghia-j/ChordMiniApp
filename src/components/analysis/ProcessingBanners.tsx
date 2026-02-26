@@ -7,17 +7,14 @@ import UserFriendlyErrorDisplay from '@/components/common/UserFriendlyErrorDispl
 
 // Dynamic imports for heavy components
 const ProcessingStatusBanner = dynamic(() => import('@/components/analysis/ProcessingStatusBanner'), {
-  loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
-  ssr: true
+  ssr: false
 });
 
 const ExtractionNotification = dynamic(() => import('@/components/analysis/ExtractionNotification'), {
-  loading: () => <div className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
 const DownloadingIndicator = dynamic(() => import('@/components/analysis/DownloadingIndicator'), {
-  loading: () => <div className="h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
 
@@ -52,12 +49,12 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
   showExtractionNotification,
   onDismissExtraction,
   onRefreshExtraction,
-  analysisResults,
-  audioDuration,
-  audioUrl,
+  analysisResults: _analysisResults,
+  audioDuration: _audioDuration,
+  audioUrl: _audioUrl,
   fromFirestoreCache,
-  videoId,
-  beatDetector,
+  videoId: _videoId,
+  beatDetector: _beatDetector,
   error,
   suggestion,
   onTryAnotherVideo,
@@ -78,15 +75,10 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
         onRefresh={onRefreshExtraction}
       />
 
-      {/* Processing Status Banner - positioned in content flow */}
+      {/* Processing Status Banner - triggers HeroUI toasts based on processing stage */}
       <ProcessingStatusBanner
-        analysisResults={analysisResults}
-        audioDuration={audioDuration}
-        audioUrl={audioUrl}
         fromCache={fromCache}
         fromFirestoreCache={fromFirestoreCache}
-        videoId={videoId}
-        beatDetector={beatDetector}
       />
 
       {/* Error message */}

@@ -41,7 +41,7 @@ export default function DocsPage() {
 
   // Use environment variable for backend URL (supports runtime configuration)
   // Fallback to localhost:5001 for local development
-  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  const localEndpoint = 'http://localhost:5001';
 
   useEffect(() => {
     const sectionIds = [
@@ -103,7 +103,7 @@ export default function DocsPage() {
         <div className="lg:grid lg:grid-cols-4 lg:gap-8">
           {/* Sidebar Navigation */}
           <div className="hidden lg:block lg:col-span-1">
-            <div className="sticky top-20 py-8">
+            <div className="sticky top-20 py-8 bg-white dark:bg-content-bg transition-colors duration-300">
               <nav className="space-y-6">
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
@@ -415,8 +415,16 @@ export default function DocsPage() {
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">API Endpoints</h2>
                 <div className="prose prose-gray dark:prose-invert max-w-none mb-8">
                   <p>
-                    All endpoints are available at the base URL: <strong className="font-mono text-gray-900 dark:text-white">{backendUrl}</strong>
+                    When running locally, all endpoints are available at: <strong className="font-mono text-gray-900 dark:text-white">{localEndpoint}</strong>
                   </p>
+                </div>
+                <div className={`rounded-lg p-4 mb-6 ${infoCardClass('info')}`}>
+                  <div className="flex items-start gap-3">
+                    <FiInfo className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      For remote/production endpoint access, please contact the maintainer. Be mindful of rate limits and usage constraints when testing remotely.
+                    </p>
+                  </div>
                 </div>
                 <div className="grid gap-6">
                   <Card shadow="sm" className="hover:shadow-lg transition-all border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
@@ -470,7 +478,7 @@ formData.append('file', audioFile);
 formData.append('model', 'chord-cnn-lstm');
 
 const response = await fetch(
-  '${backendUrl}/api/recognize-chords',
+  '${localEndpoint}/api/recognize-chords',
   {
     method: 'POST',
     body: formData
@@ -486,7 +494,7 @@ console.log(result);`}
                     <CodeBlock
                       title="cURL"
                       language="bash"
-                      code={`curl -X POST "${backendUrl}/api/detect-beats" \\
+                      code={`curl -X POST "${localEndpoint}/api/detect-beats" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=beat-transformer"`}
                     />
@@ -496,7 +504,7 @@ console.log(result);`}
                     <CodeBlock
                       title="cURL"
                       language="bash"
-                      code={`curl -X POST "${backendUrl}/api/recognize-chords" \\
+                      code={`curl -X POST "${localEndpoint}/api/recognize-chords" \\
   -F "file=@your-audio-file.mp3" \\
   -F "model=chord-cnn-lstm"`}
                     />

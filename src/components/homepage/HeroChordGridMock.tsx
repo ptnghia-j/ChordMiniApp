@@ -3,9 +3,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from '@heroui/react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Varela_Round } from 'next/font/google';
-
-const varelaRound = Varela_Round({ weight: '400', subsets: ['latin'], display: 'swap' });
 
 const MEASURES: string[][] = [
   ['C', 'C', 'Am', 'Am'],
@@ -131,12 +128,12 @@ export default function HeroChordGridMock({ className = '' }: HeroChordGridMockP
                       style={modulationStyle}
                     >
                       {showLabel && (
-                        <span className={`${varelaRound.className} text-[10px] sm:text-xs leading-none`}>
+                        <span className={`font-varela text-[10px] sm:text-xs leading-none`}>
                           {chord}
                         </span>
                       )}
                       {showRoman && roman && (
-                        <span className={`${varelaRound.className} font-semibold leading-none mt-0.5 ${
+                        <span className={`font-varela font-semibold leading-none mt-0.5 ${
                           isHighlighted ? 'text-blue-200' : isModulationCell ? 'text-green-600 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'
                         }`} style={{ fontSize: '8px' }}>
                           {roman}
