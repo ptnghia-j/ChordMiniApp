@@ -13,7 +13,7 @@ import { useAnalysisResults, useShowCorrectedChords, useChordCorrections } from 
 import { useCurrentBeatIndex } from '@/stores/playbackStore';
 import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zustand internally
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
-import { transposeChord } from '@/utils/chordTransposition';
+import { transposeChord, calculateTargetKey } from '@/utils/chordTransposition';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 
 
@@ -109,11 +109,20 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
 
-
-
+  // Capo state: fret 0 = no capo, fret 1-12 = capo position
+  const [capoFret, setCapoFretRaw] = useState<number>(0);
+  // Capo label mode: 'shape' shows the chord shape name, 'sound' shows the sounding chord name
+  const [capoLabelMode, setCapoLabelMode] = useState<'shape' | 'sound'>('shape');
 
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [chordPositions, setChordPositions] = useState<Map<string, number>>(new Map()); // Track position for each chord
+
+  // Wrapped setter that clears chord data cache when capo changes (new chord shapes need to be loaded)
+  const setCapoFret = useCallback((value: number | ((prev: number) => number)) => {
+    setCapoFretRaw(value);
+    setChordDataCache(new Map());
+    setChordPositions(new Map());
+  }, []);
 
   // Apply pitch shift transposition to chord grid data if enabled
   const transposedChordGridData = useMemo(() => {
@@ -143,6 +152,42 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       originalAudioMapping: transposedMapping
     };
   }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey]);
+
+  // When capo is set, transpose chords DOWN by capo fret count to get the "shape" chord
+  // e.g., capo on fret 2: song has D → guitarist plays C shape (D transposed -2 = C)
+  const capoTargetKey = useMemo(() => {
+    if (capoFret === 0) return 'C';
+    // When pitch shift is active, prefer targetKey for consistent enharmonic spelling
+    // with the pitch-shifted chord grid; fall back to keySignature otherwise
+    const baseKey = (isPitchShiftEnabled && targetKey) ? targetKey : (keySignature || targetKey || 'C');
+    return calculateTargetKey(baseKey, -capoFret);
+  }, [capoFret, keySignature, targetKey, isPitchShiftEnabled]);
+
+  const capoTransposedChordGridData = useMemo(() => {
+    if (capoFret === 0 || !transposedChordGridData) {
+      return transposedChordGridData;
+    }
+
+    const capoTransposedChords = transposedChordGridData.chords.map((chord) => {
+      if (!chord || chord === 'N.C.' || chord === 'N' || chord === 'N/C' || chord === 'NC') {
+        return chord;
+      }
+      return transposeChord(chord, -capoFret, capoTargetKey);
+    });
+
+    const capoTransposedMapping = transposedChordGridData.originalAudioMapping?.map(mapping => ({
+      ...mapping,
+      chord: mapping.chord && mapping.chord !== 'N.C.' && mapping.chord !== 'N' && mapping.chord !== 'N/C' && mapping.chord !== 'NC'
+        ? transposeChord(mapping.chord, -capoFret, capoTargetKey)
+        : mapping.chord
+    }));
+
+    return {
+      ...transposedChordGridData,
+      chords: capoTransposedChords,
+      originalAudioMapping: capoTransposedMapping
+    };
+  }, [transposedChordGridData, capoFret, capoTargetKey]);
 
   // Responsive diagram sizing for animated view - diagram dimensions scale with screen
   const diagramConfig = useMemo(() => {
@@ -187,8 +232,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     if (sequenceCorrections && visualIndex !== undefined) {
       const { originalSequence, correctedSequence } = sequenceCorrections;
       let chordSequenceIndex = visualIndex;
-      if (transposedChordGridData.hasPadding) {
-        chordSequenceIndex -= ((transposedChordGridData.shiftCount || 0) + (transposedChordGridData.paddingCount || 0));
+      if (capoTransposedChordGridData.hasPadding) {
+        chordSequenceIndex -= ((capoTransposedChordGridData.shiftCount || 0) + (capoTransposedChordGridData.paddingCount || 0));
       }
 
       // First try exact index matching
@@ -210,7 +255,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       if (correction) return originalChord.replace(rootNote, correction as string);
     }
     return originalChord;
-  }, [mergedShowCorrectedChords, mergedChordCorrections, sequenceCorrections, transposedChordGridData.hasPadding, transposedChordGridData.shiftCount, transposedChordGridData.paddingCount]);
+  }, [mergedShowCorrectedChords, mergedChordCorrections, sequenceCorrections, capoTransposedChordGridData.hasPadding, capoTransposedChordGridData.shiftCount, capoTransposedChordGridData.paddingCount]);
 
 
 
@@ -239,24 +284,44 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return applyCorrectedChordNameForGuitarDiagrams(rootChord, visualIndex);
   }, [applyCorrectedChordNameForGuitarDiagrams, getRootChordForDiagramLookup]);
 
+  // Build a mapping from capo-transposed (shape) chord name → sounding chord name
+  // Uses the same preprocessing (slash stripping + corrections) as the diagram rendering
+  // so that lookups by the preprocessed chordInfo.chord / name keys always match
+  const shapeToSoundingMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (capoFret === 0 || !transposedChordGridData || !capoTransposedChordGridData) return map;
+    const skipCount = (capoTransposedChordGridData.paddingCount || 0) + (capoTransposedChordGridData.shiftCount || 0);
+    for (let i = skipCount; i < transposedChordGridData.chords.length; i++) {
+      const rawSounding = transposedChordGridData.chords[i];
+      const rawShape = capoTransposedChordGridData.chords[i];
+      if (!rawSounding || !rawShape) continue;
+      // Apply the same preprocessing used by diagram rendering
+      const processedShape = preprocessAndCorrectChordNameForGuitarDiagrams(rawShape, i);
+      const processedSounding = preprocessAndCorrectChordNameForGuitarDiagrams(rawSounding, i);
+      if (processedShape !== 'N.C.' && processedSounding !== 'N.C.' && processedShape !== processedSounding) {
+        map.set(processedShape, processedSounding);
+      }
+    }
+    return map;
+  }, [transposedChordGridData, capoTransposedChordGridData, capoFret, preprocessAndCorrectChordNameForGuitarDiagrams]);
 
 
   // Unique chords for guitar diagrams (always applies corrections for consistent display)
-  // Uses transposedChordGridData to show transposed chords when pitch shift is enabled
+  // Uses capoTransposedChordGridData to show capo-adjusted shapes when capo is enabled
   const uniqueChordsForGuitarDiagrams = useMemo(() => {
     const chordSet = new Set<string>();
-    if (transposedChordGridData.originalAudioMapping?.length) {
-      transposedChordGridData.originalAudioMapping.forEach(mapping => {
+    if (capoTransposedChordGridData.originalAudioMapping?.length) {
+      capoTransposedChordGridData.originalAudioMapping.forEach(mapping => {
         if (mapping.chord) chordSet.add(preprocessAndCorrectChordNameForGuitarDiagrams(mapping.chord, mapping.visualIndex));
       });
     } else {
-      const skipCount = (transposedChordGridData.paddingCount || 0) + (transposedChordGridData.shiftCount || 0);
-      transposedChordGridData.chords.slice(skipCount).forEach((chord, index) => {
+      const skipCount = (capoTransposedChordGridData.paddingCount || 0) + (capoTransposedChordGridData.shiftCount || 0);
+      capoTransposedChordGridData.chords.slice(skipCount).forEach((chord, index) => {
         if (chord) chordSet.add(preprocessAndCorrectChordNameForGuitarDiagrams(chord, skipCount + index));
       });
     }
     return Array.from(chordSet).sort();
-  }, [transposedChordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
+  }, [capoTransposedChordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
 
   useEffect(() => {
     const loadChordData = async () => {
@@ -264,7 +329,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       uniqueChordsForGuitarDiagrams.forEach(chord => {
         if (!chordDataCache.has(chord)) chordsToLoad.add(chord);
       });
-      const currentOriginalChord = transposedChordGridData.chords[currentBeatIndex];
+      const currentOriginalChord = capoTransposedChordGridData.chords[currentBeatIndex];
       if (currentOriginalChord) {
         const currentProcessedChord = preprocessAndCorrectChordNameForGuitarDiagrams(currentOriginalChord, currentBeatIndex);
         if (!chordDataCache.has(currentProcessedChord)) chordsToLoad.add(currentProcessedChord);
@@ -285,7 +350,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       }
     };
     loadChordData();
-  }, [uniqueChordsForGuitarDiagrams, currentBeatIndex, transposedChordGridData.chords, preprocessAndCorrectChordNameForGuitarDiagrams, chordDataCache]);
+  }, [uniqueChordsForGuitarDiagrams, currentBeatIndex, capoTransposedChordGridData.chords, preprocessAndCorrectChordNameForGuitarDiagrams, chordDataCache]);
 
   // Unfiltered chord data for guitar diagrams (always shows all chords with consistent corrections)
   const uniqueChordDataForGuitarDiagrams = useMemo(() => {
@@ -298,28 +363,28 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
 
   // Unfiltered chord progression for guitar diagrams (always shows all chords regardless of Roman numeral toggle)
-  // Uses transposedChordGridData to show transposed chords when pitch shift is enabled
+  // Uses capoTransposedChordGridData to show capo-adjusted shapes
   const getUniqueChordProgressionForGuitarDiagrams = useMemo(() => {
-    if (!transposedChordGridData.chords.length) return [];
+    if (!capoTransposedChordGridData.chords.length) return [];
     const uniqueProgression = [];
     let lastChord = null;
-    const skipCount = (transposedChordGridData.paddingCount || 0) + (transposedChordGridData.shiftCount || 0);
-    for (let i = 0; i < transposedChordGridData.chords.length; i++) {
-      const originalChord = transposedChordGridData.chords[i] || 'N.C.';
-      const isShiftCell = i < (transposedChordGridData.shiftCount || 0) && !originalChord;
-      const isPaddingCell = i >= (transposedChordGridData.shiftCount || 0) && i < skipCount && originalChord === 'N.C.' && transposedChordGridData.hasPadding;
+    const skipCount = (capoTransposedChordGridData.paddingCount || 0) + (capoTransposedChordGridData.shiftCount || 0);
+    for (let i = 0; i < capoTransposedChordGridData.chords.length; i++) {
+      const originalChord = capoTransposedChordGridData.chords[i] || 'N.C.';
+      const isShiftCell = i < (capoTransposedChordGridData.shiftCount || 0) && !originalChord;
+      const isPaddingCell = i >= (capoTransposedChordGridData.shiftCount || 0) && i < skipCount && originalChord === 'N.C.' && capoTransposedChordGridData.hasPadding;
       if (isShiftCell || isPaddingCell) continue;
       if (originalChord) {
         const processedChord = preprocessAndCorrectChordNameForGuitarDiagrams(originalChord, i);
 
         if (processedChord !== lastChord) {
-          uniqueProgression.push({ chord: processedChord, startIndex: i, timestamp: transposedChordGridData.beats[i] || 0 });
+          uniqueProgression.push({ chord: processedChord, startIndex: i, timestamp: capoTransposedChordGridData.beats[i] || 0 });
           lastChord = processedChord;
         }
       }
     }
     return uniqueProgression;
-  }, [transposedChordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
+  }, [capoTransposedChordGridData, preprocessAndCorrectChordNameForGuitarDiagrams]);
 
 
 
@@ -374,9 +439,77 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     <div className={`guitar-chords-tab space-y-3 sm:space-y-3 ${className}`}>
       {/* Beat & Chord Progression Section */}
       <div className="chord-grid-section">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-y-2">
           <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Beat & Chord Progression</h3>
           <div className="flex items-center space-x-3">
+            {/* Capo control */}
+            <div className="flex items-center space-x-1.5">
+              <label htmlFor="capo-input" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Capo:
+              </label>
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <button
+                  onClick={() => setCapoFret(prev => Math.max(0, prev - 1))}
+                  disabled={capoFret === 0}
+                  className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-l-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                  aria-label="Decrease capo fret"
+                >
+                  −
+                </button>
+                <input
+                  id="capo-input"
+                  type="number"
+                  min={0}
+                  max={12}
+                  value={capoFret}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 0 && val <= 12) setCapoFret(val);
+                  }}
+                  className="w-8 h-8 text-center text-sm font-medium bg-transparent border-0 focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  aria-label="Capo fret position"
+                />
+                <button
+                  onClick={() => setCapoFret(prev => Math.min(12, prev + 1))}
+                  disabled={capoFret === 12}
+                  className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-r-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                  aria-label="Increase capo fret"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Shape/Sound label toggle - only visible when capo is active */}
+            {capoFret > 0 && (
+              <>
+                <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Label:</span>
+                  <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                    <button
+                      onClick={() => setCapoLabelMode('shape')}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'shape' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                      title="Show chord shape name (what you play)"
+                    >
+                      Shape
+                    </button>
+                    <button
+                      onClick={() => setCapoLabelMode('sound')}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'sound' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                      title="Show sounding chord name (what you hear)"
+                    >
+                      Sound
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Divider */}
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+
+            {/* View mode toggle */}
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">View:</span>
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button onClick={() => setViewMode('animated')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'animated' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Animated</button>
@@ -405,10 +538,10 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                   {getVisibleChordRange.map((chordInfo) => {
                     // Get segmentation color for this chord position
                     // Use the timestamp from the chord info for accurate mapping
-                    const timestamp = transposedChordGridData.beats[chordInfo.startIndex];
+                    const timestamp = capoTransposedChordGridData.beats[chordInfo.startIndex];
                     const segmentationColor = getSegmentationColorForBeat(
                       chordInfo.startIndex,
-                      transposedChordGridData.beats,
+                      capoTransposedChordGridData.beats,
                       segmentationData,
                       showSegmentation,
                       typeof timestamp === 'number' ? timestamp : undefined
@@ -443,10 +576,13 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                           customHeight={diagramConfig.diagramHeight}
                           showChordName={true}
                           displayName={chordInfo.chord}
+                          soundingChordName={shapeToSoundingMap.get(chordInfo.chord)}
                           isFocused={chordInfo.isCurrent}
                           segmentationColor={segmentationColor}
                           showPositionSelector={chordInfo.isCurrent}
                           onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
+                          capoFret={capoFret}
+                          capoLabelMode={capoLabelMode}
                           showRomanNumerals={false}
                           romanNumeral=""
                           labelClassName={diagramConfig.labelClass}
@@ -472,9 +608,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                     showChordName={true}
                     className="hover:scale-105 transition-transform"
                     displayName={name}
+                    soundingChordName={shapeToSoundingMap.get(name)}
                     isFocused={false}
                     showPositionSelector={true}
                     onPositionChange={(positionIndex) => handlePositionChange(name, positionIndex)}
+                    capoFret={capoFret}
+                    capoLabelMode={capoLabelMode}
                     showRomanNumerals={false}
                     romanNumeral=""
                   />
