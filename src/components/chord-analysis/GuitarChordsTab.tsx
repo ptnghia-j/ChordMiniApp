@@ -157,10 +157,11 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   // e.g., capo on fret 2: song has D → guitarist plays C shape (D transposed -2 = C)
   const capoTargetKey = useMemo(() => {
     if (capoFret === 0) return 'C';
-    // Derive target key from the song's key signature or fallback to 'C'
-    const baseKey = keySignature || targetKey || 'C';
+    // When pitch shift is active, prefer targetKey for consistent enharmonic spelling
+    // with the pitch-shifted chord grid; fall back to keySignature otherwise
+    const baseKey = (isPitchShiftEnabled && targetKey) ? targetKey : (keySignature || targetKey || 'C');
     return calculateTargetKey(baseKey, -capoFret);
-  }, [capoFret, keySignature, targetKey]);
+  }, [capoFret, keySignature, targetKey, isPitchShiftEnabled]);
 
   const capoTransposedChordGridData = useMemo(() => {
     if (capoFret === 0 || !transposedChordGridData) {
@@ -187,21 +188,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       originalAudioMapping: capoTransposedMapping
     };
   }, [transposedChordGridData, capoFret, capoTargetKey]);
-
-  // Build a mapping from capo-transposed (shape) chord name → sounding chord name
-  // This is used when capoLabelMode === 'sound' to display the actual sounding name
-  const shapeToSoundingMap = useMemo(() => {
-    const map = new Map<string, string>();
-    if (capoFret === 0 || !transposedChordGridData || !capoTransposedChordGridData) return map;
-    for (let i = 0; i < transposedChordGridData.chords.length; i++) {
-      const soundingChord = transposedChordGridData.chords[i];
-      const shapeChord = capoTransposedChordGridData.chords[i];
-      if (soundingChord && shapeChord && soundingChord !== shapeChord) {
-        map.set(shapeChord, soundingChord);
-      }
-    }
-    return map;
-  }, [transposedChordGridData, capoTransposedChordGridData, capoFret]);
 
   // Responsive diagram sizing for animated view - diagram dimensions scale with screen
   const diagramConfig = useMemo(() => {
@@ -298,6 +284,26 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return applyCorrectedChordNameForGuitarDiagrams(rootChord, visualIndex);
   }, [applyCorrectedChordNameForGuitarDiagrams, getRootChordForDiagramLookup]);
 
+  // Build a mapping from capo-transposed (shape) chord name → sounding chord name
+  // Uses the same preprocessing (slash stripping + corrections) as the diagram rendering
+  // so that lookups by the preprocessed chordInfo.chord / name keys always match
+  const shapeToSoundingMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (capoFret === 0 || !transposedChordGridData || !capoTransposedChordGridData) return map;
+    const skipCount = (capoTransposedChordGridData.paddingCount || 0) + (capoTransposedChordGridData.shiftCount || 0);
+    for (let i = skipCount; i < transposedChordGridData.chords.length; i++) {
+      const rawSounding = transposedChordGridData.chords[i];
+      const rawShape = capoTransposedChordGridData.chords[i];
+      if (!rawSounding || !rawShape) continue;
+      // Apply the same preprocessing used by diagram rendering
+      const processedShape = preprocessAndCorrectChordNameForGuitarDiagrams(rawShape, i);
+      const processedSounding = preprocessAndCorrectChordNameForGuitarDiagrams(rawSounding, i);
+      if (processedShape !== 'N.C.' && processedSounding !== 'N.C.' && processedShape !== processedSounding) {
+        map.set(processedShape, processedSounding);
+      }
+    }
+    return map;
+  }, [transposedChordGridData, capoTransposedChordGridData, capoFret, preprocessAndCorrectChordNameForGuitarDiagrams]);
 
 
   // Unique chords for guitar diagrams (always applies corrections for consistent display)
