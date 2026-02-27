@@ -13,6 +13,8 @@ interface ScrollingChordStripProps {
   chordEvents: ChordEvent[];
   /** Current playback time in seconds */
   currentTime: number;
+  /** Whether audio is currently playing (enables 60 fps RAF scrolling) */
+  isPlaying?: boolean;
   /** Height of the strip in pixels */
   height?: number;
   /** Pixels per second of timeline (controls spread) */
@@ -36,11 +38,56 @@ const SWEEP_LINE_FRACTION = 0.2;
 // Gap between chord cells (matches ChordGrid's gap-0.5 = 2px)
 const CELL_GAP = 2;
 
+// ─── Enharmonic sharp↔flat maps for normalization ────────────────────────────
+
+const SHARP_TO_FLAT: Record<string, string> = {
+  'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb',
+};
+const FLAT_TO_SHARP: Record<string, string> = {
+  Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#',
+};
+
+/**
+ * Normalize a chord name so enharmonic equivalents (C#m vs Dbm) compare equal.
+ * Applies the given accidental preference to both root and bass notes.
+ */
+function normalizeChordName(
+  chord: string,
+  pref: 'sharp' | 'flat' | null | undefined,
+): string {
+  if (!chord || !pref) return chord;
+  // Normalize root
+  const m = chord.match(/^([A-G][#b]?)(.*)/);
+  if (!m) return chord;
+ 
+  let [, root] = m
+  const [,, rest] = m;
+
+  if (pref === 'flat' && root.includes('#')) root = SHARP_TO_FLAT[root] ?? root;
+  else if (pref === 'sharp' && root.includes('b') && root.length === 2) root = FLAT_TO_SHARP[root] ?? root;
+  // Normalize bass note after slash
+  const slashIdx = rest.indexOf('/');
+  if (slashIdx !== -1) {
+    const prefix = rest.slice(0, slashIdx + 1);
+    const bass = rest.slice(slashIdx + 1);
+    const bm = bass.match(/^([A-G][#b]?)(.*)/);
+    if (bm) {
+      let [, br] = bm;
+      const [,, brest] = bm;
+      if (pref === 'flat' && br.includes('#')) br = SHARP_TO_FLAT[br] ?? br;
+      else if (pref === 'sharp' && br.includes('b') && br.length === 2) br = FLAT_TO_SHARP[br] ?? br;
+      return root + prefix + br + brest;
+    }
+  }
+  return root + rest;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
+export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   chordEvents,
   currentTime,
+  isPlaying = false,
   height = 40,
   pixelsPerSecond = 100,
   timeSignature = 4,
@@ -49,7 +96,15 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
   uncorrectedChords,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stripInnerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+
+  // ── RAF interpolation refs ────────────────────────────────────────────────
+  const rafRef = useRef<number>(0);
+  const isPlayingRef = useRef(isPlaying);
+  const playbackBaseRef = useRef({ wallTime: 0, audioTime: currentTime });
+  const ppsRef = useRef(pixelsPerSecond);
+  const sweepRef = useRef(0);
 
   // Use shared theme context (replaces manual dark mode detection)
   const { theme } = useTheme();
@@ -74,8 +129,55 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
   // Sweep line x position
   const sweepLineX = containerWidth * SWEEP_LINE_FRACTION;
 
-  // Translation: current time aligns with sweep line
-  const translateX = -currentTime * pixelsPerSecond + sweepLineX;
+  // Keep refs current so the RAF closure always uses the latest values
+  // without restarting the loop.
+  useEffect(() => { isPlayingRef.current = isPlaying; });
+  useEffect(() => { ppsRef.current = pixelsPerSecond; }, [pixelsPerSecond]);
+  useEffect(() => { sweepRef.current = sweepLineX; }, [sweepLineX]);
+
+  // ── Sync interpolation anchor on every parent currentTime update ──────────
+  useEffect(() => {
+    playbackBaseRef.current = {
+      wallTime: performance.now() / 1000,
+      audioTime: currentTime,
+    };
+    // When paused, immediately position the strip
+    if (!isPlaying && stripInnerRef.current) {
+      stripInnerRef.current.style.transform =
+        `translateX(${-currentTime * ppsRef.current + sweepRef.current}px)`;
+    }
+  }, [currentTime, isPlaying]);
+
+  // ── RAF loop: smooth 60 fps scrolling during playback ─────────────────────
+  useEffect(() => {
+    if (!isPlaying) {
+      cancelAnimationFrame(rafRef.current);
+      return;
+    }
+
+    // Anchor from current props
+    playbackBaseRef.current = {
+      wallTime: performance.now() / 1000,
+      audioTime: currentTime,
+    };
+
+    const animate = () => {
+      if (!isPlayingRef.current) return;
+      const now = performance.now() / 1000;
+      const elapsed = now - playbackBaseRef.current.wallTime;
+      const interpolatedTime = playbackBaseRef.current.audioTime + elapsed;
+      const pps = ppsRef.current;
+      const sweep = sweepRef.current;
+      if (stripInnerRef.current) {
+        stripInnerRef.current.style.transform =
+          `translateX(${-interpolatedTime * pps + sweep}px)`;
+      }
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-compute chord box positions, show-label flags, and measure separators
   const { chordBoxes, measureSeparators, totalWidth } = useMemo(() => {
@@ -88,9 +190,25 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
       const rawWidth = Math.max((event.endTime - event.startTime) * pixelsPerSecond, 4);
       const isMeasureStart = idx > 0 && (event.beatIndex - firstBeatIndex) % timeSignature === 0;
 
-      // Show chord label only on chord changes (matching ChordGrid behavior)
-      const prevChord = idx > 0 ? chordEvents[idx - 1].chordName : '';
-      const showLabel = !!event.chordName && event.chordName !== prevChord;
+      // Show chord label only when the chord VISUALLY differs from the
+      // previous *visible* event.  This is critical because
+      // buildChordTimeline skips N.C./empty beats – so two identical chords
+      // separated by an empty beat appear adjacent in the strip.  Comparing
+      // only against the previous event (not the full array) prevents
+      // false-positive "new chord" labels.  We also normalize enharmonic
+      // spellings (C# ↔ Db) via accidentalPreference so visually identical
+      // chords are treated as equal.
+      let showLabel: boolean;
+      if (!event.chordName) {
+        showLabel = false;
+      } else if (idx === 0) {
+        showLabel = true;
+      } else {
+        const prevEventChord = chordEvents[idx - 1]?.chordName ?? '';
+        const normCurrent = normalizeChordName(event.chordName, accidentalPreference);
+        const normPrev    = normalizeChordName(prevEventChord,  accidentalPreference);
+        showLabel = normCurrent !== normPrev;
+      }
 
       return {
         chordName: event.chordName,
@@ -117,7 +235,7 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
       measureSeparators: separators,
       totalWidth: last.endTime * pixelsPerSecond,
     };
-  }, [chordEvents, pixelsPerSecond, timeSignature]);
+  }, [chordEvents, pixelsPerSecond, timeSignature, accidentalPreference]);
 
   // ── Stable ChordCell callbacks (memoized to avoid re-renders) ─────────────
 
@@ -154,11 +272,11 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
       className="relative overflow-hidden rounded-sm"
       style={{ height }}
     >
-      {/* Scrolling chord strip */}
+      {/* Scrolling chord strip – transform is driven by RAF/effect, not inline */}
       <div
+        ref={stripInnerRef}
         className="absolute top-0 bottom-0"
         style={{
-          transform: `translateX(${translateX}px)`,
           width: totalWidth + containerWidth,
           willChange: 'transform',
         }}
@@ -267,6 +385,8 @@ export const ScrollingChordStrip: React.FC<ScrollingChordStripProps> = ({
       />
     </div>
   );
-};
+});
+
+ScrollingChordStrip.displayName = 'ScrollingChordStrip';
 
 export default ScrollingChordStrip;

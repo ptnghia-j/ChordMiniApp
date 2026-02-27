@@ -419,3 +419,60 @@ export function computeAccidentalPreference(chords: string[]): 'sharp' | 'flat' 
   if (flatCount > sharpCount) return 'flat';
   return null;
 }
+
+// ─── Key-based accidental preference ─────────────────────────────────────────
+
+/** Keys whose scales are conventionally spelled with flats. */
+const FLAT_KEY_ROOTS = new Set([
+  'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb',
+  'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm', 'Abm',
+  // Unicode variants
+  'B♭', 'E♭', 'A♭', 'D♭', 'G♭', 'C♭',
+  'B♭m', 'E♭m', 'A♭m',
+]);
+
+/**
+ * Derive the accidental preference directly from the detected key signature.
+ *
+ * This is more authoritative than `computeAccidentalPreference` (which counts
+ * sharps vs flats in chord labels).  When the Gemini key-detection result is
+ * available (e.g. "Db major"), the key *defines* the correct enharmonic
+ * spelling for every accidental in the piece.
+ *
+ * @param keySignature  e.g. "Db major", "F# minor", "C Major", "E♭"
+ * @returns 'sharp', 'flat', or null if the key is natural / unrecognised
+ */
+export function getAccidentalPreferenceFromKey(
+  keySignature: string | null | undefined,
+): 'sharp' | 'flat' | null {
+  if (!keySignature) return null;
+
+  // Normalise unicode accidentals to ASCII
+  const normalised = keySignature
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .trim();
+
+  // Extract root note (with optional accidental) before any quality word
+  const rootMatch = normalised.match(/^([A-G][#b]?)/i);
+  if (!rootMatch) return null;
+
+  let root = rootMatch[1];
+  // Capitalise root letter
+  root = root.charAt(0).toUpperCase() + root.slice(1);
+
+  // Detect minor quality for the lookup set
+  const isMinor = /minor|min\b|m$/i.test(normalised.slice(root.length));
+  const lookupKey = isMinor ? root + 'm' : root;
+
+  if (FLAT_KEY_ROOTS.has(lookupKey)) return 'flat';
+
+  // If the root itself contains a sharp, it's a sharp key
+  if (root.includes('#')) return 'sharp';
+
+  // Natural keys (C, G, D, A, E, B / Am, Em, Bm, F#m, C#m, G#m)
+  // For natural-root major keys (C, G, D, A, E, B) — they use sharps
+  // (except F which is flat and already caught above)
+  // For natural-root minor keys (Am, Em, Bm, etc.) — they use sharps already
+  return null;
+}

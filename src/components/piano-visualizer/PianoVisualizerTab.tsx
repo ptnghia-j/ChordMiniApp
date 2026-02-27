@@ -10,10 +10,10 @@ import {
 } from '@/utils/chordToMidi';
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
 
-import { useAnalysisResults, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
+import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey, useRomanNumerals } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
-import { computeAccidentalPreference } from '@/utils/chordUtils';
+import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
 import { createShiftedChords } from '@/utils/chordProcessing';
 import { buildBeatToChordSequenceMap, formatRomanNumeral } from '@/utils/chordFormatting';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
@@ -104,6 +104,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const mergedAnalysisResults = analysisResults ?? storeAnalysisResults;
   const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
   const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
+  const storeKeySignature = useKeySignature();
 
   // Pitch shift
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
@@ -206,10 +207,13 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     );
   }, [correctedChords, transposedChordGridData]);
 
-  // Compute accidental preference for consistent sharp/flat rendering
+  // Compute accidental preference for consistent sharp/flat rendering.
+  // Key signature (from Gemini) is authoritative; heuristic is fallback.
   const accidentalPreference = useMemo(() => {
+    const keyPref = getAccidentalPreferenceFromKey(storeKeySignature);
+    if (keyPref) return keyPref;
     return computeAccidentalPreference(correctedChords);
-  }, [correctedChords]);
+  }, [storeKeySignature, correctedChords]);
 
   // ── Roman numeral support (shared with ChordGrid via stores) ──────────────
 
@@ -289,16 +293,21 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, []);
 
   // MIDI export handler
+  const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
   const handleMidiDownload = useCallback(() => {
     if (chordEvents.length === 0) return;
     const instruments = activeInstruments.length > 0
       ? activeInstruments.map(i => ({ name: i.name, color: i.color }))
       : undefined;
-    const midiData = exportChordEventsToMidi(chordEvents, instruments);
+    const midiData = exportChordEventsToMidi(chordEvents, {
+      instruments,
+      bpm: detectedBpm || undefined,
+      timeSignature: 4, // Always 4/4 — beat detection time_signature is unreliable
+    });
     if (midiData.length > 0) {
       downloadMidiFile(midiData, 'chord-progression.mid');
     }
-  }, [chordEvents, activeInstruments]);
+  }, [chordEvents, activeInstruments, detectedBpm]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -362,8 +371,10 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         <ScrollingChordStrip
           chordEvents={chordEvents}
           currentTime={currentTime}
+          isPlaying={isPlaying}
           height={48}
           pixelsPerSecond={100}
+          timeSignature={timeSignature}
           accidentalPreference={accidentalPreference}
           beatRomanNumerals={beatRomanNumerals}
           uncorrectedChords={transposedChordGridData?.chords}

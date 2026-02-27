@@ -20,7 +20,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
-import { computeAccidentalPreference } from '@/utils/chordUtils';
+import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -253,14 +253,17 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   );
 
   // Compute a global accidental preference for consistent rendering.
-  // Always compute from available chord data so slash chords display
-  // correct enharmonic spellings (e.g. Fm7/Bb instead of Fm7/A#).
+  // The detected key signature is the most authoritative source (from Gemini
+  // key-detection).  Fall back to the heuristic (count sharps vs flats in
+  // chord labels) only when no key is available.
   const accidentalPreference = useMemo(() => {
+    const keyPref = getAccidentalPreferenceFromKey(keySignature);
+    if (keyPref) return keyPref;
     if (Array.isArray(shiftedChords) && shiftedChords.length > 0) {
       return computeAccidentalPreference(shiftedChords) || undefined;
     }
     return undefined;
-  }, [shiftedChords]);
+  }, [keySignature, shiftedChords]);
 
   // Use utility function for grid columns class (already imported)
 

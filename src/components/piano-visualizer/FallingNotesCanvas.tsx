@@ -324,7 +324,7 @@ function generateInstrumentVisualNotes(
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
+export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(({
   chordEvents,
   currentTime,
   isPlaying,
@@ -343,6 +343,13 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
   const dprRef = useRef<number>(1);
   // Track previous active notes to avoid redundant state updates
   const prevActiveKeyRef = useRef<string>('');
+  // Stable ref for the render function — avoids restarting the animation loop
+  // when data changes (which would cause flickering)
+  const renderFrameRef = useRef<((time: number) => void) | null>(null);
+  // Smooth playback interpolation: RAF loop interpolates time between the
+  // ~4 Hz timeupdate events so notes fall at a steady 60 fps.
+  const isPlayingRef = useRef(isPlaying);
+  const playbackBaseRef = useRef({ wallTime: 0, audioTime: currentTime });
 
   // Calculate total width based on white keys
   const totalWidth = useMemo(() => {
@@ -594,36 +601,78 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
     }
   }, [eventPositions, instrumentVisualNotes, whiteKeyXPositions, lookAheadSeconds, lookBehindSeconds, onActiveNotesChange, hasInstruments]);
 
-  // ─── Animation Loop ──────────────────────────────────────────────────────
+  // Keep renderFrameRef in sync with the latest renderFrame callback.
+  useEffect(() => {
+    renderFrameRef.current = renderFrame;
+  }, [renderFrame]);
+
+  // Re-render when data changes (instrument toggles, chord events, etc.)
+  // without touching the animation loop.
+  useEffect(() => {
+    if (!isPlayingRef.current) {
+      // Paused — render immediately so the user sees updated visuals.
+      renderFrameRef.current?.(lastTimeRef.current);
+    }
+    // During playback the RAF loop will pick up changes on the next frame
+    // automatically because it reads renderFrameRef.current.
+  }, [renderFrame]);
+
+  // ─── Sync base time when currentTime changes from parent ─────────────────
+  // The browser fires timeupdate at ~4 Hz.  We do NOT restart the RAF loop
+  // here — we just update the interpolation anchor so the running loop
+  // smoothly catches up.
 
   useEffect(() => {
     lastTimeRef.current = currentTime;
-
-    const render = () => {
-      renderFrame(lastTimeRef.current);
-      if (isPlaying) {
-        animFrameRef.current = requestAnimationFrame(render);
-      }
+    playbackBaseRef.current = {
+      wallTime: performance.now(),
+      audioTime: currentTime,
     };
 
-    // Always render at least once when currentTime changes
-    renderFrame(currentTime);
+    // When paused (seeking), render the new position immediately.
+    if (!isPlayingRef.current) {
+      renderFrameRef.current?.(currentTime);
+    }
+  }, [currentTime]);
+
+  // ─── Animation Loop ──────────────────────────────────────────────────────
+  // Starts / stops ONLY when `isPlaying` toggles.
+  // During playback the loop interpolates time at 60 fps using
+  // performance.now() so notes fall smoothly between the ~4 Hz
+  // timeupdate events from the <audio> element.
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
 
     if (isPlaying) {
-      animFrameRef.current = requestAnimationFrame(render);
+      // Anchor interpolation from current known position.
+      playbackBaseRef.current = {
+        wallTime: performance.now(),
+        audioTime: lastTimeRef.current,
+      };
+
+      const animate = () => {
+        const { wallTime, audioTime } = playbackBaseRef.current;
+        const elapsed = (performance.now() - wallTime) / 1000;
+        const displayTime = audioTime + elapsed;
+        lastTimeRef.current = displayTime;
+        renderFrameRef.current?.(displayTime);
+        animFrameRef.current = requestAnimationFrame(animate);
+      };
+
+      animFrameRef.current = requestAnimationFrame(animate);
+    } else {
+      // Stopped — render one final frame at the exact current time.
+      renderFrameRef.current?.(lastTimeRef.current);
     }
 
     return () => {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = 0;
       }
     };
-  }, [currentTime, isPlaying, renderFrame]);
-
-  // Update time ref when currentTime changes (for animation loop to read latest)
-  useEffect(() => {
-    lastTimeRef.current = currentTime;
-  }, [currentTime]);
+  }, [isPlaying]);
 
   // ─── Canvas Sizing ───────────────────────────────────────────────────────
 
@@ -639,9 +688,9 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
     canvas.style.width = `${totalWidth}px`;
     canvas.style.height = `${height}px`;
 
-    // Initial render
-    renderFrame(currentTime);
-  }, [totalWidth, height, renderFrame, currentTime]);
+    // Render with latest known time after resize
+    renderFrameRef.current?.(lastTimeRef.current);
+  }, [totalWidth, height]);
 
   return (
     <canvas
@@ -652,6 +701,8 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
       aria-label="Falling notes piano roll visualization"
     />
   );
-};
+});
+
+FallingNotesCanvas.displayName = 'FallingNotesCanvas';
 
 export default FallingNotesCanvas;

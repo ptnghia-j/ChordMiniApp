@@ -9,8 +9,8 @@ import { SegmentationResult } from '@/types/chatbotTypes';
 import type { BeatInfo } from '@/services/audio/beatDetectionService';
 import { simplifyChord } from '@/utils/chordSimplification';
 import { useSimplifySelector } from '@/contexts/selectors';
-import { useShowCorrectedChords } from '@/stores/analysisStore';
-import { computeAccidentalPreference } from '@/utils/chordUtils';
+import { useShowCorrectedChords, useKeySignature } from '@/stores/analysisStore';
+import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
 import { normalizeChordForDedup } from '@/utils/chordNormalization';
 import {
   buildChordOccurrenceMap,
@@ -53,6 +53,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
 }) => {
   const { isServiceAvailable, getServiceMessage } = useApiKeys();
   const { simplifyChords } = useSimplifySelector();
+  const storeKeySignature = useKeySignature();
 
   // Read correction toggle from Zustand store (shared with Beat & Chord Map tab)
   const showCorrectedChords = useShowCorrectedChords();
@@ -118,11 +119,14 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
     return events;
   }, [analysisResults, beatTimes, simplifyChords, sequenceCorrections, showCorrectedChords]);
 
-  // Compute accidental preference (sharp vs flat) from the chord labels
+  // Compute accidental preference (sharp vs flat).
+  // Key signature (from Gemini) is authoritative; heuristic is fallback.
   const accidentalPreference = useMemo<'sharp' | 'flat' | undefined>(() => {
+    const keyPref = getAccidentalPreferenceFromKey(storeKeySignature);
+    if (keyPref) return keyPref;
     if (!beatAlignedChords?.length) return undefined;
     return computeAccidentalPreference(beatAlignedChords.map(c => c.chord)) || undefined;
-  }, [beatAlignedChords]);
+  }, [storeKeySignature, beatAlignedChords]);
 
   // Chord-centric alignment: snap lyric line boundaries to chord change timestamps.
   // Chords are the authoritative timing source; lyrics snap to them (not the reverse).

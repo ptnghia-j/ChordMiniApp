@@ -154,7 +154,7 @@ function buildTrackChunk(
   return chunk.toUint8Array();
 }
 
-function buildTempoTrack(bpm: number): Uint8Array {
+function buildTempoTrack(bpm: number, timeSignature: number = 4): Uint8Array {
   const td = new MidiBuffer();
 
   // Track name
@@ -170,9 +170,9 @@ function buildTempoTrack(bpm: number): Uint8Array {
   td.writeBytes([0xff, 0x51, 0x03]);
   td.writeBytes([(uspq >> 16) & 0xff, (uspq >> 8) & 0xff, uspq & 0xff]);
 
-  // Time signature: 4/4
+  // Time signature: numerator/4  (denominator power = 2 → quarter note)
   td.writeBytes(writeVLQ(0));
-  td.writeBytes([0xff, 0x58, 0x04, 4, 2, 24, 8]);
+  td.writeBytes([0xff, 0x58, 0x04, timeSignature, 2, 24, 8]);
 
   // End of track
   td.writeBytes([...writeVLQ(0), 0xff, 0x2f, 0x00]);
@@ -191,6 +191,26 @@ function secondsToTicks(seconds: number, bpm: number): number {
   return Math.round(seconds * (bpm / 60) * TICKS_PER_QUARTER);
 }
 
+/**
+ * Merge consecutive chord events with the same chord name.
+ * Matches the audio playback service behavior — notes trigger only on chord changes.
+ */
+function mergeConsecutiveChordEvents(events: ChordEvent[]): ChordEvent[] {
+  if (events.length === 0) return [];
+  const merged: ChordEvent[] = [];
+  let current = { ...events[0] };
+  for (let i = 1; i < events.length; i++) {
+    if (events[i].chordName === current.chordName) {
+      current.endTime = events[i].endTime;
+    } else {
+      merged.push(current);
+      current = { ...events[i] };
+    }
+  }
+  merged.push(current);
+  return merged;
+}
+
 function generateInstrumentMidiNotes(
   events: ChordEvent[],
   instrumentName: string,
@@ -200,7 +220,10 @@ function generateInstrumentMidiNotes(
   const midiEvents: MidiNoteEvent[] = [];
   const velocity = 80;
 
-  for (const event of events) {
+  // Merge consecutive same-chord beats so MIDI only triggers on chord changes
+  const merged = mergeConsecutiveChordEvents(events);
+
+  for (const event of merged) {
     const { notes: chordNotes, startTime, endTime } = event;
     const duration = endTime - startTime;
 
@@ -286,20 +309,20 @@ function generateInstrumentMidiNotes(
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-/**
- * Export chord events to a MIDI file as a Uint8Array.
- *
- * When `instruments` are provided, each instrument gets its own MIDI track
- * with voicing patterns matching the chord playback service. Otherwise, a
- * single piano track is created with the base chord notes.
- */
-export function exportChordEventsToMidi(
-  events: ChordEvent[],
-  instruments?: InstrumentConfig[],
-): Uint8Array {
-  if (events.length === 0) return new Uint8Array(0);
+export interface MidiExportOptions {
+  /** Instruments to create tracks for (default: single piano track) */
+  instruments?: InstrumentConfig[];
+  /** Time signature numerator (default: 4 for 4/4) */
+  timeSignature?: number;
+  /** Explicit BPM — if omitted, estimated from average beat duration */
+  bpm?: number;
+}
 
-  // Estimate BPM from average beat duration
+/**
+ * Estimate BPM from average beat duration across chord events.
+ * Clamps result to 40–300 BPM range.
+ */
+function estimateBpmFromEvents(events: ChordEvent[]): number {
   let totalDuration = 0;
   let beatCount = 0;
   for (const event of events) {
@@ -310,11 +333,36 @@ export function exportChordEventsToMidi(
     }
   }
   const avgBeatDuration = beatCount > 0 ? totalDuration / beatCount : 0.5;
-  const bpm = Math.max(40, Math.min(300, Math.round(60 / avgBeatDuration)));
+  return Math.max(40, Math.min(300, Math.round(60 / avgBeatDuration)));
+}
+
+/**
+ * Export chord events to a MIDI file as a Uint8Array.
+ *
+ * When `instruments` are provided, each instrument gets its own MIDI track
+ * with voicing patterns matching the chord playback service. Otherwise, a
+ * single piano track is created with the base chord notes.
+ *
+ * Pass `bpm` explicitly for best accuracy (uses beat detection result).
+ * If omitted, BPM is estimated from average beat duration.
+ *
+ * NOTE: Some MIDI editors (e.g. MuseScore 4) have a "Detect time signature"
+ * import option that may override the MIDI time-signature meta-event based
+ * on note patterns.  Uncheck that option in the import dialog to honour the
+ * embedded 4/4 (or other) time signature.
+ */
+export function exportChordEventsToMidi(
+  events: ChordEvent[],
+  options?: MidiExportOptions,
+): Uint8Array {
+  if (events.length === 0) return new Uint8Array(0);
+
+  const timeSignature = options?.timeSignature ?? 4;
+  const bpm = options?.bpm ?? estimateBpmFromEvents(events);
 
   const instrumentList =
-    instruments && instruments.length > 0
-      ? instruments
+    options?.instruments && options.instruments.length > 0
+      ? options.instruments
       : [{ name: 'piano', color: '#60a5fa' }];
 
   const numTracks = 1 + Math.min(instrumentList.length, 15);
@@ -328,9 +376,13 @@ export function exportChordEventsToMidi(
   header.writeUint16(TICKS_PER_QUARTER);
 
   // Tempo track
-  const tempoTrack = buildTempoTrack(bpm);
+  const tempoTrack = buildTempoTrack(bpm, timeSignature);
 
   // Instrument tracks (MIDI supports channels 0-15; channel 9 is reserved for GM drums)
+  if (typeof console !== 'undefined') {
+    console.info(`MIDI export: BPM=${bpm}, time signature=${timeSignature}/4, tracks=${numTracks}`);
+  }
+
   if (instrumentList.length > 15) {
     console.warn(`MIDI export: ${instrumentList.length} instruments requested but only 15 channels available (channel 9 reserved for drums). Extra instruments will be ignored.`);
   }
@@ -368,6 +420,7 @@ export function downloadMidiFile(
   data: Uint8Array,
   filename: string = 'chord-progression.mid',
 ): void {
+  // Cast to ArrayBuffer for Blob compatibility (TypeScript strict mode)
   const blob = new Blob([data.buffer as ArrayBuffer], { type: 'audio/midi' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
