@@ -5,8 +5,8 @@ import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/common/Navigation';
 import AnimatedTitle from '@/components/homepage/AnimatedTitle';
-import HeroChordGridMock from '@/components/homepage/HeroChordGridMock';
-import HeroLyricsSyncMock from '@/components/homepage/HeroLyricsSyncMock';
+import HeroChordGridLyricsMock from '@/components/homepage/HeroChordGridLyricsMock';
+import HeroPianoVisualizerMock from '@/components/homepage/HeroPianoVisualizerMock';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
@@ -229,10 +229,10 @@ function NewHomePageContentInner() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.6 }}
                 >
-                  <HeroChordGridMock />
+                  <HeroChordGridLyricsMock />
                   <div className="p-3">
-                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Beat & Chord Analysis</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">Visualize chord progressions with key changes and Roman numeral analysis</p>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Beat & Chord Analysis & Lyrics</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Progressions with Roman numeral analysis, key changes, and sync lyrics</p>
                   </div>
                 </motion.div>
 
@@ -241,10 +241,10 @@ function NewHomePageContentInner() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4, duration: 0.6 }}
                 >
-                  <HeroLyricsSyncMock />
+                  <HeroPianoVisualizerMock />
                   <div className="p-3">
-                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Lyrics Sync</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">Synchronized lyrics display with real-time highlighting</p>
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-1 text-sm">Piano Visualizer</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Falling notes visualization with multi-instrument support and MIDI export</p>
                   </div>
                 </motion.div>
               </div>

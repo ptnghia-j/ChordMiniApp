@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 // Tab types
-type ActiveTab = 'beatChordMap' | 'guitarChords' | 'lyricsChords';
+type ActiveTab = 'beatChordMap' | 'guitarChords' | 'pianoVisualizer' | 'lyricsChords';
 
 /**
  * Custom hook to manage tab switching and title editing logic

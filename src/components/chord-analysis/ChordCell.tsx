@@ -36,6 +36,8 @@ export interface ChordCellProps {
   accidentalPreference?: 'sharp' | 'flat';
   // ref callback to expose the root DOM element for this cell (used by BeatHighlighter)
   cellRef?: (el: HTMLDivElement | null) => void;
+  /** Compact mode for use in scrolling chord strip — removes min-height constraints */
+  compact?: boolean;
 }
 
 /**
@@ -86,6 +88,9 @@ const areChordCellPropsEqual = (
   if (prevProps.isLoopEnabled !== nextProps.isLoopEnabled) return false;
   if (prevProps.isInLoopRange !== nextProps.isInLoopRange) return false;
 
+  // Compact mode
+  if (prevProps.compact !== nextProps.compact) return false;
+
   // Ignore callback props (onBeatClick, getChordStyle, getDynamicFontSize, onChordEdit, onLoopBeatClick)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
 
@@ -124,7 +129,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
   isInLoopRange = false,
   onLoopBeatClick,
   accidentalPreference,
-  cellRef
+  cellRef,
+  compact = false
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -176,9 +182,11 @@ export const ChordCell = React.memo<ChordCellProps>(({
       ref={cellRef}
       id={`chord-${globalIndex}`}
       className={`${getChordStyle(chord, globalIndex, isClickable)} w-full h-full ${
-        showRomanNumerals
-          ? 'min-h-[3.3rem] sm:min-h-[4.2rem]' // 20% increase when Roman numerals shown
-          : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
+        compact
+          ? '' // No min-height in compact mode (strip cells)
+          : showRomanNumerals
+            ? 'min-h-[3.3rem] sm:min-h-[4.2rem]' // 20% increase when Roman numerals shown
+            : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
       } chord-cell`}
       data-beat-index={globalIndex}
       data-is-empty={isEmpty ? "true" : "false"}

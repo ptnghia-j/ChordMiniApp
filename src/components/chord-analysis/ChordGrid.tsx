@@ -252,14 +252,15 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     sequenceCorrections
   );
 
-  // Heuristic: when corrections are not shown (e.g., during pitch shift),
-  // compute a global accidental preference for consistent rendering.
+  // Compute a global accidental preference for consistent rendering.
+  // Always compute from available chord data so slash chords display
+  // correct enharmonic spellings (e.g. Fm7/Bb instead of Fm7/A#).
   const accidentalPreference = useMemo(() => {
-    if (!showCorrectedChords && Array.isArray(shiftedChords) && shiftedChords.length > 0) {
+    if (Array.isArray(shiftedChords) && shiftedChords.length > 0) {
       return computeAccidentalPreference(shiftedChords) || undefined;
     }
     return undefined;
-  }, [showCorrectedChords, shiftedChords]);
+  }, [shiftedChords]);
 
   // Use utility function for grid columns class (already imported)
 

@@ -42,7 +42,12 @@ Chord progression visualization with synchronized beat detection and grid layout
 
 Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring multiple chord positions and synchronized beat grid integration.
 
-### 🎤 Lead Sheet with AI Assistant
+### 🎹 Piano Visualizer 
+![Piano Visualizer](public/piano_visualizer.png)
+
+Real-time piano roll visualization with falling MIDI notes synchronized to chord playback. Features a scrolling chord strip, interactive keyboard highlighting, and **MIDI file export** for importing chord progressions into any DAW.
+
+###  🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](public/leadsheet.png)
 
 Synchronized lyrics transcription with AI chatbot for contextual music analysis and translation support.
@@ -429,6 +434,13 @@ pip install -r requirements.txt
 - **Responsive Design** - Adaptive chord count (7/5/3/2/1 for xl/lg/md/sm/xs)
 - **Smooth Animations** - transitions with optimized scaling
 - **Unicode Notation** - Proper musical symbols (♯, ♭) with enharmonic equivalents
+
+### Piano Visualizer
+- **Falling Notes Canvas** - Real-time MIDI note visualization synchronized to chord playback
+- **Interactive Piano Keyboard** - On-screen keyboard with live note highlighting
+- **Scrolling Chord Strip** - Beat-aligned chord labels scrolling in sync with playback
+- **MIDI Export** - Download chord progressions as standard MIDI files (Type 1, multi-instrument)
+- **Multi-Instrument Support** - Separate MIDI tracks for piano, guitar, violin, flute, and bass
 
 ### Lyrics & Transcription [Beta]
 - **Synchronized Lyrics** - Time-aligned lyrics display

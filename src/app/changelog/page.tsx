@@ -30,6 +30,33 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.5.4',
+      date: 'June 24, 2025',
+      title: 'Piano Visualizer & MIDI Export',
+      description: 'New Piano Visualizer tab with falling notes, 88-key keyboard, scrolling chord timeline, multi-instrument support, and MIDI export. Unified chord rendering across all tabs.',
+      features: [
+        'NEW: Piano Visualizer tab — falling notes canvas with 88-key piano keyboard and real-time note highlighting',
+        'NEW: Scrolling chord timeline strip with sweep line, measure separators, and playback-synced highlighting',
+        'NEW: Multi-instrument visualization — falling notes colored per instrument (Piano, Guitar, Violin, Flute, Bass)',
+        'NEW: MIDI export — download chord progressions as Standard MIDI Type 1 files with instrument-specific voicing',
+        'NEW: Speed presets (Slow/Normal/Fast) to control piano roll look-ahead window',
+        'NEW: Roman numeral analysis displayed in chord timeline strip',
+        'IMPROVED: Unified chord rendering — ScrollingChordStrip now reuses ChordCell component for consistent formatting, roman numerals, and enharmonic corrections across all tabs',
+        'UI: Merged hero section demos — combined Chord Grid + Lyrics into single interactive demo',
+        'UI: Replaced Lyrics Sync hero demo with Piano Visualizer demo on homepage',
+      ],
+      technical: [
+        'FIX: Enharmonic spelling — bass notes like B♭ no longer incorrectly display as A♯ when flat preference is active',
+        'FIX: Superscript chord symbols (e.g. ⁷) no longer clipped by overflow in chord strip cells',
+        'FIX: Accidental preference computation now applies consistently regardless of chord correction toggle state',
+        'NEW: chordToMidi.ts — shared utility for chord-to-MIDI conversion, chord timeline building, and MIDI range detection',
+        'NEW: midiExport.ts — zero-dependency MIDI file encoder with multi-track instrument voicing',
+        'IMPROVED: ChordCell compact mode — new prop removes min-height constraints for use in chord strip',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.3.5',
       date: 'February 26, 2026',
       title: 'UI Improvements',

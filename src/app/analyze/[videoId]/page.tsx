@@ -85,6 +85,12 @@ const GuitarChordsTab = dynamic(() => import('@/components/chord-analysis/Guitar
   ssr: false
 });
 
+// Piano visualizer tab - load only when tab is active
+const PianoVisualizerTab = dynamic(() => import('@/components/piano-visualizer/PianoVisualizerTab'), {
+  loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
+
 // Chatbot interface - load only when user opens the chatbot
 const ChatbotInterfaceDyn = dynamic(() => import('@/components/chatbot/ChatbotInterface'), {
   loading: () => <ChatbotSkeleton />, ssr: false
@@ -663,9 +669,9 @@ export default function YouTubeVideoAnalyzePage() {
   // Lyrics panel state
   const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
 
-  // Auto-minimize video when panels are open or when Guitar Chords tab is active
+  // Auto-minimize video when panels are open or when Guitar Chords / Piano Visualizer tab is active
   useEffect(() => {
-    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen || activeTab === 'guitarChords';
+    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen || activeTab === 'guitarChords' || activeTab === 'pianoVisualizer';
     setIsVideoMinimized(shouldMinimize);
   }, [isChatbotOpen, isLyricsPanelOpen, activeTab]);
 
@@ -1610,6 +1616,16 @@ export default function YouTubeVideoAnalyzePage() {
                           isUploadPage={false}
                           sequenceCorrections={simplifiedSequenceCorrections}
                           segmentationData={segmentationData}
+                        />
+                      )}
+
+                      {activeTab === 'pianoVisualizer' && (
+                        <PianoVisualizerTab
+                          chordGridData={simplifiedChordGridData}
+                          sequenceCorrections={simplifiedSequenceCorrections}
+                          currentTime={currentTime}
+                          isPlaying={isPlaying}
+                          isChordPlaybackEnabled={chordPlayback.isEnabled}
                         />
                       )}
                     </div>
