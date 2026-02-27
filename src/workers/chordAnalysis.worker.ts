@@ -31,7 +31,28 @@ function scoreDownbeatAlignment(
       const isDownbeatPos = ((i - shift) % timeSignature + timeSignature) % timeSignature === 0;
       if (isDownbeatPos) onDown++; else offDown++;
     }
-    const score = onDown * onWeight - offDown * offPenalty;
+    let score = onDown * onWeight - offDown * offPenalty;
+
+    // For 4/4 (simple time): also evaluate half-bar alignment (beats 1 & 3).
+    // Many 4/4 songs change chords every 2 beats. Without this, those changes
+    // on beat 3 are penalised and can cause false preference for 3/4.
+    // The half-bar score is discounted by 0.5× because period-2 has 50%
+    // strong positions vs 25% for period-4, making random alignment 2× more
+    // likely. Without this discount, 6/8 songs (compound triple) would be
+    // incorrectly classified as 4/4.
+    if (timeSignature === 4) {
+      let onHalf = 0;
+      let offHalf = 0;
+      for (let i = 1; i < chordSeries.length; i++) {
+        if (!changeAt[i]) continue;
+        const posInBar = ((i - shift) % 4 + 4) % 4;
+        const isStrongBeat = posInBar % 2 === 0; // beat 1 (pos 0) or beat 3 (pos 2)
+        if (isStrongBeat) onHalf++; else offHalf++;
+      }
+      const halfScore = (onHalf * onWeight - offHalf * offPenalty) * 0.5;
+      score = Math.max(score, halfScore);
+    }
+
     if (score > bestScore) {
       bestScore = score;
       bestShift = shift;
