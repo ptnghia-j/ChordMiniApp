@@ -317,7 +317,7 @@ export function exportChordEventsToMidi(
       ? instruments
       : [{ name: 'piano', color: '#60a5fa' }];
 
-  const numTracks = 1 + instrumentList.length;
+  const numTracks = 1 + Math.min(instrumentList.length, 15);
 
   // Header chunk
   const header = new MidiBuffer();
@@ -330,8 +330,11 @@ export function exportChordEventsToMidi(
   // Tempo track
   const tempoTrack = buildTempoTrack(bpm);
 
-  // Instrument tracks
-  const instrumentTracks: Uint8Array[] = instrumentList.map((inst, idx) => {
+  // Instrument tracks (MIDI supports channels 0-15; channel 9 is reserved for GM drums)
+  if (instrumentList.length > 15) {
+    console.warn(`MIDI export: ${instrumentList.length} instruments requested but only 15 channels available (channel 9 reserved for drums). Extra instruments will be ignored.`);
+  }
+  const instrumentTracks: Uint8Array[] = instrumentList.slice(0, 15).map((inst, idx) => {
     const channel = idx >= 9 ? idx + 1 : idx; // skip channel 9 (GM drums)
     const program = GM_PROGRAMS[inst.name.toLowerCase()] ?? 0;
     const midiNotes = generateInstrumentMidiNotes(events, inst.name.toLowerCase(), bpm, channel);

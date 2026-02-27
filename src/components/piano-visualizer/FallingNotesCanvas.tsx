@@ -457,6 +457,19 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
     const activeNotes = new Set<number>();
     const activeColors = new Map<number, string>();
 
+    // roundRect with fallback for older browsers that lack the method
+    const safeRoundRect = (
+      c: CanvasRenderingContext2D,
+      x: number, y: number, w: number, h: number,
+      radii: number | number[],
+    ) => {
+      if (c.roundRect) {
+        c.roundRect(x, y, w, h, radii);
+      } else {
+        c.rect(x, y, w, h);
+      }
+    };
+
     // Helper to draw a single note rectangle
     const drawNote = (
       noteX: number, noteW: number, drawTop: number, drawHeight: number,
@@ -473,7 +486,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
 
       ctx.fillStyle = noteColor;
       ctx.beginPath();
-      ctx.roundRect(noteX, drawTop, noteW, drawHeight, radius);
+      safeRoundRect(ctx, noteX, drawTop, noteW, drawHeight, radius);
       ctx.fill();
 
       ctx.shadowColor = 'transparent';
@@ -483,7 +496,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = ({
       if (drawHeight > 6) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.beginPath();
-        ctx.roundRect(noteX, drawTop, noteW, Math.min(3, drawHeight * 0.3), [radius, radius, 0, 0]);
+        safeRoundRect(ctx, noteX, drawTop, noteW, Math.min(3, drawHeight * 0.3), [radius, radius, 0, 0]);
         ctx.fill();
       }
 
