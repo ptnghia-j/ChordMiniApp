@@ -62,6 +62,11 @@ const GuitarChordsTab = dynamic(() => import('@/components/chord-analysis/Guitar
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
+
+const PianoVisualizerTab = dynamic(() => import('@/components/piano-visualizer/PianoVisualizerTab'), {
+  loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
+  ssr: false
+});
 import { useProcessing } from '@/contexts/ProcessingContext';
 import BeatTimeline from '@/components/analysis/BeatTimeline';
 import { simplifyChordArray } from '@/utils/chordSimplification';
@@ -78,6 +83,7 @@ import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackM
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { usePitchShiftAudio } from '@/hooks/chord-playback/usePitchShiftAudio';
 import ResultsTabs from '@/components/homepage/ResultsTabs';
+import type { TabKey } from '@/components/homepage/ResultsTabs';
 import { searchLyricsWithFallback } from '@/services/lyrics/lyricsService';
 import type { LyricsData } from '@/types/musicAiTypes';
 
@@ -344,7 +350,7 @@ export default function LocalAudioAnalyzePage() {
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'beatChordMap' | 'guitarChords' | 'lyricsChords'>('beatChordMap');
+  const [activeTab, setActiveTab] = useState<TabKey>('beatChordMap');
 
 
   // Key signature and chord correction states - now with proper key detection
@@ -1148,6 +1154,20 @@ const simplifiedChordGridData = useMemo(() => {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
+                      />
+                    )}
+
+                    {/* Piano Visualizer Tab */}
+                    {activeTab === 'pianoVisualizer' && (
+                      <PianoVisualizerTab
+                        analysisResults={analysisResults}
+                        chordGridData={simplifiedChordGridData}
+                        showCorrectedChords={showCorrectedChords}
+                        chordCorrections={chordCorrections}
+                        sequenceCorrections={sequenceCorrections}
+                        currentTime={currentTime}
+                        isPlaying={isPlaying}
+                        isChordPlaybackEnabled={chordPlayback.isEnabled}
                       />
                     )}
                   </div>

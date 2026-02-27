@@ -3,9 +3,11 @@
 import React from 'react';
 import { Tabs, Tab } from "@heroui/react";
 
+type TabKey = 'beatChordMap' | 'guitarChords' | 'pianoVisualizer' | 'lyricsChords';
+
 interface ResultsTabsProps {
-  activeTab: 'beatChordMap' | 'guitarChords' | 'lyricsChords';
-  setActiveTab: (tab: 'beatChordMap' | 'guitarChords' | 'lyricsChords') => void;
+  activeTab: TabKey;
+  setActiveTab: (tab: TabKey) => void;
   showLyrics: boolean;
   hasCachedLyrics: boolean;
   /** Optional content rendered to the right of the tab pills (e.g. font slider) */
@@ -30,7 +32,7 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
   rightContent
 }) => {
   const handleSelectionChange = (key: React.Key) => {
-    setActiveTab(key as 'beatChordMap' | 'guitarChords' | 'lyricsChords');
+    setActiveTab(key as TabKey);
   };
 
   return (
@@ -64,6 +66,10 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
           title={<BetaTitle>Guitar Chords</BetaTitle>}
         />
         <Tab
+          key="pianoVisualizer"
+          title={<BetaTitle>Piano Visualizer</BetaTitle>}
+        />
+        <Tab
           key="lyricsChords"
           title={<BetaTitle>Lyrics & Chords</BetaTitle>}
           isDisabled={!showLyrics && !hasCachedLyrics}
@@ -82,3 +88,4 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
 
 export default ResultsTabs;
 export { ResultsTabs };
+export type { TabKey };

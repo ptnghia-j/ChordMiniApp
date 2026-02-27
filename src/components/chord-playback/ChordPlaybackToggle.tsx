@@ -41,6 +41,12 @@ interface ChordPlaybackToggleProps {
   } | null;
 }
 
+// ─── Slider track class overrides ────────────────────────────────────────────
+// HeroUI Slider applies `data-[fill-start=true]:border-s-primary` (blue) to the
+// track edges by default.  Override to match our filler colours.
+const GREEN_TRACK = "bg-gray-200 dark:bg-gray-600 h-1.5 data-[fill-start=true]:border-s-green-500 dark:data-[fill-start=true]:border-s-green-400 data-[fill-end=true]:border-e-green-500 dark:data-[fill-end=true]:border-e-green-400";
+const RED_TRACK   = "bg-gray-200 dark:bg-gray-600 h-1.5 data-[fill-start=true]:border-s-red-500 dark:data-[fill-start=true]:border-s-red-400 data-[fill-end=true]:border-e-red-500 dark:data-[fill-end=true]:border-e-red-400";
+
 /**
  * Toggle button for chord playback with toggle-based control panel
  * Plays chord progressions synchronized with the beat animation
@@ -491,7 +497,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Master volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -557,7 +563,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : (youtubePlayer ? "YouTube video volume control" : "Original audio volume control")}
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: isPitchShiftEnabled ? GREEN_TRACK : RED_TRACK,
                             filler: isPitchShiftEnabled ? "bg-green-500 dark:bg-green-400" : "bg-red-500 dark:bg-red-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -598,7 +604,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Chord playback master volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -650,7 +656,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Piano volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -693,7 +699,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Guitar volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -736,7 +742,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Violin volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -779,7 +785,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Flute volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}
@@ -821,7 +827,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           aria-label="Bass volume control"
                           classNames={{
                             base: "max-w-full",
-                            track: "bg-gray-200 dark:bg-gray-600 h-1.5",
+                            track: GREEN_TRACK,
                             filler: "bg-green-500 dark:bg-green-400",
                             thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
                           }}

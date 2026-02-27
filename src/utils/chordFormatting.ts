@@ -160,6 +160,17 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     }
   }
 
+  // Apply global accidental preference to bass note if provided
+  if (accidentalPreference && bassNote) {
+    if (accidentalPreference === 'flat' && bassNote.includes('#')) {
+      const sharpToFlat: Record<string, string> = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
+      bassNote = sharpToFlat[bassNote] || bassNote;
+    } else if (accidentalPreference === 'sharp' && bassNote.includes('b')) {
+      const flatToSharp: Record<string, string> = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
+      bassNote = flatToSharp[bassNote] || bassNote;
+    }
+  }
+
   // Replace sharp (#) with proper Unicode sharp symbol (♯)
   // Handle double sharps (##) with double sharp symbol (𝄪)
   root = root.replace(/##/g, '𝄪').replace(/#/g, '♯');
@@ -464,7 +475,13 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // This ensures consistent enharmonic spelling throughout the chord
   const preferSharps = accidentalPreference === 'sharp';
   const preferFlats = accidentalPreference === 'flat';
-  const primaryNoteArray = preferFlats ? notesWithFlats : preferSharps ? notes : (usesFlats ? notesWithFlats : notes);
+  // For flat inversions (b7, b3, etc.), prefer flat spellings to match the notation
+  // For root F (key signature has Bb), prefer flats when no explicit preference is set
+  const primaryNoteArray = preferFlats ? notesWithFlats
+    : preferSharps ? notes
+    : isFlatInversion ? notesWithFlats
+    : (usesFlats || calculationRoot === 'F') ? notesWithFlats
+    : notes;
 
   // Find the root note index in the primary array using the calculation root
   let rootIndex = -1;
@@ -603,18 +620,24 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   } else {
     // For natural root notes (C, D, E, F, G, A, B)
     // Respect optional accidental preference when provided
-    if (preferFlats && result.includes('#')) {
-      const enharmonicMap: Record<string, string> = {
-        'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb'
-      };
-      result = enharmonicMap[result] || result;
-    } else if (preferSharps && result.includes('b')) {
-      const enharmonicMap: Record<string, string> = {
-        'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
-      };
-      result = enharmonicMap[result] || result;
+    if (preferFlats) {
+      if (result.includes('#')) {
+        const enharmonicMap: Record<string, string> = {
+          'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb'
+        };
+        result = enharmonicMap[result] || result;
+      }
+      // If result already uses flats, keep it as-is
+    } else if (preferSharps) {
+      if (result.includes('b')) {
+        const enharmonicMap: Record<string, string> = {
+          'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
+        };
+        result = enharmonicMap[result] || result;
+      }
+      // If result already uses sharps, keep it as-is
     } else {
-      // Default: keep computed spelling or apply context-aware enhancement
+      // No preference: apply context-aware enhancement
       result = getEnharmonicSpelling(result, root);
     }
   }
