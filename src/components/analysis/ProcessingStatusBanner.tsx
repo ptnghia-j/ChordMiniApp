@@ -179,7 +179,9 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       });
     }
 
-    // Handle error
+    // Handle error — close processing toasts but do NOT fire an error toast.
+    // The inline UserFriendlyErrorDisplay already shows the error; adding a toast
+    // produced the duplicate / excessive-popup problem.
     if (stage === 'error') {
       if (chordTimerRef.current) { clearTimeout(chordTimerRef.current); chordTimerRef.current = null; }
       if (beatTimerRef.current) { clearTimeout(beatTimerRef.current); beatTimerRef.current = null; }
@@ -191,15 +193,6 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
         closeToast(beatToastKeyRef.current);
         beatToastKeyRef.current = null;
       }
-
-      addToast({
-        title: 'Analysis Error',
-        description: statusMessage || 'An error occurred during processing.',
-        color: 'danger',
-        variant: 'flat',
-        timeout: 5000,
-        shouldShowTimeoutProgress: true,
-      });
     }
 
     // Handle idle - cleanup any lingering toasts and timers

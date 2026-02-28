@@ -86,6 +86,19 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
     };
   }
 
+  // Blob storage / file-too-large-for-direct-processing errors
+  if (errorLower.includes('blob upload failed') ||
+      errorLower.includes('store has been suspended') ||
+      errorLower.includes('too large for direct processing')) {
+    return {
+      title: 'File Too Large',
+      message: 'This file exceeds the processing size limit and the temporary storage service is unavailable.',
+      suggestion: 'Try a shorter audio file or try again later.',
+      showTryAnotherButton: false,
+      isQuickTubeError: false
+    };
+  }
+
   // Network/connection errors
   if (errorLower.includes('network error') ||
       errorLower.includes('connection') ||
