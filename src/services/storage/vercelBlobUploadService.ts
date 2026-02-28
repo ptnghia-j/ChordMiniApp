@@ -134,13 +134,18 @@ class VercelBlobUploadService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: blobUrl }),
+      keepalive: true, // Ensure the request completes even during page transitions
     })
-      .then((res) => {
+      .then(async (res) => {
         if (res.ok) {
-          console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
-        } else if (res.status === 404) {
-          // Blob not found — already deleted by the API route
-          console.info(`\u2139\uFE0F Client cleanup: blob not found (already deleted)`);
+          // The API returns { alreadyDeleted: true } when the blob was already
+          // removed server-side, so parse the body to distinguish.
+          const data = await res.json().catch(() => ({}));
+          if (data.alreadyDeleted) {
+            console.info(`\u2139\uFE0F Client cleanup: blob already deleted by server`);
+          } else {
+            console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
+          }
         } else if (res.status >= 500) {
           // Server-side issue — log as warning so misconfigurations are visible
           console.warn(

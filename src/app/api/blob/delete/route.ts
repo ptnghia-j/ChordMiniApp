@@ -1,4 +1,4 @@
-import { del } from '@vercel/blob';
+import { del, BlobNotFoundError } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBlobUrl } from '@/utils/blobValidation';
 
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ Blob deletion failed:', errorMessage);
 
     // BlobNotFoundError means it's already deleted — treat as success
-    if (errorMessage.includes('not found')) {
+    if (error instanceof BlobNotFoundError) {
       return NextResponse.json({ success: true, alreadyDeleted: true });
     }
 

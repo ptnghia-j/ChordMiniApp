@@ -46,13 +46,20 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     // Validate that we have a Blob URL
-    const rawBlobUrl = formData.get('blob_url') as string;
-    if (!rawBlobUrl) {
+    const blobUrlEntry = formData.get('blob_url');
+    if (blobUrlEntry == null) {
       return NextResponse.json(
         { error: 'No Vercel Blob URL provided' },
         { status: 400 }
       );
     }
+    if (typeof blobUrlEntry !== 'string') {
+      return NextResponse.json(
+        { error: 'Invalid Vercel Blob URL: expected a string form field, but received a file upload' },
+        { status: 400 }
+      );
+    }
+    const rawBlobUrl = blobUrlEntry;
 
     // Strict URL validation — parse and enforce hostname allowlist
     let blobUrl: string;
@@ -101,13 +108,15 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ Failed to get audio duration, using default: ${error}`);
     }
 
-    // Non-blocking cleanup: delete the blob now that we have the data in memory
-    // and metadata extraction is complete
-    del(blobUrl).then(() => {
+    // Cleanup: delete the blob now that we have the data in memory and metadata
+    // extraction is complete. Awaited to ensure it runs reliably in serverless
+    // environments, but failures are treated as non-critical.
+    try {
+      await del(blobUrl);
       console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
-    }).catch((err) => {
+    } catch (err) {
       console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
-    });
+    }
 
     // Calculate dynamic timeout based on audio duration
     const timeoutValue = calculateProcessingTimeout(audioDuration);

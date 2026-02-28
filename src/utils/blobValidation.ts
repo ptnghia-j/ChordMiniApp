@@ -31,8 +31,11 @@ function hostMatchesAllowlist(hostname: string): boolean {
  * @throws  Error with a safe, non-leaking message on failure.
  */
 export function validateBlobUrl(url: unknown): string {
-  if (typeof url !== 'string' || url.length === 0) {
+  if (url == null || (typeof url === 'string' && url.length === 0)) {
     throw new Error('No blob URL provided');
+  }
+  if (typeof url !== 'string') {
+    throw new Error('Invalid blob URL');
   }
 
   let parsed: URL;
