@@ -79,24 +79,18 @@ export async function POST(request: NextRequest) {
     const audioBuffer = await blobResponse.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
 
-    // Non-blocking cleanup: delete the blob now that we have the data in memory
-    del(blobUrl).then(() => {
-      console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
-    }).catch((err) => {
-      console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
-    });
-
     // Extract filename from blob URL or use default
     const urlParts = blobUrl.split('/');
     const filename = urlParts[urlParts.length - 1] || 'audio.wav';
 
     console.log(`📁 Downloaded ${audioBuffer.byteLength} bytes, sending to Python backend as ${filename}`);
 
-    // Get audio duration for timeout calculation
+    // Get audio duration for timeout calculation from the in-memory buffer
+    // (must happen before blob deletion since the URL would no longer be valid)
     let audioDuration = 180; // Default 3 minutes
     try {
       console.log(`⏱️ Extracting audio duration for timeout calculation...`);
-      const metadata = await audioMetadataService.extractMetadataFromPartialDownload(blobUrl);
+      const metadata = await audioMetadataService.extractMetadataFromBlob(audioBlob);
       if (metadata && metadata.duration > 0) {
         audioDuration = metadata.duration;
         console.log(`⏱️ Audio duration detected: ${audioDuration} seconds`);
@@ -106,6 +100,14 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.warn(`⚠️ Failed to get audio duration, using default: ${error}`);
     }
+
+    // Non-blocking cleanup: delete the blob now that we have the data in memory
+    // and metadata extraction is complete
+    del(blobUrl).then(() => {
+      console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+    }).catch((err) => {
+      console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+    });
 
     // Calculate dynamic timeout based on audio duration
     const timeoutValue = calculateProcessingTimeout(audioDuration);

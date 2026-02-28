@@ -11,7 +11,8 @@ import { validateBlobUrl } from '@/utils/blobValidation';
  * Security notes:
  * - This app does not have user authentication, so session-based guards
  *   are not available. The endpoint is protected by:
- *   1. Strict URL validation (only Vercel Blob URLs for this store are accepted)
+ *   1. Strict URL validation (only HTTPS Vercel Blob URLs on *.blob.vercel-storage.com are accepted;
+ *      validation does not currently enforce a specific store id)
  *   2. The BLOB_READ_WRITE_TOKEN scoped to store_TRGSq1xmFVErVvno
  *   3. Blobs use random suffixes, making URL guessing infeasible
  *   If user authentication is added in the future, this endpoint should

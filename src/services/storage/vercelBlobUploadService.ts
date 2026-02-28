@@ -138,9 +138,21 @@ class VercelBlobUploadService {
       .then((res) => {
         if (res.ok) {
           console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
+        } else if (res.status === 404) {
+          // Blob not found — already deleted by the API route
+          console.info(`\u2139\uFE0F Client cleanup: blob not found (already deleted)`);
+        } else if (res.status >= 500) {
+          // Server-side issue — log as warning so misconfigurations are visible
+          console.warn(
+            '\u26A0\uFE0F Client cleanup: server error during blob deletion (non-critical):',
+            res.status, res.statusText
+          );
         } else {
-          // Likely already deleted by the API route — not an error
-          console.debug(`\u2139\uFE0F Client cleanup: blob already deleted or not found`);
+          // Unexpected client error codes
+          console.warn(
+            '\u26A0\uFE0F Client cleanup: unexpected response during blob deletion (non-critical):',
+            res.status, res.statusText
+          );
         }
       })
       .catch((err) => {
