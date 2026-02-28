@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { audioMetadataService } from '@/services/audio/audioMetadataService';
+import { del } from '@vercel/blob';
 
 /**
  * API route to detect beats using Vercel Blob URL
@@ -73,6 +74,13 @@ export async function POST(request: NextRequest) {
 
     const audioBuffer = await blobResponse.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+
+    // Non-blocking cleanup: delete the blob now that we have the data in memory
+    del(blobUrl).then(() => {
+      console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+    }).catch((err) => {
+      console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+    });
 
     // Extract filename from blob URL or use default
     const urlParts = blobUrl.split('/');

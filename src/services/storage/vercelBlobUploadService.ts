@@ -122,6 +122,33 @@ class VercelBlobUploadService {
   }
 
   /**
+   * Delete a blob URL via the /api/blob/delete endpoint.
+   * This is a fire-and-forget safety net — the primary deletion happens
+   * server-side in the blob processing API routes. Errors are logged
+   * but never block the caller.
+   */
+  private deleteBlobUrl(blobUrl: string): void {
+    if (!blobUrl) return;
+
+    fetch('/api/blob/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: blobUrl }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
+        } else {
+          // Likely already deleted by the API route — not an error
+          console.debug(`\u2139\uFE0F Client cleanup: blob already deleted or not found`);
+        }
+      })
+      .catch((err) => {
+        console.warn('\u26A0\uFE0F Client cleanup: blob deletion request failed (non-critical):', err);
+      });
+  }
+
+  /**
    * Upload file to Vercel Blob storage using client upload
    * Uses store_TRGSq1xmFVErVvno for storage
    */
@@ -212,6 +239,10 @@ class VercelBlobUploadService {
 
       if (onProgress) onProgress(100);
 
+      // Safety-net cleanup: delete the blob after successful processing
+      // Primary deletion already happens server-side in the API route
+      this.deleteBlobUrl(blobUrl);
+
       return {
         success: true,
         data: result,
@@ -273,6 +304,10 @@ class VercelBlobUploadService {
       
 
       if (onProgress) onProgress(100);
+
+      // Safety-net cleanup: delete the blob after successful processing
+      // Primary deletion already happens server-side in the API route
+      this.deleteBlobUrl(blobUrl);
 
       return {
         success: true,
