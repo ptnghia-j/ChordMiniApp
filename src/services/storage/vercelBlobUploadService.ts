@@ -122,6 +122,50 @@ class VercelBlobUploadService {
   }
 
   /**
+   * Delete a blob URL via the /api/blob/delete endpoint.
+   * This is a fire-and-forget safety net — the primary deletion happens
+   * server-side in the blob processing API routes. Errors are logged
+   * but never block the caller.
+   */
+  private deleteBlobUrl(blobUrl: string): void {
+    if (!blobUrl) return;
+
+    fetch('/api/blob/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: blobUrl }),
+      keepalive: true, // Ensure the request completes even during page transitions
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          // The API returns { alreadyDeleted: true } when the blob was already
+          // removed server-side, so parse the body to distinguish.
+          const data = await res.json().catch(() => ({}));
+          if (data.alreadyDeleted) {
+            console.info(`\u2139\uFE0F Client cleanup: blob already deleted by server`);
+          } else {
+            console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
+          }
+        } else if (res.status >= 500) {
+          // Server-side issue — log as warning so misconfigurations are visible
+          console.warn(
+            '\u26A0\uFE0F Client cleanup: server error during blob deletion (non-critical):',
+            res.status, res.statusText
+          );
+        } else {
+          // Unexpected client error codes
+          console.warn(
+            '\u26A0\uFE0F Client cleanup: unexpected response during blob deletion (non-critical):',
+            res.status, res.statusText
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn('\u26A0\uFE0F Client cleanup: blob deletion request failed (non-critical):', err);
+      });
+  }
+
+  /**
    * Upload file to Vercel Blob storage using client upload
    * Uses store_TRGSq1xmFVErVvno for storage
    */
@@ -174,13 +218,14 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
+    let blobUrl: string | undefined;
     
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToBlob(audioFile);
+      blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
@@ -225,6 +270,13 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    } finally {
+      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
+      // Primary deletion already happens server-side in the API route;
+      // this is a safety net for cases where the route didn't reach its del() call.
+      if (blobUrl) {
+        this.deleteBlobUrl(blobUrl);
+      }
     }
   }
 
@@ -237,13 +289,14 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
+    let blobUrl: string | undefined;
     
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToBlob(audioFile);
+      blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
@@ -287,6 +340,13 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    } finally {
+      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
+      // Primary deletion already happens server-side in the API route;
+      // this is a safety net for cases where the route didn't reach its del() call.
+      if (blobUrl) {
+        this.deleteBlobUrl(blobUrl);
+      }
     }
   }
 

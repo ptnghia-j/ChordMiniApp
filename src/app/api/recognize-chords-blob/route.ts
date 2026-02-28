@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { del } from '@vercel/blob';
+import { validateBlobUrl } from '@/utils/blobValidation';
 
 /**
  * API route to recognize chords using Vercel Blob URL
@@ -20,18 +22,28 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     // Validate that we have a Blob URL
-    const blobUrl = formData.get('blob_url') as string;
-    if (!blobUrl) {
+    const blobUrlEntry = formData.get('blob_url');
+    if (blobUrlEntry == null) {
       return NextResponse.json(
         { error: 'No Vercel Blob URL provided' },
         { status: 400 }
       );
     }
-
-    // Validate Blob URL format (Vercel Blob URLs contain specific domains)
-    if (!blobUrl.includes('vercel-storage.com') && !blobUrl.includes('blob.vercel-storage.com')) {
+    if (typeof blobUrlEntry !== 'string') {
       return NextResponse.json(
-        { error: 'Invalid Vercel Blob URL format' },
+        { error: 'Invalid Vercel Blob URL: expected a string form field, but received a file upload' },
+        { status: 400 }
+      );
+    }
+    const rawBlobUrl = blobUrlEntry;
+
+    // Strict URL validation — parse and enforce hostname allowlist
+    let blobUrl: string;
+    try {
+      blobUrl = validateBlobUrl(rawBlobUrl);
+    } catch (err) {
+      return NextResponse.json(
+        { error: (err as Error).message },
         { status: 400 }
       );
     }
@@ -49,6 +61,16 @@ export async function POST(request: NextRequest) {
 
     const audioBuffer = await blobResponse.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+
+    // Cleanup: delete the blob now that we have the data in memory. Awaited to
+    // ensure it runs reliably in serverless environments, but failures are
+    // treated as non-critical.
+    try {
+      await del(blobUrl);
+      console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+    } catch (err) {
+      console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+    }
 
     // Extract filename from blob URL or use default
     const urlParts = blobUrl.split('/');
