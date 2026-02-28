@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { del } from '@vercel/blob';
+import { validateBlobUrl } from '@/utils/blobValidation';
 
 /**
  * API route to recognize chords using Vercel Blob URL
@@ -21,18 +22,21 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     // Validate that we have a Blob URL
-    const blobUrl = formData.get('blob_url') as string;
-    if (!blobUrl) {
+    const rawBlobUrl = formData.get('blob_url') as string;
+    if (!rawBlobUrl) {
       return NextResponse.json(
         { error: 'No Vercel Blob URL provided' },
         { status: 400 }
       );
     }
 
-    // Validate Blob URL format (Vercel Blob URLs contain specific domains)
-    if (!blobUrl.includes('vercel-storage.com') && !blobUrl.includes('blob.vercel-storage.com')) {
+    // Strict URL validation — parse and enforce hostname allowlist
+    let blobUrl: string;
+    try {
+      blobUrl = validateBlobUrl(rawBlobUrl);
+    } catch (err) {
       return NextResponse.json(
-        { error: 'Invalid Vercel Blob URL format' },
+        { error: (err as Error).message },
         { status: 400 }
       );
     }

@@ -201,13 +201,14 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
+    let blobUrl: string | undefined;
     
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToBlob(audioFile);
+      blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
@@ -239,10 +240,6 @@ class VercelBlobUploadService {
 
       if (onProgress) onProgress(100);
 
-      // Safety-net cleanup: delete the blob after successful processing
-      // Primary deletion already happens server-side in the API route
-      this.deleteBlobUrl(blobUrl);
-
       return {
         success: true,
         data: result,
@@ -256,6 +253,13 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    } finally {
+      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
+      // Primary deletion already happens server-side in the API route;
+      // this is a safety net for cases where the route didn't reach its del() call.
+      if (blobUrl) {
+        this.deleteBlobUrl(blobUrl);
+      }
     }
   }
 
@@ -268,13 +272,14 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
+    let blobUrl: string | undefined;
     
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToBlob(audioFile);
+      blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
@@ -305,10 +310,6 @@ class VercelBlobUploadService {
 
       if (onProgress) onProgress(100);
 
-      // Safety-net cleanup: delete the blob after successful processing
-      // Primary deletion already happens server-side in the API route
-      this.deleteBlobUrl(blobUrl);
-
       return {
         success: true,
         data: result,
@@ -322,6 +323,13 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    } finally {
+      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
+      // Primary deletion already happens server-side in the API route;
+      // this is a safety net for cases where the route didn't reach its del() call.
+      if (blobUrl) {
+        this.deleteBlobUrl(blobUrl);
+      }
     }
   }
 
