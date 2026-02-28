@@ -106,6 +106,9 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   const ppsRef = useRef(pixelsPerSecond);
   const sweepRef = useRef(0);
 
+  // Time-to-normalized-X mapping ref (updated by useMemo, read by RAF)
+  const timeToNormalizedXRef = useRef<(time: number) => number>((t) => t * pixelsPerSecond);
+
   // Use shared theme context (replaces manual dark mode detection)
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
@@ -143,8 +146,9 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     };
     // When paused, immediately position the strip
     if (!isPlaying && stripInnerRef.current) {
+      const normalizedX = timeToNormalizedXRef.current(currentTime);
       stripInnerRef.current.style.transform =
-        `translateX(${-currentTime * ppsRef.current + sweepRef.current}px)`;
+        `translateX(${-normalizedX + sweepRef.current}px)`;
     }
   }, [currentTime, isPlaying]);
 
@@ -166,11 +170,11 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       const now = performance.now() / 1000;
       const elapsed = now - playbackBaseRef.current.wallTime;
       const interpolatedTime = playbackBaseRef.current.audioTime + elapsed;
-      const pps = ppsRef.current;
       const sweep = sweepRef.current;
+      const normalizedX = timeToNormalizedXRef.current(interpolatedTime);
       if (stripInnerRef.current) {
         stripInnerRef.current.style.transform =
-          `translateX(${-interpolatedTime * pps + sweep}px)`;
+          `translateX(${-normalizedX + sweep}px)`;
       }
       rafRef.current = requestAnimationFrame(animate);
     };
@@ -180,14 +184,73 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pre-compute chord box positions, show-label flags, and measure separators
-  const { chordBoxes, measureSeparators, totalWidth } = useMemo(() => {
-    if (chordEvents.length === 0) return { chordBoxes: [], measureSeparators: [], totalWidth: 0 };
+  // Uses UNIFORM cell widths (median beat interval) so cells don't shrink/grow.
+  const { chordBoxes, measureSeparators, totalWidth, timeToNormalizedX } = useMemo(() => {
+    const identityMapping = (t: number) => t * pixelsPerSecond;
+    if (chordEvents.length === 0) {
+      return { chordBoxes: [], measureSeparators: [], totalWidth: 0, timeToNormalizedX: identityMapping };
+    }
 
+    // ── Compute uniform beat width from median interval ────────────────────
+    const intervals: number[] = [];
+    for (let i = 0; i < chordEvents.length; i++) {
+      const dur = chordEvents[i].endTime - chordEvents[i].startTime;
+      if (dur > 0) intervals.push(dur);
+    }
+    // Sort for median
+    intervals.sort((a, b) => a - b);
+    const medianInterval = intervals.length > 0
+      ? intervals[Math.floor(intervals.length / 2)]
+      : 0.5; // sensible fallback
+    const uniformBeatWidth = medianInterval * pixelsPerSecond;
+
+    // ── Build time→normalizedX mapping ─────────────────────────────────────
+    // For a given playback time, find which event it falls in and interpolate
+    // to the uniform-grid x position.
+    const timeToNormalizedX = (time: number): number => {
+      if (chordEvents.length === 0) return time * pixelsPerSecond;
+
+      // Before first event
+      if (time <= chordEvents[0].startTime) {
+        // Scale linearly from 0 to the first cell's x
+        const firstStart = chordEvents[0].startTime;
+        if (firstStart <= 0) return 0;
+        return (time / firstStart) * 0; // stays at 0 before first event
+      }
+
+      // After last event
+      const lastIdx = chordEvents.length - 1;
+      const lastEvent = chordEvents[lastIdx];
+      if (time >= lastEvent.endTime) {
+        // Continue scrolling past the end at uniform rate
+        const overshoot = time - lastEvent.endTime;
+        return (lastIdx + 1) * uniformBeatWidth + overshoot * pixelsPerSecond;
+      }
+
+      // Binary search for the event containing `time`
+      let lo = 0, hi = lastIdx;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (chordEvents[mid].endTime <= time) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      const event = chordEvents[lo];
+      const eventDuration = event.endTime - event.startTime;
+      const fraction = eventDuration > 0
+        ? (time - event.startTime) / eventDuration
+        : 0;
+      return (lo + fraction) * uniformBeatWidth;
+    };
+
+
+    // ── Build chord boxes with uniform positions ──────────────────────────
     const firstBeatIndex = chordEvents[0].beatIndex;
 
     const boxes = chordEvents.map((event, idx) => {
-      const rawX = event.startTime * pixelsPerSecond;
-      const rawWidth = Math.max((event.endTime - event.startTime) * pixelsPerSecond, 4);
+      const uniformX = idx * uniformBeatWidth;
       const isMeasureStart = idx > 0 && (event.beatIndex - firstBeatIndex) % timeSignature === 0;
 
       // Show chord label only when the chord VISUALLY differs from the
@@ -215,11 +278,11 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
         beatIndex: event.beatIndex,
         startTime: event.startTime,
         endTime: event.endTime,
-        x: rawX + CELL_GAP / 2,
-        width: Math.max(rawWidth - CELL_GAP, 2),
+        x: uniformX + CELL_GAP / 2,
+        width: Math.max(uniformBeatWidth - CELL_GAP, 2),
         index: idx,
         isMeasureStart,
-        separatorX: rawX,
+        separatorX: uniformX,
         showLabel,
       };
     });
@@ -229,13 +292,16 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       .filter((box) => box.isMeasureStart)
       .map((box) => box.separatorX);
 
-    const last = chordEvents[chordEvents.length - 1];
     return {
       chordBoxes: boxes,
       measureSeparators: separators,
-      totalWidth: last.endTime * pixelsPerSecond,
+      totalWidth: chordEvents.length * uniformBeatWidth,
+      timeToNormalizedX,
     };
   }, [chordEvents, pixelsPerSecond, timeSignature, accidentalPreference]);
+
+  // Sync the mapping function to a ref so the RAF closure always uses the latest version
+  useEffect(() => { timeToNormalizedXRef.current = timeToNormalizedX; }, [timeToNormalizedX]);
 
   // ── Stable ChordCell callbacks (memoized to avoid re-renders) ─────────────
 
