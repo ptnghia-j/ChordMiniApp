@@ -1,25 +1,15 @@
 'use client';
 
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
-import { ChordEvent, isBlackKey, noteNameToMidi, NOTE_INDEX_MAP } from '@/utils/chordToMidi';
+import { ChordEvent, isBlackKey } from '@/utils/chordToMidi';
+import {
+  generateAllInstrumentVisualNotes,
+  mergeConsecutiveChordEvents,
+  type ActiveInstrument,
+} from '@/utils/instrumentNoteGeneration';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-/** An active instrument with name and display color */
-export interface ActiveInstrument {
-  name: string;
-  color: string;
-}
-
-/** A visual note generated for instrument-specific rendering */
-interface VisualNote {
-  midi: number;
-  startTime: number;
-  endTime: number;
-  color: string;
-  chordName: string;
-  pos: { x: number; width: number } | null;
-}
+// Re-export ActiveInstrument so existing consumers don't break
+export type { ActiveInstrument } from '@/utils/instrumentNoteGeneration';
 
 interface FallingNotesCanvasProps {
   /** Chord events to render as falling notes */
@@ -81,246 +71,8 @@ function getNoteColor(_noteIndex: number, _isBass: boolean): string {
   return DEFAULT_NOTE_COLOR;
 }
 
-// ─── Instrument Voicing Generator ────────────────────────────────────────────
-
-/**
- * Merge consecutive chord events with the same chord name into single events.
- * The audio playback service only triggers on chord changes, so the visualization
- * should mirror that behavior — one visual event per chord change, spanning the
- * full duration until the next change.
- */
-function mergeConsecutiveChordEvents(events: ChordEvent[]): ChordEvent[] {
-  if (events.length === 0) return [];
-
-  const merged: ChordEvent[] = [];
-  let current = { ...events[0] };
-
-  for (let i = 1; i < events.length; i++) {
-    if (events[i].chordName === current.chordName) {
-      // Same chord — extend endTime
-      current.endTime = events[i].endTime;
-    } else {
-      // Chord changed — push previous and start new
-      merged.push(current);
-      current = { ...events[i] };
-    }
-  }
-  merged.push(current);
-
-  return merged;
-}
-
-/**
- * Generates instrument-specific visual notes from chord events,
- * replicating the exact voicing/timing patterns from soundfontChordPlaybackService.
- *
- * Key behaviors matched from the audio service:
- * - Only generates notes on chord CHANGES (not every beat)
- * - Piano: Bass-first pattern (bass note first, upper notes after one beat delay)
- *          for long chords (≥2 beats); cluster for short chords
- * - Guitar: Octave-aware arpeggiation with half-beat spacing
- *           Short (<2 beats): cluster; Medium (2-3): 3 notes;
- *           Long (3-5): 4 notes; Very Long (5-7): 5 notes; Extra Long (≥7): 9 notes
- * - Violin (octave 5): Root note only (sustained)
- * - Flute (octave 4): Bass/root note only (sustained)
- * - Bass (octave 1-2): Single low note (E-B → oct 1, C-D# → oct 2)
- */
-function generateInstrumentVisualNotes(
-  events: ChordEvent[],
-  instruments: ActiveInstrument[],
-  posLookup: Map<number, { x: number; width: number }>,
-): VisualNote[] {
-  const notes: VisualNote[] = [];
-
-  // Merge consecutive beats with same chord — audio only triggers on chord changes
-  const merged = mergeConsecutiveChordEvents(events);
-
-  // Estimate average beat duration from the raw events for timing calculations
-  let avgBeatDuration = 0.5; // fallback
-  if (events.length >= 2) {
-    const totalSpan = events[events.length - 1].endTime - events[0].startTime;
-    avgBeatDuration = totalSpan / events.length;
-  }
-  const halfBeatDelay = avgBeatDuration / 2;
-  const fullBeatDelay = avgBeatDuration;
-
-  for (const event of merged) {
-    const { chordName, notes: chordNotes, startTime, endTime } = event;
-    const duration = endTime - startTime;
-
-    // Duration measured in beats
-    const durationInBeats = duration / avgBeatDuration;
-    const isLongChord = durationInBeats >= 2;
-
-    // Separate bass (octave 2) from main chord tones (octave 4/5)
-    const bassEntry = chordNotes.find(n => n.octave === 2);
-    const chordTones = chordNotes.filter(n => n.octave !== 2);
-    if (chordTones.length === 0) continue;
-
-    const rootName = chordTones[0].noteName;
-    const bassName = bassEntry ? bassEntry.noteName : rootName;
-
-    for (const inst of instruments) {
-      const name = inst.name.toLowerCase();
-      const color = inst.color;
-
-      switch (name) {
-        case 'piano': {
-          if (isLongChord) {
-            // ── PIANO BASS-FIRST PATTERN (matches soundfontChordPlaybackService) ──
-            // Bass note plays immediately
-            const bassMidi = bassEntry
-              ? noteNameToMidi(`${bassName}2`)
-              : noteNameToMidi(`${rootName}3`);
-            notes.push({
-              midi: bassMidi, startTime, endTime, color, chordName,
-              pos: posLookup.get(bassMidi) ?? null,
-            });
-
-            // Upper chord tones at octave 3, delayed by one full beat
-            const upperStartTime = startTime + fullBeatDelay;
-            for (const tone of chordTones) {
-              const midi = noteNameToMidi(`${tone.noteName}3`);
-              if (midi === bassMidi) continue;
-              notes.push({
-                midi, startTime: upperStartTime, endTime, color, chordName,
-                pos: posLookup.get(midi) ?? null,
-              });
-            }
-          } else {
-            // ── PIANO CLUSTER (short chords, <2 beats) ──
-            // All notes play simultaneously at octave 3
-            const bassMidi = bassEntry
-              ? noteNameToMidi(`${bassName}2`)
-              : noteNameToMidi(`${rootName}3`);
-            notes.push({
-              midi: bassMidi, startTime, endTime, color, chordName,
-              pos: posLookup.get(bassMidi) ?? null,
-            });
-            for (const tone of chordTones) {
-              const midi = noteNameToMidi(`${tone.noteName}3`);
-              if (midi === bassMidi) continue;
-              notes.push({
-                midi, startTime, endTime, color, chordName,
-                pos: posLookup.get(midi) ?? null,
-              });
-            }
-          }
-          break;
-        }
-        case 'guitar': {
-          if (isLongChord && chordTones.length >= 2) {
-            // ── GUITAR ARPEGGIATION (matches soundfontChordPlaybackService) ──
-            // Octave-aware patterns based on duration in beats
-            const rootIdx = 0;
-            const thirdIdx = chordTones.length >= 2 ? 1 : 0;
-            const fifthIdx = chordTones.length >= 3 ? 2 : (chordTones.length >= 2 ? 1 : 0);
-
-            // Helper to create a note name at a target octave
-            const noteAtOctave = (idx: number, oct: number) => ({
-              noteName: chordTones[idx].noteName, oct,
-            });
-
-            let arpPattern: Array<{ noteName: string; oct: number }>;
-
-            if (durationInBeats < 3) {
-              // MEDIUM (2-3 beats): Root(2) → Fifth(3) → Third(4)
-              arpPattern = [
-                noteAtOctave(rootIdx, 2),
-                noteAtOctave(fifthIdx, 3),
-                noteAtOctave(thirdIdx, 4),
-              ];
-            } else if (durationInBeats < 5) {
-              // LONG (3-5 beats): Root(2) → Fifth(3) → Third(4) → Root(3)
-              arpPattern = [
-                noteAtOctave(rootIdx, 2),
-                noteAtOctave(fifthIdx, 3),
-                noteAtOctave(thirdIdx, 4),
-                noteAtOctave(rootIdx, 3),
-              ];
-            } else if (durationInBeats < 7) {
-              // VERY LONG (5-7 beats): Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4)
-              arpPattern = [
-                noteAtOctave(rootIdx, 2),
-                noteAtOctave(fifthIdx, 3),
-                noteAtOctave(thirdIdx, 4),
-                noteAtOctave(fifthIdx, 4),
-                noteAtOctave(rootIdx, 4),
-              ];
-            } else {
-              // EXTRA LONG (≥7 beats): Ascend then descend
-              arpPattern = [
-                noteAtOctave(rootIdx, 2),
-                noteAtOctave(fifthIdx, 3),
-                noteAtOctave(thirdIdx, 4),
-                noteAtOctave(fifthIdx, 4),
-                noteAtOctave(rootIdx, 4),
-                noteAtOctave(fifthIdx, 4),
-                noteAtOctave(thirdIdx, 4),
-                noteAtOctave(rootIdx, 3),
-                noteAtOctave(rootIdx, 2),
-              ];
-            }
-
-            // Each arp note is spaced by half a beat
-            for (let i = 0; i < arpPattern.length; i++) {
-              const { noteName, oct } = arpPattern[i];
-              const midi = noteNameToMidi(`${noteName}${oct}`);
-              const noteStart = startTime + i * halfBeatDelay;
-              notes.push({
-                midi, startTime: noteStart, endTime, color, chordName,
-                pos: posLookup.get(midi) ?? null,
-              });
-            }
-          } else {
-            // ── GUITAR CLUSTER (short chords, <2 beats) ──
-            // All chord tones at octave 3 simultaneously
-            for (const tone of chordTones) {
-              const midi = noteNameToMidi(`${tone.noteName}3`);
-              notes.push({
-                midi, startTime, endTime, color, chordName,
-                pos: posLookup.get(midi) ?? null,
-              });
-            }
-          }
-          break;
-        }
-        case 'violin': {
-          // Root note at octave 5 (sustained)
-          const midi = noteNameToMidi(`${rootName}5`);
-          notes.push({
-            midi, startTime, endTime, color, chordName,
-            pos: posLookup.get(midi) ?? null,
-          });
-          break;
-        }
-        case 'flute': {
-          // Bass/root at octave 4 (sustained)
-          const midi = noteNameToMidi(`${bassName}4`);
-          notes.push({
-            midi, startTime, endTime, color, chordName,
-            pos: posLookup.get(midi) ?? null,
-          });
-          break;
-        }
-        case 'bass': {
-          // Single low note: E-B → octave 1, C-D# → octave 2
-          // Matches: bassIdx > NOTE_INDEX_MAP['D#'] (i.e., > 3) → octave 1
-          const noteIdx = NOTE_INDEX_MAP[bassName];
-          const octave = (noteIdx !== undefined && noteIdx > 3) ? 1 : 2;
-          const midi = noteNameToMidi(`${bassName}${octave}`);
-          notes.push({
-            midi, startTime, endTime, color, chordName,
-            pos: posLookup.get(midi) ?? null,
-          });
-          break;
-        }
-      }
-    }
-  }
-
-  return notes;
-}
+// Note: Instrument voicing logic is now in @/utils/instrumentNoteGeneration.ts
+// (single source of truth for both visualization and audio playback)
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -410,9 +162,10 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   }, [mergedChordEvents, midiKeyPositions]);
 
   // Precompute instrument-specific visual notes when instruments are active
+  // Uses shared module (single source of truth with audio playback)
   const instrumentVisualNotes = useMemo(() => {
     if (!hasInstruments || chordEvents.length === 0) return [];
-    return generateInstrumentVisualNotes(
+    return generateAllInstrumentVisualNotes(
       chordEvents, activeInstruments, midiKeyPositions,
     );
   }, [chordEvents, hasInstruments, activeInstruments, midiKeyPositions]);

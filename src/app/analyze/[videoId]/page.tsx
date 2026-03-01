@@ -113,6 +113,7 @@ import AnalysisSplitLayout from '@/components/layout/AnalysisSplitLayout';
 
 import UtilityBar from '@/components/analysis/UtilityBar';
 import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
+import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEFAULT_FLUTE_VOLUME } from '@/config/audioDefaults';
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 // Import new hooks and contexts
 import { useFirebaseReadiness } from '@/hooks/firebase/useFirebaseReadiness';
@@ -1183,10 +1184,10 @@ export default function YouTubeVideoAnalyzePage() {
   // ChordPlaybackManager is inside UIProvider and handles transposition
   const [chordPlayback, setChordPlayback] = useState<UseChordPlaybackReturn>({
     isEnabled: false,
-    pianoVolume: 50,
-    guitarVolume: 30,
-    violinVolume: 60,
-    fluteVolume: 50,
+    pianoVolume: DEFAULT_PIANO_VOLUME,
+    guitarVolume: DEFAULT_GUITAR_VOLUME,
+    violinVolume: DEFAULT_VIOLIN_VOLUME,
+    fluteVolume: DEFAULT_FLUTE_VOLUME,
     isReady: false,
     togglePlayback: () => {},
     setPianoVolume: () => {},

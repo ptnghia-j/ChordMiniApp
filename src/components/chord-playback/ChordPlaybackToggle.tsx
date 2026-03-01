@@ -8,6 +8,7 @@ import { MdPiano, MdRefresh } from 'react-icons/md';
 import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
 import { Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
+import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { useIsPitchShiftEnabled } from '@/stores/uiStore';
@@ -144,18 +145,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       } catch (error) {
         console.error('🎵 Failed to initialize audio mixer service:', error);
         // Fallback: set default audio settings so the panel can still appear
-        setAudioSettings({
-          masterVolume: 80,
-          youtubeVolume: 100,
-          pitchShiftedAudioVolume: 30,
-          chordPlaybackVolume: 60,
-          pianoVolume: 50,
-          guitarVolume: 60,
-          violinVolume: 60,
-          fluteVolume: 50,
-          bassVolume: 40,
-          metronomeVolume: 70
-        });
+        setAudioSettings({ ...DEFAULT_AUDIO_MIXER_SETTINGS });
         return;
       }
     }
@@ -164,18 +154,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
     if (!mixer) {
       console.error('🎵 Audio mixer is null after initialization');
       // Fallback: set default audio settings so the panel can still appear
-      setAudioSettings({
-        masterVolume: 80,
-        youtubeVolume: 100,
-        pitchShiftedAudioVolume: 30,
-        chordPlaybackVolume: 60,
-        pianoVolume: 50,
-        guitarVolume: 60,
-        violinVolume: 60,
-        fluteVolume: 50,
-        bassVolume: 40,
-        metronomeVolume: 70
-      });
+      setAudioSettings({ ...DEFAULT_AUDIO_MIXER_SETTINGS });
       return;
     }
 
@@ -210,18 +189,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
     } catch (error) {
       console.error('🎵 Failed to get initial settings:', error);
       // Fallback: set default audio settings
-      setAudioSettings({
-        masterVolume: 80,
-        youtubeVolume: 100,
-        pitchShiftedAudioVolume: 30,
-        chordPlaybackVolume: 60,
-        pianoVolume: 50,
-        guitarVolume: 60,
-        violinVolume: 60,
-        fluteVolume: 50,
-        bassVolume: 40,
-        metronomeVolume: 70
-      });
+      setAudioSettings({ ...DEFAULT_AUDIO_MIXER_SETTINGS });
     }
 
     // Listen for real-time settings changes
@@ -285,18 +253,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   useEffect(() => {
     if (isEnabled && showControls && !audioSettings) {
       // Set default settings as fallback so the panel can appear
-      setAudioSettings({
-        masterVolume: 80,
-        youtubeVolume: 100,
-        pitchShiftedAudioVolume: 30,
-        chordPlaybackVolume: 60,
-        pianoVolume: 50,
-        guitarVolume: 60,
-        violinVolume: 60,
-        fluteVolume: 50,
-        bassVolume: 40,
-        metronomeVolume: 70
-      });
+      setAudioSettings({ ...DEFAULT_AUDIO_MIXER_SETTINGS });
     }
   }, [isEnabled, showControls, audioSettings]);
 

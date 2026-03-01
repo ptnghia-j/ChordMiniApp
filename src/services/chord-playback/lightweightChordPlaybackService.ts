@@ -5,6 +5,7 @@
  */
 
 import { audioContextManager } from '../audio/audioContextManager';
+import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME } from '@/config/audioDefaults';
 
 // Debug helper available across this module
 function audioDebug(): boolean {
@@ -151,8 +152,8 @@ export class LightweightChordPlaybackService {
   private activeOscillators: OscillatorNode[] = [];
   private debugEnabled = false;
   private options: LightweightChordPlaybackOptions = {
-    pianoVolume: 50,
-    guitarVolume: 30,
+    pianoVolume: DEFAULT_PIANO_VOLUME,
+    guitarVolume: DEFAULT_GUITAR_VOLUME,
     enabled: false
   };
 

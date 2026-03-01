@@ -36,7 +36,10 @@ const customJestConfig = {
     '<rootDir>/.next/',
     '<rootDir>/node_modules/',
     '<rootDir>/tests/e2e/',
-    '<rootDir>/tests/manual/'
+    '<rootDir>/tests/manual/',
+    '<rootDir>/__tests__/e2e/',
+    '<rootDir>/__tests__/manual/',
+    '<rootDir>/__tests__/playwright\\.config\\.ts'
   ],
   globals: {
     'ts-jest': {

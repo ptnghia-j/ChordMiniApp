@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
+import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import {
+  DEFAULT_PIANO_VOLUME,
+  DEFAULT_GUITAR_VOLUME,
+  DEFAULT_VIOLIN_VOLUME,
+  DEFAULT_FLUTE_VOLUME,
+} from '@/config/audioDefaults';
 
 export interface UseChordPlaybackProps {
   currentBeatIndex: number;
@@ -24,28 +31,123 @@ export interface UseChordPlaybackReturn {
   setFluteVolume: (volume: number) => void;
 }
 
+// ─── Helpers: No-chord detection ─────────────────────────────────────────────
+
+const NO_CHORD_VALUES = new Set(['N.C.', 'N/C', 'NC', 'N', '']);
+
+function isNoChord(chord: string | undefined | null): boolean {
+  return !chord || NO_CHORD_VALUES.has(chord);
+}
+
+// ─── Helpers: Build pre-scheduled chord list ─────────────────────────────────
+
+interface ScheduledChordEvent {
+  /** Absolute audio time (seconds) when this chord starts */
+  audioTime: number;
+  /** Chord symbol */
+  chord: string;
+  /** Duration in seconds */
+  duration: number;
+  /** Beat index (for dynamics) */
+  beatIndex: number;
+}
+
 /**
- * Hook for managing chord playback synchronized with beat animation
- * Triggers chord playback when the beat animation reaches visible chord changes
+ * Build a list of distinct chord-change events from beats/chords arrays.
+ * Merges consecutive beats with the same chord into a single event.
+ */
+function buildChordSchedule(
+  chords: string[],
+  beats: (number | null)[],
+): ScheduledChordEvent[] {
+  const events: ScheduledChordEvent[] = [];
+  let prevChord: string | null = null;
+
+  for (let i = 0; i < chords.length; i++) {
+    const chord = chords[i];
+    const beatTime = beats[i];
+    if (isNoChord(chord) || typeof beatTime !== 'number') {
+      if (!isNoChord(chord)) continue;
+      // On N.C. boundary, close current event
+      prevChord = null;
+      continue;
+    }
+    if (chord !== prevChord) {
+      events.push({
+        audioTime: beatTime,
+        chord: chord,
+        duration: 2.0, // placeholder — filled below
+        beatIndex: i,
+      });
+      prevChord = chord;
+    }
+  }
+
+  // Fill durations: each event lasts until the next one starts
+  for (let i = 0; i < events.length - 1; i++) {
+    events[i].duration = Math.max(0.5, Math.min(8.0, events[i + 1].audioTime - events[i].audioTime));
+  }
+
+  return events;
+}
+
+/**
+ * Hook for managing chord playback synchronized with beat animation.
+ *
+ * Foreground mode: reacts to `currentBeatIndex` changes (driven by rAF).
+ * Background mode: when the browser tab is hidden, rAF stops so we switch
+ * to a `setInterval`-based poller that reads `audioElement.currentTime`
+ * directly and triggers chord changes independently.
  */
 export const useChordPlayback = ({
   currentBeatIndex,
   chords,
   beats,
   isPlaying,
-  currentTime: _currentTime,  
+  currentTime,
   bpm = 120 // Default to 120 BPM if not provided
 }: UseChordPlaybackProps): UseChordPlaybackReturn => {
   const [isEnabled, setIsEnabled] = useState(false);
-  const [pianoVolume, setPianoVolumeState] = useState(50);
-  const [guitarVolume, setGuitarVolumeState] = useState(60);
-  const [violinVolume, setViolinVolumeState] = useState(60);
-  const [fluteVolume, setFluteVolumeState] = useState(50);
+  const [pianoVolume, setPianoVolumeState] = useState(DEFAULT_PIANO_VOLUME);
+  const [guitarVolume, setGuitarVolumeState] = useState(DEFAULT_GUITAR_VOLUME);
+  const [violinVolume, setViolinVolumeState] = useState(DEFAULT_VIOLIN_VOLUME);
+  const [fluteVolume, setFluteVolumeState] = useState(DEFAULT_FLUTE_VOLUME);
   const [isReady, setIsReady] = useState(false);
 
   const chordPlaybackService = useRef(getSoundfontChordPlaybackService());
+  const dynamicsAnalyzer = useRef(getDynamicsAnalyzer());
   const lastPlayedChordIndex = useRef(-1);
   const lastPlayedChord = useRef<string | null>(null);
+
+  // Background scheduling refs
+  const backgroundIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isBackgroundRef = useRef(false);
+
+  // Keep latest values in refs so the background poller can access them
+  // without causing effect re-runs
+  const chordsRef = useRef(chords);
+  const beatsRef = useRef(beats);
+  const bpmRef = useRef(bpm);
+  const isEnabledRef = useRef(isEnabled);
+  const isPlayingRef = useRef(isPlaying);
+  const isReadyRef = useRef(isReady);
+  const currentTimeRef = useRef(currentTime);
+
+  useEffect(() => { chordsRef.current = chords; }, [chords]);
+  useEffect(() => { beatsRef.current = beats; }, [beats]);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  useEffect(() => { isEnabledRef.current = isEnabled; }, [isEnabled]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+
+  // Initialize dynamics analyzer with musical params
+  useEffect(() => {
+    dynamicsAnalyzer.current.setParams({
+      bpm,
+      timeSignature: 4, // Default 4/4 time
+    });
+  }, [bpm]);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -71,6 +173,123 @@ export const useChordPlayback = ({
       fluteVolume
     });
   }, [isEnabled, pianoVolume, guitarVolume, violinVolume, fluteVolume]);
+
+  // ─── Background Tab Chord Scheduling ─────────────────────────────────────
+  // When the browser tab loses focus, rAF stops → currentBeatIndex freezes →
+  // no new chords get triggered. We switch to a setInterval-based poller that
+  // reads the audio element's currentTime directly (the <audio>/<video> element
+  // keeps playing even in background tabs) and triggers chord changes.
+  //
+  // setInterval is throttled to ~1 000 ms minimum in background tabs by
+  // browsers, but chord changes typically last 1-4 s so this is adequate.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const stopBackgroundPoller = useCallback(() => {
+    if (backgroundIntervalRef.current !== null) {
+      clearInterval(backgroundIntervalRef.current);
+      backgroundIntervalRef.current = null;
+    }
+  }, []);
+
+  const startBackgroundPoller = useCallback(() => {
+    stopBackgroundPoller();
+
+    // Use the currentTime prop (via ref) instead of querying the DOM.
+    // This works for both HTML5 audio and YouTube iframe playback because
+    // the parent component updates currentTime via timeupdate events or
+    // YouTube player callbacks, both of which fire in background tabs.
+    const getAudioTime = (): number | null => {
+      if (isPlayingRef.current) {
+        return currentTimeRef.current;
+      }
+      return null;
+    };
+
+    // Pre-compute the chord schedule once
+    const schedule = buildChordSchedule(chordsRef.current, beatsRef.current);
+    if (schedule.length === 0) return;
+
+    // Poller: runs every 250ms (browsers clamp to ~1 000 ms in background)
+    backgroundIntervalRef.current = setInterval(() => {
+      if (!isEnabledRef.current || !isPlayingRef.current || !isReadyRef.current) {
+        return;
+      }
+
+      const time = getAudioTime();
+      if (time === null) return;
+
+      // Binary search for the current chord event
+      let lo = 0, hi = schedule.length - 1, idx = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (schedule[mid].audioTime <= time) {
+          idx = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+
+      if (idx < 0) return;
+
+      const event = schedule[idx];
+
+      // Skip if same chord already playing
+      if (event.chord === lastPlayedChord.current) return;
+
+      const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
+        event.audioTime,
+        event.beatIndex,
+        event.chord,
+      );
+
+      chordPlaybackService.current.playChord(
+        event.chord,
+        event.duration,
+        bpmRef.current,
+        dynamicVelocity,
+      );
+
+      lastPlayedChord.current = event.chord;
+      lastPlayedChordIndex.current = event.beatIndex;
+    }, 250);
+  }, [stopBackgroundPoller]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Tab going to background — start polling
+        isBackgroundRef.current = true;
+        if (isEnabledRef.current && isPlayingRef.current) {
+          startBackgroundPoller();
+        }
+      } else {
+        // Tab returning to foreground — stop polling, let rAF take over
+        isBackgroundRef.current = false;
+        stopBackgroundPoller();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopBackgroundPoller();
+    };
+  }, [startBackgroundPoller, stopBackgroundPoller]);
+
+  // Start/stop background poller when playback state changes while tab is hidden
+  useEffect(() => {
+    if (!isBackgroundRef.current) return;
+
+    if (isEnabled && isPlaying && isReady) {
+      startBackgroundPoller();
+    } else {
+      stopBackgroundPoller();
+    }
+  }, [isEnabled, isPlaying, isReady, startBackgroundPoller, stopBackgroundPoller]);
 
   // Find the next chord change from current beat index
   const findNextChordChange = useCallback((fromIndex: number): { index: number; chord: string } | null => {
@@ -103,8 +322,11 @@ export const useChordPlayback = ({
     return 2.0; // Default duration
   }, [beats]);
 
-  // Main chord playback logic - triggered when beat index changes
+  // Main chord playback logic - triggered when beat index changes (foreground only)
   useEffect(() => {
+    // Skip if background poller is active — it handles chord scheduling independently
+    if (isBackgroundRef.current) return;
+
     if (!isEnabled || !isReady || !isPlaying || currentBeatIndex < 0 || !chords || chords.length === 0) {
       return;
     }
@@ -140,14 +362,24 @@ export const useChordPlayback = ({
         ? calculateChordDuration(currentBeatIndex, nextChordChange.index)
         : 2.0;
 
-      // Play the chord with BPM information for dynamic timing
-      chordPlaybackService.current.playChord(currentChord, duration, bpm);
+      // Calculate dynamic velocity based on beat position and audio energy
+      const currentBeatTime = typeof beats[currentBeatIndex] === 'number'
+        ? (beats[currentBeatIndex] as number)
+        : 0;
+      const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
+        currentBeatTime,
+        currentBeatIndex,
+        currentChord,
+      );
+
+      // Play the chord with BPM information and dynamic velocity
+      chordPlaybackService.current.playChord(currentChord, duration, bpm, dynamicVelocity);
 
       // Update tracking variables
       lastPlayedChordIndex.current = currentBeatIndex;
       lastPlayedChord.current = currentChord;
     }
-  }, [currentBeatIndex, chords, isEnabled, isReady, isPlaying, findNextChordChange, calculateChordDuration, bpm]);
+  }, [currentBeatIndex, chords, beats, isEnabled, isReady, isPlaying, findNextChordChange, calculateChordDuration, bpm]);
 
   // Stop playback when paused or disabled
   useEffect(() => {

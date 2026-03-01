@@ -8,6 +8,20 @@
  */
 
 import { audioContextManager } from '../audio/audioContextManager';
+import { parseChordToMidiNotes } from '@/utils/chordToMidi';
+import {
+  generateNotesForInstrument,
+  beatDurationFromBpm,
+  type InstrumentName,
+  type ScheduledNote,
+} from '@/utils/instrumentNoteGeneration';
+import {
+  DEFAULT_PIANO_VOLUME,
+  DEFAULT_GUITAR_VOLUME,
+  DEFAULT_VIOLIN_VOLUME,
+  DEFAULT_FLUTE_VOLUME,
+  DEFAULT_BASS_VOLUME,
+} from '@/config/audioDefaults';
 
 // Lazy load smplr to reduce initial bundle size
 let SmplrModule: typeof import('smplr') | null = null;
@@ -31,211 +45,12 @@ export interface SoundfontChordPlaybackOptions {
   enabled: boolean;
 }
 
-/**
- * Chord parsing utilities (imported from lightweight service logic)
- */
-const NOTE_INDEX_MAP: Record<string, number> = {
-  'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5,
-  'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
-};
-
-const CHROMATIC_SCALE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-const CHORD_STRUCTURES: Record<string, number[]> = {
-  major:    [0, 4, 7],
-  minor:    [0, 3, 7],
-  dom7:     [0, 4, 7, 10],
-  maj7:     [0, 4, 7, 11],
-  min7:     [0, 3, 7, 10],
-  sus2:     [0, 2, 7],
-  sus4:     [0, 5, 7],
-  dim:      [0, 3, 6],
-  aug:      [0, 4, 8],
-  dim7:     [0, 3, 6, 9],
-  hdim7:    [0, 3, 6, 10],
-  add9:     [0, 4, 7, 14],
-  dom9:     [0, 4, 7, 10, 14],
-  maj9:     [0, 4, 7, 11, 14],
-  min9:     [0, 3, 7, 10, 14],
-  dom11:    [0, 4, 7, 10, 14, 17],
-  dom13:    [0, 4, 7, 10, 14, 21],
-  six:      [0, 4, 7, 9],
-  min6:     [0, 3, 7, 9],
-  // Extended chords (added for playback parity with diagrams)
-  minmaj7:  [0, 3, 7, 11],          // Minor-major 7th (e.g., CmMaj7)
-  min11:    [0, 3, 7, 10, 14, 17],  // Minor 11th (e.g., Cm11)
-  min13:    [0, 3, 7, 10, 14, 21],  // Minor 13th (e.g., Cm13)
-  maj11:    [0, 4, 7, 11, 14, 17],  // Major 11th (e.g., Cmaj11)
-  maj13:    [0, 4, 7, 11, 14, 21],  // Major 13th (e.g., Cmaj13)
-};
-
-const CHORD_TYPE_ALIASES: Record<string, string> = {
-  '': 'major', 'maj': 'major', 'major': 'major',
-  'm': 'minor', 'min': 'minor', 'minor': 'minor',
-  '7': 'dom7', 'dom7': 'dom7',
-  'M7': 'maj7', 'maj7': 'maj7', 'Maj7': 'maj7',
-  'm7': 'min7', 'min7': 'min7',
-  'sus2': 'sus2',
-  'sus4': 'sus4',
-  '°': 'dim', 'dim': 'dim',
-  '+': 'aug', 'aug': 'aug',
-  '°7': 'dim7', 'dim7': 'dim7',
-  'ø7': 'hdim7', 'hdim7': 'hdim7', 'm7b5': 'hdim7',
-  'add9': 'add9',
-  '9': 'dom9', 'dom9': 'dom9',
-  'M9': 'maj9', 'maj9': 'maj9', 'Maj9': 'maj9',
-  'm9': 'min9', 'min9': 'min9',
-  '11': 'dom11', 'dom11': 'dom11',
-  '13': 'dom13', 'dom13': 'dom13',
-  '6': 'six',
-  'm6': 'min6', 'min6': 'min6',
-  // Minor-major 7th variants
-  'mmaj7': 'minmaj7',
-  'mMaj7': 'minmaj7',
-  'minmaj7': 'minmaj7',
-  'mM7': 'minmaj7',
-  'minMaj7': 'minmaj7',
-  // Minor 11th and 13th
-  'm11': 'min11',
-  'min11': 'min11',
-  'm13': 'min13',
-  'min13': 'min13',
-  // Major 11th and 13th
-  'maj11': 'maj11',
-  'Maj11': 'maj11',
-  'maj13': 'maj13',
-  'Maj13': 'maj13',
-};
-
-/**
- * Convert interval notation to semitones
- * The Python backend uses delta notation where numbers represent semitone intervals:
- * delta_dict=['1','b2','2','b3','3','4','b5','5','b6','6','b7','7']
- * This maps to: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] semitones
- *
- * Examples:
- * - "1" = 0 semitones (root)
- * - "b2" = 1 semitone
- * - "2" = 2 semitones
- * - "3" = 4 semitones (major third)
- * - "4" = 5 semitones (perfect fourth)
- * - "5" = 7 semitones (perfect fifth)
- * - "b7" = 10 semitones (minor seventh)
- * - "7" = 11 semitones (major seventh)
- */
-function intervalToSemitones(interval: string): number {
-  // Parse the interval string to extract accidental and number
-  const match = interval.match(/^([#b]?)(\d+)$/);
-  if (!match) return 0;
-
-  const [, accidental, intervalNum] = match;
-  const intervalNumber = parseInt(intervalNum);
-
-  // Map interval numbers to semitones (based on major scale intervals)
-  // 1=0, 2=2, 3=4, 4=5, 5=7, 6=9, 7=11, 9=14, 11=17, 13=21
-  const intervalMap: Record<number, number> = {
-    1: 0,   // Root
-    2: 2,   // Major second
-    3: 4,   // Major third
-    4: 5,   // Perfect fourth
-    5: 7,   // Perfect fifth
-    6: 9,   // Major sixth
-    7: 11,  // Major seventh
-    9: 14,  // Major ninth (octave + major second)
-    11: 17, // Perfect eleventh (octave + perfect fourth)
-    13: 21  // Major thirteenth (octave + major sixth)
-  };
-
-  let semitones = intervalMap[intervalNumber] || 0;
-
-  // Apply accidental
-  if (accidental === '#') semitones += 1;
-  if (accidental === 'b') semitones -= 1;
-
-  return semitones;
-}
-
-/**
- * Parse chord name to get note names with octaves
- */
-function parseChordToNotes(chordName: string): string[] {
-  // Handle slash chords (e.g., "C/G", "Am/E", "Eb:maj/4")
-  const parts = chordName.split('/');
-  const baseChord = parts[0];
-  const bassSpecifier = parts[1]; // Could be note name (E, G) or interval (3, 4, b7)
-
-  // Extract root note and chord type
-  const match = baseChord.match(/^([A-G][#b]?)(.*)$/);
-  if (!match) {
-    return [];
-  }
-
-  const [, root, chordType] = match;
-  const rootIndex = NOTE_INDEX_MAP[root];
-  if (rootIndex === undefined) {
-    return [];
-  }
-
-  // Normalize chord type
-  const cleanedType = chordType.replace(/^[^A-Za-z0-9#b]+/, '').replace(/\s+/g, '');
-  const normalizedChordType = CHORD_TYPE_ALIASES[cleanedType.toLowerCase()] || 'major';
-  const intervals = CHORD_STRUCTURES[normalizedChordType];
-  if (!intervals) {
-    return [];
-  }
-
-  // Convert bass specifier to actual note name
-  let bassNoteName: string | undefined;
-
-  if (bassSpecifier) {
-    // Check if it's a note name (A-G with optional #/b) or an interval (number with optional #/b)
-    const isNoteName = /^[A-G][#b]?$/.test(bassSpecifier);
-    const isInterval = /^[#b]?\d+$/.test(bassSpecifier);
-
-    if (isNoteName) {
-      // It's already a note name (e.g., "E", "G", "Bb")
-      bassNoteName = bassSpecifier;
-    } else if (isInterval) {
-      // It's an interval (e.g., "3", "4", "b7") - convert to note name
-      const semitones = intervalToSemitones(bassSpecifier);
-      const bassNoteIndex = (rootIndex + semitones) % 12;
-      bassNoteName = CHROMATIC_SCALE[bassNoteIndex];
-    }
-  }
-
-  // Generate chord notes
-  const notes: string[] = [];
-  const isRootPosition = !bassNoteName || bassNoteName === root;
-
-  if (!isRootPosition && bassNoteName) {
-    // Add bass note in lower octave (C2-B2 range)
-    notes.push(`${bassNoteName}2`);
-  }
-
-  // Add chord tones in C4-C6 range
-  intervals.forEach(interval => {
-    const noteIndex = (rootIndex + interval) % 12;
-    const noteName = CHROMATIC_SCALE[noteIndex];
-    // Skip bass note if it's already added
-    if (!isRootPosition && noteName === bassNoteName) {
-      return;
-    }
-
-    // Determine octave based on interval
-    const octave = interval < 12 ? 4 : 5;
-    notes.push(`${noteName}${octave}`);
-  });
-
-  return notes;
-}
-
 export class SoundfontChordPlaybackService {
   // Constants for chord playback
   private static readonly CLUSTER_VOLUME_REDUCTION = 0.75; // Volume reduction for short chord clusters
   private static readonly NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']; // Chromatic scale for sorting
   private static readonly DEFAULT_BPM = 120; // Default BPM fallback
   private static readonly SAMPLE_DURATION = 3.5; // Estimated soundfont sample duration in seconds
-  private static readonly LOOP_OVERLAP = 0.1; // Overlap time for seamless looping (100ms crossfade)
 
   private audioContext: AudioContext | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,11 +70,11 @@ export class SoundfontChordPlaybackService {
   private readonly UNLOAD_DELAY_MS = 30000; // 30 seconds before unloading unused instrument
 
   private options: SoundfontChordPlaybackOptions = {
-    pianoVolume: 50,
-    guitarVolume: 60,
-    violinVolume: 60,
-    fluteVolume: 50,
-    bassVolume: 40,
+    pianoVolume: DEFAULT_PIANO_VOLUME,
+    guitarVolume: DEFAULT_GUITAR_VOLUME,
+    violinVolume: DEFAULT_VIOLIN_VOLUME,
+    fluteVolume: DEFAULT_FLUTE_VOLUME,
+    bassVolume: DEFAULT_BASS_VOLUME,
     enabled: false
   };
 
@@ -442,26 +257,16 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Play a chord with all enabled instruments
-   * Compatible with existing chord playback interface
-   *
-   * Instrument behavior:
-   * - Piano (C3): Bass-first pattern for long chords (>=2 beats, full beat delay), cluster for short chords, bass notes 1.25x louder
-   * - Guitar (C3): Octave-aware arpeggiation patterns based on duration:
-   *   * Short (<2 beats): Cluster at 0.75x volume
-   *   * Medium (2-3 beats): Root(2) → Fifth(3) → Third(4) - e.g., A2 → E3 → C#4
-   *   * Long (3-5 beats): Root(2) → Fifth(3) → Third(4) → Root(3) - e.g., A2 → E3 → C#4 → A3
-   *   * Very Long (5-7 beats): Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) - e.g., A2 → E3 → C#4 → E4 → A4
-   *   * Extra Long (>=7 beats): Ascend then descend - Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) → Fifth(4) → Third(4) → Root(3) → Root(2)
-   *   Bass notes 1.25x louder, all notes sustain for full duration
-   * - Violin (C5): Plays only the chord root (before slash in C/E)
-   * - Flute (C4): Plays the bass note for inverted chords (e.g., E for C/E), or root for root position
+   * Play a chord with all enabled instruments.
+   * Uses shared instrumentNoteGeneration module for note patterns —
+   * single source of truth matching the piano visualizer exactly.
    *
    * @param chordName - Chord symbol (e.g., "C", "Am", "G7", "C/E")
    * @param duration - Duration in seconds (default: 2.0)
    * @param bpm - Beats per minute for timing calculations (default: 120)
+   * @param dynamicVelocity - Optional dynamic velocity multiplier (0-1) from dynamics analyzer
    */
-  async playChord(chordName: string, duration: number = 2.0, bpm: number = 120): Promise<void> {
+  async playChord(chordName: string, duration: number = 2.0, bpm: number = 120, dynamicVelocity?: number): Promise<void> {
     // Lazy initialization on first playback
     if (!this.isInitialized && !this.isInitializing && this.options.enabled) {
       try {
@@ -476,62 +281,41 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
-    // Parse chord to get notes
-    const notes = parseChordToNotes(chordName);
-    if (notes.length === 0) {
+    // Parse chord using the shared chordToMidi utility (same as visualizer)
+    const midiNotes = parseChordToMidiNotes(chordName);
+    if (midiNotes.length === 0) {
       console.warn(`⚠️ Could not parse chord: ${chordName}`);
       return;
     }
 
-    // Extract chord root for single-note instruments
-    const parts = chordName.split('/');
-    const baseChord = parts[0];
+    // Validate BPM
+    const MAX_BPM = 400;
+    if (bpm <= 0 || !isFinite(bpm) || bpm > MAX_BPM) {
+      console.error(`❌ Invalid BPM value: ${bpm}. Using default ${SoundfontChordPlaybackService.DEFAULT_BPM} BPM.`);
+      bpm = SoundfontChordPlaybackService.DEFAULT_BPM;
+    }
 
-    // Get chord root (the note before slash, or the root of the chord)
-    const rootMatch = baseChord.match(/^([A-G][#b]?)/);
-    const chordRoot = rootMatch ? rootMatch[1] : null;
+    const bd = beatDurationFromBpm(bpm);
 
-    // Detect if chord is inverted by checking for bass note at octave 2
-    const bassNoteMatch = notes.find(note => note.match(/^([A-G][#b]?)2$/));
-    const bassNoteName = bassNoteMatch ? bassNoteMatch.match(/^([A-G][#b]?)2$/)![1] : null;
+    // Instrument volumes → instrument names
+    const instrumentConfigs: Array<{ name: InstrumentName; volume: number }> = [];
+    if (this.options.pianoVolume > 0) instrumentConfigs.push({ name: 'piano', volume: this.options.pianoVolume });
+    if (this.options.guitarVolume > 0) instrumentConfigs.push({ name: 'guitar', volume: this.options.guitarVolume });
+    if (this.options.violinVolume > 0) instrumentConfigs.push({ name: 'violin', volume: this.options.violinVolume });
+    if (this.options.fluteVolume > 0) instrumentConfigs.push({ name: 'flute', volume: this.options.fluteVolume });
+    if (this.options.bassVolume > 0) instrumentConfigs.push({ name: 'bass', volume: this.options.bassVolume });
 
-    // Play chord on each instrument with volume > 0
+    // Generate notes using the SHARED module (single source of truth)
     const promises: Promise<void>[] = [];
-
-    // Piano and Guitar: Play full chord (all notes including inversions)
-    if (this.options.pianoVolume > 0) {
-      promises.push(this.playInstrument('piano', notes, duration, this.options.pianoVolume, 3, bpm));
-    }
-    if (this.options.guitarVolume > 0) {
-      promises.push(this.playInstrument('guitar', notes, duration, this.options.guitarVolume, 3, bpm));
-    }
-
-    // Violin: Play only the chord root (note before slash)
-    if (this.options.violinVolume > 0 && chordRoot) {
-      const violinNote = [`${chordRoot}5`]; // Single note at octave 5
-      promises.push(this.playInstrument('violin', violinNote, duration, this.options.violinVolume, 5, bpm));
-    }
-
-    // Flute: Play the bass note for inverted chords, or root for root position
-    if (this.options.fluteVolume > 0) {
-      const fluteNoteRoot = bassNoteName || chordRoot;
-      if (fluteNoteRoot) {
-        const fluteNote = [`${fluteNoteRoot}4`]; // Single note at octave 4
-        promises.push(this.playInstrument('flute', fluteNote, duration, this.options.fluteVolume, 4, bpm));
-      }
-    }
-
-    // Bass: single low note in E1–D#2 range (root or inversion bass)
-    if (this.options.bassVolume > 0) {
-      const bassRoot = bassNoteName || chordRoot;
-      if (bassRoot) {
-        const bassIdx = NOTE_INDEX_MAP[bassRoot];
-        if (bassIdx !== undefined) {
-          const canonical = CHROMATIC_SCALE[bassIdx];
-          const octaveForBass = bassIdx > NOTE_INDEX_MAP['D#'] ? 1 : 2; // E or higher -> octave 1; else octave 2
-          const bassNote = [`${canonical}${octaveForBass}`];
-          promises.push(this.playInstrument('bass', bassNote, duration, this.options.bassVolume, octaveForBass, bpm));
-        }
+    for (const { name, volume } of instrumentConfigs) {
+      const scheduledNotes = generateNotesForInstrument(name, {
+        chordName,
+        chordNotes: midiNotes,
+        duration,
+        beatDuration: bd,
+      });
+      if (scheduledNotes.length > 0) {
+        promises.push(this.playScheduledNotes(name, scheduledNotes, duration, volume, dynamicVelocity));
       }
     }
 
@@ -539,99 +323,25 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Schedule seamless looping for sustained notes (violin and flute only)
-   * Re-triggers notes before they end to create gapless playback
+   * Play pre-computed scheduled notes on a specific instrument.
+   * Notes come from the shared instrumentNoteGeneration module.
    *
-   * NOTE: This is NOT used for guitar/piano because their arpeggiation and bass-first
-   * patterns already fill the duration. Only sustained single-note instruments need looping.
+   * For sustained instruments (violin, flute) with durations exceeding
+   * SAMPLE_DURATION, uses Web Audio API native `loop: true` for seamless
+   * gapless playback — works correctly in background tabs (unlike setTimeout).
    */
-  private scheduleSeamlessLoop(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    instrument: any, // Type will be Soundfont after lazy load
+  private async playScheduledNotes(
     instrumentName: string,
-    noteData: { note: string; velocity: number; octaveNum: number },
-    startTime: number,
-    totalDuration: number,
-    smplrDuration: number
-  ): void {
-    const { note, velocity } = noteData;
-    const sampleDuration = SoundfontChordPlaybackService.SAMPLE_DURATION;
-    const overlap = SoundfontChordPlaybackService.LOOP_OVERLAP;
-
-    // Only loop if total duration exceeds sample duration
-    if (totalDuration <= sampleDuration) return;
-
-    const loopIterationDuration = sampleDuration - overlap;
-    let currentTime = startTime + loopIterationDuration;
-    const endTime = startTime + totalDuration;
-
-    // Schedule loop iterations
-    const scheduleNextIteration = () => {
-      if (!this.audioContext || currentTime >= endTime) return;
-
-      const remainingDuration = endTime - currentTime;
-      const iterationDuration = Math.min(smplrDuration, remainingDuration + overlap);
-
-      // Start next iteration with overlap for seamless transition
-      const stopFn = instrument.start({
-        note,
-        velocity,
-        time: currentTime,
-        duration: iterationDuration,
-        loop: false, // Disable smplr's loop to avoid gaps
-      });
-
-      if (stopFn) {
-        const activeNotesForInstrument = this.activeNotes.get(instrumentName) || [];
-        activeNotesForInstrument.push(stopFn);
-        this.activeNotes.set(instrumentName, activeNotesForInstrument);
-      }
-
-      currentTime += loopIterationDuration;
-
-      // Schedule next iteration if needed
-      if (currentTime < endTime) {
-        const delay = (currentTime - this.audioContext.currentTime) * 1000;
-        if (delay > 0) {
-          const timeoutId = setTimeout(scheduleNextIteration, delay);
-          this.loopIntervals.set(`${instrumentName}-${note}-${currentTime}`, timeoutId);
-        }
-      }
-    };
-
-    // Start the loop scheduling
-    const initialDelay = (currentTime - (this.audioContext?.currentTime || 0)) * 1000;
-    if (initialDelay > 0) {
-      const timeoutId = setTimeout(scheduleNextIteration, initialDelay);
-      this.loopIntervals.set(`${instrumentName}-${note}-initial`, timeoutId);
-    }
-  }
-
-  /**
-   * Play notes on a specific instrument
-   * Guitar uses arpeggiation (notes played sequentially), other instruments play as chords
-   * PERFORMANCE FIX #4: Ensures instrument is loaded before playing
-   */
-  private async playInstrument(
-    instrumentName: string,
-    notes: string[],
+    scheduledNotes: ScheduledNote[],
     duration: number,
     volume: number,
-    octave: number,
-    bpm: number = 120
+    dynamicVelocity?: number,
   ): Promise<void> {
-    // PERFORMANCE FIX #4: Ensure instrument is loaded on-demand
+    // Ensure instrument is loaded on-demand
     await this.ensureInstrumentLoaded(instrumentName);
 
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
-
-    // Validate BPM to prevent invalid values and unrealistic high values
-    const MAX_BPM = 400;
-    if (bpm <= 0 || !isFinite(bpm) || bpm > MAX_BPM) {
-      console.error(`❌ Invalid BPM value: ${bpm}. Using default ${SoundfontChordPlaybackService.DEFAULT_BPM} BPM. (Allowed range: 1-${MAX_BPM})`);
-      bpm = SoundfontChordPlaybackService.DEFAULT_BPM;
-    }
 
     // Clear any existing scheduled timeout for this instrument
     const existingTimeout = this.scheduledTimeouts.get(instrumentName);
@@ -646,88 +356,8 @@ export class SoundfontChordPlaybackService {
     // Calculate base velocity (0-127 MIDI scale)
     const baseVelocity = (volume / 100) * 127;
 
-    // Transpose notes to the correct octave, preserving bass notes (octave 2)
-    // and tracking which notes are bass notes for velocity boost
-    interface NoteWithVelocity {
-      note: string;
-      velocity: number;
-      octaveNum: number; // Track octave for sorting
-    }
-
-    const notesWithVelocity: NoteWithVelocity[] = notes.map(note => {
-      const match = note.match(/^([A-G][#b]?)(\d)$/);
-      if (!match) return { note, velocity: baseVelocity, octaveNum: 4 };
-
-      const [, noteName, originalOctave] = match;
-      const octaveNum = parseInt(originalOctave);
-
-      // For dedicated bass instrument: preserve octave 1 or 2 exactly as provided
-      if (instrumentName === 'bass' && (octaveNum === 1 || octaveNum === 2)) {
-        return {
-          note: `${noteName}${originalOctave}`,
-          velocity: baseVelocity,
-          octaveNum
-        };
-      }
-
-      // Bass notes (octave 2) are preserved and get 1.25x velocity boost for other instruments
-      if (octaveNum === 2) {
-        return {
-          note: `${noteName}${originalOctave}`, // Preserve bass octave
-          velocity: Math.min(baseVelocity * 1.25, 127), // 1.25x louder, capped at 127
-          octaveNum
-        };
-      }
-
-      // Chord tones (octave 4+) are transposed to instrument octave
-      return {
-        note: `${noteName}${octave}`,
-        velocity: baseVelocity,
-        octaveNum: octave
-      };
-    });
-
-    // Beat duration for timing calculations (dynamic based on BPM)
-    // Formula: 60 seconds / BPM = seconds per beat
-    // Examples: 60 BPM = 1.0s, 120 BPM = 0.5s, 180 BPM = 0.33s
-    const beatDuration = 60 / bpm; // BPM already validated above
-    const halfBeatDelay = beatDuration / 2; // Half beat spacing for guitar arpeggiation
-    const fullBeatDelay = beatDuration; // Full beat delay for piano bass-first pattern (varies with BPM)
-
-    // Determine chord duration categories for different arpeggiation patterns
-    const isLongChord = duration >= (2 * beatDuration); // >= 2 beats
-    const isMediumChord = duration >= (2 * beatDuration) && duration < (3 * beatDuration); // 2-3 beats
-    const isLongCircularChord = duration >= (3 * beatDuration) && duration < (5 * beatDuration); // 3-5 beats
-    const isVeryLongChord = duration >= (5 * beatDuration) && duration < (7 * beatDuration); // 5-7 beats
-    const isExtraLongChord = duration >= (7 * beatDuration); // >= 7 beats
-
-    // Sort notes by pitch (ascending) for guitar arpeggiation and piano bass-first
-    // Bass notes (octave 2) come first, then chord tones sorted by note name
-    if (instrumentName === 'guitar' || instrumentName === 'piano') {
-      notesWithVelocity.sort((a, b) => {
-        // First sort by octave
-        if (a.octaveNum !== b.octaveNum) {
-          return a.octaveNum - b.octaveNum;
-        }
-        // Then sort by note name within same octave using chromatic scale
-        const aNoteName = a.note.match(/^([A-G][#b]?)/)?.[1] || '';
-        const bNoteName = b.note.match(/^([A-G][#b]?)/)?.[1] || '';
-        const aIndex = SoundfontChordPlaybackService.NOTE_ORDER.indexOf(aNoteName);
-        const bIndex = SoundfontChordPlaybackService.NOTE_ORDER.indexOf(bNoteName);
-        return aIndex - bIndex;
-      });
-    }
-
-    // Separate bass and upper notes for piano bass-first pattern
-    // For piano: treat the lowest note as bass, regardless of octave
-    let pianoBassNotes: typeof notesWithVelocity = [];
-    let pianoUpperNotes: typeof notesWithVelocity = [];
-
-    if (instrumentName === 'piano' && notesWithVelocity.length > 0) {
-      // After sorting, the first note is the lowest (bass note)
-      pianoBassNotes = [notesWithVelocity[0]];
-      pianoUpperNotes = notesWithVelocity.slice(1);
-    }
+    // Apply dynamic velocity if provided
+    const dynamicMultiplier = dynamicVelocity !== undefined ? dynamicVelocity : 1.0;
 
     // Track active notes for this instrument
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -736,194 +366,29 @@ export class SoundfontChordPlaybackService {
     // Calculate smplr duration with buffer to prevent race conditions
     const smplrDuration = duration + 0.2;
 
-    // Determine if we need seamless looping
-    // Only for violin and flute (sustained instruments), NOT for guitar/piano (which have patterns)
+    // Determine if we need native looping (sustained instruments exceeding sample duration)
     const isSustainedInstrument = instrumentName === 'violin' || instrumentName === 'flute';
-    const needsSeamlessLoop = isSustainedInstrument && duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
-    const singleNoteDuration = needsSeamlessLoop
-      ? SoundfontChordPlaybackService.SAMPLE_DURATION
-      : smplrDuration;
+    const needsLoop = isSustainedInstrument && duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
 
     // Get current audio context time for scheduling
     const baseTime = this.audioContext ? this.audioContext.currentTime : 0;
 
-    // Determine playback pattern based on instrument and chord duration
-    if (instrumentName === 'guitar' && isLongChord) {
-      // GUITAR ARPEGGIATION with octave-aware patterns based on duration
-      // Pre-allocate array for better performance
-      let arpeggioPattern: typeof notesWithVelocity;
+    // Play each scheduled note
+    for (const sn of scheduledNotes) {
+      const velocity = Math.min(baseVelocity * sn.velocityMultiplier * dynamicMultiplier, 127);
+      const noteStartTime = baseTime + sn.startOffset;
 
-      // Helper function to create note at specific octave
-      const createNoteAtOctave = (noteIndex: number, targetOctave: number) => {
-        const { note, velocity } = notesWithVelocity[noteIndex];
-        const noteName = note.match(/^([A-G][#b]?)/)?.[1] || '';
-        return {
-          note: `${noteName}${targetOctave}`,
-          velocity,
-          octaveNum: targetOctave
-        };
-      };
+      const stopFn = instrument.start({
+        note: sn.noteName,
+        velocity,
+        time: noteStartTime,
+        duration: smplrDuration,
+        loop: needsLoop, // Native Web Audio looping for long sustained notes
+      });
 
-      // Identify chord tones: root (index 0), third, fifth
-      // For triads: [root, third, fifth] = [0, 1, 2]
-      // For 7th chords: [root, third, fifth, seventh] = [0, 1, 2, 3]
-      const noteCount = notesWithVelocity.length;
-      const rootIdx = 0;
-      const thirdIdx = noteCount >= 2 ? 1 : 0;
-      const fifthIdx = noteCount >= 3 ? 2 : (noteCount >= 2 ? 1 : 0);
-
-      if (isMediumChord) {
-        // MEDIUM CHORDS (2-3 beats): Root(2) → Fifth(3) → Third(4)
-        // Example: A2 → E3 → C#4
-        arpeggioPattern = [
-          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
-          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
-          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
-        ];
-      } else if (isLongCircularChord) {
-        // LONG CHORDS (3-5 beats): Root(2) → Fifth(3) → Third(4) → Root(3)
-        // Example: A2 → E3 → C#4 → A3
-        arpeggioPattern = [
-          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
-          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
-          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
-          createNoteAtOctave(rootIdx, 3),   // Root at octave 3
-        ];
-      } else if (isVeryLongChord) {
-        // VERY LONG CHORDS (5-7 beats): Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4)
-        // Example: A2 → E3 → C#4 → E4 → A4
-        arpeggioPattern = [
-          createNoteAtOctave(rootIdx, 2),   // Root at octave 2
-          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3
-          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4
-          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4
-          createNoteAtOctave(rootIdx, 4),   // Root at octave 4
-        ];
-      } else if (isExtraLongChord) {
-        // EXTRA LONG CHORDS (>=7 beats): Ascend then descend
-        // Root(2) → Fifth(3) → Third(4) → Fifth(4) → Root(4) → Fifth(4) → Third(4) → Root(3) → Root(2)
-        // Example: A2 → E3 → C#4 → E4 → A4 → E4 → C#4 → A3 → A2
-        arpeggioPattern = [
-          createNoteAtOctave(rootIdx, 2),   // Root at octave 2 (start)
-          createNoteAtOctave(fifthIdx, 3),  // Fifth at octave 3 (ascending)
-          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4 (ascending)
-          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4 (ascending)
-          createNoteAtOctave(rootIdx, 4),   // Root at octave 4 (peak)
-          createNoteAtOctave(fifthIdx, 4),  // Fifth at octave 4 (descending)
-          createNoteAtOctave(thirdIdx, 4),  // Third at octave 4 (descending)
-          createNoteAtOctave(rootIdx, 3),   // Root at octave 3 (descending)
-          createNoteAtOctave(rootIdx, 2),   // Root at octave 2 (end)
-        ];
-      } else {
-        // Fallback (should not reach here due to conditions above)
-        arpeggioPattern = notesWithVelocity;
+      if (stopFn) {
+        activeNotesForInstrument.push(stopFn);
       }
-
-      // Play the arpeggiation pattern
-      arpeggioPattern.forEach(({ note, velocity }, index) => {
-        const timeOffset = index * halfBeatDelay;
-        const noteStartTime = baseTime + timeOffset;
-
-        const stopFn = instrument.start({
-          note,
-          velocity,
-          time: noteStartTime,
-          duration: smplrDuration, // Use full duration - guitar notes sustain naturally
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-      });
-    } else if (instrumentName === 'guitar' && !isLongChord) {
-      // GUITAR CLUSTER (short chords) - reduced volume for balance
-      notesWithVelocity.forEach(({ note, velocity }) => {
-        const stopFn = instrument.start({
-          note,
-          velocity: velocity * SoundfontChordPlaybackService.CLUSTER_VOLUME_REDUCTION,
-          time: baseTime,
-          duration: smplrDuration, // Use full duration - guitar notes sustain naturally
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-      });
-    } else if (instrumentName === 'piano' && isLongChord) {
-      // PIANO BASS-FIRST PATTERN (all long chords)
-      // Play bass note (lowest note) first
-      pianoBassNotes.forEach(({ note, velocity }) => {
-        const stopFn = instrument.start({
-          note,
-          velocity,
-          time: baseTime,
-          duration: smplrDuration, // Use full duration - piano notes sustain naturally
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-      });
-
-      // Play upper notes after full beat delay (varies with BPM: 1.0s at 60 BPM, 0.5s at 120 BPM, 0.33s at 180 BPM)
-      pianoUpperNotes.forEach(({ note, velocity }) => {
-        const stopFn = instrument.start({
-          note,
-          velocity,
-          time: baseTime + fullBeatDelay, // Full beat delay (60/BPM seconds)
-          duration: smplrDuration, // Use full duration - piano notes sustain naturally
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-      });
-    } else if (instrumentName === 'piano' && !isLongChord) {
-      // PIANO CLUSTER (short chords) - reduced volume for balance
-      notesWithVelocity.forEach(({ note, velocity }) => {
-        const stopFn = instrument.start({
-          note,
-          velocity: velocity * SoundfontChordPlaybackService.CLUSTER_VOLUME_REDUCTION,
-          time: baseTime,
-          duration: smplrDuration, // Use full duration - piano notes sustain naturally
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-      });
-    } else {
-      // DEFAULT PATTERN (violin, flute, or other instruments)
-      notesWithVelocity.forEach(({ note, velocity, octaveNum }) => {
-        const stopFn = instrument.start({
-          note,
-          velocity,
-          time: baseTime,
-          duration: singleNoteDuration,
-          loop: false,
-        });
-
-        if (stopFn) {
-          activeNotesForInstrument.push(stopFn);
-        }
-
-        // Schedule seamless looping if needed (important for violin and flute sustained notes)
-        if (needsSeamlessLoop) {
-          this.scheduleSeamlessLoop(
-            instrument,
-            instrumentName,
-            { note, velocity, octaveNum },
-            baseTime,
-            duration,
-            singleNoteDuration
-          );
-        }
-      });
     }
 
     // Store active notes for later cleanup

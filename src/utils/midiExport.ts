@@ -16,6 +16,7 @@
 
 import type { ChordEvent } from './chordToMidi';
 import { noteNameToMidi, NOTE_INDEX_MAP } from './chordToMidi';
+import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -216,15 +217,24 @@ function generateInstrumentMidiNotes(
   instrumentName: string,
   bpm: number,
   channel: number,
+  timeSignature: number = 4,
 ): MidiNoteEvent[] {
   const midiEvents: MidiNoteEvent[] = [];
-  const velocity = 80;
+  const BASE_VELOCITY = 80;
+
+  // Set up dynamics analyzer for export context
+  const dynamics = getDynamicsAnalyzer();
+  dynamics.setParams({ bpm, timeSignature });
 
   // Merge consecutive same-chord beats so MIDI only triggers on chord changes
   const merged = mergeConsecutiveChordEvents(events);
 
+  // Build a beat-index mapping: estimate beat index from time position
+  // This is approximate — each merged event gets a beat index based on time/beatDuration
+  const beatDuration = 60 / bpm;
+
   for (const event of merged) {
-    const { notes: chordNotes, startTime, endTime } = event;
+    const { notes: chordNotes, startTime, endTime, chordName } = event;
     const duration = endTime - startTime;
 
     const bassEntry = chordNotes.find(n => n.octave === 2);
@@ -233,6 +243,11 @@ function generateInstrumentMidiNotes(
 
     const rootName = chordTones[0].noteName;
     const bassName = bassEntry ? bassEntry.noteName : rootName;
+
+    // Compute dynamic velocity for this chord event
+    const estimatedBeatIndex = Math.round(startTime / beatDuration);
+    const dynamicMultiplier = dynamics.getExportVelocity(startTime, estimatedBeatIndex, chordName);
+    const velocity = Math.max(1, Math.min(127, Math.round(BASE_VELOCITY * dynamicMultiplier)));
 
     const notesToPlay: Array<{ midi: number; startOffset: number }> = [];
 
@@ -389,7 +404,7 @@ export function exportChordEventsToMidi(
   const instrumentTracks: Uint8Array[] = instrumentList.slice(0, 15).map((inst, idx) => {
     const channel = idx >= 9 ? idx + 1 : idx; // skip channel 9 (GM drums)
     const program = GM_PROGRAMS[inst.name.toLowerCase()] ?? 0;
-    const midiNotes = generateInstrumentMidiNotes(events, inst.name.toLowerCase(), bpm, channel);
+    const midiNotes = generateInstrumentMidiNotes(events, inst.name.toLowerCase(), bpm, channel, timeSignature);
     const displayName = inst.name.charAt(0).toUpperCase() + inst.name.slice(1);
     return buildTrackChunk(midiNotes, channel, program, displayName);
   });

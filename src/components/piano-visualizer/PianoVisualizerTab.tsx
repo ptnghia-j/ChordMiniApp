@@ -9,6 +9,9 @@ import {
   type ChordEvent,
 } from '@/utils/chordToMidi';
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
+import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
+import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
+import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey, useRomanNumerals } from '@/stores/uiStore';
@@ -17,6 +20,7 @@ import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/u
 import { createShiftedChords } from '@/utils/chordProcessing';
 import { buildBeatToChordSequenceMap, formatRomanNumeral } from '@/utils/chordFormatting';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
+import { DEFAULT_AUDIO_MIXER_SETTINGS, DEFAULT_PIANO_VOLUME } from '@/config/audioDefaults';
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 
@@ -84,6 +88,117 @@ const INSTRUMENT_COLORS: Record<string, string> = {
   bass: '#f87171',    // red-400
 };
 
+// ─── Piano-Only Auto-Playback Hook ───────────────────────────────────────────
+
+/**
+ * When the Piano Visualizer tab is active and chord playback toggle is OFF,
+ * automatically play piano-only sounds matching the visualizer's note patterns.
+ */
+function usePianoOnlyPlayback(
+  chordEvents: ChordEvent[],
+  currentTime: number,
+  isPlaying: boolean,
+  isChordPlaybackEnabled: boolean,
+  bpm: number,
+) {
+  const lastPlayedChordRef = useRef<string | null>(null);
+  const serviceRef = useRef(getSoundfontChordPlaybackService());
+  const dynamicsAnalyzerRef = useRef(getDynamicsAnalyzer());
+  const pianoOnlyActiveRef = useRef(false);
+
+  // Determine whether piano-only mode should be active
+  const shouldActivate = !isChordPlaybackEnabled && isPlaying;
+
+  // Merge events to match playback granularity (one per chord change)
+  const merged = useMemo(() => mergeConsecutiveChordEvents(chordEvents), [chordEvents]);
+
+  // Activate / deactivate piano-only mode
+  useEffect(() => {
+    const service = serviceRef.current;
+
+    if (shouldActivate) {
+      // Enable service with piano only (all other instruments at 0)
+      service.updateOptions({
+        enabled: true,
+        pianoVolume: DEFAULT_PIANO_VOLUME,
+        guitarVolume: 0,
+        violinVolume: 0,
+        fluteVolume: 0,
+        bassVolume: 0,
+      });
+      pianoOnlyActiveRef.current = true;
+    } else if (pianoOnlyActiveRef.current) {
+      // Deactivate: stop any piano-only notes
+      service.stopAll();
+      // Only disable the service if chord playback is NOT taking over.
+      // When isChordPlaybackEnabled is true, useChordPlayback has already
+      // called updateOptions({ enabled: true }), so disabling here would
+      // race and leave the service disabled.
+      if (!isChordPlaybackEnabled) {
+        service.updateOptions({ enabled: false });
+      }
+      pianoOnlyActiveRef.current = false;
+      lastPlayedChordRef.current = null;
+    }
+  }, [shouldActivate, isChordPlaybackEnabled]);
+
+  // Find and play the current chord on time changes
+  useEffect(() => {
+    if (!shouldActivate || merged.length === 0) return;
+
+    // Find the chord that is currently active at currentTime
+    const currentChordEvent = merged.find(
+      e => currentTime >= e.startTime && currentTime < e.endTime,
+    );
+
+    if (!currentChordEvent) {
+      // No chord at this time — stop if we were playing
+      if (lastPlayedChordRef.current !== null) {
+        serviceRef.current.stopAll();
+        lastPlayedChordRef.current = null;
+      }
+      return;
+    }
+
+    // Only trigger on chord changes
+    if (currentChordEvent.chordName === lastPlayedChordRef.current) return;
+
+    const duration = currentChordEvent.endTime - currentChordEvent.startTime;
+
+    // Calculate dynamic velocity for musical expression
+    // Estimate beat index from event position in the merged list
+    const eventIndex = merged.indexOf(currentChordEvent);
+    const dynamicVelocity = dynamicsAnalyzerRef.current.getVelocityMultiplier(
+      currentTime,
+      eventIndex >= 0 ? eventIndex : undefined,
+      currentChordEvent.chordName,
+    );
+
+    serviceRef.current.playChord(currentChordEvent.chordName, duration, bpm, dynamicVelocity);
+    lastPlayedChordRef.current = currentChordEvent.chordName;
+  }, [currentTime, shouldActivate, merged, bpm]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const service = serviceRef.current;
+    return () => {
+      if (pianoOnlyActiveRef.current) {
+        service.stopAll();
+        service.updateOptions({ enabled: false });
+        pianoOnlyActiveRef.current = false;
+      }
+    };
+  }, []);
+
+  // Stop when playback stops
+  useEffect(() => {
+    if (!isPlaying && pianoOnlyActiveRef.current) {
+      serviceRef.current.stopAll();
+      lastPlayedChordRef.current = null;
+    }
+  }, [isPlaying]);
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
@@ -126,9 +241,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       return getAudioMixerService().getSettings();
     }
     return {
-      masterVolume: 80, youtubeVolume: 100, pitchShiftedAudioVolume: 30,
-      chordPlaybackVolume: 70, pianoVolume: 50, guitarVolume: 60,
-      violinVolume: 60, fluteVolume: 50, bassVolume: 40, metronomeVolume: 70,
+      ...DEFAULT_AUDIO_MIXER_SETTINGS,
     };
   });
 
@@ -294,6 +407,18 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   // MIDI export handler
   const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
+
+  // Piano-only auto-playback: plays piano when visualizer tab is active but chord playback is off
+  usePianoOnlyPlayback(chordEvents, currentTime, isPlaying, isChordPlaybackEnabled, detectedBpm || 120);
+
+  // Determine active instruments for visualization
+  // When piano-only mode is active (chord playback OFF), show piano notes on the visualizer
+  const effectiveActiveInstruments = useMemo<ActiveInstrument[]>(() => {
+    if (isChordPlaybackEnabled) return activeInstruments;
+    // Piano-only mode: show piano notes on the visualizer
+    return [{ name: 'Piano', color: INSTRUMENT_COLORS.piano }];
+  }, [isChordPlaybackEnabled, activeInstruments]);
+
   const handleMidiDownload = useCallback(() => {
     if (chordEvents.length === 0) return;
     const instruments = activeInstruments.length > 0
@@ -386,11 +511,13 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         ref={containerRef}
         className="piano-visualizer-section bg-gray-950 dark:bg-gray-950 rounded-lg overflow-hidden"
       >
-        {/* Instrument legend (shown when chord playback is active) */}
-        {activeInstruments.length > 0 && (
+        {/* Instrument legend (shown when instruments are visualized) */}
+        {effectiveActiveInstruments.length > 0 && (
           <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-900/60 border-b border-gray-800">
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Instruments:</span>
-            {activeInstruments.map((inst) => (
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+              {isChordPlaybackEnabled ? 'Instruments:' : 'Piano Only:'}
+            </span>
+            {effectiveActiveInstruments.map((inst) => (
               <div key={inst.name} className="flex items-center gap-1.5">
                 <div
                   className="w-2.5 h-2.5 rounded-sm"
@@ -420,7 +547,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 lookAheadSeconds={speed.lookAhead}
                 lookBehindSeconds={0.5}
                 height={280}
-                activeInstruments={activeInstruments}
+                activeInstruments={effectiveActiveInstruments}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

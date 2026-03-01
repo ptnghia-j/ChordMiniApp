@@ -4,6 +4,8 @@
  * Handles YouTube video, chord playback instruments, and master volume controls
  */
 
+import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
+
 export interface AudioMixerSettings {
   masterVolume: number; // 0-100
   youtubeVolume: number; // 0-100 (YouTube video playback)
@@ -33,18 +35,7 @@ export interface YouTubePlayer {
 }
 
 export class AudioMixerService {
-  private settings: AudioMixerSettings = {
-    masterVolume: 80,
-    youtubeVolume: 100, // YouTube video defaults to 100%
-    pitchShiftedAudioVolume: 30, // Pitch-shifted audio defaults to 30% for balance
-    chordPlaybackVolume: 70,
-    pianoVolume: 50,
-    guitarVolume: 60,
-    violinVolume: 60,
-    fluteVolume: 50,
-    bassVolume: 40,
-    metronomeVolume: 70
-  };
+  private settings: AudioMixerSettings = { ...DEFAULT_AUDIO_MIXER_SETTINGS };
 
   private youtubePlayer: YouTubePlayer | null = null;
   private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; bassVolume: number }) => void } | null = null;
@@ -297,18 +288,7 @@ export class AudioMixerService {
    * Reset all volumes to defaults
    */
   resetToDefaults() {
-    this.settings = {
-      masterVolume: 80,
-      youtubeVolume: 100,
-      pitchShiftedAudioVolume: 30,
-      chordPlaybackVolume: 70,
-      pianoVolume: 50,
-      guitarVolume: 60,
-      violinVolume: 60,
-      fluteVolume: 50,
-      bassVolume: 40,
-      metronomeVolume: 70
-    };
+    this.settings = { ...DEFAULT_AUDIO_MIXER_SETTINGS };
     this.applyAllVolumes();
     this.saveSettings();
     this.notifyListeners();

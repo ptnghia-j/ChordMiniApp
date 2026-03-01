@@ -14,6 +14,8 @@
  * - Lazy loading of Tone.js library (~150KB) for better initial bundle size
  */
 
+import { DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME } from '@/config/audioDefaults';
+
 import { audioContextManager } from './audioContextManager';
 
 // Lazy load Tone.js to reduce initial bundle size
@@ -63,7 +65,7 @@ export class GrainPlayerPitchShiftService {
   private _currentTime = 0;
   private _duration = 0;
   private _playbackRate = 1;
-  private _volume = 30; // 0-100 (default 30% for balanced audio with YouTube)
+  private _volume = DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME; // 0-100 (default for balanced audio with YouTube)
 
   // Time tracking
   private timeTrackingInterval: ReturnType<typeof setInterval> | null = null;
