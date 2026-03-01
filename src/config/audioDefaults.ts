@@ -16,7 +16,7 @@ export const DEFAULT_MASTER_VOLUME = 80;
 export const DEFAULT_YOUTUBE_VOLUME = 70;
 
 /** Pitch-shifted audio volume (kept low for balance with YouTube audio) */
-export const DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME = 30;
+export const DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME = 20;
 
 // ─── Chord Playback Volumes ─────────────────────────────────────────────────
 

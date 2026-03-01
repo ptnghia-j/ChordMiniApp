@@ -83,6 +83,20 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const STABILITY_THRESHOLD = 2; // Require 2 consecutive frames with same beat
   const HYSTERESIS_BUFFER = 0.05; // 50ms buffer zone around beat boundaries
 
+  // PERFORMANCE P1-D: Page Visibility API — pause rAF computation when tab is hidden
+  const isTabVisibleRef = useRef(true);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      isTabVisibleRef.current = document.visibilityState === 'visible';
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  // PERFORMANCE P3-H: Time-delta tracking to skip redundant computation
+  const lastComputedTimeRef = useRef(0);
+
   const findCurrentBeatIndexWithHysteresis = useCallback((currentTime: number, beats: (number | null)[]): number => {
     if (!beats || beats.length === 0) return -1;
 
@@ -386,7 +400,22 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         return;
       }
 
+      // PERFORMANCE P1-D: Skip expensive beat tracking computation when tab is hidden
+      // The rAF loop continues to run but skips all CPU-intensive work
+      if (!isTabVisibleRef.current) {
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+        return;
+      }
+
       const time = youtubePlayer.getCurrentTime();
+
+      // PERFORMANCE P3-H: Skip computation if player time hasn't meaningfully changed
+      // This avoids redundant binary searches and state updates on near-identical frames
+      if (Math.abs(time - lastComputedTimeRef.current) < 0.01) {
+        rafRef.current = requestAnimationFrame(updateBeatTracking);
+        return;
+      }
+      lastComputedTimeRef.current = time;
       const stamp = Date.now();
       if (stamp - lastTimeUpdateRef.current >= TIME_UPDATE_INTERVAL) {
         setCurrentTime(time);

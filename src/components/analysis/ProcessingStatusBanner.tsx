@@ -8,10 +8,10 @@ import { getAudioDurationFromUrl } from '@/utils/audioDurationUtils';
 
 // Processing time ratios (processing time as fraction of audio duration)
 const PROCESSING_RATIOS: Record<string, number> = {
-  'madmom': 0.35,
+  'madmom': 0.3,
   'beat-transformer': 0.45,
-  'auto': 0.35,
-  'chord-recognition': 0.35,
+  'auto': 0.3,
+  'chord-recognition': 0.1,
 };
 
 const FALLBACK_DURATION = 180; // 3 minutes default
@@ -95,7 +95,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     // When chord-recognition starts, show chord toast
     if (stage === 'chord-recognition' && !chordToastKeyRef.current) {
       const effectiveDuration = audioDurationRef.current || FALLBACK_DURATION;
-      const beatRatio = PROCESSING_RATIOS[beatDetector] || 0.35;
+      const beatRatio = PROCESSING_RATIOS[beatDetector] || 0.3;
       // Chord toast stays for 1/10 of the beat detection estimate
       const chordTimeoutMs = Math.ceil(effectiveDuration * beatRatio * 0.1) * 1000;
 
@@ -123,7 +123,7 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     // When beat-detection starts, show beat toast (chord toast stays visible with its own timeout)
     if (stage === 'beat-detection' && !beatToastKeyRef.current) {
       const effectiveDuration = audioDurationRef.current || FALLBACK_DURATION;
-      const beatRatio = PROCESSING_RATIOS[beatDetector] || 0.35;
+      const beatRatio = PROCESSING_RATIOS[beatDetector] || 0.3;
       const beatTimeoutMs = Math.ceil(effectiveDuration * beatRatio) * 1000;
 
       const key = addToast({

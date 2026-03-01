@@ -12,6 +12,8 @@ import { db } from '@/config/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { executeWithAuthRecovery } from '@/utils/authRecovery';
 import { safeAuthOperation } from '@/utils/clientOnlyFirebase';
+import { audioMetadataCache } from '@/services/cache/smartFirebaseCache';
+import { storageMonitoringService } from '@/services/storage/storageMonitoringService';
 
 // Collection name for audio cache - matches existing Firebase data
 const AUDIO_CACHE_COLLECTION = 'audioFiles';
@@ -238,9 +240,6 @@ export class FirebaseStorageSimplified {
       }
     }
 
-    // Import smart cache
-    const { audioMetadataCache } = await import('@/services/cache/smartFirebaseCache');
-
     const result = await audioMetadataCache.get(
       `audio_${videoId}`,
       async () => {
@@ -268,7 +267,6 @@ export class FirebaseStorageSimplified {
 
             // Log cache miss due to expiration
             try {
-              const { storageMonitoringService } = await import('@/services/storage/storageMonitoringService');
               storageMonitoringService.logStorageOperation({
                 type: 'cache_miss',
                 videoId,
@@ -283,13 +281,16 @@ export class FirebaseStorageSimplified {
             return null;
           }
 
-          // Verify the audio URL is still accessible
-          if (await this.verifyAudioUrl(data.audioUrl)) {
-            console.log(`✅ Found cached audio for ${videoId} (${data.isStreamUrl ? 'stream' : 'storage'} URL)`);
+          // PERFORMANCE P0-A: Skip URL verification for recently-cached entries
+          // The smart cache TTL already handles staleness; redundant HEAD requests add 1-3s latency
+          const cacheAge = Date.now() - (data.extractionTimestamp || 0);
+          const SKIP_VERIFY_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+
+          if (cacheAge < SKIP_VERIFY_THRESHOLD || await this.verifyAudioUrl(data.audioUrl)) {
+            console.log(`✅ Found cached audio for ${videoId} (${data.isStreamUrl ? 'stream' : 'storage'} URL)${cacheAge < SKIP_VERIFY_THRESHOLD ? ' [verification skipped - recent entry]' : ''}`);
 
             // Log cache hit
             try {
-              const { storageMonitoringService } = await import('@/services/storage/storageMonitoringService');
               storageMonitoringService.logStorageOperation({
                 type: 'cache_hit',
                 videoId,
@@ -307,7 +308,6 @@ export class FirebaseStorageSimplified {
 
             // Log cache miss due to inaccessible URL
             try {
-              const { storageMonitoringService } = await import('@/services/storage/storageMonitoringService');
               storageMonitoringService.logStorageOperation({
                 type: 'cache_miss',
                 videoId,
@@ -412,9 +412,6 @@ export class FirebaseStorageSimplified {
     if (!db || videoIds.length === 0) {
       return new Map();
     }
-
-    // Import smart cache
-    const { audioMetadataCache } = await import('@/services/cache/smartFirebaseCache');
 
     // Use smart cache batch functionality
     const cachedResults = await audioMetadataCache.getBatch(

@@ -152,28 +152,19 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access with enhanced metadata
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: videoMetadata.title,
-                thumbnail: videoMetadata.thumbnail,
-                channelTitle: videoMetadata.channelTitle,
-                duration: this.parseDuration(videoMetadata.duration),
-                fileSize: existingFile.fileSize || 0,
-
-                // Enhanced metadata for cache hits
-                extractionService: 'firebase-storage-cache',
-                extractionTimestamp: Date.now(),
-                videoDuration: videoMetadata.duration
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
+            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
+            firebaseStorageSimplified.saveAudioMetadataBackground({
+              videoId,
+              audioUrl: existingFile.audioUrl,
+              title: videoMetadata.title,
+              thumbnail: videoMetadata.thumbnail,
+              channelTitle: videoMetadata.channelTitle,
+              duration: this.parseDuration(videoMetadata.duration),
+              fileSize: existingFile.fileSize || 0,
+              extractionService: 'firebase-storage-cache',
+              extractionTimestamp: Date.now(),
+              videoDuration: videoMetadata.duration
+            });
 
             return {
               success: true,
@@ -638,26 +629,17 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access with enhanced metadata
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: videoMetadata.title,
-                duration: this.parseDuration(videoMetadata.duration),
-                fileSize: existingFile.fileSize || 0,
-
-                // Enhanced metadata for cache hits
-                extractionService: 'firebase-storage-cache',
-                extractionTimestamp: Date.now(),
-                videoDuration: videoMetadata.duration
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
+            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
+            firebaseStorageSimplified.saveAudioMetadataBackground({
+              videoId,
+              audioUrl: existingFile.audioUrl,
+              title: videoMetadata.title,
+              duration: this.parseDuration(videoMetadata.duration),
+              fileSize: existingFile.fileSize || 0,
+              extractionService: 'firebase-storage-cache',
+              extractionTimestamp: Date.now(),
+              videoDuration: videoMetadata.duration
+            });
 
             return {
               success: true,
@@ -959,21 +941,14 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: videoMetadata.title,
-                duration: this.parseDuration(videoMetadata.duration),
-                fileSize: existingFile.fileSize || 0
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
+            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
+            firebaseStorageSimplified.saveAudioMetadataBackground({
+              videoId,
+              audioUrl: existingFile.audioUrl,
+              title: videoMetadata.title,
+              duration: this.parseDuration(videoMetadata.duration),
+              fileSize: existingFile.fileSize || 0
+            });
 
             return {
               success: true,
@@ -1181,21 +1156,14 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: `YouTube Video ${videoId}`,
-                duration: 0, // Duration will be detected later
-                fileSize: existingFile.fileSize || 0
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
+            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
+            firebaseStorageSimplified.saveAudioMetadataBackground({
+              videoId,
+              audioUrl: existingFile.audioUrl,
+              title: `YouTube Video ${videoId}`,
+              duration: 0,
+              fileSize: existingFile.fileSize || 0
+            });
 
             return {
               success: true,
@@ -1593,21 +1561,14 @@ export class AudioExtractionServiceSimplified {
             console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
             console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
 
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: title || `Video ${videoId}`,
-                duration: 0, // Duration will be detected later
-                fileSize: existingFile.fileSize || 0
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
+            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
+            firebaseStorageSimplified.saveAudioMetadataBackground({
+              videoId,
+              audioUrl: existingFile.audioUrl,
+              title: title || `Video ${videoId}`,
+              duration: 0,
+              fileSize: existingFile.fileSize || 0
+            });
 
             return {
               success: true,

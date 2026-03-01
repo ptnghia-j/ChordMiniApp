@@ -40,6 +40,10 @@ interface CachedAudioFileData extends AudioFileData {
 
 /**
  * Find existing Firebase Storage audio file for a video ID
+ * 
+ * PERFORMANCE P0-B: Check Firestore metadata first (O(1) doc lookup) before
+ * falling back to expensive listAll() which scans ALL files in the storage bucket.
+ * 
  * @param videoId YouTube video ID
  * @returns Object with download URL and storage path if found, null otherwise
  */
@@ -50,7 +54,39 @@ export async function findExistingAudioFile(
   storagePath: string;
   fileSize?: number;
 } | null> {
-  // Get Firebase Storage instance (ensures initialization)
+  // Step 1: Fast path — check Firestore metadata for existing storagePath + audioUrl
+  // This avoids the expensive listAll() call that scans the entire audio/ directory
+  if (db) {
+    try {
+      const docRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AudioFileData;
+        // Only use if not expired/invalid and has valid storage data
+        if (!('invalid' in data && data.invalid) &&
+            !('expired' in data && data.expired) &&
+            data.audioUrl && data.storagePath) {
+          // For stream URLs, check expiration
+          if (data.isStreamUrl && data.streamExpiresAt && Date.now() > data.streamExpiresAt) {
+            // Stream expired, fall through to storage scan
+          } else {
+            console.log(`✅ Found audio via Firestore metadata for ${videoId} (fast path)`);
+            return {
+              audioUrl: data.audioUrl,
+              storagePath: data.storagePath,
+              fileSize: data.fileSize || undefined
+            };
+          }
+        }
+      }
+    } catch (firestoreError) {
+      // Firestore lookup failed, fall through to storage scan
+      console.warn(`⚠️ Firestore metadata lookup failed for ${videoId}, falling back to storage scan:`, firestoreError);
+    }
+  }
+
+  // Step 2: Slow path — scan Firebase Storage (only if Firestore metadata not found)
   const storage = await getStorageInstance();
 
   if (!storage) {
@@ -59,8 +95,6 @@ export async function findExistingAudioFile(
   }
 
   try {
-    // Firebase Storage search logging removed for production
-
     // List all files in the audio directory
     const audioRef = ref(storage, 'audio');
     const listResult = await listAll(audioRef);
@@ -78,7 +112,7 @@ export async function findExistingAudioFile(
 
     // Use the most recent file (last in the list)
     const audioFile = matchingFiles[matchingFiles.length - 1];
-    console.log(`✅ Found existing audio file in Firebase Storage: ${audioFile.name}`);
+    console.log(`✅ Found existing audio file in Firebase Storage: ${audioFile.name} (slow path)`);
 
     // Get the download URL
     const audioUrl = await getDownloadURL(audioFile);
@@ -92,8 +126,6 @@ export async function findExistingAudioFile(
     } catch (metadataError) {
       console.warn('Could not get file metadata:', metadataError);
     }
-
-    // Firebase Storage result logging removed for production
 
     return {
       audioUrl,

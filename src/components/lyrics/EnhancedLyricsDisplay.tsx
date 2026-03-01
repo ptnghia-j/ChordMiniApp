@@ -19,6 +19,8 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const currentLineRef = useRef<HTMLDivElement>(null);
+  // PERFORMANCE P2-G: Throttle scroll to prevent competing smooth-scroll calls
+  const lastScrollTimeRef = useRef(0);
 
   const currentLine = lyrics.lines.find(
     line => currentTime >= line.startTime && currentTime <= line.endTime
@@ -27,6 +29,11 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
   // Auto-scroll to the current line
   useEffect(() => {
     if (autoScroll && currentLine && currentLineRef.current && containerRef.current) {
+      // PERFORMANCE P2-G: Throttle to max ~3 scrolls/second to prevent competing animations
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current < 300) return;
+      lastScrollTimeRef.current = now;
+
       const container = containerRef.current;
       const element = currentLineRef.current;
 
