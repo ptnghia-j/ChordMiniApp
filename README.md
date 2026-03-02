@@ -1,23 +1,3 @@
-## 📄 Citation
-
-If you use or reference ChordMini in your work, please cite:
-
-**BibTeX:**
-```bibtex
-@misc{phan2026enhancingautomaticchordrecognition,
-      title={Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation}, 
-      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},
-      year={2026},
-      eprint={2602.19778},
-      archivePrefix={arXiv},
-      primaryClass={cs.SD},
-      url={https://arxiv.org/abs/2602.19778}, 
-}
-```
-
-**Plain text (for non-LaTeX users):**
-> Nghia Phan, Rong Jin, Gang Liu, and Xiao Dong. "Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation." arXiv preprint arXiv:2602.19778, 2026. https://arxiv.org/abs/2602.19778
-
 # ChordMini
 
 **Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics.**
