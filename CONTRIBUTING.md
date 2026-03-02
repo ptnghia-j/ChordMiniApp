@@ -159,9 +159,6 @@ Contributors will be recognized in:
 
 ## 📞 Contact
 
-**Project Maintainer**: Nghia Phan
-**Email**: phantrongnghia510@gmail.com
-
 - **Repository**: https://github.com/ptnghia-j/ChordMiniApp
 - **Live Demo**: https://chordmini.me
 
