@@ -42,10 +42,14 @@ def validate_beat_detection_request() -> Tuple[bool, Optional[str], Optional[Fil
     if file and file.filename == '':
         return False, "No file selected", None, {}
 
+    # Get stems_folder parameter if provided
+    stems_folder = request.form.get('stems_folder')
+
     params = {
         'detector': detector,
         'force': force,
-        'audio_path': audio_path
+        'audio_path': audio_path,
+        'stems_folder': stems_folder
     }
 
     return True, None, file, params
