@@ -146,7 +146,6 @@ Use the bug report template and include:
 ### Getting Help
 - **GitHub Discussions**: For questions and community discussions
 - **Issues**: For bug reports and feature requests
-- **Email**: phantrongnghia510@gmail.com for direct contact
 - **Documentation**: Check existing docs before asking questions
 
 ### Recognition
