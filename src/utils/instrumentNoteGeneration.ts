@@ -122,8 +122,8 @@ export function beatDurationFromBpm(bpm: number): number {
  *   - Long (3-5 beats): +Root(3)
  *   - Very Long (5-7 beats): Root(2)→Fifth(3)→Third(4)→Fifth(4)→Root(4)
  *   - Extra Long (≥7 beats): ascend+descend (9 notes)
- * - **Violin**: Root note only at octave 5 (sustained)
- * - **Flute**: Bass/root note at octave 4 (sustained)
+ * - **Violin**: Root note only at octave 6 (sustained)
+ * - **Flute**: Bass/root note at octave 5 (sustained)
  * - **Bass**: Single low note (E-B → octave 1, C-D# → octave 2)
  */
 export function generateNotesForInstrument(
@@ -347,7 +347,7 @@ function generateViolinNotes(
   rootName: string,
   duration: number,
 ): ScheduledNote[] {
-  const name = `${rootName}5`;
+  const name = `${rootName}6`;
   const midi = noteNameToMidi(name);
   return [{
     noteName: name,
@@ -363,7 +363,7 @@ function generateFluteNotes(
   bassName: string,
   duration: number,
 ): ScheduledNote[] {
-  const name = `${bassName}4`;
+  const name = `${bassName}5`;
   const midi = noteNameToMidi(name);
   return [{
     noteName: name,

@@ -91,6 +91,18 @@ function buildChordSchedule(
   return events;
 }
 
+function estimateSongDuration(beats: (number | null)[]): number | undefined {
+  const numericBeats = beats.filter((beat): beat is number => typeof beat === 'number');
+  if (numericBeats.length === 0) return undefined;
+  if (numericBeats.length === 1) return numericBeats[0];
+
+  const lastBeat = numericBeats[numericBeats.length - 1];
+  const previousBeat = numericBeats[numericBeats.length - 2];
+  const trailingBeatDuration = Math.max(0, lastBeat - previousBeat);
+
+  return lastBeat + trailingBeatDuration;
+}
+
 /**
  * Hook for managing chord playback synchronized with beat animation.
  *
@@ -146,8 +158,9 @@ export const useChordPlayback = ({
     dynamicsAnalyzer.current.setParams({
       bpm,
       timeSignature: 4, // Default 4/4 time
+      totalDuration: estimateSongDuration(beats),
     });
-  }, [bpm]);
+  }, [beats, bpm]);
 
   // Initialize service and check readiness
   useEffect(() => {

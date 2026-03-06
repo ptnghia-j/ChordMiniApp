@@ -112,6 +112,18 @@ function usePianoOnlyPlayback(
   // Merge events to match playback granularity (one per chord change)
   const merged = useMemo(() => mergeConsecutiveChordEvents(chordEvents), [chordEvents]);
 
+  useEffect(() => {
+    const totalDuration = merged.length > 0
+      ? merged[merged.length - 1].endTime
+      : undefined;
+
+    dynamicsAnalyzerRef.current.setParams({
+      bpm,
+      timeSignature: 4,
+      totalDuration,
+    });
+  }, [bpm, merged]);
+
   // Activate / deactivate piano-only mode
   useEffect(() => {
     const service = serviceRef.current;

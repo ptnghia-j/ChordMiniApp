@@ -13,6 +13,7 @@ import { getGrainPlayerPitchShiftService } from '@/services/audio/grainPlayerPit
 import { setPitchShiftService as setGlobalPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import {
   useIsPitchShiftEnabled,
+  useSetIsPitchShiftReady,
   usePitchShiftSemitones,
   useSetIsProcessingPitchShift,
   useSetPitchShiftError,
@@ -59,6 +60,7 @@ export const usePitchShiftAudio = ({
   setCurrentTime,
 }: UsePitchShiftAudioProps): UsePitchShiftAudioReturn => {
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const setIsPitchShiftReadyInStore = useSetIsPitchShiftReady();
   const pitchShiftSemitones = usePitchShiftSemitones();
   const setIsProcessingPitchShift = useSetIsProcessingPitchShift();
   const setPitchShiftError = useSetPitchShiftError();
@@ -71,6 +73,7 @@ export const usePitchShiftAudio = ({
 
   // Track if time update is from pitch shift service (to prevent seek feedback loop)
   const isTimeUpdateFromService = useRef(false);
+  const resetServiceTimeUpdateFlagTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track the last known playing state from the service (to prevent auto-pause)
   const lastServicePlayingState = useRef(false);
@@ -82,6 +85,21 @@ export const usePitchShiftAudio = ({
   // REGRESSION FIX: Store pending playback rate to apply when service becomes ready
   // This prevents race conditions when playback rate is changed before service initialization completes
   const pendingPlaybackRate = useRef<number | null>(null);
+  const currentTimeRef = useRef(currentTime);
+  const isPlayingRef = useRef(isPlaying);
+  const playbackRateRef = useRef(playbackRate);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
 
   // Register service instance globally for volume control access
   useEffect(() => {
@@ -115,6 +133,8 @@ export const usePitchShiftAudio = ({
 
     try {
       isInitializing.current = true;
+      setIsPitchShiftReady(false);
+      setIsPitchShiftReadyInStore(false);
       setIsProcessingPitchShift(true);
       setPitchShiftError(null);
 
@@ -133,10 +153,15 @@ export const usePitchShiftAudio = ({
         isTimeUpdateFromService.current = true;
         lastSyncedTime.current = time;
         setCurrentTime(time);
-        // Reset flag after React has processed the state update
-        // Use a shorter delay to allow legitimate seeks to happen quickly
-        setTimeout(() => {
+
+        if (resetServiceTimeUpdateFlagTimeout.current) {
+          clearTimeout(resetServiceTimeUpdateFlagTimeout.current);
+        }
+
+        // Reset the flag shortly after the state update has propagated.
+        resetServiceTimeUpdateFlagTimeout.current = setTimeout(() => {
           isTimeUpdateFromService.current = false;
+          resetServiceTimeUpdateFlagTimeout.current = null;
         }, 50);
       });
 
@@ -146,15 +171,16 @@ export const usePitchShiftAudio = ({
       });
 
       setIsPitchShiftReady(true);
+      setIsPitchShiftReadyInStore(true);
       setIsFirebaseAudioAvailable(true);
       lastSemitones.current = pitchShiftSemitones;
 
       // Ensure service is aligned with current page state immediately
       try {
         // Apply playback rate and seek position before starting
-        pitchShiftService.current.setPlaybackRate(playbackRate);
-        pitchShiftService.current.seek(currentTime || 0);
-        if (isPlaying) {
+        pitchShiftService.current.setPlaybackRate(playbackRateRef.current);
+        pitchShiftService.current.seek(currentTimeRef.current || 0);
+        if (isPlayingRef.current) {
           // Start playback right away for upload page; YouTube visual sync not needed here
           pitchShiftService.current.play();
           lastServicePlayingState.current = true;
@@ -165,6 +191,7 @@ export const usePitchShiftAudio = ({
       console.error('❌ Failed to initialize pitch shift:', error);
       setPitchShiftError('Failed to load pitch-shifted audio. Please try again.');
       setIsPitchShiftReady(false);
+      setIsPitchShiftReadyInStore(false);
       setIsFirebaseAudioAvailable(false);
     } finally {
       setIsProcessingPitchShift(false);
@@ -174,13 +201,11 @@ export const usePitchShiftAudio = ({
     firebaseAudioUrl,
     pitchShiftSemitones,
     setIsProcessingPitchShift,
+    setIsPitchShiftReadyInStore,
     setPitchShiftError,
     setIsFirebaseAudioAvailable,
     setCurrentTime,
     setIsPlaying,
-    playbackRate,
-    currentTime,
-    isPlaying,
   ]);
 
   /**
@@ -210,11 +235,16 @@ export const usePitchShiftAudio = ({
     lastSemitones.current = 0;
     isTimeUpdateFromService.current = false;
     lastSyncedTime.current = 0;
+    if (resetServiceTimeUpdateFlagTimeout.current) {
+      clearTimeout(resetServiceTimeUpdateFlagTimeout.current);
+      resetServiceTimeUpdateFlagTimeout.current = null;
+    }
 
     // Mark as not ready so we re-initialize on next toggle
     setIsPitchShiftReady(false);
+    setIsPitchShiftReadyInStore(false);
     isInitializing.current = false;
-  }, []);
+  }, [setIsPitchShiftReadyInStore]);
 
   /**
    * Handle pitch shift toggle
@@ -428,6 +458,11 @@ export const usePitchShiftAudio = ({
    */
   useEffect(() => {
     return () => {
+      if (resetServiceTimeUpdateFlagTimeout.current) {
+        clearTimeout(resetServiceTimeUpdateFlagTimeout.current);
+        resetServiceTimeUpdateFlagTimeout.current = null;
+      }
+
       cleanupPitchShift().catch((error) => {
         console.error('❌ Failed to cleanup pitch shift on unmount:', error);
       });

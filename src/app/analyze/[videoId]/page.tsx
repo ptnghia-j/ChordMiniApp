@@ -1311,6 +1311,7 @@ export default function YouTubeVideoAnalyzePage() {
   useScrollAndAnimation({
     youtubePlayer,
     isPlaying,
+    currentTime,
     analysisResults,
     currentBeatIndex,
     currentBeatIndexRef,
@@ -1733,6 +1734,7 @@ export default function YouTubeVideoAnalyzePage() {
               }}
               onProgress={handleYouTubeProgress}
               onSeek={(time: number) => {
+                setCurrentTime(time);
                 if (youtubePlayer && youtubePlayer.seekTo) {
                   youtubePlayer.seekTo(time, 'seconds');
                 }

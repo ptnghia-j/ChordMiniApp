@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { HiMail, HiHeart } from 'react-icons/hi';
-import { SiGithub, SiArxiv } from 'react-icons/si';
+import { SiGithub } from 'react-icons/si';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 
 const Footer: React.FC = () => {
@@ -40,11 +40,11 @@ const Footer: React.FC = () => {
       href: 'https://github.com/ptnghia-j/ChordMiniApp',
       icon: <SiGithub className="w-5 h-5" />,
     },
-    {
-      name: 'arXiv Paper',
-      href: 'https://arxiv.org/abs/2602.19778',
-      icon: <SiArxiv className="w-5 h-5" />,
-    },
+    // {
+    //   name: 'arXiv Paper',
+    //   href: 'https://arxiv.org/abs/2602.19778',
+    //   icon: <SiArxiv className="w-5 h-5" />,
+    // },
   ];
 
   return (

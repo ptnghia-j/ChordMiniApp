@@ -74,6 +74,7 @@ interface UIStore {
 
   // Pitch shift
   isPitchShiftEnabled: boolean;
+  isPitchShiftReady: boolean;
   pitchShiftSemitones: number;
   isProcessingPitchShift: boolean;
   pitchShiftError: string | null;
@@ -81,6 +82,7 @@ interface UIStore {
   originalKey: string;
   targetKey: string;
   setIsPitchShiftEnabled: (enabled: boolean) => void;
+  setIsPitchShiftReady: (ready: boolean) => void;
   togglePitchShift: () => void;
   setPitchShiftSemitones: (semitones: number) => void;
   resetPitchShift: () => void;
@@ -121,6 +123,7 @@ export const useUIStore = create<UIStore>()(
       loopStartBeat: -1,
       loopEndBeat: -1,
       isPitchShiftEnabled: false,
+      isPitchShiftReady: false,
       pitchShiftSemitones: 0,
       isProcessingPitchShift: false,
       pitchShiftError: null,
@@ -286,9 +289,12 @@ export const useUIStore = create<UIStore>()(
 
       setIsPitchShiftEnabled: (enabled) => set({ isPitchShiftEnabled: enabled }, false, 'setIsPitchShiftEnabled'),
 
+      setIsPitchShiftReady: (ready) => set({ isPitchShiftReady: ready }, false, 'setIsPitchShiftReady'),
+
       resetPitchShift: () =>
         set(
           (state) => ({
+            isPitchShiftReady: false,
             pitchShiftSemitones: 0,
             targetKey: state.originalKey,
             pitchShiftError: null,
@@ -389,6 +395,7 @@ export const useSetLoopRange = () => useUIStore((state) => state.setLoopRange);
 export const usePitchShift = () =>
   useUIStore((state) => ({
     isPitchShiftEnabled: state.isPitchShiftEnabled,
+    isPitchShiftReady: state.isPitchShiftReady,
     pitchShiftSemitones: state.pitchShiftSemitones,
     isProcessingPitchShift: state.isProcessingPitchShift,
     pitchShiftError: state.pitchShiftError,
@@ -398,6 +405,7 @@ export const usePitchShift = () =>
   }));
 
 export const useIsPitchShiftEnabled = () => useUIStore((state) => state.isPitchShiftEnabled);
+export const useIsPitchShiftReady = () => useUIStore((state) => state.isPitchShiftReady);
 export const usePitchShiftSemitones = () => useUIStore((state) => state.pitchShiftSemitones);
 export const useTargetKey = () => useUIStore((state) => state.targetKey);
 export const useOriginalKey = () => useUIStore((state) => state.originalKey);
@@ -406,6 +414,7 @@ export const useIsProcessingPitchShift = () => useUIStore((state) => state.isPro
 export const usePitchShiftError = () => useUIStore((state) => state.pitchShiftError);
 export const useIsFirebaseAudioAvailable = () => useUIStore((state) => state.isFirebaseAudioAvailable);
 export const useSetPitchShiftSemitones = () => useUIStore((state) => state.setPitchShiftSemitones);
+export const useSetIsPitchShiftReady = () => useUIStore((state) => state.setIsPitchShiftReady);
 export const useSetIsProcessingPitchShift = () => useUIStore((state) => state.setIsProcessingPitchShift);
 export const useSetPitchShiftError = () => useUIStore((state) => state.setPitchShiftError);
 export const useSetIsFirebaseAudioAvailable = () => useUIStore((state) => state.setIsFirebaseAudioAvailable);

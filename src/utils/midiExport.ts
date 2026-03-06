@@ -212,6 +212,11 @@ function mergeConsecutiveChordEvents(events: ChordEvent[]): ChordEvent[] {
   return merged;
 }
 
+function getSongDurationFromEvents(events: ChordEvent[]): number | undefined {
+  if (events.length === 0) return undefined;
+  return events.reduce((maxDuration, event) => Math.max(maxDuration, event.endTime), 0);
+}
+
 function generateInstrumentMidiNotes(
   events: ChordEvent[],
   instrumentName: string,
@@ -222,12 +227,16 @@ function generateInstrumentMidiNotes(
   const midiEvents: MidiNoteEvent[] = [];
   const BASE_VELOCITY = 80;
 
-  // Set up dynamics analyzer for export context
-  const dynamics = getDynamicsAnalyzer();
-  dynamics.setParams({ bpm, timeSignature });
-
   // Merge consecutive same-chord beats so MIDI only triggers on chord changes
   const merged = mergeConsecutiveChordEvents(events);
+
+  // Set up dynamics analyzer for export context
+  const dynamics = getDynamicsAnalyzer();
+  dynamics.setParams({
+    bpm,
+    timeSignature,
+    totalDuration: getSongDurationFromEvents(merged),
+  });
 
   // Build a beat-index mapping: estimate beat index from time position
   // This is approximate — each merged event gets a beat index based on time/beatDuration

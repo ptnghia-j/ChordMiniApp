@@ -16,6 +16,7 @@
  * 3. Phrasing arc           (crescendo/diminuendo within phrases)
  * 4. Harmonic tension       (chord quality → expressiveness)
  * 5. Tempo-aware scaling    (wider dynamics at slow tempos, gentler at fast)
+ * 6. Macro song contour     (soft intro/outro, fuller middle section)
  */
 
 import { audioContextManager } from './audioContextManager';
@@ -28,6 +29,8 @@ export interface EnergyContour {
   values: Float32Array;
   /** Time step between samples (seconds) */
   timeStep: number;
+  /** Total duration of the analyzed audio buffer */
+  duration: number;
   /** Min/max for normalization */
   minRms: number;
   maxRms: number;
@@ -39,6 +42,8 @@ export interface DynamicsParams {
   bpm: number;
   /** Time signature (beats per measure, e.g. 4 for 4/4) */
   timeSignature: number;
+  /** Total song duration in seconds (optional but recommended) */
+  totalDuration?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -66,6 +71,15 @@ const WEAK_BEAT_SOFTEN = 0.90;
 
 /** How much influence the energy contour has (0 = none, 1 = full) */
 const ENERGY_INFLUENCE = 0.35;
+
+/** Portion of the song reserved for the intro fade-in */
+const INTRO_SECTION_PORTION = 0.12;
+
+/** Portion of the song reserved for the outro fade-out */
+const OUTRO_SECTION_PORTION = 0.12;
+
+/** Softened edge multiplier used at the start and end of the song */
+const MACRO_EDGE_MULTIPLIER = 0.78;
 
 // ─── Harmonic Tension Map ────────────────────────────────────────────────────
 
@@ -136,6 +150,11 @@ function getChordQuality(chordName: string): string {
   const match = base.match(/^[A-G][#b]?(.*)/);
   const suffix = match ? match[1].replace(/^[^A-Za-z0-9#b°ø+]+/, '').trim() : '';
   return QUALITY_ALIASES[suffix] ?? QUALITY_ALIASES[suffix.toLowerCase()] ?? 'major';
+}
+
+function easeInOutSine(t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  return 0.5 - 0.5 * Math.cos(Math.PI * clamped);
 }
 
 // ─── DynamicsAnalyzer ────────────────────────────────────────────────────────
@@ -215,6 +234,7 @@ export class DynamicsAnalyzer {
     this.energyContour = {
       values: smoothed,
       timeStep: RMS_WINDOW_SIZE,
+      duration: audioBuffer.duration,
       minRms,
       maxRms,
     };
@@ -225,6 +245,32 @@ export class DynamicsAnalyzer {
    */
   hasEnergyContour(): boolean {
     return this.energyContour !== null;
+  }
+
+  private getMacroDynamicContour(time: number): number {
+    const totalDuration = this.params?.totalDuration ?? this.energyContour?.duration;
+    if (!totalDuration || !isFinite(totalDuration) || totalDuration <= 0) {
+      return 1.0;
+    }
+
+    const clampedTime = Math.max(0, Math.min(time, totalDuration));
+    const normalizedTime = clampedTime / totalDuration;
+    const introPortion = Math.max(0, Math.min(INTRO_SECTION_PORTION, 0.5));
+    const outroPortion = Math.max(0, Math.min(OUTRO_SECTION_PORTION, 0.5));
+    const outroStart = Math.max(introPortion, 1 - outroPortion);
+    const dynamicRange = 1 - MACRO_EDGE_MULTIPLIER;
+
+    if (introPortion > 0 && normalizedTime <= introPortion) {
+      const progress = normalizedTime / introPortion;
+      return MACRO_EDGE_MULTIPLIER + dynamicRange * easeInOutSine(progress);
+    }
+
+    if (outroPortion > 0 && normalizedTime >= outroStart) {
+      const progress = (normalizedTime - outroStart) / Math.max(outroPortion, Number.EPSILON);
+      return 1 - dynamicRange * easeInOutSine(progress);
+    }
+
+    return 1.0;
   }
 
   // ─── Velocity Calculation ────────────────────────────────────────────────
@@ -306,6 +352,9 @@ export class DynamicsAnalyzer {
       }
       velocity = 0.75 + (velocity - 0.75) * tempoScale;
     }
+
+    // ── 6. Macro song contour (soft intro/full middle/soft outro) ──────────
+    velocity *= this.getMacroDynamicContour(time);
 
     // Clamp to valid range
     return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, velocity));

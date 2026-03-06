@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
+import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 
 // Types for playback state management
 interface ClickInfo {
@@ -78,6 +79,8 @@ export const usePlaybackState = ({
 }: UsePlaybackStateProps): UsePlaybackStateReturn => {
 
   // Current state for playback (lines 319-329)
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const isPitchShiftReady = useIsPitchShiftReady();
   const [currentBeatIndexState, setCurrentBeatIndexState] = useState(-1);
   const currentBeatIndexRef = useRef(-1);
   const [currentDownbeatIndexState, setCurrentDownbeatIndexState] = useState(-1);
@@ -161,9 +164,13 @@ export const usePlaybackState = ({
   }, [setIsPlaying]);
 
   const handleYouTubeProgress = useCallback((state: { played: number; playedSeconds: number }) => {
+    if (isPitchShiftEnabled && isPitchShiftReady) {
+      return;
+    }
+
     // Update current time from YouTube player progress
     setCurrentTime(state.playedSeconds);
-  }, [setCurrentTime]);
+  }, [isPitchShiftEnabled, isPitchShiftReady, setCurrentTime]);
 
   // Auto-scroll implementation (lines 2561-2576): Smooth scrolling to current beat
   const scrollToCurrentBeat = useCallback(() => {

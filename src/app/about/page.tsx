@@ -2,9 +2,13 @@
 
 import React from 'react';
 import Navigation from '@/components/common/Navigation';
-import { Snippet } from '@heroui/react';
 
 const AboutPage: React.FC = () => {
+  // Original author names are intentionally commented out for anonymous review.
+  // Original preprint link is intentionally commented out for anonymous review.
+  // const originalBibtexAuthorLine = '      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},';
+  // const originalBibtexUrlLine = '      url={https://arxiv.org/abs/2602.19778},';
+
   // const { theme } = useTheme();
 
   return (
@@ -34,42 +38,16 @@ const AboutPage: React.FC = () => {
             <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
               Automatic Chord Recognition (ACR) is constrained by the scarcity of aligned chord labels, as well-aligned annotations are costly to acquire. At the same time, open-weight pre-trained models are currently more accessible than their proprietary training data. In this work, we present a two-stage training pipeline that leverages pre-trained models together with unlabeled audio. The proposed method decouples training into two stages. In the first stage, we use a pre-trained BTC model as a teacher to generate pseudo-labels for over 1,000 hours of diverse unlabeled audio and train a student model solely on these pseudo-labels. In the second stage, the student is continually trained on ground-truth labels as they become available, with selective knowledge distillation (KD) from the teacher applied as a regularizer to prevent catastrophic forgetting of the representations learned in the first stage. In our experiments, two models (BTC, 2E1D) were used as students. In stage 1, using only pseudo-labels, the BTC student achieves over 98% of the teacher&apos;s performance, while the 2E1D model achieves about 96% across seven standard mir_eval metrics. After a single training run for both students in stage 2, the resulting BTC student model surpasses the traditional supervised learning baseline by 2.5% and the original pre-trained teacher model by 1.55% on average across all metrics. The resulting 2E1D student model improves from the traditional supervised learning baseline by 3.79% on average and achieves almost the same performance as the teacher. Both cases show large gains on rare chord qualities.
             </p>
-            <p className="text-sm">
+            {/* <p className="text-sm">
               <a href="https://arxiv.org/abs/2602.19778" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                 arXiv:2602.19778 [cs.SD]
               </a>
-            </p>
-            <p className="text-gray-500 dark:text-gray-400 italic text-sm">
+            </p> */}
+            {/* <p className="text-gray-500 dark:text-gray-400 italic text-sm">
               Nghia Phan, Rong Jin, Gang Liu, Xiao Dong
-            </p>
+            </p> */}
 
-            {/* Academic Citation */}
-            <div className="pt-2">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Academic Citation</h3>
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  If you use ChordMini in your research or academic work, please cite:
-                </p>
-                <Snippet
-                  symbol=""
-                  variant="flat"
-                  codeString={`@misc{phan2026enhancingautomaticchordrecognition,\n      title={Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation}, \n      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},\n      year={2026},\n      eprint={2602.19778},\n      archivePrefix={arXiv},\n      primaryClass={cs.SD},\n      url={https://arxiv.org/abs/2602.19778}, \n}`}
-                  classNames={{
-                    base: "w-full rounded-lg bg-gray-50 dark:bg-[#1E252E] border border-gray-200 dark:border-gray-700/60",
-                    pre: "text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-all",
-                    copyButton: "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
-                  }}
-                >
-                  {`@misc{phan2026enhancingautomaticchordrecognition,\n      title={Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation}, \n      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},\n      year={2026},\n      eprint={2602.19778},\n      archivePrefix={arXiv},\n      primaryClass={cs.SD},\n      url={https://arxiv.org/abs/2602.19778}, \n}`}
-                </Snippet>
-                <p className="text-sm text-gray-600 dark:text-gray-400 italic">
-                  Nghia Phan, Rong Jin, Gang Liu, and Xiao Dong. &ldquo;Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation.&rdquo; arXiv preprint arXiv:2602.19778, 2026.{' '}
-                  <a href="https://arxiv.org/abs/2602.19778" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline not-italic">
-                    https://arxiv.org/abs/2602.19778
-                  </a>
-                </p>
-              </div>
-            </div>
+            {/* Academic Citation hidden for anonymous review. */}
           </div>
         </div>
 

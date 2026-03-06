@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { YouTubePlayer } from '@/types/youtube';
+import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 import { timingSyncService } from '@/services/audio/timingSyncService';
 
 // Define ChordGridData type based on the analyze page implementation
@@ -28,6 +29,7 @@ export interface ScrollAndAnimationDependencies {
   // Audio and playback state
   youtubePlayer: YouTubePlayer | null; // YouTube player for timing
   isPlaying: boolean;
+  currentTime: number;
   analysisResults: AnalysisResult | null;
 
   // Beat tracking state
@@ -63,6 +65,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const {
     youtubePlayer,
     isPlaying,
+    currentTime,
     analysisResults,
     currentBeatIndex,
     currentBeatIndexRef,
@@ -75,6 +78,14 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     setGlobalSpeedAdjustment,
     lastClickInfo,
   } = deps;
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const isPitchShiftReady = useIsPitchShiftReady();
+  const isPitchShiftTimeAuthorityActive = isPitchShiftEnabled && isPitchShiftReady;
+  const currentTimeRef = useRef(currentTime);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
 
   // ANTI-JITTER: Hysteresis-based beat tracking to prevent oscillation
   // Adds stability buffer zones around beat boundaries to eliminate double-blinking
@@ -378,16 +389,26 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   useEffect(() => {
     // CRITICAL FIX: Only set up animation loop when playing
     // This prevents unnecessary CPU usage when paused
-    if (!youtubePlayer || !analysisResults || !isPlaying) {
+    if (!analysisResults || !isPlaying) {
       return;
     }
+
+    if (!isPitchShiftTimeAuthorityActive && (!youtubePlayer || !youtubePlayer.getCurrentTime)) {
+      return;
+    }
+
+    lastComputedTimeRef.current = Number.NEGATIVE_INFINITY;
 
     // PERFORMANCE OPTIMIZATION: Use RequestAnimationFrame with frame skipping
     // This provides 20fps updates (every 3rd frame) to match state update throttle
     const updateBeatTracking = () => {
       // CRITICAL FIX: Check current playing state dynamically
       // If paused, stop the loop immediately (don't schedule next frame)
-      if (!youtubePlayer || !youtubePlayer.getCurrentTime || !isPlaying) {
+      if (!isPlaying) {
+        return; // Stop the loop when paused
+      }
+
+      if (!isPitchShiftTimeAuthorityActive && (!youtubePlayer || !youtubePlayer.getCurrentTime)) {
         return; // Stop the loop when paused
       }
 
@@ -407,7 +428,9 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         return;
       }
 
-      const time = youtubePlayer.getCurrentTime();
+      const time = isPitchShiftTimeAuthorityActive
+        ? currentTimeRef.current
+        : youtubePlayer!.getCurrentTime();
 
       // PERFORMANCE P3-H: Skip computation if player time hasn't meaningfully changed
       // This avoids redundant binary searches and state updates on near-identical frames
@@ -417,7 +440,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
       }
       lastComputedTimeRef.current = time;
       const stamp = Date.now();
-      if (stamp - lastTimeUpdateRef.current >= TIME_UPDATE_INTERVAL) {
+      if (!isPitchShiftTimeAuthorityActive && stamp - lastTimeUpdateRef.current >= TIME_UPDATE_INTERVAL) {
         setCurrentTime(time);
         lastTimeUpdateRef.current = stamp;
       }
@@ -775,8 +798,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // CRITICAL FIX: Include isPlaying to ensure animation starts/stops when playback changes
   // The effect will restart the loop when isPlaying becomes true
   // and cleanup will stop it when isPlaying becomes false
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely]); // Updated to use centralized beat updates
+  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, setCurrentTime, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely, isPitchShiftTimeAuthorityActive]); // Updated to use centralized beat updates
 
   return {
     scrollToCurrentBeat,
