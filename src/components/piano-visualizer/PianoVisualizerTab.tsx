@@ -111,18 +111,18 @@ function usePianoOnlyPlayback(
 
   // Merge events to match playback granularity (one per chord change)
   const merged = useMemo(() => mergeConsecutiveChordEvents(chordEvents), [chordEvents]);
+  const totalDuration = useMemo(
+    () => (merged.length > 0 ? merged[merged.length - 1].endTime : undefined),
+    [merged],
+  );
 
   useEffect(() => {
-    const totalDuration = merged.length > 0
-      ? merged[merged.length - 1].endTime
-      : undefined;
-
     dynamicsAnalyzerRef.current.setParams({
       bpm,
       timeSignature: 4,
       totalDuration,
     });
-  }, [bpm, merged]);
+  }, [bpm, totalDuration]);
 
   // Activate / deactivate piano-only mode
   useEffect(() => {
@@ -178,17 +178,19 @@ function usePianoOnlyPlayback(
     const duration = currentChordEvent.endTime - currentChordEvent.startTime;
 
     // Calculate dynamic velocity for musical expression
-    // Estimate beat index from event position in the merged list
-    const eventIndex = merged.indexOf(currentChordEvent);
     const dynamicVelocity = dynamicsAnalyzerRef.current.getVelocityMultiplier(
       currentTime,
-      eventIndex >= 0 ? eventIndex : undefined,
+      undefined,
       currentChordEvent.chordName,
     );
 
-    serviceRef.current.playChord(currentChordEvent.chordName, duration, bpm, dynamicVelocity);
+    serviceRef.current.playChord(currentChordEvent.chordName, duration, bpm, dynamicVelocity, {
+      startTime: currentChordEvent.startTime,
+      playbackTime: currentTime,
+      totalDuration,
+    });
     lastPlayedChordRef.current = currentChordEvent.chordName;
-  }, [currentTime, shouldActivate, merged, bpm]);
+  }, [currentTime, shouldActivate, merged, bpm, totalDuration]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -560,6 +562,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 lookBehindSeconds={0.5}
                 height={280}
                 activeInstruments={effectiveActiveInstruments}
+                bpm={detectedBpm || undefined}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

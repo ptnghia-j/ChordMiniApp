@@ -15,8 +15,13 @@
  */
 
 import type { ChordEvent } from './chordToMidi';
-import { noteNameToMidi, NOTE_INDEX_MAP } from './chordToMidi';
 import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import {
+  beatDurationFromBpm,
+  generateNotesForInstrument,
+  mergeConsecutiveChordEvents,
+  type InstrumentName,
+} from './instrumentNoteGeneration';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -192,26 +197,6 @@ function secondsToTicks(seconds: number, bpm: number): number {
   return Math.round(seconds * (bpm / 60) * TICKS_PER_QUARTER);
 }
 
-/**
- * Merge consecutive chord events with the same chord name.
- * Matches the audio playback service behavior — notes trigger only on chord changes.
- */
-function mergeConsecutiveChordEvents(events: ChordEvent[]): ChordEvent[] {
-  if (events.length === 0) return [];
-  const merged: ChordEvent[] = [];
-  let current = { ...events[0] };
-  for (let i = 1; i < events.length; i++) {
-    if (events[i].chordName === current.chordName) {
-      current.endTime = events[i].endTime;
-    } else {
-      merged.push(current);
-      current = { ...events[i] };
-    }
-  }
-  merged.push(current);
-  return merged;
-}
-
 function getSongDurationFromEvents(events: ChordEvent[]): number | undefined {
   if (events.length === 0) return undefined;
   return events.reduce((maxDuration, event) => Math.max(maxDuration, event.endTime), 0);
@@ -229,6 +214,7 @@ function generateInstrumentMidiNotes(
 
   // Merge consecutive same-chord beats so MIDI only triggers on chord changes
   const merged = mergeConsecutiveChordEvents(events);
+  const totalSongDuration = getSongDurationFromEvents(merged);
 
   // Set up dynamics analyzer for export context
   const dynamics = getDynamicsAnalyzer();
@@ -238,90 +224,33 @@ function generateInstrumentMidiNotes(
     totalDuration: getSongDurationFromEvents(merged),
   });
 
-  // Build a beat-index mapping: estimate beat index from time position
-  // This is approximate — each merged event gets a beat index based on time/beatDuration
-  const beatDuration = 60 / bpm;
+  const beatDuration = beatDurationFromBpm(bpm);
 
   for (const event of merged) {
     const { notes: chordNotes, startTime, endTime, chordName } = event;
     const duration = endTime - startTime;
 
-    const bassEntry = chordNotes.find(n => n.octave === 2);
-    const chordTones = chordNotes.filter(n => n.octave !== 2);
-    if (chordTones.length === 0) continue;
-
-    const rootName = chordTones[0].noteName;
-    const bassName = bassEntry ? bassEntry.noteName : rootName;
-
     // Compute dynamic velocity for this chord event
     const estimatedBeatIndex = Math.round(startTime / beatDuration);
     const dynamicMultiplier = dynamics.getExportVelocity(startTime, estimatedBeatIndex, chordName);
-    const velocity = Math.max(1, Math.min(127, Math.round(BASE_VELOCITY * dynamicMultiplier)));
+    const scheduledNotes = generateNotesForInstrument(instrumentName as InstrumentName, {
+      chordName,
+      chordNotes,
+      duration,
+      beatDuration,
+      startTime,
+      totalDuration: totalSongDuration,
+    });
 
-    const notesToPlay: Array<{ midi: number; startOffset: number }> = [];
-
-    switch (instrumentName) {
-      case 'piano': {
-        // Bass note at octave 2 (inversions) or root at octave 3
-        const bassMidi = bassEntry
-          ? noteNameToMidi(`${bassName}2`)
-          : noteNameToMidi(`${rootName}3`);
-        notesToPlay.push({ midi: bassMidi, startOffset: 0 });
-
-        // Chord tones at octave 3
-        for (const tone of chordTones) {
-          const midi = noteNameToMidi(`${tone.noteName}3`);
-          if (midi !== bassMidi) {
-            notesToPlay.push({ midi, startOffset: 0 });
-          }
-        }
-        break;
-      }
-      case 'guitar': {
-        if (duration >= 0.4 && chordTones.length >= 2) {
-          const rootIdx = 0;
-          const thirdIdx = 1;
-          const fifthIdx = chordTones.length >= 3 ? 2 : 1;
-          const step = Math.min(duration * 0.15, 0.12);
-
-          notesToPlay.push(
-            { midi: noteNameToMidi(`${chordTones[rootIdx].noteName}2`), startOffset: 0 },
-            { midi: noteNameToMidi(`${chordTones[fifthIdx].noteName}3`), startOffset: step },
-            { midi: noteNameToMidi(`${chordTones[thirdIdx].noteName}4`), startOffset: step * 2 },
-          );
-        } else {
-          for (const tone of chordTones) {
-            notesToPlay.push({ midi: noteNameToMidi(`${tone.noteName}3`), startOffset: 0 });
-          }
-        }
-        break;
-      }
-      case 'violin': {
-        notesToPlay.push({ midi: noteNameToMidi(`${rootName}5`), startOffset: 0 });
-        break;
-      }
-      case 'flute': {
-        notesToPlay.push({ midi: noteNameToMidi(`${bassName}4`), startOffset: 0 });
-        break;
-      }
-      case 'bass': {
-        const noteIdx = NOTE_INDEX_MAP[bassName];
-        const octave = (noteIdx !== undefined && noteIdx > 3) ? 1 : 2;
-        notesToPlay.push({ midi: noteNameToMidi(`${bassName}${octave}`), startOffset: 0 });
-        break;
-      }
-      default: {
-        // Fallback: original chord notes
-        for (const note of chordNotes) {
-          notesToPlay.push({ midi: note.midi, startOffset: 0 });
-        }
-      }
-    }
-
-    for (const { midi, startOffset } of notesToPlay) {
+    for (const scheduledNote of scheduledNotes) {
+      const velocity = Math.max(
+        1,
+        Math.min(127, Math.round(BASE_VELOCITY * dynamicMultiplier * scheduledNote.velocityMultiplier)),
+      );
+      const midi = scheduledNote.midi;
       if (midi < 0 || midi > 127) continue;
-      const startTick = secondsToTicks(startTime + startOffset, bpm);
-      const endTick = secondsToTicks(endTime, bpm);
+      const startTick = secondsToTicks(startTime + scheduledNote.startOffset, bpm);
+      const endTick = secondsToTicks(startTime + scheduledNote.startOffset + scheduledNote.duration, bpm);
 
       midiEvents.push({ tick: startTick, midi, velocity, channel, isNoteOn: true });
       midiEvents.push({ tick: endTick, midi, velocity: 0, channel, isNoteOn: false });

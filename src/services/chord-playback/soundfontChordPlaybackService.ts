@@ -45,12 +45,20 @@ export interface SoundfontChordPlaybackOptions {
   enabled: boolean;
 }
 
+export interface PlaybackTimingContext {
+  startTime?: number;
+  totalDuration?: number;
+  playbackTime?: number;
+}
+
 export class SoundfontChordPlaybackService {
   // Constants for chord playback
   private static readonly CLUSTER_VOLUME_REDUCTION = 0.75; // Volume reduction for short chord clusters
   private static readonly NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']; // Chromatic scale for sorting
   private static readonly DEFAULT_BPM = 120; // Default BPM fallback
   private static readonly SAMPLE_DURATION = 3.5; // Estimated soundfont sample duration in seconds
+  private static readonly DENSITY_REFERENCE_VOICES = 3;
+  private static readonly MIN_DENSITY_COMPENSATION = 0.72;
 
   private audioContext: AudioContext | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,11 +69,17 @@ export class SoundfontChordPlaybackService {
   private isInitialized = false;
   private isInitializing = false;
   private initializationError: Error | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private activeNotes: Map<string, any[]> = new Map(); // Track active note stop functions per instrument
+  private activeNotes: Map<string, Array<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    stopFn: any;
+    scheduledStartTime: number;
+    scheduledEndTime: number;
+    isLooping: boolean;
+  }>> = new Map(); // Track active notes with metadata
   private scheduledTimeouts: Map<string, NodeJS.Timeout> = new Map(); // Track scheduled timeouts for cleanup
-  private releaseTime = 0.3; // Release/fade-out time in seconds
+  private releaseTime = 0.5; // Release/fade-out time in seconds (allows natural decay on chord switch)
   private loopIntervals: Map<string, NodeJS.Timeout> = new Map(); // Track loop intervals for cleanup
+  private instrumentGeneration: Map<string, number> = new Map(); // Per-instrument generation counter to prevent stale async calls
   private unloadTimers: Map<string, NodeJS.Timeout> = new Map(); // Track scheduled instrument unloads
   private readonly UNLOAD_DELAY_MS = 30000; // 30 seconds before unloading unused instrument
 
@@ -266,9 +280,17 @@ export class SoundfontChordPlaybackService {
    * @param bpm - Beats per minute for timing calculations (default: 120)
    * @param dynamicVelocity - Optional dynamic velocity multiplier (0-1) from dynamics analyzer
    */
-  async playChord(chordName: string, duration: number = 2.0, bpm: number = 120, dynamicVelocity?: number): Promise<void> {
-    // Lazy initialization on first playback
-    if (!this.isInitialized && !this.isInitializing && this.options.enabled) {
+  async playChord(
+    chordName: string,
+    duration: number = 2.0,
+    bpm: number = 120,
+    dynamicVelocity?: number,
+    timingContext?: PlaybackTimingContext,
+  ): Promise<void> {
+    // Lazy initialization on first playback.
+    // Also wait for any initialization already kicked off by updateOptions(...)
+    // so the first chord is not dropped during the init window.
+    if (!this.isInitialized && this.options.enabled) {
       try {
         await this.initialize();
       } catch (error) {
@@ -313,9 +335,19 @@ export class SoundfontChordPlaybackService {
         chordNotes: midiNotes,
         duration,
         beatDuration: bd,
+        startTime: timingContext?.startTime,
+        totalDuration: timingContext?.totalDuration,
       });
       if (scheduledNotes.length > 0) {
-        promises.push(this.playScheduledNotes(name, scheduledNotes, duration, volume, dynamicVelocity));
+        promises.push(
+          this.playScheduledNotes(
+            name,
+            scheduledNotes,
+            volume,
+            dynamicVelocity,
+            timingContext,
+          ),
+        );
       }
     }
 
@@ -333,12 +365,21 @@ export class SoundfontChordPlaybackService {
   private async playScheduledNotes(
     instrumentName: string,
     scheduledNotes: ScheduledNote[],
-    duration: number,
     volume: number,
     dynamicVelocity?: number,
+    timingContext?: PlaybackTimingContext,
   ): Promise<void> {
+    // Increment generation counter BEFORE awaiting so we can detect stale calls
+    const prevGen = this.instrumentGeneration.get(instrumentName) ?? 0;
+    const thisGen = prevGen + 1;
+    this.instrumentGeneration.set(instrumentName, thisGen);
+
     // Ensure instrument is loaded on-demand
     await this.ensureInstrumentLoaded(instrumentName);
+
+    // If a newer playScheduledNotes call was made while we were loading,
+    // bail out — the newer call will handle everything.
+    if (this.instrumentGeneration.get(instrumentName) !== thisGen) return;
 
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
@@ -350,8 +391,10 @@ export class SoundfontChordPlaybackService {
       this.scheduledTimeouts.delete(instrumentName);
     }
 
-    // Stop previous notes on this instrument with fade-out
-    this.stopInstrumentNotes(instrumentName);
+    // Stop previous notes on this instrument with crossfade overlap.
+    // Schedule the stop slightly in the future so old notes' decay overlaps
+    // with new notes' attack, eliminating audible gaps.
+    this.crossfadeStopInstrumentNotes(instrumentName);
 
     // Calculate base velocity (0-127 MIDI scale)
     const baseVelocity = (volume / 100) * 127;
@@ -360,23 +403,69 @@ export class SoundfontChordPlaybackService {
     const dynamicMultiplier = dynamicVelocity !== undefined ? dynamicVelocity : 1.0;
 
     // Track active notes for this instrument
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const activeNotesForInstrument: any[] = [];
-
-    // Calculate smplr duration with buffer to prevent race conditions
-    const smplrDuration = duration + 0.2;
+    const activeNotesForInstrument: Array<{
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stopFn: any;
+      scheduledStartTime: number;
+      scheduledEndTime: number;
+      isLooping: boolean;
+    }> = [];
 
     // Determine if we need native looping (sustained instruments exceeding sample duration)
     const isSustainedInstrument = instrumentName === 'violin' || instrumentName === 'flute';
-    const needsLoop = isSustainedInstrument && duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
 
     // Get current audio context time for scheduling
     const baseTime = this.audioContext ? this.audioContext.currentTime : 0;
+    const elapsedInChord = timingContext?.playbackTime !== undefined && timingContext?.startTime !== undefined
+      ? Math.max(0, timingContext.playbackTime - timingContext.startTime)
+      : 0;
+    const adjustedNotes = scheduledNotes
+      .map((sn) => {
+        const originalEndOffset = sn.startOffset + sn.duration;
+        if (originalEndOffset <= elapsedInChord) {
+          return null;
+        }
+
+        const adjustedStartOffset = Math.max(0, sn.startOffset - elapsedInChord);
+        const adjustedDuration = originalEndOffset - Math.max(elapsedInChord, sn.startOffset);
+        if (adjustedDuration <= 0) {
+          return null;
+        }
+
+        return {
+          ...sn,
+          startOffset: adjustedStartOffset,
+          duration: adjustedDuration,
+        } satisfies ScheduledNote;
+      })
+      .filter((sn): sn is ScheduledNote => sn !== null);
+
+    if (adjustedNotes.length === 0) {
+      return;
+    }
+
+    const onsetDensity = new Map<string, number>();
+    for (const note of adjustedNotes) {
+      const onsetKey = note.startOffset.toFixed(4);
+      onsetDensity.set(onsetKey, (onsetDensity.get(onsetKey) ?? 0) + 1);
+    }
 
     // Play each scheduled note
-    for (const sn of scheduledNotes) {
-      const velocity = Math.min(baseVelocity * sn.velocityMultiplier * dynamicMultiplier, 127);
+    for (const sn of adjustedNotes) {
+      const simultaneousNotes = onsetDensity.get(sn.startOffset.toFixed(4)) ?? 1;
+      const densityCompensation = Math.max(
+        SoundfontChordPlaybackService.MIN_DENSITY_COMPENSATION,
+        Math.sqrt(SoundfontChordPlaybackService.DENSITY_REFERENCE_VOICES / simultaneousNotes),
+      );
+      const velocity = Math.min(
+        baseVelocity * sn.velocityMultiplier * dynamicMultiplier * densityCompensation,
+        127,
+      );
       const noteStartTime = baseTime + sn.startOffset;
+      // Extend note duration slightly so the tail overlaps the next chord's
+      // attack, preventing audible silence gaps between chord changes.
+      const smplrDuration = sn.duration + 0.6;
+      const needsLoop = isSustainedInstrument && sn.duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
 
       const stopFn = instrument.start({
         note: sn.noteName,
@@ -387,7 +476,12 @@ export class SoundfontChordPlaybackService {
       });
 
       if (stopFn) {
-        activeNotesForInstrument.push(stopFn);
+        activeNotesForInstrument.push({
+          stopFn,
+          scheduledStartTime: noteStartTime,
+          scheduledEndTime: noteStartTime + smplrDuration,
+          isLooping: needsLoop,
+        });
       }
     }
 
@@ -395,12 +489,17 @@ export class SoundfontChordPlaybackService {
     this.activeNotes.set(instrumentName, activeNotesForInstrument);
 
     // Schedule safety timeout (fires slightly before smplr's internal timeout)
-    if (duration > 0) {
-      const timeoutDuration = duration + 0.15;
+    const remainingDuration = adjustedNotes.reduce(
+      (maxEnd, note) => Math.max(maxEnd, note.startOffset + note.duration),
+      0,
+    );
+    if (remainingDuration > 0) {
+      const timeoutDuration = remainingDuration + 0.15;
+      const savedGen = thisGen;
       const timeoutId = setTimeout(() => {
         this.scheduledTimeouts.delete(instrumentName);
-        const currentActiveNotes = this.activeNotes.get(instrumentName);
-        if (currentActiveNotes === activeNotesForInstrument) {
+        // Only stop if this generation is still current
+        if (this.instrumentGeneration.get(instrumentName) === savedGen) {
           this.stopInstrumentNotes(instrumentName);
         }
       }, timeoutDuration * 1000);
@@ -410,7 +509,11 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Stop all notes on a specific instrument with fade-out
+   * Stop notes on a specific instrument.
+   * Notes that have already started and will complete soon (within ~0.5s)
+   * are allowed to decay naturally instead of being abruptly cancelled.
+   * This prevents race conditions where future-scheduled short notes
+   * (e.g., a bass pickup at beat 2.5) are cancelled before they sound.
    */
   private stopInstrumentNotes(instrumentName: string): void {
     const activeNotesForInstrument = this.activeNotes.get(instrumentName);
@@ -419,16 +522,74 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
-    // Stop each note with release time for natural fade-out
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    activeNotesForInstrument.forEach((stopFn: any) => {
-      // Call stop function with fade-out time
-      // smplr stop function accepts a time parameter for fade-out
-      stopFn(this.releaseTime);
+    const now = this.audioContext?.currentTime ?? 0;
+    // Grace period: notes ending within this window are allowed to finish naturally
+    const GRACE_PERIOD = 0.5;
+
+    activeNotesForInstrument.forEach((note) => {
+      if (note.isLooping) {
+        // Looping notes (violin/flute) must always be explicitly stopped
+        note.stopFn(this.releaseTime);
+      } else {
+        const timeUntilEnd = note.scheduledEndTime - now;
+        if (timeUntilEnd <= GRACE_PERIOD) {
+          // Note is almost done or already finished — let it decay naturally
+        } else {
+          note.stopFn(this.releaseTime);
+        }
+      }
     });
 
     // Clear the active notes for this instrument
     this.activeNotes.set(instrumentName, []);
+  }
+
+  /**
+   * Crossfade-stop: let old notes decay naturally while new notes start.
+   * Distinguishes between currently-sounding notes (started in the past)
+   * and future-scheduled notes (not yet audible).
+   * Currently-sounding notes with little time left finish naturally;
+   * those with more time get a slow fade. Future notes are cancelled silently.
+   */
+  private crossfadeStopInstrumentNotes(instrumentName: string): void {
+    const activeNotesForInstrument = this.activeNotes.get(instrumentName);
+
+    if (!activeNotesForInstrument || activeNotesForInstrument.length === 0) {
+      return;
+    }
+
+    const now = this.audioContext?.currentTime ?? 0;
+    // Very long release for smooth crossfade — the exponential decay of the
+    // old note blends continuously into the new note's attack.
+    const CROSSFADE_RELEASE = 2.0;
+
+    // Detach old notes from tracking immediately
+    const notesToStop = [...activeNotesForInstrument];
+    this.activeNotes.set(instrumentName, []);
+
+    for (const note of notesToStop) {
+      const timeUntilEnd = note.scheduledEndTime - now;
+      if (timeUntilEnd <= 0) {
+        // Already finished — nothing to do
+        continue;
+      }
+
+      const noteHasStarted = now >= note.scheduledStartTime - 0.02;
+
+      if (!noteHasStarted) {
+        // Future-scheduled note that hasn't started playing — cancel silently
+        note.stopFn(0);
+        continue;
+      }
+
+      if (!note.isLooping && timeUntilEnd <= 1.5) {
+        // Currently sounding and nearly done — let it finish naturally
+        continue;
+      }
+
+      // Currently sounding with significant time left, or looping — slow fade
+      note.stopFn(CROSSFADE_RELEASE);
+    }
   }
 
   /**
@@ -478,7 +639,18 @@ export class SoundfontChordPlaybackService {
   }
 
   /**
-   * Stop all playing notes with fade-out
+   * Soft-stop all instruments using crossfade instead of hard stop.
+   * Used when currentTime briefly falls between chord boundaries so
+   * notes fade out gracefully rather than being cut abruptly.
+   */
+  softStopAll(): void {
+    this.instruments.forEach((_instrument, instrumentName) => {
+      this.crossfadeStopInstrumentNotes(instrumentName);
+    });
+  }
+
+  /**
+   * Stop all playing notes with fade-out (force-stops everything, including short notes)
    */
   stopAll(): void {
     // Clear all scheduled timeouts
@@ -493,9 +665,15 @@ export class SoundfontChordPlaybackService {
     });
     this.loopIntervals.clear();
 
-    // Stop notes on each instrument with fade-out
+    // Force-stop notes on each instrument (no grace period)
     this.instruments.forEach((_instrument, instrumentName) => {
-      this.stopInstrumentNotes(instrumentName);
+      const activeNotesForInstrument = this.activeNotes.get(instrumentName);
+      if (activeNotesForInstrument && activeNotesForInstrument.length > 0) {
+        activeNotesForInstrument.forEach((note) => {
+          note.stopFn(this.releaseTime);
+        });
+        this.activeNotes.set(instrumentName, []);
+      }
     });
   }
 

@@ -61,25 +61,25 @@ const MIN_VELOCITY = 0.4;
 const MAX_VELOCITY = 1.0;
 
 /** Downbeat accent multiplier */
-const DOWNBEAT_ACCENT = 1.15;
+const DOWNBEAT_ACCENT = 1.04;
 
 /** Beat-3 mild accent in 4/4 */
-const BEAT3_ACCENT = 1.05;
+const BEAT3_ACCENT = 1.02;
 
 /** Weak beat softening multiplier */
-const WEAK_BEAT_SOFTEN = 0.90;
+const WEAK_BEAT_SOFTEN = 0.97;
 
 /** How much influence the energy contour has (0 = none, 1 = full) */
-const ENERGY_INFLUENCE = 0.35;
+const ENERGY_INFLUENCE = 0.25;
 
 /** Portion of the song reserved for the intro fade-in */
-const INTRO_SECTION_PORTION = 0.12;
+const INTRO_SECTION_PORTION = 0.08;
 
 /** Portion of the song reserved for the outro fade-out */
-const OUTRO_SECTION_PORTION = 0.12;
+const OUTRO_SECTION_PORTION = 0.08;
 
 /** Softened edge multiplier used at the start and end of the song */
-const MACRO_EDGE_MULTIPLIER = 0.78;
+const MACRO_EDGE_MULTIPLIER = 0.88;
 
 // ─── Harmonic Tension Map ────────────────────────────────────────────────────
 
@@ -90,33 +90,33 @@ const MACRO_EDGE_MULTIPLIER = 0.78;
  */
 const TENSION_MAP: Record<string, number> = {
   // Stable / consonant
-  major: 0.95,
-  minor: 0.98,
-  sus2: 0.96,
-  sus4: 0.97,
-  six: 0.96,
-  min6: 0.97,
+  major: 0.97,
+  minor: 0.99,
+  sus2: 0.97,
+  sus4: 0.98,
+  six: 0.97,
+  min6: 0.98,
   // Mildly tense
-  dom7: 1.03,
-  maj7: 0.98,
+  dom7: 1.02,
+  maj7: 0.99,
   min7: 1.00,
-  add9: 0.98,
+  add9: 0.99,
   // More tense
-  dim: 1.08,
-  aug: 1.07,
-  hdim7: 1.06,
-  dim7: 1.10,
+  dim: 1.05,
+  aug: 1.04,
+  hdim7: 1.04,
+  dim7: 1.06,
   // Extended / colorful
-  dom9: 1.04,
-  dom11: 1.05,
-  dom13: 1.06,
-  min9: 1.02,
-  min11: 1.03,
-  min13: 1.04,
+  dom9: 1.02,
+  dom11: 1.03,
+  dom13: 1.03,
+  min9: 1.01,
+  min11: 1.02,
+  min13: 1.02,
   maj9: 1.00,
   maj11: 1.01,
-  maj13: 1.02,
-  minmaj7: 1.08,
+  maj13: 1.01,
+  minmaj7: 1.05,
 };
 
 // ─── Chord quality extraction ────────────────────────────────────────────────
@@ -162,6 +162,10 @@ function easeInOutSine(t: number): number {
 export class DynamicsAnalyzer {
   private params: DynamicsParams | null = null;
   private energyContour: EnergyContour | null = null;
+  /** Smoothed velocity to prevent abrupt jumps between consecutive chords */
+  private lastVelocity: number | null = null;
+  /** Time of the last velocity query for time-aware smoothing */
+  private lastVelocityTime: number | null = null;
 
   /**
    * Set musical parameters for beat-strength shaping.
@@ -288,10 +292,47 @@ export class DynamicsAnalyzer {
     beatIndex?: number,
     chordName?: string,
   ): number {
-    let velocity = 0.75; // Base mid-level velocity
+    // =====================================================================
+    // The velocity is built from two component groups:
+    //   SMOOTH — phrasing arc + macro contour: inherently continuous curves
+    //            that should NOT be dampened by the EMA.
+    //   VOLATILE — metric accent + harmonic tension + energy: components
+    //             that can jump at chord boundaries and benefit from EMA
+    //             smoothing.
+    // Final velocity = smoothEnvelope * smoothedVolatile
+    // =====================================================================
 
-    // ── 1. Audio energy contour (optional) ───────────────────────────────
-    // Blended with ENERGY_INFLUENCE so algorithmic dynamics remain dominant.
+    // ── Smooth envelope (no EMA) ─────────────────────────────────────────
+    let smoothEnvelope = 1.0;
+
+    // 1. Phrasing arc (asymmetric 4-bar crescendo/diminuendo, ±8%)
+    //    Crescendo over ~65 % of the phrase, quicker diminuendo over ~35 %.
+    if (this.params && beatIndex !== undefined && beatIndex >= 0) {
+      const phraseLength = this.params.timeSignature * 4;
+      const positionInPhrase = beatIndex % phraseLength;
+      const normalizedPosition = positionInPhrase / phraseLength;
+
+      const PEAK_POSITION = 0.65;
+      let phraseEnvelope: number;
+      if (normalizedPosition <= PEAK_POSITION) {
+        // Gradual rise: half-sine from 0 → 1
+        phraseEnvelope = Math.sin((normalizedPosition / PEAK_POSITION) * (Math.PI / 2));
+      } else {
+        // Quicker fall: half-cosine from 1 → 0
+        phraseEnvelope = Math.cos(
+          ((normalizedPosition - PEAK_POSITION) / (1 - PEAK_POSITION)) * (Math.PI / 2),
+        );
+      }
+      smoothEnvelope *= 0.92 + 0.08 * phraseEnvelope;
+    }
+
+    // 2. Macro song contour (soft intro/outro, full middle)
+    smoothEnvelope *= this.getMacroDynamicContour(time);
+
+    // ── Volatile component (EMA-smoothed) ────────────────────────────────
+    let volatile = 0.75; // Base mid-level velocity
+
+    // 3. Audio energy contour (optional)
     if (this.energyContour) {
       const idx = Math.floor(time / this.energyContour.timeStep);
       const clamped = Math.max(0, Math.min(idx, this.energyContour.values.length - 1));
@@ -301,63 +342,61 @@ export class DynamicsAnalyzer {
         ? (rms - this.energyContour.minRms) / range
         : 0.5;
 
-      // Map to velocity range, then blend
       const energyVelocity = MIN_VELOCITY + normalized * (MAX_VELOCITY - MIN_VELOCITY);
-      velocity = velocity * (1 - ENERGY_INFLUENCE) + energyVelocity * ENERGY_INFLUENCE;
+      volatile = volatile * (1 - ENERGY_INFLUENCE) + energyVelocity * ENERGY_INFLUENCE;
     }
 
-    // ── 2. Metric accent (beat strength) ─────────────────────────────────
+    // 4. Metric accent (beat strength)
     if (this.params && beatIndex !== undefined && beatIndex >= 0) {
       const beatInMeasure = beatIndex % this.params.timeSignature;
 
       if (beatInMeasure === 0) {
-        velocity *= DOWNBEAT_ACCENT;
+        volatile *= DOWNBEAT_ACCENT;
       } else if (this.params.timeSignature === 4 && beatInMeasure === 2) {
-        velocity *= BEAT3_ACCENT;
+        volatile *= BEAT3_ACCENT;
       } else {
-        velocity *= WEAK_BEAT_SOFTEN;
+        volatile *= WEAK_BEAT_SOFTEN;
       }
     }
 
-    // ── 3. Phrasing arc (4-bar phrase crescendo/diminuendo) ──────────────
-    if (this.params && beatIndex !== undefined && beatIndex >= 0) {
-      const phraseLength = this.params.timeSignature * 4;
-      const positionInPhrase = beatIndex % phraseLength;
-      const normalizedPosition = positionInPhrase / phraseLength;
-
-      // Sine arc: swell to midpoint then taper (±5%)
-      const phraseShape = 0.95 + 0.05 * Math.sin(normalizedPosition * Math.PI);
-      velocity *= phraseShape;
-    }
-
-    // ── 4. Harmonic tension ──────────────────────────────────────────────
+    // 5. Harmonic tension
     if (chordName) {
       const quality = getChordQuality(chordName);
       const tension = TENSION_MAP[quality] ?? 1.0;
-      velocity *= tension;
+      volatile *= tension;
     }
 
-    // ── 5. Tempo-aware dynamic range scaling ─────────────────────────────
-    // Fast tempos (>160 BPM): compress dynamics → gentler variation
-    // Slow tempos (<80 BPM): expand dynamics → wider expression
+    // 6. Tempo-aware dynamic range scaling
     if (this.params) {
       const bpm = this.params.bpm;
       let tempoScale = 1.0;
       if (bpm > 160) {
-        // Compress toward 0.75 center
         tempoScale = 0.85 + 0.15 * (200 - Math.min(bpm, 200)) / 40;
       } else if (bpm < 80) {
-        // Expand from 0.75 center
         tempoScale = 1.0 + 0.1 * (80 - Math.max(bpm, 40)) / 40;
       }
-      velocity = 0.75 + (velocity - 0.75) * tempoScale;
+      volatile = 0.75 + (volatile - 0.75) * tempoScale;
     }
 
-    // ── 6. Macro song contour (soft intro/full middle/soft outro) ──────────
-    velocity *= this.getMacroDynamicContour(time);
+    // EMA smoothing — only applied to the volatile component so intentional
+    // phrasing / macro contour curves are preserved in full.
+    if (this.lastVelocity !== null && this.lastVelocityTime !== null) {
+      const timeSinceLast = Math.abs(time - this.lastVelocityTime);
+      if (timeSinceLast < 4.0) {
+        const alpha = timeSinceLast < 0.8 ? 0.3 : timeSinceLast < 2.0 ? 0.45 : 0.65;
+        volatile = alpha * volatile + (1 - alpha) * this.lastVelocity;
+      }
+    }
+    this.lastVelocity = volatile;
+    this.lastVelocityTime = time;
+
+    // Combine: smooth envelope shapes the overall arc, volatile adds texture
+    let velocity = smoothEnvelope * volatile;
 
     // Clamp to valid range
-    return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, velocity));
+    velocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, velocity));
+
+    return velocity;
   }
 
   /**
@@ -378,6 +417,8 @@ export class DynamicsAnalyzer {
   reset(): void {
     this.params = null;
     this.energyContour = null;
+    this.lastVelocity = null;
+    this.lastVelocityTime = null;
   }
 }
 

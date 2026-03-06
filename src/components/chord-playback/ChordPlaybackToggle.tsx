@@ -817,7 +817,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                     <Button
                       size="sm"
                       variant="flat"
-                      color="default"
+                      color="success"
                       onPress={() => audioMixer.current?.resetToDefaults()}
                       startContent={<MdRefresh className="h-4 w-4" />}
                       className="flex-1"

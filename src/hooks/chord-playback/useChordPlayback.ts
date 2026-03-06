@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import {
@@ -61,34 +61,80 @@ function buildChordSchedule(
   beats: (number | null)[],
 ): ScheduledChordEvent[] {
   const events: ScheduledChordEvent[] = [];
-  let prevChord: string | null = null;
+  let activeChord: string | null = null;
+  let activeStartTime: number | null = null;
+  let activeBeatIndex = -1;
+
+  const pushEvent = (endTime: number) => {
+    if (activeChord === null || activeStartTime === null) return;
+    events.push({
+      audioTime: activeStartTime,
+      chord: activeChord,
+      duration: Math.max(0.5, endTime - activeStartTime),
+      beatIndex: activeBeatIndex,
+    });
+  };
 
   for (let i = 0; i < chords.length; i++) {
     const chord = chords[i];
     const beatTime = beats[i];
-    if (isNoChord(chord) || typeof beatTime !== 'number') {
-      if (!isNoChord(chord)) continue;
-      // On N.C. boundary, close current event
-      prevChord = null;
+    if (typeof beatTime !== 'number') {
       continue;
     }
-    if (chord !== prevChord) {
-      events.push({
-        audioTime: beatTime,
-        chord: chord,
-        duration: 2.0, // placeholder — filled below
-        beatIndex: i,
-      });
-      prevChord = chord;
+
+    if (isNoChord(chord)) {
+      pushEvent(beatTime);
+      activeChord = null;
+      activeStartTime = null;
+      activeBeatIndex = -1;
+      continue;
+    }
+
+    if (activeChord === null) {
+      activeChord = chord;
+      activeStartTime = beatTime;
+      activeBeatIndex = i;
+      continue;
+    }
+
+    if (chord !== activeChord) {
+      pushEvent(beatTime);
+      activeChord = chord;
+      activeStartTime = beatTime;
+      activeBeatIndex = i;
     }
   }
 
-  // Fill durations: each event lasts until the next one starts
-  for (let i = 0; i < events.length - 1; i++) {
-    events[i].duration = Math.max(0.5, Math.min(8.0, events[i + 1].audioTime - events[i].audioTime));
+  if (activeChord !== null && activeStartTime !== null) {
+    const estimatedSongDuration = estimateSongDuration(beats);
+    pushEvent(estimatedSongDuration ?? activeStartTime + 2);
   }
 
   return events;
+}
+
+function findScheduledChordEventAtTime(
+  schedule: ScheduledChordEvent[],
+  time: number,
+): ScheduledChordEvent | null {
+  let lo = 0;
+  let hi = schedule.length - 1;
+  let idx = -1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (schedule[mid].audioTime <= time) {
+      idx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  if (idx < 0) return null;
+
+  const event = schedule[idx];
+  return time < event.audioTime + event.duration ? event : null;
 }
 
 function estimateSongDuration(beats: (number | null)[]): number | undefined {
@@ -130,6 +176,17 @@ export const useChordPlayback = ({
   const dynamicsAnalyzer = useRef(getDynamicsAnalyzer());
   const lastPlayedChordIndex = useRef(-1);
   const lastPlayedChord = useRef<string | null>(null);
+  // Derive total song duration from chord schedule (max end time of all events)
+  // This matches the visual path's calculation, ensuring endgame windows are consistent.
+  const chordSchedule = useMemo(() => buildChordSchedule(chords, beats), [chords, beats]);
+  const estimatedSongDuration = useMemo(() => {
+    if (chordSchedule.length === 0) return estimateSongDuration(beats);
+    // Use the max end time from the chord schedule, consistent with the visual path
+    return chordSchedule.reduce(
+      (maxEnd, ev) => Math.max(maxEnd, ev.audioTime + ev.duration),
+      0,
+    );
+  }, [chordSchedule, beats]);
 
   // Background scheduling refs
   const backgroundIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -144,6 +201,7 @@ export const useChordPlayback = ({
   const isPlayingRef = useRef(isPlaying);
   const isReadyRef = useRef(isReady);
   const currentTimeRef = useRef(currentTime);
+  const estimatedSongDurationRef = useRef(estimatedSongDuration);
 
   useEffect(() => { chordsRef.current = chords; }, [chords]);
   useEffect(() => { beatsRef.current = beats; }, [beats]);
@@ -152,6 +210,7 @@ export const useChordPlayback = ({
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { estimatedSongDurationRef.current = estimatedSongDuration; }, [estimatedSongDuration]);
 
   // Initialize dynamics analyzer with musical params
   useEffect(() => {
@@ -231,24 +290,11 @@ export const useChordPlayback = ({
       const time = getAudioTime();
       if (time === null) return;
 
-      // Binary search for the current chord event
-      let lo = 0, hi = schedule.length - 1, idx = -1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (schedule[mid].audioTime <= time) {
-          idx = mid;
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-
-      if (idx < 0) return;
-
-      const event = schedule[idx];
+      const event = findScheduledChordEventAtTime(schedule, time);
+      if (!event) return;
 
       // Skip if same chord already playing
-      if (event.chord === lastPlayedChord.current) return;
+      if (event.beatIndex === lastPlayedChordIndex.current) return;
 
       const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
         event.audioTime,
@@ -261,6 +307,11 @@ export const useChordPlayback = ({
         event.duration,
         bpmRef.current,
         dynamicVelocity,
+        {
+          startTime: event.audioTime,
+          totalDuration: estimatedSongDurationRef.current,
+          playbackTime: time,
+        },
       );
 
       lastPlayedChord.current = event.chord;
@@ -304,102 +355,60 @@ export const useChordPlayback = ({
     }
   }, [isEnabled, isPlaying, isReady, startBackgroundPoller, stopBackgroundPoller]);
 
-  // Find the next chord change from current beat index
-  const findNextChordChange = useCallback((fromIndex: number): { index: number; chord: string } | null => {
-    if (!chords || chords.length === 0) return null;
-    
-    const currentChord = chords[fromIndex];
-    
-    // Look ahead to find the next different chord
-    for (let i = fromIndex + 1; i < chords.length; i++) {
-      const nextChord = chords[i];
-      if (nextChord && nextChord !== currentChord && nextChord !== 'N.C.' && nextChord !== 'N/C' && nextChord !== 'N') {
-        return { index: i, chord: nextChord };
-      }
-    }
-    
-    return null;
-  }, [chords]);
-
-  // Calculate chord duration based on beat timing
-  const calculateChordDuration = useCallback((startIndex: number, endIndex: number): number => {
-    if (!beats || beats.length === 0) return 2.0; // Default duration
-    
-    const startTime = beats[startIndex];
-    const endTime = beats[endIndex];
-    
-    if (typeof startTime === 'number' && typeof endTime === 'number') {
-      return Math.max(0.5, Math.min(8.0, endTime - startTime)); // Clamp between 0.5 and 8 seconds
-    }
-    
-    return 2.0; // Default duration
-  }, [beats]);
-
-  // Main chord playback logic - triggered when beat index changes (foreground only)
+  // Main chord playback logic - foreground uses the same precomputed chord schedule
+  // as background mode so playback always uses the chord's real start/duration.
   useEffect(() => {
     // Skip if background poller is active — it handles chord scheduling independently
     if (isBackgroundRef.current) return;
 
-    if (!isEnabled || !isReady || !isPlaying || currentBeatIndex < 0 || !chords || chords.length === 0) {
+    if (!isEnabled || !isReady || !isPlaying || chordSchedule.length === 0) {
       return;
     }
 
-    const currentChord = chords[currentBeatIndex];
-
-    // Check if current beat is a "No Chord" marker
-    const isNoChord = !currentChord || currentChord === 'N.C.' || currentChord === 'N/C' || currentChord === 'NC' || currentChord === 'N' || currentChord === '';
-
-    // If we encounter N.C and we were previously playing a chord, stop with fade-out
-    if (isNoChord && lastPlayedChord.current !== null) {
-      chordPlaybackService.current.stopAll();
-      lastPlayedChord.current = null;
-      lastPlayedChordIndex.current = currentBeatIndex;
+    const event = findScheduledChordEventAtTime(chordSchedule, currentTime);
+    if (!event) {
+      if (lastPlayedChord.current !== null) {
+        // Use soft crossfade stop instead of hard stopAll — prevents jarring
+        // cuts when currentTime briefly falls between two chord boundaries.
+        chordPlaybackService.current.softStopAll();
+        lastPlayedChord.current = null;
+        lastPlayedChordIndex.current = -1;
+      }
       return;
     }
 
-    // Skip if no chord or it's a rest
-    if (isNoChord) {
+    if (event.beatIndex === lastPlayedChordIndex.current) {
       return;
     }
 
-    // Only play if this is a new chord change (not just a beat within the same chord)
-    const shouldPlay = (
-      currentBeatIndex !== lastPlayedChordIndex.current &&
-      currentChord !== lastPlayedChord.current
+    const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
+      event.audioTime,
+      event.beatIndex,
+      event.chord,
     );
 
-    if (shouldPlay) {
-      // Find the next chord change to calculate duration
-      const nextChordChange = findNextChordChange(currentBeatIndex);
-      const duration = nextChordChange
-        ? calculateChordDuration(currentBeatIndex, nextChordChange.index)
-        : 2.0;
+    chordPlaybackService.current.playChord(
+      event.chord,
+      event.duration,
+      bpm,
+      dynamicVelocity,
+      {
+        startTime: event.audioTime,
+        totalDuration: estimatedSongDuration,
+        playbackTime: currentTime,
+      },
+    );
 
-      // Calculate dynamic velocity based on beat position and audio energy
-      const currentBeatTime = typeof beats[currentBeatIndex] === 'number'
-        ? (beats[currentBeatIndex] as number)
-        : 0;
-      const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
-        currentBeatTime,
-        currentBeatIndex,
-        currentChord,
-      );
-
-      // Play the chord with BPM information and dynamic velocity
-      chordPlaybackService.current.playChord(currentChord, duration, bpm, dynamicVelocity);
-
-      // Update tracking variables
-      lastPlayedChordIndex.current = currentBeatIndex;
-      lastPlayedChord.current = currentChord;
-    }
-  }, [currentBeatIndex, chords, beats, isEnabled, isReady, isPlaying, findNextChordChange, calculateChordDuration, bpm]);
+    lastPlayedChordIndex.current = event.beatIndex;
+    lastPlayedChord.current = event.chord;
+  }, [currentBeatIndex, currentTime, isEnabled, isReady, isPlaying, chordSchedule, bpm, estimatedSongDuration]);
 
   // Stop playback when paused or disabled
   useEffect(() => {
     if (!isPlaying || !isEnabled) {
       chordPlaybackService.current.stopAll();
-      lastPlayedChordIndex.current = -1;
       lastPlayedChord.current = null;
+      lastPlayedChordIndex.current = -1;
     }
   }, [isPlaying, isEnabled]);
 

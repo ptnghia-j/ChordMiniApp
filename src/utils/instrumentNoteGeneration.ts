@@ -49,6 +49,10 @@ export interface NoteGenerationParams {
   duration: number;
   /** Average beat duration in seconds (60 / BPM) */
   beatDuration: number;
+  /** Absolute start time of this chord/event in the song timeline */
+  startTime?: number;
+  /** Estimated total song duration in seconds */
+  totalDuration?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -58,6 +62,24 @@ export const CLUSTER_VOLUME_REDUCTION = 0.75;
 
 /** Bass note velocity boost multiplier */
 export const BASS_VELOCITY_BOOST = 1.25;
+
+/** Minimum chord length (in beats) required for the piano repeating rhythm pattern */
+export const PIANO_PATTERN_MIN_BEATS = 4;
+
+/** Scale down the short-chord piano bass pickup so it reads as a light syncopation */
+export const SHORT_CHORD_BASS_PICKUP_VELOCITY_REDUCTION = 0.65;
+
+/** Make the short-chord piano bass pickup brief */
+export const SHORT_CHORD_BASS_PICKUP_DURATION_FACTOR = 0.4;
+
+/** Four 4/4 measures before the end, stop using the dense piano long-pattern */
+export const PIANO_ENDGAME_FULL_PATTERN_CUTOFF_MEASURES = 4;
+
+/** In the last four measures but before the final two, strike the piano chord twice */
+export const PIANO_ENDGAME_DOUBLE_STRIKE_CUTOFF_MEASURES = 2;
+
+/** Small epsilon for floating-point comparisons in timing math */
+const TIMING_EPSILON = 1e-6;
 
 // Chromatic scale for note name resolution
 const CHROMATIC_SCALE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -114,8 +136,9 @@ export function beatDurationFromBpm(bpm: number): number {
  * Generate scheduled notes for a single instrument playing a single chord.
  *
  * Patterns:
- * - **Piano**: Bass-first (bass note immediate, upper notes after 1 beat delay) for long chords (≥2 beats);
- *              all notes simultaneously for short chords
+ * - **Piano**: For chords lasting at least 4 beats, upper tones repeat on beats 1/2/3/4
+ *              while bass follows 1/2.5/3/4; shorter chords play the full chord once,
+ *              voiced in octaves 3 and 4
  * - **Guitar**: Octave-aware arpeggiation with half-beat spacing:
  *   - Short (<2 beats): cluster at octave 3
  *   - Medium (2-3 beats): Root(2)→Fifth(3)→Third(4)
@@ -123,14 +146,15 @@ export function beatDurationFromBpm(bpm: number): number {
  *   - Very Long (5-7 beats): Root(2)→Fifth(3)→Third(4)→Fifth(4)→Root(4)
  *   - Extra Long (≥7 beats): ascend+descend (9 notes)
  * - **Violin**: Root note only at octave 6 (sustained)
- * - **Flute**: Bass/root note at octave 5 (sustained)
+ * - **Flute**: Short chords sustain the bass/3rd at octave 5; long chords (≥4 beats)
+ *              switch to the 5th at octave 5 with a syncopated re-attack
  * - **Bass**: Single low note (E-B → octave 1, C-D# → octave 2)
  */
 export function generateNotesForInstrument(
   instrument: InstrumentName,
   params: NoteGenerationParams,
 ): ScheduledNote[] {
-  const { chordNotes, duration, beatDuration } = params;
+  const { chordNotes, duration, beatDuration, startTime, totalDuration } = params;
 
   // Separate bass (octave 2) from main chord tones (octave 4/5)
   const bassEntry = chordNotes.find(n => n.octave === 2);
@@ -151,7 +175,7 @@ export function generateNotesForInstrument(
     case 'piano':
       return generatePianoNotes(
         chordTones, bassEntry, rootName, bassName,
-        duration, fullBeatDelay, isLongChord,
+        duration, fullBeatDelay, durationInBeats, isLongChord, startTime, totalDuration,
       );
 
     case 'guitar':
@@ -164,7 +188,7 @@ export function generateNotesForInstrument(
       return generateViolinNotes(rootName, duration);
 
     case 'flute':
-      return generateFluteNotes(bassName, duration);
+      return generateFluteNotes(rootName, bassName, chordTones, duration, fullBeatDelay, durationInBeats);
 
     case 'bass':
       return generateBassNotes(bassName, duration);
@@ -183,66 +207,209 @@ function generatePianoNotes(
   bassName: string,
   duration: number,
   fullBeatDelay: number,
+  durationInBeats: number,
   isLongChord: boolean,
+  startTime?: number,
+  totalDuration?: number,
 ): ScheduledNote[] {
   const notes: ScheduledNote[] = [];
+  const patternMeasureDuration = fullBeatDelay * 4;
+  const chordStartTime = startTime ?? 0;
+  const chordEndTime = chordStartTime + duration;
 
-  // Bass note MIDI
-  const bassNoteName = bassEntry ? `${bassName}2` : `${rootName}3`;
+  // Bass note MIDI (raised to octave 3)
+  const bassNoteName = `${bassEntry ? bassName : rootName}3`;
   const bassMidi = noteNameToMidi(bassNoteName);
 
-  if (isLongChord) {
-    // ── BASS-FIRST PATTERN ──
-    // Bass note plays immediately
+  const useRepeatingPattern = isLongChord && durationInBeats >= PIANO_PATTERN_MIN_BEATS;
+  const shortChordNeedsBassPickup = isLongChord && !useRepeatingPattern;
+
+  const clampDuration = (startOffset: number, requestedDuration: number) => {
+    const remaining = duration - startOffset;
+    return Math.max(0, Math.min(requestedDuration, remaining));
+  };
+
+  const pushSingleChord = (
+    startOffset: number,
+    noteDuration: number,
+    volumeReduction: number,
+    skipFifth: boolean = false,
+  ) => {
     notes.push({
       noteName: bassNoteName,
       midi: bassMidi,
-      startOffset: 0,
-      duration: duration,
-      velocityMultiplier: bassEntry ? BASS_VELOCITY_BOOST : 1.0,
+      startOffset,
+      duration: noteDuration,
+      velocityMultiplier: (bassEntry ? BASS_VELOCITY_BOOST : 1.0) * volumeReduction,
       isBass: !!bassEntry,
     });
 
-    // Upper chord tones at octave 3, delayed by one full beat
-    for (const tone of chordTones) {
-      const name = `${tone.noteName}3`;
-      const midi = noteNameToMidi(name);
-      if (midi === bassMidi) continue; // skip duplicate
-      notes.push({
-        noteName: name,
-        midi,
-        startOffset: fullBeatDelay,
-        duration: duration - fullBeatDelay,
-        velocityMultiplier: 1.0,
-        isBass: false,
-      });
-    }
-  } else {
-    // ── CLUSTER PATTERN (short chords) ──
-    // Bass note
-    notes.push({
-      noteName: bassNoteName,
-      midi: bassMidi,
-      startOffset: 0,
-      duration: duration,
-      velocityMultiplier: bassEntry ? BASS_VELOCITY_BOOST * CLUSTER_VOLUME_REDUCTION : CLUSTER_VOLUME_REDUCTION,
-      isBass: !!bassEntry,
-    });
-
-    // All chord tones simultaneously
-    for (const tone of chordTones) {
-      const name = `${tone.noteName}3`;
+    for (let toneIdx = 0; toneIdx < chordTones.length; toneIdx++) {
+      // Skip the 5th (index 2) when requested — differentiates piano from guitar
+      if (skipFifth && toneIdx === 2) continue;
+      const tone = chordTones[toneIdx];
+      const name = `${tone.noteName}4`;
       const midi = noteNameToMidi(name);
       if (midi === bassMidi) continue;
       notes.push({
         noteName: name,
         midi,
-        startOffset: 0,
-        duration: duration,
-        velocityMultiplier: CLUSTER_VOLUME_REDUCTION,
+        startOffset,
+        duration: noteDuration,
+        velocityMultiplier: volumeReduction,
         isBass: false,
       });
     }
+  };
+
+  const pushSingleChordAbsolute = (
+    absoluteStartTime: number,
+    absoluteEndTime: number,
+    volumeReduction: number,
+    skipFifth: boolean = false,
+  ) => {
+    const startOffset = Math.max(0, absoluteStartTime - chordStartTime);
+    const noteDuration = clampDuration(startOffset, absoluteEndTime - absoluteStartTime);
+    if (noteDuration <= 0) return;
+    pushSingleChord(startOffset, noteDuration, volumeReduction, skipFifth);
+  };
+
+  const pushRepeatedNotesInWindow = (
+    noteName: string,
+    midi: number,
+    patternOffsets: number[],
+    velocityMultiplier: number,
+    isBassNote: boolean,
+    windowStartTime: number,
+    windowEndTime: number,
+  ) => {
+    if (windowEndTime - windowStartTime < patternMeasureDuration - TIMING_EPSILON) {
+      return;
+    }
+
+    const fullPatternCycles = Math.floor((windowEndTime - windowStartTime + TIMING_EPSILON) / patternMeasureDuration);
+    for (let cycleIndex = 0; cycleIndex < fullPatternCycles; cycleIndex += 1) {
+      const measureStart = windowStartTime + cycleIndex * patternMeasureDuration;
+      for (let i = 0; i < patternOffsets.length; i += 1) {
+        const absoluteStartTime = measureStart + patternOffsets[i];
+        if (absoluteStartTime >= windowEndTime - TIMING_EPSILON) continue;
+        const nextStart = patternOffsets[i + 1] !== undefined
+          ? measureStart + patternOffsets[i + 1]
+          : measureStart + patternMeasureDuration;
+        const absoluteEndTime = Math.min(windowEndTime, nextStart);
+        const startOffset = Math.max(0, absoluteStartTime - chordStartTime);
+        const noteDuration = clampDuration(
+          startOffset,
+          Math.max(fullBeatDelay / 2, absoluteEndTime - absoluteStartTime),
+        );
+        if (noteDuration <= 0) continue;
+        notes.push({
+          noteName,
+          midi,
+          startOffset,
+          duration: noteDuration,
+          velocityMultiplier,
+          isBass: isBassNote,
+        });
+      }
+    }
+  };
+
+  if (!useRepeatingPattern) {
+    // ── FULL-CHORD ONCE PATTERN (shorter chords) ──
+    // Skip the 5th to differentiate piano voicing from guitar
+    pushSingleChord(0, duration, CLUSTER_VOLUME_REDUCTION, chordTones.length >= 3);
+
+    if (shortChordNeedsBassPickup) {
+      const bassPickupOffset = fullBeatDelay * 1.5;
+      const bassPickupDuration = clampDuration(
+        bassPickupOffset,
+        fullBeatDelay * SHORT_CHORD_BASS_PICKUP_DURATION_FACTOR,
+      );
+      if (bassPickupDuration > 0) {
+        notes.push({
+          noteName: bassNoteName,
+          midi: bassMidi,
+          startOffset: bassPickupOffset,
+          duration: bassPickupDuration,
+          velocityMultiplier: (bassEntry ? BASS_VELOCITY_BOOST : 1.0)
+            * CLUSTER_VOLUME_REDUCTION
+            * SHORT_CHORD_BASS_PICKUP_VELOCITY_REDUCTION,
+          isBass: !!bassEntry,
+        });
+      }
+    }
+
+    return notes;
+  }
+
+  const upperPatternOffsets = [0, fullBeatDelay, fullBeatDelay * 2, fullBeatDelay * 3];
+  const bassPatternOffsets = [0, fullBeatDelay * 1.5, fullBeatDelay * 2, fullBeatDelay * 3];
+
+  const canApplyEndgameShape = totalDuration !== undefined && patternMeasureDuration > 0;
+  const densePatternEndTime = canApplyEndgameShape
+    ? Math.max(0, totalDuration - PIANO_ENDGAME_FULL_PATTERN_CUTOFF_MEASURES * patternMeasureDuration)
+    : chordEndTime;
+  const finalSustainStartTime = canApplyEndgameShape
+    ? Math.max(0, totalDuration - PIANO_ENDGAME_DOUBLE_STRIKE_CUTOFF_MEASURES * patternMeasureDuration)
+    : Number.POSITIVE_INFINITY;
+
+  // Detect the last chord: its end time should be at or near the song's total duration.
+  // Use a tolerance of half a beat to handle floating-point accumulation.
+  const lastChordTolerance = fullBeatDelay * 0.5;
+  const isLastChord = canApplyEndgameShape && (totalDuration - chordEndTime) < lastChordTolerance;
+
+  // For the last chord, play a single sustained chord capped at one measure.
+  // No repeating pattern — just hold the chord for one measure then let it decay.
+  // Deterministic 50/50 fifth-skip based on chord start time.
+  if (isLastChord) {
+    const cappedDuration = Math.min(duration, patternMeasureDuration);
+    const skipFifthHere = chordTones.length >= 3 && Math.floor(chordStartTime * 10) % 2 === 1;
+    pushSingleChord(0, cappedDuration, CLUSTER_VOLUME_REDUCTION, skipFifthHere);
+    return notes;
+  }
+
+  const denseWindowStart = chordStartTime;
+  const denseWindowEnd = Math.min(chordEndTime, densePatternEndTime);
+  if (denseWindowEnd - denseWindowStart >= patternMeasureDuration - TIMING_EPSILON) {
+    pushRepeatedNotesInWindow(
+      bassNoteName,
+      bassMidi,
+      bassPatternOffsets,
+      bassEntry ? BASS_VELOCITY_BOOST : 1.0,
+      !!bassEntry,
+      denseWindowStart,
+      denseWindowEnd,
+    );
+
+    for (const tone of chordTones) {
+      const name = `${tone.noteName}4`;
+      const midi = noteNameToMidi(name);
+      pushRepeatedNotesInWindow(name, midi, upperPatternOffsets, 1.0, false, denseWindowStart, denseWindowEnd);
+    }
+  }
+
+  const sparseWindowStart = Math.max(chordStartTime, densePatternEndTime);
+  const sparseWindowEnd = Math.min(chordEndTime, finalSustainStartTime);
+  if (sparseWindowEnd - sparseWindowStart > TIMING_EPSILON) {
+    let sparseStrikeIdx = 0;
+    for (
+      let strikeStart = sparseWindowStart;
+      strikeStart < sparseWindowEnd - TIMING_EPSILON;
+      strikeStart += patternMeasureDuration
+    ) {
+      const strikeEnd = Math.min(sparseWindowEnd, strikeStart + patternMeasureDuration);
+      // Deterministic 50/50: alternate strikes skip the 5th for voicing variety
+      const skipFifthHere = chordTones.length >= 3 && sparseStrikeIdx % 2 === 1;
+      pushSingleChordAbsolute(strikeStart, strikeEnd, CLUSTER_VOLUME_REDUCTION, skipFifthHere);
+      sparseStrikeIdx++;
+    }
+  }
+
+  const finalWindowStart = Math.max(chordStartTime, finalSustainStartTime);
+  if (chordEndTime - finalWindowStart > TIMING_EPSILON) {
+    const skipFifthFinal = chordTones.length >= 3 && Math.floor(finalWindowStart * 10) % 2 === 1;
+    pushSingleChordAbsolute(finalWindowStart, chordEndTime, CLUSTER_VOLUME_REDUCTION, skipFifthFinal);
   }
 
   return notes;
@@ -315,18 +482,25 @@ function generateGuitarNotes(
       const fullName = `${noteName}${oct}`;
       const midi = noteNameToMidi(fullName);
       const startOffset = i * halfBeatDelay;
+      // Each arpeggio note sustains to the chord end, creating legato overlap.
+      // Add a small extra sustain tail so the note's decay bridges any
+      // micro-gap caused by the soundfont's attack time on the next note.
+      const noteDuration = duration - startOffset + halfBeatDelay * 0.5;
       notes.push({
         noteName: fullName,
         midi,
         startOffset,
-        duration: duration - startOffset,
+        duration: Math.min(noteDuration, duration - startOffset + halfBeatDelay),
         velocityMultiplier: oct === 2 ? BASS_VELOCITY_BOOST : 1.0,
         isBass: oct === 2,
       });
     }
   } else {
     // ── CLUSTER (short chords) ──
-    for (const tone of chordTones) {
+    // Skip the 3rd (index 1) to differentiate guitar voicing from piano
+    for (let toneIdx = 0; toneIdx < chordTones.length; toneIdx++) {
+      if (toneIdx === 1 && chordTones.length >= 3) continue;
+      const tone = chordTones[toneIdx];
       const name = `${tone.noteName}3`;
       const midi = noteNameToMidi(name);
       notes.push({
@@ -360,17 +534,52 @@ function generateViolinNotes(
 }
 
 function generateFluteNotes(
+  rootName: string,
   bassName: string,
+  chordTones: MidiNote[],
   duration: number,
+  fullBeatDelay: number,
+  durationInBeats: number,
 ): ScheduledNote[] {
-  const name = `${bassName}5`;
+  const useLongPattern = durationInBeats >= PIANO_PATTERN_MIN_BEATS;
+
+  if (!useLongPattern) {
+    const fluteNoteName = bassName === rootName && chordTones.length >= 2
+      ? chordTones[1].noteName
+      : bassName;
+    const name = `${fluteNoteName}5`;
+    const midi = noteNameToMidi(name);
+    return [{
+      noteName: name,
+      midi,
+      startOffset: 0,
+      duration,
+      velocityMultiplier: 1.0,
+      isBass: false,
+    }];
+  }
+
+  const flutePatternNote = chordTones.length >= 3
+    ? chordTones[2].noteName
+    : (chordTones.length >= 2 ? chordTones[1].noteName : bassName);
+  const name = `${flutePatternNote}5`;
   const midi = noteNameToMidi(name);
+  const syncopatedOffset = fullBeatDelay * 1.5;
+  const syncopatedDuration = Math.max(fullBeatDelay * 0.5, duration - syncopatedOffset);
+
   return [{
     noteName: name,
     midi,
     startOffset: 0,
-    duration,
-    velocityMultiplier: 1.0,
+    duration: Math.max(fullBeatDelay, syncopatedOffset),
+    velocityMultiplier: 0.95,
+    isBass: false,
+  }, {
+    noteName: name,
+    midi,
+    startOffset: syncopatedOffset,
+    duration: Math.max(fullBeatDelay * 0.5, syncopatedDuration),
+    velocityMultiplier: 0.85,
     isBass: false,
   }];
 }
@@ -422,14 +631,17 @@ export function generateAllInstrumentVisualNotes(
   events: ChordEvent[],
   instruments: ActiveInstrument[],
   posLookup: Map<number, { x: number; width: number }>,
+  bpm?: number,
 ): VisualNote[] {
   const notes: VisualNote[] = [];
 
   // Merge consecutive beats with same chord — audio only triggers on chord changes
   const merged = mergeConsecutiveChordEvents(events);
+  const totalSongDuration = merged.reduce((maxEnd, event) => Math.max(maxEnd, event.endTime), 0);
 
-  // Estimate average beat duration from the raw events for timing calculations
-  const avgBeatDuration = estimateBeatDuration(events);
+  // Use BPM-based beat duration when available (matches audio path exactly).
+  // Fall back to estimated beat duration from raw events.
+  const bd = bpm ? beatDurationFromBpm(bpm) : estimateBeatDuration(events);
 
   for (const event of merged) {
     const { chordName, notes: chordNotes, startTime, endTime } = event;
@@ -443,14 +655,16 @@ export function generateAllInstrumentVisualNotes(
         chordName,
         chordNotes,
         duration,
-        beatDuration: avgBeatDuration,
+        beatDuration: bd,
+        startTime,
+        totalDuration: totalSongDuration,
       });
 
       for (const sn of scheduled) {
         notes.push({
           midi: sn.midi,
           startTime: startTime + sn.startOffset,
-          endTime: endTime,
+          endTime: startTime + sn.startOffset + sn.duration,
           color,
           chordName,
           pos: posLookup.get(sn.midi) ?? null,

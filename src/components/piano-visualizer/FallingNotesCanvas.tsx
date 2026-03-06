@@ -32,6 +32,8 @@ interface FallingNotesCanvasProps {
   height?: number;
   /** Active instruments for instrument-specific coloring */
   activeInstruments?: ActiveInstrument[];
+  /** BPM for consistent beat duration with audio playback */
+  bpm?: number;
   /** Callback: set of active MIDI notes at current time */
   onActiveNotesChange?: (notes: Set<number>, colors: Map<number, string>) => void;
 }
@@ -87,6 +89,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   lookBehindSeconds = 0.5,
   height = 300,
   activeInstruments = [],
+  bpm,
   onActiveNotesChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,9 +169,9 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   const instrumentVisualNotes = useMemo(() => {
     if (!hasInstruments || chordEvents.length === 0) return [];
     return generateAllInstrumentVisualNotes(
-      chordEvents, activeInstruments, midiKeyPositions,
+      chordEvents, activeInstruments, midiKeyPositions, bpm,
     );
-  }, [chordEvents, hasInstruments, activeInstruments, midiKeyPositions]);
+  }, [chordEvents, hasInstruments, activeInstruments, midiKeyPositions, bpm]);
 
   // ─── Render Frame ────────────────────────────────────────────────────────
 
