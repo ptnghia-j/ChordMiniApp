@@ -240,6 +240,7 @@ function generateInstrumentMidiNotes(
       beatDuration,
       startTime,
       totalDuration: totalSongDuration,
+      timeSignature,
     });
 
     for (const scheduledNote of scheduledNotes) {

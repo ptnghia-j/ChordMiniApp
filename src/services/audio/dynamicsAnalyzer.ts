@@ -354,6 +354,9 @@ export class DynamicsAnalyzer {
         volatile *= DOWNBEAT_ACCENT;
       } else if (this.params.timeSignature === 4 && beatInMeasure === 2) {
         volatile *= BEAT3_ACCENT;
+      } else if (this.params.timeSignature === 6 && beatInMeasure === 3) {
+        // 6/8 compound time: secondary accent on beat 4 (start of second group)
+        volatile *= BEAT3_ACCENT;
       } else {
         volatile *= WEAK_BEAT_SOFTEN;
       }

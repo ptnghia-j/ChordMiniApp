@@ -33,6 +33,7 @@ interface ChordPlaybackManagerProps {
   isPlaying: boolean;
   currentTime: number;
   bpm?: number; // Beats per minute for dynamic timing (optional, defaults to 120)
+  timeSignature?: number; // Beats per measure (e.g. 3 for 3/4, defaults to 4)
   onChordPlaybackChange: (chordPlayback: {
     isEnabled: boolean;
     pianoVolume: number;
@@ -54,6 +55,7 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
   isPlaying,
   currentTime,
   bpm,
+  timeSignature,
   onChordPlaybackChange
 }) => {
   // CRITICAL FIX: Apply transposition to chord playback data
@@ -69,7 +71,8 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
     beats: transposedChordGridData?.beats || chordGridData?.beats || [],
     isPlaying,
     currentTime,
-    bpm // Pass BPM for dynamic timing
+    bpm, // Pass BPM for dynamic timing
+    timeSignature, // Pass time signature for pattern selection
   });
 
   // CRITICAL FIX: Create a stable object reference to prevent infinite re-renders

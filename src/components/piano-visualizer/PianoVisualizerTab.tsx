@@ -100,6 +100,7 @@ function usePianoOnlyPlayback(
   isPlaying: boolean,
   isChordPlaybackEnabled: boolean,
   bpm: number,
+  timeSignature: number = 4,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
@@ -119,10 +120,10 @@ function usePianoOnlyPlayback(
   useEffect(() => {
     dynamicsAnalyzerRef.current.setParams({
       bpm,
-      timeSignature: 4,
+      timeSignature,
       totalDuration,
     });
-  }, [bpm, totalDuration]);
+  }, [bpm, timeSignature, totalDuration]);
 
   // Activate / deactivate piano-only mode
   useEffect(() => {
@@ -188,9 +189,9 @@ function usePianoOnlyPlayback(
       startTime: currentChordEvent.startTime,
       playbackTime: currentTime,
       totalDuration,
-    });
+    }, timeSignature);
     lastPlayedChordRef.current = currentChordEvent.chordName;
-  }, [currentTime, shouldActivate, merged, bpm, totalDuration]);
+  }, [currentTime, shouldActivate, merged, bpm, totalDuration, timeSignature]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -423,7 +424,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
 
   // Piano-only auto-playback: plays piano when visualizer tab is active but chord playback is off
-  usePianoOnlyPlayback(chordEvents, currentTime, isPlaying, isChordPlaybackEnabled, detectedBpm || 120);
+  usePianoOnlyPlayback(chordEvents, currentTime, isPlaying, isChordPlaybackEnabled, detectedBpm || 120, timeSignature);
 
   // Determine active instruments for visualization
   // When piano-only mode is active (chord playback OFF), show piano notes on the visualizer
@@ -441,12 +442,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     const midiData = exportChordEventsToMidi(chordEvents, {
       instruments,
       bpm: detectedBpm || undefined,
-      timeSignature: 4, // Always 4/4 — beat detection time_signature is unreliable
+      timeSignature, // Use detected time signature
     });
     if (midiData.length > 0) {
       downloadMidiFile(midiData, 'chord-progression.mid');
     }
-  }, [chordEvents, activeInstruments, detectedBpm]);
+  }, [chordEvents, activeInstruments, detectedBpm, timeSignature]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -563,6 +564,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 height={280}
                 activeInstruments={effectiveActiveInstruments}
                 bpm={detectedBpm || undefined}
+                timeSignature={timeSignature}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

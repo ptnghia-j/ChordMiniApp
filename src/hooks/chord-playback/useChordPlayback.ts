@@ -15,6 +15,7 @@ export interface UseChordPlaybackProps {
   isPlaying: boolean;
   currentTime: number;
   bpm?: number; // Beats per minute for dynamic timing (optional, defaults to 120)
+  timeSignature?: number; // Beats per measure (e.g. 3 for 3/4, defaults to 4)
 }
 
 export interface UseChordPlaybackReturn {
@@ -163,7 +164,8 @@ export const useChordPlayback = ({
   beats,
   isPlaying,
   currentTime,
-  bpm = 120 // Default to 120 BPM if not provided
+  bpm = 120, // Default to 120 BPM if not provided
+  timeSignature = 4 // Default to 4/4 time
 }: UseChordPlaybackProps): UseChordPlaybackReturn => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [pianoVolume, setPianoVolumeState] = useState(DEFAULT_PIANO_VOLUME);
@@ -197,6 +199,7 @@ export const useChordPlayback = ({
   const chordsRef = useRef(chords);
   const beatsRef = useRef(beats);
   const bpmRef = useRef(bpm);
+  const timeSignatureRef = useRef(timeSignature);
   const isEnabledRef = useRef(isEnabled);
   const isPlayingRef = useRef(isPlaying);
   const isReadyRef = useRef(isReady);
@@ -206,6 +209,7 @@ export const useChordPlayback = ({
   useEffect(() => { chordsRef.current = chords; }, [chords]);
   useEffect(() => { beatsRef.current = beats; }, [beats]);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  useEffect(() => { timeSignatureRef.current = timeSignature; }, [timeSignature]);
   useEffect(() => { isEnabledRef.current = isEnabled; }, [isEnabled]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
@@ -216,10 +220,10 @@ export const useChordPlayback = ({
   useEffect(() => {
     dynamicsAnalyzer.current.setParams({
       bpm,
-      timeSignature: 4, // Default 4/4 time
+      timeSignature,
       totalDuration: estimateSongDuration(beats),
     });
-  }, [beats, bpm]);
+  }, [beats, bpm, timeSignature]);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -312,6 +316,7 @@ export const useChordPlayback = ({
           totalDuration: estimatedSongDurationRef.current,
           playbackTime: time,
         },
+        timeSignatureRef.current,
       );
 
       lastPlayedChord.current = event.chord;
@@ -397,11 +402,12 @@ export const useChordPlayback = ({
         totalDuration: estimatedSongDuration,
         playbackTime: currentTime,
       },
+      timeSignature,
     );
 
     lastPlayedChordIndex.current = event.beatIndex;
     lastPlayedChord.current = event.chord;
-  }, [currentBeatIndex, currentTime, isEnabled, isReady, isPlaying, chordSchedule, bpm, estimatedSongDuration]);
+  }, [currentBeatIndex, currentTime, isEnabled, isReady, isPlaying, chordSchedule, bpm, estimatedSongDuration, timeSignature]);
 
   // Stop playback when paused or disabled
   useEffect(() => {

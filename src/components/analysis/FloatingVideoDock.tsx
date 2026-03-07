@@ -101,6 +101,9 @@ interface FloatingVideoDockProps {
   isCountingDown?: boolean;
   countdownDisplay?: string;
   onRequestCountdown?: () => Promise<boolean> | boolean;
+
+  // Time signature for piano pattern (e.g. 3 for 3/4, defaults to 4)
+  timeSignature?: number;
 }
 
 const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
@@ -134,7 +137,8 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   positionMode = 'fixed',
   isCountdownEnabled = false,
   isCountingDown = false,
-  countdownDisplay
+  countdownDisplay,
+  timeSignature,
 }) => {
   // Roman numerals from Zustand store
   const showRomanNumerals = useShowRomanNumerals();
@@ -149,7 +153,8 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
     chords,
     beats,
     isPlaying,
-    currentTime
+    currentTime,
+    timeSignature,
   });
 
   // Don't render if no video URLs are available

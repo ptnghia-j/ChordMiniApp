@@ -1494,6 +1494,7 @@ export default function YouTubeVideoAnalyzePage() {
               isPlaying={isPlaying}
               currentTime={currentTime}
               bpm={bpm}
+              timeSignature={timeSignature}
               onChordPlaybackChange={handleChordPlaybackChange}
             />
 
@@ -1756,6 +1757,7 @@ export default function YouTubeVideoAnalyzePage() {
               youtubePlayer={youtubePlayer}
               showTopToggles={true} // Mobile-only via md:hidden inside FloatingVideoDock; desktop uses UtilityBar
               positionMode="relative" // Use relative positioning for responsive layout
+              timeSignature={timeSignature}
               isCountdownEnabled={isCountdownEnabled}
               isCountingDown={isCountingDown}
               countdownDisplay={countdownDisplay}

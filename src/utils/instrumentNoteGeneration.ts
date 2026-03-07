@@ -53,6 +53,8 @@ export interface NoteGenerationParams {
   startTime?: number;
   /** Estimated total song duration in seconds */
   totalDuration?: number;
+  /** Time signature (beats per measure, e.g. 3 for 3/4, default 4) */
+  timeSignature?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -154,7 +156,7 @@ export function generateNotesForInstrument(
   instrument: InstrumentName,
   params: NoteGenerationParams,
 ): ScheduledNote[] {
-  const { chordNotes, duration, beatDuration, startTime, totalDuration } = params;
+  const { chordNotes, duration, beatDuration, startTime, totalDuration, timeSignature = 4 } = params;
 
   // Separate bass (octave 2) from main chord tones (octave 4/5)
   const bassEntry = chordNotes.find(n => n.octave === 2);
@@ -175,7 +177,7 @@ export function generateNotesForInstrument(
     case 'piano':
       return generatePianoNotes(
         chordTones, bassEntry, rootName, bassName,
-        duration, fullBeatDelay, durationInBeats, isLongChord, startTime, totalDuration,
+        duration, fullBeatDelay, durationInBeats, isLongChord, startTime, totalDuration, timeSignature,
       );
 
     case 'guitar':
@@ -211,9 +213,15 @@ function generatePianoNotes(
   isLongChord: boolean,
   startTime?: number,
   totalDuration?: number,
+  timeSignature: number = 4,
 ): ScheduledNote[] {
   const notes: ScheduledNote[] = [];
-  const patternMeasureDuration = fullBeatDelay * 4;
+  // For compound time (6/8), the repeating pattern unit is 3 beats (one compound beat group),
+  // not the full 6-beat measure. This lets chords spanning a half-measure (3 beats)
+  // still get the waltz "oom-pah-pah" feel — matching the 3/4 strategy.
+  const isCompoundTime = timeSignature === 6;
+  const patternBeats = isCompoundTime ? 3 : timeSignature;
+  const patternMeasureDuration = fullBeatDelay * patternBeats;
   const chordStartTime = startTime ?? 0;
   const chordEndTime = chordStartTime + duration;
 
@@ -221,7 +229,7 @@ function generatePianoNotes(
   const bassNoteName = `${bassEntry ? bassName : rootName}3`;
   const bassMidi = noteNameToMidi(bassNoteName);
 
-  const useRepeatingPattern = isLongChord && durationInBeats >= PIANO_PATTERN_MIN_BEATS;
+  const useRepeatingPattern = isLongChord && durationInBeats >= patternBeats;
   const shortChordNeedsBassPickup = isLongChord && !useRepeatingPattern;
 
   const clampDuration = (startOffset: number, requestedDuration: number) => {
@@ -343,8 +351,20 @@ function generatePianoNotes(
     return notes;
   }
 
-  const upperPatternOffsets = [0, fullBeatDelay, fullBeatDelay * 2, fullBeatDelay * 3];
-  const bassPatternOffsets = [0, fullBeatDelay * 1.5, fullBeatDelay * 2, fullBeatDelay * 3];
+  // Build beat offsets based on time signature.
+  // In 4/4 time: upper [1,2,3,4], bass [1,2.5,3,4] (syncopated).
+  // In 3/4 time: waltz pattern — bass on beat 1 only, upper tones on beats 2 & 3.
+  // In 6/8 time: compound waltz — same waltz pattern per 3-beat group, repeats
+  //              naturally for chords spanning 6+ beats ("oom-pah-pah oom-pah-pah").
+  const isWaltz = timeSignature === 3 || isCompoundTime;
+  const upperPatternOffsets = isWaltz
+    ? [fullBeatDelay, fullBeatDelay * 2]
+    : Array.from({ length: timeSignature }, (_, i) => fullBeatDelay * i);
+  const bassPatternOffsets = isWaltz
+    ? [0]
+    : timeSignature === 4
+      ? [0, fullBeatDelay * 1.5, fullBeatDelay * 2, fullBeatDelay * 3]
+      : Array.from({ length: timeSignature }, (_, i) => fullBeatDelay * i);
 
   const canApplyEndgameShape = totalDuration !== undefined && patternMeasureDuration > 0;
   const densePatternEndTime = canApplyEndgameShape
@@ -632,6 +652,7 @@ export function generateAllInstrumentVisualNotes(
   instruments: ActiveInstrument[],
   posLookup: Map<number, { x: number; width: number }>,
   bpm?: number,
+  timeSignature?: number,
 ): VisualNote[] {
   const notes: VisualNote[] = [];
 
@@ -658,6 +679,7 @@ export function generateAllInstrumentVisualNotes(
         beatDuration: bd,
         startTime,
         totalDuration: totalSongDuration,
+        timeSignature,
       });
 
       for (const sn of scheduled) {

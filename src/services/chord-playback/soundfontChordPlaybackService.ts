@@ -286,6 +286,7 @@ export class SoundfontChordPlaybackService {
     bpm: number = 120,
     dynamicVelocity?: number,
     timingContext?: PlaybackTimingContext,
+    timeSignature: number = 4,
   ): Promise<void> {
     // Lazy initialization on first playback.
     // Also wait for any initialization already kicked off by updateOptions(...)
@@ -337,6 +338,7 @@ export class SoundfontChordPlaybackService {
         beatDuration: bd,
         startTime: timingContext?.startTime,
         totalDuration: timingContext?.totalDuration,
+        timeSignature,
       });
       if (scheduledNotes.length > 0) {
         promises.push(
