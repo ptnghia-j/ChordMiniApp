@@ -195,8 +195,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     if (windowWidth >= 1280) return { size: 'large' as const, diagramWidth: 115, diagramHeight: 147, cellWidth: 130, marginX: 8, labelClass: '' };
     if (windowWidth >= 1024) return { size: 'medium' as const, diagramWidth: 100, diagramHeight: 128, cellWidth: 115, marginX: 7, labelClass: '' };
     if (windowWidth >= 768) return { size: 'medium' as const, diagramWidth: 90, diagramHeight: 115, cellWidth: 105, marginX: 6, labelClass: '' };
-    if (windowWidth >= 640) return { size: 'small' as const, diagramWidth: 78, diagramHeight: 100, cellWidth: 92, marginX: 5, labelClass: 'text-[10px] leading-tight' };
-    return { size: 'small' as const, diagramWidth: 70, diagramHeight: 90, cellWidth: 82, marginX: 4, labelClass: 'text-[10px] leading-tight' };
+    if (windowWidth >= 640) return { size: 'small' as const, diagramWidth: 78, diagramHeight: 100, cellWidth: 92, marginX: 5, labelClass: 'text-xs leading-tight' };
+    return { size: 'small' as const, diagramWidth: 70, diagramHeight: 90, cellWidth: 82, marginX: 4, labelClass: 'text-xs leading-tight' };
   }, [windowWidth]);
 
   // Handle chord position changes

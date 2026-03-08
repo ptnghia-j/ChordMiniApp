@@ -58,9 +58,10 @@ module.exports = {
         'content-bg': '#1E252E',
       },
       fontFamily: {
-        sans: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        sans: ["var(--font-brand-sans)", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
         mono: ["var(--font-roboto-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"],
-        nunito: ["var(--font-nunito)", "Nunito", "system-ui", "sans-serif"],
+        display: ["var(--font-brand-sans)", "system-ui", "sans-serif"],
+        nunito: ["var(--font-brand-sans)", "system-ui", "sans-serif"],
         varela: ["var(--font-varela-round)", "Varela Round", "system-ui", "sans-serif"],
       },
       boxShadow: {

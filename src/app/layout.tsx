@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Roboto_Mono, Nunito, Varela_Round } from 'next/font/google';
+import { DM_Sans, Roboto_Mono, Varela_Round } from 'next/font/google';
 import './globals.css';
 import '../styles/analysis-embedded.css';
 import '../styles/chord-grid.css';
@@ -22,15 +22,15 @@ const robotoMono = Roboto_Mono({
   display: 'swap',
 });
 
-// Nunito font for logo text - rounded, friendly font suitable for music apps
-const nunito = Nunito({
+// Reference-inspired primary sans (closest supported match to Google Sans)
+const dmSans = DM_Sans({
   subsets: ['latin'],
-  variable: '--font-nunito',
+  variable: '--font-brand-sans',
   display: 'swap',
-  weight: ['700', '800'],
+  weight: ['400', '500', '600', '700'],
 });
 
-// Varela Round font for chord labels, guitar chord names, and lyrics chord annotations
+// Previous chord-label font family used across beat grids, guitar chord labels, and lyrics chords
 const varelaRound = Varela_Round({
   weight: '400',
   subsets: ['latin'],
@@ -146,7 +146,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${robotoMono.variable} ${nunito.variable} ${varelaRound.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${robotoMono.variable} ${dmSans.variable} ${varelaRound.variable}`} suppressHydrationWarning>
       <head>
         {/* Blocking script: apply dark class BEFORE first paint to prevent theme flash */}
         <script
@@ -158,7 +158,7 @@ export default function RootLayout({
         <style dangerouslySetInnerHTML={{
           __html: `
             /* Critical above-the-fold styles */
-            html { font-family: ui-sans-serif, system-ui, sans-serif; }
+            html { font-family: var(--font-brand-sans), ui-sans-serif, system-ui, sans-serif; }
             body { margin: 0; padding: 0; background: #f8fafc; visibility: hidden; }
             body.theme-ready { visibility: visible; }
             .dark body { background: #1e252e; }

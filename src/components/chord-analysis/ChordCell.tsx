@@ -38,6 +38,10 @@ export interface ChordCellProps {
   cellRef?: (el: HTMLDivElement | null) => void;
   /** Compact mode for use in scrolling chord strip — removes min-height constraints */
   compact?: boolean;
+  /** Number of following cells this chord label may visually borrow space from */
+  labelOverflowCells?: number;
+  /** Additional pixel gap width to include when overflowing across neighboring cells */
+  labelOverflowGapPx?: number;
 }
 
 /**
@@ -90,6 +94,8 @@ const areChordCellPropsEqual = (
 
   // Compact mode
   if (prevProps.compact !== nextProps.compact) return false;
+  if (prevProps.labelOverflowCells !== nextProps.labelOverflowCells) return false;
+  if (prevProps.labelOverflowGapPx !== nextProps.labelOverflowGapPx) return false;
 
   // Ignore callback props (onBeatClick, getChordStyle, getDynamicFontSize, onChordEdit, onLoopBeatClick)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
@@ -130,7 +136,9 @@ export const ChordCell = React.memo<ChordCellProps>(({
   onLoopBeatClick,
   accidentalPreference,
   cellRef,
-  compact = false
+  compact = false,
+  labelOverflowCells = 0,
+  labelOverflowGapPx = 0
 }) => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -177,6 +185,25 @@ export const ChordCell = React.memo<ChordCellProps>(({
     }
   }, [isEditing, handleEditSave, editedChord, displayChord, isClickable, handleClick]);
 
+  const getGridLabelFontSize = useCallback((labelLength: number) => {
+    if (compact) return undefined;
+
+    const minFontSize = showRomanNumerals ? 14 : 15;
+    const maxFontSize = showRomanNumerals ? 17 : 19;
+    const scale = showRomanNumerals ? 0.18 : 0.2;
+    const penalty = labelLength > 4 ? 2 : labelLength > 2 ? 1 : 0;
+
+    return `${Math.max(
+      minFontSize,
+      Math.min(maxFontSize, Math.round(cellSize * scale) - penalty)
+    )}px`;
+  }, [compact, showRomanNumerals, cellSize]);
+
+  const canOverflowLabel = !compact && showChordLabel && !isEmpty && labelOverflowCells > 0;
+  const labelOverflowWidth = canOverflowLabel
+    ? `calc(${labelOverflowCells + 1} * 100% + ${labelOverflowGapPx}px)`
+    : '100%';
+
   return (
     <div
       ref={cellRef}
@@ -191,6 +218,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
       data-beat-index={globalIndex}
       data-is-empty={isEmpty ? "true" : "false"}
       style={{
+        overflow: canOverflowLabel ? 'visible' : undefined,
+        zIndex: canOverflowLabel ? 2 : undefined,
         // Priority order: current beat (CSS class with !important) > loop range > modulation > segmentation
         // Current beat highlighting is handled purely via CSS (see chord-grid.css)
         // We still apply loop range inline styles even when the cell is the current beat;
@@ -220,7 +249,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
       aria-label={isClickable ? `Jump to beat ${globalIndex + 1}${chord ? `, chord ${chord}` : ''}` : undefined}
     >
       {/* Enhanced chord display with pickup beat support and Roman numerals */}
-      <div style={getChordContainerStyles()}>
+      <div style={{ ...getChordContainerStyles(), overflow: canOverflowLabel ? 'visible' : 'hidden' }}>
         {!isEmpty && showChordLabel && chord ? (
           isEditing ? (
             <input
@@ -232,12 +261,13 @@ export const ChordCell = React.memo<ChordCellProps>(({
               className={`font-varela ${getDynamicFontSize(cellSize, editValue.length)} leading-tight bg-transparent border-none outline-none text-center w-full`}
               style={{
                 ...getChordLabelStyles(),
+                fontSize: getGridLabelFontSize(editValue.length),
                 maxWidth: '100%',
               }}
               autoFocus
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full">
+            <div className="flex flex-col items-center justify-center h-full" style={{ overflow: canOverflowLabel ? 'visible' : 'hidden', width: '100%' }}>
               {/* Chord label */}
               <div
                 // ✅ APPLY FONT: Use font-varela Tailwind class
@@ -245,15 +275,22 @@ export const ChordCell = React.memo<ChordCellProps>(({
                   showRomanNumerals
                     ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
                     : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
-                } leading-tight ${
+                } leading-tight whitespace-nowrap ${
                   wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
-                } overflow-hidden text-ellipsis whitespace-nowrap max-w-full ${
+                } ${canOverflowLabel ? 'overflow-visible' : 'overflow-hidden text-ellipsis max-w-full'} ${
                   isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
                 }`}
                 style={{
                   ...getChordLabelStyles(),
-                  maxWidth: '100%',
-                  textOverflow: 'ellipsis',
+                  fontSize: getGridLabelFontSize((editedChord || displayChord).length),
+                  width: labelOverflowWidth,
+                  maxWidth: labelOverflowWidth,
+                  minWidth: '100%',
+                  alignSelf: 'flex-start',
+                  overflow: canOverflowLabel ? 'visible' : 'hidden',
+                  textOverflow: canOverflowLabel ? 'clip' : 'ellipsis',
+                  position: 'relative',
+                  zIndex: canOverflowLabel ? 2 : 1,
                 }}
                 onClick={isEditMode ? handleClick : undefined}
                 title={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}
@@ -269,7 +306,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
                 <div
                   className={`font-varela font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
                   style={{
-                    fontSize: `${Math.max(10, cellSize * 0.18)}px`, // Larger, more readable Roman numeral size
+                    fontSize: `${Math.max(11, cellSize * 0.18)}px`,
                     lineHeight: '1', // FIXED: Consistent line height to prevent layout shifts
                     overflow: 'visible', // Allow superscripts to extend beyond container
                     position: 'relative', // Ensure proper positioning context for absolute children

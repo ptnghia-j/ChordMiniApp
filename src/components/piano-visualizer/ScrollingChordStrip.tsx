@@ -37,6 +37,40 @@ const SWEEP_LINE_FRACTION = 0.2;
 
 // Gap between chord cells (matches ChordGrid's gap-0.5 = 2px)
 const CELL_GAP = 2;
+const MIN_TIMELINE_BEAT_WIDTH = 36;
+
+function getEffectiveTimelineBeats(timeSignature: number): number {
+  if (timeSignature >= 6 && timeSignature % 3 === 0) {
+    return Math.max(2, timeSignature / 3);
+  }
+
+  return Math.max(1, timeSignature);
+}
+
+export function getUniformTimelineBeatWidth(
+  chordEvents: ChordEvent[],
+  pixelsPerSecond: number,
+  timeSignature: number,
+): number {
+  const intervals = chordEvents
+    .map((event) => event.endTime - event.startTime)
+    .filter((duration) => duration > 0)
+    .sort((a, b) => a - b);
+
+  const medianInterval = intervals.length > 0
+    ? intervals[Math.floor(intervals.length / 2)]
+    : 0.5;
+
+  const effectiveTimelineBeats = getEffectiveTimelineBeats(timeSignature);
+  const measureScale = effectiveTimelineBeats < 4
+    ? 4 / effectiveTimelineBeats
+    : 1;
+
+  const rawBeatWidth = medianInterval * pixelsPerSecond;
+  const minBeatWidth = MIN_TIMELINE_BEAT_WIDTH * measureScale;
+
+  return Math.max(rawBeatWidth, minBeatWidth);
+}
 
 // ─── Enharmonic sharp↔flat maps for normalization ────────────────────────────
 
@@ -191,18 +225,11 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       return { chordBoxes: [], measureSeparators: [], totalWidth: 0, timeToNormalizedX: identityMapping };
     }
 
-    // ── Compute uniform beat width from median interval ────────────────────
-    const intervals: number[] = [];
-    for (let i = 0; i < chordEvents.length; i++) {
-      const dur = chordEvents[i].endTime - chordEvents[i].startTime;
-      if (dur > 0) intervals.push(dur);
-    }
-    // Sort for median
-    intervals.sort((a, b) => a - b);
-    const medianInterval = intervals.length > 0
-      ? intervals[Math.floor(intervals.length / 2)]
-      : 0.5; // sensible fallback
-    const uniformBeatWidth = medianInterval * pixelsPerSecond;
+    const uniformBeatWidth = getUniformTimelineBeatWidth(
+      chordEvents,
+      pixelsPerSecond,
+      timeSignature,
+    );
 
     // ── Build time→normalizedX mapping ─────────────────────────────────────
     // For a given playback time, find which event it falls in and interpolate
@@ -312,8 +339,8 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     [],
   );
 
-  /** ChordCell's getDynamicFontSize — fixed text-xs for compact strip cells. */
-  const stripGetDynamicFontSize = useCallback(() => 'text-xs', []);
+  /** ChordCell's getDynamicFontSize — fixed text-sm for compact strip cells. */
+  const stripGetDynamicFontSize = useCallback(() => 'text-sm', []);
 
   /** No-op beat click handler (strip is non-interactive). */
   const noopBeatClick = useCallback(() => {}, []);

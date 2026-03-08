@@ -529,7 +529,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         {/* Instrument legend (shown when instruments are visualized) */}
         {effectiveActiveInstruments.length > 0 && (
           <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-900/60 border-b border-gray-800">
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+            <span className="text-xs uppercase tracking-[0.12em] text-gray-500 font-medium">
               {isChordPlaybackEnabled ? 'Instruments:' : 'Piano Only:'}
             </span>
             {effectiveActiveInstruments.map((inst) => (
@@ -538,7 +538,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                   className="w-2.5 h-2.5 rounded-sm"
                   style={{ backgroundColor: inst.color }}
                 />
-                <span className="text-[11px] text-gray-400">{inst.name}</span>
+                <span className="text-xs font-medium text-gray-400">{inst.name}</span>
               </div>
             ))}
           </div>

@@ -173,7 +173,7 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
                   {metadataRows.map(({ label, value }) => (
                     <div key={label} className="flex flex-col">
-                      <span className="text-[11px] font-medium text-emerald-500 dark:text-emerald-400 uppercase tracking-wider">
+                      <span className="text-xs font-medium text-emerald-500 dark:text-emerald-400 uppercase tracking-[0.12em]">
                         {label}
                       </span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium truncate">
@@ -190,7 +190,7 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
               {detailRows.map(({ label, value }) => (
                 <div key={label} className="flex flex-col">
-                  <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-[0.12em]">
                     {label}
                   </span>
                   <span className="text-gray-800 dark:text-gray-200 font-medium truncate">

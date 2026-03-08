@@ -15,8 +15,8 @@ export const CriticalCSS: React.FC = () => {
       html, body {
         margin: 0;
         padding: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-        line-height: 1.6;
+        font-family: var(--font-brand-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        line-height: 1.5;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
@@ -43,17 +43,19 @@ export const CriticalCSS: React.FC = () => {
       
       /* Typography critical styles */
       h1 {
-        font-size: 2.5rem;
+        font-size: clamp(2.5rem, 5vw, 3rem);
         font-weight: 700;
-        line-height: 1.2;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
         margin: 0 0 1rem 0;
         color: #1f2937;
       }
       
       h2 {
-        font-size: 2rem;
-        font-weight: 600;
-        line-height: 1.3;
+        font-size: clamp(2rem, 4vw, 3rem);
+        font-weight: 700;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
         margin: 0 0 0.75rem 0;
         color: #374151;
       }

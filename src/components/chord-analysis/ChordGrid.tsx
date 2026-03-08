@@ -380,6 +380,61 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return calculatedRows;
   }, [groupedByMeasure, dynamicMeasuresPerRow]);
 
+  const labelOverflowMap = useMemo(() => {
+    const map = new Map<number, { cells: number; gapPx: number }>();
+    const WITHIN_MEASURE_GAP_PX = 2;
+    const MEASURE_BOUNDARY_GAP_PX = 9;
+    let runningGlobalIndex = 0;
+
+    rows.forEach((row) => {
+      const rowEntries: Array<{
+        globalIndex: number;
+        measureIdx: number;
+        chord: string;
+        showChordLabel: boolean;
+      }> = [];
+
+      row.forEach((measure, measureIdx) => {
+        measure.chords.forEach((rowChord) => {
+          rowEntries.push({
+            globalIndex: runningGlobalIndex,
+            measureIdx,
+            chord: rowChord,
+            showChordLabel: shouldShowChordLabelLocal(runningGlobalIndex),
+          });
+          runningGlobalIndex += 1;
+        });
+      });
+
+      rowEntries.forEach((entry, entryIndex) => {
+        if (!entry.showChordLabel || entry.chord === '') {
+          return;
+        }
+
+        let cells = 0;
+        let gapPx = 0;
+
+        for (let scanIndex = entryIndex + 1; scanIndex < rowEntries.length; scanIndex += 1) {
+          const previousEntry = rowEntries[scanIndex - 1];
+          const nextEntry = rowEntries[scanIndex];
+
+          if (nextEntry.showChordLabel) {
+            break;
+          }
+
+          cells += 1;
+          gapPx += nextEntry.measureIdx === previousEntry.measureIdx
+            ? WITHIN_MEASURE_GAP_PX
+            : MEASURE_BOUNDARY_GAP_PX;
+        }
+
+        map.set(entry.globalIndex, { cells, gapPx });
+      });
+    });
+
+    return map;
+  }, [rows, shouldShowChordLabelLocal]);
+
   // CRITICAL FIX: Use original chords for Roman numeral mapping to prevent misalignment during pitch shift
   // Roman numerals are key-relative and should remain constant regardless of transposition
   // Only chord labels should change during pitch shift, not the Roman numeral analysis
@@ -583,6 +638,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                         fromKey: modulationInfo.fromKey,
                         toKey: modulationInfo.toKey
                       } : undefined;
+                      const labelOverflow = labelOverflowMap.get(globalIndex);
 
                       return (
                         <ChordCell
@@ -612,6 +668,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                           onLoopBeatClick={handleLoopBeatClick}
                           accidentalPreference={accidentalPreference}
                           cellRef={makeCellRef(globalIndex)}
+                          labelOverflowCells={labelOverflow?.cells ?? 0}
+                          labelOverflowGapPx={labelOverflow?.gapPx ?? 0}
                         />
                       );
                     })}

@@ -2,9 +2,10 @@
 
 /**
  * Admin Cache Deletion Script for ChordMini Application
- * 
- * This script uses Firebase Admin SDK for elevated permissions to delete cache data.
- * It can be run with service account credentials or in environments with admin access.
+ *
+ * This script uses Firestore's REST API with Google-authenticated credentials
+ * to delete cache data with elevated permissions.
+ * It can be run with service account credentials or in environments with ADC.
  *
  * Usage Examples:
  *   node delete-cache-admin.js Y2ge3KrdeWs --translations
@@ -12,37 +13,150 @@
  *   node delete-cache-admin.js Y2ge3KrdeWs --all
  */
 
-const admin = require('firebase-admin');
+const { GoogleAuth } = require('google-auth-library');
 const dotenv = require('dotenv');
+const readline = require('readline');
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
-// Initialize Firebase Admin
-let db;
-try {
-  // Try to initialize with service account or default credentials
-  if (!admin.apps.length) {
-    const config = {
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'chordmini-d29f9'
-    };
+const FIRESTORE_SCOPE = 'https://www.googleapis.com/auth/datastore';
+let projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'chordmini-d29f9';
+let authClientPromise;
 
-    // Try to use service account key if available
+function getFirestoreBaseUrl() {
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+}
+
+async function getAuthClient() {
+  if (authClientPromise) {
+    return authClientPromise;
+  }
+
+  authClientPromise = (async () => {
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        config.credential = admin.credential.cert(serviceAccount);
+        const credentials = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        projectId = credentials.project_id || projectId;
+        const auth = new GoogleAuth({
+          credentials,
+          scopes: [FIRESTORE_SCOPE],
+        });
+        return auth.getClient();
       } catch (parseError) {
-        console.log('⚠️  Failed to parse service account key, using default credentials');
+        console.log('⚠️  Failed to parse service account key, falling back to default credentials');
       }
     }
 
-    admin.initializeApp(config);
+    const auth = new GoogleAuth({
+      projectId,
+      scopes: [FIRESTORE_SCOPE],
+    });
+    return auth.getClient();
+  })();
+
+  return authClientPromise;
+}
+
+async function getAccessToken() {
+  const client = await getAuthClient();
+  const tokenResponse = await client.getAccessToken();
+  const token = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse?.token;
+
+  if (!token) {
+    throw new Error('Failed to obtain Google access token');
   }
-  db = admin.firestore();
-  console.log('✅ Firebase Admin initialized successfully');
+
+  return token;
+}
+
+async function firestoreRequest(url, options = {}) {
+  const token = await getAccessToken();
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firestore API request failed (${response.status} ${response.statusText}): ${errorText}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function getDocumentId(documentName = '') {
+  return documentName.split('/').pop() || '';
+}
+
+function parseFirestoreValue(value) {
+  if (!value || typeof value !== 'object') return value;
+  if ('stringValue' in value) return value.stringValue;
+  if ('integerValue' in value) return value.integerValue;
+  if ('doubleValue' in value) return value.doubleValue;
+  if ('booleanValue' in value) return value.booleanValue;
+  if ('timestampValue' in value) return value.timestampValue;
+  if ('nullValue' in value) return null;
+  if ('mapValue' in value) {
+    return Object.fromEntries(
+      Object.entries(value.mapValue.fields || {}).map(([key, nested]) => [key, parseFirestoreValue(nested)])
+    );
+  }
+  if ('arrayValue' in value) {
+    return (value.arrayValue.values || []).map(parseFirestoreValue);
+  }
+  return value;
+}
+
+function getDocumentData(document) {
+  return Object.fromEntries(
+    Object.entries(document.fields || {}).map(([key, value]) => [key, parseFirestoreValue(value)])
+  );
+}
+
+async function listCollectionDocuments(collectionName) {
+  const documents = [];
+  let pageToken = '';
+
+  do {
+    const params = new URLSearchParams({ pageSize: '300' });
+    if (pageToken) {
+      params.set('pageToken', pageToken);
+    }
+
+    const data = await firestoreRequest(`${getFirestoreBaseUrl()}/${collectionName}?${params.toString()}`);
+    documents.push(...(data.documents || []));
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+
+  return documents;
+}
+
+async function commitDeleteBatch(documentNames) {
+  if (!documentNames.length) {
+    return;
+  }
+
+  await firestoreRequest(`${getFirestoreBaseUrl()}:commit`, {
+    method: 'POST',
+    body: JSON.stringify({
+      writes: documentNames.map((name) => ({ delete: name })),
+    }),
+  });
+}
+
+try {
+  console.log('✅ Firestore admin access configured');
 } catch (error) {
-  console.error('❌ Failed to initialize Firebase Admin:', error.message);
+  console.error('❌ Failed to initialize Firestore admin access:', error.message);
   console.error('💡 Admin credentials required for cache deletion');
   console.error('💡 Current security rules prevent deletion by regular users');
   console.error('💡 Solutions:');
@@ -163,27 +277,26 @@ async function deleteCacheFromCollection(collectionName, videoId) {
   console.log(`\n🔍 Searching ${collectionInfo.description}...`);
 
   try {
-    const collectionRef = db.collection(collectionInfo.name);
-    const snapshot = await collectionRef.get();
+    const documents = await listCollectionDocuments(collectionInfo.name);
 
-    if (snapshot.empty) {
+    if (documents.length === 0) {
       console.log(`  ℹ️  Collection '${collectionInfo.name}' is empty`);
       return { deleted: 0, errors: 0 };
     }
 
-    console.log(`  📋 Found ${snapshot.size} documents in collection`);
+    console.log(`  📋 Found ${documents.length} documents in collection`);
 
     let deletedCount = 0;
     let errorCount = 0;
     let checkedCount = 0;
 
-    const batch = db.batch();
+    let pendingDeletes = [];
     let batchSize = 0;
     const maxBatchSize = 500; // Firestore batch limit
 
-    for (const doc of snapshot.docs) {
-      const docId = doc.id;
-      const docData = doc.data();
+    for (const document of documents) {
+      const docId = getDocumentId(document.name);
+      const docData = getDocumentData(document);
       checkedCount++;
 
       // Check if document is related to the video ID
@@ -192,20 +305,22 @@ async function deleteCacheFromCollection(collectionName, videoId) {
                        (docData[collectionInfo.searchField] === videoId);
 
       if (isRelated) {
-        batch.delete(doc.ref);
+        pendingDeletes.push(document.name);
         batchSize++;
         console.log(`  📝 Queued for deletion: ${docId}`);
 
         // Execute batch if we hit the limit
         if (batchSize >= maxBatchSize) {
           try {
-            await batch.commit();
+            await commitDeleteBatch(pendingDeletes);
             deletedCount += batchSize;
             console.log(`  ✅ Batch deleted ${batchSize} documents`);
+            pendingDeletes = [];
             batchSize = 0;
           } catch (batchError) {
             console.error(`  ❌ Batch deletion failed:`, batchError.message);
             errorCount += batchSize;
+            pendingDeletes = [];
             batchSize = 0;
           }
         }
@@ -215,7 +330,7 @@ async function deleteCacheFromCollection(collectionName, videoId) {
     // Execute remaining batch
     if (batchSize > 0) {
       try {
-        await batch.commit();
+        await commitDeleteBatch(pendingDeletes);
         deletedCount += batchSize;
         console.log(`  ✅ Final batch deleted ${batchSize} documents`);
       } catch (batchError) {
@@ -245,7 +360,6 @@ function promptConfirmation(targetCollections, videoId) {
     return Promise.resolve(true);
   }
 
-  const readline = require('readline');
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -266,17 +380,17 @@ function promptConfirmation(targetCollections, videoId) {
 }
 
 async function testFirebaseConnection() {
-  console.log('\n🔧 Testing Firebase Admin connection...');
+  console.log('\n🔧 Testing Firestore admin connection...');
   
   try {
-    // Test admin access by trying to list collections
-    const collections = await db.listCollections();
-    console.log(`✅ Firebase Admin connection successful (found ${collections.length} collections)`);
+    const databaseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)`;
+    await firestoreRequest(databaseUrl);
+    console.log(`✅ Firestore admin connection successful (project: ${projectId})`);
     return true;
   } catch (error) {
-    console.error('❌ Firebase Admin connection failed:', error.message);
+    console.error('❌ Firestore admin connection failed:', error.message);
     console.error('💡 Troubleshooting tips:');
-    console.error('   • Make sure you have Firebase Admin credentials');
+    console.error('   • Make sure you have service account credentials or Application Default Credentials');
     console.error('   • Check if you are running in a Google Cloud environment');
     console.error('   • Verify your Firebase project ID');
     return false;
@@ -291,7 +405,7 @@ async function main() {
 
     const connectionOk = await testFirebaseConnection();
     if (!connectionOk) {
-      console.error('\n❌ Cannot proceed without Firebase Admin connection');
+      console.error('\n❌ Cannot proceed without Firestore admin connection');
       process.exit(1);
     }
 

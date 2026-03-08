@@ -49,6 +49,12 @@ function getQuarterRestSymbol(isDarkMode: boolean): string {
 export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boolean = false, accidentalPreference?: 'sharp' | 'flat'): string {
   if (!chordName) return chordName;
 
+  const ACCIDENTAL_STYLE = 'font-weight: 700; display:inline-block; text-shadow: 0.018em 0 0 currentColor, -0.018em 0 0 currentColor;';
+  const MAJOR_TRIANGLE_STYLE = 'font-weight: 500; position:relative; top:-0.03em;';
+  const SUPERSCRIPT_STYLE = 'font-weight: inherit; font-size: 0.7em; line-height: 1; vertical-align: super;';
+  const PAREN_GROUP_STYLE = 'display: inline-flex; align-items: flex-start; font-weight: inherit; font-size: 0.7em; line-height: 1; position: relative; top: -0.42em; white-space: nowrap;';
+  const stylizeAccidentals = (text: string) => text.replace(/([♭♯𝄫𝄪])/g, `<span style="${ACCIDENTAL_STYLE}">$1</span>`);
+
 
 
   // Handle special cases
@@ -186,97 +192,106 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     bassNote = bassNote.replace(/([A-G])bb/g, '$1𝄫').replace(/([A-G])b/g, '$1♭');
   }
 
+  root = stylizeAccidentals(root);
+  if (bassNote) {
+    bassNote = stylizeAccidentals(bassNote);
+  }
+
   // Handle existing ° symbols in the quality string (from AI corrections)
   if (quality.includes('°')) {
     // If ° symbol is already present, format it properly and remove any 'dim' text
     quality = quality.replace(/dim/g, ''); // Remove 'dim' text if present with °
-    quality = quality.replace(/°/g, '<span style="font-weight: 400; position:relative;top:-1px">°</span>');
+    quality = quality.replace(/°/g, '<span style="font-weight: inherit; position:relative;top:-1px">°</span>');
+  }
+
+  if (quality.includes('Δ')) {
+    quality = quality.replace(/Δ/g, `<span style="${MAJOR_TRIANGLE_STYLE}">Δ</span>`);
   }
 
   // Apply professional chord quality notation with uniform font weight
   // All parts of chord labels use regular font weight for cleaner appearance
-  const formattedRoot = `<span style="font-weight: 400;">${root}</span>`;
+  const formattedRoot = `<span style="font-weight: inherit;">${root}</span>`;
 
   if (quality === 'maj') {
     // Major chords don't need a suffix in standard notation
     quality = '';
   } else if (quality === 'min' || quality === 'minor') {
     // Use 'm' instead of 'min'/'minor' for minor chords (industry standard)
-    quality = '<span style="font-weight: 400;">m</span>';
+    quality = '<span style="font-weight: inherit;">m</span>';
   } else if (quality.includes('sus')) {
     // FIXED: Handle sus chords with consistent formatting to prevent layout shifts
     // Process sus with parentheses first to avoid conflicts
     if (quality.includes('sus') && quality.includes('(')) {
       // Handle "sus4(b7)" -> "sus⁴⁽♭⁷⁾" with consistent superscript sizing
-      quality = quality.replace(/sus(\d+)(?=\()/g, '<span style="font-weight: 400;">sus</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1;">$1</sup>');
+      quality = quality.replace(/sus(\d+)(?=\()/g, `<span style="font-weight: inherit;">sus</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
       // Handle "sus(b7)" -> "sus⁽♭⁷⁾"
-      quality = quality.replace(/sus(?=\()/g, '<span style="font-weight: 400;">sus</span>');
+      quality = quality.replace(/sus(?=\()/g, '<span style="font-weight: inherit;">sus</span>');
     } else {
       // Handle simple sus chords: "sus4" -> "sus⁴"
-      quality = quality.replace(/sus(\d+)/g, '<span style="font-weight: 400;">sus</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1;">$1</sup>');
+      quality = quality.replace(/sus(\d+)/g, `<span style="font-weight: inherit;">sus</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
     }
   } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
     // FIXED: Half-diminished 7th chords with consistent superscript sizing
-    quality = '<span style="font-weight: 400; position:relative;top:-1px">ø</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">7</sup>';
+    quality = `<span style="font-weight: inherit; position:relative;top:-1px">ø</span><sup style="${SUPERSCRIPT_STYLE}">7</sup>`;
   } else if (quality.includes('dim') && !quality.includes('°')) {
     // Use standard diminished symbol (°) for better readability
     // Only replace 'dim' if ° symbol is not already present
-    quality = quality.replace('dim', '<span style="font-weight: 400; position:relative;top:-1px">°</span>');
+    quality = quality.replace('dim', '<span style="font-weight: inherit; position:relative;top:-1px">°</span>');
   } else if (quality.includes('aug')) {
     // Use standard augmented symbol (+) for better readability
-    quality = quality.replace('aug', '<span style="font-weight: 400; position:relative">+</span>');
+    quality = quality.replace('aug', '<span style="font-weight: inherit; position:relative">+</span>');
   } else if (quality.includes('7') || quality.includes('9') || quality.includes('11') || quality.includes('13')) {
     // Handle extensions with proper formatting
 
     // FIXED: Handle complex cases with consistent superscript sizing
     if (quality.startsWith('min')) {
-      quality = '<span style="font-weight: 400;">m</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
+      quality = '<span style="font-weight: inherit;">m</span>' + quality.substring(3).replace(/(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
     } else if (quality.startsWith('maj')) {
       // Use triangle (Δ) for major 7th chords - industry standard
       if (quality === 'maj7') {
-        quality = '<span style="font-weight: 400; position:relative;top:-1px">Δ</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">7</sup>';
+        quality = `<span style="${MAJOR_TRIANGLE_STYLE}">Δ</span><sup style="${SUPERSCRIPT_STYLE}">7</sup>`;
       } else {
-        quality = '<span style="font-weight: 400;">maj</span>' + quality.substring(3).replace(/(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
+        quality = '<span style="font-weight: inherit;">maj</span>' + quality.substring(3).replace(/(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
       }
     } else {
       // Make numeric extensions superscript with consistent sizing
-      quality = '<span style="font-weight: 400;">' + quality.replace(/(\d+)/g, '</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup><span style="font-weight: 400;">') + '</span>';
+      quality = '<span style="font-weight: inherit;">' + quality.replace(/(\d+)/g, `</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup><span style="font-weight: inherit;">`) + '</span>';
       // Clean up empty spans
-      quality = quality.replace(/<span style="font-weight: 400;"><\/span>/g, '');
+      quality = quality.replace(/<span style="font-weight: inherit;"><\/span>/g, '');
     }
   } else if (quality) {
     // Wrap any other quality in lighter weight span
-    quality = `<span style="font-weight: 400;">${quality}</span>`;
+    quality = `<span style="font-weight: inherit;">${quality}</span>`;
   }
 
   // FIXED: Handle altered notes with consistent superscript sizing
   if (quality.includes('add')) {
-    quality = quality.replace(/add(\d+)/g, '<span style="font-weight: 400;">add</span><sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">$1</sup>');
+    quality = quality.replace(/add(\d+)/g, `<span style="font-weight: inherit;">add</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
   }
 
   // FIXED: Handle parentheses around chord extensions with consistent sizing and stable layout
   if (quality.includes('(') && quality.includes(')')) {
-    // Handle flat extensions in parentheses: (b5), (b7), (b9), (b13) -> ⁽♭⁵⁾, ⁽♭⁷⁾, etc.
-    quality = quality.replace(/\(b(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽♭$1⁾</sup>');
-    // Handle sharp extensions in parentheses: (#5), (#9), (#11) -> ⁽♯⁵⁾, ⁽♯⁹⁾, etc.
-    quality = quality.replace(/\(#(\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽♯$1⁾</sup>');
-    // Handle numeric extensions in parentheses: (7), (9), (11), (13) -> ⁽⁷⁾, ⁽⁹⁾, etc.
-    quality = quality.replace(/\((\d+)\)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">⁽$1⁾</sup>');
+    // Handle flat extensions in parentheses as a positioned inline group so the parentheses align with the accidental+number
+    quality = quality.replace(/\(b(\d+)\)/g, `<span style="${PAREN_GROUP_STYLE}">(<span style="${ACCIDENTAL_STYLE}">♭</span>$1)</span>`);
+    // Handle sharp extensions in parentheses similarly
+    quality = quality.replace(/\(#(\d+)\)/g, `<span style="${PAREN_GROUP_STYLE}">(<span style="${ACCIDENTAL_STYLE}">♯</span>$1)</span>`);
+    // Handle numeric-only parenthesized extensions
+    quality = quality.replace(/\((\d+)\)/g, `<span style="${PAREN_GROUP_STYLE}">($1)</span>`);
   }
 
   // FIXED: Handle non-parenthesized extensions with consistent sizing
   if (quality.includes('b5') || quality.includes('b7') || quality.includes('b9') || quality.includes('b13')) {
-    quality = quality.replace(/b(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">♭$1</sup>');
+    quality = quality.replace(/b(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}"><span style="${ACCIDENTAL_STYLE}">♭</span>$1</sup>`);
   }
 
   if (quality.includes('#5') || quality.includes('#9') || quality.includes('#11')) {
-    quality = quality.replace(/#(\d+)/g, '<sup style="font-weight: 300; font-size: 0.7em; line-height: 1; vertical-align: super;">♯$1</sup>');
+    quality = quality.replace(/#(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}"><span style="${ACCIDENTAL_STYLE}">♯</span>$1</sup>`);
   }
 
   // Combine root, quality, and bass note with proper spacing
   let formattedChord = quality ? `${formattedRoot}${quality}` : formattedRoot;
   if (bassNote) {
-    formattedChord += `<span style="font-weight: 400; margin:0 0.1em">/</span><span style="font-weight: 400;">${bassNote}</span>`;
+    formattedChord += `<span style="font-weight: inherit; margin:0 0.1em">/</span><span style="font-weight: inherit;">${bassNote}</span>`;
   }
 
   return formattedChord;
@@ -704,10 +719,10 @@ export function getChordLabelStyles(): React.CSSProperties {
     alignItems: 'center',
     minHeight: '1.5rem', // Reduced min height
     minWidth: '2rem', // Reduced min width
-    fontFamily: 'var(--font-varela-round), "Varela Round", "Helvetica Neue", "Arial", sans-serif', // Use Varela Round to match demo page
-    fontWeight: '400', // Slightly lighter base weight for better contrast with bold roots
+    fontFamily: 'var(--font-varela-round), "Varela Round", "Helvetica Neue", "Arial", sans-serif',
+    fontWeight: '600',
     letterSpacing: '0.005em', // Minimal letter spacing for cleaner look
-    fontSize: '0.95rem', // Slightly smaller for better proportion
+    fontSize: '0.95rem', // Previous chord-label sizing baseline
     overflow: 'visible', // Prevent truncation
     textOverflow: 'clip', // Don't use ellipsis
     hyphens: 'none', // Prevent hyphenation

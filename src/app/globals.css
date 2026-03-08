@@ -110,13 +110,42 @@
 
 /* Base font styles */
 @layer base {
+  :root {
+    --typography-heading-tracking: -0.025em;
+    --typography-body-line-height: 1.5;
+  }
+
   html {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-brand-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* Dark mode transitions */
   html {
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  body {
+    font-family: inherit;
+    line-height: var(--typography-body-line-height);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: inherit;
+    letter-spacing: var(--typography-heading-tracking);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
   /* Dark mode styles */

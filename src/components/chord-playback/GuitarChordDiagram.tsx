@@ -117,7 +117,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
           />
         </div>
         {showChordName && (
-          <span className={`font-varela text-center font-medium mt-1 ${
+          <span className={`font-varela text-center font-semibold mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
@@ -240,7 +240,7 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
       {/* Chord name */}
       {showChordName && (
         <span
-          className={`font-varela text-center font-medium mt-1 ${
+          className={`font-varela text-center font-semibold mt-1 ${
             size === 'small' ? 'text-xs' :
             size === 'medium' ? 'text-sm' :
             'text-base'
