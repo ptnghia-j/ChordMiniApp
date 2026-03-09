@@ -174,6 +174,7 @@ cache/
 .venv/
 python_backend/venv/
 **/venv/
+SongFormer/**/.git
 
 # Large binary files
 *.jar
@@ -198,6 +199,8 @@ bfg.jar
 **/pretrained_models/
 **/checkpoints/
 checkpoints/
+!SongFormer/src/SongFormer/ckpts/SongFormer.safetensors
+!SongFormer/src/SongFormer/ckpts/MusicFM/pretrained_msd.pt
 
 # API keys and sensitive information
 **/api-keys*.txt

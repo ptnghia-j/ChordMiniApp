@@ -34,6 +34,7 @@ export async function GET() {
     // List of allowed environment variable prefixes/names
     const allowedPrefixes = ['NEXT_PUBLIC_'];
     const allowedNames = ['NEXT_DISABLE_DEV_OVERLAY', 'NODE_ENV'];
+    const blockedKeys = new Set(['NEXT_PUBLIC_PYTHON_API_URL', 'NEXT_PUBLIC_SONGFORMER_API_URL']);
 
     // Iterate through all environment variables
     for (const [key, value] of Object.entries(process.env)) {
@@ -42,7 +43,7 @@ export async function GET() {
         allowedPrefixes.some(prefix => key.startsWith(prefix)) ||
         allowedNames.includes(key);
 
-      if (isAllowed && value !== undefined) {
+      if (isAllowed && value !== undefined && !blockedKeys.has(key)) {
         publicConfig[key] = value;
       }
     }

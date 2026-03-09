@@ -326,6 +326,7 @@ export const ensureAuthReady = async (timeoutMs: number = 30000): Promise<boolea
 
 // Collection names
 export const TRANSLATIONS_COLLECTION = 'translations';
+export const SEGMENTATION_JOBS_COLLECTION = 'segmentationJobs';
 
 // Initialize translations collection if it doesn't exist
 export const initTranslationsCollection = async () => {

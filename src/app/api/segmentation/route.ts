@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
 import { SegmentationRequest, SegmentationResult } from '@/types/chatbotTypes';
-import { analyzeSongSegmentation } from '@/services/lyrics/songSegmentationService';
+import { BACKEND_URLS } from '@/config/api';
+import { normalizeSongFormerSegmentation } from '@/services/lyrics/songSegmentationService';
 
 /**
  * POST /api/segmentation
@@ -8,15 +10,68 @@ import { analyzeSongSegmentation } from '@/services/lyrics/songSegmentationServi
  * Analyzes song structure and returns segmentation data with timestamps
  */
 
-export const maxDuration = 240; // 4 minutes for segmentation analysis
+export const maxDuration = 300; // Vercel Hobby limit; long processing should be delegated to async backend jobs.
+
+const MAX_SONGFORMER_BACKEND_TIMEOUT_MS = 10 * 60 * 1000;
+const parsedSongformerBackendTimeoutMs = Number(
+  process.env.SONGFORMER_BACKEND_TIMEOUT_MS || MAX_SONGFORMER_BACKEND_TIMEOUT_MS,
+);
+const SONGFORMER_BACKEND_TIMEOUT_MS = Number.isFinite(parsedSongformerBackendTimeoutMs) && parsedSongformerBackendTimeoutMs > 0
+  ? Math.min(parsedSongformerBackendTimeoutMs, MAX_SONGFORMER_BACKEND_TIMEOUT_MS)
+  : MAX_SONGFORMER_BACKEND_TIMEOUT_MS;
+
+function hasRemoteAudioSource(audioUrl?: string): boolean {
+  if (!audioUrl) return false;
+  return audioUrl.startsWith('http://') || audioUrl.startsWith('https://') || audioUrl.startsWith('/audio/');
+}
+
+function resolveAudioUrl(audioUrl: string, request: NextRequest): string {
+  if (audioUrl.startsWith('/')) {
+    return new URL(audioUrl, request.nextUrl.origin).toString();
+  }
+
+  return audioUrl;
+}
+
+async function requestSongFormerSegmentation(audioUrl: string) {
+  try {
+    const response = await axios.post(
+      `${BACKEND_URLS.SONGFORMER_BACKEND}/api/songformer/segment`,
+      { audioUrl },
+      {
+        timeout: SONGFORMER_BACKEND_TIMEOUT_MS,
+        headers: { 'Content-Type': 'application/json' },
+        validateStatus: () => true,
+      },
+    );
+
+    const payload = response.data;
+    if (response.status < 200 || response.status >= 300 || !payload?.success) {
+      throw new Error(payload?.error || 'SongFormer backend request failed');
+    }
+
+    return payload.data as {
+      segments: Array<{ start: number | string; end: number | string; label: string }>;
+      model?: string;
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = error.code === 'ECONNABORTED'
+        ? `SongFormer backend exceeded ${Math.round(SONGFORMER_BACKEND_TIMEOUT_MS / 1000)}s timeout`
+        : error.response?.data?.error || error.message;
+
+      throw new Error(message);
+    }
+
+    throw error;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse the request body
     const body: SegmentationRequest = await request.json();
-    const { songContext, geminiApiKey } = body;
+    const { songContext } = body;
 
-    // Validate input
     if (!songContext) {
       return NextResponse.json(
         { error: 'Song context is required' },
@@ -31,35 +86,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!songContext.lyrics || songContext.lyrics.lines.length === 0) {
+    if (!hasRemoteAudioSource(songContext.audioUrl)) {
       return NextResponse.json(
-        { error: 'Lyrics data is required for segmentation analysis' },
+        { error: 'A remote audio URL is required for SongFormer segmentation' },
         { status: 400 }
       );
     }
 
+    console.log(`Starting SongFormer segmentation analysis for song: ${songContext.title || 'Unknown'}`);
 
-
-    // Check API key availability
-    const apiKey = geminiApiKey || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Gemini API key is required for segmentation analysis' },
-        { status: 400 }
-      );
-    }
-
-    console.log(`Starting segmentation analysis for song: ${songContext.title || 'Unknown'}`);
-
-    // Perform segmentation analysis
-    const segmentationResult: SegmentationResult = await analyzeSongSegmentation({
+    const audioUrl = resolveAudioUrl(songContext.audioUrl as string, request);
+    const songFormerResult = await requestSongFormerSegmentation(audioUrl);
+    const segmentationResult: SegmentationResult = normalizeSongFormerSegmentation(
+      songFormerResult.segments,
       songContext,
-      geminiApiKey: apiKey
-    });
+      songFormerResult.model || 'songformer',
+    );
 
     console.log(`Segmentation analysis completed: ${segmentationResult.segments.length} segments identified`);
 
-    // Return the segmentation result
     return NextResponse.json({
       success: true,
       data: segmentationResult
@@ -67,11 +112,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in segmentation API:', error);
-    
-    // Return appropriate error response
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const statusCode = errorMessage.includes('API key') ? 401 : 
-                      errorMessage.includes('required') ? 400 : 500;
+    const statusCode = errorMessage.includes('required') ? 400 : 500;
 
     return NextResponse.json(
       { 
@@ -91,25 +134,29 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     name: 'Song Segmentation API',
-    description: 'Analyzes song structure to identify sections like intro, verse, chorus, bridge, etc.',
+    description: 'Requests SongFormer segmentation and normalizes it for the ChordMini UI.',
     version: '1.0.0',
     endpoints: {
       'POST /api/segmentation': {
-        description: 'Analyze song structure and return segmentation data',
+        description: 'Analyze song structure with SongFormer and return segmentation data',
         parameters: {
-          songContext: 'Complete song analysis data including beats, chords, and lyrics',
-          geminiApiKey: 'Optional Gemini API key (uses environment variable if not provided)'
+          songContext: 'Complete song analysis data including beats and a backend-accessible audio URL',
         },
         response: {
           success: 'boolean',
           data: 'SegmentationResult object with segments and analysis'
         }
+      },
+      'POST /api/segmentation/jobs': {
+        description: 'Create an async SongFormer segmentation job backed by Firestore',
+      },
+      'GET /api/segmentation/jobs/:jobId': {
+        description: 'Poll SongFormer segmentation job status and retrieve the persisted result',
       }
     },
     requirements: [
       'Song must have beat detection data',
-      'Song must have lyrics data',
-      'Gemini API key must be available'
+      'SongFormer requires a remote audio URL accessible by the SongFormer backend'
     ],
     segmentTypes: [
       'intro',

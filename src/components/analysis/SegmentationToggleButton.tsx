@@ -1,91 +1,80 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
-import { HiOutlineSquares2X2, HiSquares2X2 } from 'react-icons/hi2';
+import { HiArrowPath, HiOutlineSquares2X2, HiSquares2X2 } from 'react-icons/hi2';
 import { Tooltip } from '@heroui/react';
-import { SEGMENTATION_COLOR_LEGEND } from '@/utils/segmentationColors';
 
 interface SegmentationToggleButtonProps {
   isEnabled: boolean;
   onClick: () => void;
   hasSegmentationData: boolean;
+  isLoading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  errorMessage?: string | null;
   className?: string;
 }
 
-/**
- * Toggle button for segmentation visualization
- * Shows/hides color-coded segmentation overlay on the beat/chord grid
- */
 const SegmentationToggleButton: React.FC<SegmentationToggleButtonProps> = ({
   isEnabled,
   onClick,
   hasSegmentationData,
-  className = ''
+  isLoading = false,
+  disabled = false,
+  disabledReason,
+  errorMessage,
+  className = '',
 }) => {
-  if (!hasSegmentationData) {
-    return null; // Don't show toggle if no segmentation data available
-  }
-
-  // Create more opaque colors for better visibility in legend
-  const getLegendColor = (color: string): string => {
-    // Convert rgba(r, g, b, 0.3) to rgba(r, g, b, 0.8) for better visibility
-    return color.replace('0.3)', '0.8)');
-  };
-
-  // Create tooltip content with color legend
-  const tooltipContent = (
-    <div className="p-3">
-      <div className="text-center mb-3 font-semibold text-sm">Segmentation Colors</div>
-      <div className="space-y-2">
-        {SEGMENTATION_COLOR_LEGEND.map((item, index) => (
-          <div key={index} className="flex items-center gap-3">
-            <div
-              className="w-5 h-5 rounded-sm shadow-sm"
-              style={{ backgroundColor: getLegendColor(item.color) }}
-            />
-            <span className="text-sm font-medium">{item.type}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const tooltipLabel = isLoading
+    ? 'Analyzing song segments...'
+    : hasSegmentationData
+      ? (isEnabled ? 'Hide song segmentation overlay' : 'Show song segmentation overlay')
+      : errorMessage
+        ? 'Retry song segmentation'
+        : disabled && disabledReason
+          ? disabledReason
+          : 'Enable song segmentation';
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={['relative', className].filter(Boolean).join(' ')}>
       <Tooltip
-        content={isEnabled ? tooltipContent : `${isEnabled ? 'Hide' : 'Show'} song segmentation visualization`}
+        content={tooltipLabel}
         placement="top"
         delay={500}
         closeDelay={100}
         classNames={{
-          base: "max-w-xs",
-          content: "bg-gray-900 dark:bg-gray-800 text-white border border-gray-700"
+          base: 'max-w-xs',
+          content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg',
         }}
       >
-        <motion.button
-          onClick={onClick}
-          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onClick();
+          }}
+          disabled={disabled || isLoading}
+          className={`p-2 rounded-full transition-colors ${
             isEnabled
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-          }`}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+              ? 'bg-indigo-600 text-white'
+              : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+          } ${(disabled || isLoading) ? 'cursor-not-allowed opacity-60' : ''}`}
+          aria-label={hasSegmentationData ? 'Toggle song segmentation overlay' : 'Enable song segmentation'}
+          title={typeof tooltipLabel === 'string' ? tooltipLabel : 'Song segmentation'}
         >
-          {isEnabled ? (
-            <HiSquares2X2 className="w-3 h-3 sm:w-4 sm:h-4" />
+          {isLoading ? (
+            <HiArrowPath className="h-5 w-5 animate-spin" />
+          ) : isEnabled ? (
+            <HiSquares2X2 className="h-5 w-5" />
           ) : (
-            <HiOutlineSquares2X2 className="w-3 h-3 sm:w-4 sm:h-4" />
+            <HiOutlineSquares2X2 className="h-5 w-5" />
           )}
-          <span className="hidden sm:inline">Segmentation</span>
-          <span className="sm:hidden">Seg</span>
-        </motion.button>
+        </button>
       </Tooltip>
 
-      {/* Beta tag */}
-      <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-[9px] px-1 py-0.5 rounded-full font-bold">
-        EXP
+      <div className="absolute -top-1 -right-1 bg-indigo-500/70 dark:bg-indigo-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold pointer-events-none">
+        BETA
       </div>
     </div>
   );

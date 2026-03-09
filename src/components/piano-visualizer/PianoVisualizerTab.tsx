@@ -11,7 +11,7 @@ import {
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
 import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
-import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey, useRomanNumerals } from '@/stores/uiStore';
@@ -23,6 +23,7 @@ import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-
 import { DEFAULT_AUDIO_MIXER_SETTINGS, DEFAULT_PIANO_VOLUME } from '@/config/audioDefaults';
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
+import { isInstrumentalTime } from '@/utils/segmentationSections';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,79 @@ interface PianoVisualizerTabProps {
   isPlaying?: boolean;
   /** Whether chord playback is enabled */
   isChordPlaybackEnabled?: boolean;
+  /** High-frequency beat index from the shared playback tracker */
+  currentBeatIndex?: number;
+}
+
+const PLAYBACK_EVENT_BOUNDARY_TOLERANCE = 0.08;
+const PLAYBACK_EVENT_MISS_GRACE_PERIOD = 0.12;
+
+function findChordEventIndexByBeatIndex(events: ChordEvent[], beatIndex: number): number {
+  if (beatIndex < 0) return -1;
+
+  let lo = 0;
+  let hi = events.length - 1;
+  let idx = -1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (events[mid].beatIndex <= beatIndex) {
+      idx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return idx;
+}
+
+function findChordEventForPlayback(
+  events: ChordEvent[],
+  currentTime: number,
+  currentBeatIndex: number,
+  toleranceSeconds = PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
+): ChordEvent | null {
+  const exactEvent = events.find((event) => currentTime >= event.startTime && currentTime < event.endTime);
+
+  const beatEventIndex = findChordEventIndexByBeatIndex(events, currentBeatIndex);
+  const beatEvent = beatEventIndex >= 0 ? events[beatEventIndex] : null;
+
+  if (exactEvent && beatEvent && exactEvent.beatIndex !== beatEvent.beatIndex) {
+    const beatEventStartsSoon = beatEvent.startTime >= currentTime
+      && beatEvent.startTime - currentTime <= toleranceSeconds;
+
+    if (beatEventStartsSoon) {
+      return beatEvent;
+    }
+  }
+
+  if (exactEvent) {
+    return exactEvent;
+  }
+
+  if (beatEventIndex >= 0) {
+    const resolvedBeatEvent = events[beatEventIndex];
+    const nextEventStart = events[beatEventIndex + 1]?.startTime ?? resolvedBeatEvent.endTime;
+    const withinBeatEventWindow = currentTime >= resolvedBeatEvent.startTime - toleranceSeconds
+      && currentTime < nextEventStart + toleranceSeconds;
+
+    if (withinBeatEventWindow) {
+      return resolvedBeatEvent;
+    }
+  }
+
+  const forwardEvent = events.find(
+    (event) => currentTime + toleranceSeconds >= event.startTime && currentTime < event.startTime,
+  );
+  if (forwardEvent) {
+    return forwardEvent;
+  }
+
+  const backwardEvent = [...events].reverse().find(
+    (event) => currentTime - toleranceSeconds < event.endTime && currentTime >= event.endTime,
+  );
+  return backwardEvent ?? null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -79,12 +153,25 @@ const SPEED_PRESETS = [
   { label: 'Fast', lookAhead: 2, description: 'Compact, closer timing' },
 ] as const;
 
+function areMixerSettingsEqual(a: AudioMixerSettings, b: AudioMixerSettings): boolean {
+  return (
+    a.pianoVolume === b.pianoVolume
+    && a.guitarVolume === b.guitarVolume
+    && a.violinVolume === b.violinVolume
+    && a.fluteVolume === b.fluteVolume
+    && a.bassVolume === b.bassVolume
+    && a.saxophoneVolume === b.saxophoneVolume
+    && a.chordPlaybackVolume === b.chordPlaybackVolume
+  );
+}
+
 // Instrument color palette
 const INSTRUMENT_COLORS: Record<string, string> = {
   piano: '#60a5fa',   // blue-400
   guitar: '#34d399',  // emerald-400
   violin: '#a78bfa',  // violet-400
   flute: '#fb923c',   // orange-400
+  saxophone: '#facc15', // yellow-400
   bass: '#f87171',    // red-400
 };
 
@@ -97,15 +184,18 @@ const INSTRUMENT_COLORS: Record<string, string> = {
 function usePianoOnlyPlayback(
   chordEvents: ChordEvent[],
   currentTime: number,
+  currentBeatIndex: number,
   isPlaying: boolean,
   isChordPlaybackEnabled: boolean,
   bpm: number,
   timeSignature: number = 4,
+  segmentationData?: SegmentationResult | null,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
-  const dynamicsAnalyzerRef = useRef(getDynamicsAnalyzer());
+  const dynamicsAnalyzerRef = useRef(new DynamicsAnalyzer());
   const pianoOnlyActiveRef = useRef(false);
+  const eventMissStartedAtRef = useRef<number | null>(null);
 
   // Determine whether piano-only mode should be active
   const shouldActivate = !isChordPlaybackEnabled && isPlaying;
@@ -122,8 +212,9 @@ function usePianoOnlyPlayback(
       bpm,
       timeSignature,
       totalDuration,
+      segmentationData,
     });
-  }, [bpm, timeSignature, totalDuration]);
+  }, [bpm, segmentationData, timeSignature, totalDuration]);
 
   // Activate / deactivate piano-only mode
   useEffect(() => {
@@ -137,6 +228,7 @@ function usePianoOnlyPlayback(
         guitarVolume: 0,
         violinVolume: 0,
         fluteVolume: 0,
+        saxophoneVolume: 0,
         bassVolume: 0,
       });
       pianoOnlyActiveRef.current = true;
@@ -159,19 +251,27 @@ function usePianoOnlyPlayback(
   useEffect(() => {
     if (!shouldActivate || merged.length === 0) return;
 
-    // Find the chord that is currently active at currentTime
-    const currentChordEvent = merged.find(
-      e => currentTime >= e.startTime && currentTime < e.endTime,
-    );
+    const currentChordEvent = findChordEventForPlayback(merged, currentTime, currentBeatIndex);
 
     if (!currentChordEvent) {
-      // No chord at this time — stop if we were playing
       if (lastPlayedChordRef.current !== null) {
+        if (eventMissStartedAtRef.current === null) {
+          eventMissStartedAtRef.current = currentTime;
+          return;
+        }
+
+        if (currentTime - eventMissStartedAtRef.current < PLAYBACK_EVENT_MISS_GRACE_PERIOD) {
+          return;
+        }
+
         serviceRef.current.stopAll();
         lastPlayedChordRef.current = null;
+        eventMissStartedAtRef.current = null;
       }
       return;
     }
+
+    eventMissStartedAtRef.current = null;
 
     // Only trigger on chord changes
     if (currentChordEvent.chordName === lastPlayedChordRef.current) return;
@@ -180,8 +280,8 @@ function usePianoOnlyPlayback(
 
     // Calculate dynamic velocity for musical expression
     const dynamicVelocity = dynamicsAnalyzerRef.current.getVelocityMultiplier(
-      currentTime,
-      undefined,
+      currentChordEvent.startTime,
+      currentChordEvent.beatIndex,
       currentChordEvent.chordName,
     );
 
@@ -191,7 +291,7 @@ function usePianoOnlyPlayback(
       totalDuration,
     }, timeSignature);
     lastPlayedChordRef.current = currentChordEvent.chordName;
-  }, [currentTime, shouldActivate, merged, bpm, totalDuration, timeSignature]);
+  }, [bpm, currentBeatIndex, currentTime, merged, shouldActivate, timeSignature, totalDuration]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -210,6 +310,7 @@ function usePianoOnlyPlayback(
     if (!isPlaying && pianoOnlyActiveRef.current) {
       serviceRef.current.stopAll();
       lastPlayedChordRef.current = null;
+      eventMissStartedAtRef.current = null;
     }
   }, [isPlaying]);
 }
@@ -223,9 +324,11 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   showCorrectedChords,
   chordCorrections,
   sequenceCorrections = null,
+  segmentationData = null,
   currentTime = 0,
   isPlaying = false,
   isChordPlaybackEnabled = false,
+  currentBeatIndex = -1,
 }) => {
   // Zustand store fallbacks
   const storeAnalysisResults = useAnalysisResults();
@@ -245,6 +348,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const [speedIndex, setSpeedIndex] = useState(1); // Default: Normal
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
   const [noteColors, setNoteColors] = useState<Map<number, string>>(new Map());
+  const activeNotesSignatureRef = useRef('');
 
   // Container ref for responsive width
   const containerRef = useRef<HTMLDivElement>(null);
@@ -267,7 +371,9 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
+        setContainerWidth((prev) => (
+          Math.abs(prev - entry.contentRect.width) >= 1 ? entry.contentRect.width : prev
+        ));
       }
     });
     observer.observe(container);
@@ -278,7 +384,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   useEffect(() => {
     const mixer = getAudioMixerService();
     const unsub = mixer.addListener((settings) => {
-      setMixerSettings({ ...settings });
+      setMixerSettings(prev => (areMixerSettingsEqual(prev, settings) ? prev : { ...settings }));
     });
     return unsub;
   }, []);
@@ -398,16 +504,25 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [containerWidth]);
 
   // Determine active instruments from audio mixer
+  const autoSaxophoneActive = useMemo(
+    () => !!segmentationData && isChordPlaybackEnabled && isInstrumentalTime(segmentationData, currentTime),
+    [currentTime, isChordPlaybackEnabled, segmentationData],
+  );
+
   const activeInstruments = useMemo<ActiveInstrument[]>(() => {
     if (!isChordPlaybackEnabled) return [];
+
     const instruments: ActiveInstrument[] = [];
     if (mixerSettings.pianoVolume > 0) instruments.push({ name: 'Piano', color: INSTRUMENT_COLORS.piano });
     if (mixerSettings.guitarVolume > 0) instruments.push({ name: 'Guitar', color: INSTRUMENT_COLORS.guitar });
     if (mixerSettings.violinVolume > 0) instruments.push({ name: 'Violin', color: INSTRUMENT_COLORS.violin });
     if (mixerSettings.fluteVolume > 0) instruments.push({ name: 'Flute', color: INSTRUMENT_COLORS.flute });
+    if (mixerSettings.saxophoneVolume > 0 || autoSaxophoneActive) {
+      instruments.push({ name: 'Saxophone', color: INSTRUMENT_COLORS.saxophone });
+    }
     if (mixerSettings.bassVolume > 0) instruments.push({ name: 'Bass', color: INSTRUMENT_COLORS.bass });
     return instruments;
-  }, [isChordPlaybackEnabled, mixerSettings]);
+  }, [autoSaxophoneActive, isChordPlaybackEnabled, mixerSettings]);
 
   // Calculate keyboard width
   const keyboardWidth = useMemo(() => {
@@ -416,6 +531,16 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   // Handle active notes from canvas
   const handleActiveNotesChange = useCallback((notes: Set<number>, colors: Map<number, string>) => {
+    const signature = Array.from(notes)
+      .sort((a, b) => a - b)
+      .map(note => `${note}:${colors.get(note) ?? ''}`)
+      .join('|');
+
+    if (signature === activeNotesSignatureRef.current) {
+      return;
+    }
+
+    activeNotesSignatureRef.current = signature;
     setActiveNotes(notes);
     setNoteColors(colors);
   }, []);
@@ -424,7 +549,16 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
 
   // Piano-only auto-playback: plays piano when visualizer tab is active but chord playback is off
-  usePianoOnlyPlayback(chordEvents, currentTime, isPlaying, isChordPlaybackEnabled, detectedBpm || 120, timeSignature);
+  usePianoOnlyPlayback(
+    chordEvents,
+    currentTime,
+    currentBeatIndex,
+    isPlaying,
+    isChordPlaybackEnabled,
+    detectedBpm || 120,
+    timeSignature,
+    segmentationData,
+  );
 
   // Determine active instruments for visualization
   // When piano-only mode is active (chord playback OFF), show piano notes on the visualizer
@@ -443,11 +577,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       instruments,
       bpm: detectedBpm || undefined,
       timeSignature, // Use detected time signature
+      segmentationData,
     });
     if (midiData.length > 0) {
       downloadMidiFile(midiData, 'chord-progression.mid');
     }
-  }, [chordEvents, activeInstruments, detectedBpm, timeSignature]);
+  }, [chordEvents, activeInstruments, detectedBpm, segmentationData, timeSignature]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -518,6 +653,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           accidentalPreference={accidentalPreference}
           beatRomanNumerals={beatRomanNumerals}
           uncorrectedChords={transposedChordGridData?.chords}
+          segmentationData={segmentationData}
         />
       </div>
 

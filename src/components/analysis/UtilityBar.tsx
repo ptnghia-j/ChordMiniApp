@@ -5,6 +5,7 @@ import { Tooltip } from '@heroui/react';
 import { HiOutlineChatBubbleLeftRight, HiChevronDoubleDown, HiOutlineChevronDoubleDown } from 'react-icons/hi2';
 import { FaRegFileLines } from 'react-icons/fa6';
 import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
+import SegmentationToggleButton from '@/components/analysis/SegmentationToggleButton';
 import RomanNumeralToggle from '@/components/analysis/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/chord-playback/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/analysis/ChordSimplificationToggle';
@@ -47,6 +48,15 @@ interface UtilityBarProps {
   isLyricsPanelOpen: boolean;
   toggleChatbot: () => void;
   toggleLyricsPanel: () => void;
+  segmentation: {
+    isVisible: boolean;
+    hasData: boolean;
+    isLoading: boolean;
+    disabled?: boolean;
+    disabledReason?: string;
+    errorMessage?: string | null;
+    onToggle: () => void;
+  };
 
   // Metronome
   metronome?: {
@@ -80,6 +90,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isLyricsPanelOpen,
   toggleChatbot,
   toggleLyricsPanel,
+  segmentation,
   metronome,
   totalBeats = 0,
   maxWidth = '1200px',
@@ -206,42 +217,53 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             )}
           </div>
 
-          {/* Right group: Lyrics + Chat (hidden on upload page) */}
-          {!isUploadPage && (
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Tooltip
-                content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
-                placement="top"
-                classNames={{
-                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-                }}
-              >
-                <button
-                  onClick={toggleLyricsPanel}
-                  className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                  aria-label="Toggle lyrics panel"
-                >
-                  <FaRegFileLines className="h-5 w-5"/>
-                </button>
-              </Tooltip>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <SegmentationToggleButton
+              isEnabled={segmentation.isVisible}
+              onClick={segmentation.onToggle}
+              hasSegmentationData={segmentation.hasData}
+              isLoading={segmentation.isLoading}
+              disabled={segmentation.disabled}
+              disabledReason={segmentation.disabledReason}
+              errorMessage={segmentation.errorMessage}
+            />
 
-              <Tooltip
-                content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
-                placement="top"
-                classNames={{
-                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-                }}
-              >
-                <button
-                  onClick={toggleChatbot}
-                  className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                  aria-label="Toggle AI chat"
+            {!isUploadPage && (
+              <>
+                <Tooltip
+                  content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
+                  placement="top"
+                  classNames={{
+                    content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                  }}
                 >
-                  <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
-                </button>
-              </Tooltip>
-            </div>
-          )}
+                  <button
+                    onClick={toggleLyricsPanel}
+                    className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                    aria-label="Toggle lyrics panel"
+                  >
+                    <FaRegFileLines className="h-5 w-5"/>
+                  </button>
+                </Tooltip>
+
+                <Tooltip
+                  content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
+                  placement="top"
+                  classNames={{
+                    content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                  }}
+                >
+                  <button
+                    onClick={toggleChatbot}
+                    className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                    aria-label="Toggle AI chat"
+                  >
+                    <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
+                  </button>
+                </Tooltip>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

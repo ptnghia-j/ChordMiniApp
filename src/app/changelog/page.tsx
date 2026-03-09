@@ -30,6 +30,26 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.0',
+      date: 'March 9, 2026',
+      title: 'Segmentation-Aware Playback & Visualizer Polish',
+      description: 'Introduces song segmentation overlays, segmentation-shaped playback dynamics, smoother piano visualizer rendering, and sax/manual playback improvements.',
+      features: [
+        'NEW: Song segmentation overlays with section-aware labeling for intro, verse, chorus, bridge, and outro workflows',
+        'NEW: Segmentation-aware dynamics contour — playback now rises naturally through builds, peaks in the later second-half chorus, and tapers smoothly in the outro',
+        'NEW: Homepage beat chord grid demo toggle for previewing segmentation overlays',
+        'IMPROVED: Saxophone playback — manual sax volume now works outside instrumental sections while still auto-lifting during instrumental passages',
+        'IMPROVED: Segmentation toggle UX — clearer action-focused wording and better availability messaging',
+      ],
+      technical: [
+        'PERFORMANCE: Piano visualizer timing now applies soft drift correction instead of re-anchoring every parent time update',
+        'PERFORMANCE: Reduced redundant visualizer state churn from repeated resize, mixer, and active-note updates',
+        'IMPROVED: Piano-only playback and MIDI export now use the same section-aware dynamics inputs for closer runtime/export parity',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.5.4',
       date: 'June 24, 2025',
       title: 'Piano Visualizer & MIDI Export',

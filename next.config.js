@@ -3,6 +3,67 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
+function toOrigin(value) {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+const dynamicConnectSrcOrigins = [
+  process.env.PYTHON_API_URL,
+  process.env.SONGFORMER_API_URL,
+  process.env.LOCAL_SONGFORMER_API_URL,
+  process.env.NEXT_PUBLIC_PYTHON_API_URL,
+  'http://localhost:5001',
+  'http://127.0.0.1:5001',
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'https://songformer-ouqoeeszja-uc.a.run.app',
+].map(toOrigin).filter(Boolean);
+
+const connectSrcValues = Array.from(new Set([
+  "'self'",
+  'blob:',
+  'https://*.googleapis.com',
+  'https://*.youtube.com',
+  'https://www.youtube-nocookie.com',
+  'https://*.ytimg.com',
+  'https://*.ggpht.com',
+  'https://*.google.com',
+  'https://*.doubleclick.net',
+  'https://googleads.g.doubleclick.net',
+  'https://www.google.com',
+  'https://pagead2.googlesyndication.com',
+  'https://*.googlesyndication.com',
+  'https://tpc.googlesyndication.com',
+  'https://securepubads.g.doubleclick.net',
+  'https://partner.googleadservices.com',
+  'https://googleadservices.com',
+  'https://quicktube.app',
+  'https://chordmini-backend-191567167632.us-central1.run.app',
+  'https://lrclib.net',
+  'https://api.genius.com',
+  'https://vercel.com',
+  'https://*.vercel.com',
+  'https://blob.vercel-storage.com',
+  'https://*.blob.vercel-storage.com',
+  'https://api.vercel.com',
+  'https://gleitz.github.io',
+  'https://*.vocalremover.org',
+  ...dynamicConnectSrcOrigins,
+]));
+
+const contentSecurityPolicy = [
+  `connect-src ${connectSrcValues.join(' ')}`,
+  "worker-src 'self' blob:",
+  "frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://s3.us-east-1.amazonaws.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
+  "img-src 'self' data: https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://pagead2.googlesyndication.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.youtube-nocookie.com https://*.googleapis.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://gleitz.github.io",
+].join('; ');
+
 const nextConfig = {
   // Enable standalone output for Docker deployments
   output: 'standalone',
@@ -144,7 +205,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "connect-src 'self' blob: https://*.googleapis.com https://*.youtube.com https://www.youtube-nocookie.com https://*.ytimg.com https://*.ggpht.com https://*.google.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://www.google.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://tpc.googlesyndication.com https://securepubads.g.doubleclick.net https://partner.googleadservices.com https://googleadservices.com https://quicktube.app https://chordmini-backend-191567167632.us-central1.run.app https://lrclib.net https://api.genius.com https://vercel.com https://*.vercel.com https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://api.vercel.com https://gleitz.github.io https://*.vocalremover.org; worker-src 'self' blob:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://s3.us-east-1.amazonaws.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; img-src 'self' data: https://*.googleapis.com https://*.youtube.com https://*.ytimg.com https://*.ggpht.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://pagead2.googlesyndication.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.youtube-nocookie.com https://*.googleapis.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://gleitz.github.io;",
+            value: contentSecurityPolicy,
           },
           {
             key: 'Cross-Origin-Embedder-Policy',

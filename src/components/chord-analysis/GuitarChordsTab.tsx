@@ -564,8 +564,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                         style={{
                           width: `${diagramConfig.cellWidth}px`,
                           margin: `0 ${diagramConfig.marginX}px`,
-                          backgroundColor: segmentationColor || 'transparent',
-                          padding: segmentationColor ? '8px' : '0'
                         }}
                       >
                         <GuitarChordDiagram

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { enhanceLyricsWithCharacterTiming, EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
 import { normalizeChordForDedup } from '@/utils/chordNormalization';
+import { isInstrumentalLikeSegment } from '@/utils/segmentationSections';
 
 // Types: beat-aligned chord events
 export interface BeatAlignedChordEvent {
@@ -297,14 +298,7 @@ export const useProcessedLyrics = ({
 
     // Add instrumental placeholders for sections without lyrics
     if (segmentationData?.segments) {
-      const instrumentalSections = segmentationData.segments.filter(segment => {
-        const type = (segment.label || segment.type || '').toLowerCase();
-        return type.includes('intro') ||
-               type.includes('outro') ||
-               type.includes('instrumental') ||
-               type.includes('solo') ||
-               type.includes('bridge') && !type.includes('vocal');
-      });
+      const instrumentalSections = segmentationData.segments.filter(isInstrumentalLikeSegment);
 
       instrumentalSections.forEach(segment => {
         // Check if there are already lyrics in this time range

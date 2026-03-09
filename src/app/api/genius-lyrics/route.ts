@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * Genius Lyrics API Proxy
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try the Python backend first
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
 
     try {
       console.log('🔄 Trying Python backend for Genius lyrics...');

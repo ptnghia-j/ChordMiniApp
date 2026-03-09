@@ -9,14 +9,14 @@
  * 
  * 1. Client-side (async):
  *    const config = await loadPublicConfig();
- *    const apiUrl = config.NEXT_PUBLIC_PYTHON_API_URL;
+ *    const baseUrl = config.NEXT_PUBLIC_BASE_URL;
  * 
  * 2. Server-side (sync):
- *    const apiUrl = getConfigValueSync('NEXT_PUBLIC_PYTHON_API_URL', 'fallback');
+ *    const baseUrl = getConfigValueSync('NEXT_PUBLIC_BASE_URL', 'fallback');
  * 
  * 3. React components (use hook):
  *    const config = usePublicConfig();
- *    const apiUrl = config.NEXT_PUBLIC_PYTHON_API_URL;
+ *    const baseUrl = config.NEXT_PUBLIC_BASE_URL;
  */
 
 // Type definition for public configuration
@@ -32,7 +32,6 @@ export interface PublicConfig {
 
   // API Configuration
   NEXT_PUBLIC_YOUTUBE_API_KEY?: string;
-  NEXT_PUBLIC_PYTHON_API_URL?: string;
   NEXT_PUBLIC_BASE_URL?: string;
 
   // Feature Flags
@@ -222,25 +221,3 @@ export function getFirebaseConfigSync() {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
   };
 }
-
-/**
- * Get backend URL from runtime config
- * 
- * @param fallback - Fallback URL if not configured
- * @returns Promise resolving to backend URL
- */
-export async function getBackendUrl(fallback = 'http://localhost:5001'): Promise<string> {
-  const config = await loadPublicConfig();
-  return config.NEXT_PUBLIC_PYTHON_API_URL || fallback;
-}
-
-/**
- * Get backend URL synchronously (server-side only)
- * 
- * @param fallback - Fallback URL if not configured
- * @returns Backend URL
- */
-export function getBackendUrlSync(fallback = 'http://localhost:5001'): string {
-  return process.env.NEXT_PUBLIC_PYTHON_API_URL || fallback;
-}
-

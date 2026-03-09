@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * Health Check API Route
@@ -10,7 +11,7 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 export async function GET() {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
     
     // Make request to backend health endpoint
     const response = await fetch(`${backendUrl}/`, {

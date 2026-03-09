@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { ApiCredentialService } from '@/types/apiKeyTypes';
 
 // Types
 interface ProcessedLyricLine {
@@ -38,7 +39,7 @@ const availableLanguages = [
 // Hook interface
 interface UseTranslationProps {
   processedLines: ProcessedLyricLine[];
-  getApiKey: (service: 'musicAi' | 'gemini') => Promise<string | null>;
+  getApiKey: (service: ApiCredentialService) => Promise<string | null>;
 }
 
 interface UseTranslationReturn {

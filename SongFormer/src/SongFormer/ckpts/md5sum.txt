@@ -1,0 +1,4 @@
+df930aceac8209818556c4a656a0714c    MusicFM/pretrained_msd.pt
+75ab2e47b093e07378f7f703bdb82c14    MusicFM/msd_stats.json
+5a24800e12ab357744f8b47e523ba3e6    SongFormer.safetensors
+2c66c0bb91364e318e90dbc2d9a79ee2    SongFormer.pt

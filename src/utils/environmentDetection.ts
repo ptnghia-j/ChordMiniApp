@@ -2,7 +2,7 @@
  * Environment Detection Utility for ChordMini
  *
  * Simplified URL-based strategy detection:
- * - Localhost Development: Use yt-dlp when both NEXT_PUBLIC_BASE_URL and NEXT_PUBLIC_PYTHON_API_URL contain "localhost"
+ * - Localhost Development: Use yt-dlp when the frontend origin contains "localhost"
  * - Production: Use yt2mp3magic for all other environments
  * - Automatic fallback between strategies for reliability
  *
@@ -37,10 +37,10 @@ export function detectEnvironment(): EnvironmentConfig {
   // Get environment variables for URL-based detection
   const nodeEnv = process.env.NODE_ENV;
   const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
-  const envPythonApiUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || '';
+  const effectiveBaseUrl = isBrowser ? window.location.origin : envBaseUrl;
 
   // URL-based environment detection
-  const isLocalhost = envBaseUrl.includes('localhost') && envPythonApiUrl.includes('localhost');
+  const isLocalhost = effectiveBaseUrl.includes('localhost') || effectiveBaseUrl.includes('127.0.0.1');
 
   // Determine environment based on URL detection
   const isDevelopment = isLocalhost || nodeEnv === 'development';
@@ -107,10 +107,8 @@ export async function detectEnvironmentAsync(): Promise<EnvironmentConfig> {
   // Get environment variables from runtime config
   const nodeEnv = config.NODE_ENV;
   const envBaseUrl = config.NEXT_PUBLIC_BASE_URL || '';
-  const envPythonApiUrl = config.NEXT_PUBLIC_PYTHON_API_URL || '';
-
   // URL-based environment detection
-  const isLocalhost = envBaseUrl.includes('localhost') && envPythonApiUrl.includes('localhost');
+  const isLocalhost = envBaseUrl.includes('localhost') || envBaseUrl.includes('127.0.0.1');
 
   // Determine environment based on URL detection
   const isDevelopment = isLocalhost || nodeEnv === 'development';

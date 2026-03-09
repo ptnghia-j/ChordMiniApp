@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { del } from '@vercel/blob';
 import { validateBlobUrl } from '@/utils/blobValidation';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * API route to recognize chords using Vercel Blob URL
@@ -14,7 +15,7 @@ export const maxDuration = 300; // 5 minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
 
     console.log(`🎵 Processing Vercel Blob chord recognition request`);
 

@@ -1,0 +1,23 @@
+defaults:
+  - model: muq_mulan
+  - dataset: mtg_en_zh
+
+basics:
+  #logs and checkpoints will be saved to outputs/yyyy-mm-dd/hh-mm-ss/
+  sr: 24000 #sample rate
+  orig_sr: 44100 #origin sample rate used for datatset loading
+  random_seed: 42 #set to null if require non-deterministic
+  duration: 10
+
+train:
+  lr: 1e-4
+  batch_size: 24 
+  num_workers: 6
+  data_max_secs: 10 
+  save_model_every: 100
+  valid_every: 1 
+  log_tensorboard: true
+  resume:
+    use: false
+    checkpoint_path: path/to/mulan.1100.pt
+    load_optimizer: false

@@ -4,7 +4,9 @@ import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react'
 import type { ChordEvent } from '@/utils/chordToMidi';
 import { ChordCell } from '@/components/chord-analysis/ChordCell';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useRomanNumerals } from '@/stores/uiStore';
+import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
+import type { SegmentationResult } from '@/types/chatbotTypes';
+import { getSegmentationColorForBeatIndex } from '@/utils/chordFormatting';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,8 @@ interface ScrollingChordStripProps {
   beatRomanNumerals?: Map<number, React.ReactElement | string>;
   /** Original (uncorrected, transposed) chords array for wasCorrected detection */
   uncorrectedChords?: string[];
+  /** Optional segmentation result used for section coloring */
+  segmentationData?: SegmentationResult | null;
 }
 
 // Sweep line position as fraction of container width from left edge
@@ -38,6 +42,9 @@ const SWEEP_LINE_FRACTION = 0.2;
 // Gap between chord cells (matches ChordGrid's gap-0.5 = 2px)
 const CELL_GAP = 2;
 const MIN_TIMELINE_BEAT_WIDTH = 36;
+const SOFT_SYNC_DRIFT_THRESHOLD = 0.05;
+const HARD_SYNC_DRIFT_THRESHOLD = 0.24;
+const DRIFT_BLEND_FACTOR = 0.35;
 
 function getEffectiveTimelineBeats(timeSignature: number): number {
   if (timeSignature >= 6 && timeSignature % 3 === 0) {
@@ -128,6 +135,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   accidentalPreference,
   beatRomanNumerals,
   uncorrectedChords,
+  segmentationData,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stripInnerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +157,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
 
   // Read roman numeral toggle from UI store
   const { showRomanNumerals } = useRomanNumerals();
+  const showSegmentation = useShowSegmentation();
 
   // Measure container width
   useEffect(() => {
@@ -156,7 +165,9 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
+        setContainerWidth((prev) => (
+          Math.abs(prev - entry.contentRect.width) >= 1 ? entry.contentRect.width : prev
+        ));
       }
     });
     observer.observe(el);
@@ -174,10 +185,27 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
 
   // ── Sync interpolation anchor on every parent currentTime update ──────────
   useEffect(() => {
-    playbackBaseRef.current = {
-      wallTime: performance.now() / 1000,
-      audioTime: currentTime,
-    };
+    if (isPlaying) {
+      const now = performance.now() / 1000;
+      const projectedTime = playbackBaseRef.current.audioTime + (now - playbackBaseRef.current.wallTime);
+      const drift = currentTime - projectedTime;
+
+      if (Math.abs(drift) >= SOFT_SYNC_DRIFT_THRESHOLD) {
+        const correctedTime = Math.abs(drift) >= HARD_SYNC_DRIFT_THRESHOLD
+          ? currentTime
+          : projectedTime + drift * DRIFT_BLEND_FACTOR;
+
+        playbackBaseRef.current = {
+          wallTime: now,
+          audioTime: correctedTime,
+        };
+      }
+    } else {
+      playbackBaseRef.current = {
+        wallTime: performance.now() / 1000,
+        audioTime: currentTime,
+      };
+    }
     // When paused, immediately position the strip
     if (!isPlaying && stripInnerRef.current) {
       const normalizedX = timeToNormalizedXRef.current(currentTime);
@@ -402,19 +430,25 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             !!uncorrectedChords &&
             box.beatIndex < uncorrectedChords.length &&
             uncorrectedChords[box.beatIndex] !== box.chordName;
+          const segmentationColor = showSegmentation && segmentationData && !isPast && !isEmpty
+            ? getSegmentationColorForBeatIndex(box.beatIndex, [], segmentationData, true, undefined, box.startTime)
+            : undefined;
+          const containerClass = isActive
+            ? showSegmentation && segmentationData && !isEmpty
+              ? 'bg-transparent border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
+              : 'bg-blue-50 dark:bg-blue-900/50 border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
+            : isPast
+              ? 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500'
+              : isEmpty
+                ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600/40'
+                : showSegmentation && segmentationData
+                  ? 'bg-transparent border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
+                  : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100';
 
           return (
             <div
               key={box.index}
-              className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden transition-colors duration-75 ${
-                isActive
-                  ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
-                  : isPast
-                    ? 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500'
-                    : isEmpty
-                      ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600/40'
-                      : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
-              }`}
+              className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden transition-colors duration-75 ${containerClass}`}
               style={{
                 left: box.x,
                 width: box.width,
@@ -437,6 +471,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                 showRomanNumerals={showRomanNumerals}
                 romanNumeral={romanNumeral}
                 accidentalPreference={accidentalPreference ?? undefined}
+                segmentationColor={segmentationColor}
               />
             </div>
           );

@@ -1,6 +1,6 @@
 # ChordMini
 
-**Advanced music analysis platform with AI-powered chord recognition, beat detection, and synchronized lyrics.**
+Open-source music analysis tool for chord recognition, beat tracking, piano visualizer, guitar diagrams, and lyrics synchronization.
 
 
 ## Features Overview
@@ -13,8 +13,9 @@ Clean, intuitive interface for YouTube search, URL input, and recent video acces
 
 ### 🎵 Beat & Chord Analysis
 ![Beat Chord Grid](public/beatchord_grid.png)
+![Beat Chord Grid with Lyrics](public/beatchord_grid_lyrics.png)
 
-Chord progression visualization with synchronized beat detection and grid layout with add-on features: Roman Numeral Analysis, Key Modulation Signals, Simplified Chord Notation, and Enhanced Chord Correction.
+Chord progression visualization with synchronized beat detection and grid layout with add-on features: Roman Numeral Analysis, Key Modulation Signals, Simplified Chord Notation, Enhanced Chord Correction, and **song segmentation overlays** for structural sections like intro, verse, chorus, bridge, and outro.
 
 ### 🎵 Guitar Diagrams
 
@@ -25,29 +26,43 @@ Interactive guitar chord diagrams with **accurate fingering patterns** from the 
 ### 🎹 Piano Visualizer 
 ![Piano Visualizer](public/piano_visualizer.png)
 
-Real-time piano roll visualization with falling MIDI notes synchronized to chord playback. Features a scrolling chord strip, interactive keyboard highlighting, and **MIDI file export** for importing chord progressions into any DAW.
+Real-time piano roll visualization with falling MIDI notes synchronized to chord playback. Features a scrolling chord strip, interactive keyboard highlighting, smoother playback-synced rendering, segmentation-aware dynamics shaping, and **MIDI file export** for importing chord progressions into any DAW.
 
 ###  🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](public/leadsheet.png)
 
 Synchronized lyrics transcription with AI chatbot for contextual music analysis and translation support.
 
+---
+
 ## 🚀 Quick Setup
 
 ### Prerequisites
 - **Node.js 18+** and **npm**
 - **Python 3.9+** (for backend)
+- **Git LFS** (for SongFormer checkpoints)
 - **Firebase account** (free tier)
+- **Gemini API** (free tier)
 
 ### Setup Steps
 
 1. **Clone and install**
    Clone with submodules in one command (for fresh clones)
    ```bash
+   git lfs install
    git clone --recursive https://github.com/ptnghia-j/ChordMiniApp.git
    cd ChordMiniApp
+   git lfs pull
    npm install
    ```
+
+   #### If you already cloned the repo before SongFormer was added
+   ```bash
+   git pull
+   git lfs pull
+   ```
+
+   `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
 
    #### Verify that submodules are populated
    ```
@@ -194,6 +209,7 @@ See the API Keys Setup section below for detailed instructions on obtaining thes
    - `lyrics` — Music.ai transcription results (docId: `videoId`)
    - `keyDetections` — Musical key analysis cache (docId: cacheKey)
    - `audioFiles` — Audio file metadata and URLs (docId: `videoId`)
+   - `segmentationJobs` — Async SongFormer segmentation jobs and persisted results (docId: `seg_<timestamp>_<uuid>`)
 
 5. **Enable Anonymous Authentication**
    - In Firebase Console: Authentication → Sign-in method → enable Anonymous
@@ -208,9 +224,11 @@ See the API Keys Setup section below for detailed instructions on obtaining thes
      - Audio: up to 50MB
      - Video: up to 100MB
 
+---
+
 ### API Keys Setup
 
-#### Music.ai API
+#### Music.ai API (deprecated - MUSIC.ai no longer provide individual API key, only business plan)
 ```bash
 # 1. Sign up at music.ai
 # 2. Get API key from dashboard
@@ -225,6 +243,8 @@ NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
 # 3. Add to .env.local
 NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
 ```
+
+---
 
 ## 🏗️ Backend Architecture
 
@@ -274,6 +294,8 @@ Production deployments is configured based on your VPS and url should be set in 
    pip install --no-cache-dir -r requirements.txt
    ```
 
+   In cases of conflict with spleeter, httpx, use --no-deps to skip installing dependencies of spleeter.
+
 4. **Start local backend on port 5001**
    ```bash
    python app.py
@@ -306,8 +328,6 @@ Production deployments is configured based on your VPS and url should be set in 
 
 - **Beat Detection**: Beat-Transformer and madmom models
 - **Chord Recognition**: Chord-CNN-LSTM, BTC-SL, BTC-PL models
-- **Lyrics Processing**: Genius.com integration
-- **Rate Limiting**: IP-based rate limiting with Flask-Limiter
 - **Audio Processing**: Support for MP3, WAV, FLAC formats
 
 #### Environment Variables for Local Backend
@@ -371,7 +391,7 @@ myenv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-### Key Workflow Features
+<!-- ### Key Workflow Features
 
 #### **Dual Input Support**
 - **YouTube Integration**: URL/search → video selection → analysis
@@ -381,51 +401,23 @@ pip install -r requirements.txt
 - **Development**: localhost:5001 Python backend with yt-dlp (avoiding macOS AirTunes port conflict)
 - **Production**: Google Cloud Run backend with yt-mp3-go
 
-#### **Intelligent Caching**
-- **Firebase Cache**: Analysis results with enhanced metadata
-- **Cache Hit**: Instant loading of previous analyses
-- **Cache Miss**: Full ML processing pipeline
+#### **Caching after computation**
+- **Firebase Cache**: audio metadata, lyrics, transcriptions, key detections, segmentation results
 
 #### **ML Pipeline**
 - **Parallel Processing**: Beat detection + chord recognition + key analysis
 - **Multiple Models**: Beat-Transformer/madmom, Chord-CNN-LSTM/BTC variants
-- **AI Integration**: Gemini AI for key detection and enharmonic corrections
-
+- **AI Integration**: Gemini AI for key detection and enharmonic corrections -->
+---
 
 ### External APIs & Services
-- **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api)
-- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction
-- **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction
+We sincerely thank the following APIs and services for their support and contribution to the project.
+- **Google Gemini API** - AI language model for roman numeral analysis, enharmonic corrections, and lyrics translation
+- **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api) - YouTube search and video information
+- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction (local)
+- **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction (production)
 - **LRClib** - [github.com/tranxuanthang/lrclib](https://github.com/tranxuanthang/lrclib) - Lyrics synchronization
 - **Music.ai SDK** - AI-powered music transcription
-- **Google Gemini API** - AI language model for translations
-
-## 📱 Features
-
-### Core Analysis
-- **Beat Detection** - Automatic tempo and beat tracking
-- **Chord Recognition** - AI-powered chord progression analysis
-- **Key Detection** - Musical key identification with Gemini AI
-
-### Guitar Features [Beta]
-- **Accurate Chord Database Integration** - Official @tombatossals/chords-db with verified chord fingering patterns
-- **Enhanced Chord Recognition** - Support for both ML model colon notation (C:minor) and standard notation (Cm)
-- **Interactive Chord Diagrams** - Visual guitar fingering patterns with correct fret positions and finger placements
-- **Responsive Design** - Adaptive chord count (7/5/3/2/1 for xl/lg/md/sm/xs)
-- **Smooth Animations** - transitions with optimized scaling
-- **Unicode Notation** - Proper musical symbols (♯, ♭) with enharmonic equivalents
-
-### Piano Visualizer
-- **Falling Notes Canvas** - Real-time MIDI note visualization synchronized to chord playback
-- **Interactive Piano Keyboard** - On-screen keyboard with live note highlighting
-- **Scrolling Chord Strip** - Beat-aligned chord labels scrolling in sync with playback
-- **MIDI Export** - Download chord progressions as standard MIDI files (Type 1, multi-instrument)
-- **Multi-Instrument Support** - Separate MIDI tracks for piano, guitar, violin, flute, and bass
-
-### Lyrics & Transcription [Beta]
-- **Synchronized Lyrics** - Time-aligned lyrics display
-- **Multi-language Support** - Translation with Gemini AI
-- **Word-level Timing** - Precise synchronization with Music.ai
 
 <!-- 
 ## 🚀 Deployment Options

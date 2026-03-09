@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { 
+  ApiCredentialService,
   ApiKeyStatus, 
   ApiKeyValidationResult, 
   RateLimitInfo 
@@ -15,7 +16,8 @@ import { apiKeyValidation } from '@/services/api/apiKeyValidationService';
 export const useApiKeys = () => {
   const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus>({
     musicAi: { hasKey: false, isValid: false },
-    gemini: { hasKey: false, isValid: false }
+    gemini: { hasKey: false, isValid: false },
+    songformerAccess: { hasKey: false, isValid: false }
   });
   const [isLoading, setIsLoading] = useState(true);
   const [rateLimitInfo, setRateLimitInfo] = useState<RateLimitInfo | null>(null);
@@ -47,7 +49,7 @@ export const useApiKeys = () => {
 
   // Validate and store API key
   const setApiKey = useCallback(async (
-    service: 'musicAi' | 'gemini', 
+    service: ApiCredentialService, 
     apiKey: string
   ): Promise<ApiKeyValidationResult> => {
     let validationResult: ApiKeyValidationResult;
@@ -55,8 +57,10 @@ export const useApiKeys = () => {
     // Validate the API key
     if (service === 'musicAi') {
       validationResult = await apiKeyValidation.validateMusicAiKey(apiKey);
-    } else {
+    } else if (service === 'gemini') {
       validationResult = await apiKeyValidation.validateGeminiKey(apiKey);
+    } else {
+      validationResult = await apiKeyValidation.validateSongformerAccessCode(apiKey);
     }
     
     if (validationResult.isValid) {
@@ -71,23 +75,23 @@ export const useApiKeys = () => {
   }, [refreshApiKeyStatus]);
 
   // Remove API key
-  const removeApiKey = useCallback(async (service: 'musicAi' | 'gemini') => {
+  const removeApiKey = useCallback(async (service: ApiCredentialService) => {
     apiKeyStorage.removeApiKey(service);
     await refreshApiKeyStatus();
   }, [refreshApiKeyStatus]);
 
   // Get API key for service calls
-  const getApiKey = useCallback(async (service: 'musicAi' | 'gemini'): Promise<string | null> => {
+  const getApiKey = useCallback(async (service: ApiCredentialService): Promise<string | null> => {
     return await apiKeyStorage.getApiKey(service);
   }, []);
 
   // Check if service requires user API key
-  const requiresApiKey = useCallback((service: 'musicAi' | 'gemini'): boolean => {
+  const requiresApiKey = useCallback((service: ApiCredentialService): boolean => {
     return apiKeyValidation.requiresUserApiKey(service);
   }, []);
 
   // Check if service is available (has valid key or fallback available)
-  const isServiceAvailable = useCallback((service: 'musicAi' | 'gemini'): boolean => {
+  const isServiceAvailable = useCallback((service: ApiCredentialService): boolean => {
     const status = apiKeyStatus[service];
 
     if (service === 'musicAi') {
@@ -100,13 +104,21 @@ export const useApiKeys = () => {
       return true; // Always available with fallback
     }
 
+    if (service === 'songformerAccess') {
+      if (process.env.NODE_ENV !== 'production') {
+        return true;
+      }
+
+      return status.hasKey && status.isValid;
+    }
+
     return false;
   }, [apiKeyStatus]);
 
 
 
   // Get service availability message
-  const getServiceMessage = useCallback((service: 'musicAi' | 'gemini'): string => {
+  const getServiceMessage = useCallback((service: ApiCredentialService): string => {
     const status = apiKeyStatus[service];
     
     if (service === 'musicAi') {
@@ -127,6 +139,19 @@ export const useApiKeys = () => {
         return 'Invalid Gemini API key - falling back to app quota';
       }
       return 'Using your Gemini API key for translations';
+    }
+
+    if (service === 'songformerAccess') {
+      if (process.env.NODE_ENV !== 'production') {
+        return 'Song segmentation access code is not required for local development';
+      }
+      if (!status.hasKey) {
+        return 'Access code required for first-time SongFormer segmentation requests';
+      }
+      if (!status.isValid) {
+        return 'Invalid SongFormer access code - please check your code';
+      }
+      return 'SongFormer access code configured';
     }
     
     return 'Service status unknown';

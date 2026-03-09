@@ -3,9 +3,10 @@ import { GoogleGenAI } from '@google/genai';
 import { db, TRANSLATIONS_COLLECTION } from '@/config/firebase';
 import { collection, doc, getDoc, setDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
+import { GEMINI_MODEL_NAME } from '@/config/gemini';
 
-// Define the model name to use (using stable Gemini 2.0 Flash for reliability)
-const MODEL_NAME = 'gemini-2.0-flash';
+// Define the model name to use
+const MODEL_NAME = GEMINI_MODEL_NAME;
 
 // Lazy initialization of Gemini API client to avoid build-time errors
 let _ai: GoogleGenAI | null = null;

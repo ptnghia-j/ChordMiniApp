@@ -74,6 +74,7 @@ import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
+import { useSegmentationState } from '@/hooks/lyrics/useSegmentationState';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import UtilityBar from '@/components/analysis/UtilityBar';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
@@ -100,6 +101,14 @@ export default function LocalAudioAnalyzePage() {
   const objectUrlRef = useRef<string | null>(null);
 
   const { lyrics, completeLyricsTranscription } = useLyricsState();
+  const {
+    segmentationData,
+    showSegmentation,
+    isSegmenting,
+    segmentationError,
+    toggleSegmentation,
+    resetSegmentation,
+  } = useSegmentationState();
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -234,8 +243,27 @@ export default function LocalAudioAnalyzePage() {
       synchronizedChords: analysisResults?.synchronizedChords,
       chordModel: analysisResults?.chordModel || chordDetector,
       lyrics: lyrics || undefined,
+      audioUrl: audioProcessingState.audioUrl || undefined,
     } as const;
-  }, [analysisResults, uploadSessionId, audioFile?.name, duration, lyrics, beatDetector, chordDetector]);
+  }, [analysisResults, uploadSessionId, audioFile?.name, duration, lyrics, beatDetector, chordDetector, audioProcessingState.audioUrl]);
+
+  useEffect(() => {
+    resetSegmentation();
+  }, [analysisResults, resetSegmentation]);
+
+  const segmentationDisabledReason = !uploadSongContext?.audioUrl
+    ? 'Song segmentation becomes available after audio extraction finishes.'
+    : uploadSongContext.audioUrl.startsWith('blob:')
+      ? 'Song segmentation requires a backend-accessible extracted audio URL.'
+      : !uploadSongContext.beats?.length
+        ? 'Song segmentation becomes available after beat analysis finishes.'
+        : undefined;
+
+  const canAnalyzeSegmentation = !segmentationDisabledReason;
+
+  const handleSegmentationToggle = useCallback(() => {
+    void toggleSegmentation(uploadSongContext);
+  }, [toggleSegmentation, uploadSongContext]);
 
 
 
@@ -1075,6 +1103,7 @@ const simplifiedChordGridData = useMemo(() => {
                               showCorrectedChords={showCorrectedChords}
                               chordCorrections={chordCorrections}
                               sequenceCorrections={sequenceCorrections}
+                              segmentationData={segmentationData}
                             />
                             <div className="mt-3">
                               <BeatTimeline
@@ -1119,7 +1148,7 @@ const simplifiedChordGridData = useMemo(() => {
                                     theme={theme}
                                     analysisResults={analysisResults}
                                     onFontSizeChange={setFontSize}
-                                    segmentationData={null}
+                                    segmentationData={segmentationData}
                                   />
                                 </div>
                               )}
@@ -1155,6 +1184,7 @@ const simplifiedChordGridData = useMemo(() => {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
+                        segmentationData={segmentationData}
                       />
                     )}
 
@@ -1166,6 +1196,7 @@ const simplifiedChordGridData = useMemo(() => {
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
+                        segmentationData={segmentationData}
                         currentTime={currentTime}
                         isPlaying={isPlaying}
                         isChordPlaybackEnabled={chordPlayback.isEnabled}
@@ -1197,6 +1228,15 @@ const simplifiedChordGridData = useMemo(() => {
                           isLyricsPanelOpen={isLyricsPanelOpen}
                           toggleChatbot={toggleChatbot}
                           toggleLyricsPanel={toggleLyricsPanel}
+                          segmentation={{
+                            isVisible: showSegmentation && !!segmentationData,
+                            hasData: !!segmentationData,
+                            isLoading: isSegmenting,
+                            disabled: !canAnalyzeSegmentation && !segmentationData,
+                            disabledReason: !segmentationData ? segmentationDisabledReason : undefined,
+                            errorMessage: segmentationError,
+                            onToggle: handleSegmentationToggle,
+                          }}
                           metronome={{
                             isEnabled: isMetronomeEnabled,
                             toggleMetronomeWithSync: handleMetronomeToggle,
@@ -1231,6 +1271,7 @@ const simplifiedChordGridData = useMemo(() => {
                       chordGridData={simplifiedChordGridData}
                       isPlaying={isPlaying}
                       currentTime={currentTime}
+                      segmentationData={segmentationData}
                       bpm={analysisResults?.beatDetectionResult?.bpm || 120}
                       timeSignature={timeSignature}
                       onChordPlaybackChange={handleChordPlaybackChange}

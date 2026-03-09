@@ -1,0 +1,2 @@
+SongFormer/src/SongFormer/ckpts/SongFormer.safetensors filter=lfs diff=lfs merge=lfs -text
+SongFormer/src/SongFormer/ckpts/MusicFM/pretrained_msd.pt filter=lfs diff=lfs merge=lfs -text

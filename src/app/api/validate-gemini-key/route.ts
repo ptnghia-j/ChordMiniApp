@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { GEMINI_MODEL_NAME } from '@/config/gemini';
 
 interface ValidationRequest {
   apiKey: string;
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
         try {
           // Make a small test request to check quota
           const quotaTestResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: {

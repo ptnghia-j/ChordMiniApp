@@ -14,6 +14,7 @@ import DesktopPerformanceOptimizer from '@/components/layout/DesktopPerformanceO
 import CriticalCSS from '@/components/layout/CriticalCSS';
 import CorsErrorSuppression from '@/components/layout/CorsErrorSuppression';
 import DevIndicatorHider from '@/components/layout/DevIndicatorHider';
+import { getFrontendBaseUrl } from '@/config/serverBackend';
 
 // Configure Google Fonts
 const robotoMono = Roboto_Mono({
@@ -42,8 +43,7 @@ const varelaRound = Varela_Round({
 
 // Define metadata for the application
 export const metadata: Metadata = {
-  // Use production backend URL for production detection
-  metadataBase: new URL(process.env.NEXT_PUBLIC_PYTHON_API_URL === 'https://chordmini-backend-191567167632.us-central1.run.app' ? 'https://chordmini.me' : 'http://localhost:3000'),
+  metadataBase: new URL(getFrontendBaseUrl()),
   title: {
     default: 'ChordMini - Chord Recognition and Beat Tracking with LLM',
     template: '%s | ChordMini'

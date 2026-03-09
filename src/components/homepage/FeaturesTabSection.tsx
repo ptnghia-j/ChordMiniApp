@@ -78,11 +78,12 @@ const LYRIC_LINES: MockLyricLine[] = [
 const TAB_CONTENT = {
   'chord-grid': {
     title: 'Beat & Chord Grid',
-    description: 'Real-time chord progression visualization synchronized with audio playback.',
+    description: 'Real-time chord progression visualization synchronized with audio playback and optional song section overlays.',
     features: [
       { text: 'AI-powered chord detection with multiple models (Chord-CNN-LSTM, BTC)', color: 'blue' },
       { text: 'Beat-aligned grid with automatic time signature detection', color: 'blue' },
       { text: 'Roman numeral analysis & key detection via Gemini AI', color: 'blue' },
+      { text: 'Song segmentation overlay for intro, verse, chorus, bridge, and outro', color: 'blue' },
       { text: 'Interactive click-to-seek playback navigation', color: 'blue' },
     ],
   },
@@ -118,6 +119,21 @@ const TAB_CONTENT = {
   },
 };
 
+const SEGMENT_DEMO_SECTIONS = [
+  { key: 'intro', label: 'Intro', startMeasure: 0, endMeasure: 1, badge: 'border-slate-400/50 bg-slate-100 text-slate-700 dark:border-slate-500/40 dark:bg-slate-500/15 dark:text-slate-200', cell: 'bg-slate-100/80 dark:bg-slate-500/10' },
+  { key: 'verse', label: 'Verse', startMeasure: 2, endMeasure: 4, badge: 'border-emerald-400/50 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-200', cell: 'bg-emerald-100/80 dark:bg-emerald-500/10' },
+  { key: 'pre', label: 'Pre-Chorus', startMeasure: 5, endMeasure: 5, badge: 'border-orange-400/50 bg-orange-100 text-orange-700 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-200', cell: 'bg-orange-100/80 dark:bg-orange-500/10' },
+  { key: 'chorus', label: 'Chorus', startMeasure: 6, endMeasure: 8, badge: 'border-rose-400/50 bg-rose-100 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200', cell: 'bg-rose-100/80 dark:bg-rose-500/10' },
+  { key: 'bridge', label: 'Bridge', startMeasure: 9, endMeasure: 9, badge: 'border-violet-400/50 bg-violet-100 text-violet-700 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-200', cell: 'bg-violet-100/80 dark:bg-violet-500/10' },
+  { key: 'outro', label: 'Outro', startMeasure: 10, endMeasure: 11, badge: 'border-sky-400/50 bg-sky-100 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-200', cell: 'bg-sky-100/80 dark:bg-sky-500/10' },
+];
+
+function getSegmentForMeasure(measureIndex: number) {
+  return SEGMENT_DEMO_SECTIONS.find(
+    section => measureIndex >= section.startMeasure && measureIndex <= section.endMeasure,
+  );
+}
+
 // ============================================================
 // Shared helpers
 // ============================================================
@@ -145,61 +161,77 @@ function useProgressionIndex(beat: number): number {
 // ============================================================
 
 function ChordGrid({
-  isDark, currentBeat, showRomanNumerals, measures,
+  isDark, currentBeat, showRomanNumerals, measures, showSegmentation = false,
 }: {
-  isDark: boolean; currentBeat: number; showRomanNumerals: boolean; measures: string[][];
+  isDark: boolean; currentBeat: number; showRomanNumerals: boolean; measures: string[][]; showSegmentation?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap gap-y-1">
-      {measures.map((measure, mIdx) => (
-        <div key={mIdx} className="w-1/2 md:w-1/3 lg:w-1/4 px-[2px]">
-          <div className={`grid grid-cols-4 gap-[2px] border-l-[3px] pl-1 ${
-            isDark ? 'border-gray-500/60' : 'border-gray-400'
-          }`}>
-            {measure.map((chord, beatIdx) => {
-              const globalIdx = mIdx * 4 + beatIdx;
-              const isHighlighted = globalIdx === currentBeat;
-              const isEmpty = !chord;
+    <div className="grid grid-cols-2 gap-x-1 gap-y-1 md:grid-cols-3 lg:grid-cols-4">
+      {measures.map((measure, mIdx) => {
+        const section = getSegmentForMeasure(mIdx);
+        const showSectionBadge = showSegmentation && section && section.startMeasure === mIdx;
 
-              const prevChord = globalIdx > 0
-                ? measures[Math.floor((globalIdx - 1) / 4)]?.[(globalIdx - 1) % 4] || ''
-                : '';
-              const showLabel = !!chord && chord !== prevChord;
-              const roman = showLabel ? ROMAN[chord] : undefined;
+        return (
+          <div key={mIdx} className="min-w-0 px-[2px]">
+            {showSegmentation && (
+              <div className="mb-1 flex h-6 items-center">
+                {section && showSectionBadge ? (
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${section.badge}`}>
+                    {section.label}
+                  </span>
+                ) : null}
+              </div>
+            )}
+            <div className={`grid grid-cols-4 gap-[2px] border-l-[3px] pl-1 ${
+              isDark ? 'border-gray-500/60' : 'border-gray-400'
+            }`}>
+              {measure.map((chord, beatIdx) => {
+                const globalIdx = mIdx * 4 + beatIdx;
+                const isHighlighted = globalIdx === currentBeat;
+                const isEmpty = !chord;
 
-              return (
-                <div
-                  key={beatIdx}
-                  className={`flex flex-col items-center justify-center rounded-sm border transition-all duration-150 ${
-                    showRomanNumerals ? 'aspect-[1/1.25]' : 'aspect-square'
-                  } ${
-                    isHighlighted
-                      ? isDark
-                        ? 'bg-blue-800 border-blue-400 text-blue-100'
-                        : 'bg-blue-100 border-blue-600 text-blue-900'
-                      : isEmpty
-                        ? isDark ? 'bg-[#111720]/80 border-gray-600/40' : 'bg-gray-100 border-gray-300'
-                        : isDark ? 'bg-[#111720] border-gray-600/50 text-gray-200' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  {showLabel && (
-                    <span className={`font-varela text-[10px] sm:text-xs lg:text-sm leading-none`}>
-                      {chord}
-                    </span>
-                  )}
-                  {showRomanNumerals && roman && (
-                    <span className={`font-varela font-semibold leading-none mt-0.5 ${
-                      isHighlighted ? 'text-blue-200 dark:text-blue-200' : 'text-blue-700 dark:text-blue-300'
-                    }`} style={{ fontSize: '8px' }}>
-                      {roman}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                const prevChord = globalIdx > 0
+                  ? measures[Math.floor((globalIdx - 1) / 4)]?.[(globalIdx - 1) % 4] || ''
+                  : '';
+                const showLabel = !!chord && chord !== prevChord;
+                const roman = showLabel ? ROMAN[chord] : undefined;
+
+                return (
+                  <div
+                    key={beatIdx}
+                    className={`flex flex-col items-center justify-center rounded-sm border transition-all duration-150 ${
+                      showRomanNumerals ? 'aspect-[1/1.25]' : 'aspect-square'
+                    } ${
+                      isHighlighted
+                        ? isDark
+                          ? 'bg-blue-800 border-blue-400 text-blue-100'
+                          : 'bg-blue-100 border-blue-600 text-blue-900'
+                        : isEmpty
+                          ? isDark ? 'bg-[#111720]/80 border-gray-600/40' : 'bg-gray-100 border-gray-300'
+                          : showSegmentation && section
+                            ? `${section.cell} ${isDark ? 'border-gray-600/50 text-gray-200' : 'border-gray-300 text-gray-900'}`
+                            : isDark ? 'bg-[#111720] border-gray-600/50 text-gray-200' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    {showLabel && (
+                      <span className="font-varela text-[10px] leading-none sm:text-xs lg:text-sm">
+                        {chord}
+                      </span>
+                    )}
+                    {showRomanNumerals && roman && (
+                      <span className={`mt-0.5 font-varela font-semibold leading-none ${
+                        isHighlighted ? 'text-blue-200 dark:text-blue-200' : 'text-blue-700 dark:text-blue-300'
+                      }`} style={{ fontSize: '8px' }}>
+                        {roman}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -210,6 +242,7 @@ function ChordGrid({
 
 function ChordGridMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: number }) {
   const [showRoman, setShowRoman] = useState(false);
+  const [showSegmentation, setShowSegmentation] = useState(false);
 
   return (
     <motion.div
@@ -239,6 +272,20 @@ function ChordGridMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat
               }`}
             >Roman</button>
           </Tooltip>
+          <Tooltip content="Preview song segmentation overlays" placement="top">
+            <button
+              onClick={() => setShowSegmentation((v) => !v)}
+              className={`rounded-lg px-2 py-0.5 text-xs font-medium border transition-colors cursor-pointer ${
+                showSegmentation
+                  ? isDark
+                    ? 'bg-emerald-800/40 border-emerald-400 text-emerald-100'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                  : isDark
+                    ? 'bg-gray-700/40 border-gray-500 text-gray-400 hover:border-emerald-400 hover:text-emerald-300'
+                    : 'bg-gray-50 border-gray-300 text-gray-500 hover:border-emerald-300 hover:text-emerald-700'
+              }`}
+            >Segments</button>
+          </Tooltip>
           <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${
             isDark ? 'bg-blue-800/40 border border-blue-400 text-blue-50' : 'bg-blue-50 border border-blue-200 text-blue-800'
           }`}>Time: 4/4</span>
@@ -247,7 +294,22 @@ function ChordGridMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat
           }`}>Key: C Major</span>
         </div>
       </div>
-      <ChordGrid isDark={isDark} currentBeat={currentBeat} showRomanNumerals={showRoman} measures={MEASURES} />
+      <ChordGrid
+        isDark={isDark}
+        currentBeat={currentBeat}
+        showRomanNumerals={showRoman}
+        measures={MEASURES}
+        showSegmentation={showSegmentation}
+      />
+      {showSegmentation && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {SEGMENT_DEMO_SECTIONS.map((section) => (
+            <span key={section.key} className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${section.badge}`}>
+              {section.label}
+            </span>
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 }

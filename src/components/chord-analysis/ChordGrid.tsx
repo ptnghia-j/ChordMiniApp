@@ -3,7 +3,6 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import BeatHighlighter from './BeatHighlighter';
 import {
-  getSegmentationColorForBeatIndex,
   formatRomanNumeral,
   buildBeatToChordSequenceMap
 } from '@/utils/chordFormatting';
@@ -21,6 +20,8 @@ import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
 import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
+import { getSegmentationColor } from '@/utils/segmentationColors';
+import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -37,6 +38,20 @@ interface AudioMappingItem {
   timestamp: number;
   visualIndex: number;
   audioIndex: number; // Original audio index for accurate beat click handling
+}
+
+interface GroupedMeasure {
+  measureNumber: number;
+  chords: string[];
+  beats: number[];
+  isPickupMeasure?: boolean;
+  visualStartIndex: number;
+}
+
+interface SectionBlock {
+  label: string;
+  accentColor: string;
+  rows: SegmentedSectionRow[];
 }
 
 interface ChordGridProps {
@@ -226,18 +241,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // Use simple time signature - no complex beat source logic
   const actualBeatsPerMeasure = timeSignature;
 
-  // Function to get segmentation color for a specific beat index using shared utility
-  const getSegmentationColorForBeatIndexLocal = (beatIndex: number): string | undefined => {
-    return getSegmentationColorForBeatIndex(
-      beatIndex,
-      beats,
-      segmentationData,
-      showSegmentation,
-      originalAudioMapping,
-      null
-    );
-  };
-
   // Use custom hook for chord data processing
   const {
     shiftedChords,
@@ -290,6 +293,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // Use custom hook for layout calculations
   const {
     cellSize,
+    screenWidth,
     gridLayoutConfig,
     getDynamicFontSize,
     getGridColumnsClass,
@@ -317,97 +321,111 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // PERFORMANCE OPTIMIZATION: Extract layout values from memoized config
   const { measuresPerRow: dynamicMeasuresPerRow } = gridLayoutConfig;
 
+  const sectionStripMetrics = useCallback((label: string, rowCount: number) => {
+    const isSmallScreen = screenWidth < 640;
+    const cellMinHeightPx = showRomanNumerals
+      ? (isSmallScreen ? 52.8 : 67.2)
+      : (isSmallScreen ? 44 : 56);
+    const rowGapPx = 2; // matches section content wrapper space-y-0.5
+    const verticalPaddingPx = 16;
+    const labelCharHeightPx = isSmallScreen ? 8 : 10;
+
+    const rowsHeightPx = (rowCount * cellMinHeightPx) + (Math.max(0, rowCount - 1) * rowGapPx);
+    const labelHeightPx = (label.length * labelCharHeightPx) + verticalPaddingPx;
+
+    return {
+      heightPx: Math.max(rowsHeightPx, labelHeightPx),
+      labelHeightPx,
+      rowsHeightPx,
+    };
+  }, [screenWidth, showRomanNumerals]);
+
   // Use utility function for chord styling
   const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
     return getChordStyle(chord, beatIndex, isClickable, hasPickupBeats, timeSignature, pickupBeatsCount);
   }, [hasPickupBeats, timeSignature, pickupBeatsCount]);
 
   // Memoized measure grouping with proper pickup beat handling using shifted chords
-  const groupedByMeasure = useMemo(() => {
+  const groupedByMeasure = useMemo<GroupedMeasure[]>(() => {
     if (chords.length === 0) {
       return [];
     }
-    const measures: Array<{
-      measureNumber: number;
-      chords: string[];
-      beats: number[];
-      isPickupMeasure?: boolean;
-    }> = [];
 
-  // SIMPLIFIED: Basic measure grouping without padding/shift complexity
-  let currentIndex = 0;
-  let measureNumber = 0;
+    const measures: GroupedMeasure[] = [];
 
-  while (currentIndex < shiftedChords.length) {
-    const measure = {
-      measureNumber: measureNumber,
-      chords: [] as string[],
-      beats: [] as number[],
-      isPickupMeasure: false
-    };
+    // SIMPLIFIED: Basic measure grouping without padding/shift complexity
+    let currentIndex = 0;
+    let measureNumber = 0;
 
-    // Simple measure grouping: exactly actualBeatsPerMeasure beats per measure
-    for (let b = 0; b < actualBeatsPerMeasure && currentIndex < shiftedChords.length; b++) {
-      measure.chords.push(shiftedChords[currentIndex]);
-      const beatTime = beats[currentIndex];
-      measure.beats.push(typeof beatTime === 'number' ? beatTime : 0);
-      currentIndex++;
-    }
+    while (currentIndex < shiftedChords.length) {
+      const measure: GroupedMeasure = {
+        measureNumber,
+        chords: [],
+        beats: [],
+        isPickupMeasure: false,
+        visualStartIndex: measureNumber * actualBeatsPerMeasure,
+      };
 
-    // FIXED: Only pad incomplete measures if they have actual content
-    // This prevents trailing empty measures from beat-transformer-light
-    if (measure.chords.length > 0) {
-      // Pad incomplete measures to maintain consistent grid layout
-      while (measure.chords.length < actualBeatsPerMeasure) {
-        measure.chords.push(''); // Empty cell for padding
-        measure.beats.push(-1); // Invalid beat index for padding
+      for (let b = 0; b < actualBeatsPerMeasure && currentIndex < shiftedChords.length; b += 1) {
+        measure.chords.push(shiftedChords[currentIndex]);
+        const beatTime = beats[currentIndex];
+        measure.beats.push(typeof beatTime === 'number' ? beatTime : -1);
+        currentIndex += 1;
       }
-      measures.push(measure);
-      measureNumber++;
+
+      if (measure.chords.length > 0) {
+        while (measure.chords.length < actualBeatsPerMeasure) {
+          measure.chords.push('');
+          measure.beats.push(-1);
+        }
+
+        measures.push(measure);
+        measureNumber += 1;
+      }
     }
-  }
 
     return measures;
   }, [shiftedChords, beats, actualBeatsPerMeasure, chords.length]);
 
   // PERFORMANCE OPTIMIZATION: Memoized rows calculation
   // Group measures into rows using the dynamic measures per row
-  const rows = useMemo(() => {
-    const calculatedRows: Array<typeof groupedByMeasure> = [];
+  const rows = useMemo<GroupedMeasure[][]>(() => {
+    const calculatedRows: GroupedMeasure[][] = [];
     for (let i = 0; i < groupedByMeasure.length; i += dynamicMeasuresPerRow) {
       calculatedRows.push(groupedByMeasure.slice(i, i + dynamicMeasuresPerRow));
     }
     return calculatedRows;
   }, [groupedByMeasure, dynamicMeasuresPerRow]);
 
+  const sectionBlocks = useMemo<SectionBlock[] | null>(() => {
+    if (!showSegmentation || !segmentationData?.segments?.length || groupedByMeasure.length === 0) {
+      return null;
+    }
+
+    return buildSegmentedSectionBlocks(
+      groupedByMeasure,
+      dynamicMeasuresPerRow,
+      actualBeatsPerMeasure,
+      segmentationData,
+    ).map((block) => ({
+      ...block,
+      accentColor: getSegmentationColor(block.label),
+    }));
+  }, [showSegmentation, segmentationData, groupedByMeasure, dynamicMeasuresPerRow, actualBeatsPerMeasure]);
+
   const labelOverflowMap = useMemo(() => {
     const map = new Map<number, { cells: number; gapPx: number }>();
     const WITHIN_MEASURE_GAP_PX = 2;
     const MEASURE_BOUNDARY_GAP_PX = 9;
-    let runningGlobalIndex = 0;
 
-    rows.forEach((row) => {
-      const rowEntries: Array<{
-        globalIndex: number;
-        measureIdx: number;
-        chord: string;
-        showChordLabel: boolean;
-      }> = [];
-
-      row.forEach((measure, measureIdx) => {
-        measure.chords.forEach((rowChord) => {
-          rowEntries.push({
-            globalIndex: runningGlobalIndex,
-            measureIdx,
-            chord: rowChord,
-            showChordLabel: shouldShowChordLabelLocal(runningGlobalIndex),
-          });
-          runningGlobalIndex += 1;
-        });
-      });
-
+    const populateRowOverflows = (rowEntries: Array<{
+      globalIndex: number | null;
+      measureIdx: number;
+      chord: string;
+      showChordLabel: boolean;
+    }>) => {
       rowEntries.forEach((entry, entryIndex) => {
-        if (!entry.showChordLabel || entry.chord === '') {
+        if (entry.globalIndex === null || !entry.showChordLabel || entry.chord === '') {
           return;
         }
 
@@ -430,10 +448,66 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
         map.set(entry.globalIndex, { cells, gapPx });
       });
+    };
+
+    if (sectionBlocks) {
+      sectionBlocks.forEach((block) => block.rows.forEach((row) => {
+        const rowEntries: Array<{
+          globalIndex: number | null;
+          measureIdx: number;
+          chord: string;
+          showChordLabel: boolean;
+        }> = [];
+
+        row.slots.forEach((slot, measureIdx) => {
+          slot.cells.forEach((cell) => {
+            rowEntries.push(cell
+              ? {
+                globalIndex: cell.globalIndex,
+                measureIdx,
+                chord: cell.chord,
+                showChordLabel: shouldShowChordLabelLocal(cell.globalIndex),
+              }
+              : {
+                globalIndex: null,
+                measureIdx,
+                chord: '',
+                showChordLabel: false,
+              });
+          });
+        });
+
+        populateRowOverflows(rowEntries);
+      }));
+
+      return map;
+    }
+
+    rows.forEach((row) => {
+      const rowEntries: Array<{
+        globalIndex: number | null;
+        measureIdx: number;
+        chord: string;
+        showChordLabel: boolean;
+      }> = [];
+
+      row.forEach((measure, measureIdx) => {
+        measure.chords.forEach((rowChord, beatIdx) => {
+          const globalIndex = measure.visualStartIndex + beatIdx;
+          rowEntries.push({
+            globalIndex,
+            measureIdx,
+            chord: rowChord,
+            showChordLabel: shouldShowChordLabelLocal(globalIndex),
+          });
+        });
+      });
+
+      populateRowOverflows(rowEntries);
     });
 
     return map;
-  }, [rows, shouldShowChordLabelLocal]);
+  }, [rows, sectionBlocks, shouldShowChordLabelLocal]);
 
   // CRITICAL FIX: Use original chords for Roman numeral mapping to prevent misalignment during pitch shift
   // Roman numerals are key-relative and should remain constant regardless of transposition
@@ -469,6 +543,160 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       return v !== undefined ? v : formatRomanNumeral(rn);
     };
   }, [romanNumeralData]);
+
+  const renderChordGridCell = useCallback((chord: string, globalIndex: number, cellKey: string) => {
+    const showChordLabel = shouldShowChordLabelLocal(globalIndex);
+    const isEmpty = chord === '';
+    const isClickableCell = isClickable(globalIndex, chord);
+    const { chord: displayChord, wasCorrected } = getDisplayChordLocal(chord, globalIndex);
+    const chordSequenceIndex = beatToChordSequenceMap[globalIndex];
+    const rawRomanNumeral = showRomanNumerals && showChordLabel && romanNumeralData?.analysis && chordSequenceIndex !== undefined
+      ? romanNumeralData.analysis[chordSequenceIndex] || ''
+      : '';
+    const romanNumeral = rawRomanNumeral ? formatRomanNumeralMemo(rawRomanNumeral) : '';
+    const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(
+      (mod) => mod.atIndex === chordSequenceIndex
+    );
+    const modulationMarker = modulationInfo ? {
+      isModulation: true,
+      fromKey: modulationInfo.fromKey,
+      toKey: modulationInfo.toKey,
+    } : undefined;
+    const labelOverflow = labelOverflowMap.get(globalIndex);
+
+    return (
+      <ChordCell
+        key={cellKey}
+        chord={chord}
+        globalIndex={globalIndex}
+        isClickable={isClickableCell}
+        cellSize={cellSize}
+        isDarkMode={isDarkMode}
+        showChordLabel={showChordLabel}
+        isEmpty={isEmpty}
+        displayChord={displayChord}
+        wasCorrected={wasCorrected}
+        onBeatClick={handleBeatClick}
+        getChordStyle={getChordStyleLocal}
+        getDynamicFontSize={getDynamicFontSize}
+        isEditMode={isEditMode}
+        editedChord={editedChords?.[globalIndex]}
+        onChordEdit={onChordEdit}
+        showRomanNumerals={showRomanNumerals}
+        romanNumeral={romanNumeral}
+        modulationInfo={modulationMarker}
+        isLoopEnabled={isLoopEnabled}
+        isInLoopRange={isInLoopRange(globalIndex)}
+        onLoopBeatClick={handleLoopBeatClick}
+        accidentalPreference={accidentalPreference}
+        cellRef={makeCellRef(globalIndex)}
+        labelOverflowCells={labelOverflow?.cells ?? 0}
+        labelOverflowGapPx={labelOverflow?.gapPx ?? 0}
+      />
+    );
+  }, [
+    accidentalPreference,
+    beatToChordSequenceMap,
+    cellSize,
+    editedChords,
+    formatRomanNumeralMemo,
+    getChordStyleLocal,
+    getDisplayChordLocal,
+    getDynamicFontSize,
+    handleBeatClick,
+    handleLoopBeatClick,
+    isClickable,
+    isDarkMode,
+    isEditMode,
+    isInLoopRange,
+    isLoopEnabled,
+    labelOverflowMap,
+    makeCellRef,
+    onChordEdit,
+    romanNumeralData?.analysis,
+    sequenceCorrections?.keyAnalysis?.modulations,
+    shouldShowChordLabelLocal,
+    showRomanNumerals,
+  ]);
+
+  const renderMeasureRow = useCallback((row: GroupedMeasure[], rowKey: string) => (
+    <div key={rowKey} className="measure-row min-w-0">
+      <div className={`grid gap-1 sm:gap-1 w-full ${
+        dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
+        dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
+        dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
+        dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
+        dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
+        dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
+        dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
+        dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
+        dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
+        dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
+        'grid-cols-4'
+      }`}>
+        {row.map((measure, measureIdx) => (
+          <div
+            key={`${rowKey}-measure-${measure.measureNumber}-${measureIdx}`}
+            className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
+            style={{ paddingLeft: '2px' }}
+          >
+            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
+              {measure.chords.map((chord, beatIdx) => {
+                const globalIndex = measure.visualStartIndex + beatIdx;
+                return renderChordGridCell(chord, globalIndex, `chord-${globalIndex}`);
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ), [
+    dynamicMeasuresPerRow,
+    getGridColumnsClass,
+    renderChordGridCell,
+  ]);
+
+  const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string) => (
+    <div key={rowKey} className="measure-row min-w-0">
+      <div className={`grid gap-1 sm:gap-1 w-full ${
+        dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
+        dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
+        dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
+        dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
+        dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
+        dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
+        dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
+        dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
+        dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
+        dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
+        'grid-cols-4'
+      }`}>
+        {row.slots.map((slot, measureIdx) => {
+          const visibleCells = getVisibleCellsForSegmentedSlot(slot.cells);
+          const showMeasureBar = shouldRenderSegmentedSlotMeasureBar(slot.cells);
+
+          return (
+          <div
+            key={`${rowKey}-slot-${slot.slotIndex}-${measureIdx}`}
+            className={`${showMeasureBar ? 'border-l-[3px] border-gray-600 dark:border-gray-400' : ''} min-w-0 flex-shrink-0`}
+            style={showMeasureBar ? { paddingLeft: '2px' } : undefined}
+          >
+            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
+              {visibleCells.map(({ cell, gridColumnStart }) => (
+                <div
+                  key={`segmented-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`}
+                  style={gridColumnStart ? { gridColumnStart } : undefined}
+                >
+                  {renderChordGridCell(cell.chord, cell.globalIndex, `segmented-cell-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`)}
+                </div>
+              ))}
+            </div>
+          </div>
+          );
+        })}
+      </div>
+    </div>
+  ), [dynamicMeasuresPerRow, getGridColumnsClass, renderChordGridCell]);
 
   // Early return if no chords available
   if (chords.length === 0) {
@@ -550,136 +778,45 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
         {/* Clean grid area with minimal background */}
         <div className="px-0 dark:bg-dark-bg bg-gray-50">
-          {/* Render rows of measures */}
-          <div className="space-y-0.5 overflow-x-auto">
-        {rows.map((row, rowIdx) => (
-          <div
-            key={`row-${rowIdx}`}
-            className="measure-row min-w-0"
-          >
-            {/* Grid of measures with consistent responsive layout */}
-            <div className={`grid gap-1 sm:gap-1 w-full ${
-              // Consistent grid that maintains complete measures per row across all screen sizes
-              dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
-              dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
-              dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
-              dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
-              dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
-              dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
-              dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
-              dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
-              dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
-              dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
-              'grid-cols-4' // Fallback
-            }`}>
-              {row.map((measure, measureIdx) => {
-                return (
-                <div
-                  key={`measure-${rowIdx}-${measureIdx}`}
-                  className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
-                  style={{
-                    paddingLeft: '2px'
-                  }}
-                >
-                  {/* Chord cells for this measure - consistent grid based on time signature */}
-                  <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
-                    {measure.chords.map((chord, beatIdx) => {
-                      // Calculate global index with consistent measure layout
-                      // Each measure always has exactly actualBeatsPerMeasure cells
-                      let globalIndex = 0;
+          <div className="overflow-x-auto">
+            {sectionBlocks ? (
+              <div className="space-y-3">
+                {sectionBlocks.map((section, sectionIdx) => {
+                  const stripMetrics = sectionStripMetrics(section.label, section.rows.length);
 
-                      // Count beats from all previous rows (each measure has actualBeatsPerMeasure beats)
-                      for (let r = 0; r < rowIdx; r++) {
-                        globalIndex += rows[r].length * actualBeatsPerMeasure;
-                      }
+                  return (
+                  <div key={`section-${sectionIdx}-${section.label}`} className="flex items-start gap-2 sm:gap-3">
+                    <div
+                      className="w-7 sm:w-8 flex-shrink-0 flex"
+                      style={{ height: `${stripMetrics.heightPx}px` }}
+                    >
+                      <div
+                        className={`w-full h-full rounded-sm border text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center ${
+                          isDarkMode ? 'text-gray-100 border-white/15' : 'text-gray-700 border-black/10'
+                        }`}
+                        style={{
+                          writingMode: 'vertical-rl',
+                          transform: 'rotate(180deg)',
+                          backgroundColor: section.accentColor,
+                          padding: '0.5rem 0.2rem',
+                        }}
+                        title={section.label}
+                      >
+                        {section.label}
+                      </div>
+                    </div>
 
-                      // Count beats from previous measures in current row
-                      globalIndex += measureIdx * actualBeatsPerMeasure;
-
-                      // Add current beat index within this measure
-                      globalIndex += beatIdx;
-
-                      // FIXED: Use currentBeatIndex directly - animation logic already accounts for shift/padding
-                      // The analyze page animation logic handles shift and padding correctly
-
-                      const showChordLabel = shouldShowChordLabelLocal(globalIndex);
-                      const isEmpty = chord === '';
-
-                      // Use hook function for click logic
-                      const isClickableCell = isClickable(globalIndex, chord);
-
-                      // COMMENTED OUT: Complex padding/shift click logic
-                      // const isShiftCell = hasPadding && globalIndex < shiftCount;
-                      // if (isShiftCell) {
-                      //   isClickable = false; // Shift cells are not clickable
-                      // }
-
-                      // PERFORMANCE OPTIMIZATION: Use memoized ChordCell component
-                      // This prevents unnecessary re-renders when only currentBeatIndex changes
-                      const { chord: displayChord, wasCorrected } = getDisplayChordLocal(chord, globalIndex);
-
-                      // Get segmentation color for this beat
-                      const segmentationColor = getSegmentationColorForBeatIndexLocal(globalIndex);
-
-                      // Get Roman numeral for this chord using chord sequence mapping
-                      // Only show Roman numeral when chord label is shown (chord changes)
-                      const chordSequenceIndex = beatToChordSequenceMap[globalIndex];
-                      const rawRomanNumeral = showRomanNumerals && showChordLabel && romanNumeralData?.analysis && chordSequenceIndex !== undefined
-                        ? romanNumeralData.analysis[chordSequenceIndex] || ''
-                        : '';
-                      const romanNumeral = rawRomanNumeral ? formatRomanNumeralMemo(rawRomanNumeral) : '';
-
-                      // Check for modulation at this chord index
-                      const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(
-                        mod => mod.atIndex === chordSequenceIndex
-                      );
-                      const modulationMarker = modulationInfo ? {
-                        isModulation: true,
-                        fromKey: modulationInfo.fromKey,
-                        toKey: modulationInfo.toKey
-                      } : undefined;
-                      const labelOverflow = labelOverflowMap.get(globalIndex);
-
-                      return (
-                        <ChordCell
-                          key={`chord-${globalIndex}`}
-                          chord={chord}
-                          globalIndex={globalIndex}
-
-                          isClickable={isClickableCell}
-                          cellSize={cellSize}
-                          isDarkMode={isDarkMode}
-                          showChordLabel={showChordLabel}
-                          isEmpty={isEmpty}
-                          displayChord={displayChord}
-                          wasCorrected={wasCorrected}
-                          segmentationColor={segmentationColor}
-                          onBeatClick={handleBeatClick}
-                          getChordStyle={getChordStyleLocal}
-                          getDynamicFontSize={getDynamicFontSize}
-                          isEditMode={isEditMode}
-                          editedChord={editedChords?.[globalIndex]}
-                          onChordEdit={onChordEdit}
-                          showRomanNumerals={showRomanNumerals}
-                          romanNumeral={romanNumeral}
-                          modulationInfo={modulationMarker}
-                          isLoopEnabled={isLoopEnabled}
-                          isInLoopRange={isInLoopRange(globalIndex)}
-                          onLoopBeatClick={handleLoopBeatClick}
-                          accidentalPreference={accidentalPreference}
-                          cellRef={makeCellRef(globalIndex)}
-                          labelOverflowCells={labelOverflow?.cells ?? 0}
-                          labelOverflowGapPx={labelOverflow?.gapPx ?? 0}
-                        />
-                      );
-                    })}
+                    <div className="flex-1 space-y-0.5 min-w-0">
+                      {section.rows.map((row, rowIdx) => renderSegmentedRow(row, `section-${sectionIdx}-row-${rowIdx}`))}
+                    </div>
                   </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                )})}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {rows.map((row, rowIdx) => renderMeasureRow(row, `row-${rowIdx}`))}
+              </div>
+            )}
           </div>
         </div> {/* Close grid area */}
 

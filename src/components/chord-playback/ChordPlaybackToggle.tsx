@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
+import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead, GiSaxophone } from 'react-icons/gi';
 import { Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
@@ -748,6 +748,54 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           }}
                         />
                       </div>
+                    </div>
+
+                    {/* Saxophone volume control */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label
+                          className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                          title="Auto-on during instrumental sections. Outside them, raise the slider to hear saxophone manually."
+                        >
+                          <GiSaxophone className="h-4 w-4" />
+                          Saxophone
+                        </label>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                          {Math.round(audioSettings.saxophoneVolume)}%
+                        </span>
+                      </div>
+                      <div
+                        onMouseDown={() => setActiveSlider('saxophone')}
+                        onMouseUp={() => setActiveSlider(null)}
+                        onMouseLeave={() => {
+                          if (activeSlider === 'saxophone') setActiveSlider(null);
+                        }}
+                      >
+                        <Slider
+                          size="sm"
+                          step={1}
+                          minValue={0}
+                          maxValue={100}
+                          value={audioSettings.saxophoneVolume}
+                          onChange={(value) => {
+                            if (activeSlider === 'saxophone' || activeSlider === null) {
+                              const vol = Array.isArray(value) ? value[0] : value;
+                              audioMixer.current?.setSaxophoneVolume(vol);
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Saxophone volume control"
+                          classNames={{
+                            base: "max-w-full",
+                            track: GREEN_TRACK,
+                            filler: "bg-green-500 dark:bg-green-400",
+                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-300">
+                        Auto-on in instrumental sections; manual everywhere else.
+                      </p>
                     </div>
 
                     {/* Bass volume control */}

@@ -2,11 +2,8 @@
 
 import React from 'react';
 import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
-import SegmentationToggleButton from '@/components/analysis/SegmentationToggleButton';
-import { useShowSegmentation, useToggleSegmentation } from '@/stores/uiStore';
 
 interface AnalysisHeaderProps {
-  // Title and editing
   videoTitle: string;
   isEditMode: boolean;
   editedTitle: string;
@@ -14,22 +11,13 @@ interface AnalysisHeaderProps {
   onEditToggle: () => void;
   onTitleSave: () => void;
   onTitleCancel: () => void;
-
-  // Correction toggle
   showCorrectedChords: boolean;
   hasCorrections: boolean;
   toggleEnharmonicCorrection: () => void;
-  
-  // Lyrics transcription
   isTranscribingLyrics: boolean;
   hasCachedLyrics: boolean;
   canTranscribe: boolean;
   transcribeLyricsWithAI: () => void;
-  
-  // Segmentation
-  hasSegmentationData: boolean;
-
-  // Error display
   lyricsError: string | null;
 }
 
@@ -48,19 +36,16 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
   hasCachedLyrics,
   canTranscribe,
   transcribeLyricsWithAI,
-  hasSegmentationData,
-  lyricsError
+  lyricsError,
 }) => {
-  const showSegmentation = useShowSegmentation();
-  const toggleSegmentation = useToggleSegmentation();
   return (
     <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
-      {/* Mobile: buttons next to title, Desktop: buttons on right side */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-2 gap-2">
-        {/* Title section */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full md:w-auto gap-2">
+      <div className="flex flex-col gap-2 mb-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-2 w-full md:w-auto sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">Analysis Results</h3>
+            <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">
+              Analysis Results
+            </h3>
             <div className="flex items-center gap-2 mt-1">
               {isEditMode ? (
                 <div className="flex items-center gap-2 flex-1">
@@ -104,9 +89,7 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
             </div>
           </div>
 
-          {/* Buttons row - next to title on mobile, separate on desktop */}
           <div className="flex gap-2 flex-shrink-0 md:hidden">
-            {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
             {hasCorrections && (
               <button
                 onClick={toggleEnharmonicCorrection}
@@ -121,7 +104,6 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
               </button>
             )}
 
-            {/* Music.AI Transcription Button */}
             <button
               onClick={transcribeLyricsWithAI}
               disabled={isTranscribingLyrics || !canTranscribe}
@@ -132,32 +114,22 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
               }`}
               title={
                 !canTranscribe
-                  ? "Add your Music.AI API key in Settings to enable lyrics transcription"
+                  ? 'Add your Music.AI API key in Settings to enable lyrics transcription'
                   : isTranscribingLyrics
-                  ? "Transcription in progress..."
-                  : "AI transcription from audio (word-level sync)"
+                    ? 'Transcription in progress...'
+                    : 'AI transcription from audio (word-level sync)'
               }
             >
               {isTranscribingLyrics
-                ? "Transcribing..."
+                ? 'Transcribing...'
                 : !canTranscribe
-                ? "API Key Required"
-                : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
-              }
+                  ? 'API Key Required'
+                  : (hasCachedLyrics ? 'Re-transcribe' : 'Lyrics Transcribe')}
             </button>
-
-            {/* Segmentation Toggle Button */}
-            <SegmentationToggleButton
-              isEnabled={showSegmentation}
-              onClick={toggleSegmentation}
-              hasSegmentationData={hasSegmentationData}
-            />
           </div>
         </div>
 
-        {/* Desktop buttons - separate section on right side */}
         <div className="hidden md:flex gap-2 flex-shrink-0">
-          {/* Enharmonic correction toggle button - show for both legacy and sequence corrections */}
           {hasCorrections && (
             <button
               onClick={toggleEnharmonicCorrection}
@@ -172,7 +144,6 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
             </button>
           )}
 
-          {/* Music.AI Transcription Button */}
           <button
             onClick={transcribeLyricsWithAI}
             disabled={isTranscribingLyrics || !canTranscribe}
@@ -183,35 +154,29 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
             }`}
             title={
               !canTranscribe
-                ? "Add your Music.AI API key in Settings to enable lyrics transcription"
+                ? 'Add your Music.AI API key in Settings to enable lyrics transcription'
                 : isTranscribingLyrics
-                ? "Transcription in progress..."
-                : "AI transcription from audio (word-level sync)"
+                  ? 'Transcription in progress...'
+                  : 'AI transcription from audio (word-level sync)'
             }
           >
             {isTranscribingLyrics
-              ? "Transcribing..."
+              ? 'Transcribing...'
               : !canTranscribe
-              ? "API Key Required"
-              : (hasCachedLyrics ? "Re-transcribe" : "Lyrics Transcribe")
-            }
+                ? 'API Key Required'
+                : (hasCachedLyrics ? 'Re-transcribe' : 'Lyrics Transcribe')}
           </button>
-
-          {/* Segmentation Toggle Button */}
-          <SegmentationToggleButton
-            isEnabled={showSegmentation}
-            onClick={toggleSegmentation}
-            hasSegmentationData={hasSegmentationData}
-          />
         </div>
       </div>
 
       {lyricsError && (
-        <div className={`mt-2 md:col-span-2 ${
-          lyricsError.includes('Transcribing lyrics')
-            ? 'text-blue-600 dark:text-blue-400'
-            : 'text-red-500'
-        }`}>
+        <div
+          className={`mt-2 ${
+            lyricsError.includes('Transcribing lyrics')
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-red-500'
+          }`}
+        >
           {lyricsError}
         </div>
       )}

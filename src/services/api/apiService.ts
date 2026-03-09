@@ -31,10 +31,8 @@ class ApiService {
   private clientLimiter: ClientRateLimiter;
 
   constructor() {
-    // Use environment variable for backend URL (supports runtime configuration)
-    // Fallback to localhost:5001 for local development (avoids macOS AirPlay port 5000 conflict)
-    this.backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
     this.frontendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    this.backendUrl = this.frontendUrl;
 
     // Client-side rate limiter: 4 requests per minute (slightly under server limit for beat/chord models)
     this.clientLimiter = new ClientRateLimiter(4, 60000);
@@ -44,12 +42,11 @@ class ApiService {
    * Determine the correct base URL for an endpoint
    */
   private getBaseUrlForEndpoint(endpoint: string): string {
-    // Local Next.js API routes (lyrics, etc.)
-    if (endpoint.startsWith('/api/')) {
-      return this.frontendUrl;
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      return '';
     }
-    // Backend ML endpoints
-    return this.backendUrl;
+
+    return this.frontendUrl;
   }
 
   /**
@@ -279,7 +276,7 @@ class ApiService {
    * Health check - FIXED: Increased timeout for Google Cloud Run cold starts
    */
   async healthCheck(): Promise<ApiResponse> {
-    return this.get('/', { timeout: 25000, retries: false });
+    return this.get('/api/health', { timeout: 25000, retries: false });
   }
 
   /**

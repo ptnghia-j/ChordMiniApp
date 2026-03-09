@@ -68,7 +68,6 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   isFocused = false,
   customWidth,
   customHeight,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   segmentationColor,
   showPositionSelector = false,
   onPositionChange,
@@ -91,6 +90,27 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
   const width = customWidth ?? presetWidth;
   const height = customHeight ?? presetHeight;
 
+  const withAlpha = (color: string, alpha: number): string => {
+    const rgbaMatch = color.match(/rgba?\(([^)]+)\)/i);
+    if (!rgbaMatch) return color;
+
+    const channels = rgbaMatch[1].split(',').map((part) => part.trim());
+    if (channels.length < 3) return color;
+
+    return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${alpha})`;
+  };
+
+  const focusedAccentColor = segmentationColor || 'rgba(59, 130, 246, 0.6)';
+  const focusedDiagramStyle = isFocused
+    ? {
+        boxShadow: `0 0 0 2px ${withAlpha(focusedAccentColor, segmentationColor ? 0.75 : 0.6)}`,
+        backgroundColor: withAlpha(focusedAccentColor, segmentationColor ? 0.18 : 0.12),
+      }
+    : undefined;
+  const focusedLabelStyle = isFocused
+    ? { color: withAlpha(focusedAccentColor, segmentationColor ? 0.95 : 1) }
+    : undefined;
+
   // Return quarter rest SVG for N.C. (No Chord)
   if (!chordData || !chordData.positions || chordData.positions.length === 0) {
     const restSize = Math.min(width * 0.6, height * 0.6); // Scale rest to 60% of container
@@ -98,14 +118,11 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     return (
       <div className={`flex flex-col items-center justify-center ${className}`}>
         <div
-          className={`flex items-center justify-center transition-all duration-200 rounded-lg ${
-            isFocused
-              ? 'ring-2 ring-blue-500/60 dark:ring-blue-400/60 bg-blue-50 dark:bg-blue-900/30'
-              : ''
-          }`}
+          className="flex items-center justify-center transition-all duration-200 rounded-lg"
           style={{
             width: `${width}px`,
             height: `${height}px`,
+            ...focusedDiagramStyle,
           }}
         >
           <Image
@@ -123,9 +140,10 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             'text-base'
           } ${
             isFocused
-              ? 'text-blue-600 dark:text-blue-400 font-semibold' // Focused: blue colored
+              ? 'font-semibold'
               : 'text-gray-500 dark:text-gray-400' // Unfocused: lighter
-          } transition-all duration-200 ${labelClassName || ''}`}>
+          } transition-all duration-200 ${labelClassName || ''}`}
+          style={focusedLabelStyle}>
             No Chord
           </span>
         )}
@@ -218,14 +236,11 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     <div className={`flex flex-col items-center ${className}`}>
       {/* Chord diagram - transparent, sits directly on parent background */}
       <div
-        className={`chord-diagram-container relative overflow-hidden transition-all duration-200 rounded-lg ${
-          isFocused
-            ? 'ring-2 ring-blue-500/60 dark:ring-blue-400/60 bg-blue-50 dark:bg-blue-900/30'
-            : ''
-        }`}
+        className="chord-diagram-container relative overflow-hidden transition-all duration-200 rounded-lg"
         style={{
           width: `${width}px`,
           height: `${height}px`,
+          ...focusedDiagramStyle,
         }}
       >
         <div className="chord-diagram-svg">
@@ -246,9 +261,10 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
             'text-base'
           } ${
             isFocused
-              ? 'text-blue-600 dark:text-blue-400 font-semibold' // Focused: blue colored
+              ? 'font-semibold'
               : 'text-gray-600 dark:text-gray-400' // Unfocused: lighter in both modes
           } transition-all duration-200 ${labelClassName || ''}`}
+          style={focusedLabelStyle}
           dangerouslySetInnerHTML={{
             __html: getFormattedChordName()
           }}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * API route to recognize chords in an audio file using the BTC Supervised Learning model
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (!formData.get('detector')) formData.set('detector', 'btc-sl');
 
     // Forward the request to the Python backend unified endpoint
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
     const response = await fetch(`${backendUrl}/api/recognize-chords`, {
       method: 'POST',
       body: formData,

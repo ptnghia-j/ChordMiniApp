@@ -3,7 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import ChatbotButton from '@/components/chatbot/ChatbotButton';
-import { SongContext, SegmentationResult } from '@/types/chatbotTypes';
+import { SongContext } from '@/types/chatbotTypes';
 
 // Lazy load chatbot interface only when needed
 const ChatbotInterface = dynamic(() => import('@/components/chatbot/ChatbotInterface'), {
@@ -17,7 +17,6 @@ interface ChatbotSectionProps {
   onToggle: () => void;
   onClose: () => void;
   songContext: SongContext;
-  onSegmentationResult?: (result: SegmentationResult) => void;
 }
 
 export const ChatbotSection: React.FC<ChatbotSectionProps> = ({
@@ -25,8 +24,7 @@ export const ChatbotSection: React.FC<ChatbotSectionProps> = ({
   isOpen,
   onToggle,
   onClose,
-  songContext,
-  onSegmentationResult
+  songContext
 }) => {
   return (
     <>
@@ -41,7 +39,6 @@ export const ChatbotSection: React.FC<ChatbotSectionProps> = ({
             isOpen={isOpen}
             onClose={onClose}
             songContext={songContext}
-            onSegmentationResult={onSegmentationResult}
           />
         </>
       )}

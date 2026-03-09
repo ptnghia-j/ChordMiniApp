@@ -15,6 +15,7 @@ export interface AudioMixerSettings {
   guitarVolume: number; // 0-100
   violinVolume: number; // 0-100
   fluteVolume: number; // 0-100
+  saxophoneVolume: number; // 0-100
   bassVolume: number; // 0-100 (new)
   metronomeVolume: number; // 0-100
 }
@@ -38,7 +39,7 @@ export class AudioMixerService {
   private settings: AudioMixerSettings = { ...DEFAULT_AUDIO_MIXER_SETTINGS };
 
   private youtubePlayer: YouTubePlayer | null = null;
-  private chordPlaybackService: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; bassVolume: number }) => void } | null = null;
+  private chordPlaybackService: { updateOptions: (options: Partial<{ pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; saxophoneVolume: number; bassVolume: number }>) => void } | null = null;
   private metronomeService: { setVolume: (volume: number) => void } | null = null;
   private listeners: Array<(settings: AudioMixerSettings) => void> = [];
 
@@ -81,7 +82,7 @@ export class AudioMixerService {
     }
   }
 
-  setChordPlaybackService(service: { updateOptions: (options: { pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; bassVolume: number }) => void } | null) {
+  setChordPlaybackService(service: { updateOptions: (options: Partial<{ pianoVolume: number; guitarVolume: number; violinVolume: number; fluteVolume: number; saxophoneVolume: number; bassVolume: number }>) => void } | null) {
     this.chordPlaybackService = service;
     this.applyChordPlaybackVolume();
   }
@@ -214,6 +215,16 @@ export class AudioMixerService {
   }
 
   /**
+   * Set saxophone volume
+   */
+  setSaxophoneVolume(volume: number) {
+    this.settings.saxophoneVolume = Math.max(0, Math.min(100, volume));
+    this.applyChordPlaybackVolume();
+    this.saveSettings();
+    this.notifyListeners();
+  }
+
+  /**
    * Set bass volume
    */
   setBassVolume(volume: number) {
@@ -253,6 +264,7 @@ export class AudioMixerService {
       const effectiveGuitarVolume = (this.settings.guitarVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveViolinVolume = (this.settings.violinVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveFluteVolume = (this.settings.fluteVolume / 100) * (effectiveChordVolume / 100) * 100;
+      const effectiveSaxophoneVolume = (this.settings.saxophoneVolume / 100) * (effectiveChordVolume / 100) * 100;
       const effectiveBassVolume = (this.settings.bassVolume / 100) * (effectiveChordVolume / 100) * 100;
 
       this.chordPlaybackService.updateOptions({
@@ -260,6 +272,7 @@ export class AudioMixerService {
         guitarVolume: effectiveGuitarVolume,
         violinVolume: effectiveViolinVolume,
         fluteVolume: effectiveFluteVolume,
+        saxophoneVolume: effectiveSaxophoneVolume,
         bassVolume: effectiveBassVolume
       });
     }
@@ -320,6 +333,7 @@ export class AudioMixerService {
       guitar: (this.settings.guitarVolume / 100) * (effChord / 100) * 100,
       violin: (this.settings.violinVolume / 100) * (effChord / 100) * 100,
       flute: (this.settings.fluteVolume / 100) * (effChord / 100) * 100,
+      saxophone: (this.settings.saxophoneVolume / 100) * (effChord / 100) * 100,
       bass: (this.settings.bassVolume / 100) * (effChord / 100) * 100,
       metronome: this.calculateEffectiveVolume(this.settings.metronomeVolume)
     };

@@ -5,6 +5,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ApiKeyModalProps, API_KEY_HELP_URLS } from '@/types/apiKeyTypes';
 import { HiLightBulb, HiGift, HiInformationCircle } from 'react-icons/hi2';
 
+const SEGMENTATION_ACCESS_REQUEST_EMAIL = process.env.NEXT_PUBLIC_SEGMENTATION_ACCESS_REQUEST_EMAIL || 'phantrongnghia510@gmail.com';
+
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   isOpen,
   onClose,
@@ -37,7 +39,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     e.preventDefault();
     
     if (!apiKey.trim()) {
-      setError('Please enter an API key');
+      setError(service === 'songformerAccess' ? 'Please enter an access code' : 'Please enter an API key');
       return;
     }
 
@@ -48,7 +50,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       await onKeySubmitted(apiKey.trim());
       // Modal will be closed by parent component on success
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to validate API key');
+      const fallbackMessage = service === 'songformerAccess'
+        ? 'Failed to validate access code'
+        : 'Failed to validate API key';
+      setError(error instanceof Error ? error.message : fallbackMessage);
     } finally {
       setIsValidating(false);
     }
@@ -65,7 +70,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           placeholder: 'Enter your Music.ai API key...',
           keyFormat: 'API keys are typically 40+ characters long',
           freeInfo: 'Free to start: $20 credit included with new accounts',
-          freeIcon: <HiLightBulb className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          freeIcon: <HiLightBulb className="w-3 h-3 mt-0.5 flex-shrink-0" />,
+          fieldLabel: 'API Key',
+          submitLabel: 'Save API Key',
+          helpLabel: 'How to get a Music.ai API key →',
         };
       case 'gemini':
         return {
@@ -76,7 +84,24 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           placeholder: 'Enter your Gemini API key (AIza...)...',
           keyFormat: 'API keys start with "AIza" and are 39 characters long',
           freeInfo: 'Free tier available: Generous usage limits for personal projects',
-          freeIcon: <HiGift className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          freeIcon: <HiGift className="w-3 h-3 mt-0.5 flex-shrink-0" />,
+          fieldLabel: 'API Key',
+          submitLabel: 'Save API Key',
+          helpLabel: 'How to get a Gemini API key →',
+        };
+      case 'songformerAccess':
+        return {
+          name: 'Song Segmentation',
+          description: 'First-time SongFormer segmentation requests are protected by an access code because backend runs are expensive. Completed cached results remain available without a code.',
+          features: 'new SongFormer segmentation requests',
+          helpUrl: `mailto:${SEGMENTATION_ACCESS_REQUEST_EMAIL}`,
+          placeholder: 'Enter your SongFormer access code...',
+          keyFormat: 'Access codes are case-sensitive',
+          freeInfo: `Request access through ${SEGMENTATION_ACCESS_REQUEST_EMAIL}`,
+          freeIcon: <HiInformationCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />,
+          fieldLabel: 'Access Code',
+          submitLabel: 'Save Access Code',
+          helpLabel: 'Request access code via email →',
         };
       default:
         return {
@@ -87,7 +112,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           placeholder: 'Enter your API key...',
           keyFormat: '',
           freeInfo: '',
-          freeIcon: null
+          freeIcon: null,
+          fieldLabel: 'API Key',
+          submitLabel: 'Save API Key',
+          helpLabel: 'How to get this API key →',
         };
     }
   };
@@ -111,7 +139,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <h2 className={`text-xl font-semibold ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>
-              {serviceInfo.name} API Key {required ? 'Required' : 'Setup'}
+              {serviceInfo.name} {serviceInfo.fieldLabel} {required ? 'Required' : 'Setup'}
             </h2>
             {!required && (
               <button
@@ -147,7 +175,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   </div>
                 )}
                 <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>
-                  Your key is stored locally and encrypted. It never leaves your browser.
+                  Your {serviceInfo.fieldLabel.toLowerCase()} is stored locally and encrypted. It never leaves your browser.
                 </p>
               </div>
             </div>
@@ -159,7 +187,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
               }`}>
-                API Key
+                {serviceInfo.fieldLabel}
               </label>
               <div className="relative">
                 <input
@@ -235,7 +263,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                     Validating...
                   </span>
                 ) : (
-                  'Save API Key'
+                  serviceInfo.submitLabel
                 )}
               </button>
               
@@ -267,7 +295,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
               }`}
             >
-              How to get a {serviceInfo.name} API key →
+              {serviceInfo.helpLabel}
             </a>
           </div>
         </div>

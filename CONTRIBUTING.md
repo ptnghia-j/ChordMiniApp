@@ -1,6 +1,6 @@
 # Contributing to ChordMini
 
-Thank you for your interest in contributing to ChordMini! This guide will help you get started with contributing to our AI-powered chord recognition application.
+Thank you for your interest in contributing to ChordMini! This guide will help you get started with contributing to our open-source music analysis tool for chords, beats, lyrics, and visualization workflows.
 
 ## 📝 Code Style Guidelines
 
@@ -19,7 +19,7 @@ Thank you for your interest in contributing to ChordMini! This guide will help y
 - **Props**: Define explicit interfaces for all component props
 
 ### Styling Guidelines
-- **Tailwind CSS**: Use utility classes, avoid custom CSS when possible
+- **HeroUI + Tailwind CSS**: Prefer HeroUI components with Tailwind utility class overrides; avoid custom CSS when possible
 - **Responsive Design**: Mobile-first approach with proper breakpoints
 - **Dark Mode**: Support both light and dark themes consistently
 - **Accessibility**: Include proper ARIA labels and keyboard navigation
@@ -28,36 +28,43 @@ Thank you for your interest in contributing to ChordMini! This guide will help y
 Follow the existing ESLint rules:
 ```bash
 npm run lint        # Check for linting errors
-npm run lint:fix    # Auto-fix linting issues
 ```
 
-## 🧪 Testing
+If a change introduces lint issues, fix them in the touched files before opening a PR.
+
+## 🧪 Testing (To be updated)
 
 ### Testing Strategy
-- **Unit Tests**: Jest + React Testing Library for component testing
-- **Integration Tests**: API route testing with mock services
+- **Unit Tests**: Jest + React Testing Library for components, hooks, services, and stores
+- **Integration Tests**: Jest-based integration coverage for API routes and workflow-heavy features
 - **E2E Tests**: Playwright for critical user flows
-- **Performance Tests**: Lighthouse CI for performance monitoring
+- **Build Verification**: `npm run build` is an important validation step before submitting changes
 
 ### Running Tests
 ```bash
-npm run test        # Run unit tests
+npm run lint        # Run ESLint checks
+npm run test        # Run Jest suites
 npm run test:watch  # Run tests in watch mode
 npm run test:e2e    # Run end-to-end tests
 npm run build       # Verify production build
 ```
 
+Current test suites primarily live under:
+- `__tests__/unit`
+- `__tests__/integration`
+- `__tests__/e2e`
+
 ### Test Requirements
-- **Coverage**: Maintain >80% test coverage for new features
-- **Critical Paths**: All user-facing features must have tests
-- **API Routes**: All API endpoints must have integration tests
-- **Components**: UI components must have accessibility tests
+- **Relevant Coverage**: Add or update tests for behavior changes when practical, especially for regressions and critical flows
+- **Critical Paths**: User-facing features and analysis workflows should have targeted validation
+- **API Routes**: API changes should include integration or focused route-level coverage where practical
+- **UI Changes**: UI updates should include manual verification, and accessibility checks when the interaction changes
 
 ## 🔄 Pull Request Process
 
 ### Before Submitting
 1. **Fork and Branch**: Create a feature branch from `main`
-2. **Code Quality**: Ensure all tests pass and linting is clean
+2. **Code Quality**: Ensure relevant tests pass and linting is clean
 3. **Documentation**: Update relevant documentation
 4. **Build Verification**: Run `npm run build` successfully
 
@@ -69,17 +76,17 @@ npm run build       # Verify production build
 - **Breaking Changes**: Clearly document any breaking changes
 
 ### Review Process
-1. **Automated Checks**: All CI/CD checks must pass
+1. **Automated Checks**: Current CI validates TypeScript compilation, ESLint, and production build
 2. **Code Review**: At least one maintainer review required
-3. **Testing**: Manual testing for complex features
+3. **Testing**: Add targeted automated tests where practical and perform manual testing for complex features
 4. **Documentation**: Ensure documentation is updated
 
 ### Merge Criteria
-- ✅ All tests passing
+- ✅ Relevant checks passing
 - ✅ Code review approved
 - ✅ No merge conflicts
 - ✅ Documentation updated
-- ✅ Performance impact assessed
+- ✅ Performance impact assessed when applicable
 
 ## 🐛 Issue Reporting
 

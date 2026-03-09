@@ -1,0 +1,1 @@
+from .muq import MuQConfig, MuQ

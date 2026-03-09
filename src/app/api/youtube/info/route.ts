@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 // YouTube video ID validation regex
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
     let lastError = null;
 
     // Method 1: Try Python backend first (if available)
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
 
     try {
       console.log(`Trying Python backend: ${backendUrl}/api/extract-audio`);

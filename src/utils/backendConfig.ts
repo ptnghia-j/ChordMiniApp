@@ -5,11 +5,11 @@
  * across the entire ChordMiniApp application.
  *
  * RUNTIME CONFIG SUPPORT:
- * - Server-side code (API routes, SSR): Use getBackendUrl() (sync, uses process.env)
- * - Client-side code (React components): Use getBackendUrlAsync() for runtime config
+ * - Server-side code (API routes, SSR): Uses server-only PYTHON_API_URL
+ * - Client-side code (React components): Uses same-origin frontend API routes
  */
 
-import { loadPublicConfig } from '@/config/publicConfig';
+import { getPythonApiUrl as getServerPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * Get the Python backend URL from environment variables (sync, for server-side)
@@ -24,7 +24,7 @@ import { loadPublicConfig } from '@/config/publicConfig';
  * @returns The backend URL to use for API calls
  */
 export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  return getServerPythonApiUrl();
 }
 
 /**
@@ -36,14 +36,11 @@ export function getBackendUrl(): string {
  * @returns Promise resolving to the backend URL
  */
 export async function getBackendUrlAsync(): Promise<string> {
-  // Server-side: use process.env directly
   if (typeof window === 'undefined') {
     return getBackendUrl();
   }
 
-  // Client-side: load runtime config
-  const config = await loadPublicConfig();
-  return config.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  return window.location.origin;
 }
 
 /**
@@ -52,7 +49,9 @@ export async function getBackendUrlAsync(): Promise<string> {
  * @returns True if using localhost backend
  */
 export function isLocalBackend(): boolean {
-  const backendUrl = getBackendUrl();
+  const backendUrl = typeof window === 'undefined'
+    ? getBackendUrl()
+    : window.location.origin;
   return backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1');
 }
 
@@ -159,8 +158,8 @@ export function validateBackendConfig() {
     url,
     isLocal: isLocalBackend(),
     isProduction: isProductionBackend(),
-    environmentVariable: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'not set',
-    fallbackUsed: !process.env.NEXT_PUBLIC_PYTHON_API_URL
+    environmentVariable: process.env.PYTHON_API_URL || 'not set',
+    fallbackUsed: !process.env.PYTHON_API_URL
   };
 }
 

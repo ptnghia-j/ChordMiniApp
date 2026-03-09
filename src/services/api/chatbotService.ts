@@ -7,8 +7,9 @@
 
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { ChatMessage, ChatbotRequest, ChatbotResponse, SongContext, SegmentationRequest, SegmentationResult } from '@/types/chatbotTypes';
+import { ChatMessage, ChatbotRequest, ChatbotResponse, SongContext, SegmentationResult } from '@/types/chatbotTypes';
 import { LyricsData } from '@/types/musicAiTypes';
+import { segmentationAsyncService } from '@/services/api/segmentationAsyncService';
 
 /**
  * Sends a message to the chatbot API
@@ -259,38 +260,25 @@ export function truncateConversationHistory(
 }
 
 /**
- * Sends a request to the segmentation API
+ * Sends a request to the SongFormer segmentation API.
  */
 export async function requestSongSegmentation(
   songContext: SongContext,
-  geminiApiKey?: string
 ): Promise<SegmentationResult> {
   try {
-    const request: SegmentationRequest = {
-      songContext,
-      geminiApiKey
-    };
-
-    const response = await axios.post('/api/segmentation', request, {
-      timeout: 120000, // 120 second timeout for segmentation analysis (maximum allowed)
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.data.success) {
-      return response.data.data;
-    } else {
-      throw new Error(response.data.error || 'Segmentation analysis failed');
-    }
+    const result = await segmentationAsyncService.requestSegmentation(songContext);
+    console.log('✅ SongFormer async segmentation request completed successfully');
+    return result;
   } catch (error) {
     console.error('Error requesting song segmentation:', error);
 
     if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.error || error.message;
+      const message = error.code === 'ECONNABORTED'
+        ? 'SongFormer segmentation timed out in the browser before the response could be applied.'
+        : error.response?.data?.error || error.message;
       throw new Error(`Segmentation request failed: ${message}`);
     }
 
-    throw new Error('Failed to analyze song segmentation');
+    throw new Error(error instanceof Error ? error.message : 'Failed to analyze song segmentation');
   }
 }

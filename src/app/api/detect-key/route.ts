@@ -3,11 +3,13 @@ import { GoogleGenAI } from '@google/genai';
 import { firestoreDb } from '@/services/firebase/firebaseService';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
+import { GEMINI_MODEL_NAME } from '@/config/gemini';
 
 export const maxDuration = 240; // 4 minutes for key detection processing
 
 // Define the model name to use
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = GEMINI_MODEL_NAME;
+const KEY_DETECTION_PROMPT_VERSION = 'v2-preserve-inversion-symbols';
 
 // Lazy initialization of Gemini API client to avoid build-time errors
 let _ai: GoogleGenAI | null = null;
@@ -45,7 +47,7 @@ function generateKeyDetectionCacheKey(chords: ChordData[], includeEnharmonicCorr
     .join('|');
 
   // Put flags at the beginning to ensure they're not truncated
-  const keyString = `enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
+  const keyString = `prompt:${KEY_DETECTION_PROMPT_VERSION}_enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
 
   // Use SHA-256 hash for better uniqueness and consistent length
   const hash = crypto.createHash('sha256').update(keyString).digest('hex');
@@ -338,6 +340,13 @@ Please respond with ONLY a JSON object in this exact format:
   }` : ''}
 }
 
+	OUTPUT REPRESENTATION RULES:
+	- The fields "sequenceCorrections.correctedSequence", "sequenceCorrections.keyAnalysis.sections[].chords", and "corrections" must contain CHORD SYMBOLS, not Roman numerals.
+	- Preserve inversion slash notation in chord symbols. If the input chord is "D/F#", the corrected chord symbol must stay slash-based, such as "D/F#" (or an enharmonic respelling of the same pitches if absolutely needed).
+	- NEVER convert a chord symbol into figure-bass shorthand. For chord-symbol outputs, do NOT rewrite "D/F#" as "D6", "D64", "D65", "IV6", or any other Roman numeral / figured-bass label.
+	- Roman numeral inversion notation belongs ONLY inside "romanNumerals.analysis" and "romanNumerals.temporalShifts[*].romanNumeral".
+	- Example: chord symbol output = "D/F#"; Roman numeral output may be "I6" or "IV6" depending on the local key context. Keep these as separate representations.
+
 ${includeRomanNumerals ? `
 ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
 1. **STANDARD NOTATION**: Use standard music theory Roman numerals (I, ii, iii, IV, V, vi, vii°)
@@ -346,7 +355,7 @@ ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
    - Diminished chords: vii° (lowercase with degree symbol)
    - Seventh chords: V7, ii7, etc.
 
-2. **INVERSIONS**: Use proper figure bass notation for ALL inversions
+	2. **INVERSIONS**: Use proper figure bass notation for ALL inversions in the Roman numeral fields only
    **TRIADS:**
    - Root position: I, ii, iii, IV, V, vi, vii° (no figures)
    - First inversion: I6, ii6, iii6, IV6, V6, vi6, vii°6 (NOT I/3 or I/E)
@@ -358,7 +367,8 @@ ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
    - Second inversion: I43, ii43, iii43, IV43, V43, vi43, vii°43 (NOT I7/5)
    - Third inversion: I42, ii42, iii42, IV42, V42, vi42, vii°42 (NOT I7/7)
 
-   **CRITICAL**: NEVER use slash notation (I/D, V/B) - ALWAYS use figure bass (I42, V6)
+	   **CRITICAL**: NEVER use slash notation (I/D, V/B) inside the Roman numeral fields - ALWAYS use figure bass (I42, V6)
+	   **IMPORTANT SEPARATION**: This rule applies ONLY to Roman numeral analysis. It does NOT permit changing chord-symbol outputs like "D/F#" into "D6".
 
 3. **TEMPORARY TONAL SHIFTS**: Use bar notation for analysis, but note frontend conversion
    - Analysis format: V7|vi (V7 going to vi as temporary tonic)
@@ -387,11 +397,13 @@ CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:` : ''}
    - Valid correction: E→F#→F##dim→G#m (G# and Ab are same pitch)
    - INVALID correction: E→F#→A#dim→G#m (G and A# are different pitches - changes harmonic function!)
    - Please aware of walking bass line (E→F#→F##→G# in the context of the key and in the direction of the bass line and hence F## fits in) and notice the double accidentals, double sharps (F##) used in the example above.
+	   - For slash chords, preserve the same inversion / bass note function in chord-symbol output. Example: "D/F#" must remain a slash chord symbol, not "D6".
 
 3. **CHORD QUALITY PRESERVATION**: Keep ALL chord qualities exactly unchanged
    - "Gdim" stays "dim" quality, can become "F#dim" but never "A#dim" or "Gmaj"
    - "F#7" stays "7" quality, can become "Gb7" but never "F7" or "F#maj7"
    - "C#m" stays "m" quality, can become "Dbm" but never "C#" or "Dm"
+	   - "D/F#" stays a slash-chord inversion symbol, can become something enharmonically equivalent like "D/Gb" only if the same sounding bass must be respelled, but never "D6"
 
 4. **KEY SIGNATURE OPTIMIZATION**: Choose spellings with less accidentals
    - Prefer Db major (5 flats) over C# major (7 sharps)

@@ -79,6 +79,7 @@ def register_blueprints(app: Flask, config) -> None:
     from blueprints.beats import beats_bp
     from blueprints.chords import chords_bp
     from blueprints.lyrics import lyrics_bp
+    from blueprints.songformer import songformer_bp
     from blueprints.debug import debug_bp
 
     # Register blueprints
@@ -87,6 +88,7 @@ def register_blueprints(app: Flask, config) -> None:
     app.register_blueprint(beats_bp)
     app.register_blueprint(chords_bp)
     app.register_blueprint(lyrics_bp)
+    app.register_blueprint(songformer_bp)
 
     # Register debug blueprint only in non-production mode
     if not config.PRODUCTION_MODE:
@@ -142,6 +144,15 @@ def init_services(app: Flask, config) -> None:
         log_info(f"Failed to initialize lyrics service: {e}")
         # Create a dummy service that returns errors
         services['lyrics'] = None
+
+    # Initialize SongFormer service
+    try:
+        from services.audio.songformer_service import SongFormerService
+        services['songformer'] = SongFormerService()
+        log_info("SongFormer service initialized")
+    except Exception as e:
+        log_info(f"Failed to initialize SongFormer service: {e}")
+        services['songformer'] = None
 
 
 

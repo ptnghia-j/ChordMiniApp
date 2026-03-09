@@ -344,7 +344,10 @@ export default function YouTubeVideoAnalyzePage() {
   const {
     segmentationData,
     showSegmentation,
-    handleSegmentationResult,
+    isSegmenting,
+    segmentationError,
+    toggleSegmentation,
+    resetSegmentation,
   } = useSegmentationState();
 
   // Get chord processing state from Zustand stores
@@ -961,9 +964,28 @@ export default function YouTubeVideoAnalyzePage() {
 
       // Lyrics data
       lyrics: lyrics || undefined,
-      translatedLyrics: translatedLyrics
+      translatedLyrics: translatedLyrics,
+      audioUrl: audioProcessingState.audioUrl || undefined,
     };
-  }, [videoId, videoTitle, duration, analysisResults, lyrics, translatedLyrics]);
+  }, [videoId, videoTitle, duration, analysisResults, lyrics, translatedLyrics, audioProcessingState.audioUrl]);
+
+  useEffect(() => {
+    resetSegmentation();
+  }, [videoId, resetSegmentation]);
+
+  const segmentationDisabledReason = !buildSongContext.audioUrl
+    ? 'Song segmentation becomes available after audio extraction finishes.'
+    : buildSongContext.audioUrl.startsWith('blob:')
+      ? 'Song segmentation requires a backend-accessible extracted audio URL.'
+      : !buildSongContext.beats?.length
+        ? 'Song segmentation becomes available after beat analysis finishes.'
+        : undefined;
+
+  const canAnalyzeSegmentation = !segmentationDisabledReason;
+
+  const handleSegmentationToggle = useCallback(() => {
+    void toggleSegmentation(buildSongContext);
+  }, [toggleSegmentation, buildSongContext]);
 
   // Function to handle chatbot toggle
   const toggleChatbot = () => {
@@ -1493,6 +1515,7 @@ export default function YouTubeVideoAnalyzePage() {
               chordGridData={chordGridData}
               isPlaying={isPlaying}
               currentTime={currentTime}
+              segmentationData={segmentationData}
               bpm={bpm}
               timeSignature={timeSignature}
               onChordPlaybackChange={handleChordPlaybackChange}
@@ -1569,7 +1592,6 @@ export default function YouTubeVideoAnalyzePage() {
                       hasCachedLyrics={hasCachedLyrics}
                       canTranscribe={isServiceAvailable('musicAi') && !!audioProcessingState.audioUrl}
                       transcribeLyricsWithAI={transcribeLyricsWithAI}
-                      hasSegmentationData={!!segmentationData}
                       lyricsError={lyricsError}
                     />
 
@@ -1626,7 +1648,9 @@ export default function YouTubeVideoAnalyzePage() {
                         <PianoVisualizerTab
                           chordGridData={simplifiedChordGridData}
                           sequenceCorrections={simplifiedSequenceCorrections}
+                          segmentationData={segmentationData}
                           currentTime={currentTime}
+                          currentBeatIndex={currentBeatIndex}
                           isPlaying={isPlaying}
                           isChordPlaybackEnabled={chordPlayback.isEnabled}
                         />
@@ -1675,7 +1699,6 @@ export default function YouTubeVideoAnalyzePage() {
                           onClose={() => setIsChatbotOpen(false)}
                           songContext={buildSongContext}
                           className="static inset-auto w-full h-full max-h-none max-w-none rounded-lg shadow-sm"
-                          onSegmentationResult={handleSegmentationResult}
                           embedded
                         />
                       </div>
@@ -1704,6 +1727,7 @@ export default function YouTubeVideoAnalyzePage() {
               currentBeatIndex={currentBeatIndex}
               chords={simplifiedChordGridData?.chords || []}
               beats={simplifiedChordGridData?.beats || []}
+              segmentationData={segmentationData}
               toggleVideoMinimization={toggleVideoMinimization}
               toggleFollowMode={toggleFollowMode}
               toggleMetronomeWithSync={async () => false}
@@ -1782,6 +1806,15 @@ export default function YouTubeVideoAnalyzePage() {
               isLyricsPanelOpen={isLyricsPanelOpen}
               toggleChatbot={toggleChatbot}
               toggleLyricsPanel={toggleLyricsPanel}
+              segmentation={{
+                isVisible: showSegmentation && !!segmentationData,
+                hasData: !!segmentationData,
+                isLoading: isSegmenting,
+                disabled: !canAnalyzeSegmentation && !segmentationData,
+                disabledReason: !segmentationData ? segmentationDisabledReason : undefined,
+                errorMessage: segmentationError,
+                onToggle: handleSegmentationToggle,
+              }}
               metronome={{
                 isEnabled: isMetronomeEnabled,
                 toggleMetronomeWithSync: handleMetronomeToggle

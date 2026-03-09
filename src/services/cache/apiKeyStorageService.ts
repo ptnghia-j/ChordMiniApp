@@ -4,6 +4,7 @@
  */
 
 import { 
+  ApiCredentialService,
   ApiKeyConfig, 
   EncryptedApiKeyData, 
   API_KEY_STORAGE_KEYS 
@@ -138,10 +139,23 @@ class ApiKeyStorageService {
     return new TextDecoder().decode(decrypted);
   }
 
+  private getStorageKey(service: ApiCredentialService): string {
+    switch (service) {
+      case 'musicAi':
+        return API_KEY_STORAGE_KEYS.MUSIC_AI;
+      case 'gemini':
+        return API_KEY_STORAGE_KEYS.GEMINI;
+      case 'songformerAccess':
+        return API_KEY_STORAGE_KEYS.SONGFORMER_ACCESS;
+      default:
+        return API_KEY_STORAGE_KEYS.GEMINI;
+    }
+  }
+
   /**
    * Store API key securely
    */
-  public async storeApiKey(service: 'musicAi' | 'gemini', apiKey: string): Promise<void> {
+  public async storeApiKey(service: ApiCredentialService, apiKey: string): Promise<void> {
     const storage = this.getLocalStorage();
     if (!storage) {
       throw new Error('localStorage not available - API key storage requires browser environment');
@@ -149,9 +163,7 @@ class ApiKeyStorageService {
 
     try {
       const encryptedData = await this.encryptApiKey(apiKey);
-      const storageKey = service === 'musicAi'
-        ? API_KEY_STORAGE_KEYS.MUSIC_AI
-        : API_KEY_STORAGE_KEYS.GEMINI;
+      const storageKey = this.getStorageKey(service);
 
       storage.setItem(storageKey, JSON.stringify(encryptedData));
 
@@ -171,7 +183,7 @@ class ApiKeyStorageService {
   /**
    * Retrieve API key securely
    */
-  public async getApiKey(service: 'musicAi' | 'gemini'): Promise<string | null> {
+  public async getApiKey(service: ApiCredentialService): Promise<string | null> {
     const storage = this.getLocalStorage();
     if (!storage) {
       // In server environment, return null (will fallback to environment variables)
@@ -179,9 +191,7 @@ class ApiKeyStorageService {
     }
 
     try {
-      const storageKey = service === 'musicAi'
-        ? API_KEY_STORAGE_KEYS.MUSIC_AI
-        : API_KEY_STORAGE_KEYS.GEMINI;
+      const storageKey = this.getStorageKey(service);
 
       const encryptedDataStr = storage.getItem(storageKey);
       if (!encryptedDataStr) {
@@ -199,16 +209,14 @@ class ApiKeyStorageService {
   /**
    * Check if API key exists for service
    */
-  public hasApiKey(service: 'musicAi' | 'gemini'): boolean {
+  public hasApiKey(service: ApiCredentialService): boolean {
     const storage = this.getLocalStorage();
     if (!storage) {
       // In server environment, return false (will fallback to environment variables)
       return false;
     }
 
-    const storageKey = service === 'musicAi'
-      ? API_KEY_STORAGE_KEYS.MUSIC_AI
-      : API_KEY_STORAGE_KEYS.GEMINI;
+    const storageKey = this.getStorageKey(service);
 
     const metaData = storage.getItem(`${storageKey}_meta`);
     if (!metaData) return false;
@@ -224,16 +232,14 @@ class ApiKeyStorageService {
   /**
    * Remove API key
    */
-  public removeApiKey(service: 'musicAi' | 'gemini'): void {
+  public removeApiKey(service: ApiCredentialService): void {
     const storage = this.getLocalStorage();
     if (!storage) {
       console.warn('localStorage not available - cannot remove API key');
       return;
     }
 
-    const storageKey = service === 'musicAi'
-      ? API_KEY_STORAGE_KEYS.MUSIC_AI
-      : API_KEY_STORAGE_KEYS.GEMINI;
+    const storageKey = this.getStorageKey(service);
 
     storage.removeItem(storageKey);
     storage.removeItem(`${storageKey}_meta`);
@@ -254,6 +260,10 @@ class ApiKeyStorageService {
     if (this.hasApiKey('gemini')) {
       config.gemini = await this.getApiKey('gemini') || undefined;
     }
+
+    if (this.hasApiKey('songformerAccess')) {
+      config.songformerAccess = await this.getApiKey('songformerAccess') || undefined;
+    }
     
     return config;
   }
@@ -270,6 +280,7 @@ class ApiKeyStorageService {
 
     this.removeApiKey('musicAi');
     this.removeApiKey('gemini');
+    this.removeApiKey('songformerAccess');
     storage.removeItem(API_KEY_STORAGE_KEYS.ENCRYPTION_SALT);
     this.encryptionKey = null;
 

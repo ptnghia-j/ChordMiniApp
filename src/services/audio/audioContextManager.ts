@@ -21,7 +21,11 @@ export class AudioContextManager {
       throw new Error('AudioContext is only available in browser environment');
     }
 
-    if (!this._ctx) {
+    if (!this._ctx || this._ctx.state === 'closed') {
+      if (this._ctx?.state === 'closed') {
+        this._ctx = null;
+      }
+
       // Use webkitAudioContext fallback for Safari
       const Ctor = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       this._ctx = new Ctor({ latencyHint: 'interactive', sampleRate: 44100 } as AudioContextOptions);
@@ -38,6 +42,7 @@ export class AudioContextManager {
 
   async resume(): Promise<void> {
     if (!this._ctx) return;
+    if (this._ctx.state === 'closed') return;
     if (this._ctx.state === 'suspended' && !this._isInitializing) {
       this._isInitializing = true;
       try {

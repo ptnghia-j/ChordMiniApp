@@ -383,7 +383,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
   // PERFORMANCE OPTIMIZATION: Throttle currentTime writes to store to reduce re-renders
   const lastTimeUpdateRef = useRef<number>(0);
-  const TIME_UPDATE_INTERVAL = 250; // Update currentTime at most every 250ms
+  const TIME_UPDATE_INTERVAL = 100; // Keep visual/audio consumers fresher to reduce residual interpolation snaps
 
   // Update current time and check for current beat
   useEffect(() => {

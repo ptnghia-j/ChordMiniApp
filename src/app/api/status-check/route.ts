@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * Status Check API Route
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
     
     let response;
     let expectedError = false;

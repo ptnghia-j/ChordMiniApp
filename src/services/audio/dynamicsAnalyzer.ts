@@ -20,6 +20,7 @@
  */
 
 import { audioContextManager } from './audioContextManager';
+import type { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,15 @@ export interface DynamicsParams {
   timeSignature: number;
   /** Total song duration in seconds (optional but recommended) */
   totalDuration?: number;
+  /** Optional song segmentation used for section-aware shaping */
+  segmentationData?: SegmentationResult | null;
+}
+
+interface SectionContourPoint {
+  startTime: number;
+  centerTime: number;
+  endTime: number;
+  target: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -80,6 +90,13 @@ const OUTRO_SECTION_PORTION = 0.08;
 
 /** Softened edge multiplier used at the start and end of the song */
 const MACRO_EDGE_MULTIPLIER = 0.88;
+
+/** Floor/ceiling for section contour targets */
+const SECTION_TARGET_FLOOR = 0.82;
+const SECTION_TARGET_CEILING = 1.22;
+
+/** How far to extrapolate beyond the first/last section center targets */
+const OUTER_SECTION_EXTRAPOLATION = 0.55;
 
 // ─── Harmonic Tension Map ────────────────────────────────────────────────────
 
@@ -157,11 +174,72 @@ function easeInOutSine(t: number): number {
   return 0.5 - 0.5 * Math.cos(Math.PI * clamped);
 }
 
+function interpolateContour(
+  time: number,
+  startTime: number,
+  endTime: number,
+  startValue: number,
+  endValue: number,
+): number {
+  const duration = Math.max(endTime - startTime, Number.EPSILON);
+  const progress = Math.max(0, Math.min(1, (time - startTime) / duration));
+  return startValue + (endValue - startValue) * easeInOutSine(progress);
+}
+
+function clampSectionTarget(target: number): number {
+  return Math.max(SECTION_TARGET_FLOOR, Math.min(SECTION_TARGET_CEILING, target));
+}
+
+function normalizeSectionType(segment: SongSegment): string {
+  const raw = (segment.label ?? segment.type ?? '').toLowerCase().trim();
+  const normalized = raw
+    .replace(/\s*\(.*?\)/g, '')
+    .replace(/\s*\d+/g, '')
+    .replace(/_/g, '-')
+    .replace(/\s+/g, '-');
+
+  if (normalized.includes('pre') && normalized.includes('chorus')) return 'pre-chorus';
+  if (normalized.includes('post') && normalized.includes('chorus')) return 'chorus';
+  if (normalized.includes('intro')) return 'intro';
+  if (normalized.includes('verse')) return 'verse';
+  if (normalized.includes('chorus') || normalized.includes('refrain') || normalized.includes('hook')) return 'chorus';
+  if (normalized.includes('bridge') || normalized.includes('middle-8') || normalized.includes('middle8')) return 'bridge';
+  if (normalized.includes('instrumental') || normalized.includes('solo')) return 'instrumental';
+  if (normalized.includes('breakdown') || normalized.includes('break')) return 'breakdown';
+  if (normalized.includes('outro') || normalized.includes('ending') || normalized.includes('tag')) return 'outro';
+
+  return 'other';
+}
+
+function getBaseSectionTarget(sectionType: string): number {
+  switch (sectionType) {
+    case 'intro':
+      return 0.89;
+    case 'verse':
+      return 0.97;
+    case 'pre-chorus':
+      return 1.06;
+    case 'chorus':
+      return 1.13;
+    case 'bridge':
+      return 0.95;
+    case 'instrumental':
+      return 1.02;
+    case 'breakdown':
+      return 0.88;
+    case 'outro':
+      return 0.86;
+    default:
+      return 0.99;
+  }
+}
+
 // ─── DynamicsAnalyzer ────────────────────────────────────────────────────────
 
 export class DynamicsAnalyzer {
   private params: DynamicsParams | null = null;
   private energyContour: EnergyContour | null = null;
+  private sectionContour: SectionContourPoint[] = [];
   /** Smoothed velocity to prevent abrupt jumps between consecutive chords */
   private lastVelocity: number | null = null;
   /** Time of the last velocity query for time-aware smoothing */
@@ -172,6 +250,111 @@ export class DynamicsAnalyzer {
    */
   setParams(params: DynamicsParams): void {
     this.params = params;
+    this.sectionContour = this.buildSectionContour(params);
+  }
+
+  private buildSectionContour(params: DynamicsParams): SectionContourPoint[] {
+    const segments = params.segmentationData?.segments ?? [];
+    const totalDuration = params.totalDuration ?? params.segmentationData?.metadata.totalDuration;
+    if (!totalDuration || !isFinite(totalDuration) || totalDuration <= 0 || segments.length === 0) {
+      return [];
+    }
+
+    const sortedSegments = [...segments]
+      .filter(segment => Number.isFinite(segment.startTime) && Number.isFinite(segment.endTime) && segment.endTime > segment.startTime)
+      .sort((a, b) => a.startTime - b.startTime);
+
+    if (sortedSegments.length === 0) {
+      return [];
+    }
+
+    const normalizedTypes = sortedSegments.map(normalizeSectionType);
+    const chorusIndices = normalizedTypes
+      .map((type, index) => (type === 'chorus' ? index : -1))
+      .filter(index => index >= 0);
+    const preferredPeakIndex = [...chorusIndices].reverse().find((index) => {
+      const segment = sortedSegments[index];
+      const center = (segment.startTime + segment.endTime) / 2;
+      return center >= totalDuration * 0.5;
+    }) ?? chorusIndices[chorusIndices.length - 1];
+
+    return sortedSegments.map((segment, index) => {
+      const sectionType = normalizedTypes[index];
+      const center = (segment.startTime + segment.endTime) / 2;
+      const progress = totalDuration > 0 ? center / totalDuration : 0;
+
+      let target = getBaseSectionTarget(sectionType);
+
+      if (sectionType === 'verse') {
+        target += Math.max(0, progress - 0.1) * 0.05;
+      } else if (sectionType === 'pre-chorus') {
+        target += Math.max(0, progress - 0.18) * 0.075;
+      } else if (sectionType === 'chorus') {
+        const chorusOrder = chorusIndices.indexOf(index);
+        const chorusLift = chorusIndices.length > 1 ? chorusOrder / (chorusIndices.length - 1) : 1;
+        target += 0.045 * chorusLift;
+        if (progress >= 0.5) {
+          target += 0.03;
+        }
+        if (preferredPeakIndex === index) {
+          target += 0.055;
+        }
+      } else if (sectionType === 'instrumental') {
+        target += Math.max(0, progress - 0.45) * 0.03;
+      } else if (sectionType === 'bridge' || sectionType === 'breakdown') {
+        target -= Math.max(0, progress - 0.35) * 0.025;
+      } else if (sectionType === 'outro') {
+        target -= Math.max(0, progress - 0.72) * 0.14;
+      }
+
+      return {
+        startTime: segment.startTime,
+        centerTime: center,
+        endTime: segment.endTime,
+        target: clampSectionTarget(target),
+      };
+    });
+  }
+
+  private getSectionDynamicContour(time: number): number {
+    if (this.sectionContour.length === 0) {
+      return 1.0;
+    }
+
+    const points = this.sectionContour;
+    if (points.length === 1) {
+      return points[0].target;
+    }
+
+    const first = points[0];
+    const second = points[1];
+    if (time <= first.centerTime) {
+      const startTarget = clampSectionTarget(
+        first.target + (first.target - second.target) * OUTER_SECTION_EXTRAPOLATION,
+      );
+      return interpolateContour(time, first.startTime, first.centerTime, startTarget, first.target);
+    }
+
+    for (let index = 0; index < points.length - 1; index++) {
+      const current = points[index];
+      const next = points[index + 1];
+      if (time <= next.centerTime) {
+        return interpolateContour(
+          time,
+          current.centerTime,
+          next.centerTime,
+          current.target,
+          next.target,
+        );
+      }
+    }
+
+    const last = points[points.length - 1];
+    const previous = points[points.length - 2];
+    const endTarget = clampSectionTarget(
+      last.target + (last.target - previous.target) * OUTER_SECTION_EXTRAPOLATION,
+    );
+    return interpolateContour(time, last.centerTime, last.endTime, last.target, endTarget);
   }
 
   // ─── Optional Audio Energy Analysis ──────────────────────────────────────
@@ -326,13 +509,16 @@ export class DynamicsAnalyzer {
       smoothEnvelope *= 0.92 + 0.08 * phraseEnvelope;
     }
 
-    // 2. Macro song contour (soft intro/outro, full middle)
+    // 2. Section-aware contour (verse/build/chorus/bridge/outro)
+    smoothEnvelope *= this.getSectionDynamicContour(time);
+
+    // 3. Macro song contour (soft intro/outro, full middle)
     smoothEnvelope *= this.getMacroDynamicContour(time);
 
     // ── Volatile component (EMA-smoothed) ────────────────────────────────
     let volatile = 0.75; // Base mid-level velocity
 
-    // 3. Audio energy contour (optional)
+    // 4. Audio energy contour (optional)
     if (this.energyContour) {
       const idx = Math.floor(time / this.energyContour.timeStep);
       const clamped = Math.max(0, Math.min(idx, this.energyContour.values.length - 1));
@@ -346,7 +532,7 @@ export class DynamicsAnalyzer {
       volatile = volatile * (1 - ENERGY_INFLUENCE) + energyVelocity * ENERGY_INFLUENCE;
     }
 
-    // 4. Metric accent (beat strength)
+    // 5. Metric accent (beat strength)
     if (this.params && beatIndex !== undefined && beatIndex >= 0) {
       const beatInMeasure = beatIndex % this.params.timeSignature;
 
@@ -362,14 +548,14 @@ export class DynamicsAnalyzer {
       }
     }
 
-    // 5. Harmonic tension
+    // 6. Harmonic tension
     if (chordName) {
       const quality = getChordQuality(chordName);
       const tension = TENSION_MAP[quality] ?? 1.0;
       volatile *= tension;
     }
 
-    // 6. Tempo-aware dynamic range scaling
+    // 7. Tempo-aware dynamic range scaling
     if (this.params) {
       const bpm = this.params.bpm;
       let tempoScale = 1.0;
@@ -420,6 +606,7 @@ export class DynamicsAnalyzer {
   reset(): void {
     this.params = null;
     this.energyContour = null;
+    this.sectionContour = [];
     this.lastVelocity = null;
     this.lastVelocityTime = null;
   }

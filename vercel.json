@@ -1,62 +1,54 @@
 {
   "outputDirectory": ".next",
   "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-segmentation-jobs",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "functions": {
     "src/app/api/detect-beats/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/recognize-chords/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/recognize-chords-btc-pl/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/recognize-chords-btc-sl/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/detect-beats-blob/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/recognize-chords-blob/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "src/app/api/blob/upload/route.ts": {
-      "maxDuration": 60,
-      "memory": 512
+      "maxDuration": 60
     },
     "src/app/api/extract-and-analyze/route.ts": {
-      "maxDuration": 60,
-      "memory": 512
+      "maxDuration": 60
     },
     "src/app/api/ytdlp/extract/route.ts": {
-      "maxDuration": 300,
-      "memory": 512
+      "maxDuration": 300
     },
     "src/app/api/ytdlp/download/route.ts": {
-      "maxDuration": 300,
-      "memory": 512
+      "maxDuration": 300
     },
     "src/app/api/transcribe-lyrics/route.ts": {
-      "maxDuration": 300,
-      "memory": 512
+      "maxDuration": 300
     },
     "src/app/api/extract-audio/route.ts": {
-      "maxDuration": 300,
-      "memory": 512
+      "maxDuration": 300
     },
     "src/app/api/**/*.ts": {
-      "maxDuration": 60,
-      "memory": 256
+      "maxDuration": 60
     },
     "src/pages/api/**/*.ts": {
-      "maxDuration": 60,
-      "memory": 256
+      "maxDuration": 60
     }
   },
   "headers": [

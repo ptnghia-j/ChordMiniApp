@@ -1,5 +1,4 @@
-// Beat detection service to communicate with the Python backend
-import { config } from '@/config/env';
+// Beat detection service to communicate with the Next.js API proxy
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import { vercelBlobUploadService } from '../storage/vercelBlobUploadService';
@@ -50,11 +49,6 @@ function parseTimeSignature(timeSignature: unknown): number {
   console.warn(`Invalid time signature: ${timeSignature}, using default ${defaultValue}`);
   return defaultValue;
 }
-
-
-// Base URL for the Python API (full backend with all features)
-const API_BASE_URL = config.pythonApiUrl;
-
 // Interface for beat info with strength
 export interface BeatInfo {
   time: number;       // Beat time in seconds
@@ -469,7 +463,7 @@ export async function detectBeatsFromFile(
           reject(new Error('Beat detection was aborted'));
         });
 
-        xhr.open('POST', `${API_BASE_URL}/api/detect-beats`);
+        xhr.open('POST', '/api/detect-beats');
         xhr.send(formData);
       });
     }
@@ -777,7 +771,7 @@ export async function detectBeatsFromPath(
 
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/detect-beats`, {
+    const response = await fetch('/api/detect-beats', {
       method: 'POST',
       body: formData,
     });

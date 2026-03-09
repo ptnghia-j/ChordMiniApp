@@ -32,7 +32,6 @@ export interface VercelBlobUploadResult {
 }
 
 class VercelBlobUploadService {
-  private readonly PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
   private readonly VERCEL_SIZE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB conservative limit
 
   /**

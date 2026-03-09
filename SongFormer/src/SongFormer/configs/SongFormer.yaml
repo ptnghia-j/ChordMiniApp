@@ -1,0 +1,186 @@
+# ============================
+# Model Configuration
+# ============================
+
+input_dim_raw: 4096         # Downsampled Fused SSL Representation Dimension
+input_dim: 2048             # Input Dimension after Linear Layer
+
+# Downsampling Module
+down_sample_conv_kernel_size: 3
+down_sample_conv_stride: 3
+down_sample_conv_dropout: 0.1
+down_sample_conv_padding: 0
+
+# Transformer Module
+transformer_encoder_input_dim: 1024
+transformer_input_dim: 512
+num_transformer_layers: 4
+transformer_nhead: 8
+transformer_dropout: 0.1
+
+# task-specific heads
+boundary_head_hidden_dims: [128, 64, 8]
+function_head_hidden_dims: []
+
+num_classes: 128
+num_dataset_classes: 64
+
+# scheduler
+warmup_steps: 300
+total_steps: 12010
+warmup_max_lr: 0.0001
+
+# frame rates after downsampling
+output_logits_frame_rates: 8.333
+# it means output_logits_frame_rates = input_embd_frame_rates // downsample_rates, because the padding is 0.
+downsample_rates: 3
+# frame rates after downsampling, used by model and post process
+frame_rates: 8.333
+
+# ema config
+ema_kwargs:
+    {update_after_step: 200}
+
+# ============================
+# Loss Functions configuration
+# ============================
+
+# Focal loss
+label_focal_loss_weight: 0.2
+
+label_focal_loss_alpha: 0.25
+label_focal_loss_gamma: 2.0
+
+# Boundary TV loss
+boundary_tvloss_weight: 0.05
+
+boundary_tv_loss_beta: 0.6
+boundary_tv_loss_lambda: 0.4
+boundary_tv_loss_boundary_threshold: 0.01
+boundary_tv_loss_reduction_weight: 0.1
+
+loss_weight_section: 0.2
+loss_weight_function: 0.8
+
+# ============================
+# Training config
+# ============================
+
+# Number of neighbors used to augment boundaries in the dataset.
+# Example: 1/25*3 * 10s = 1.2s (both sides total 4.2s)
+num_neighbors: 10
+learn_label: true
+learn_segment: true
+accumulation_steps: 2
+slice_dur: 420
+early_stopping_step: 3
+local_maxima_filter_size: 3
+
+# ============================
+# Dataset config
+# ============================
+
+train_dataset:
+    _target_: dataset.SongFormerDataset.Dataset
+    dataset_abstracts:
+        [
+            {
+                "internal_tmp_id": "SongForm-HX-8Class",
+                "dataset_type": "SongForm-HX-8Class",
+                "input_embedding_dir": "your_data_dir/30s_420s/harmonix/musicfm_hop420/layer_10 your_data_dir/30s_420s/harmonix/muq_hop420/layer_10 your_data_dir/420s/harmonix/musicfm_hop420/layer_10 your_data_dir/420s/harmonix/muq_hop420/layer_10",
+                "label_path": "your_data_dir/labels/harmonixset_8class_rule_revision.jsonl",
+                "split_ids_path": "your_data_dir/separated_ids/harmonixset_separated_ids_with_val_set/train.txt",
+                "multiplier": 4,
+            },
+            {
+                "internal_tmp_id": "SongForm-Private",
+                "dataset_type": "SongForm-Private",
+                "input_embedding_dir": "your_data_dir/30s_420s/Internal_data/musicfm_hop420/layer_10 your_data_dir/30s_420s/Internal_data/muq_hop420/layer_10 your_data_dir/420s/Internal_data/musicfm_hop420/layer_10 your_data_dir/420s/Internal_data/muq_hop420/layer_10",
+                "label_path": "your_data_dir/labels/0006_single_layer_transformer_musicfm_muq_along_time_00_5k_v1.jsonl",
+                "split_ids_path": "your_data_dir/separated_ids/internal_data_sofa_clean/train.txt",
+                "multiplier": 1,
+            },
+            {
+                adapter: HookTheoryAdapter,
+                internal_tmp_id: "SongForm-Hook",
+                structure_jsonl_paths: [
+                    "your_data_dir/HookTheoryStructure.train.jsonl"
+                ],
+                dataset_type: "SongForm-Hook",
+                input_embedding_dir: "your_data_dir/30s_420s/HookTheory/musicfm_hop420/layer_10 your_data_dir/30s_420s/HookTheory/muq_hop420/layer_10 your_data_dir/420s/HookTheory/musicfm_hop420/layer_10 your_data_dir/420s/HookTheory/muq_hop420/layer_10",
+                split_ids_path: "your_data_dir/separated_ids/hooktheory_separated_ids/train.txt",
+                multiplier: 1,
+            },
+        ]
+    hparams:
+        output_logits_frame_rates: ${output_logits_frame_rates}
+        downsample_rates: ${downsample_rates}
+        num_neighbors: ${num_neighbors}
+        input_dim: ${input_dim_raw}
+        slice_dur: ${slice_dur}
+        num_classes: ${num_classes}
+        frame_rates: ${frame_rates}
+
+eval_dataset:
+    _target_: dataset.SongFormerDataset.Dataset
+    dataset_abstracts:
+        [
+            {
+                "internal_tmp_id": "SongForm-HX-8Classs_val",
+                "dataset_type": "SongForm-HX-8Class",
+                "input_embedding_dir": "your_data_dir/30s_420s/harmonix/musicfm_hop420/layer_10 your_data_dir/30s_420s/harmonix/muq_hop420/layer_10 your_data_dir/420s/harmonix/musicfm_hop420/layer_10 your_data_dir/420s/harmonix/muq_hop420/layer_10",
+                "label_path": "your_data_dir/processed_data/labels/harmonixset_8class_rule_revision.jsonl",
+                "split_ids_path": "your_data_dir/separated_ids/harmonixset_separated_ids_with_val_set/val.txt",
+                "multiplier": 1,
+            },
+        ]
+    hparams:
+        output_logits_frame_rates: ${output_logits_frame_rates}
+        downsample_rates: ${downsample_rates}
+        num_neighbors: ${num_neighbors}
+        input_dim: ${input_dim_raw}
+        slice_dur: ${slice_dur}
+        num_classes: ${num_classes}
+        frame_rates: ${frame_rates}
+
+# ============================
+# DataLoader configuration
+# ============================
+
+train_dataloader:
+    num_workers: 4
+    batch_size: 4
+    pin_memory: True
+    prefetch_factor: 4
+    drop_last: True
+    persistent_workers: True
+    shuffle: true
+
+eval_dataloader:
+    num_workers: 0
+    batch_size: 1
+    shuffle: false
+
+# ============================
+# Optimizer configuration
+# ============================
+
+optimizer:
+    lr: ${warmup_max_lr}
+    betas: [0.8, 0.999]
+    eps: 1e-08
+    weight_decay: 3e-7
+
+# ============================
+# Training Run configuration
+# ============================
+
+args:
+    run_name: SongFormer
+    model_name: SongFormer
+    save_interval: 800
+    eval_interval: 800
+    checkpoint_dir: output/SongFormer
+    max_epochs: 1000
+    max_steps: 12010
+    tags: null

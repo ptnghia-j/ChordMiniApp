@@ -25,9 +25,7 @@ export default function StatusPage() {
 
   const { isChecking, lastUpdate, rateLimitState, checkAllEndpoints } = useStatusMonitoring();
 
-  // Use environment variable for backend URL (supports runtime configuration)
-  // Fallback to localhost:5001 for local development
-  const baseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   
   useEffect(() => {
     // Check immediately on page load

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { ChatbotRequest, ChatbotResponse, ChatMessage } from '@/types/chatbotTypes';
 import { formatSongContextForAI, validateSongContext } from '@/services/api/chatbotService';
+import { GEMINI_MODEL_NAME } from '@/config/gemini';
 
 export const maxDuration = 120; // 2 minutes for chatbot processing
 
 // Define the model name to use
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = GEMINI_MODEL_NAME;
 
 // Lazy initialization of Gemini API client to avoid build-time errors
 let _ai: GoogleGenAI | null = null;

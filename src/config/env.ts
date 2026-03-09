@@ -8,8 +8,8 @@ import { loadPublicConfig } from '@/config/publicConfig';
 
 // Static configuration (suitable for server-side code)
 export const config = {
-  // Python backend API URL - Uses environment variable with localhost fallback for development
-  pythonApiUrl: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001',
+  // Frontend API base URL - browser clients should call same-origin Next.js API routes.
+  pythonApiUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
 
   // Local development URL (for reference)
   localApiUrl: 'http://localhost:5001',
@@ -36,8 +36,8 @@ export async function getConfigAsync() {
   // Client-side: load runtime config
   const runtimeConfig = await loadPublicConfig();
   return {
-    pythonApiUrl: runtimeConfig.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001',
-    localApiUrl: 'http://localhost:5001',
+    pythonApiUrl: typeof window !== 'undefined' ? window.location.origin : (runtimeConfig.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
+    localApiUrl: 'http://localhost:3000',
     apiTimeout: 120000,
     maxAudioSize: 50 * 1024 * 1024,
   };

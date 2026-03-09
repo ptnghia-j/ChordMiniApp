@@ -2,17 +2,19 @@
 
 import React, { useState } from 'react';
 import { Card, CardBody, Chip, Button, Progress } from '@heroui/react';
-import { ApiKeySettingsProps, API_KEY_HELP_URLS } from '@/types/apiKeyTypes';
+import { ApiCredentialService, ApiKeySettingsProps, API_KEY_HELP_URLS } from '@/types/apiKeyTypes';
 import ApiKeyModal from './ApiKeyModal';
+
+const SEGMENTATION_ACCESS_REQUEST_EMAIL = process.env.NEXT_PUBLIC_SEGMENTATION_ACCESS_REQUEST_EMAIL || 'phantrongnghia510@gmail.com';
 
 const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   onApiKeyUpdate,
   apiKeyStatus
 }) => {
-  const [activeModal, setActiveModal] = useState<'musicAi' | 'gemini' | null>(null);
+  const [activeModal, setActiveModal] = useState<ApiCredentialService | null>(null);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
-  const handleKeySubmitted = async (service: 'musicAi' | 'gemini', key: string) => {
+  const handleKeySubmitted = async (service: ApiCredentialService, key: string) => {
     setIsUpdating(service);
     try {
       await onApiKeyUpdate(service, key);
@@ -22,7 +24,7 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
     }
   };
 
-  const handleRemoveKey = async (service: 'musicAi' | 'gemini') => {
+  const handleRemoveKey = async (service: ApiCredentialService) => {
     setIsUpdating(service);
     try {
       await onApiKeyUpdate(service, null);
@@ -37,7 +39,7 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
     }`} />
   );
 
-  const getStatusLabel = (service: 'musicAi' | 'gemini') => {
+  const getStatusLabel = (service: ApiCredentialService) => {
     const s = apiKeyStatus[service];
     if (!s.hasKey) return 'Not configured';
     if (s.isValid) return 'Valid';
@@ -54,7 +56,7 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600 dark:text-gray-400">
-        Keys are encrypted locally and never leave your browser.
+        Credentials are encrypted locally and never leave your browser.
       </p>
 
       {/* Music.ai */}
@@ -119,6 +121,57 @@ const ApiKeySettings: React.FC<ApiKeySettingsProps> = ({
             <a href="https://music.ai/workflows/" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:underline">
               Setup Workflow &rarr;
             </a>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Song Segmentation */}
+      <Card shadow="sm" className="border border-gray-200 dark:border-gray-700">
+        <CardBody className="p-4 gap-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold text-gray-900 dark:text-white">Song Segmentation</h4>
+                <Chip size="sm" variant="flat" color="warning">Restricted</Chip>
+                <div className="flex items-center gap-1.5 ml-1">
+                  <StatusDot valid={apiKeyStatus.songformerAccess.isValid} hasKey={apiKeyStatus.songformerAccess.hasKey} />
+                  <span className={`text-xs font-medium ${
+                    apiKeyStatus.songformerAccess.isValid ? 'text-green-600 dark:text-green-400'
+                    : apiKeyStatus.songformerAccess.hasKey ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
+                  }`}>
+                    {getStatusLabel('songformerAccess')}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Required only for new uncached SongFormer segmentation requests. Cached results remain available without a code.
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Request access via{' '}
+                <a href={`mailto:${SEGMENTATION_ACCESS_REQUEST_EMAIL}`} className="text-blue-500 hover:underline">
+                  {SEGMENTATION_ACCESS_REQUEST_EMAIL}
+                </a>
+                . Local development does not require this code.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm" color="warning" variant="flat"
+                isDisabled={isUpdating === 'songformerAccess'}
+                onPress={() => setActiveModal('songformerAccess')}
+              >
+                {apiKeyStatus.songformerAccess.hasKey ? 'Update Code' : 'Add Code'}
+              </Button>
+              {apiKeyStatus.songformerAccess.hasKey && (
+                <Button
+                  size="sm" color="danger" variant="light"
+                  isDisabled={isUpdating === 'songformerAccess'}
+                  onPress={() => handleRemoveKey('songformerAccess')}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
         </CardBody>
       </Card>

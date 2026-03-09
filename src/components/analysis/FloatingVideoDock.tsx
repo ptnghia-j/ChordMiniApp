@@ -8,6 +8,7 @@ import { Tooltip } from '@heroui/react';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { useChordPlayback } from '@/hooks/chord-playback/useChordPlayback';
 import { useShowRomanNumerals, useToggleRomanNumerals } from '@/stores/uiStore';
+import type { SegmentationResult } from '@/types/chatbotTypes';
 
 // Dynamic imports for heavy components
 const MetronomeControls = dynamic(() => import('@/components/chord-playback/MetronomeControls'), {
@@ -51,6 +52,7 @@ interface FloatingVideoDockProps {
   currentBeatIndex: number;
   chords: string[];
   beats: (number | null)[];
+  segmentationData?: SegmentationResult | null;
 
   // Handlers
   toggleVideoMinimization: () => void;
@@ -115,6 +117,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   currentBeatIndex,
   chords,
   beats,
+  segmentationData,
   toggleVideoMinimization,
   toggleFollowMode,
   toggleMetronomeWithSync,
@@ -154,6 +157,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
     beats,
     isPlaying,
     currentTime,
+    segmentationData,
     timeSignature,
   });
 

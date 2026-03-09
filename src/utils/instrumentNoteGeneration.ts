@@ -14,7 +14,7 @@ import { noteNameToMidi, NOTE_INDEX_MAP, type ChordEvent, type MidiNote } from '
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Supported instrument names (lowercase) */
-export type InstrumentName = 'piano' | 'guitar' | 'violin' | 'flute' | 'bass';
+export type InstrumentName = 'piano' | 'guitar' | 'violin' | 'flute' | 'saxophone' | 'bass';
 
 /** A scheduled note with timing and velocity information */
 export interface ScheduledNote {
@@ -150,6 +150,7 @@ export function beatDurationFromBpm(bpm: number): number {
  * - **Violin**: Root note only at octave 6 (sustained)
  * - **Flute**: Short chords sustain the bass/3rd at octave 5; long chords (≥4 beats)
  *              switch to the 5th at octave 5 with a syncopated re-attack
+ * - **Saxophone**: Guide-tone lead phrase with syncopated accents for instrumental sections
  * - **Bass**: Single low note (E-B → octave 1, C-D# → octave 2)
  */
 export function generateNotesForInstrument(
@@ -191,6 +192,9 @@ export function generateNotesForInstrument(
 
     case 'flute':
       return generateFluteNotes(rootName, bassName, chordTones, duration, fullBeatDelay, durationInBeats);
+
+    case 'saxophone':
+      return generateSaxophoneNotes(rootName, chordTones, duration, fullBeatDelay, durationInBeats);
 
     case 'bass':
       return generateBassNotes(bassName, duration);
@@ -602,6 +606,62 @@ function generateFluteNotes(
     velocityMultiplier: 0.85,
     isBass: false,
   }];
+}
+
+function generateSaxophoneNotes(
+  rootName: string,
+  chordTones: MidiNote[],
+  duration: number,
+  fullBeatDelay: number,
+  durationInBeats: number,
+): ScheduledNote[] {
+  const guideTone = chordTones.length >= 2 ? chordTones[1].noteName : rootName;
+  const accentTone = chordTones.length >= 3 ? chordTones[2].noteName : guideTone;
+  const notes: ScheduledNote[] = [];
+
+  const pushNote = (
+    noteName: string,
+    octave: number,
+    startOffset: number,
+    requestedDuration: number,
+    velocityMultiplier: number,
+  ) => {
+    if (startOffset >= duration) return;
+
+    const actualDuration = Math.min(requestedDuration, duration - startOffset);
+    if (actualDuration <= 0) return;
+
+    const name = `${noteName}${octave}`;
+    const midi = noteNameToMidi(name);
+    notes.push({
+      noteName: name,
+      midi,
+      startOffset,
+      duration: actualDuration,
+      velocityMultiplier,
+      isBass: false,
+    });
+  };
+
+  if (durationInBeats < 2) {
+    pushNote(guideTone, 5, 0, duration, 0.96);
+    return notes;
+  }
+
+  if (durationInBeats < PIANO_PATTERN_MIN_BEATS) {
+    pushNote(guideTone, 5, 0, fullBeatDelay * 0.8, 0.94);
+    pushNote(accentTone, 5, fullBeatDelay * 1.5, duration, 1.04);
+    return notes;
+  }
+
+  const cycleDuration = fullBeatDelay * 2;
+  for (let cycleStart = 0; cycleStart < duration - fullBeatDelay * 0.5; cycleStart += cycleDuration) {
+    pushNote(guideTone, 5, cycleStart, fullBeatDelay * 0.65, 0.94);
+    pushNote(accentTone, 5, cycleStart + fullBeatDelay * 1.5, fullBeatDelay * 0.4, 1.08);
+  }
+
+  pushNote(rootName, 6, Math.max(0, duration - fullBeatDelay), fullBeatDelay, 0.9);
+  return notes;
 }
 
 function generateBassNotes(

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * API route to get API documentation
@@ -8,7 +9,7 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 export async function GET() {
   try {
     // Try to call the Python backend API first
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
     
     try {
       const response = await fetch(`${backendUrl}/api/docs`, {

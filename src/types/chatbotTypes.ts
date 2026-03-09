@@ -31,6 +31,7 @@ export interface SongContext {
   // Source identifier - at least one must be present
   videoId?: string;      // Present for YouTube sources
   uploadId?: string;     // Present for upload sources
+  audioUrl?: string;     // Optional remote audio URL for audio-backed services
   // Basic metadata
   title?: string;
   duration?: number;
@@ -100,7 +101,6 @@ export interface SongSegment {
   endBeat?: number;
   confidence?: number;
   label?: string; // Optional custom label (e.g., "Verse 1", "Chorus 2")
-  reasoning?: string; // Optional reasoning for why this segment was identified
 }
 
 export interface SegmentationResult {
@@ -121,5 +121,5 @@ export interface SegmentationResult {
 
 export interface SegmentationRequest {
   songContext: SongContext;
-  geminiApiKey?: string;
+  accessCode?: string;
 }

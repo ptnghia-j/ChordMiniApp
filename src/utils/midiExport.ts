@@ -15,7 +15,8 @@
  */
 
 import type { ChordEvent } from './chordToMidi';
-import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import type { SegmentationResult } from '@/types/chatbotTypes';
 import {
   beatDurationFromBpm,
   generateNotesForInstrument,
@@ -33,6 +34,7 @@ const GM_PROGRAMS: Record<string, number> = {
   guitar: 24,  // Nylon String Guitar
   violin: 40,  // Violin
   flute: 73,   // Flute
+  saxophone: 65, // Alto Sax
   bass: 33,    // Electric Bass (finger)
 };
 
@@ -208,6 +210,7 @@ function generateInstrumentMidiNotes(
   bpm: number,
   channel: number,
   timeSignature: number = 4,
+  segmentationData?: SegmentationResult | null,
 ): MidiNoteEvent[] {
   const midiEvents: MidiNoteEvent[] = [];
   const BASE_VELOCITY = 80;
@@ -217,11 +220,12 @@ function generateInstrumentMidiNotes(
   const totalSongDuration = getSongDurationFromEvents(merged);
 
   // Set up dynamics analyzer for export context
-  const dynamics = getDynamicsAnalyzer();
+  const dynamics = new DynamicsAnalyzer();
   dynamics.setParams({
     bpm,
     timeSignature,
     totalDuration: getSongDurationFromEvents(merged),
+    segmentationData,
   });
 
   const beatDuration = beatDurationFromBpm(bpm);
@@ -231,7 +235,7 @@ function generateInstrumentMidiNotes(
     const duration = endTime - startTime;
 
     // Compute dynamic velocity for this chord event
-    const estimatedBeatIndex = Math.round(startTime / beatDuration);
+    const estimatedBeatIndex = event.beatIndex ?? Math.round(startTime / beatDuration);
     const dynamicMultiplier = dynamics.getExportVelocity(startTime, estimatedBeatIndex, chordName);
     const scheduledNotes = generateNotesForInstrument(instrumentName as InstrumentName, {
       chordName,
@@ -270,6 +274,8 @@ export interface MidiExportOptions {
   timeSignature?: number;
   /** Explicit BPM — if omitted, estimated from average beat duration */
   bpm?: number;
+  /** Optional song segmentation used for section-aware velocity shaping */
+  segmentationData?: SegmentationResult | null;
 }
 
 /**
@@ -343,7 +349,15 @@ export function exportChordEventsToMidi(
   const instrumentTracks: Uint8Array[] = instrumentList.slice(0, 15).map((inst, idx) => {
     const channel = idx >= 9 ? idx + 1 : idx; // skip channel 9 (GM drums)
     const program = GM_PROGRAMS[inst.name.toLowerCase()] ?? 0;
-    const midiNotes = generateInstrumentMidiNotes(events, inst.name.toLowerCase(), bpm, channel, timeSignature);
+    const segmentationData = options?.segmentationData;
+    const midiNotes = generateInstrumentMidiNotes(
+      events,
+      inst.name.toLowerCase(),
+      bpm,
+      channel,
+      timeSignature,
+      segmentationData,
+    );
     const displayName = inst.name.charAt(0).toUpperCase() + inst.name.slice(1);
     return buildTrackChunk(midiNotes, channel, program, displayName);
   });

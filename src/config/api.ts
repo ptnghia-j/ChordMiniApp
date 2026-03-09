@@ -6,45 +6,22 @@
  * while other endpoints remain on the Vercel frontend.
  * Audio extraction uses QuickTube directly from the frontend.
  *
- * RUNTIME CONFIG SUPPORT:
- * - Server-side code (API routes, SSR): Use BACKEND_URLS constant (process.env)
- * - Client-side code (React components): Use getBackendUrlsAsync() for runtime config
+ * Server-side backend routing configuration.
+ * Backend service URLs are intentionally resolved from server-only environment variables.
  */
 
-import { loadPublicConfig } from '@/config/publicConfig';
+import { getPythonApiUrl, getSongformerApiUrl, getFrontendBaseUrl } from '@/config/serverBackend';
 
 // Backend URLs - Centralized configuration using environment variables
 // NOTE: This constant uses process.env and is suitable for server-side code (API routes, SSR)
 // For client-side code, use getBackendUrlsAsync() to get runtime configuration
 export const BACKEND_URLS = {
-  // Python backend (uses environment variable with fallback for localhost development)
-  PYTHON_BACKEND: process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001',
+  PYTHON_BACKEND: getPythonApiUrl(),
 
-  // Vercel frontend (current domain)
-  VERCEL_FRONTEND: typeof window !== 'undefined' ? window.location.origin : '',
+  SONGFORMER_BACKEND: getSongformerApiUrl(),
+
+  VERCEL_FRONTEND: getFrontendBaseUrl(),
 } as const;
-
-/**
- * Get backend URLs with runtime configuration (async, for client-side)
- *
- * Use this function in client-side code (React components, browser services)
- * to get backend URLs that are configured at Docker container runtime.
- *
- * @returns Promise resolving to backend URLs object
- */
-export async function getBackendUrlsAsync() {
-  // Server-side: use process.env directly
-  if (typeof window === 'undefined') {
-    return BACKEND_URLS;
-  }
-
-  // Client-side: load runtime config
-  const config = await loadPublicConfig();
-  return {
-    PYTHON_BACKEND: config.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001',
-    VERCEL_FRONTEND: window.location.origin,
-  };
-}
 
 // Endpoint routing configuration
 export const API_ROUTES = {

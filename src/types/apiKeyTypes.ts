@@ -6,7 +6,10 @@
 export interface ApiKeyConfig {
   musicAi?: string;
   gemini?: string;
+  songformerAccess?: string;
 }
+
+export type ApiCredentialService = 'musicAi' | 'gemini' | 'songformerAccess';
 
 export interface EncryptedApiKeyData {
   encryptedData: string;
@@ -17,7 +20,7 @@ export interface EncryptedApiKeyData {
 export interface ApiKeyValidationResult {
   isValid: boolean;
   error?: string;
-  service: 'musicAi' | 'gemini';
+  service: ApiCredentialService;
   quotaInfo?: {
     used: number;
     limit: number;
@@ -41,19 +44,25 @@ export interface ApiKeyStatus {
     quotaLimit?: number;
     quotaResetTime?: string;
   };
+  songformerAccess: {
+    hasKey: boolean;
+    isValid: boolean;
+    lastValidated?: string;
+    error?: string;
+  };
 }
 
 export interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  service: 'musicAi' | 'gemini';
+  service: ApiCredentialService;
   required?: boolean;
   onKeySubmitted: (key: string) => Promise<void>;
   currentError?: string;
 }
 
 export interface ApiKeySettingsProps {
-  onApiKeyUpdate: (service: 'musicAi' | 'gemini', key: string | null) => void;
+  onApiKeyUpdate: (service: ApiCredentialService, key: string | null) => void;
   apiKeyStatus: ApiKeyStatus;
 }
 
@@ -68,7 +77,7 @@ export interface RateLimitInfo {
 }
 
 export interface ApiKeyRequirement {
-  service: 'musicAi' | 'gemini';
+  service: ApiCredentialService;
   feature: string;
   required: boolean;
   fallbackAvailable: boolean;
@@ -79,12 +88,14 @@ export interface ApiKeyRequirement {
 export const API_KEY_STORAGE_KEYS = {
   MUSIC_AI: 'chord_app_music_ai_key',
   GEMINI: 'chord_app_gemini_key',
+  SONGFORMER_ACCESS: 'chord_app_songformer_access_code',
   ENCRYPTION_SALT: 'chord_app_key_salt'
 } as const;
 
 export const API_KEY_VALIDATION_ENDPOINTS = {
   MUSIC_AI: '/api/validate-music-ai-key',
-  GEMINI: '/api/validate-gemini-key'
+  GEMINI: '/api/validate-gemini-key',
+  SONGFORMER_ACCESS: '/api/validate-songformer-access-code'
 } as const;
 
 export const RATE_LIMIT_THRESHOLDS = {

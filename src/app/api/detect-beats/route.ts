@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * Beat Detection API Route
@@ -15,7 +16,7 @@ export const maxDuration = 300; // 5 minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
 
     console.log(`🥁 Processing beat detection request`);
 
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
             {
               error: 'Port conflict with Apple AirTunes',
               details: 'Port 5000 is being used by Apple AirPlay/AirTunes service instead of our Python backend',
-              solution: 'Change Python backend to use a different port (e.g., 5001, 8000) and update NEXT_PUBLIC_PYTHON_API_URL',
+              solution: 'Change Python backend to use a different port (e.g., 5001, 8000) and update PYTHON_API_URL',
               debugInfo: {
                 serverHeader,
                 targetUrl: `${backendUrl}/api/detect-beats`,

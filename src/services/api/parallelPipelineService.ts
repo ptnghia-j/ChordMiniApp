@@ -337,14 +337,11 @@ export function canUseDirectUrlWithBackend(url: string): boolean {
  * Get the appropriate backend endpoint for direct URL processing
  */
 export function getBackendEndpointForDirectUrl(processingType: 'beats' | 'chords'): string {
-  const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
-
-  // Use the "firebase" endpoints which accept any HTTP URL
   switch (processingType) {
     case 'beats':
-      return `${backendUrl}/api/detect-beats-firebase`;
+      return '/api/detect-beats';
     case 'chords':
-      return `${backendUrl}/api/recognize-chords-firebase`;
+      return '/api/recognize-chords';
     default:
       throw new Error(`Unknown processing type: ${processingType}`);
   }

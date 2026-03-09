@@ -19,17 +19,8 @@ export function areBTCModelsAvailable(): boolean {
     return false;
   }
 
-  // Use NEXT_PUBLIC_PYTHON_API_URL to detect environment
-  const pythonApiUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL;
-  
-  if (!pythonApiUrl) {
-    // If no API URL is set, assume production and hide BTC models
-    return false;
-  }
-
-  // Local development: API URL contains localhost:5001
-  const isLocalDevelopment = pythonApiUrl.includes('localhost:5001') || 
-                            pythonApiUrl.includes('127.0.0.1:5001');
+  const origin = window.location.origin;
+  const isLocalDevelopment = origin.includes('localhost') || origin.includes('127.0.0.1');
 
   return isLocalDevelopment;
 }

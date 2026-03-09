@@ -1,0 +1,123 @@
+# @package _group_
+common:
+  fp16: false
+  log_format: json
+  log_interval: 200
+  seed: 1337
+  # tensorboard_logdir: tblog_proj_name
+  # wandb_project: wandb_proj_name
+
+checkpoint:
+  save_interval_updates: 12500
+  keep_interval_updates: -1
+  no_epoch_checkpoints: true
+
+
+distributed_training:
+  ddp_backend: no_c10d
+  distributed_backend: 'nccl'
+  distributed_world_size: 64
+  nprocs_per_node: 8
+  find_unused_parameters: true
+
+task:
+  _name: muq_pretraining
+  data: ???
+  label_dir: ???
+  labels: ???
+  label_rate: ${model.label_rate}
+  sample_rate: 24000
+
+  # crop to 30s
+  max_sample_size: 720000
+  min_sample_size: 432000
+  clip_secs: 30
+
+  pad_audio: false
+  random_crop: true
+  normalize: false # must be consistent with extractor
+
+
+dataset:
+  num_workers: 6
+  max_tokens: 2000000
+  skip_invalid_size_inputs_valid_test: true
+  validate_interval: 1
+  validate_interval_updates: 10000
+
+criterion:
+  _name: model 
+  # log_keys:
+  #   - accuracies
+
+optimization:
+  max_update: 400000
+  lr: [0.0005]
+  clip_norm: 10.0
+  update_freq: [2]
+
+optimizer:
+  _name: adam
+  adam_betas: (0.9,0.98)
+  adam_eps: 1e-06
+  weight_decay: 0.01
+
+lr_scheduler:
+  _name: polynomial_decay
+  warmup_updates: 32000
+
+model:
+  _name: muq
+  label_rate: 25
+  num_codebooks: 1
+  codebook_dim: 16
+  codebook_size: 8192 # 4096
+  features: ["melspec_2048"]
+  hop_length: 240
+  n_mels: 128
+  conv_dim: 512
+  encoder_dim: 1024
+  encoder_depth: 12
+  mask_hop: 0.4
+  mask_prob: 0.6
+  is_flash: false
+
+  use_rvq_target: true
+  rvq_ckpt_path: /inspire/hdd/project/project-public/niuzhikang-240108120093/hainazhu/MuQ/open/RVQ_4000.pth # ??? # Please specify this to your path/to/mel/rvq/RVQ_4000.pth
+
+  stat: {melspec_2048_cnt: 14282760192, melspec_2048_mean: 6.768444971712967, melspec_2048_std: 18.417922652295623}
+  w2v2_config: {
+    activation_dropout: 0.1, adapter_kernel_size: 3, adapter_stride: 2, add_adapter: false, apply_spec_augment: true,
+    architectures: [Wav2Vec2ConformerForCTC], attention_dropout: 0.1, bos_token_id: 1, classifier_proj_size: 256,
+    codevector_dim: 768, conformer_conv_dropout: 0.1, contrastive_logits_temperature: 0.1, conv_bias: true,
+    conv_depthwise_kernel_size: 31, conv_dim: [512, 512, 512, 512, 512, 512, 512], conv_kernel: [10, 3, 3, 3, 3, 2, 2],
+    conv_stride: [5, 2, 2, 2, 2, 2, 2], ctc_loss_reduction: sum, ctc_zero_infinity: false, diversity_loss_weight: 0.1,
+    do_stable_layer_norm: true, eos_token_id: 2, feat_extract_activation: gelu, feat_extract_dropout: 0.0,
+    feat_extract_norm: layer, feat_proj_dropout: 0.1, feat_quantizer_dropout: 0.0, final_dropout: 0.1,
+    gradient_checkpointing: false, hidden_act: swish, hidden_dropout: 0.1, hidden_dropout_prob: 0.1, hidden_size: 1024,
+    initializer_range: 0.02, intermediate_size: 4096, layer_norm_eps: 1e-5, layerdrop: 0.0, mask_feature_length: 10,
+    mask_feature_min_masks: 0, mask_feature_prob: 0.0, mask_time_length: 10, mask_time_min_masks: 2, mask_time_prob: 0.05,
+    max_source_positions: 5000, model_type: wav2vec2-conformer, num_adapter_layers: 3, num_attention_heads: 16,
+    num_codevector_groups: 2, num_codevectors_per_group: 320, num_conv_pos_embedding_groups: 16,
+    num_conv_pos_embeddings: 128, num_feat_extract_layers: 7, num_hidden_layers: 24, num_negatives: 100,
+    output_hidden_size: 1024, pad_token_id: 0, position_embeddings_type: rotary, proj_codevector_dim: 768,
+    rotary_embedding_base: 10000, tdnn_dilation: [1, 2, 3, 1, 1], tdnn_dim: [512, 512, 512, 512, 1500],
+    tdnn_kernel: [5, 3, 3, 1, 1], torch_dtype: float32, transformers_version: 4.19.0.dev0,
+    use_weighted_layer_sum: false, vocab_size: 32, xvector_output_dim: 512
+  }
+
+hydra:
+  job:
+    config:
+      override_dirname:
+        kv_sep: '-'
+        item_sep: '__'
+        exclude_keys:
+          - run
+          - task.data
+          - task.label_dir
+  run:
+    dir: ???
+  sweep:
+    dir: ???
+    subdir: ${hydra.job.config_name}__${hydra.job.override_dirname}

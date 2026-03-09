@@ -1,0 +1,51 @@
+创作一首[{genre}风格的]曲目，[使用{instrument}][营造一种{moods}氛围，][由{artist}创作][取名为{title}]。
+创作一段[{genre}流派的]乐曲，[由{artist}创作][以{instrument}为重点][，取名为{title}][，并营造{moods}的氛围]。
+创作一首[{genre}风格的]歌曲，[捕捉{moods}的精髓][，类似{artist}的作品][，以{instrument}为特色][，取名为{title}]。
+创作一段[{genre}流派的]作曲，[由{artist}创作][探索{moods}][，以{instrument}为特色][，取名为{title}]。
+创作一首[{genre}风格的]曲目，[呈现出{moods}氛围][由{artist}创作][，以{instrument}为特色][，取名为{title}]。
+生成一首[{genre}流派的]歌曲，[突显出{artist}独有的音乐风格][，以{instrument}为特色][，取名为{title}][，灵感来自{moods}的氛围]。
+创作一段[{genre}风格的]乐曲，[结合{instrument}][创造出{moods}的氛围][，模仿{artist}的作品][，取名为{title}]。
+编排一段[{genre}流派的]作曲，[以{instrument}为重点][由{artist}创作][，取名为{title}][，传达{moods}的感受]。
+一首[{genre}]歌曲[，具有{moods}气息][，以{instrument}为中心][，并由以下标签识别：{Tags}][，{artist}的风格][，取名为{title}]。
+一首[{genre}]歌[，带有{moods}感觉][，展示了{instrument}][，{Tags}]。
+一首[{genre}]曲子[，具有{moods}氛围][，专注于{instrument}][，并由以下标签识别：{Tags}]。
+一首[{genre}]作品[带有{moods}氛围][，强调{instrument}的声音][，并由以下标签定义：{Tags}]。
+一首[{genre}]音乐[，突出使用{instrument}][，具有{moods}触感][，由以下标签定义：{Tags}]。
+一首[{genre}]作品[带有{moods}氛围][，强调{instrument}的声音][，具有标签：{Tags}]。
+一段[{genre}]表演[伴随着{moods}氛围][，以{instrument}为中心][，{Tags}]。
+一首[{genre}]乐章[，散发着{moods}气氛][，以{instrument}为主导][，标签为：{Tags}]。
+一首[{genre}]旋律[具有{moods}风格][，突出表现了{instrument}][，标签为{Tags}]。
+一首[{genre}]歌曲[，带有{moods}情感][，重点展现{instrument}][，{Tags}]。
+一首[{genre}]创作[融入了{moods}元素][，强调{instrument}的音色][，并由以下标签定义：{Tags}]。
+一首[{genre}]演奏曲[突显{instrument}的运用][，带有{moods}特质][，由以下标签：{Tags}]。
+一首[{genre}]乐曲[具有{moods}气氛][，凸显{instrument}的声音][，{Tags}]。
+一段[{genre}]演奏[营造出{moods}气氛][，以{instrument}为焦点][，标签：{Tags}]。
+[{genre}][，{moods}][，{instrument}][，{Tags}]
+[{Tags}][，{genre}]，[{instrument}]，[{moods}]
+[风格: {genre}][，情绪: {moods}][，乐器: {instrument}][，标签: {Tags}]
+[{genre}音乐][，{BPMDescript}][，{moods}氛围][，{instrument}声音][，{Tags}]
+[{genre}类型][，{moods}感觉][，节奏为{BPM}][，{BPMDescript}][，使用{instrument}][，{Tags}]
+[{instrument}演奏][，节奏{BPM}拍][，{BPMDescript}][，{moods}情感][，{genre}类别][，{Tags}]
+[{moods}的情感][，{BPMDescript}][，{genre}风格][，{instrument}融合][，{Tags}][，BPM: {BPM}]
+[BPM为{BPM}，][{Tags}][{genre}形式][，{moods}本质][，{instrument}重点][，{BPMDescript}]
+[{BPMDescript}][，{genre}传统][，{BPM} bpm][，{moods}感觉][，{instrument}展示][，标签: {Tags}]
+[{instrument}为重点][，{genre}的风格][，{moods}氛围][，{BPMDescript}] [，{Tags}][，{BPM} bpm]
+[{genre}风格][，{moods}情感][，节奏{BPM}bpm][，{BPMDescript}][，{instrument}特色][，{Tags}]
+[{Tags}][，{BPMDescript}][，{genre}类型][，节奏{BPM} bpm，]，[{instrument}]，[{moods}]
+[类型: {genre}][，氛围: {moods}][，{BPM}BPM][，乐器特点: {instrument}][，关键词: {Tags}][，{BPMDescript}]
+[{genre}类别][，{BPMDescript}][，{moods}基调][，{instrument}元素][，{Tags}][，{BPM}bpm]
+[{genre}特点][，{moods}背景][，{Tags}][，{instrument}主题][，{BPMDescript}][，{BPM} bpm]
+[{instrument}呈现][，节奏{BPM}][，{BPMDescript}][，{moods}内涵][，{genre}流派][，{Tags}]
+[{moods}表达][，{BPMDescript}][，{genre}艺术形式][，{instrument}结合][，{Tags}][，BPM为{BPM}]
+[每分钟{BPM}拍][，{Tags}][，{genre}手法][，{moods}内核][，{instrument}突出][，{BPMDescript}]
+[{BPMDescript}][，{genre}特色][，{BPM} bpm][，{moods}情感渲染][，{instrument}呈现方式][，关键词: {Tags}]
+[{instrument}核心][，{genre}表现形式][，{moods}气氛][，{BPMDescript}] [，{Tags}][，节奏{BPM} bpm]
+[{genre}][，{moods}][，节奏{BPM}bpm][，{BPMDescript}][，{instrument}][，{Tags}]
+[{Tags}] [，{BPMDescript}][，{genre}][，节奏{BPM} bpm，]，[{instrument}]，[{moods}]
+[类型: {genre}][，氛围: {moods}][，{BPM}BPM][，乐器: {instrument}][，标签: {Tags}][，{BPMDescript}]
+[{genre}类别][，{BPMDescript}][，{moods}的感觉][，{instrument}音色][，{Tags}][，节奏{BPM}bpm]
+[{genre}][，{moods}情绪][，{Tags}][，{instrument}特点][，{BPMDescript}][，节奏{BPM} bpm]
+[{instrument}演绎][，节奏{BPM}][，{BPMDescript}][，{moods}心情][，{genre}风格][，{Tags}]
+[{moods}的心境][，{BPMDescript}][，{genre}类别][，{instrument}结合][，{Tags}][，BPM: {BPM}]
+[{BPMDescript}][，{genre}习惯][，节奏{BPM} bpm][，{moods}感受][，{instrument}呈现][，标签: {Tags}]
+[{instrument}][，{genre}风格][，{moods}氛围][，{BPMDescript}] [，{Tags}][，节奏{BPM} bpm]

@@ -4,6 +4,7 @@
  */
 
 import { 
+  ApiCredentialService,
   ApiKeyValidationResult, 
   ApiKeyStatus, 
   RateLimitInfo,
@@ -102,6 +103,43 @@ class ApiKeyValidationService {
   }
 
   /**
+   * Validate SongFormer access code
+   */
+  public async validateSongformerAccessCode(apiKey: string): Promise<ApiKeyValidationResult> {
+    const cacheKey = `songformer_${apiKey.slice(-8)}`;
+    const cached = this.getCachedValidation(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch('/api/validate-songformer-access-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ apiKey })
+      });
+
+      const data = await response.json();
+
+      const result: ApiKeyValidationResult = {
+        isValid: response.ok && data.valid,
+        error: data.error || (response.ok ? undefined : 'Invalid access code'),
+        service: 'songformerAccess'
+      };
+
+      this.setCachedValidation(cacheKey, result);
+      return result;
+    } catch {
+      const result: ApiKeyValidationResult = {
+        isValid: false,
+        error: 'Failed to validate access code',
+        service: 'songformerAccess'
+      };
+      return result;
+    }
+  }
+
+  /**
    * Get current API key status for all services
    */
   public async getApiKeyStatus(): Promise<ApiKeyStatus> {
@@ -112,6 +150,10 @@ class ApiKeyValidationService {
       },
       gemini: {
         hasKey: apiKeyStorage.hasApiKey('gemini'),
+        isValid: false
+      },
+      songformerAccess: {
+        hasKey: apiKeyStorage.hasApiKey('songformerAccess'),
         isValid: false
       }
     };
@@ -149,6 +191,20 @@ class ApiKeyValidationService {
         }
       } catch {
         status.gemini.error = 'Failed to validate stored key';
+      }
+    }
+
+    if (status.songformerAccess.hasKey) {
+      try {
+        const apiKey = await apiKeyStorage.getApiKey('songformerAccess');
+        if (apiKey) {
+          const validation = await this.validateSongformerAccessCode(apiKey);
+          status.songformerAccess.isValid = validation.isValid;
+          status.songformerAccess.error = validation.error;
+          status.songformerAccess.lastValidated = new Date().toISOString();
+        }
+      } catch {
+        status.songformerAccess.error = 'Failed to validate stored access code';
       }
     }
 
@@ -190,10 +246,14 @@ class ApiKeyValidationService {
   /**
    * Check if a service requires user API key
    */
-  public requiresUserApiKey(service: 'musicAi' | 'gemini'): boolean {
+  public requiresUserApiKey(service: ApiCredentialService): boolean {
     if (service === 'musicAi') {
       // Music.ai always requires user API key in production
       return true;
+    }
+
+    if (service === 'songformerAccess') {
+      return process.env.NODE_ENV === 'production';
     }
     
     if (service === 'gemini') {

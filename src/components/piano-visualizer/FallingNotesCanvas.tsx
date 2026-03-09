@@ -66,6 +66,9 @@ const DEFAULT_NOTE_COLOR = '#60a5fa'; // blue-400
 
 // Hit line position from bottom (where notes "land")
 const HIT_LINE_Y_RATIO = 0.88;
+const SOFT_SYNC_DRIFT_THRESHOLD = 0.05;
+const HARD_SYNC_DRIFT_THRESHOLD = 0.24;
+const DRIFT_BLEND_FACTOR = 0.35;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -100,7 +103,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   const lastTimeRef = useRef<number>(currentTime);
   const dprRef = useRef<number>(1);
   // Track previous active notes to avoid redundant state updates
-  const prevActiveKeyRef = useRef<string>('');
+  const prevActiveSignatureRef = useRef<string>('');
   // Stable ref for the render function — avoids restarting the animation loop
   // when data changes (which would cause flickering)
   const renderFrameRef = useRef<((time: number) => void) | null>(null);
@@ -353,9 +356,12 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
     ctx.restore();
 
     // Only notify parent when active notes actually changed (prevents excessive re-renders)
-    const activeKey = [...activeNotes].sort((a, b) => a - b).join(',');
-    if (activeKey !== prevActiveKeyRef.current) {
-      prevActiveKeyRef.current = activeKey;
+    const activeSignature = [...activeNotes]
+      .sort((a, b) => a - b)
+      .map(note => `${note}:${activeColors.get(note) ?? ''}`)
+      .join('|');
+    if (activeSignature !== prevActiveSignatureRef.current) {
+      prevActiveSignatureRef.current = activeSignature;
       onActiveNotesChange?.(activeNotes, activeColors);
     }
   }, [eventPositions, instrumentVisualNotes, whiteKeyXPositions, lookAheadSeconds, lookBehindSeconds, onActiveNotesChange, hasInstruments]);
@@ -383,10 +389,28 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
 
   useEffect(() => {
     lastTimeRef.current = currentTime;
-    playbackBaseRef.current = {
-      wallTime: performance.now(),
-      audioTime: currentTime,
-    };
+    if (isPlayingRef.current) {
+      const now = performance.now();
+      const projectedTime = playbackBaseRef.current.audioTime + (now - playbackBaseRef.current.wallTime) / 1000;
+      const drift = currentTime - projectedTime;
+
+      if (Math.abs(drift) >= SOFT_SYNC_DRIFT_THRESHOLD) {
+        const correctedTime = Math.abs(drift) >= HARD_SYNC_DRIFT_THRESHOLD
+          ? currentTime
+          : projectedTime + drift * DRIFT_BLEND_FACTOR;
+
+        playbackBaseRef.current = {
+          wallTime: now,
+          audioTime: correctedTime,
+        };
+        lastTimeRef.current = correctedTime;
+      }
+    } else {
+      playbackBaseRef.current = {
+        wallTime: performance.now(),
+        audioTime: currentTime,
+      };
+    }
 
     // When paused (seeking), render the new position immediately.
     if (!isPlayingRef.current) {

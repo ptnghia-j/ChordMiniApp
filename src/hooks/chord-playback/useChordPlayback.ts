@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { getDynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import { getAudioMixerService } from '@/services/chord-playback/audioMixerService';
 import {
   DEFAULT_PIANO_VOLUME,
   DEFAULT_GUITAR_VOLUME,
   DEFAULT_VIOLIN_VOLUME,
   DEFAULT_FLUTE_VOLUME,
+  DEFAULT_AUTO_SAXOPHONE_VOLUME,
 } from '@/config/audioDefaults';
+import type { SegmentationResult } from '@/types/chatbotTypes';
+import { isInstrumentalTime } from '@/utils/segmentationSections';
 
 export interface UseChordPlaybackProps {
   currentBeatIndex: number;
@@ -16,6 +20,7 @@ export interface UseChordPlaybackProps {
   currentTime: number;
   bpm?: number; // Beats per minute for dynamic timing (optional, defaults to 120)
   timeSignature?: number; // Beats per measure (e.g. 3 for 3/4, defaults to 4)
+  segmentationData?: SegmentationResult | null;
 }
 
 export interface UseChordPlaybackReturn {
@@ -52,6 +57,9 @@ interface ScheduledChordEvent {
   /** Beat index (for dynamics) */
   beatIndex: number;
 }
+
+const FOREGROUND_EVENT_BOUNDARY_TOLERANCE = 0.08;
+const EVENT_MISS_GRACE_PERIOD = 0.12;
 
 /**
  * Build a list of distinct chord-change events from beats/chords arrays.
@@ -138,6 +146,82 @@ function findScheduledChordEventAtTime(
   return time < event.audioTime + event.duration ? event : null;
 }
 
+function findScheduledChordEventIndexByBeatIndex(
+  schedule: ScheduledChordEvent[],
+  beatIndex: number,
+): number {
+  if (beatIndex < 0) return -1;
+
+  let lo = 0;
+  let hi = schedule.length - 1;
+  let idx = -1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (schedule[mid].beatIndex <= beatIndex) {
+      idx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return idx;
+}
+
+function findScheduledChordEventForPlayback(
+  schedule: ScheduledChordEvent[],
+  time: number,
+  beatIndex: number,
+  toleranceSeconds = FOREGROUND_EVENT_BOUNDARY_TOLERANCE,
+): ScheduledChordEvent | null {
+  const exactEvent = findScheduledChordEventAtTime(schedule, time);
+
+  const beatEventIndex = findScheduledChordEventIndexByBeatIndex(schedule, beatIndex);
+  const beatEvent = beatEventIndex >= 0 ? schedule[beatEventIndex] : null;
+
+  if (exactEvent && beatEvent && exactEvent.beatIndex !== beatEvent.beatIndex) {
+    const beatEventStartsSoon = beatEvent.audioTime >= time
+      && beatEvent.audioTime - time <= toleranceSeconds;
+
+    if (beatEventStartsSoon) {
+      return beatEvent;
+    }
+  }
+
+  if (exactEvent) {
+    return exactEvent;
+  }
+
+  if (beatEventIndex >= 0) {
+    const resolvedBeatEvent = schedule[beatEventIndex];
+    const nextEventStart = schedule[beatEventIndex + 1]?.audioTime
+      ?? (resolvedBeatEvent.audioTime + resolvedBeatEvent.duration);
+    const withinBeatEventWindow = time >= resolvedBeatEvent.audioTime - toleranceSeconds
+      && time < nextEventStart + toleranceSeconds;
+
+    if (withinBeatEventWindow) {
+      return resolvedBeatEvent;
+    }
+  }
+
+  const forwardEvent = findScheduledChordEventAtTime(schedule, time + toleranceSeconds);
+  if (forwardEvent && forwardEvent.audioTime - time <= toleranceSeconds) {
+    return forwardEvent;
+  }
+
+  const backwardProbeTime = Math.max(0, time - toleranceSeconds);
+  const backwardEvent = findScheduledChordEventAtTime(schedule, backwardProbeTime);
+  if (backwardEvent) {
+    const backwardEventEnd = backwardEvent.audioTime + backwardEvent.duration;
+    if (time - backwardEventEnd <= toleranceSeconds) {
+      return backwardEvent;
+    }
+  }
+
+  return null;
+}
+
 function estimateSongDuration(beats: (number | null)[]): number | undefined {
   const numericBeats = beats.filter((beat): beat is number => typeof beat === 'number');
   if (numericBeats.length === 0) return undefined;
@@ -165,14 +249,19 @@ export const useChordPlayback = ({
   isPlaying,
   currentTime,
   bpm = 120, // Default to 120 BPM if not provided
-  timeSignature = 4 // Default to 4/4 time
+  timeSignature = 4, // Default to 4/4 time
+  segmentationData,
 }: UseChordPlaybackProps): UseChordPlaybackReturn => {
   const [isEnabled, setIsEnabled] = useState(false);
+  const [playbackRecoveryNonce, setPlaybackRecoveryNonce] = useState(0);
   const [pianoVolume, setPianoVolumeState] = useState(DEFAULT_PIANO_VOLUME);
   const [guitarVolume, setGuitarVolumeState] = useState(DEFAULT_GUITAR_VOLUME);
   const [violinVolume, setViolinVolumeState] = useState(DEFAULT_VIOLIN_VOLUME);
   const [fluteVolume, setFluteVolumeState] = useState(DEFAULT_FLUTE_VOLUME);
   const [isReady, setIsReady] = useState(false);
+  const [effectiveManualSaxophoneVolume, setEffectiveManualSaxophoneVolume] = useState(0);
+  const [effectiveAutomaticSaxophoneVolume, setEffectiveAutomaticSaxophoneVolume] = useState(0);
+  const [hasManualSaxophoneOverride, setHasManualSaxophoneOverride] = useState(false);
 
   const chordPlaybackService = useRef(getSoundfontChordPlaybackService());
   const dynamicsAnalyzer = useRef(getDynamicsAnalyzer());
@@ -205,6 +294,17 @@ export const useChordPlayback = ({
   const isReadyRef = useRef(isReady);
   const currentTimeRef = useRef(currentTime);
   const estimatedSongDurationRef = useRef(estimatedSongDuration);
+  const previousShouldEnableSaxophoneRef = useRef(false);
+  const previousAppliedSaxophoneVolumeRef = useRef(0);
+  const eventMissStartedAtRef = useRef<number | null>(null);
+
+  const shouldEnableSaxophone = isEnabled
+    && !!segmentationData
+    && isInstrumentalTime(segmentationData, currentTime);
+
+  const appliedSaxophoneVolume = shouldEnableSaxophone && !hasManualSaxophoneOverride
+    ? effectiveAutomaticSaxophoneVolume
+    : effectiveManualSaxophoneVolume;
 
   useEffect(() => { chordsRef.current = chords; }, [chords]);
   useEffect(() => { beatsRef.current = beats; }, [beats]);
@@ -216,14 +316,34 @@ export const useChordPlayback = ({
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { estimatedSongDurationRef.current = estimatedSongDuration; }, [estimatedSongDuration]);
 
+  useEffect(() => {
+    const mixer = getAudioMixerService();
+
+    const syncSaxophoneVolume = () => {
+      const settings = mixer.getSettings();
+      const effectiveVolumes = mixer.getEffectiveVolumes();
+
+      setHasManualSaxophoneOverride(settings.saxophoneVolume > 0);
+      setEffectiveManualSaxophoneVolume(effectiveVolumes.saxophone);
+      setEffectiveAutomaticSaxophoneVolume(
+        (DEFAULT_AUTO_SAXOPHONE_VOLUME / 100) * (effectiveVolumes.chordPlayback / 100) * 100,
+      );
+    };
+
+    syncSaxophoneVolume();
+    const unsubscribe = mixer.addListener(syncSaxophoneVolume);
+    return unsubscribe;
+  }, []);
+
   // Initialize dynamics analyzer with musical params
   useEffect(() => {
     dynamicsAnalyzer.current.setParams({
       bpm,
       timeSignature,
-      totalDuration: estimateSongDuration(beats),
+      totalDuration: estimatedSongDuration,
+      segmentationData,
     });
-  }, [beats, bpm, timeSignature]);
+  }, [bpm, estimatedSongDuration, segmentationData, timeSignature]);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -249,6 +369,69 @@ export const useChordPlayback = ({
       fluteVolume
     });
   }, [isEnabled, pianoVolume, guitarVolume, violinVolume, fluteVolume]);
+
+  useEffect(() => {
+    chordPlaybackService.current.updateOptions({
+      saxophoneVolume: appliedSaxophoneVolume,
+    });
+  }, [appliedSaxophoneVolume]);
+
+  useEffect(() => {
+    const saxophoneJustActivated = shouldEnableSaxophone && !previousShouldEnableSaxophoneRef.current;
+    const saxophoneJustBecameAudible = appliedSaxophoneVolume > 0
+      && previousAppliedSaxophoneVolumeRef.current === 0;
+    const saxophoneVolumeChangedWhileAudible = appliedSaxophoneVolume > 0
+      && previousAppliedSaxophoneVolumeRef.current > 0
+      && appliedSaxophoneVolume !== previousAppliedSaxophoneVolumeRef.current;
+
+    if (
+      (saxophoneJustActivated || saxophoneJustBecameAudible || saxophoneVolumeChangedWhileAudible)
+      && isEnabled
+      && isReady
+      && isPlaying
+      && appliedSaxophoneVolume > 0
+    ) {
+      const activeEvent = findScheduledChordEventForPlayback(chordSchedule, currentTime, currentBeatIndex);
+
+      if (activeEvent && activeEvent.beatIndex === lastPlayedChordIndex.current) {
+        const dynamicVelocity = dynamicsAnalyzer.current.getVelocityMultiplier(
+          activeEvent.audioTime,
+          activeEvent.beatIndex,
+          activeEvent.chord,
+        );
+
+        void chordPlaybackService.current.playChordInstrument(
+          'saxophone',
+          activeEvent.chord,
+          activeEvent.duration,
+          bpm,
+          dynamicVelocity,
+          {
+            startTime: activeEvent.audioTime,
+            totalDuration: estimatedSongDuration,
+            playbackTime: currentTime,
+          },
+          timeSignature,
+        );
+      }
+    }
+
+    previousShouldEnableSaxophoneRef.current = shouldEnableSaxophone;
+    previousAppliedSaxophoneVolumeRef.current = appliedSaxophoneVolume;
+  }, [
+    appliedSaxophoneVolume,
+    bpm,
+    currentBeatIndex,
+    chordSchedule,
+    currentTime,
+    estimatedSongDuration,
+    hasManualSaxophoneOverride,
+    isEnabled,
+    isPlaying,
+    isReady,
+    shouldEnableSaxophone,
+    timeSignature,
+  ]);
 
   // ─── Background Tab Chord Scheduling ─────────────────────────────────────
   // When the browser tab loses focus, rAF stops → currentBeatIndex freezes →
@@ -338,6 +521,14 @@ export const useChordPlayback = ({
         // Tab returning to foreground — stop polling, let rAF take over
         isBackgroundRef.current = false;
         stopBackgroundPoller();
+
+        if (isEnabledRef.current && isPlayingRef.current) {
+          lastPlayedChord.current = null;
+          lastPlayedChordIndex.current = -1;
+          eventMissStartedAtRef.current = null;
+          void chordPlaybackService.current.prepareForPlayback();
+          setPlaybackRecoveryNonce(prev => prev + 1);
+        }
       }
     };
 
@@ -370,17 +561,30 @@ export const useChordPlayback = ({
       return;
     }
 
-    const event = findScheduledChordEventAtTime(chordSchedule, currentTime);
+    const event = findScheduledChordEventForPlayback(chordSchedule, currentTime, currentBeatIndex);
     if (!event) {
       if (lastPlayedChord.current !== null) {
-        // Use soft crossfade stop instead of hard stopAll — prevents jarring
-        // cuts when currentTime briefly falls between two chord boundaries.
+        if (eventMissStartedAtRef.current === null) {
+          eventMissStartedAtRef.current = currentTime;
+          return;
+        }
+
+        if (currentTime - eventMissStartedAtRef.current < EVENT_MISS_GRACE_PERIOD) {
+          return;
+        }
+
+        // Use soft crossfade stop instead of hard stopAll and only after a
+        // brief grace window so single missed timing ticks do not create an
+        // audible drop-out between adjacent chords.
         chordPlaybackService.current.softStopAll();
         lastPlayedChord.current = null;
         lastPlayedChordIndex.current = -1;
+        eventMissStartedAtRef.current = null;
       }
       return;
     }
+
+    eventMissStartedAtRef.current = null;
 
     if (event.beatIndex === lastPlayedChordIndex.current) {
       return;
@@ -407,7 +611,7 @@ export const useChordPlayback = ({
 
     lastPlayedChordIndex.current = event.beatIndex;
     lastPlayedChord.current = event.chord;
-  }, [currentBeatIndex, currentTime, isEnabled, isReady, isPlaying, chordSchedule, bpm, estimatedSongDuration, timeSignature]);
+  }, [currentBeatIndex, currentTime, isEnabled, isReady, isPlaying, chordSchedule, bpm, estimatedSongDuration, playbackRecoveryNonce, timeSignature]);
 
   // Stop playback when paused or disabled
   useEffect(() => {
@@ -415,11 +619,19 @@ export const useChordPlayback = ({
       chordPlaybackService.current.stopAll();
       lastPlayedChord.current = null;
       lastPlayedChordIndex.current = -1;
+      eventMissStartedAtRef.current = null;
     }
   }, [isPlaying, isEnabled]);
 
   // Toggle playback enabled state
   const togglePlayback = useCallback(() => {
+    const isEnabling = !isEnabledRef.current;
+    if (isEnabling) {
+      lastPlayedChord.current = null;
+      lastPlayedChordIndex.current = -1;
+      eventMissStartedAtRef.current = null;
+      void chordPlaybackService.current.prepareForPlayback();
+    }
     setIsEnabled(prev => !prev);
   }, []);
 

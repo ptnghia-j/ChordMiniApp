@@ -3,6 +3,7 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { audioMetadataService } from '@/services/audio/audioMetadataService';
 import { del } from '@vercel/blob';
 import { validateBlobUrl } from '@/utils/blobValidation';
+import { getPythonApiUrl } from '@/config/serverBackend';
 
 /**
  * API route to detect beats using Vercel Blob URL
@@ -38,7 +39,7 @@ function calculateProcessingTimeout(audioDuration: number): number {
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001';
+    const backendUrl = getPythonApiUrl();
 
     console.log(`🥁 Processing Vercel Blob beat detection request`);
 

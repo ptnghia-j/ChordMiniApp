@@ -7,6 +7,7 @@ import ApiKeySettings from '@/components/settings/ApiKeySettings';
 import Navigation from '@/components/common/Navigation';
 import { Card, CardBody, Switch, Tabs, Tab, Spinner, Divider } from '@heroui/react';
 import { FiSettings, FiKey, FiLock, FiMoon, FiShield, FiDatabase, FiBarChart2 } from 'react-icons/fi';
+import { ApiCredentialService } from '@/types/apiKeyTypes';
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
@@ -19,7 +20,7 @@ export default function SettingsPage() {
     isEncryptionSupported
   } = useApiKeys();
 
-  const handleApiKeyUpdate = async (service: 'musicAi' | 'gemini', key: string | null) => {
+  const handleApiKeyUpdate = async (service: ApiCredentialService, key: string | null) => {
     try {
       if (key) {
         const validation = await setApiKey(service, key);

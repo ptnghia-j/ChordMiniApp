@@ -1,0 +1,28 @@
+# @package _group_
+mtg_jamendo_json_en: &MTG
+  use: true
+  ratio: 1
+  duration: ${basics.duration}
+  lang: en
+  plain_rate: 0.5
+  
+  data_dir: path/to/MTG-Jamendo # Please modify this
+  json_path: 
+    train: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/music_info.train.json
+    valid: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/music_info.valid.json
+  tag_types: [genre, instrument, moods] # artist, title
+  prompt: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/prompt/en.txt
+
+
+mtg_jamendo_json_zh:
+  <<: *MTG
+  use: true
+  ratio: 1
+
+  lang: zh
+  prompt: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/prompt/zh.txt
+  translate:
+    genre: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/translate/genre_en2zh.json
+    instrument: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/translate/instrument_en2zh.json
+    keywords: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/translate/keywords_en2zh.json
+    moods: /root/MuQ/src/recipes/contrastive_learning/datasets/mtg-jamendo/translate/moods_en2zh.json
