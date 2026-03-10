@@ -9,7 +9,13 @@
  * This ensures falling notes exactly match the audio that is played.
  */
 
-import { noteNameToMidi, NOTE_INDEX_MAP, type ChordEvent, type MidiNote } from '@/utils/chordToMidi';
+import {
+  noteNameToMidi,
+  NOTE_INDEX_MAP,
+  isNoChordChordName,
+  type ChordEvent,
+  type MidiNote,
+} from '@/utils/chordToMidi';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -98,16 +104,24 @@ export function mergeConsecutiveChordEvents(events: ChordEvent[]): ChordEvent[] 
   if (events.length === 0) return [];
 
   const merged: ChordEvent[] = [];
-  let current = { ...events[0] };
+  let current: ChordEvent = {
+    ...events[0],
+    beatCount: events[0].beatCount ?? 1,
+  };
 
   for (let i = 1; i < events.length; i++) {
-    if (events[i].chordName === current.chordName) {
+    const isContiguous = Math.abs(events[i].startTime - current.endTime) <= TIMING_EPSILON;
+    if (events[i].chordName === current.chordName && isContiguous) {
       // Same chord — extend endTime
       current.endTime = events[i].endTime;
+      current.beatCount = (current.beatCount ?? 1) + (events[i].beatCount ?? 1);
     } else {
       // Chord changed — push previous and start new
       merged.push(current);
-      current = { ...events[i] };
+      current = {
+        ...events[i],
+        beatCount: events[i].beatCount ?? 1,
+      };
     }
   }
   merged.push(current);
@@ -157,7 +171,11 @@ export function generateNotesForInstrument(
   instrument: InstrumentName,
   params: NoteGenerationParams,
 ): ScheduledNote[] {
-  const { chordNotes, duration, beatDuration, startTime, totalDuration, timeSignature = 4 } = params;
+  const { chordName, chordNotes, duration, beatDuration, startTime, totalDuration, timeSignature = 4 } = params;
+
+  if (isNoChordChordName(chordName) || chordNotes.length === 0) {
+    return [];
+  }
 
   // Separate bass (octave 2) from main chord tones (octave 4/5)
   const bassEntry = chordNotes.find(n => n.octave === 2);
@@ -721,12 +739,14 @@ export function generateAllInstrumentVisualNotes(
   const totalSongDuration = merged.reduce((maxEnd, event) => Math.max(maxEnd, event.endTime), 0);
 
   // Use BPM-based beat duration when available (matches audio path exactly).
-  // Fall back to estimated beat duration from raw events.
+  // Fall back to estimated beat duration from raw events when beat counts are unavailable.
   const bd = bpm ? beatDurationFromBpm(bpm) : estimateBeatDuration(events);
 
   for (const event of merged) {
     const { chordName, notes: chordNotes, startTime, endTime } = event;
     const duration = endTime - startTime;
+    const eventBeatCount = Math.max(1, event.beatCount ?? 1);
+    const eventBeatDuration = duration > 0 ? duration / eventBeatCount : bd;
 
     for (const inst of instruments) {
       const instrumentName = inst.name.toLowerCase() as InstrumentName;
@@ -736,7 +756,7 @@ export function generateAllInstrumentVisualNotes(
         chordName,
         chordNotes,
         duration,
-        beatDuration: bd,
+        beatDuration: eventBeatDuration,
         startTime,
         totalDuration: totalSongDuration,
         timeSignature,

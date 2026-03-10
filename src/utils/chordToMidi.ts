@@ -70,6 +70,8 @@ export const CHORD_TYPE_ALIASES: Record<string, string> = {
   'maj13': 'maj13', 'Maj13': 'maj13',
 };
 
+export const NO_CHORD_VALUES = new Set(['N.C.', 'N', 'N/C', 'NC', '']);
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** A note with name, octave, and MIDI number */
@@ -96,9 +98,15 @@ export interface ChordEvent {
   endTime: number;
   /** Beat index in the chord grid */
   beatIndex: number;
+  /** Number of aligned beat-grid cells covered by this event */
+  beatCount?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+export function isNoChordChordName(chordName: string | undefined | null): boolean {
+  return !chordName || NO_CHORD_VALUES.has(chordName);
+}
 
 /**
  * Convert note name + octave string (e.g. "C4") to MIDI note number.
@@ -161,7 +169,7 @@ function intervalToSemitones(interval: string): number {
  * parseChordToMidiNotes("C/G")  → [{name:"G2", midi:43}, {name:"C4", midi:60}, ...]
  */
 export function parseChordToMidiNotes(chordName: string): MidiNote[] {
-  if (!chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC') {
+  if (isNoChordChordName(chordName)) {
     return [];
   }
 
@@ -243,40 +251,52 @@ export function parseChordToMidiNotes(chordName: string): MidiNote[] {
 export function buildChordTimeline(
   chords: string[],
   beats: (number | null)[],
-  paddingCount: number = 0,
+  _paddingCount: number = 0,
   shiftCount: number = 0,
 ): ChordEvent[] {
   const events: ChordEvent[] = [];
-  const skipCount = shiftCount + paddingCount;
+  const skipCount = Math.max(0, shiftCount);
+
+  const getNextTimedBeat = (fromIndex: number): number | null => {
+    for (let i = fromIndex + 1; i < beats.length; i += 1) {
+      const candidate = beats[i];
+      if (typeof candidate === 'number') {
+        return candidate;
+      }
+    }
+    return null;
+  };
 
   for (let i = skipCount; i < chords.length; i++) {
-    const chord = chords[i];
-    if (!chord || chord === 'N.C.' || chord === 'N' || chord === 'N/C' || chord === 'NC') continue;
-
     const startTime = beats[i];
-    if (startTime === null || startTime === undefined) continue;
+    if (typeof startTime !== 'number') continue;
+
+    const rawChord = chords[i] ?? '';
+    const chordName = isNoChordChordName(rawChord) ? 'N.C.' : rawChord;
 
     // Find end time: next beat's timestamp or estimate
     let endTime: number;
-    if (i + 1 < beats.length && beats[i + 1] !== null && beats[i + 1] !== undefined) {
-      endTime = beats[i + 1] as number;
+    const nextTimedBeat = getNextTimedBeat(i);
+    if (nextTimedBeat !== null) {
+      endTime = nextTimedBeat;
     } else {
       // Last beat — estimate duration from previous beat interval
-      const prevInterval = i > 0 && beats[i - 1] !== null
-        ? startTime - (beats[i - 1] as number)
+      const prevBeat = i > 0 ? beats[i - 1] : null;
+      const prevInterval = typeof prevBeat === 'number'
+        ? startTime - prevBeat
         : 0.5;
       endTime = startTime + prevInterval;
     }
 
-    const notes = parseChordToMidiNotes(chord);
-    if (notes.length === 0) continue;
+    const notes = parseChordToMidiNotes(chordName);
 
     events.push({
-      chordName: chord,
+      chordName,
       notes,
       startTime,
       endTime,
       beatIndex: i,
+      beatCount: 1,
     });
   }
 

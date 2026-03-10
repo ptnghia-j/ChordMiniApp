@@ -233,6 +233,8 @@ function generateInstrumentMidiNotes(
   for (const event of merged) {
     const { notes: chordNotes, startTime, endTime, chordName } = event;
     const duration = endTime - startTime;
+    const eventBeatCount = Math.max(1, event.beatCount ?? 1);
+    const eventBeatDuration = duration > 0 ? duration / eventBeatCount : beatDuration;
 
     // Compute dynamic velocity for this chord event
     const estimatedBeatIndex = event.beatIndex ?? Math.round(startTime / beatDuration);
@@ -241,7 +243,7 @@ function generateInstrumentMidiNotes(
       chordName,
       chordNotes,
       duration,
-      beatDuration,
+      beatDuration: eventBeatDuration,
       startTime,
       totalDuration: totalSongDuration,
       timeSignature,

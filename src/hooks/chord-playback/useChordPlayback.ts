@@ -11,6 +11,7 @@ import {
 } from '@/config/audioDefaults';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { isInstrumentalTime } from '@/utils/segmentationSections';
+import { isNoChordChordName } from '@/utils/chordToMidi';
 
 export interface UseChordPlaybackProps {
   currentBeatIndex: number;
@@ -39,10 +40,8 @@ export interface UseChordPlaybackReturn {
 
 // ─── Helpers: No-chord detection ─────────────────────────────────────────────
 
-const NO_CHORD_VALUES = new Set(['N.C.', 'N/C', 'NC', 'N', '']);
-
 function isNoChord(chord: string | undefined | null): boolean {
-  return !chord || NO_CHORD_VALUES.has(chord);
+  return isNoChordChordName(chord);
 }
 
 // ─── Helpers: Build pre-scheduled chord list ─────────────────────────────────
@@ -56,6 +55,8 @@ interface ScheduledChordEvent {
   duration: number;
   /** Beat index (for dynamics) */
   beatIndex: number;
+  /** Number of aligned beat-grid cells covered by this event */
+  beatCount: number;
 }
 
 const FOREGROUND_EVENT_BOUNDARY_TOLERANCE = 0.08;
@@ -73,6 +74,7 @@ function buildChordSchedule(
   let activeChord: string | null = null;
   let activeStartTime: number | null = null;
   let activeBeatIndex = -1;
+  let activeBeatCount = 0;
 
   const pushEvent = (endTime: number) => {
     if (activeChord === null || activeStartTime === null) return;
@@ -81,6 +83,7 @@ function buildChordSchedule(
       chord: activeChord,
       duration: Math.max(0.5, endTime - activeStartTime),
       beatIndex: activeBeatIndex,
+      beatCount: Math.max(1, activeBeatCount),
     });
   };
 
@@ -96,6 +99,7 @@ function buildChordSchedule(
       activeChord = null;
       activeStartTime = null;
       activeBeatIndex = -1;
+      activeBeatCount = 0;
       continue;
     }
 
@@ -103,6 +107,7 @@ function buildChordSchedule(
       activeChord = chord;
       activeStartTime = beatTime;
       activeBeatIndex = i;
+      activeBeatCount = 1;
       continue;
     }
 
@@ -111,6 +116,9 @@ function buildChordSchedule(
       activeChord = chord;
       activeStartTime = beatTime;
       activeBeatIndex = i;
+      activeBeatCount = 1;
+    } else {
+      activeBeatCount += 1;
     }
   }
 
@@ -195,10 +203,9 @@ function findScheduledChordEventForPlayback(
 
   if (beatEventIndex >= 0) {
     const resolvedBeatEvent = schedule[beatEventIndex];
-    const nextEventStart = schedule[beatEventIndex + 1]?.audioTime
-      ?? (resolvedBeatEvent.audioTime + resolvedBeatEvent.duration);
+    const resolvedBeatEventEnd = resolvedBeatEvent.audioTime + resolvedBeatEvent.duration;
     const withinBeatEventWindow = time >= resolvedBeatEvent.audioTime - toleranceSeconds
-      && time < nextEventStart + toleranceSeconds;
+      && time < resolvedBeatEventEnd + toleranceSeconds;
 
     if (withinBeatEventWindow) {
       return resolvedBeatEvent;
@@ -410,6 +417,7 @@ export const useChordPlayback = ({
             startTime: activeEvent.audioTime,
             totalDuration: estimatedSongDuration,
             playbackTime: currentTime,
+            beatCount: activeEvent.beatCount,
           },
           timeSignature,
         );
@@ -498,6 +506,7 @@ export const useChordPlayback = ({
           startTime: event.audioTime,
           totalDuration: estimatedSongDurationRef.current,
           playbackTime: time,
+          beatCount: event.beatCount,
         },
         timeSignatureRef.current,
       );
@@ -605,6 +614,7 @@ export const useChordPlayback = ({
         startTime: event.audioTime,
         totalDuration: estimatedSongDuration,
         playbackTime: currentTime,
+        beatCount: event.beatCount,
       },
       timeSignature,
     );

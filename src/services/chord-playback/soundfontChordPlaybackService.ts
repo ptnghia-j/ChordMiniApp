@@ -50,6 +50,19 @@ export interface PlaybackTimingContext {
   startTime?: number;
   totalDuration?: number;
   playbackTime?: number;
+  beatCount?: number;
+}
+
+function resolvePatternBeatDuration(
+  duration: number,
+  bpm: number,
+  timingContext?: PlaybackTimingContext,
+): number {
+  const beatCount = timingContext?.beatCount;
+  if (typeof beatCount === 'number' && isFinite(beatCount) && beatCount > 0 && duration > 0) {
+    return duration / beatCount;
+  }
+  return beatDurationFromBpm(bpm);
 }
 
 interface InstrumentEnvelopeConfig {
@@ -480,7 +493,7 @@ export class SoundfontChordPlaybackService {
       bpm = SoundfontChordPlaybackService.DEFAULT_BPM;
     }
 
-    const bd = beatDurationFromBpm(bpm);
+    const bd = resolvePatternBeatDuration(duration, bpm, timingContext);
 
     // Instrument volumes → instrument names
     const instrumentConfigs: Array<{ name: InstrumentName; volume: number }> = [];
@@ -562,7 +575,7 @@ export class SoundfontChordPlaybackService {
       chordName,
       chordNotes: midiNotes,
       duration,
-      beatDuration: beatDurationFromBpm(bpm),
+      beatDuration: resolvePatternBeatDuration(duration, bpm, timingContext),
       startTime: timingContext?.startTime,
       totalDuration: timingContext?.totalDuration,
       timeSignature,

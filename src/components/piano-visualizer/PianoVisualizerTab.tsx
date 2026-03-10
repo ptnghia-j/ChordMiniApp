@@ -71,6 +71,10 @@ interface PianoVisualizerTabProps {
 const PLAYBACK_EVENT_BOUNDARY_TOLERANCE = 0.08;
 const PLAYBACK_EVENT_MISS_GRACE_PERIOD = 0.12;
 
+function hasPlayableNotes(event: ChordEvent): boolean {
+  return event.notes.length > 0;
+}
+
 function findChordEventIndexByBeatIndex(events: ChordEvent[], beatIndex: number): number {
   if (beatIndex < 0) return -1;
 
@@ -117,9 +121,9 @@ function findChordEventForPlayback(
 
   if (beatEventIndex >= 0) {
     const resolvedBeatEvent = events[beatEventIndex];
-    const nextEventStart = events[beatEventIndex + 1]?.startTime ?? resolvedBeatEvent.endTime;
+    const resolvedBeatEventEnd = resolvedBeatEvent.endTime;
     const withinBeatEventWindow = currentTime >= resolvedBeatEvent.startTime - toleranceSeconds
-      && currentTime < nextEventStart + toleranceSeconds;
+      && currentTime < resolvedBeatEventEnd + toleranceSeconds;
 
     if (withinBeatEventWindow) {
       return resolvedBeatEvent;
@@ -201,7 +205,10 @@ function usePianoOnlyPlayback(
   const shouldActivate = !isChordPlaybackEnabled && isPlaying;
 
   // Merge events to match playback granularity (one per chord change)
-  const merged = useMemo(() => mergeConsecutiveChordEvents(chordEvents), [chordEvents]);
+  const merged = useMemo(
+    () => mergeConsecutiveChordEvents(chordEvents.filter(hasPlayableNotes)),
+    [chordEvents],
+  );
   const totalDuration = useMemo(
     () => (merged.length > 0 ? merged[merged.length - 1].endTime : undefined),
     [merged],
@@ -289,6 +296,7 @@ function usePianoOnlyPlayback(
       startTime: currentChordEvent.startTime,
       playbackTime: currentTime,
       totalDuration,
+      beatCount: currentChordEvent.beatCount,
     }, timeSignature);
     lastPlayedChordRef.current = currentChordEvent.chordName;
   }, [bpm, currentBeatIndex, currentTime, merged, shouldActivate, timeSignature, totalDuration]);
