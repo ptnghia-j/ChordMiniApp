@@ -9,6 +9,27 @@ export interface GridLayoutConfig {
   totalRows: number;
 }
 
+const MEASURE_COLUMN_GAP_PX = 4;
+const WITHIN_MEASURE_BEAT_GAP_PX = 2;
+const MEASURE_LEFT_CHROME_PX = 5;
+
+export const estimateBeatCellWidth = (
+  availableWidth: number,
+  measuresPerRow: number,
+  timeSignature: number,
+): number => {
+  if (availableWidth <= 0 || measuresPerRow <= 0 || timeSignature <= 0) {
+    return 0;
+  }
+
+  const totalCells = measuresPerRow * timeSignature;
+  const withinMeasureGaps = measuresPerRow * Math.max(0, timeSignature - 1) * WITHIN_MEASURE_BEAT_GAP_PX;
+  const measureGaps = Math.max(0, measuresPerRow - 1) * MEASURE_COLUMN_GAP_PX;
+  const measureChrome = measuresPerRow * MEASURE_LEFT_CHROME_PX;
+
+  return (availableWidth - withinMeasureGaps - measureGaps - measureChrome) / totalCells;
+};
+
 /**
  * Dynamic font sizing system based on cell size and chord complexity
  */
@@ -187,11 +208,13 @@ export const calculateGridLayout = (
   const EFFECTIVE_MIN_SIZE = Math.max(MIN_CELL_SIZE, MIN_TOUCH_TARGET);
 
   const availableWidth = effectiveWidth * 0.95;
-  const gapSize = effectiveWidth < 640 ? 4 : 8;
-  const maxCellsWithMinSize = Math.floor(
-    (availableWidth - (timeSignature - 1) * gapSize) / EFFECTIVE_MIN_SIZE
-  );
-  const maxMeasuresWithMinSize = Math.floor(maxCellsWithMinSize / timeSignature);
+  let maxMeasuresWithMinSize = 0;
+
+  while (
+    estimateBeatCellWidth(availableWidth, maxMeasuresWithMinSize + 1, timeSignature) >= EFFECTIVE_MIN_SIZE
+  ) {
+    maxMeasuresWithMinSize += 1;
+  }
 
   // Apply minimum cell size constraint
   if (maxMeasuresWithMinSize > 0 && maxMeasuresWithMinSize < measuresPerRow) {
@@ -207,13 +230,23 @@ export const calculateGridLayout = (
     const MIN_COMPACT_CELL_SIZE = 34; // relaxed threshold to preserve two measures on narrow phones
     if (finalMeasuresPerRow === 1 && isPortraitPhone && isCompactContainer) {
       const desiredMeasures = 2;
-      const cellsNeeded = desiredMeasures * timeSignature;
-      const gapCount = Math.max(0, cellsNeeded - 1);
-      const requiredCellSize = (availableWidth - gapCount * gapSize) / cellsNeeded;
+      const requiredCellSize = estimateBeatCellWidth(availableWidth, desiredMeasures, timeSignature);
 
       if (requiredCellSize >= MIN_COMPACT_CELL_SIZE) {
         finalMeasuresPerRow = desiredMeasures;
       }
+    }
+  }
+
+  if (timeSignature > 0) {
+    const expandedMeasuresPerRow = finalMeasuresPerRow + 1;
+    const relaxedExpansionCellSize = effectiveWidth < 640 ? 42 : effectiveWidth < 1024 ? 46 : 50;
+
+    if (
+      expandedMeasuresPerRow <= Math.max(finalMeasuresPerRow, maxMeasuresWithMinSize)
+      && estimateBeatCellWidth(availableWidth, expandedMeasuresPerRow, timeSignature) >= relaxedExpansionCellSize
+    ) {
+      finalMeasuresPerRow = expandedMeasuresPerRow;
     }
   }
 

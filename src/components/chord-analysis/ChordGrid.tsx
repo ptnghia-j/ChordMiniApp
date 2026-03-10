@@ -321,24 +321,13 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // PERFORMANCE OPTIMIZATION: Extract layout values from memoized config
   const { measuresPerRow: dynamicMeasuresPerRow } = gridLayoutConfig;
 
-  const sectionStripMetrics = useCallback((label: string, rowCount: number) => {
-    const isSmallScreen = screenWidth < 640;
-    const cellMinHeightPx = showRomanNumerals
-      ? (isSmallScreen ? 52.8 : 67.2)
-      : (isSmallScreen ? 44 : 56);
+  const sectionStripMetrics = useCallback((rowCount: number) => {
     const rowGapPx = 2; // matches section content wrapper space-y-0.5
-    const verticalPaddingPx = 16;
-    const labelCharHeightPx = isSmallScreen ? 8 : 10;
-
-    const rowsHeightPx = (rowCount * cellMinHeightPx) + (Math.max(0, rowCount - 1) * rowGapPx);
-    const labelHeightPx = (label.length * labelCharHeightPx) + verticalPaddingPx;
 
     return {
-      heightPx: Math.max(rowsHeightPx, labelHeightPx),
-      labelHeightPx,
-      rowsHeightPx,
+      heightPx: (Math.max(1, rowCount) * cellSize) + (Math.max(0, rowCount - 1) * rowGapPx),
     };
-  }, [screenWidth, showRomanNumerals]);
+  }, [cellSize]);
 
   // Use utility function for chord styling
   const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
@@ -782,7 +771,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
             {sectionBlocks ? (
               <div className="space-y-3">
                 {sectionBlocks.map((section, sectionIdx) => {
-                  const stripMetrics = sectionStripMetrics(section.label, section.rows.length);
+                  const stripMetrics = sectionStripMetrics(section.rows.length);
 
                   return (
                   <div key={`section-${sectionIdx}-${section.label}`} className="flex items-start gap-2 sm:gap-3">

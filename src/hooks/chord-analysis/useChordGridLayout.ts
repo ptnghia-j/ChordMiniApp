@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { calculateGridLayout, getDynamicFontSize, getGridColumnsClass, GridLayoutConfig } from '@/utils/chordStyling';
+import { calculateGridLayout, estimateBeatCellWidth, getDynamicFontSize, getGridColumnsClass, GridLayoutConfig } from '@/utils/chordStyling';
 
 /**
  * Custom hook for managing ChordGrid layout and sizing
@@ -61,16 +61,13 @@ export const useChordGridLayout = (
     if (containerWidth === 0) return 80; // Default fallback
 
     const { measuresPerRow } = gridLayoutConfig;
-    const totalCells = measuresPerRow * timeSignature;
-    const gapSize = screenWidth < 640 ? 4 : 8; // sm:gap-2 vs gap-1
-    const totalGaps = (totalCells - 1) * gapSize;
     const availableWidth = containerWidth * 0.95; // Account for padding
-    const cellWidth = Math.floor((availableWidth - totalGaps) / totalCells);
+    const cellWidth = Math.floor(estimateBeatCellWidth(availableWidth, measuresPerRow, timeSignature));
 
     // Ensure minimum cell size for touch targets
     const MIN_CELL_SIZE = 44;
     return Math.max(cellWidth, MIN_CELL_SIZE);
-  }, [containerWidth, screenWidth, gridLayoutConfig, timeSignature]);
+  }, [containerWidth, gridLayoutConfig, timeSignature]);
 
   // Update cell size when calculated size changes
   useEffect(() => {
