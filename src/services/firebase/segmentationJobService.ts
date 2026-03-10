@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 
 import { getFirestoreInstance, SEGMENTATION_JOBS_COLLECTION } from '@/config/firebase';
+import { deleteDocumentsWithAdminAccess } from '@/services/firebase/firestoreAdminService';
 import { SegmentationResult, SongContext } from '@/types/chatbotTypes';
 
 export type SegmentationJobStatus = 'created' | 'processing' | 'completed' | 'failed';
@@ -34,7 +35,7 @@ export interface SegmentationJobDocument {
   uploadId?: string;
   audioUrl: string;
   result?: SegmentationResult;
-  error?: string;
+  error?: string | null;
   model?: string;
   updateTokenHash: string;
   createdAt?: unknown;
@@ -62,6 +63,26 @@ function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
   ) as T;
+}
+
+async function deleteSegmentationJobs(jobIds: string[]): Promise<number> {
+  if (jobIds.length === 0) {
+    return 0;
+  }
+
+  try {
+    return await deleteDocumentsWithAdminAccess(SEGMENTATION_JOBS_COLLECTION, jobIds);
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+  }
+
+  const firestore = await getFirestoreInstance();
+  await Promise.all(
+    jobIds.map((jobId) => deleteDoc(doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId))),
+  );
+  return jobIds.length;
 }
 
 function buildJobId(): string {
@@ -192,6 +213,7 @@ export async function updateSegmentationJob(
     jobRef,
     stripUndefinedFields({
       ...updates,
+      ...(updates.status === 'completed' ? { error: null } : {}),
       ...(updates.status ? { staleAtMs: getSegmentationJobStaleAtMs(updates.status, now) } : {}),
       updatedAt: serverTimestamp(),
       updatedAtMs: now,
@@ -285,9 +307,7 @@ export async function cleanupStaleSegmentationJobs(
   collectStaleJobs(processingSnapshot);
 
   if (staleJobIds.length > 0) {
-    await Promise.all(
-      staleJobIds.map((jobId) => deleteDoc(doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId))),
-    );
+    await deleteSegmentationJobs(staleJobIds);
   }
 
   return {
@@ -305,22 +325,12 @@ export async function deleteNonCompletedSegmentationJobsByRequestHash(
   const jobsRef = collection(firestore, SEGMENTATION_JOBS_COLLECTION);
   const snapshot = await getDocs(query(jobsRef, where('requestHash', '==', requestHash)));
 
-  let deletedCount = 0;
-  const deletions: Promise<void>[] = [];
-  snapshot.forEach((docSnap) => {
-    const job = docSnap.data() as SegmentationJobDocument;
-    if (job.status === 'completed') {
-      return;
-    }
+  const jobIdsToDelete = snapshot.docs
+    .map((docSnap) => docSnap.data() as SegmentationJobDocument)
+    .filter((job) => job.status !== 'completed')
+    .filter((job) => !(options?.excludeJobId && job.jobId === options.excludeJobId))
+    .map((job) => job.jobId);
 
-    if (options?.excludeJobId && job.jobId === options.excludeJobId) {
-      return;
-    }
-
-    deletions.push(deleteDoc(doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), job.jobId)));
-    deletedCount += 1;
-  });
-
-  await Promise.all(deletions);
-  return deletedCount;
+  await deleteSegmentationJobs(jobIdsToDelete);
+  return jobIdsToDelete.length;
 }
