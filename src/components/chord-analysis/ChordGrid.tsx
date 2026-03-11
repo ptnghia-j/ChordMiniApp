@@ -19,7 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
-import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
+import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
 import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
 
@@ -260,13 +260,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   // key-detection).  Fall back to the heuristic (count sharps vs flats in
   // chord labels) only when no key is available.
   const accidentalPreference = useMemo(() => {
-    const keyPref = getAccidentalPreferenceFromKey(keySignature);
-    if (keyPref) return keyPref;
-    if (Array.isArray(shiftedChords) && shiftedChords.length > 0) {
-      return computeAccidentalPreference(shiftedChords) || undefined;
-    }
-    return undefined;
-  }, [keySignature, shiftedChords]);
+    return getDisplayAccidentalPreference({
+      chords: shiftedChords,
+      keySignature,
+      preserveExactSpelling: Boolean(sequenceCorrections),
+    });
+  }, [keySignature, sequenceCorrections, shiftedChords]);
 
   // Use utility function for grid columns class (already imported)
 
@@ -323,11 +322,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
   const sectionStripMetrics = useCallback((rowCount: number) => {
     const rowGapPx = 2; // matches section content wrapper space-y-0.5
+    const isDesktopLayout = screenWidth >= 640;
+    const minCellHeightPx = showRomanNumerals
+      ? (isDesktopLayout ? 4.2 * 16 : 3.3 * 16)
+      : (isDesktopLayout ? 3.5 * 16 : 2.75 * 16);
+    const effectiveRowHeightPx = Math.max(cellSize, minCellHeightPx);
 
     return {
-      heightPx: (Math.max(1, rowCount) * cellSize) + (Math.max(0, rowCount - 1) * rowGapPx),
+      heightPx: (Math.max(1, rowCount) * effectiveRowHeightPx) + (Math.max(0, rowCount - 1) * rowGapPx),
     };
-  }, [cellSize]);
+  }, [cellSize, screenWidth, showRomanNumerals]);
 
   // Use utility function for chord styling
   const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {

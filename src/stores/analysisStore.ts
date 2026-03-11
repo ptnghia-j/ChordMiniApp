@@ -46,6 +46,7 @@ interface AnalysisStore {
   completeAnalysis: (results: AnalysisResult) => void;
   failAnalysis: (error: string) => void;
   resetAnalysis: () => void;
+  setIsAnalyzing: (isAnalyzing: boolean) => void;
   setAnalysisResults: (results: AnalysisResult | null) => void;
   setAnalysisError: (error: string | null) => void;
 
@@ -67,6 +68,7 @@ interface AnalysisStore {
   setLyrics: (lyrics: LyricsData | null) => void;
   setShowLyrics: (show: boolean) => void;
   setHasCachedLyrics: (hasCached: boolean) => void;
+  setIsTranscribingLyrics: (isTranscribing: boolean) => void;
   setLyricsError: (error: string | null) => void;
 
   // Key detection operations
@@ -152,6 +154,8 @@ export const useAnalysisStore = create<AnalysisStore>()(
           'resetAnalysis'
         ),
 
+      setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }, false, 'setIsAnalyzing'),
+
       setAnalysisResults: (results) => set({ analysisResults: results }, false, 'setAnalysisResults'),
 
       setAnalysisError: (error) => set({ analysisError: error }, false, 'setAnalysisError'),
@@ -212,6 +216,9 @@ export const useAnalysisStore = create<AnalysisStore>()(
       setShowLyrics: (show) => set({ showLyrics: show }, false, 'setShowLyrics'),
 
       setHasCachedLyrics: (hasCached) => set({ hasCachedLyrics: hasCached }, false, 'setHasCachedLyrics'),
+
+      setIsTranscribingLyrics: (isTranscribing) =>
+        set({ isTranscribingLyrics: isTranscribing }, false, 'setIsTranscribingLyrics'),
 
       setLyricsError: (error) => set({ lyricsError: error }, false, 'setLyricsError'),
 

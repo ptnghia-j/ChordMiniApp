@@ -451,27 +451,17 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
       console.log('Found cached audio file in Firestore');
       const data = docSnap.data() as CachedAudioFileData;
 
-      // Check if the entry is already marked as invalid or expired
+      // Read path: treat invalid/expired entries as cache misses without mutating metadata.
       if (data.invalid || data.expired) {
         console.log(`Cache entry for ${videoId} is marked as ${data.invalid ? 'invalid' : 'expired'}, will re-download`);
         return null;
       }
 
-      // For stream URLs, check if they're expired
+      // Read path: treat expired stream URLs as stale without writing cleanup markers.
       if (data.isStreamUrl && data.streamExpiresAt) {
         const now = Date.now();
         if (now > data.streamExpiresAt) {
           console.log(`Stream URL for ${videoId} has expired, will re-extract`);
-
-          // Mark the entry as expired
-          setDoc(docRef, {
-            ...data,
-            expired: true,
-            expirationReason: 'Stream URL expired',
-            expirationTimestamp: serverTimestamp()
-          }).catch(err => {
-            console.error(`Failed to mark stream URL entry for ${videoId} as expired:`, err);
-          });
 
           return null;
         }
@@ -490,32 +480,6 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
 
       if (ageInDays > 7) {
         console.log(`Cache entry for ${videoId} is ${ageInDays.toFixed(1)} days old, treating as expired`);
-
-        // Mark the entry as expired but don't wait for the operation to complete
-        // This avoids slowing down the request
-        setDoc(docRef, {
-          ...data,
-          expired: true,
-          expirationReason: 'Age > 7 days',
-          expirationTimestamp: serverTimestamp()
-        }).then(() => {
-          console.log(`Marked cache entry for ${videoId} as expired`);
-
-          // Schedule deletion of storage files in the background (only for non-stream URLs)
-          if (!data.isStreamUrl && data.storagePath) {
-            deleteAudioFile(data.storagePath)
-              .then(() => console.log(`Deleted expired audio file: ${data.storagePath}`))
-              .catch(err => console.error(`Failed to delete expired audio file: ${data.storagePath}`, err));
-          }
-
-          if (!data.isStreamUrl && data.videoStoragePath) {
-            deleteAudioFile(data.videoStoragePath)
-              .then(() => console.log(`Deleted expired video file: ${data.videoStoragePath}`))
-              .catch(err => console.error(`Failed to delete expired video file: ${data.videoStoragePath}`, err));
-          }
-        }).catch(err => {
-          console.error(`Failed to mark cache entry for ${videoId} as expired:`, err);
-        });
 
         return null;
       }
@@ -556,39 +520,18 @@ export async function getAudioFileMetadata(videoId: string): Promise<AudioFileDa
               const publicUrl = await getDownloadURL(storageRef);
               console.log(`Generated public URL: ${publicUrl}`);
 
-              // Update the data with the public URL
-              data.audioUrl = publicUrl;
-
-              // Update the document in Firestore (don't wait for it to complete)
-              setDoc(docRef, {
+              // Read path: resolve the public URL for this caller without updating Firestore.
+              return {
                 ...data,
                 audioUrl: publicUrl,
-                lastUpdated: serverTimestamp()
-              }).then(() => {
-                console.log('Updated audio file metadata with public URL');
-              }).catch(err => {
-                console.error('Error updating audio file metadata:', err);
-              });
-              return data;
+              };
             } catch (downloadError) {
               console.error('Error getting download URL:', downloadError);
 
-              // If the file doesn't exist in storage, return null to trigger a re-download
+              // If the file doesn't exist in storage, return null to trigger a re-download.
               if (downloadError instanceof Error &&
                   downloadError.toString().includes('storage/object-not-found')) {
                 console.log('File not found in Firebase Storage, will trigger re-download');
-
-                // Mark the entry as invalid (don't wait for it to complete)
-                setDoc(docRef, {
-                  ...data,
-                  invalid: true,
-                  invalidReason: 'File not found in storage',
-                  invalidTimestamp: serverTimestamp()
-                }).then(() => {
-                  console.log(`Marked cache entry for ${videoId} as invalid`);
-                }).catch(err => {
-                  console.error(`Failed to mark cache entry for ${videoId} as invalid:`, err);
-                });
 
                 return null;
               }

@@ -15,13 +15,24 @@ export interface ModelState {
   setChordDetector: (detector: ChordDetectorType) => void;
 }
 
+export interface UseModelStateOptions {
+  initialBeatDetector?: BeatDetectorType | null;
+  initialChordDetector?: ChordDetectorType | null;
+}
+
 /**
  * Custom hook for managing model selection state with localStorage persistence
  * Extracted from analyze page component - maintains ZERO logic changes
  */
-export const useModelState = (): ModelState => {
+export const useModelState = (options: UseModelStateOptions = {}): ModelState => {
+  const { initialBeatDetector = null, initialChordDetector = null } = options;
+
   // Initialize model states with localStorage persistence
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
+    if (initialBeatDetector) {
+      return initialBeatDetector;
+    }
+
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_beat_detector');
       if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
@@ -36,6 +47,10 @@ export const useModelState = (): ModelState => {
   });
 
   const [chordDetector, setChordDetector] = useState<ChordDetectorType>(() => {
+    if (initialChordDetector) {
+      return getSafeChordModel(initialChordDetector);
+    }
+
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_chord_detector');
       if (saved && ['chord-cnn-lstm', 'btc-sl', 'btc-pl'].includes(saved)) {
@@ -60,6 +75,29 @@ export const useModelState = (): ModelState => {
   useEffect(() => {
     chordDetectorRef.current = chordDetector;
   }, [chordDetector]);
+
+  useEffect(() => {
+    if (initialBeatDetector && initialBeatDetector !== beatDetector) {
+      const timer = window.setTimeout(() => {
+        setBeatDetector(initialBeatDetector);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
+    }
+  }, [beatDetector, initialBeatDetector]);
+
+  useEffect(() => {
+    if (initialChordDetector) {
+      const safeModel = getSafeChordModel(initialChordDetector);
+      if (safeModel !== chordDetector) {
+        const timer = window.setTimeout(() => {
+          setChordDetector(safeModel);
+        }, 0);
+
+        return () => window.clearTimeout(timer);
+      }
+    }
+  }, [chordDetector, initialChordDetector]);
 
   // Persist beat detector selection to localStorage
   useEffect(() => {

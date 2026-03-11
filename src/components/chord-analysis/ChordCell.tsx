@@ -297,7 +297,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
                 dangerouslySetInnerHTML={{
                   __html: editedChord
                     ? editedChord // Show raw edited value without formatting
-                    : formatChordWithMusicalSymbols(displayChord, isDarkMode, accidentalPreference)
+                    : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
                 }}
               />
 

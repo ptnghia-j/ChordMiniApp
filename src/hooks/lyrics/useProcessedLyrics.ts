@@ -3,6 +3,7 @@ import { enhanceLyricsWithCharacterTiming, EnhancedLyricLine } from '@/utils/lyr
 import { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
 import { normalizeChordForDedup } from '@/utils/chordNormalization';
 import { isInstrumentalLikeSegment } from '@/utils/segmentationSections';
+import type { LyricWordTiming } from '@/types/musicAiTypes';
 
 // Types: beat-aligned chord events
 export interface BeatAlignedChordEvent {
@@ -21,12 +22,144 @@ interface LyricLine {
   endTime: number;
   text: string;
   chords: ChordMarker[];
+  wordTimings?: LyricWordTiming[];
 }
 
 interface SynchronizedLyrics {
   lines: LyricLine[];
   error?: string; // Optional error message when lyrics synchronization fails
 }
+
+const WORD_REGEX = /\S+/g;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
+
+const findWordMatches = (text: string): Array<Pick<LyricWordTiming, 'text' | 'startChar' | 'endChar'>> => {
+  const matches: Array<Pick<LyricWordTiming, 'text' | 'startChar' | 'endChar'>> = [];
+  let match: RegExpExecArray | null;
+
+  WORD_REGEX.lastIndex = 0;
+
+  while ((match = WORD_REGEX.exec(text)) !== null) {
+    matches.push({
+      text: match[0],
+      startChar: match.index,
+      endChar: match.index + match[0].length - 1,
+    });
+  }
+
+  return matches;
+};
+
+const estimateWordTimings = (line: LyricLine): LyricWordTiming[] => {
+  const matches = findWordMatches(line.text);
+  if (matches.length === 0) return [];
+
+  let currentTime = line.startTime;
+  let remainingWeight = matches.reduce((sum, match) => sum + Math.max(1, match.text.length), 0);
+
+  return matches.map((match, index) => {
+    const weight = Math.max(1, match.text.length);
+    const isLastWord = index === matches.length - 1;
+    const remainingDuration = Math.max(line.endTime - currentTime, 0);
+    const duration = isLastWord || remainingWeight <= 0
+      ? remainingDuration
+      : remainingDuration * (weight / remainingWeight);
+    const endTime = isLastWord ? line.endTime : Math.min(line.endTime, currentTime + duration);
+    const wordTiming: LyricWordTiming = {
+      text: match.text,
+      startTime: currentTime,
+      endTime,
+      startChar: match.startChar,
+      endChar: match.endChar,
+    };
+
+    currentTime = endTime;
+    remainingWeight -= weight;
+    return wordTiming;
+  });
+};
+
+const getWordTimingsForLine = (line: LyricLine): LyricWordTiming[] => {
+  if (!line.text) return [];
+
+  const lineLength = line.text.length;
+  if (line.wordTimings?.length) {
+    const sanitized = line.wordTimings
+      .filter((wordTiming) => Number.isFinite(wordTiming.startTime) && Number.isFinite(wordTiming.endTime))
+      .map((wordTiming) => {
+        const startChar = clamp(wordTiming.startChar, 0, Math.max(lineLength - 1, 0));
+        const endChar = clamp(wordTiming.endChar, startChar, Math.max(lineLength - 1, 0));
+
+        return {
+          text: wordTiming.text,
+          startTime: clamp(wordTiming.startTime, line.startTime, line.endTime),
+          endTime: clamp(wordTiming.endTime, line.startTime, line.endTime),
+          startChar,
+          endChar,
+        };
+      })
+      .filter((wordTiming) => wordTiming.text.trim().length > 0)
+      .sort((a, b) => a.startTime - b.startTime || a.startChar - b.startChar);
+
+    if (sanitized.length > 0) {
+      return sanitized.map((wordTiming, index) => {
+        const startTime = index > 0 ? Math.max(wordTiming.startTime, sanitized[index - 1].endTime) : wordTiming.startTime;
+        const endTime = Math.max(startTime, wordTiming.endTime);
+        return {
+          ...wordTiming,
+          startTime,
+          endTime,
+        };
+      });
+    }
+  }
+
+  return estimateWordTimings(line);
+};
+
+const getChordPositionForLine = (
+  line: LyricLine,
+  chordTime: number,
+  wordTimings: LyricWordTiming[]
+): number => {
+  if (line.text.length === 0) return 0;
+
+  if (wordTimings.length === 0) {
+    const relativePosition = clamp(
+      (chordTime - line.startTime) / Math.max(line.endTime - line.startTime, 0.001),
+      0,
+      1
+    );
+    return clamp(Math.floor(relativePosition * Math.max(line.text.length - 1, 0)), 0, Math.max(line.text.length - 1, 0));
+  }
+
+  const targetWord = wordTimings.reduce<LyricWordTiming>((closest, candidate) => {
+    const closestDistance = chordTime < closest.startTime
+      ? closest.startTime - chordTime
+      : chordTime > closest.endTime
+        ? chordTime - closest.endTime
+        : 0;
+    const candidateDistance = chordTime < candidate.startTime
+      ? candidate.startTime - chordTime
+      : chordTime > candidate.endTime
+        ? chordTime - candidate.endTime
+        : 0;
+
+    return candidateDistance < closestDistance ? candidate : closest;
+  }, wordTimings[0]);
+
+  const wordDuration = Math.max(targetWord.endTime - targetWord.startTime, 0.001);
+  const withinWordProgress = clamp((chordTime - targetWord.startTime) / wordDuration, 0, 1);
+  const wordCharSpan = Math.max(targetWord.endChar - targetWord.startChar, 0);
+
+  return clamp(
+    targetWord.startChar + Math.round(wordCharSpan * withinWordProgress),
+    targetWord.startChar,
+    targetWord.endChar
+  );
+};
 
 // Utility functions
 /**
@@ -169,7 +302,8 @@ export const useProcessedLyrics = ({
           startTime: line.startTime,
           endTime: line.endTime,
           text: line.text,
-          chords: line.chords ? [...line.chords] : []
+          chords: line.chords ? [...line.chords] : [],
+          wordTimings: line.wordTimings ? line.wordTimings.map((wordTiming) => ({ ...wordTiming })) : undefined,
         })),
         error: lyrics.error
       };
@@ -184,7 +318,8 @@ export const useProcessedLyrics = ({
             position: chord.position,
             chord: chord.chord,
             time: chord.time
-          })) : []
+          })) : [],
+          wordTimings: line.wordTimings ? line.wordTimings.map((wordTiming) => ({ ...wordTiming })) : undefined,
         })),
         error: lyrics.error
       };
@@ -214,59 +349,14 @@ export const useProcessedLyrics = ({
           }
         }
 
+        const wordTimings = getWordTimingsForLine(line);
+
         // Create chord markers for each chord
         const chordMarkers: ChordMarker[] = deduplicatedLineChords.map(chord => {
-          // Calculate the relative position of the chord within the line
-          const relativePosition = (chord.time - line.startTime) / (line.endTime - line.startTime);
-
-          // Split the line text into words
-          const words = line.text.split(' ');
-          const totalChars = line.text.length;
-
-          // Map to character position in the text
-          const charPosition = Math.floor(relativePosition * totalChars);
-
-          // Find which word this position falls into
-          let currentPos = 0;
-          let wordIndex = -1; // -1 = not found (falls on gap/space)
-
-          for (let i = 0; i < words.length; i++) {
-            const wordLength = words[i].length;
-            if (charPosition >= currentPos && charPosition < currentPos + wordLength) {
-              wordIndex = i;
-              break;
-            }
-            // Add 1 for the space between words
-            currentPos += wordLength + 1;
-          }
-
-          // FIX: When charPosition falls on a gap between words, find the
-          // nearest word (by distance to word-start) instead of defaulting to
-          // word 0. This prevents orphaned chords from piling onto the first word.
-          if (wordIndex < 0 && words.length > 0) {
-            let minDist = Infinity;
-            wordIndex = 0;
-            currentPos = 0;
-            for (let i = 0; i < words.length; i++) {
-              const dist = Math.abs(charPosition - currentPos);
-              if (dist < minDist) {
-                minDist = dist;
-                wordIndex = i;
-              }
-              currentPos += words[i].length + 1;
-            }
-          }
-
-          // Calculate the position at the start of the word
-          let wordStartPos = 0;
-          for (let i = 0; i < Math.max(0, wordIndex); i++) {
-            wordStartPos += words[i].length + 1; // Add 1 for space
-          }
-
           return {
             time: chord.time,
             chord: chord.chord,
-            position: wordStartPos // Position at the start of the word
+            position: getChordPositionForLine(line, chord.time, wordTimings)
           };
         });
 

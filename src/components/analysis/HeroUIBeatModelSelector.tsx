@@ -10,6 +10,7 @@ interface HeroUIBeatModelSelectorProps {
   onChange: (model: ModelType) => void;
   defaultValue?: ModelType;
   className?: string;
+  disabled?: boolean;
 }
 
 interface ModelOption {
@@ -22,7 +23,8 @@ interface ModelOption {
 const HeroUIBeatModelSelector = ({
   onChange,
   defaultValue = 'madmom',
-  className = ''
+  className = '',
+  disabled = false,
 }: HeroUIBeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
@@ -133,7 +135,7 @@ const HeroUIBeatModelSelector = ({
         variant="bordered"
         color="primary"
         isLoading={loading}
-        isDisabled={false}
+        isDisabled={disabled}
         startContent={getModelIcon(selectedModel)}
         description={selectedModelDescription}
         aria-label="Beat detection model selector"

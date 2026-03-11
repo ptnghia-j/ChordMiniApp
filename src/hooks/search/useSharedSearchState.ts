@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiPost } from '@/config/api';
+import { buildAnalyzePageUrl } from '@/utils/analyzeRouteUtils';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -128,26 +129,20 @@ export const useSharedSearchState = () => {
         const data = await response.json();
 
         if (data.success && data.title) {
-          // Navigate with metadata like search results
-          let url = `/analyze/${videoId}?title=${encodeURIComponent(data.title)}`;
-          if (data.uploader) {
-            url += `&channel=${encodeURIComponent(data.uploader)}`;
-          }
-          if (data.thumbnail) {
-            url += `&thumbnail=${encodeURIComponent(data.thumbnail)}`;
-          }
-          router.push(url);
+          router.push(buildAnalyzePageUrl(videoId, {
+            title: data.title,
+            channel: data.uploader || null,
+            thumbnail: data.thumbnail || null,
+          }));
           console.log(`✅ Direct URL metadata fetched: "${data.title}"`);
         } else {
-          // Fallback to videoId only if metadata fetch fails
-          router.push(`/analyze/${videoId}`);
+          router.push(buildAnalyzePageUrl(videoId));
           console.log(`⚠️ Direct URL metadata fetch failed, using videoId only`);
         }
       } catch (err) {
         console.error('Failed to fetch video metadata for direct URL:', err);
         setSearchError('Failed to fetch video information');
-        // Fallback to videoId only if metadata fetch fails
-        router.push(`/analyze/${videoId}`);
+        router.push(buildAnalyzePageUrl(videoId));
       } finally {
         setIsSearching(false);
       }
@@ -160,11 +155,9 @@ export const useSharedSearchState = () => {
 
   // Handle video selection from search results
   const handleVideoSelect = useCallback((videoId: string, title?: string) => {
-    // Navigate to analysis page with optional title
-    const url = title
-      ? `/analyze/${videoId}?title=${encodeURIComponent(title)}`
-      : `/analyze/${videoId}`;
-    router.push(url);
+    router.push(buildAnalyzePageUrl(videoId, {
+      title: title || null,
+    }));
   }, [router]);
 
   // Real-time search effect - triggers search when searchQuery changes

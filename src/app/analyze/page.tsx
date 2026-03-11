@@ -932,9 +932,7 @@ const simplifiedChordGridData = useMemo(() => {
 
     // Initialize AnalysisStore with local audio upload state
     analysisStore.setAnalysisResults(analysisResults);
-    if (audioProcessingState.isAnalyzing) {
-      analysisStore.startAnalysis();
-    }
+    analysisStore.setIsAnalyzing(audioProcessingState.isAnalyzing);
     analysisStore.setAnalysisError(audioProcessingState.error || null);
 
     // Set stub values for upload page (not used but required for consistency)
@@ -945,6 +943,7 @@ const simplifiedChordGridData = useMemo(() => {
     analysisStore.setLyrics(null);
     analysisStore.setShowLyrics(false);
     analysisStore.setHasCachedLyrics(false);
+    analysisStore.setIsTranscribingLyrics(false);
     analysisStore.setLyricsError(null);
 
     // Initialize PlaybackStore

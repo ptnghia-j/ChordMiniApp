@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { isBlackKey, NOTE_NAMES } from '@/utils/chordToMidi';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -101,7 +100,7 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = React.memo(({
         const isC = key.noteName === 'C';
 
         return (
-          <motion.button
+          <button
             key={`white-${key.midi}`}
             className={`
               absolute top-0 border rounded-b-sm
@@ -117,14 +116,11 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = React.memo(({
               width: whiteKeyWidth,
               height: whiteKeyHeight,
               zIndex: 1,
-              ...(isActive ? { backgroundColor: color || '#60a5fa' } : {}),
+              ...(isActive ? {
+                backgroundColor: color || '#60a5fa',
+                borderColor: color || '#60a5fa',
+              } : {}),
             }}
-            animate={isActive ? {
-              boxShadow: `0 0 12px 2px ${color || '#60a5fa'}80`,
-            } : {
-              boxShadow: '0 0 0px 0px transparent',
-            }}
-            transition={{ duration: 0.05 }}
             onClick={() => onKeyClick?.(key.midi)}
             aria-label={`${key.noteName}${key.octave}`}
             aria-pressed={isActive}
@@ -135,7 +131,7 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = React.memo(({
                 C{key.octave}
               </span>
             )}
-          </motion.button>
+          </button>
         );
       })}
 
@@ -149,7 +145,7 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = React.memo(({
         const offsetPx = key.offset * (whiteKeyWidth * 0.3);
 
         return (
-          <motion.button
+          <button
             key={`black-${key.midi}`}
             className={`
               absolute top-0 rounded-b-md
@@ -164,14 +160,11 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = React.memo(({
               width: blackKeyWidth,
               height: blackKeyHeight,
               zIndex: 2,
-              ...(isActive ? { backgroundColor: color || '#3b82f6' } : {}),
+              ...(isActive ? {
+                backgroundColor: color || '#3b82f6',
+                border: `1px solid ${color || '#3b82f6'}`,
+              } : {}),
             }}
-            animate={isActive ? {
-              boxShadow: `0 0 10px 2px ${color || '#3b82f6'}80`,
-            } : {
-              boxShadow: '0 0 0px 0px transparent',
-            }}
-            transition={{ duration: 0.05 }}
             onClick={() => onKeyClick?.(key.midi)}
             aria-label={`${key.noteName}${key.octave}`}
             aria-pressed={isActive}

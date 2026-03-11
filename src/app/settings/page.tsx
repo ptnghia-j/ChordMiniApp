@@ -71,12 +71,12 @@ export default function SettingsPage() {
           <Tabs
             defaultSelectedKey="general"
             variant="underlined"
-            color="primary"
+            color="success"
             classNames={{
               tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-              cursor: "w-full bg-primary",
+              cursor: "w-full bg-success",
               tab: "max-w-fit px-0 h-12 group",
-              tabContent: "text-gray-600 dark:text-gray-400 group-data-[selected=true]:text-primary group-data-[selected=true]:font-semibold"
+              tabContent: "text-gray-600 dark:text-gray-400 group-data-[selected=true]:text-success group-data-[selected=true]:font-semibold"
             }}
           >
             {/* General Tab */}
@@ -95,7 +95,7 @@ export default function SettingsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                          <FiMoon className="w-4 h-4 text-primary" />
+                          <FiMoon className="w-4 h-4 text-white" />
                         </div>
                         <div>
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Dark Mode</h4>
@@ -166,7 +166,7 @@ export default function SettingsPage() {
                     />
                     <Divider />
                     <PrivacyItem
-                      icon={<FiDatabase className="w-4 h-4 text-primary" />}
+                      icon={<FiDatabase className="w-4 h-4 text-white" />}
                       iconBg="bg-primary-50 dark:bg-primary-900/20"
                       title="Cache Data"
                       description="Analysis results are cached in Firebase for performance. No personal data is stored."

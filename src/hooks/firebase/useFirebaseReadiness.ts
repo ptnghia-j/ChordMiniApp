@@ -10,30 +10,52 @@ export const useFirebaseReadiness = () => {
   const [firebaseReady, setFirebaseReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const checkFirebaseReady = async () => {
       try {
-        // Test Firebase connection with a simple operation
-        const { getFirestoreInstance } = await import('@/config/firebase');
-        const firestore = await getFirestoreInstance();
+        const { ensureFirebaseInitialized } = await import('@/config/firebase');
+        const { db } = await ensureFirebaseInitialized();
 
-        // Quick connection test - just ensure firestore instance exists
-        if (!firestore) throw new Error('Firestore instance not available');
+        if (!db) {
+          throw new Error('Firestore instance not available');
+        }
+
+        if (cancelled) {
+          return;
+        }
 
         setFirebaseReady(true);
         console.log('✅ Firebase connection verified');
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         console.error('❌ Firebase connection failed:', error);
         setFirebaseReady(false);
-        
+
         // Retry after a delay
-        setTimeout(() => {
+        retryTimeout = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
           console.log('🔄 Retrying Firebase connection...');
-          checkFirebaseReady();
+          void checkFirebaseReady();
         }, 2000);
       }
     };
 
-    checkFirebaseReady();
+    void checkFirebaseReady();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
   }, []);
 
   return { firebaseReady };

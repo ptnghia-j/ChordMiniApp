@@ -7,6 +7,7 @@
 
 import { CustomMusicAiClient } from "@/services/api/customMusicAiClient";
 import { apiKeyStorage } from "@/services/cache/apiKeyStorageService";
+import type { LyricWordTiming } from "@/types/musicAiTypes";
 
 // Define types for the Music.ai SDK responses
 interface ChordData {
@@ -18,6 +19,7 @@ interface LyricLine {
   startTime: number;
   endTime: number;
   text: string;
+  wordTimings?: LyricWordTiming[];
 }
 
 interface LyricsData {
@@ -30,6 +32,7 @@ interface SynchronizedLyrics {
     startTime: number;
     endTime: number;
     text: string;
+    wordTimings?: LyricWordTiming[];
     chords: Array<{
       time: number;
       chord: string;
@@ -71,6 +74,7 @@ interface LyricsLineData {
   startTime?: number;
   end?: number;
   endTime?: number;
+  wordTimings?: LyricWordTiming[];
 }
 
 interface WordTimestamp {
@@ -86,6 +90,115 @@ interface ChordResultData {
   name?: string;
   chord?: string;
 }
+
+const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+
+const buildLinesFromWordTimestamps = (words: WordTimestamp[]): LyricLine[] => {
+  const lines: LyricLine[] = [];
+  let currentWords: LyricWordTiming[] = [];
+  let currentLineText = '';
+  let currentCharPosition = 0;
+
+  const flushCurrentLine = () => {
+    if (!currentLineText.trim() || currentWords.length === 0) {
+      currentWords = [];
+      currentLineText = '';
+      currentCharPosition = 0;
+      return;
+    }
+
+    lines.push({
+      startTime: currentWords[0].startTime,
+      endTime: currentWords[currentWords.length - 1].endTime,
+      text: currentLineText.trim(),
+      wordTimings: currentWords.map((wordTiming) => ({ ...wordTiming })),
+    });
+
+    currentWords = [];
+    currentLineText = '';
+    currentCharPosition = 0;
+  };
+
+  words.forEach((word, index) => {
+    if (!word.text || (word.startTime === undefined && word.start === undefined) || (word.endTime === undefined && word.end === undefined)) {
+      if (index === words.length - 1) flushCurrentLine();
+      return;
+    }
+
+    const wordStartTime = parseFloat(String(word.startTime || word.start || 0));
+    const wordEndTime = parseFloat(String(word.endTime || word.end || 0));
+    const normalizedText = word.text.replace(/^\n+/, '').trim();
+    const startsNewLine = currentLineText === '' || word.text.startsWith("\n") || currentLineText.length > 80;
+
+    if (startsNewLine) {
+      flushCurrentLine();
+    }
+
+    if (!normalizedText) {
+      if (index === words.length - 1) flushCurrentLine();
+      return;
+    }
+
+    const prefix = currentLineText.length > 0 ? ' ' : '';
+    currentLineText += `${prefix}${normalizedText}`;
+    currentCharPosition += prefix.length;
+
+    currentWords.push({
+      text: normalizedText,
+      startTime: wordStartTime,
+      endTime: wordEndTime,
+      startChar: currentCharPosition,
+      endChar: currentCharPosition + normalizedText.length - 1,
+    });
+
+    currentCharPosition += normalizedText.length;
+
+    if (index === words.length - 1) {
+      flushCurrentLine();
+    }
+  });
+
+  return lines;
+};
+
+const getChordPositionWithinLine = (line: LyricLine, chordTime: number): number => {
+  if (!line.text.length) return 0;
+
+  if (line.wordTimings?.length) {
+    const targetWord = line.wordTimings.reduce<LyricWordTiming>((closest, candidate) => {
+      const closestDistance = chordTime < closest.startTime
+        ? closest.startTime - chordTime
+        : chordTime > closest.endTime
+          ? chordTime - closest.endTime
+          : 0;
+      const candidateDistance = chordTime < candidate.startTime
+        ? candidate.startTime - chordTime
+        : chordTime > candidate.endTime
+          ? chordTime - candidate.endTime
+          : 0;
+
+      return candidateDistance < closestDistance ? candidate : closest;
+    }, line.wordTimings[0]);
+
+    const wordDuration = Math.max(targetWord.endTime - targetWord.startTime, 0.001);
+    const progress = clamp((chordTime - targetWord.startTime) / wordDuration, 0, 1);
+    const wordSpan = Math.max(targetWord.endChar - targetWord.startChar, 0);
+
+    return clamp(
+      targetWord.startChar + Math.round(wordSpan * progress),
+      targetWord.startChar,
+      targetWord.endChar
+    );
+  }
+
+  const relativeTime = clamp(
+    (chordTime - line.startTime) / Math.max(line.endTime - line.startTime, 0.001),
+    0,
+    1
+  );
+
+  return clamp(Math.floor(relativeTime * Math.max(line.text.length - 1, 0)), 0, Math.max(line.text.length - 1, 0));
+};
 
 // Define interface for Music.ai SDK
 interface MusicAiSDK {
@@ -688,30 +801,10 @@ class MusicAiService {
 
       console.log(`Synchronizing ${lyrics.lines.length} lyrics lines with ${chords.length} chords`);
 
-      // If we have no chords, create some dummy chords for visualization
+      // Preserve accurate lyrics timing even when chord data is unavailable.
+      // Do not fabricate placeholder chords just to populate the UI.
       if (!chords || chords.length === 0) {
-        console.warn('No chords available for synchronization, creating dummy chords');
-
-        // Create dummy chords for each line
-        const dummyChords: ChordData[] = [];
-        lyrics.lines.forEach(line => {
-          // Add a chord at the start of each line
-          dummyChords.push({
-            time: line.startTime,
-            chord: 'C'  // Default chord
-          });
-
-          // Add another chord in the middle if the line is long enough
-          if (line.endTime - line.startTime > 5) {
-            dummyChords.push({
-              time: line.startTime + (line.endTime - line.startTime) / 2,
-              chord: 'G'  // Another default chord
-            });
-          }
-        });
-
-        // Use the dummy chords for synchronization
-        chords = dummyChords;
+        console.warn('No chords available for synchronization');
       }
 
       // Create a new data structure with synchronized lyrics and chords
@@ -723,15 +816,10 @@ class MusicAiService {
 
         // Calculate the position of each chord within the line text
         const chordsWithPositions = lineChords.map(chord => {
-          // Calculate relative position of the chord within the line
-          const relativeTime = (chord.time - line.startTime) / (line.endTime - line.startTime);
-          // Map to a character position in the text
-          const position = Math.floor(relativeTime * line.text.length);
-
           return {
             time: chord.time,
             chord: chord.chord,
-            position: Math.min(position, line.text.length - 1) // Ensure position is within text bounds
+            position: getChordPositionWithinLine(line, chord.time)
           };
         });
 
@@ -739,6 +827,7 @@ class MusicAiService {
           startTime: line.startTime,
           endTime: line.endTime,
           text: line.text,
+          wordTimings: line.wordTimings?.map((wordTiming) => ({ ...wordTiming })),
           chords: chordsWithPositions
         };
       });
@@ -837,58 +926,15 @@ class MusicAiService {
                   lines.push({
                     startTime: parseFloat(String(line.startTime || line.start || 0)),
                     endTime: parseFloat(String(line.endTime || line.end || 0)),
-                    text: line.text.trim()
+                    text: line.text.trim(),
+                    wordTimings: line.wordTimings ? line.wordTimings.map((wordTiming) => ({ ...wordTiming })) : undefined,
                   });
                 }
               });
             }
             // Format 2: Transcript with word timestamps
             else if (lyricsData.transcript && lyricsData.wordTimestamps) {
-              // Create lines from the transcript
-              const words = lyricsData.wordTimestamps;
-
-              // Group words into lines (assuming words are in order)
-              let currentLine = "";
-              let lineStartTime = 0;
-              let lineEndTime = 0;
-
-              words.forEach((word: WordTimestamp, index: number) => {
-                if (word.text && (word.startTime !== undefined || word.start !== undefined) &&
-                    (word.endTime !== undefined || word.end !== undefined)) {
-                  const wordStartTime = parseFloat(String(word.startTime || word.start || 0));
-                  const wordEndTime = parseFloat(String(word.endTime || word.end || 0));
-
-                  // If this is the first word or if we should start a new line
-                  if (currentLine === "" || word.text.startsWith("\n") || currentLine.length > 80) {
-                    // If we have a line, add it
-                    if (currentLine !== "") {
-                      lines.push({
-                        startTime: lineStartTime,
-                        endTime: lineEndTime,
-                        text: currentLine.trim()
-                      });
-                    }
-
-                    // Start a new line
-                    currentLine = word.text.replace(/^\n+/, ""); // Remove leading newlines
-                    lineStartTime = wordStartTime;
-                    lineEndTime = wordEndTime;
-                  } else {
-                    // Add to current line
-                    currentLine += " " + word.text;
-                    lineEndTime = wordEndTime;
-                  }
-                }
-
-                // If this is the last word, add the final line
-                if (index === words.length - 1 && currentLine !== "") {
-                  lines.push({
-                    startTime: lineStartTime,
-                    endTime: lineEndTime,
-                    text: currentLine.trim()
-                  });
-                }
-              });
+              lines.push(...buildLinesFromWordTimestamps(lyricsData.wordTimestamps));
             }
           }
         } catch (fetchError) {
@@ -908,58 +954,15 @@ class MusicAiService {
               lines.push({
                 startTime: parseFloat(String(line.startTime || line.start || 0)),
                 endTime: parseFloat(String(line.endTime || line.end || 0)),
-                text: line.text.trim()
+                text: line.text.trim(),
+                wordTimings: line.wordTimings ? line.wordTimings.map((wordTiming) => ({ ...wordTiming })) : undefined,
               });
             }
           });
         }
         // Format 2: Transcript with word timestamps
         else if (typeof result === 'object' && result !== null && 'transcript' in result && 'wordTimestamps' in result && result.transcript && result.wordTimestamps) {
-          // Create lines from the transcript
-          const words = result.wordTimestamps;
-
-          // Group words into lines (assuming words are in order)
-          let currentLine = "";
-          let lineStartTime = 0;
-          let lineEndTime = 0;
-
-          words.forEach((word: WordTimestamp, index: number) => {
-            if (word.text && (word.startTime !== undefined || word.start !== undefined) &&
-                (word.endTime !== undefined || word.end !== undefined)) {
-              const wordStartTime = parseFloat(String(word.startTime || word.start || 0));
-              const wordEndTime = parseFloat(String(word.endTime || word.end || 0));
-
-              // If this is the first word or if we should start a new line
-              if (currentLine === "" || word.text.startsWith("\n") || currentLine.length > 80) {
-                // If we have a line, add it
-                if (currentLine !== "") {
-                  lines.push({
-                    startTime: lineStartTime,
-                    endTime: lineEndTime,
-                    text: currentLine.trim()
-                  });
-                }
-
-                // Start a new line
-                currentLine = word.text.replace(/^\n+/, ""); // Remove leading newlines
-                lineStartTime = wordStartTime;
-                lineEndTime = wordEndTime;
-              } else {
-                // Add to current line
-                currentLine += " " + word.text;
-                lineEndTime = wordEndTime;
-              }
-            }
-
-            // If this is the last word, add the final line
-            if (index === words.length - 1 && currentLine !== "") {
-              lines.push({
-                startTime: lineStartTime,
-                endTime: lineEndTime,
-                text: currentLine.trim()
-              });
-            }
-          });
+          lines.push(...buildLinesFromWordTimestamps(result.wordTimestamps));
         }
       }
 

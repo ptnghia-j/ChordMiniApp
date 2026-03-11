@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { LyricsData, ChordMarker } from '@/types/musicAiTypes';
+import { LyricsData, ChordMarker, SynchronizedLyrics } from '@/types/musicAiTypes';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { useApiKeys } from '@/hooks/settings/useApiKeys';
 import { SegmentationResult } from '@/types/chatbotTypes';
@@ -10,11 +10,12 @@ import type { BeatInfo } from '@/services/audio/beatDetectionService';
 import { simplifyChord } from '@/utils/chordSimplification';
 import { useSimplifySelector } from '@/contexts/selectors';
 import { useShowCorrectedChords, useKeySignature } from '@/stores/analysisStore';
-import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
+import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { normalizeChordForDedup } from '@/utils/chordNormalization';
 import {
   buildChordOccurrenceMap,
   buildChordOccurrenceCorrectionMap,
+  buildChordSequenceIndexMap,
   getDisplayChord,
   SequenceCorrections
 } from '@/utils/chordProcessing';
@@ -84,6 +85,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
     const occurrenceMap = buildChordOccurrenceMap(rawChords);
     // 2. Build the correction look-up from sequenceCorrections (already simplified if needed)
     const correctionMap = buildChordOccurrenceCorrectionMap(sequenceCorrections ?? null);
+    const sequenceIndexMap = buildChordSequenceIndexMap(rawChords, sequenceCorrections?.originalSequence);
 
     const events: { time: number; chord: string }[] = [];
     let lastNormalized = '';
@@ -93,17 +95,22 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
 
       let chordLabel = rawChords[idx]; // already simplified
 
-      // Apply per-position corrections (same as getDisplayChord in ChordGrid)
-      if (showCorrectedChords && sequenceCorrections) {
-        const { chord: corrected, wasCorrected } = getDisplayChord(
+      // Apply per-position original/corrected display using the same sequence-aware logic as ChordGrid
+      if (sequenceCorrections) {
+        const { chord: displayChord, wasCorrected } = getDisplayChord(
           chordLabel,
           idx,
           showCorrectedChords,
           sequenceCorrections,
           occurrenceMap,
-          correctionMap
+          correctionMap,
+          sequenceIndexMap
         );
-        if (wasCorrected) chordLabel = corrected;
+        if (showCorrectedChords) {
+          if (wasCorrected) chordLabel = displayChord;
+        } else {
+          chordLabel = displayChord;
+        }
       }
 
       // Normalize to canonical display form to prevent visual duplicates
@@ -122,11 +129,12 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   // Compute accidental preference (sharp vs flat).
   // Key signature (from Gemini) is authoritative; heuristic is fallback.
   const accidentalPreference = useMemo<'sharp' | 'flat' | undefined>(() => {
-    const keyPref = getAccidentalPreferenceFromKey(storeKeySignature);
-    if (keyPref) return keyPref;
-    if (!beatAlignedChords?.length) return undefined;
-    return computeAccidentalPreference(beatAlignedChords.map(c => c.chord)) || undefined;
-  }, [storeKeySignature, beatAlignedChords]);
+    return getDisplayAccidentalPreference({
+      chords: (beatAlignedChords ?? []).map(c => c.chord),
+      keySignature: storeKeySignature,
+      preserveExactSpelling: Boolean(sequenceCorrections),
+    });
+  }, [beatAlignedChords, sequenceCorrections, storeKeySignature]);
 
   // Chord-centric alignment: snap lyric line boundaries to chord change timestamps.
   // Chords are the authoritative timing source; lyrics snap to them (not the reverse).
@@ -215,6 +223,27 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
     return { ...lyrics, lines: snapped } as LyricsData;
   }, [lyrics, beatAlignedChords, beatTimes, simplifyChords]);
 
+  const displayLyrics = useMemo<SynchronizedLyrics>(() => ({
+    lines: snappedLyrics.lines.map((line) => ({
+      startTime: line.startTime,
+      endTime: line.endTime,
+      text: line.text,
+      chords: (line.chords || []).map((chord: ChordMarker) => ({
+        time: chord.time,
+        chord: chord.chord,
+        position: chord.position ?? 0,
+      })),
+      wordTimings: line.wordTimings?.map((wordTiming) => ({ ...wordTiming })),
+    })),
+    error: snappedLyrics.error,
+  }), [snappedLyrics]);
+
+  const downbeatTimes = useMemo(() => (
+    ((analysisResults?.beats as BeatInfo[]) || [])
+      .filter((beat) => typeof beat === 'object' && (beat as BeatInfo).beatNum === 1)
+      .map((beat) => (beat as BeatInfo).time)
+  ), [analysisResults?.beats]);
+
 
   if (!showLyrics) {
     const musicAiAvailable = isServiceAvailable('musicAi');
@@ -278,7 +307,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
   return (
     <div>
       <LeadSheetDisplay
-        lyrics={{ lines: snappedLyrics.lines.map(l => ({ startTime: l.startTime, endTime: l.endTime, text: l.text, chords: (l.chords || []).map(c => ({ time: c.time, chord: c.chord, position: c.position ?? 0 })) })) }}
+        lyrics={displayLyrics}
         currentTime={currentTime}
         fontSize={fontSize}
         onFontSizeChange={onFontSizeChange}
@@ -286,7 +315,7 @@ export const LyricsSection: React.FC<LyricsSectionProps> = ({
         chords={beatAlignedChords || []}
         segmentationData={segmentationData}
         downbeatsOnly={false}
-        downbeatTimes={((analysisResults?.beats as BeatInfo[]) || []).filter((b) => typeof b === 'object' && (b as BeatInfo).beatNum === 1).map((b) => (b as BeatInfo).time)}
+        downbeatTimes={downbeatTimes}
         accidentalPreference={accidentalPreference}
       />
     </div>

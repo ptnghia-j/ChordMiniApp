@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   formatChordWithMusicalSymbols,
@@ -22,6 +22,13 @@ interface TranslatedLyrics {
   translatedLyrics: string;
   fromCache: boolean;
   backgroundUpdateInProgress?: boolean;
+}
+
+interface WordSegment {
+  text: string;
+  chords: string[];
+  isChineseChar?: boolean;
+  startPos: number;
 }
 
 interface LyricLineProps {
@@ -132,47 +139,10 @@ const getSectionLabel = (timestamp: number, segmentationData?: SegmentationResul
 };
 
 /**
- * Get the translated text for a specific line in a specific language
- */
-const getTranslatedLineText = (
-  originalText: string,
-  language: string,
-  translatedLyrics: { [language: string]: TranslatedLyrics },
-  processedLines: (EnhancedLyricLine & {
-    isInstrumental?: boolean;
-    isChordOnly?: boolean;
-    isCondensed?: boolean;
-  })[]
-): string => {
-  if (!translatedLyrics[language] || !translatedLyrics[language].translatedLyrics) {
-    return '';
-  }
-
-  // Get all original lines from the current processed lyrics
-  const originalLines = processedLines.map((line) => line.text);
-
-  // Find the index of this line in the original text
-  const originalLineIndex = originalLines.indexOf(originalText);
-  if (originalLineIndex === -1) {
-    return '';
-  }
-
-  // Split the translated text into lines
-  const translatedLines = translatedLyrics[language].translatedLyrics.split('\n');
-
-  // Return the corresponding translated line if it exists
-  if (originalLineIndex < translatedLines.length) {
-    return translatedLines[originalLineIndex];
-  }
-
-  return '';
-};
-
-/**
  * LyricLine component - extracted from LeadSheetDisplay
  * Handles rendering of individual lyric lines with complex character-by-character animation
  */
-export const LyricLine: React.FC<LyricLineProps> = ({
+const LyricLineComponent: React.FC<LyricLineProps> = ({
   line,
   index,
   isActive,
@@ -188,206 +158,190 @@ export const LyricLine: React.FC<LyricLineProps> = ({
   memoizedCharacterArrays,
   accidentalPreference
 }) => {
-  // Find all word boundaries in the line
-  const words = findWordBoundaries(line.text);
-
-  // Group chords by the word they belong to
-  const chordsByWord: { [wordIndex: number]: string[] } = {};
-
-  // Sort chords by position (ensure line.chords exists and position property exists)
-  const sortedChords = [...(line.chords || [])].sort((a, b) => {
-    // Ensure position property exists, default to 0 if not
-    const posA = a.position !== undefined ? a.position : 0;
-    const posB = b.position !== undefined ? b.position : 0;
-    return posA - posB;
-  });
-
-  // CRITICAL FIX: Deduplicate chords at line level before word assignment
-  // Uses normalized display form so chords that render identically (e.g. B:maj and B)
-  // are treated as duplicates even if their raw strings differ.
-  const lineDeduplicatedChords: { chord: string; position: number; time: number }[] = [];
-  let lastNormalizedInLine = '';
-
-  sortedChords.forEach(chord => {
-    const normalized = normalizeChordForDedup(chord.chord);
-    if (normalized !== lastNormalizedInLine) {
-      lineDeduplicatedChords.push(chord);
-      lastNormalizedInLine = normalized;
-    }
-  });
-
-  // Assign each deduplicated chord to a word, with cross-word dedup.
-  // Track the last chord shown across ALL words so that "E B" on word 0
-  // followed by "B" on word 1 collapses the second "B".
-  let lastAssignedNormalized = '';
-  lineDeduplicatedChords.forEach(chord => {
-    let wordIndex = findWordAtPosition(chord.position, words);
-    // If chord falls on a gap between words, assign to nearest word
-    if (wordIndex < 0 && words.length > 0) {
-      wordIndex = findNearestWord(chord.position, words);
-    }
-    if (wordIndex >= 0) {
-      if (!chordsByWord[wordIndex]) {
-        chordsByWord[wordIndex] = [];
-      }
-      const normalized = normalizeChordForDedup(chord.chord);
-      // Skip if this chord visually matches the last chord already assigned
-      // (either on this word or on a previous word)
-      if (normalized === lastAssignedNormalized) return;
-      // Also skip if already on THIS word (by visual form)
-      if (chordsByWord[wordIndex].some(c => normalizeChordForDedup(c) === normalized)) return;
-      chordsByWord[wordIndex].push(chord.chord);
-      lastAssignedNormalized = normalized;
-    }
-  });
-
-  // Inter-word boundary dedup: if the last chord on word N matches
-  // the first chord on word N+1, remove the leading duplicate from N+1.
-  const occupiedWords = Object.keys(chordsByWord).map(Number).sort((a, b) => a - b);
-  let prevBoundaryChord = '';
-  for (const wi of occupiedWords) {
-    const wChords = chordsByWord[wi];
-    while (wChords.length > 0 && normalizeChordForDedup(wChords[0]) === prevBoundaryChord) {
-      wChords.shift();
-    }
-    if (wChords.length > 0) {
-      prevBoundaryChord = normalizeChordForDedup(wChords[wChords.length - 1]);
-    }
-    if (wChords.length === 0) {
-      delete chordsByWord[wi];
-    }
-  }
-
   // Check if this is an instrumental placeholder or chord-only section
   const isInstrumental = line.isInstrumental;
   const isChordOnly = line.isChordOnly;
   const isCondensed = line.isCondensed;
 
-  // Create word segments with their associated chords
-  const wordSegments: { text: string; chords: string[]; isChineseChar?: boolean }[] = [];
-
-  // SPECIAL HANDLING: For condensed chord-only sections, create separate segments
-  // so each chord label is properly spaced above its own ♪ symbol.
-  if (isChordOnly && isCondensed) {
-    // Use ALL chords in order (preserving repeated progressions like A-B-C-D-A-B-C-D).
-    // Previous code used globally-unique filtering which collapsed repeats to just A-B-C-D.
-    const allChords = (line.chords || []).map(c =>
-      normalizeChordForDedup(c.chord) // strips invisible quality markers (e.g. :maj)
-    );
-
-    // Create a separate segment for each chord/♪ pair
-    allChords.forEach((chord, idx) => {
-      if (idx > 0) {
-        // Add spacing between chord/♪ pairs
-        wordSegments.push({ text: '  ', chords: [] });
-      }
-      wordSegments.push({
-        text: '♪',
-        chords: [chord]
-      });
+  const wordSegments = useMemo(() => {
+    const words = findWordBoundaries(line.text);
+    const chordsByWord: { [wordIndex: number]: string[] } = {};
+    const sortedChords = [...(line.chords || [])].sort((a, b) => {
+      const posA = a.position !== undefined ? a.position : 0;
+      const posB = b.position !== undefined ? b.position : 0;
+      return posA - posB;
     });
-  } else {
-    // Regular processing for lyrics, instrumental, and non-condensed chord-only sections
 
-    // Check if this line contains Chinese characters
-    const hasChineseChars = containsChineseCharacters(line.text);
+    const lineDeduplicatedChords: { chord: string; position: number; time: number }[] = [];
+    let lastNormalizedInLine = '';
+    sortedChords.forEach(chord => {
+      const normalized = normalizeChordForDedup(chord.chord);
+      if (normalized !== lastNormalizedInLine) {
+        lineDeduplicatedChords.push(chord);
+        lastNormalizedInLine = normalized;
+      }
+    });
 
-    // For Chinese text, we need special handling for character spacing
-    if (hasChineseChars) {
-      // For Chinese text, group characters into words based on spaces
-      const chineseWords = line.text.split(' ').filter(word => word.length > 0);
-
-      // Process each word
-      chineseWords.forEach((word, wordIndex) => {
-        // Find chords that align with this word
-        const wordChords: string[] = [];
-        const wordStartPos = line.text.indexOf(word);
-        const wordEndPos = wordStartPos + word.length - 1;
-
-        // Find chords that belong to this word
-        sortedChords.forEach(chord => {
-          if (chord.position >= wordStartPos && chord.position <= wordEndPos) {
-            wordChords.push(chord.chord);
-          }
-        });
-
-        // Add the word as a segment with its chords
-        wordSegments.push({
-          text: word,
-          chords: wordChords,
-          isChineseChar: containsChineseCharacters(word)
-        });
-
-        // Add space after word (except for the last word)
-        if (wordIndex < chineseWords.length - 1) {
-          wordSegments.push({
-            text: ' ',
-            chords: []
-          });
+    let lastAssignedNormalized = '';
+    lineDeduplicatedChords.forEach(chord => {
+      let wordIndex = findWordAtPosition(chord.position, words);
+      if (wordIndex < 0 && words.length > 0) {
+        wordIndex = findNearestWord(chord.position, words);
+      }
+      if (wordIndex >= 0) {
+        if (!chordsByWord[wordIndex]) {
+          chordsByWord[wordIndex] = [];
         }
+        const normalized = normalizeChordForDedup(chord.chord);
+        if (normalized === lastAssignedNormalized) return;
+        if (chordsByWord[wordIndex].some(c => normalizeChordForDedup(c) === normalized)) return;
+        chordsByWord[wordIndex].push(chord.chord);
+        lastAssignedNormalized = normalized;
+      }
+    });
+
+    const occupiedWords = Object.keys(chordsByWord).map(Number).sort((a, b) => a - b);
+    let prevBoundaryChord = '';
+    for (const wi of occupiedWords) {
+      const wChords = chordsByWord[wi];
+      while (wChords.length > 0 && normalizeChordForDedup(wChords[0]) === prevBoundaryChord) {
+        wChords.shift();
+      }
+      if (wChords.length > 0) {
+        prevBoundaryChord = normalizeChordForDedup(wChords[wChords.length - 1]);
+      }
+      if (wChords.length === 0) {
+        delete chordsByWord[wi];
+      }
+    }
+
+    const rawWordSegments: Array<Omit<WordSegment, 'startPos'>> = [];
+
+    if (isChordOnly && isCondensed) {
+      const allChords = (line.chords || []).map(c => normalizeChordForDedup(c.chord));
+      allChords.forEach((chord, idx) => {
+        if (idx > 0) {
+          rawWordSegments.push({ text: '  ', chords: [] });
+        }
+        rawWordSegments.push({
+          text: '♪',
+          chords: [chord]
+        });
       });
     } else {
-      // For non-Chinese text, use the original word-based approach
-      // Split the line into words and spaces
-      const maxChordsPerWord = 2;
-      let lastIndex = 0;
-      words.forEach((word, wordIndex) => {
-        const wordChords = chordsByWord[wordIndex] || [];
-        const displayChords = wordChords.slice(0, maxChordsPerWord);
-        const excessChords = wordChords.slice(maxChordsPerWord);
+      const hasChineseChars = containsChineseCharacters(line.text);
 
-        // Add any space before this word (or ♪ for excess chords)
-        if (word.start > lastIndex) {
-          if (excessChords.length > 0) {
-            // Insert ♪ segment carrying excess chords in the gap before this word
-            wordSegments.push({ text: '♪ ', chords: excessChords });
-          } else {
-            wordSegments.push({
-              text: line.text.substring(lastIndex, word.start),
+      if (hasChineseChars) {
+        const chineseWords = line.text.split(' ').filter(word => word.length > 0);
+        let searchStartIndex = 0;
+
+        chineseWords.forEach((word, wordIndex) => {
+          const wordChords: string[] = [];
+          const wordStartPos = line.text.indexOf(word, searchStartIndex);
+          const wordEndPos = wordStartPos + word.length - 1;
+
+          sortedChords.forEach(chord => {
+            if (chord.position >= wordStartPos && chord.position <= wordEndPos) {
+              wordChords.push(chord.chord);
+            }
+          });
+
+          rawWordSegments.push({
+            text: word,
+            chords: wordChords,
+            isChineseChar: containsChineseCharacters(word)
+          });
+
+          if (wordIndex < chineseWords.length - 1) {
+            rawWordSegments.push({
+              text: ' ',
               chords: []
             });
           }
-        } else if (excessChords.length > 0) {
-          // No space before word but have excess chords - insert ♪ anyway
-          wordSegments.push({ text: '♪ ', chords: excessChords });
+
+          searchStartIndex = wordEndPos + 1;
+        });
+      } else {
+        const maxChordsPerWord = 2;
+        let lastIndex = 0;
+        words.forEach((word, wordIndex) => {
+          const wordChords = chordsByWord[wordIndex] || [];
+          const displayChords = wordChords.slice(0, maxChordsPerWord);
+          const excessChords = wordChords.slice(maxChordsPerWord);
+
+          if (word.start > lastIndex) {
+            if (excessChords.length > 0) {
+              rawWordSegments.push({ text: '♪ ', chords: excessChords });
+            } else {
+              rawWordSegments.push({
+                text: line.text.substring(lastIndex, word.start),
+                chords: []
+              });
+            }
+          } else if (excessChords.length > 0) {
+            rawWordSegments.push({ text: '♪ ', chords: excessChords });
+          }
+
+          rawWordSegments.push({
+            text: line.text.substring(word.start, word.end + 1),
+            chords: displayChords
+          });
+
+          lastIndex = word.end + 1;
+        });
+
+        if (lastIndex < line.text.length) {
+          rawWordSegments.push({
+            text: line.text.substring(lastIndex),
+            chords: []
+          });
         }
-
-        // Add the word with its chords (capped at maxChordsPerWord)
-        wordSegments.push({
-          text: line.text.substring(word.start, word.end + 1),
-          chords: displayChords
-        });
-
-        lastIndex = word.end + 1;
-      });
-    }
-
-    // For non-Chinese text, add any remaining text after the last word
-    if (!hasChineseChars) {
-      let lastIndex = 0;
-      if (words.length > 0) {
-        const lastWord = words[words.length - 1];
-        lastIndex = lastWord.end + 1;
-      }
-
-      if (lastIndex < line.text.length) {
-        wordSegments.push({
-          text: line.text.substring(lastIndex),
-          chords: []
-        });
       }
     }
-  } // End of regular processing else block
 
-  // Get translated texts for this line in all selected languages
-  const translatedTexts = selectedLanguages.map(language => ({
-    language,
-    text: translatedLyrics[language] ? getTranslatedLineText(line.text, language, translatedLyrics, processedLines) : ''
-  })).filter(item => item.text);
+    let startPos = 0;
+    const wordSegments = rawWordSegments.map((segment) => {
+      const segmentWithStart = {
+        ...segment,
+        startPos,
+      };
+      startPos += segment.text.length;
+      return segmentWithStart;
+    });
 
-  // Get section label for this line
-  const sectionLabel = getSectionLabel(line.startTime, segmentationData);
-  const isFirstLineOfSection = index === 0 || getSectionLabel(processedLines[index - 1]?.startTime, segmentationData) !== sectionLabel;
+    return wordSegments;
+  }, [line.text, line.chords, isChordOnly, isCondensed]);
+
+  const translatedLineIndex = useMemo(() => (
+    processedLines.findIndex((processedLine) => (
+      processedLine.text === line.text
+      && processedLine.startTime === line.startTime
+      && processedLine.endTime === line.endTime
+    ))
+  ), [processedLines, line.text, line.startTime, line.endTime]);
+
+  const translatedTexts = useMemo(() => (
+    selectedLanguages
+      .map((language) => {
+        const translatedText = translatedLineIndex >= 0 && translatedLyrics[language]?.translatedLyrics
+          ? translatedLyrics[language].translatedLyrics.split('\n')[translatedLineIndex] || ''
+          : '';
+
+        return {
+          language,
+          text: translatedText,
+        };
+      })
+      .filter(item => item.text)
+  ), [selectedLanguages, translatedLyrics, translatedLineIndex]);
+
+  const { sectionLabel, isFirstLineOfSection } = useMemo(() => {
+    const sectionLabel = getSectionLabel(line.startTime, segmentationData);
+    return {
+      sectionLabel,
+      isFirstLineOfSection: index === 0 || getSectionLabel(processedLines[index - 1]?.startTime, segmentationData) !== sectionLabel,
+    };
+  }, [index, line.startTime, processedLines, segmentationData]);
 
   return (
     <div key={index}>
@@ -512,13 +466,7 @@ export const LyricLine: React.FC<LyricLineProps> = ({
 
                       // Calculate the absolute position of this segment in the line
                       // Use indexOf with a start position to handle repeated segments correctly
-                      let segmentStartPos = 0;
-                      const segmentIndex = wordSegments.findIndex(s => s === segment);
-
-                      // Find the correct start position by looking at previous segments
-                      for (let i = 0; i < segmentIndex; i++) {
-                        segmentStartPos += wordSegments[i].text.length;
-                      }
+                      const segmentStartPos = segment.startPos;
 
                       const segmentEndPos = segmentStartPos + segment.text.length - 1;
 
@@ -696,5 +644,37 @@ export const LyricLine: React.FC<LyricLineProps> = ({
     </div>
   );
 };
+
+const areSelectedLanguagesEqual = (prev: string[], next: string[]): boolean => (
+  prev.length === next.length && prev.every((language, index) => language === next[index])
+);
+
+const areTextColorsEqual = (prev: TextColors, next: TextColors): boolean => (
+  prev.unplayed === next.unplayed
+  && prev.played === next.played
+  && prev.chord === next.chord
+  && prev.background === next.background
+);
+
+const areLyricLinePropsEqual = (prevProps: LyricLineProps, nextProps: LyricLineProps): boolean => {
+  if (prevProps.line !== nextProps.line) return false;
+  if (prevProps.index !== nextProps.index) return false;
+  if (prevProps.isActive !== nextProps.isActive) return false;
+  if (prevProps.isPast !== nextProps.isPast) return false;
+  if ((prevProps.isActive || nextProps.isActive) && prevProps.currentTime !== nextProps.currentTime) return false;
+  if (prevProps.fontSize !== nextProps.fontSize) return false;
+  if (prevProps.darkMode !== nextProps.darkMode) return false;
+  if (prevProps.accidentalPreference !== nextProps.accidentalPreference) return false;
+  if (!areTextColorsEqual(prevProps.textColors, nextProps.textColors)) return false;
+  if (!areSelectedLanguagesEqual(prevProps.selectedLanguages, nextProps.selectedLanguages)) return false;
+  if (prevProps.translatedLyrics !== nextProps.translatedLyrics) return false;
+  if (prevProps.processedLines !== nextProps.processedLines) return false;
+  if (prevProps.segmentationData !== nextProps.segmentationData) return false;
+  if (prevProps.memoizedCharacterArrays !== nextProps.memoizedCharacterArrays) return false;
+  return true;
+};
+
+export const LyricLine = React.memo(LyricLineComponent, areLyricLinePropsEqual);
+LyricLine.displayName = 'LyricLine';
 
 export default LyricLine;

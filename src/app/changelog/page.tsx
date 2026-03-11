@@ -30,6 +30,28 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.1',
+      date: 'March 11, 2026',
+      title: 'Analyze Flow & Playback UX Checks (In Development)',
+      description: 'Current working tree includes analyze-flow refactors plus playback UX performance/alignment improvements and verification updates.',
+      features: [
+        'IMPROVED: Lyrics playback — stable display props, active-line-only time updates, and word-timing-aware chord placement',
+        'IMPROVED: Guitar/piano playback UI — memoized guitar diagram focus updates and lighter piano key highlighting',
+        'IMPROVED: Refactored analyze flow for better route handoff, model setup, and state management',
+        'NEW: Analyze flow helpers/hooks/components added for route handoff, model setup, and related page/state updates',
+        'UI: Minor UI changes'
+      ],
+      technical: [
+        'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',
+        'VALIDATION: Focused non-Playwright playback smoke tests passed; lint passed; build passed',
+        'AUDIT: npm audit reports 1 moderate transitive vulnerability in file-type (fix available via npm audit fix)',
+      ],
+      breaking: [
+        'Refactoring across the app is in progress - expect changes to the feature and its implementation'
+      ]
+    },
+
+    {
       version: 'v0.6.0',
       date: 'March 9, 2026',
       title: 'Segmentation-Aware Playback & Visualizer Polish',
@@ -46,7 +68,9 @@ export default function ChangelogPage() {
         'PERFORMANCE: Reduced redundant visualizer state churn from repeated resize, mixer, and active-note updates',
         'IMPROVED: Piano-only playback and MIDI export now use the same section-aware dynamics inputs for closer runtime/export parity',
       ],
-      breaking: []
+      breaking: [
+        'Segmentation feature is in experimental mode - expect changes to the feature and its implementation'
+      ]
     },
 
     {

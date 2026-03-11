@@ -1,5 +1,5 @@
 import { analyzeAudioWithRateLimit, AnalysisResult, ChordDetectorType } from '@/services/chord-analysis/chordRecognitionService';
-import { getTranscription, saveTranscription } from '@/services/firebase/firestoreService';
+import { getTranscription, saveTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
 
 // Define error types for better type safety
 export interface ErrorWithSuggestion extends Error {
@@ -21,6 +21,11 @@ export interface AudioProcessingState {
   fromFirestoreCache: boolean;
   isStreamUrl?: boolean;
   streamExpiresAt?: number;
+}
+
+export interface AnalyzeAudioFileOptions {
+  prefetchedTranscription?: TranscriptionData | Omit<TranscriptionData, 'createdAt'> | null;
+  onTranscriptionSaved?: (data: Omit<TranscriptionData, 'createdAt'>) => void;
 }
 
 export class AudioProcessingService {
@@ -96,11 +101,17 @@ export class AudioProcessingService {
     videoId: string,
     beatDetector: string,
     chordDetector: string,
-    title?: string
+    title?: string,
+    options?: AnalyzeAudioFileOptions
   ): Promise<AnalysisResult> {
     try {
       // Check Firestore cache first
-      const cachedData = await getTranscription(videoId, beatDetector, chordDetector);
+      const hasPrefetchedTranscription =
+        options !== undefined && Object.prototype.hasOwnProperty.call(options, 'prefetchedTranscription');
+
+      const cachedData = hasPrefetchedTranscription
+        ? options?.prefetchedTranscription ?? null
+        : await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
         // Cache found - loading cached results
@@ -145,7 +156,10 @@ export class AudioProcessingService {
         timestamp: new Date()
       };
 
-      await saveTranscription(transcriptionData);
+      const saveSucceeded = await saveTranscription(transcriptionData);
+      if (saveSucceeded) {
+        options?.onTranscriptionSaved?.(transcriptionData);
+      }
 
       return analysisResults;
     } catch (error: unknown) {

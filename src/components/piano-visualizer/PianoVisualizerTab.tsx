@@ -16,8 +16,14 @@ import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey, useRomanNumerals } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
-import { computeAccidentalPreference, getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
-import { createShiftedChords } from '@/utils/chordProcessing';
+import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
+import {
+  buildChordOccurrenceCorrectionMap,
+  buildChordOccurrenceMap,
+  buildChordSequenceIndexMap,
+  createShiftedChords,
+  getDisplayChord,
+} from '@/utils/chordProcessing';
 import { buildBeatToChordSequenceMap, formatRomanNumeral } from '@/utils/chordFormatting';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { DEFAULT_AUDIO_MIXER_SETTINGS, DEFAULT_PIANO_VOLUME } from '@/config/audioDefaults';
@@ -416,23 +422,28 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     if (!transposedChordGridData) return [];
     const chords = [...transposedChordGridData.chords];
 
-    if (mergedShowCorrectedChords && sequenceCorrections) {
-      const { originalSequence, correctedSequence } = sequenceCorrections;
-      const skipCount = (transposedChordGridData.shiftCount || 0) + (transposedChordGridData.paddingCount || 0);
-      for (let i = skipCount; i < chords.length; i++) {
-        const seqIndex = i - skipCount;
-        if (seqIndex >= 0 && seqIndex < originalSequence.length && originalSequence[seqIndex] === chords[i]) {
-          chords[i] = correctedSequence[seqIndex];
-        }
-      }
-    } else if (mergedShowCorrectedChords && mergedChordCorrections) {
-      for (let i = 0; i < chords.length; i++) {
-        const chord = chords[i];
-        if (!chord) continue;
+    if (sequenceCorrections) {
+      const chordGroupOccurrenceMap = buildChordOccurrenceMap(chords);
+      const chordOccurrenceCorrectionMap = buildChordOccurrenceCorrectionMap(sequenceCorrections);
+      const chordSequenceIndexMap = buildChordSequenceIndexMap(chords);
+      return chords.map((chord, index) => getDisplayChord(
+        chord,
+        index,
+        mergedShowCorrectedChords,
+        sequenceCorrections,
+        chordGroupOccurrenceMap,
+        chordOccurrenceCorrectionMap,
+        chordSequenceIndexMap,
+      ).chord);
+    }
+
+    if (mergedShowCorrectedChords && mergedChordCorrections) {
+      return chords.map((chord) => {
+        if (!chord) return chord;
         const rootNote = chord.includes(':') ? chord.split(':')[0] : (chord.match(/^([A-G][#b]?)/)?.[1] || chord);
         const correction = mergedChordCorrections[rootNote];
-        if (correction) chords[i] = chord.replace(rootNote, correction);
-      }
+        return correction ? chord.replace(rootNote, correction) : chord;
+      });
     }
 
     return chords;
@@ -452,10 +463,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   // Compute accidental preference for consistent sharp/flat rendering.
   // Key signature (from Gemini) is authoritative; heuristic is fallback.
   const accidentalPreference = useMemo(() => {
-    const keyPref = getAccidentalPreferenceFromKey(storeKeySignature);
-    if (keyPref) return keyPref;
-    return computeAccidentalPreference(correctedChords);
-  }, [storeKeySignature, correctedChords]);
+    return getDisplayAccidentalPreference({
+      chords: correctedChords,
+      keySignature: storeKeySignature,
+      preserveExactSpelling: Boolean(sequenceCorrections),
+    });
+  }, [storeKeySignature, correctedChords, sequenceCorrections]);
 
   // ── Roman numeral support (shared with ChordGrid via stores) ──────────────
 

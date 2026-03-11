@@ -227,21 +227,6 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
           </p>
         </div>
       )}
-
-      {/* Conditionally render the "Upcoming models" box */}
-      {!isDevelopmentEnvironment() && (
-        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm transition-colors duration-300">
-          <p className="font-medium mb-1 text-blue-800 dark:text-blue-200 transition-colors duration-300">For other experimental models</p>
-          <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-300 transition-colors duration-300">
-            <li>Please consider cloning the repo and building from source.</li>
-          </ul>
-        </div>
-      )}
-
-
-
-
-
     </div>
   );
 };

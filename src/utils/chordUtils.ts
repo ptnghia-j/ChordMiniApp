@@ -476,3 +476,25 @@ export function getAccidentalPreferenceFromKey(
   // For natural-root minor keys (Am, Em, Bm, etc.) — they use sharps already
   return null;
 }
+
+/**
+ * Determine the accidental preference to use for display formatting.
+ * If a sequence correction payload is present, preserve that payload's exact
+ * enharmonic spelling instead of coercing it to the detected key signature.
+ */
+export function getDisplayAccidentalPreference(params: {
+  chords: string[];
+  keySignature?: string | null;
+  preserveExactSpelling?: boolean;
+}): 'sharp' | 'flat' | undefined {
+  const { chords, keySignature, preserveExactSpelling = false } = params;
+
+  if (preserveExactSpelling) {
+    return undefined;
+  }
+
+  const keyPref = getAccidentalPreferenceFromKey(keySignature);
+  if (keyPref) return keyPref;
+
+  return computeAccidentalPreference(chords) || undefined;
+}

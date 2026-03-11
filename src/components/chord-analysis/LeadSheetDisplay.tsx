@@ -16,6 +16,7 @@ import LyricsControls from '@/components/lyrics/LyricsControls';
 import NoLyricsMessage from '@/components/lyrics/NoLyricsMessage';
 import LyricLine from '@/components/lyrics/LyricLine';
 import { SegmentationResult } from '@/types/chatbotTypes';
+import type { LyricWordTiming } from '@/types/musicAiTypes';
 interface ChordData {
   time: number;
   chord: string;
@@ -33,6 +34,7 @@ interface LyricLine {
   endTime: number;
   text: string;
   chords: ChordMarker[];
+  wordTimings?: LyricWordTiming[];
 }
 interface SynchronizedLyrics {
   lines: LyricLine[];

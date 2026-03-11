@@ -5,9 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-import { useParams, useSearchParams } from 'next/navigation';
-// Import types are used in type annotations and interfaces
-import { getTranscription, saveTranscription } from '@/services/firebase/firestoreService';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '@/components/common/Navigation';
 
 // Dynamic imports for heavy components to improve initial bundle size
@@ -34,12 +32,9 @@ import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useAudioProcessing } from '@/hooks/audio/useAudioProcessing';
 import { useAudioPlayer } from '@/hooks/chord-playback/useAudioPlayer';
 import { useModelState } from '@/hooks/chord-analysis/useModelState';
+import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrchestrator';
 import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
-import {
-  handleAudioAnalysis as handleAudioAnalysisService,
-  transcribeLyricsWithAI as transcribeLyricsWithAIService,
-  extractAudioFromYouTube as extractAudioFromYouTubeService
-} from '@/services/audio/audioProcessingExtracted';
+import { transcribeLyricsWithAI as transcribeLyricsWithAIService } from '@/services/audio/audioProcessingExtracted';
 import {
   getChordGridData as getChordGridDataService
 } from '@/services/chord-analysis/chordGridCalculationService';
@@ -115,6 +110,8 @@ import UtilityBar from '@/components/analysis/UtilityBar';
 import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
 import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEFAULT_FLUTE_VOLUME } from '@/config/audioDefaults';
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
+import { buildAnalyzePageUrl, readAnalyzeRouteParams } from '@/utils/analyzeRouteUtils';
+import { consumeAnalyzeSessionHandoff } from '@/utils/analyzeSessionHandoff';
 // Import new hooks and contexts
 import { useFirebaseReadiness } from '@/hooks/firebase/useFirebaseReadiness';
 import { useYouTubeSetup } from '@/hooks/youtube/useYouTubeSetup';
@@ -135,14 +132,20 @@ import { usePlaybackStore } from '@/stores/playbackStore';
 
 export default function YouTubeVideoAnalyzePage() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const videoId = params?.videoId as string;
-  const titleFromSearch = searchParams?.get('title') ? decodeURIComponent(searchParams.get('title')!) : null;
-
-  // Extract additional metadata from URL parameters
-  const durationFromSearch = searchParams?.get('duration') || null;
-  const channelFromSearch = searchParams?.get('channel') ? decodeURIComponent(searchParams.get('channel')!) : null;
-  const thumbnailFromSearch = searchParams?.get('thumbnail') ? decodeURIComponent(searchParams.get('thumbnail')!) : null;
+  const routeParams = readAnalyzeRouteParams(searchParams);
+  const titleFromSearch = routeParams.title;
+  const durationFromSearch = routeParams.duration;
+  const channelFromSearch = routeParams.channel;
+  const thumbnailFromSearch = routeParams.thumbnail;
+  const autoStartRequested = Boolean(routeParams.autoStart);
+  const [initialAnalyzeHandoff] = useState(() => consumeAnalyzeSessionHandoff(
+    videoId,
+    routeParams.beatModel,
+    routeParams.chordModel
+  ));
 
   const {
     stage,
@@ -166,7 +169,11 @@ export default function YouTubeVideoAnalyzePage() {
     setState: setAudioProcessingState,
     setAnalysisResults,
     setVideoTitle
-  } = useAudioProcessing(videoId);
+  } = useAudioProcessing(videoId, {
+    initialState: initialAnalyzeHandoff?.audioProcessingState ?? null,
+    initialAnalysisResults: initialAnalyzeHandoff?.analysisResults ?? null,
+    initialVideoTitle: initialAnalyzeHandoff?.videoTitle ?? titleFromSearch,
+  });
 
   const {
     state: audioPlayerState,
@@ -195,134 +202,12 @@ export default function YouTubeVideoAnalyzePage() {
     chordDetectorRef,
     setBeatDetector,
     setChordDetector,
-  } = useModelState();
+  } = useModelState({
+    initialBeatDetector: routeParams.beatModel,
+    initialChordDetector: routeParams.chordModel,
+  });
 
-  // Cache availability state
-  const [cacheAvailable, setCacheAvailable] = useState<boolean>(false);
-  const [cacheCheckCompleted, setCacheCheckCompleted] = useState<boolean>(false);
-  const [cacheCheckInProgress, setCacheCheckInProgress] = useState<boolean>(false);
-
-  // Firebase initialization tracking to prevent race conditions
   const { firebaseReady } = useFirebaseReadiness();
-  const [initialCacheCheckDone, setInitialCacheCheckDone] = useState<boolean>(false);
-
-  // Reset cache state when models change (persistence is handled in useModelState hook)
-  // Combined into single useEffect to prevent multiple state updates
-  useEffect(() => {
-    setCacheCheckCompleted(false);
-    setCacheAvailable(false);
-    setCacheCheckInProgress(false);
-    setInitialCacheCheckDone(false);
-  }, [beatDetector, chordDetector]);
-
-  // REGRESSION FIX: Reset initialCacheCheckDone when videoId changes
-  // This ensures cache is checked for each new video in "Recently Transcribed"
-  useEffect(() => {
-    setInitialCacheCheckDone(false);
-  }, [videoId]);
-
-  const extractionLockRef = useRef<boolean>(false); // Prevent duplicate extraction
-  const latestRequestIdRef = useRef<string | null>(null);
-  const audioExtractionAbortControllerRef = useRef<AbortController | null>(null);
-
-  // Cancel in-flight audio extraction when video changes or component unmounts
-  useEffect(() => {
-    return () => {
-      audioExtractionAbortControllerRef.current?.abort();
-    };
-  }, [videoId]);
-
-
-  // STREAMLINED: Check cache before extraction with connection management
-  const checkCacheBeforeExtraction = useCallback(async (extractionFunction: (forceRefresh?: boolean) => Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void>) => {
-    if (!firebaseReady || initialCacheCheckDone) {
-      return;
-    }
-
-    try {
-      setInitialCacheCheckDone(true);
-
-      // CRITICAL FIX: Ensure Firebase is initialized before cache check
-      // The lazy initialization in firebase.ts means storage/db are null until initialized
-      const { ensureFirebaseInitialized } = await import('@/config/firebase');
-      await ensureFirebaseInitialized();
-      console.log('✅ Firebase initialized before cache check');
-
-      // PERFORMANCE FIX: Use connection manager for reliable cache access
-      const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
-
-      const cachedAudio = await withFirebaseConnectionCheck(async () => {
-        const { getCachedAudioFile } = await import('@/services/firebase/firebaseStorageService');
-        return await getCachedAudioFile(videoId);
-      }, 'cached audio check');
-
-      if (cachedAudio) {
-        console.log(`✅ Found cached audio for ${videoId}, loading from cache`);
-
-        // BANNER FIX: Ensure processing stage is properly reset to idle
-        setStage('idle');
-        setProgress(0);
-        setStatusMessage('');
-
-        // Set audio state directly from cache
-        setAudioProcessingState(prev => ({
-          ...prev,
-          isExtracting: false,
-          isDownloading: false,
-          isExtracted: true,
-          audioUrl: cachedAudio.audioUrl,
-          fromCache: true,
-          error: null,
-          suggestion: null
-        }));
-
-        // Update duration if available
-        if (cachedAudio.duration && cachedAudio.duration > 0) {
-          setDuration(cachedAudio.duration);
-        }
-
-        // FIXED: Set video title from URL parameters when cached audio is found
-        // This ensures "recently transcribed" videos show proper titles
-        if (titleFromSearch) {
-          setVideoTitle(titleFromSearch);
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`✅ Set video title from URL parameters: "${titleFromSearch}"`);
-          }
-        } else if (cachedAudio.title && cachedAudio.title !== `YouTube Video ${videoId}`) {
-          setVideoTitle(cachedAudio.title);
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`✅ Set video title from cached audio: "${cachedAudio.title}"`);
-          }
-        }
-
-        return; // Skip extraction since we have cached audio
-      }
-
-      // No cached audio found, proceed with extraction
-      const extractionResult = await extractionFunction(false);
-
-      // FIXED: Set video title from extraction result
-      if (extractionResult && extractionResult.title) {
-        setVideoTitle(extractionResult.title);
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✅ Set video title from extraction: "${extractionResult.title}"`);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error checking cached audio:', error);
-      // If cache check fails, proceed with extraction anyway
-      const extractionResult = await extractionFunction(false);
-
-      // FIXED: Set video title from extraction result even when cache check fails
-      if (extractionResult && extractionResult.title) {
-        setVideoTitle(extractionResult.title);
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✅ Set video title from extraction (cache check failed): "${extractionResult.title}"`);
-        }
-      }
-    }
-  }, [videoId, firebaseReady, initialCacheCheckDone, setAudioProcessingState, setDuration, setStage, setProgress, setStatusMessage, setVideoTitle, titleFromSearch]);
 
   // Extract state from audio player hook
   const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
@@ -335,10 +220,6 @@ export default function YouTubeVideoAnalyzePage() {
   const setCurrentTime = useCallback((time: number) => {
     setAudioPlayerState(prev => ({ ...prev, currentTime: time }));
   }, [setAudioPlayerState]);
-
-  // Key signature state
-  const [keySignature, setKeySignature] = useState<string | null>(null);
-  const [isDetectingKey, setIsDetectingKey] = useState(false);
 
   // Use segmentation state hook
   const {
@@ -354,43 +235,136 @@ export default function YouTubeVideoAnalyzePage() {
   const simplifyChords = useUIStore((state) => state.simplifyChords);
   const showRomanNumerals = useUIStore((state) => state.showRomanNumerals);
   const updateRomanNumeralData = useUIStore((state) => state.updateRomanNumeralData);
+  const [showExtractionNotification, setShowExtractionNotification] = useState(false);
 
-  // Track Roman numerals request state locally (not in Zustand since it's page-specific)
-  const [romanNumeralsRequested, setRomanNumeralsRequested] = useState(false);
+  // Use lyrics state hook
+  const {
+    lyrics,
+    showLyrics,
+    hasCachedLyrics,
+    isTranscribingLyrics,
+    lyricsError,
+    translatedLyrics,
+    setLyrics,
+    setShowLyrics,
+    setHasCachedLyrics,
+    setIsTranscribingLyrics,
+    setLyricsError,
+  } = useLyricsState();
 
+  const {
+    cacheAvailable,
+    cacheCheckCompleted,
+    cacheCheckInProgress,
+    keySignature,
+    isDetectingKey,
+    chordCorrections,
+    showCorrectedChords,
+    setShowCorrectedChords,
+    sequenceCorrections,
+    handleAudioAnalysis,
+    extractAudioFromYouTube,
+  } = useAnalyzePageOrchestrator({
+    videoId,
+    titleFromSearch,
+    durationFromSearch,
+    channelFromSearch,
+    thumbnailFromSearch,
+    firebaseReady,
+    modelsInitialized,
+    beatDetector,
+    chordDetector,
+    beatDetectorRef,
+    chordDetectorRef,
+    audioRef,
+    audioProcessingState,
+    analysisResults,
+    lyrics,
+    showRomanNumerals,
+    setShowExtractionNotification,
+    setAudioProcessingState,
+    setAnalysisResults,
+    setDuration,
+    setVideoTitle,
+    setLyrics,
+    setShowLyrics,
+    setHasCachedLyrics,
+    stage,
+    setStage,
+    setProgress,
+    setStatusMessage,
+    startProcessing,
+    completeProcessing,
+    failProcessing,
+    updateRomanNumeralData,
+    analyzeAudioFromService,
+    skipInitialCacheBootstrap: Boolean(initialAnalyzeHandoff),
+  });
 
+  useEffect(() => {
+    if (initialAnalyzeHandoff?.duration) {
+      setDuration(initialAnalyzeHandoff.duration);
+    }
+  }, [initialAnalyzeHandoff, setDuration]);
 
-  // Enharmonic correction state
-  const [chordCorrections, setChordCorrections] = useState<Record<string, string> | null>(null);
-  const [showCorrectedChords, setShowCorrectedChords] = useState(false);
-  // NEW: Enhanced sequence-based corrections
-  const [sequenceCorrections, setSequenceCorrections] = useState<{
-    originalSequence: string[];
-    correctedSequence: string[];
-    keyAnalysis?: {
-      sections: Array<{
-        startIndex: number;
-        endIndex: number;
-        key: string;
-        chords: string[];
-      }>;
-      modulations?: Array<{
-        fromKey: string;
-        toKey: string;
-        atIndex: number;
-        atTime?: number;
-      }>;
-    };
-    romanNumerals?: {
-      analysis: string[];
-      keyContext: string;
-      temporalShifts?: Array<{
-        chordIndex: number;
-        targetKey: string;
-        romanNumeral: string;
-      }>;
-    } | null;
-  } | null>(null);
+  const currentAnalyzeUrl = useMemo(() => {
+    const queryString = searchParams.toString();
+    return queryString ? `/analyze/${videoId}?${queryString}` : `/analyze/${videoId}`;
+  }, [searchParams, videoId]);
+
+  const canonicalAnalyzeUrl = useMemo(() => buildAnalyzePageUrl(videoId, {
+    ...routeParams,
+    beatModel: beatDetector,
+    chordModel: chordDetector,
+  }), [beatDetector, chordDetector, routeParams, videoId]);
+
+  const autoStartAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (!videoId || !modelsInitialized || canonicalAnalyzeUrl === currentAnalyzeUrl) {
+      return;
+    }
+
+    router.replace(canonicalAnalyzeUrl, { scroll: false });
+  }, [canonicalAnalyzeUrl, currentAnalyzeUrl, modelsInitialized, router, videoId]);
+
+  useEffect(() => {
+    if (!autoStartRequested) {
+      autoStartAttemptedRef.current = false;
+      return;
+    }
+
+    if (autoStartAttemptedRef.current) {
+      return;
+    }
+
+    if (
+      !modelsInitialized ||
+      !audioProcessingState.isExtracted ||
+      !audioProcessingState.audioUrl ||
+      audioProcessingState.isAnalyzing ||
+      audioProcessingState.isAnalyzed ||
+      !!audioProcessingState.error
+    ) {
+      return;
+    }
+
+    autoStartAttemptedRef.current = true;
+    void handleAudioAnalysis();
+  }, [
+    autoStartRequested,
+    audioProcessingState.audioUrl,
+    audioProcessingState.error,
+    audioProcessingState.isAnalyzed,
+    audioProcessingState.isAnalyzing,
+    audioProcessingState.isExtracted,
+    handleAudioAnalysis,
+    modelsInitialized,
+  ]);
+
+  const hideInitialAnalysisControls = autoStartRequested
+    && !audioProcessingState.error
+    && !audioProcessingState.isAnalyzed;
 
   // Memoize chord corrections to prevent useMemo dependency changes
   const memoizedChordCorrections = useMemo(() => chordCorrections, [chordCorrections]);
@@ -401,27 +375,6 @@ export default function YouTubeVideoAnalyzePage() {
   const simplifiedSequenceCorrections = useMemo(() => {
     return simplifyChords ? simplifySequenceCorrections(memoizedSequenceCorrections) : memoizedSequenceCorrections;
   }, [simplifyChords, memoizedSequenceCorrections]);
-
-  // Auto-enable corrections when sequence corrections are available (only once)
-  const [hasAutoEnabledCorrections, setHasAutoEnabledCorrections] = useState(false);
-  useEffect(() => {
-    if (sequenceCorrections && sequenceCorrections.correctedSequence.length > 0 && !showCorrectedChords && !hasAutoEnabledCorrections) {
-      setShowCorrectedChords(true);
-      setHasAutoEnabledCorrections(true);
-    }
-  }, [sequenceCorrections, showCorrectedChords, hasAutoEnabledCorrections]);
-
-  // REMOVED: Separate Roman numeral useEffect to prevent duplicate API calls
-  // Roman numeral logic is now integrated into the main key detection useEffect below
-
-  // Reset Roman numerals requested flag when toggled off
-  useEffect(() => {
-    if (!showRomanNumerals) {
-      setRomanNumeralsRequested(false);
-    }
-  }, [showRomanNumerals, setRomanNumeralsRequested]);
-
-  const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
 
   // Current state for playback
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
@@ -442,7 +395,6 @@ export default function YouTubeVideoAnalyzePage() {
   // YouTube player state
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
-  const [showExtractionNotification, setShowExtractionNotification] = useState(false);
 
   // Use extracted navigation helpers hook
   const {
@@ -483,171 +435,6 @@ export default function YouTubeVideoAnalyzePage() {
     setDuration,
     isFollowModeEnabled
   });
-
-  // Enhanced audio analysis function that integrates with processing context
-  const handleAudioAnalysis = useCallback(async () => {
-    // Create dependency object for extracted service with type-compatible wrappers
-    const deps = {
-      // State setters with type compatibility wrappers
-      setAudioProcessingState: (updater: (prev: any) => any) => setAudioProcessingState(updater),
-      setAnalysisResults,
-      setDuration,
-      setShowExtractionNotification, // Used for banner display
-      setLyrics: () => {}, // Not used in analysis
-      setShowLyrics: () => {}, // Not used in analysis
-      setHasCachedLyrics: () => {}, // Not used in analysis
-      setActiveTab: () => {}, // Not used in analysis
-      setIsTranscribingLyrics: () => {}, // Not used in analysis
-      setLyricsError: () => {}, // Not used in analysis
-
-      // Processing context
-      processingContext: {
-        stage: '',
-        progress: 0,
-        setStage,
-        setProgress,
-        setStatusMessage,
-        startProcessing,
-        completeProcessing,
-        failProcessing
-      },
-
-      // Audio processing service
-      analyzeAudioFromService,
-
-      // Refs and state
-      audioRef,
-      extractionLockRef,
-      beatDetectorRef,
-      chordDetectorRef,
-
-      // URL parameters
-      videoId,
-      titleFromSearch,
-      durationFromSearch,
-      channelFromSearch,
-      thumbnailFromSearch,
-
-      // Current state values
-      audioProcessingState: {
-        ...audioProcessingState,
-        audioUrl: audioProcessingState.audioUrl || null // Convert undefined to null for compatibility
-      },
-      beatDetector,
-      chordDetector,
-      progress: 0
-    };
-
-    // Call the extracted service function
-    return await handleAudioAnalysisService(deps as any); // Type compatibility handled by wrapper
-  }, [
-    audioProcessingState,
-    analyzeAudioFromService,
-    beatDetector,
-    chordDetector,
-    beatDetectorRef,
-    chordDetectorRef,
-    completeProcessing,
-    failProcessing,
-    setAnalysisResults,
-    setAudioProcessingState,
-    setDuration,
-    setProgress,
-    setStage,
-    setStatusMessage,
-    startProcessing,
-    videoId,
-    titleFromSearch,
-    durationFromSearch,
-    channelFromSearch,
-    thumbnailFromSearch,
-    audioRef,
-    extractionLockRef
-  ]); // Complete dependency array
-
-  // PERFORMANCE OPTIMIZATION: Split massive useEffect into focused effects
-
-  // Audio state changes only - check cache when audio is extracted
-  useEffect(() => {
-    const checkAnalysisCache = async () => {
-      // Only check if audio is extracted and models are ready
-      if (
-        audioProcessingState.isExtracted &&
-        audioProcessingState.audioUrl &&
-        !audioProcessingState.isAnalyzed &&
-        !audioProcessingState.isAnalyzing &&
-        modelsInitialized &&
-        !cacheCheckCompleted &&
-        !cacheCheckInProgress
-      ) {
-        try {
-          setCacheCheckInProgress(true);
-
-          // BANNER FIX: Use connection manager for reliable cache access after inactivity
-          const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
-
-          const cachedData = await withFirebaseConnectionCheck(async () => {
-            return await getTranscription(videoId, beatDetector, chordDetector);
-          }, 'analysis cache check');
-
-          if (cachedData) {
-            setCacheAvailable(true);
-          } else {
-            setCacheAvailable(false);
-          }
-
-          setCacheCheckCompleted(true);
-        } catch (error) {
-          console.error('Error checking cached analysis:', error);
-          setCacheAvailable(false);
-          setCacheCheckCompleted(true);
-        } finally {
-          setCacheCheckInProgress(false);
-        }
-      }
-    };
-
-    checkAnalysisCache();
-  }, [
-    audioProcessingState.isExtracted,
-    audioProcessingState.audioUrl,
-    audioProcessingState.isAnalyzed,
-    audioProcessingState.isAnalyzing,
-    modelsInitialized,
-    cacheCheckCompleted,
-    cacheCheckInProgress,
-    videoId,
-    beatDetector,
-    chordDetector
-  ]);
-
-  // Stage management - handle banner dismissal when stage changes
-  useEffect(() => {
-    // BANNER FIX (scoped): After cache check, only reset to idle for pre-analysis stages
-    if (!cacheCheckCompleted) return;
-
-    // Do NOT interfere with analysis stages (beat-detection, chord-recognition) or completion
-    if (stage === 'downloading' || stage === 'extracting') {
-      setStage('idle');
-      setProgress(0);
-      setStatusMessage('');
-    }
-  }, [cacheCheckCompleted, stage, setStage, setProgress, setStatusMessage]);
-
-  // Use lyrics state hook
-  const {
-    lyrics,
-    showLyrics,
-    hasCachedLyrics,
-    isTranscribingLyrics,
-    lyricsError,
-    translatedLyrics,
-    setLyrics,
-    setShowLyrics,
-    setHasCachedLyrics,
-    setIsTranscribingLyrics,
-    setLyricsError,
-  } = useLyricsState();
 
   // Font size state (not part of lyrics hook)
   const [fontSize, setFontSize] = useState<number>(16);
@@ -694,249 +481,8 @@ export default function YouTubeVideoAnalyzePage() {
     handleChordEdit(originalChord, newChord);
   }, [handleChordEdit]);
 
-  // Check for cached enharmonic correction data when analysis results are loaded
-  useEffect(() => {
-    const checkCachedEnharmonicData = async () => {
-      if (analysisResults?.chords && analysisResults.chords.length > 0 && !chordCorrections) {
-        try {
-          // Get current model values at execution time
-          const currentBeatDetector = beatDetector;
-          const currentChordDetector = chordDetector;
-          const cachedTranscription = await getTranscription(videoId, currentBeatDetector, currentChordDetector);
-          // Check cached transcription data for chord corrections
-
-          if (cachedTranscription && cachedTranscription.chordCorrections) {
-            // Loading cached chord corrections (new format)
-            setChordCorrections(cachedTranscription.chordCorrections);
-            if (cachedTranscription.keySignature) {
-              setKeySignature(cachedTranscription.keySignature);
-            }
-            // Load cached Roman numeral data
-            if (cachedTranscription.romanNumerals) {
-              updateRomanNumeralData(cachedTranscription.romanNumerals);
-
-            }
-          } else if (cachedTranscription && cachedTranscription.originalChords && cachedTranscription.correctedChords) {
-            // Backward compatibility: convert old format to new format
-            const corrections: Record<string, string> = {};
-            for (let i = 0; i < cachedTranscription.originalChords.length && i < cachedTranscription.correctedChords.length; i++) {
-              const original = cachedTranscription.originalChords[i];
-              const corrected = cachedTranscription.correctedChords[i];
-              if (original !== corrected) {
-                corrections[original] = corrected;
-              }
-            }
-            if (Object.keys(corrections).length > 0) {
-              setChordCorrections(corrections);
-            }
-            if (cachedTranscription.keySignature) {
-              setKeySignature(cachedTranscription.keySignature);
-            }
-            // Load cached Roman numeral data (backward compatibility)
-            if (cachedTranscription.romanNumerals) {
-              updateRomanNumeralData(cachedTranscription.romanNumerals);
-
-            }
-          } else {
-            // No cached chord corrections found
-          }
-        } catch (error) {
-          console.error('Failed to load cached enharmonic correction data:', error);
-        }
-      }
-    };
-
-    checkCachedEnharmonicData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisResults?.chords, videoId, chordCorrections]); // Removed beatDetector and chordDetector to prevent unnecessary re-runs
-
-  // Unified key detection effect - handles both initial detection and Roman numeral requests
-  useEffect(() => {
-    // Determine if we need to make an API call
-    const needsInitialDetection = analysisResults?.chords && analysisResults.chords.length > 0 && !isDetectingKey && !keyDetectionAttempted;
-    const needsRomanNumerals = showRomanNumerals && analysisResults && !romanNumeralsRequested && (sequenceCorrections?.romanNumerals?.analysis?.length || 0) === 0;
-
-    if (needsInitialDetection || needsRomanNumerals) {
-      setIsDetectingKey(true);
-      if (needsInitialDetection) {
-        setKeyDetectionAttempted(true);
-      }
-      if (needsRomanNumerals) {
-        setRomanNumeralsRequested(true);
-      }
-
-      // Prepare chord data for key detection
-      // CRITICAL FIX: Deduplicate consecutive identical chords to avoid beat-level analysis
-      const rawChordData = analysisResults.chords.map((chord) => ({
-        chord: chord.chord,
-        time: chord.time
-      }));
-
-      // Remove consecutive duplicate chords to get only chord changes
-      const chordData = rawChordData.filter((chord, index) => {
-        if (index === 0) return true; // Always include first chord
-        return chord.chord !== rawChordData[index - 1].chord; // Include only if different from previous
-      });
-
-
-
-      // Import and call key detection service with enharmonic correction
-
-      import('@/services/audio/keyDetectionService').then(({ detectKey }) => {
-        // Use cache for sequence corrections (no bypass)
-        detectKey(chordData, true, false, showRomanNumerals) // Request enharmonic correction, use cache, include Roman numerals if enabled
-          .then(result => {
-
-            setKeySignature(result.primaryKey);
-
-            // Handle sequence-based corrections (preferred)
-            if (result.sequenceCorrections && result.sequenceCorrections.correctedSequence) {
-              setSequenceCorrections(result.sequenceCorrections);
-
-              // Also set legacy corrections for backward compatibility
-              if (result.corrections && Object.keys(result.corrections).length > 0) {
-                setChordCorrections(result.corrections);
-              }
-            } else if (result.corrections && Object.keys(result.corrections).length > 0) {
-              // FALLBACK: Use legacy chord corrections
-              setChordCorrections(result.corrections);
-            }
-
-            // Handle Roman numeral analysis (separate from sequence corrections)
-            if (result.romanNumerals) {
-              updateRomanNumeralData(result.romanNumerals);
-            } else {
-              updateRomanNumeralData(null);
-            }
-
-            // Update the transcription cache with key signature and enharmonic correction data
-            if (result.primaryKey && result.primaryKey !== 'Unknown') {
-              const updateTranscriptionWithKey = async () => {
-                try {
-                  // Get current model values at execution time
-                  const currentBeatDetector = beatDetector;
-                  const currentChordDetector = chordDetector;
-                  const cachedTranscription = await getTranscription(videoId, currentBeatDetector, currentChordDetector);
-                  if (cachedTranscription) {
-                    await saveTranscription({
-                      ...cachedTranscription,
-                      keySignature: result.primaryKey,
-                      keyModulation: result.modulation,
-                      chordCorrections: result.corrections || null,
-                      romanNumerals: result.romanNumerals || null
-                    });
-                    // console.log('Updated transcription cache with key signature and enharmonic correction data:', result.primaryKey);
-                  }
-                } catch (error) {
-                  console.error('Failed to update transcription cache with key signature and enharmonic correction data:', error);
-                }
-              };
-              updateTranscriptionWithKey();
-            }
-          })
-          .catch(error => {
-            console.error('Failed to detect key:', error);
-            setKeySignature(null);
-          })
-          .finally(() => {
-            setIsDetectingKey(false);
-          });
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisResults?.chords, isDetectingKey, keyDetectionAttempted, videoId, showRomanNumerals, romanNumeralsRequested]); // FIXED: Removed sequenceCorrections?.romanNumerals to prevent infinite loop
-
   // Use YouTube setup hook
   useYouTubeSetup(videoId, setAudioProcessingState);
-
-  // RACE CONDITION FIX: Load video info and extract audio AFTER Firebase is ready
-  useEffect(() => {
-    if (videoId && firebaseReady && !audioProcessingState.isExtracting && !extractionLockRef.current && !initialCacheCheckDone) {
-
-      // BANNER FIX: Reset processing context for new video
-      setStage('idle');
-      setProgress(0);
-      setStatusMessage('');
-
-      // Reset key detection flag for new video
-      setKeyDetectionAttempted(false);
-      setRomanNumeralsRequested(false); // Reset Roman numerals flag for new video
-      setChordCorrections(null); // Reset chord corrections for new video
-      setShowCorrectedChords(false); // Reset to show original chords
-      setHasAutoEnabledCorrections(false); // Reset auto-enable flag for new video
-      setSequenceCorrections(null); // Reset sequence corrections for new video
-
-      // RACE CONDITION FIX: Check cache BEFORE starting extraction
-      // BANNER FIX: Ensure this operation completes properly
-      const performCacheCheck = async () => {
-        try {
-          await checkCacheBeforeExtraction(extractAudioFromYouTube);
-        } catch (error) {
-          console.error('Cache check failed during initial load:', error);
-          // BANNER FIX: Ensure banner is dismissed even if cache check fails
-          setStage('idle');
-          setProgress(0);
-          setStatusMessage('');
-        }
-      };
-
-      performCacheCheck();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, titleFromSearch, firebaseReady, initialCacheCheckDone]); // Re-run when videoId, titleFromSearch, or Firebase readiness changes
-
-
-
-  useEffect(() => {
-    // Auto-load cached lyrics AFTER audio extraction is complete
-    // This replaces the old checkCachedLyricsService with auto-loading logic from LyricsManager
-    const autoLoadCachedLyrics = async () => {
-      // Only check for cached lyrics if we have an audio URL and no existing lyrics
-      if ((!lyrics || !lyrics.lines || lyrics.lines.length === 0) && audioProcessingState.audioUrl) {
-        try {
-          const response = await fetch('/api/transcribe-lyrics', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              videoId: params?.videoId || videoId,
-              audioPath: audioProcessingState.audioUrl,
-              forceRefresh: false,
-              checkCacheOnly: true // Only check cache without processing
-            }),
-          });
-
-          const data = await response.json();
-
-          if (response.ok && data.success && data.lyrics) {
-            if (data.lyrics.lines && Array.isArray(data.lyrics.lines) && data.lyrics.lines.length > 0) {
-              // Auto-load cached lyrics for Music.AI transcription (no user choices needed)
-              setLyrics(data.lyrics);
-              setShowLyrics(true);
-              setHasCachedLyrics(false); // Don't show "Cached Lyrics Available" when lyrics are auto-loaded
-              // Don't auto-switch to lyrics tab, let user choose
-
-            }
-          } else {
-            // No cached lyrics found, set hasCachedLyrics to false
-            setHasCachedLyrics(false);
-          }
-        } catch (error) {
-          // Silently handle cache check errors
-          console.log('Cache check failed:', error);
-          setHasCachedLyrics(false);
-        }
-      }
-    };
-
-    if (audioProcessingState.isExtracted && audioProcessingState.audioUrl) {
-      // PERFORMANCE FIX: Load lyrics immediately without delay
-      autoLoadCachedLyrics();
-    }
-  }, [videoId, params, lyrics, audioProcessingState.isExtracted, audioProcessingState.audioUrl, setLyrics, setShowLyrics, setHasCachedLyrics, setActiveTab]); // Re-run when audio extraction completes
-
-  // REMOVED: Duplicate cache checking useEffect - now handled by the single useEffect above
 
   // Video title is now handled by the useAudioProcessing hook
 
@@ -1046,7 +592,6 @@ export default function YouTubeVideoAnalyzePage() {
 
       // Refs and state
       audioRef,
-      extractionLockRef,
       beatDetectorRef,
       chordDetectorRef,
 
@@ -1071,102 +616,6 @@ export default function YouTubeVideoAnalyzePage() {
     // Call the extracted service function
     return await transcribeLyricsWithAIService(deps as any); // Type compatibility handled by wrapper
   };
-
-  // Extract audio from YouTube using our API endpoint
-  const extractAudioFromYouTube = useCallback(async (forceRefresh = false): Promise<{ title?: string; audioUrl?: string; fromCache?: boolean; duration?: number } | void> => {
-    // Cancel any in-flight extraction tied to the previous request
-    if (audioExtractionAbortControllerRef.current) {
-      try { audioExtractionAbortControllerRef.current.abort(); } catch {}
-    }
-    // Unlock extraction (previous request was cancelled)
-    extractionLockRef.current = false;
-
-    // Create a new controller and request ID for this invocation
-    const controller = new AbortController();
-    audioExtractionAbortControllerRef.current = controller;
-
-    const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()}`;
-
-    // Mark this request as the latest
-    latestRequestIdRef.current = requestId;
-
-    // Create dependency object for extracted service
-    const deps = {
-      // State setters
-      setAudioProcessingState: (updater: (prev: any) => any) => setAudioProcessingState(updater),
-      setAnalysisResults: () => {}, // Not used in audio extraction
-      setDuration: () => {}, // Not used in audio extraction
-      setShowExtractionNotification,
-      setLyrics: () => {}, // Not used in audio extraction
-      setShowLyrics: () => {}, // Not used in audio extraction
-      setHasCachedLyrics: () => {}, // Not used in audio extraction
-      setActiveTab: () => {}, // Not used in audio extraction
-      setIsTranscribingLyrics: () => {}, // Not used in audio extraction
-      setLyricsError: () => {}, // Not used in audio extraction
-
-      // Processing context (not used in audio extraction)
-      processingContext: {
-        stage: '',
-        progress: 0,
-        setStage: () => {},
-        setProgress: () => {},
-        setStatusMessage: () => {},
-        startProcessing: () => {},
-        completeProcessing: () => {},
-        failProcessing: () => {}
-      },
-
-      // Audio processing service (not used in audio extraction)
-      analyzeAudioFromService: () => Promise.resolve({} as any), // Not used in audio extraction
-
-      // Refs and state
-      audioRef,
-      extractionLockRef,
-      beatDetectorRef,
-      chordDetectorRef,
-
-      // URL parameters
-      videoId,
-      titleFromSearch,
-      durationFromSearch,
-      channelFromSearch,
-      thumbnailFromSearch,
-
-      // Current state values
-      audioProcessingState: {
-        ...audioProcessingState,
-        audioUrl: audioProcessingState.audioUrl || null // Convert undefined to null for compatibility
-      },
-      beatDetector,
-      chordDetector,
-      progress: 0,
-
-      // Request cancellation & staleness control
-      requestId,
-      abortSignal: controller.signal,
-      isRequestStillCurrent: (id: string) => latestRequestIdRef.current === id,
-    };
-
-    // Call the extracted service function
-    return await extractAudioFromYouTubeService(deps as any, forceRefresh); // Type compatibility handled by wrapper
-  }, [
-    videoId,
-    setShowExtractionNotification,
-    audioProcessingState,
-    audioRef,
-    beatDetector,
-    beatDetectorRef,
-    channelFromSearch,
-    chordDetector,
-    chordDetectorRef,
-    durationFromSearch,
-    setAudioProcessingState,
-    thumbnailFromSearch,
-    titleFromSearch,
-    extractionLockRef
-  ]);
 
   // Use YouTube handlers from usePlaybackState hook instead of duplicating logic
 
@@ -1423,9 +872,7 @@ export default function YouTubeVideoAnalyzePage() {
 
     // Initialize AnalysisStore
     analysisStore.setAnalysisResults(analysisResults);
-    if (audioProcessingState.isAnalyzing) {
-      analysisStore.startAnalysis();
-    }
+    analysisStore.setIsAnalyzing(audioProcessingState.isAnalyzing);
     analysisStore.setAnalysisError(audioProcessingState.error || null);
     analysisStore.setCacheAvailable(cacheAvailable);
     analysisStore.setCacheCheckCompleted(cacheCheckCompleted);
@@ -1440,9 +887,7 @@ export default function YouTubeVideoAnalyzePage() {
     analysisStore.setLyrics(lyrics);
     analysisStore.setShowLyrics(showLyrics);
     analysisStore.setHasCachedLyrics(hasCachedLyrics);
-    if (isTranscribingLyrics) {
-      analysisStore.startLyricsTranscription();
-    }
+    analysisStore.setIsTranscribingLyrics(isTranscribingLyrics);
     analysisStore.setLyricsError(lyricsError);
 
     // Initialize UIStore
@@ -1561,6 +1006,7 @@ export default function YouTubeVideoAnalyzePage() {
             onStartAnalysis={handleAudioAnalysis}
             cacheAvailable={cacheAvailable}
             cacheCheckCompleted={cacheCheckCompleted}
+            hidden={hideInitialAnalysisControls}
           />
         </div>
 
@@ -1613,6 +1059,7 @@ export default function YouTubeVideoAnalyzePage() {
                             isEditMode={isEditMode}
                             editedChords={editedChords}
                             onChordEdit={handleChordEditWrapper}
+                            showCorrectedChords={showCorrectedChords}
                             sequenceCorrections={simplifiedSequenceCorrections}
                           />
 
@@ -1673,7 +1120,12 @@ export default function YouTubeVideoAnalyzePage() {
 	                    )}
                   </div>
                 ) : (
-                  <div className="text-gray-500 dark:text-gray-400 p-4">Run analysis to see results</div>
+	                  <div className="rounded-xl border border-dashed border-default-300/70 dark:border-default-700/70 bg-default-50/60 dark:bg-default-900/20 p-6 text-center">
+	                    <p className="text-sm font-medium text-foreground">No analysis loaded yet</p>
+	                    <p className="mt-1 text-sm text-default-500 dark:text-default-400">
+	                      Choose your models above, then open cached results or run a fresh analysis.
+	                    </p>
+	                  </div>
                 )}
               </div>
             )}
@@ -1832,6 +1284,3 @@ export default function YouTubeVideoAnalyzePage() {
     </div>
   );
 }
-
-
-

@@ -3,6 +3,7 @@ import {
   createShiftedChords,
   buildChordOccurrenceMap,
   buildChordOccurrenceCorrectionMap,
+  buildChordSequenceIndexMap,
   getDisplayChord,
   shouldShowChordLabel,
   SequenceCorrections
@@ -44,6 +45,10 @@ export const useChordDataProcessing = (
     return buildChordOccurrenceCorrectionMap(sequenceCorrections);
   }, [sequenceCorrections]);
 
+  const chordSequenceIndexMap = useMemo(() => {
+    return buildChordSequenceIndexMap(shiftedChords, sequenceCorrections?.originalSequence);
+  }, [shiftedChords, sequenceCorrections]);
+
   // Chord display function with corrections
   const getDisplayChordLocal = useMemo(() => {
     return (originalChord: string, visualIndex?: number) => {
@@ -53,10 +58,11 @@ export const useChordDataProcessing = (
         showCorrectedChords,
         sequenceCorrections,
         chordGroupOccurrenceMap,
-        chordOccurrenceCorrectionMap
+        chordOccurrenceCorrectionMap,
+        chordSequenceIndexMap
       );
     };
-  }, [showCorrectedChords, sequenceCorrections, chordGroupOccurrenceMap, chordOccurrenceCorrectionMap]);
+  }, [showCorrectedChords, sequenceCorrections, chordGroupOccurrenceMap, chordOccurrenceCorrectionMap, chordSequenceIndexMap]);
 
   // Chord label display logic
   const shouldShowChordLabelLocal = useMemo(() => {

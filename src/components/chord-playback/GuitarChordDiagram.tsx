@@ -56,7 +56,7 @@ const GUITAR_INSTRUMENT = {
   }
 };
 
-export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
+const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
   chordData,
   positionIndex = 0,
   size = 'medium',
@@ -315,5 +315,34 @@ export const GuitarChordDiagram: React.FC<GuitarChordDiagramProps> = ({
     </div>
   );
 };
+
+const areChordDiagramPropsEqual = (
+  prevProps: GuitarChordDiagramProps,
+  nextProps: GuitarChordDiagramProps
+): boolean => {
+  if (prevProps.chordData !== nextProps.chordData) return false;
+  if (prevProps.positionIndex !== nextProps.positionIndex) return false;
+  if (prevProps.size !== nextProps.size) return false;
+  if (prevProps.className !== nextProps.className) return false;
+  if (prevProps.showChordName !== nextProps.showChordName) return false;
+  if (prevProps.lite !== nextProps.lite) return false;
+  if (prevProps.displayName !== nextProps.displayName) return false;
+  if (prevProps.soundingChordName !== nextProps.soundingChordName) return false;
+  if (prevProps.isFocused !== nextProps.isFocused) return false;
+  if (prevProps.customWidth !== nextProps.customWidth) return false;
+  if (prevProps.customHeight !== nextProps.customHeight) return false;
+  if (prevProps.segmentationColor !== nextProps.segmentationColor) return false;
+  if (prevProps.showPositionSelector !== nextProps.showPositionSelector) return false;
+  if (prevProps.capoFret !== nextProps.capoFret) return false;
+  if (prevProps.capoLabelMode !== nextProps.capoLabelMode) return false;
+  if (prevProps.showRomanNumerals !== nextProps.showRomanNumerals) return false;
+  if (prevProps.romanNumeral !== nextProps.romanNumeral) return false;
+  if (prevProps.labelClassName !== nextProps.labelClassName) return false;
+  if (prevProps.romanNumeralClassName !== nextProps.romanNumeralClassName) return false;
+  return true;
+};
+
+export const GuitarChordDiagram = React.memo(GuitarChordDiagramComponent, areChordDiagramPropsEqual);
+GuitarChordDiagram.displayName = 'GuitarChordDiagram';
 
 export default GuitarChordDiagram;

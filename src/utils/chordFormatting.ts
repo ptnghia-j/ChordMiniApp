@@ -7,6 +7,7 @@
 import React from 'react';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
+import { getChordComparisonKey } from '@/utils/chordProcessing';
 
 // Inline SVG content for quarter rest symbols (optimized to prevent loading delays and flickering)
 const QUARTER_REST_SVG_LIGHT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125" style="width: 100%; height: 100%;">
@@ -490,10 +491,12 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // This ensures consistent enharmonic spelling throughout the chord
   const preferSharps = accidentalPreference === 'sharp';
   const preferFlats = accidentalPreference === 'flat';
+  const rootUsesSharps = calculationRoot.includes('#');
   // For flat inversions (b7, b3, etc.), prefer flat spellings to match the notation
   // For root F (key signature has Bb), prefer flats when no explicit preference is set
   const primaryNoteArray = preferFlats ? notesWithFlats
     : preferSharps ? notes
+    : rootUsesSharps ? notes
     : isFlatInversion ? notesWithFlats
     : (usesFlats || calculationRoot === 'F') ? notesWithFlats
     : notes;
@@ -575,6 +578,30 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // Calculate the bass note index
   const bassIndex = (rootIndex + bassSemitones) % 12;
   let result = bassNoteArray[bassIndex];
+
+  const normalizedInversion = inversion.replace(/^([b#])/, '');
+
+  // For standard chord-tone inversions on minor chords, prefer the actual chord tone
+  // spelling instead of mirroring the accidental prefix in the degree token. This fixes
+  // cases like C#:min/b7, which should display as C#m/B rather than carrying the literal
+  // degree token through as b7.
+  if (isMinor && inversion === 'b7' && normalizedInversion === '7') {
+    if (root.startsWith('C#')) {
+      return 'B';
+    }
+    if (root.startsWith('F#')) {
+      return 'E';
+    }
+    if (root.startsWith('G#')) {
+      return 'F#';
+    }
+    if (root.startsWith('D#')) {
+      return 'C#';
+    }
+    if (root.startsWith('A#')) {
+      return 'G#';
+    }
+  }
 
   // FIXED: Apply proper enharmonic spelling for chord inversions
   // For chord inversions, theoretical correctness is more important than simplicity
@@ -884,12 +911,6 @@ export const buildBeatToChordSequenceMap = (
   if (chordsLength === 0 || !romanNumeralData?.analysis) return {};
 
   const map: Record<number, number> = {};
-  const normalizeChord = (chord: string) => {
-    if (chord === 'N' || chord === 'N.C.' || chord === 'N/C' || chord === 'NC') {
-      return 'N';
-    }
-    return chord;
-  };
 
   // Use corrected sequence if available, otherwise use original chord sequence for mapping
   const referenceSequence = sequenceCorrections?.correctedSequence || shiftedChords;
@@ -903,7 +924,7 @@ export const buildBeatToChordSequenceMap = (
       continue;
     }
 
-    const normalizedCurrent = normalizeChord(currentChord);
+    const normalizedCurrent = getChordComparisonKey(currentChord);
 
     // Only advance the sequence index when the chord actually changes
     if (normalizedCurrent !== lastNormalizedChord) {
@@ -913,7 +934,7 @@ export const buildBeatToChordSequenceMap = (
           // Look for the next occurrence of this chord in the corrected sequence
           let found = false;
           for (let i = sequenceIndex + 1; i < referenceSequence.length; i++) {
-            const correctedChord = normalizeChord(referenceSequence[i]);
+            const correctedChord = getChordComparisonKey(referenceSequence[i]);
             if (correctedChord === normalizedCurrent) {
               sequenceIndex = i;
               found = true;

@@ -8,6 +8,7 @@ import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapsho
 import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
 import { Card, CardBody, Button, Chip, Skeleton } from '@heroui/react';
 import { useIsVisible } from '@/hooks/scroll/useIntersectionObserver';
+import { buildAnalyzePageUrl } from '@/utils/analyzeRouteUtils';
 
 interface TranscribedVideo {
   videoId: string;
@@ -521,15 +522,13 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
             <Card
               key={video.videoId}
               as={Link}
-              href={(() => {
-                const baseUrl = `/analyze/${video.videoId}`;
-                const params = new URLSearchParams();
-                if (video.title && video.title !== `Video ${video.videoId}`) params.set('title', video.title);
-                if (video.channelTitle) params.set('channel', video.channelTitle);
-                if (video.thumbnailUrl) params.set('thumbnail', video.thumbnailUrl);
-                const paramString = params.toString();
-                return paramString ? `${baseUrl}?${paramString}` : baseUrl;
-              })()}
+              href={buildAnalyzePageUrl(video.videoId, {
+                title: video.title && video.title !== `Video ${video.videoId}` ? video.title : null,
+                channel: video.channelTitle || null,
+                thumbnail: video.thumbnailUrl || null,
+                beatModel: (video.beatModel as 'madmom' | 'beat-transformer' | null) || null,
+                chordModel: (video.chordModel as 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl' | null) || null,
+              })}
               isPressable
               className="group hover:scale-[1.02] transition-all duration-200 bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10 hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-lg"
             >

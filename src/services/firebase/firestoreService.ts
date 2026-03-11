@@ -11,6 +11,7 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
+import { applyEnharmonicCorrection } from '@/utils/chordUtils';
 import { BeatInfo } from '../audio/beatDetectionService';
 
 // Extended interface for synchronized chords that may have additional properties
@@ -20,6 +21,36 @@ interface ExtendedSynchronizedChord {
   beatNum?: number;
   source?: string;
 }
+
+export type RomanNumeralData = {
+  analysis: string[];
+  keyContext: string;
+  temporalShifts?: Array<{
+    chordIndex: number;
+    targetKey: string;
+    romanNumeral: string;
+  }>;
+};
+
+export type SequenceCorrectionsData = {
+  originalSequence: string[];
+  correctedSequence: string[];
+  keyAnalysis?: {
+    sections: Array<{
+      startIndex: number;
+      endIndex: number;
+      key: string;
+      chords: string[];
+    }>;
+    modulations?: Array<{
+      fromKey: string;
+      toKey: string;
+      atIndex: number;
+      atTime?: number;
+    }>;
+  };
+  romanNumerals?: RomanNumeralData | null;
+} | null;
 
 // Define the transcription data structure
 export interface TranscriptionData {
@@ -45,27 +76,145 @@ export interface TranscriptionData {
   // Add key signature field
   keySignature?: string | null;
   keyModulation?: string | null;
-  // Add enharmonic correction fields
-  originalChords?: string[] | null;
-  correctedChords?: string[] | null;
   chordCorrections?: Record<string, string> | null;
+  sequenceCorrections?: SequenceCorrectionsData;
+  correctedChords?: string[] | null;
+  originalChords?: string[] | null;
+  // Compatibility fields from newer Gemini enrichment schema already present in Firestore
+  primaryKey?: string | null;
+  modulation?: string | null;
+  corrections?: Record<string, string> | null;
+  rawResponse?: string | null;
   // Add Roman numeral analysis field
-  romanNumerals?: {
-    analysis: string[];
-    keyContext: string;
-    temporalShifts?: Array<{
-      chordIndex: number;
-      targetKey: string;
-      romanNumeral: string;
-    }>;
-  } | null;
+  romanNumerals?: RomanNumeralData | null;
+}
+
+function buildLegacySequenceCorrections(data: TranscriptionData): SequenceCorrectionsData {
+  const legacyCorrections = data.chordCorrections ?? data.corrections ?? null;
+  const originalSequence =
+    data.originalChords ??
+    data.synchronizedChords?.map((item) => item.chord) ??
+    data.chords?.map((item) => item.chord) ??
+    null;
+
+  if (!legacyCorrections || !Array.isArray(originalSequence) || originalSequence.length === 0) {
+    return null;
+  }
+
+  const correctedSequence = originalSequence.map((chord) => applyEnharmonicCorrection(chord, legacyCorrections));
+  const hasAnyCorrection = correctedSequence.some((chord, index) => chord !== originalSequence[index]);
+
+  if (!hasAnyCorrection) {
+    return null;
+  }
+
+  return {
+    originalSequence,
+    correctedSequence,
+    romanNumerals: data.romanNumerals ?? null,
+  };
+}
+
+export function normalizeTranscriptionData(data: TranscriptionData): TranscriptionData {
+  const normalizedSequenceCorrections =
+    data.sequenceCorrections ??
+    (
+      Array.isArray(data.originalChords) &&
+      Array.isArray(data.correctedChords) &&
+      data.originalChords.length === data.correctedChords.length
+        ? {
+            originalSequence: data.originalChords,
+            correctedSequence: data.correctedChords,
+            romanNumerals: data.romanNumerals ?? null,
+          }
+        : null
+    ) ??
+    buildLegacySequenceCorrections(data);
+
+  return {
+    ...data,
+    keySignature: data.keySignature ?? data.primaryKey ?? null,
+    keyModulation: data.keyModulation ?? data.modulation ?? null,
+    chordCorrections: data.chordCorrections ?? data.corrections ?? null,
+    correctedChords: data.correctedChords ?? normalizedSequenceCorrections?.correctedSequence ?? null,
+    originalChords: data.originalChords ?? normalizedSequenceCorrections?.originalSequence ?? null,
+    sequenceCorrections: normalizedSequenceCorrections
+      ? {
+          ...normalizedSequenceCorrections,
+          romanNumerals: normalizedSequenceCorrections.romanNumerals ?? data.romanNumerals ?? null,
+        }
+      : null,
+    romanNumerals: data.romanNumerals ?? normalizedSequenceCorrections?.romanNumerals ?? null,
+  };
 }
 
 // Collection name
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
 
+const buildTranscriptionDocId = (
+  videoId: string,
+  beatModel: string,
+  chordModel: string
+) => `${videoId}_${beatModel}_${chordModel}`;
+
 // Flag to disable Firestore if CORS errors persist
 let firestoreDisabled = false;
+
+async function withAuthenticatedFirestoreWrite<T>(
+  operation: () => Promise<T>,
+  fallbackValue: T
+): Promise<T> {
+  if (!db || !auth || firestoreDisabled) {
+    return fallbackValue;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const timeoutId = setTimeout(() => {
+      unsubscribe();
+      finish(fallbackValue);
+    }, 10000);
+
+    const finish = (value: T) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    unsubscribe = onAuthStateChanged(auth!, async (user) => {
+      unsubscribe();
+      clearTimeout(timeoutId);
+
+      if (!user) {
+        console.error('❌ User not authenticated, cannot save to Firestore');
+        console.error('❌ Authentication required for Firestore operations');
+        finish(fallbackValue);
+        return;
+      }
+
+      try {
+        finish(await operation());
+      } catch (error) {
+        console.error('❌ Authenticated Firestore write failed:', error);
+        finish(fallbackValue);
+      }
+    });
+  });
+}
+
+export interface TranscriptionEnrichmentUpdate {
+  title?: string | null;
+  channelTitle?: string | null;
+  thumbnail?: string | null;
+  keySignature?: string | null;
+  keyModulation?: string | null;
+  chordCorrections?: Record<string, string> | null;
+  sequenceCorrections?: SequenceCorrectionsData;
+  correctedChords?: string[] | null;
+  originalChords?: string[] | null;
+  romanNumerals?: TranscriptionData['romanNumerals'];
+}
 
 /**
  * Check if a transcription exists in the database
@@ -93,7 +242,7 @@ export async function getTranscription(
     // console.log(`Checking for cached transcription: videoId=${videoId}, beatModel=${beatModel}, chordModel=${chordModel}`);
 
     // Create a unique document ID based on the parameters
-    const docId = `${videoId}_${beatModel}_${chordModel}`;
+    const docId = buildTranscriptionDocId(videoId, beatModel, chordModel);
 
     // Get the document reference
     const docRef = doc(db, TRANSCRIPTIONS_COLLECTION, docId);
@@ -103,7 +252,7 @@ export async function getTranscription(
 
     // Check if the document exists
     if (docSnap.exists()) {
-      const data = docSnap.data() as TranscriptionData;
+      const data = normalizeTranscriptionData(docSnap.data() as TranscriptionData);
       // console.log('Found cached transcription in Firestore:', {
       //   videoId: data.videoId,
       //   timeSignature: data.timeSignature,
@@ -161,29 +310,61 @@ export async function saveTranscription(
     return false;
   }
 
-  // Wait for authentication to be ready
-  return new Promise((resolve) => {
+  return withAuthenticatedFirestoreWrite(
+    () => performFirestoreSave(transcriptionData),
+    false
+  );
+}
 
-    const unsubscribe = onAuthStateChanged(auth!, async (user) => {
-      unsubscribe(); // Clean up the listener
+export async function updateTranscriptionEnrichment(
+  videoId: string,
+  beatModel: string,
+  chordModel: string,
+  enrichment: TranscriptionEnrichmentUpdate
+): Promise<boolean> {
+  if (!db || !auth || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('❌ Firestore disabled due to CORS issues, skipping transcription enrichment update');
+    } else if (!db) {
+      console.warn('❌ Firebase Firestore not initialized, skipping transcription enrichment update');
+    } else {
+      console.warn('❌ Firebase Auth not initialized, skipping transcription enrichment update');
+    }
+    return false;
+  }
 
-      if (!user) {
-        console.error('❌ User not authenticated, cannot save to Firestore');
-        console.error('❌ Authentication required for Firestore operations');
-        resolve(false);
-        return;
-      }
+  const sanitizedEnrichment = Object.fromEntries(
+    Object.entries({
+      title: enrichment.title,
+      channelTitle: enrichment.channelTitle,
+      thumbnail: enrichment.thumbnail,
+      keySignature: enrichment.keySignature,
+      primaryKey: enrichment.keySignature,
+      keyModulation: enrichment.keyModulation,
+      modulation: enrichment.keyModulation,
+      chordCorrections: enrichment.chordCorrections,
+      corrections: enrichment.chordCorrections,
+      sequenceCorrections: enrichment.sequenceCorrections,
+      correctedChords: enrichment.correctedChords ?? enrichment.sequenceCorrections?.correctedSequence ?? null,
+      originalChords: enrichment.originalChords ?? enrichment.sequenceCorrections?.originalSequence ?? null,
+      romanNumerals: enrichment.romanNumerals,
+    }).filter(([, value]) => value !== undefined)
+  );
 
-      const result = await performFirestoreSave(transcriptionData);
-      resolve(result);
-    });
+  if (Object.keys(sanitizedEnrichment).length === 0) {
+    return true;
+  }
 
-    // Add a timeout to prevent hanging
-    setTimeout(() => {
-      unsubscribe();
-      resolve(false);
-    }, 10000);
-  });
+  return withAuthenticatedFirestoreWrite(async () => {
+    const docRef = doc(
+      db!,
+      TRANSCRIPTIONS_COLLECTION,
+      buildTranscriptionDocId(videoId, beatModel, chordModel)
+    );
+
+    await setDoc(docRef, sanitizedEnrichment, { merge: true });
+    return true;
+  }, false);
 }
 
 /**
@@ -222,14 +403,16 @@ async function performFirestoreSave(
     //   hasBeatShift: transcriptionData.beatShift !== undefined,
     //   hasKeySignature: transcriptionData.keySignature !== undefined,
     //   hasKeyModulation: transcriptionData.keyModulation !== undefined,
-    //   hasOriginalChords: transcriptionData.originalChords !== undefined,
-    //   hasCorrectedChords: transcriptionData.correctedChords !== undefined,
     //   hasChordCorrections: transcriptionData.chordCorrections !== undefined,
     //   totalInputFields: Object.keys(transcriptionData).length
     // });
 
     // Create a unique document ID based on the parameters
-    const docId = `${transcriptionData.videoId}_${transcriptionData.beatModel}_${transcriptionData.chordModel}`;
+    const docId = buildTranscriptionDocId(
+      transcriptionData.videoId,
+      transcriptionData.beatModel,
+      transcriptionData.chordModel
+    );
 
     // Document ID created and validated
 
@@ -265,6 +448,8 @@ async function performFirestoreSave(
     const sanitizedData = {
       videoId: transcriptionData.videoId,
       title: transcriptionData.title || null, // Include video title for proper display
+      channelTitle: transcriptionData.channelTitle || null,
+      thumbnail: transcriptionData.thumbnail || null,
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
       beats: transcriptionData.beats.map((beat) => {
@@ -312,10 +497,15 @@ async function performFirestoreSave(
       beatShift: transcriptionData.beatShift ?? 0,
       // Include key signature fields (handle undefined)
       keySignature: transcriptionData.keySignature ?? null,
+      primaryKey: transcriptionData.keySignature ?? transcriptionData.primaryKey ?? null,
       keyModulation: transcriptionData.keyModulation ?? null,
-      // Include enharmonic correction fields (handle undefined)
-      originalChords: transcriptionData.originalChords ?? null,
-      correctedChords: transcriptionData.correctedChords ?? null,
+      modulation: transcriptionData.keyModulation ?? transcriptionData.modulation ?? null,
+      chordCorrections: transcriptionData.chordCorrections ?? null,
+      corrections: transcriptionData.chordCorrections ?? transcriptionData.corrections ?? null,
+      sequenceCorrections: transcriptionData.sequenceCorrections ?? null,
+      correctedChords: transcriptionData.correctedChords ?? transcriptionData.sequenceCorrections?.correctedSequence ?? null,
+      originalChords: transcriptionData.originalChords ?? transcriptionData.sequenceCorrections?.originalSequence ?? null,
+      romanNumerals: transcriptionData.romanNumerals ?? null,
       createdAt: Timestamp.now()
     };
 

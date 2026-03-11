@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { firestoreDb } from '@/services/firebase/firebaseService';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import crypto from 'crypto';
 import { GEMINI_MODEL_NAME } from '@/config/gemini';
+import { sanitizeLegacyCorrections, sanitizeSequenceCorrections } from '@/utils/keyDetectionCorrections';
 
 export const maxDuration = 240; // 4 minutes for key detection processing
 
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
-const KEY_DETECTION_PROMPT_VERSION = 'v2-preserve-inversion-symbols';
+const KEY_DETECTION_PROMPT_VERSION = 'v3-enharmonic-key-consistency';
 
 // Lazy initialization of Gemini API client to avoid build-time errors
 let _ai: GoogleGenAI | null = null;
@@ -90,18 +91,55 @@ interface KeyDetectionResult {
     }>;
   } | null;
   rawResponse?: string;
-  timestamp?: unknown;
-  cacheKey?: string;
+}
+
+interface KeyDetectionCacheEntry {
+  primaryKey: string;
+  modulation?: string | null;
+  corrections?: Record<string, string>;
+  sequenceCorrections?: KeyDetectionResult['sequenceCorrections'];
+  romanNumerals?: KeyDetectionResult['romanNumerals'];
+}
+
+function buildLegacyCorrections(
+  sequenceCorrections: KeyDetectionResult['sequenceCorrections']
+): Record<string, string> {
+  const legacyCorrections: Record<string, string> = {};
+
+  if (!sequenceCorrections?.originalSequence || !sequenceCorrections.correctedSequence) {
+    return legacyCorrections;
+  }
+
+  sequenceCorrections.originalSequence.forEach((original: string, index: number) => {
+    const corrected = sequenceCorrections.correctedSequence[index];
+    if (original !== corrected) {
+      legacyCorrections[original] = corrected;
+    }
+  });
+
+  return legacyCorrections;
+}
+
+function buildCorrectedChordSequence(
+  chordNames: string[],
+  corrections: Record<string, string>,
+  sequenceCorrections: KeyDetectionResult['sequenceCorrections']
+): string[] {
+  if (sequenceCorrections?.correctedSequence?.length) {
+    return sequenceCorrections.correctedSequence;
+  }
+
+  return chordNames.map((chord) => corrections[chord] || chord);
 }
 
 // Helper function to check cache for key detection
-async function checkKeyDetectionCache(cacheKey: string): Promise<KeyDetectionResult | null> {
+async function checkKeyDetectionCache(cacheKey: string): Promise<KeyDetectionCacheEntry | null> {
   try {
     const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data() as KeyDetectionResult;
+      const data = docSnap.data() as KeyDetectionCacheEntry;
       console.log('Found cached key detection');
       return data;
     }
@@ -118,16 +156,15 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
   try {
     const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
 
-    // ENHANCED: Ensure sequence corrections and Roman numerals are properly structured for caching
-    const cacheData = {
-      ...keyResult,
-      timestamp: serverTimestamp(),
-      cacheKey,
+    const cacheData: KeyDetectionCacheEntry = {
+      primaryKey: keyResult.primaryKey,
+      modulation: keyResult.modulation ?? null,
+      corrections: keyResult.corrections || {},
       // Ensure sequence corrections are properly stored
       sequenceCorrections: keyResult.sequenceCorrections ? {
         originalSequence: keyResult.sequenceCorrections.originalSequence || [],
         correctedSequence: keyResult.sequenceCorrections.correctedSequence || [],
-        keyAnalysis: keyResult.sequenceCorrections.keyAnalysis || null
+        keyAnalysis: keyResult.sequenceCorrections.keyAnalysis || undefined
       } : null,
       // Ensure Roman numerals are properly stored
       romanNumerals: keyResult.romanNumerals ? {
@@ -204,8 +241,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a Gemini AI instance with the appropriate API key
-    // User-provided key takes precedence over environment variable
+    // Generate cache key (include enharmonic and Roman numeral flags in cache key)
+    const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection, includeRomanNumerals);
+
+    // Check cache first (unless bypassed for testing)
+    console.log('🔍 [CACHE] Checking cache for key:', cacheKey.substring(0, 20) + '...');
+    const cachedResult = bypassCache ? null : await checkKeyDetectionCache(cacheKey);
+    if (cachedResult && !bypassCache) {
+      console.log('✅ [CACHE] Cache hit - returning cached result');
+      // Extract chord names for fallback if enharmonic correction data is missing
+      const chordNames = chords.map((chord: ChordData) => {
+        if (typeof chord === 'string') {
+          return chord;
+        }
+        return chord.chord || String(chord);
+      });
+
+      const sanitizedSequenceCorrections = cachedResult.sequenceCorrections
+        ? sanitizeSequenceCorrections(chordNames, cachedResult.sequenceCorrections)
+        : null;
+      const normalizedCorrections = {
+        ...buildLegacyCorrections(sanitizedSequenceCorrections),
+        ...sanitizeLegacyCorrections(chordNames, cachedResult.corrections || {})
+      };
+      const correctedChords = includeEnharmonicCorrection
+        ? buildCorrectedChordSequence(chordNames, normalizedCorrections, sanitizedSequenceCorrections)
+        : undefined;
+
+      return NextResponse.json({
+        primaryKey: cachedResult.primaryKey,
+        modulation: cachedResult.modulation,
+        // Keep API compatibility by deriving these fields from request/cached analysis when needed.
+        originalChords: includeEnharmonicCorrection ? chordNames : undefined,
+        correctedChords,
+        corrections: normalizedCorrections,
+        // ENHANCED: Include sequence corrections from cache with proper structure
+        sequenceCorrections: sanitizedSequenceCorrections,
+        // Include Roman numeral analysis from cache
+        romanNumerals: cachedResult.romanNumerals || null,
+        fromCache: true
+      });
+    } else {
+      console.log('❌ [CACHE] Cache miss - proceeding to Gemini API');
+    }
+
+    // Create a Gemini AI instance only after the cache lookup misses.
+    // User-provided key takes precedence over environment variable.
     let geminiAI: GoogleGenAI;
 
     if (geminiApiKey) {
@@ -227,42 +308,6 @@ export async function POST(request: NextRequest) {
         );
       }
       geminiAI = serverClient;
-    }
-
-    // Generate cache key (include enharmonic and Roman numeral flags in cache key)
-    const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection, includeRomanNumerals);
-
-    // Check cache first (unless bypassed for testing)
-    console.log('🔍 [CACHE] Checking cache for key:', cacheKey.substring(0, 20) + '...');
-    const cachedResult = bypassCache ? null : await checkKeyDetectionCache(cacheKey);
-    if (cachedResult && !bypassCache) {
-      console.log('✅ [CACHE] Cache hit - returning cached result');
-      // Extract chord names for fallback if enharmonic correction data is missing
-      const chordNames = chords.map((chord: ChordData) => {
-        if (typeof chord === 'string') {
-          return chord;
-        }
-        return chord.chord || String(chord);
-      });
-
-
-
-      return NextResponse.json({
-        primaryKey: cachedResult.primaryKey,
-        modulation: cachedResult.modulation,
-        rawResponse: cachedResult.rawResponse,
-        // Ensure we always return these fields, even if they're missing from old cache
-        originalChords: cachedResult.originalChords || (includeEnharmonicCorrection ? chordNames : undefined),
-        correctedChords: cachedResult.correctedChords || (includeEnharmonicCorrection ? chordNames : undefined),
-        corrections: cachedResult.corrections || {},
-        // ENHANCED: Include sequence corrections from cache with proper structure
-        sequenceCorrections: cachedResult.sequenceCorrections || null,
-        // Include Roman numeral analysis from cache
-        romanNumerals: cachedResult.romanNumerals || null,
-        fromCache: true
-      });
-    } else {
-      console.log('❌ [CACHE] Cache miss - proceeding to Gemini API');
     }
 
     // Format chord progression for AI analysis
@@ -390,26 +435,35 @@ CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:` : ''}
 1. **SAME PITCH REQUIREMENT**: Only change note spelling, never the actual pitch
    - ENHARMONIC EQUIVALENTS (same pitch): C#↔Db, D#↔Eb, F#↔Gb, G#↔Ab, A#↔Bb
    - DIFFERENT PITCHES (never change): C≠C#, D≠D#, E≠F, F≠F#, G≠G#, A≠A#, B≠C
-   - Example: Gdim can become F#dim (G# and Ab are same pitch) but NEVER A#dim (G and A# are different pitches!)
+	   - Example: G#dim can become Abdim (G# and Ab are the same pitch) but NEVER A#dim (G# and A# are different pitches!)
 
 2. **HARMONIC FUNCTION PRESERVATION**: The bass line progression must remain identical
-   - Original progression: E→F#→Gdim→G#m
-   - Valid correction: E→F#→F##dim→G#m (G# and Ab are same pitch)
-   - INVALID correction: E→F#→A#dim→G#m (G and A# are different pitches - changes harmonic function!)
-   - Please aware of walking bass line (E→F#→F##→G# in the context of the key and in the direction of the bass line and hence F## fits in) and notice the double accidentals, double sharps (F##) used in the example above.
+	   - Original progression: E→F#→G#dim→G#m
+	   - Valid correction: E→F#→Abdim→Abm (same sounding bass progression, respelled consistently for a flat context)
+	   - INVALID correction: E→F#→A#dim→G#m (G# and A# are different pitches - changes harmonic function!)
+	   - Be aware of walking bass lines and preserve the same sounding bass motion even when a double accidental or respelling is needed.
 	   - For slash chords, preserve the same inversion / bass note function in chord-symbol output. Example: "D/F#" must remain a slash chord symbol, not "D6".
 
 3. **CHORD QUALITY PRESERVATION**: Keep ALL chord qualities exactly unchanged
-   - "Gdim" stays "dim" quality, can become "F#dim" but never "A#dim" or "Gmaj"
+	   - "G#dim" stays "dim" quality, can become "Abdim" but never "A#dim" or "Gmaj"
    - "F#7" stays "7" quality, can become "Gb7" but never "F7" or "F#maj7"
    - "C#m" stays "m" quality, can become "Dbm" but never "C#" or "Dm"
 	   - "D/F#" stays a slash-chord inversion symbol, can become something enharmonically equivalent like "D/Gb" only if the same sounding bass must be respelled, but never "D6"
+		   - NEVER change a slash bass to a different pitch-class. Example: "A/B" may stay "A/B" or become an enharmonic equivalent like "A/Cb", but never "A/C#".
 
 4. **KEY SIGNATURE OPTIMIZATION**: Choose spellings with less accidentals
    - Prefer Db major (5 flats) over C# major (7 sharps)
    - Prefer B major (5 sharps) over Cb major (7 flats)
+	   - If a section could be labeled either with sharps or flats, choose the representation that minimizes accidentals AND keeps chord spellings internally consistent.
 
-5. **CONSERVATIVE APPROACH**: When uncertain, preserve original spelling
+	5. **LOCAL KEY / CHORD SPELLING CONSISTENCY**: Keep the chosen local key name and corrected chord spellings in the SAME enharmonic system
+	   - If you label a local section as a sharp key (for example G#, C#, D#), corrected chords in that section must also use sharp-based spellings when applicable.
+	   - If you label a local section as a flat key (for example Ab, Db, Eb), corrected chords in that section must also use flat-based spellings when applicable.
+	   - NEVER mix a sharp key label with flat-only corrected chords, or a flat key label with sharp-only corrected chords, if an equivalent same-pitch respelling exists.
+	   - Example: if the local key is G#, use "E#m" instead of "Fm". If you want to keep "Fm", then the local key should be spelled as Ab-based instead.
+	   - Apply the same consistency rule to modulation labels, section keys, corrected chord symbols, and Roman numeral key contexts.
+
+	6. **CONSERVATIVE APPROACH**: When uncertain, preserve original spelling ONLY if it does not conflict with the chosen local key spelling or create mixed enharmonic notation within the same section.
 
 VALID CORRECTION EXAMPLES (same pitch, different spelling):
 - "C#m" → "Dbm" (C# and Db are the same pitch)
@@ -418,7 +472,7 @@ VALID CORRECTION EXAMPLES (same pitch, different spelling):
 - "A#" → "Bb" (A# and Bb are the same pitch)
 
 INVALID CORRECTION EXAMPLES (NEVER DO - different pitches or qualities):
-- "Gdim" → "A#dim" (G and A# are DIFFERENT PITCHES!)
+- "G#dim" → "A#dim" (G# and A# are DIFFERENT PITCHES!)
 - "F" → "F#" (F and F# are DIFFERENT PITCHES!)
 - "C" → "Cm" (changes chord quality)
 - "F#7" → "F7" (F# and F are DIFFERENT PITCHES!)
@@ -454,7 +508,12 @@ Important: Do not include any explanations, analysis, or additional text. Just g
     console.log('🚀 [GEMINI] Sending key detection request to Gemini API');
     const response = await geminiAI.models.generateContent({
       model: MODEL_NAME,
-      contents: prompt
+      contents: prompt,
+      config: {
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.HIGH
+        }
+      }
     });
     console.log('✅ [GEMINI] Received response from Gemini API');
 
@@ -485,19 +544,12 @@ Important: Do not include any explanations, analysis, or additional text. Just g
         // Handle both new sequence-based format and legacy format
         if (jsonResponse.sequenceCorrections) {
           // NEW: Enhanced sequence-based corrections
-          const sequenceCorrections = jsonResponse.sequenceCorrections;
-          const correctedSequence = sequenceCorrections.correctedSequence || chordNames;
-
-          // Create legacy corrections mapping for backward compatibility
-          const legacyCorrections: Record<string, string> = {};
-          if (sequenceCorrections.originalSequence && sequenceCorrections.correctedSequence) {
-            sequenceCorrections.originalSequence.forEach((original: string, index: number) => {
-              const corrected = sequenceCorrections.correctedSequence[index];
-              if (original !== corrected) {
-                legacyCorrections[original] = corrected;
-              }
-            });
-          }
+          const sequenceCorrections = sanitizeSequenceCorrections(chordNames, jsonResponse.sequenceCorrections);
+          const legacyCorrections = {
+            ...buildLegacyCorrections(sequenceCorrections),
+            ...sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {})
+          };
+          const correctedSequence = buildCorrectedChordSequence(chordNames, legacyCorrections, sequenceCorrections);
 
           result = {
             primaryKey: jsonResponse.primaryKey || 'Unknown',
@@ -511,7 +563,7 @@ Important: Do not include any explanations, analysis, or additional text. Just g
           };
         } else {
           // LEGACY: Individual chord corrections (fallback)
-          const corrections = jsonResponse.corrections || {};
+          const corrections = sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {});
 
           // Apply corrections to create corrected chord array
           const correctedChords = chordNames.map(chord => {

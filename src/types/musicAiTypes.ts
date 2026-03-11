@@ -5,11 +5,20 @@
 /**
  * Represents a single line of lyrics with start and end times
  */
+export interface LyricWordTiming {
+  text: string;
+  startTime: number;
+  endTime: number;
+  startChar: number;
+  endChar: number;
+}
+
 export interface LyricLine {
   startTime: number;
   endTime: number;
   text: string;
   chords?: ChordMarker[]; // Optional array of chord markers
+  wordTimings?: LyricWordTiming[];
 }
 
 /**
@@ -46,6 +55,7 @@ export interface SynchronizedLyrics {
     endTime: number;
     text: string;
     chords: ChordMarker[];
+    wordTimings?: LyricWordTiming[];
   }>;
   error?: string; // Optional error message when lyrics synchronization fails
 }

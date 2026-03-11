@@ -147,7 +147,7 @@ const Footer: React.FC = () => {
             {/* Left Side - Copyright and Contact */}
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-6">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                © 2025 ChordMini. All rights reserved.
+                © {new Date().getFullYear()} ChordMini. All rights reserved.
               </p>
               <div className="flex items-center space-x-2">
                 <HiMail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -163,7 +163,7 @@ const Footer: React.FC = () => {
             {/* Right Side - Version and Support */}
             <div className="flex items-center space-x-6">
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Version 0.6.0
+                Version 0.6.1
               </span>
               <a
                 href="https://buymeacoffee.com/nghiaphan"

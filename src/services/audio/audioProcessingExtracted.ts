@@ -1,4 +1,5 @@
-import { getTranscription } from '@/services/firebase/firestoreService';
+import { AnalyzeAudioFileOptions } from '@/services/audio/audioProcessingService';
+import { getTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
 import { apiPost } from '@/config/api';
 import { LyricsData } from '@/types/musicAiTypes';
 
@@ -52,7 +53,7 @@ interface ProcessingContextType {
   failProcessing: (message: string) => void;
 }
 
-interface AudioProcessingServiceDependencies {
+export interface AudioProcessingServiceDependencies {
   // State setters
   setAudioProcessingState: (updater: (prev: AudioProcessingState) => AudioProcessingState) => void;
   setAnalysisResults: (results: AnalysisResult) => void;
@@ -69,10 +70,15 @@ interface AudioProcessingServiceDependencies {
   processingContext: ProcessingContextType;
 
   // Audio processing service
-  analyzeAudioFromService: (audioUrl: string, beatDetector: BeatDetectorType, chordDetector: ChordDetectorType) => Promise<AnalysisResult>;
+  analyzeAudioFromService: (
+    audioUrl: string,
+    beatDetector: BeatDetectorType,
+    chordDetector: ChordDetectorType,
+    options?: AnalyzeAudioFileOptions
+  ) => Promise<AnalysisResult>;
 
   // Refs and state
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   extractionLockRef: React.MutableRefObject<boolean>;
   beatDetectorRef: React.MutableRefObject<BeatDetectorType>;
   chordDetectorRef: React.MutableRefObject<ChordDetectorType>;
@@ -95,6 +101,13 @@ interface AudioProcessingServiceDependencies {
   requestId: string;
   abortSignal?: AbortSignal;
   isRequestStillCurrent: (id: string) => boolean;
+
+  // Optional session-local transcription snapshot helpers
+  loadTranscriptionSnapshot?: (
+    beatDetector: BeatDetectorType,
+    chordDetector: ChordDetectorType
+  ) => Promise<TranscriptionData | Omit<TranscriptionData, 'createdAt'> | null>;
+  setTranscriptionSnapshot?: (data: Omit<TranscriptionData, 'createdAt'> | TranscriptionData) => void;
 }
 
 /**
@@ -128,10 +141,15 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
   // console.log(`🔍 Model state verification: state beatDetector="${deps.beatDetector}", state chordDetector="${deps.chordDetector}"`);
   // console.log(`🔍 Model ref verification: ref beatDetector="${beatDetectorRef.current}", ref chordDetector="${chordDetectorRef.current}"`);
 
+  let cachedData: TranscriptionData | Omit<TranscriptionData, 'createdAt'> | null = null;
+
   try {
-    const cachedData = await getTranscription(videoId, currentBeatDetector, currentChordDetector);
+    cachedData = deps.loadTranscriptionSnapshot
+      ? await deps.loadTranscriptionSnapshot(currentBeatDetector, currentChordDetector)
+      : await getTranscription(videoId, currentBeatDetector, currentChordDetector);
 
     if (cachedData) {
+      deps.setTranscriptionSnapshot?.(cachedData);
       // Found cached results, loading...
 
       // Start processing context for loading cached data
@@ -218,7 +236,17 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
     }, 1000);
 
     // Call the audio processing service with current model values
-    const results = await analyzeAudioFromService(audioProcessingState.audioUrl, currentBeatDetector, currentChordDetector);
+    const results = await analyzeAudioFromService(
+      audioProcessingState.audioUrl,
+      currentBeatDetector,
+      currentChordDetector,
+      {
+        prefetchedTranscription: cachedData ?? null,
+        onTranscriptionSaved: (transcriptionData) => {
+          deps.setTranscriptionSnapshot?.(transcriptionData);
+        },
+      }
+    );
 
     // Update duration from analysis results if available
     if (results.audioDuration && results.audioDuration > 0) {
