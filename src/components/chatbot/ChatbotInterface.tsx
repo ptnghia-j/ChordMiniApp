@@ -101,7 +101,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
         <>
           {!embedded && (
             <motion.div
-              className="fixed inset-0 bg-black bg-opacity-30 z-[9997] sm:hidden"
+              className="fixed inset-0 z-[9997] bg-black/20 backdrop-blur-[1px] sm:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -110,13 +110,14 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             />
           )}
           <motion.div
-            className={`${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'} ${embedded ? '' : 'z-[9998]'} flex flex-col bg-white dark:bg-content-bg border border-neutral-200 dark:border-gray-700 shadow-2xl rounded-xl ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'} ${className}`}
+            className={`${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'} ${embedded ? '' : 'z-[9998]'} flex flex-col rounded-xl border border-white/45 bg-white/72 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] backdrop-blur-xl dark:border-white/12 dark:bg-slate-900/42 ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'} ${className}`}
             initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
             exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
-            <div className="flex items-center justify-between p-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+            <div className="shrink-0 border-b border-black/5 bg-white/34 p-3 backdrop-blur-md dark:border-white/8 dark:bg-slate-900/12">
+              <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <HiSparkles className="h-5 w-5 text-blue-500" />
                 <h3 className="font-semibold text-neutral-800 dark:text-white text-sm sm:text-base">AI Music Assistant</h3>
@@ -129,12 +130,13 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
                   <HiXMark className="h-5 w-5" />
                 </button>
               </div>
+              </div>
             </div>
 
             <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'}`}>
+                  <div className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user' ? 'bg-blue-600 text-white' : 'border border-black/5 bg-white/78 text-neutral-800 dark:border-white/10 dark:bg-white/[0.06] dark:text-neutral-200'}`}>
                     {message.role === 'user' ? (
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : (
@@ -145,7 +147,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
                 </div>
               ))}
               {isLoading && (
-                <div className="flex justify-start"><div className="bg-neutral-100 dark:bg-neutral-800 p-3 rounded-lg"><div className="flex space-x-1"><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div></div></div></div>
+                <div className="flex justify-start"><div className="rounded-lg border border-black/5 bg-white/78 p-3 dark:border-white/10 dark:bg-white/[0.06]"><div className="flex space-x-1"><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div><div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div></div></div></div>
               )}
             </div>
 
@@ -154,7 +156,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             )}
 
             <div className="p-3 shrink-0">
-              <div className="flex flex-col p-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+              <div className="flex flex-col rounded-xl border border-black/5 bg-white/78 p-1 backdrop-blur-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 dark:border-white/10 dark:bg-white/[0.06]">
                 <textarea
                   ref={textareaRef}
                   value={inputMessage}

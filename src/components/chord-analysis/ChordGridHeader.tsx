@@ -22,19 +22,20 @@ export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
   className = ''
 }) => {
   return (
-    <div className={`flex justify-between items-baseline ${className}`}>
+    <div className={`flex justify-between items-center ${className}`}>
       {/* Left side - Title */}
       <div className="flex items-center gap-3">
-        {/* 2. Added m-0 to remove default browser margins */}
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 m-0">
-          Chord Progression
-        </h3>
+        {/* <div className="rounded-full border border-default-200/80 bg-default-100 px-3 py-1 transition-colors duration-300 dark:border-white/10 dark:bg-gray-800/50"> */}
+          <h3 className="m-0 text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Chord Progression
+          </h3>
+        {/* </div> */}
       </div>
 
       {/* Right side - Tags */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Time signature tag */}
-        <div className="bg-blue-50 dark:bg-blue-800/40 border border-blue-200 dark:border-blue-400 rounded-lg px-3 py-1">
+        <div className="rounded-lg border border-blue-300/60 bg-blue-500/10 px-3 py-1 dark:border-blue-400/35 dark:bg-blue-800/40">
           <span className="text-sm font-medium text-blue-800 dark:text-blue-50">
             Time: {timeSignature === 6 ? '6/8' : `${timeSignature}/4`}
           </span>
@@ -42,7 +43,7 @@ export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
 
         {/* Key signature tag */}
         {keySignature && (
-          <div className="bg-green-50 dark:bg-green-800/40 border border-green-200 dark:border-green-400 rounded-lg px-3 py-1">
+          <div className="rounded-lg border border-green-300/60 bg-green-500/10 px-3 py-1 dark:border-green-400/35 dark:bg-green-800/40">
             <span className="text-sm font-medium text-green-800 dark:text-green-50">
               Key: {keySignature.replace(/b/g, '♭').replace(/#/g, '♯')}
             </span>
@@ -51,8 +52,8 @@ export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
 
         {/* Key detection loading indicator */}
         {isDetectingKey && (
-          <div className="bg-blue-50/60 dark:bg-blue-200/60 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
-            <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
+          <div className="rounded-lg border border-blue-300/55 bg-blue-500/12 px-3 py-1 dark:border-blue-300/35 dark:bg-blue-300/16">
+            <span className="text-sm font-medium text-blue-800 dark:text-white">
               Detecting key...
             </span>
           </div>
@@ -60,7 +61,7 @@ export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
 
         {/* Pickup beats indicator */}
         {hasPickupBeats && pickupBeatsCount > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-200 border border-blue-200 dark:border-blue-300 rounded-lg px-3 py-1">
+          <div className="rounded-lg border border-blue-300/55 bg-blue-500/12 px-3 py-1 dark:border-blue-300/35 dark:bg-blue-300/16">
             <span className="text-sm font-medium text-blue-800 dark:text-blue-900">
               Pickup: {pickupBeatsCount} beat{pickupBeatsCount > 1 ? 's' : ''}
             </span>

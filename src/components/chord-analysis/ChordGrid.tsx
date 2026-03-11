@@ -335,8 +335,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
   // Use utility function for chord styling
   const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
-    return getChordStyle(chord, beatIndex, isClickable, hasPickupBeats, timeSignature, pickupBeatsCount);
-  }, [hasPickupBeats, timeSignature, pickupBeatsCount]);
+    return getChordStyle(
+      chord,
+      beatIndex,
+      isClickable,
+      hasPickupBeats,
+      timeSignature,
+      pickupBeatsCount,
+      paddingCount + shiftCount,
+    );
+  }, [hasPickupBeats, timeSignature, pickupBeatsCount, paddingCount, shiftCount]);
 
   // Memoized measure grouping with proper pickup beat handling using shifted chords
   const groupedByMeasure = useMemo<GroupedMeasure[]>(() => {
@@ -755,10 +763,10 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       <BeatHighlighter cellRefsMap={cellRefsMapRef} theme={theme} isLoopEnabled={isLoopEnabled} />
 
       {/* Clean card container with minimal styling */}
-      <div className="bg-white dark:bg-content-bg rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-stone-300 bg-stone-50/90 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] transition-colors duration-300 dark:border-gray-600 dark:bg-gray-800/50 dark:shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)]">
 
         {/* Header section using extracted component */}
-        <div className="p-3 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-600">
+        <div className="border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 dark:border-white/10 dark:bg-gray-800/50">
           <ChordGridHeader
             timeSignature={timeSignature}
             keySignature={keySignature}
@@ -770,7 +778,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         </div>
 
         {/* Clean grid area with minimal background */}
-        <div className="px-0 dark:bg-dark-bg bg-gray-50">
+        <div className="bg-gray-100/70 px-0 dark:bg-gray-800/45">
           <div className="overflow-x-auto">
             {sectionBlocks ? (
               <div className="space-y-3">

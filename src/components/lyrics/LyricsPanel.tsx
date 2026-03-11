@@ -149,12 +149,16 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
           data-lyrics-index={index}
           className={`flex items-start gap-3 py-2 px-3 rounded-lg transition-all duration-300 ${
             isCurrent
-              ? 'bg-green-100/80 dark:bg-green-900/25 scale-[1.02]'
+              ? 'border border-green-200/55 bg-green-50/55 dark:border-green-500/10 dark:bg-green-900/25 scale-[1.02]'
               : ''
           }`}
         >
           <span className={`text-[11px] tabular-nums mt-0.5 min-w-[3rem] shrink-0 ${
-            isCurrent ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-gray-400 dark:text-gray-600'
+            isCurrent
+              ? 'text-green-600 dark:text-green-400 font-semibold'
+              : isPast
+                ? 'text-gray-500 dark:text-gray-600'
+                : 'text-gray-500 dark:text-gray-500'
           }`}>
             {Math.floor(line.time / 60)}:{(line.time % 60).toFixed(1).padStart(4, '0')}
           </span>
@@ -162,8 +166,8 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             isCurrent
               ? 'text-gray-900 dark:text-white font-semibold'
               : isPast
-                ? 'text-gray-400 dark:text-gray-500'
-                : 'text-gray-600 dark:text-gray-400'
+                ? 'text-gray-500 dark:text-gray-500'
+                : 'text-gray-700 dark:text-gray-400'
           }`}>
             {line.text || '♪'}
           </span>
@@ -177,7 +181,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
         <>
           {!embedded && (
             <motion.div
-              className="fixed inset-0 bg-black/30 z-[9997] sm:hidden"
+              className="fixed inset-0 z-[9997] bg-black/20 backdrop-blur-[1px] sm:hidden"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={onClose}
             />
@@ -186,10 +190,9 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             className={`
               ${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'}
               ${embedded ? '' : 'z-[9998]'}
-              flex flex-col
-              bg-white dark:bg-content-bg
-              border border-gray-200 dark:border-gray-700
-              shadow-2xl rounded-xl overflow-hidden
+              relative isolate flex flex-col
+              border border-white/45 dark:border-white/12
+              shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] rounded-xl overflow-hidden
               ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96'}
               ${className}
             `}
@@ -198,8 +201,11 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-white/72 backdrop-blur-xl dark:bg-slate-900/42" />
+
+            <div className="relative z-10 flex h-full flex-col">
             {/* Unified top: header + search — no border between them */}
-            <div className="shrink-0 px-4 pt-3 pb-3 space-y-2.5 bg-white dark:bg-content-bg">
+            <div className="shrink-0 space-y-2.5 bg-white/34 px-4 pt-3 pb-3 backdrop-blur-md dark:bg-slate-900/12">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -261,7 +267,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                   onKeyDown={handleKeyPress}
                   placeholder="Search for song lyrics..."
                   disabled={isLoading}
-                  className="flex-1 px-3 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800/80 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/60 border-none disabled:opacity-50 transition-shadow"
+                  className="flex-1 rounded-lg border border-black/5 bg-white/72 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 transition-shadow focus:outline-none focus:ring-2 focus:ring-green-500/60 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:placeholder-gray-500"
                 />
                 <Button
                   size="sm"
@@ -277,11 +283,12 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             </div>
 
             {/* Scrollable content */}
-            <div ref={lyricsContainerRef} className="flex-1 overflow-y-auto overscroll-contain relative">
-              {/* Song title — sticky with backdrop blur + gradient fade */}
+            <div ref={lyricsContainerRef} className="relative flex-1 overflow-y-auto overscroll-contain">
+              {/* Song title — sticky with subtle backdrop blur only */}
               {(songTitle || songArtist) && (
-                <div className="sticky top-0 z-10">
-                  <div className="backdrop-blur-md bg-white/90 dark:bg-content-bg/90 px-4 pt-2 pb-1.5">
+                <div className="sticky top-0 z-10 isolate overflow-hidden border-b border-white/20 dark:border-white/5">
+                  <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white/55 backdrop-blur-xl dark:bg-slate-950/30" />
+                  <div className="px-4 pt-2 pb-1.5">
                     <h4 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">{songTitle}</h4>
                     {songArtist && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">by {songArtist}</p>}
                     {geniusUrl && (
@@ -290,7 +297,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                       </a>
                     )}
                   </div>
-                  <div className="h-3 bg-gradient-to-b from-white/80 dark:from-content-bg/80 to-transparent pointer-events-none" />
                 </div>
               )}
 
@@ -340,6 +346,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                   </div>
                 )}
               </div>
+            </div>
             </div>
           </motion.div>
         </>

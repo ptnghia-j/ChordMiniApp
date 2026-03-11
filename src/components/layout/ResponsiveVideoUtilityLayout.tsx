@@ -97,14 +97,14 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
 
   // Compute dynamic overlap based on measured video height
   const baseOverlap = Math.max(0, Math.min(Math.round(videoHeight * (panelsOpen ? 0.85 : 0.95)), 420));
-  const extraLift = 16; // small additional lift to close residual gap consistently
+  const extraLift = panelsOpen ? 32 : 104; // keep the utility/video row tighter to the beat grid with more visible video protrusion
 
 
   return (
     <div
       ref={layoutContainerRef}
-      className={`flex flex-col md:flex-row md:items-end items-stretch gap-4 px-3 pb-0 sm:px-4 sm:pb-0 relative z-[60]`}
-      style={{ marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -16 : -48)) : 0 }}
+      className={`flex flex-col items-stretch gap-3 px-3 pb-0 sm:px-4 sm:pb-0 md:flex-row md:items-end md:gap-3 relative z-[60]`}
+      style={{ marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -28 : -88)) : 0 }}
     >
       {/* Utility bar container - LEFT on wide screens, first in order */}
       <div

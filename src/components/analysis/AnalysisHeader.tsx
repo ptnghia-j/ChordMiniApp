@@ -39,8 +39,8 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
   lyricsError,
 }) => {
   return (
-    <div className="rounded-lg bg-white dark:bg-dark-bg mb-2 mt-0 transition-colors duration-300">
-      <div className="flex flex-col gap-2 mb-2 md:flex-row md:items-center md:justify-between">
+    <div className="mb-2 mt-0 rounded-2xl border border-default-200/80 bg-default-100/50 px-3 py-1.5 shadow-sm transition-colors duration-300 dark:border-white/10 dark:bg-gray-800/30 dark:backdrop-blur-md sm:px-4 sm:py-2">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 w-full md:w-auto sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-lg text-gray-800 dark:text-gray-100 transition-colors duration-300">
@@ -53,7 +53,7 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
                     type="text"
                     value={editedTitle}
                     onChange={(e) => onTitleChange(e.target.value)}
-                    className="flex-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-800 dark:text-gray-100"
+                    className="flex-1 rounded-lg border border-default-300 bg-background px-2 py-1 text-sm text-gray-800 dark:border-white/10 dark:bg-gray-800/50 dark:text-gray-100"
                     placeholder="Enter song title..."
                     autoFocus
                   />

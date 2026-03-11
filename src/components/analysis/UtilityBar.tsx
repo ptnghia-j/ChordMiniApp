@@ -107,7 +107,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   return (
     <div className={`w-full ${className}`}>
       <div
-        className="mx-auto rounded-2xl bg-slate-100/70 dark:bg-slate-800/70  backdrop-blur-md border border-gray-300 dark:border-gray-700 shadow-sm px-3 sm:px-4 py-1.5 sm:py-2.5"
+        className="mx-auto rounded-full border border-white/35 bg-default-200 px-3 py-1 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-md sm:px-4 sm:py-1.5 dark:border-white/20 dark:bg-gray-800/60"
         style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
       >
         <div className="flex items-center justify-between gap-3">

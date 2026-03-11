@@ -48,7 +48,8 @@ const Footer: React.FC = () => {
   ];
 
   return (
-    <footer className="relative z-20 bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
+    <footer className="relative z-20 overflow-hidden border-t border-white/45 bg-white/82 backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-dark-bg/82">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/45 to-transparent dark:from-white/5" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Main Footer Content */}
@@ -66,7 +67,7 @@ const Footer: React.FC = () => {
                     width={40}
                     height={40}
                     sizes="40px"
-                    className="w-10 h-10 block dark:hidden"
+                    className="w-10 h-10 block dark:hidden rounded-lg"
                   />
                   {/* Dark theme logo - hidden in light mode */}
                   <Image
@@ -75,7 +76,7 @@ const Footer: React.FC = () => {
                     width={40}
                     height={40}
                     sizes="40px"
-                    className="w-10 h-10 hidden dark:block"
+                    className="w-10 h-10 hidden dark:block rounded-lg"
                   />
                 </Link>
                 <div>

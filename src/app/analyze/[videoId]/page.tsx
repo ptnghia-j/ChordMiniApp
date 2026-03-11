@@ -99,6 +99,7 @@ import {
 } from '@/utils/chordSimplification';
 
 // Import new sub-components
+import AnalyzePageBackdrop from '@/components/analysis/AnalyzePageBackdrop';
 import FloatingVideoDock from '@/components/analysis/FloatingVideoDock';
 import AnalysisHeader from '@/components/analysis/AnalysisHeader';
 import ResultsTabs from '@/components/homepage/ResultsTabs';
@@ -319,6 +320,14 @@ export default function YouTubeVideoAnalyzePage() {
   }), [beatDetector, chordDetector, routeParams, videoId]);
 
   const autoStartAttemptedRef = useRef(false);
+
+  const analyzeBackdropUrl = useMemo(() => {
+    if (thumbnailFromSearch) {
+      return thumbnailFromSearch;
+    }
+
+    return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+  }, [thumbnailFromSearch, videoId]);
 
   useEffect(() => {
     if (!videoId || !modelsInitialized || canonicalAnalyzeUrl === currentAnalyzeUrl) {
@@ -928,7 +937,7 @@ export default function YouTubeVideoAnalyzePage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="relative min-h-screen bg-white dark:bg-gray-900">
       {/* Conditional Playback Controls */}
       <ConditionalPlaybackControls
         youtubePlayer={youtubePlayer}
@@ -966,7 +975,15 @@ export default function YouTubeVideoAnalyzePage() {
               onChordPlaybackChange={handleChordPlaybackChange}
             />
 
-    <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300 overflow-hidden">
+    <div className="relative z-30 isolate flex min-h-screen flex-col overflow-hidden bg-white dark:bg-dark-bg transition-colors duration-300">
+      <AnalyzePageBackdrop
+        thumbnailUrl={analyzeBackdropUrl}
+        showFooterTransition={Boolean(analysisResults)}
+      />
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-28 bg-gradient-to-b from-white/45 to-transparent dark:from-white/5" />
+
+      <div className="relative z-10 flex min-h-screen flex-col">
       {/* Use the Navigation component */}
       <Navigation />
 
@@ -1278,6 +1295,19 @@ export default function YouTubeVideoAnalyzePage() {
       )}
 
           </div>
+          </div>
+          {analysisResults ? (
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-24 z-0 h-28 overflow-hidden">
+              {analyzeBackdropUrl ? (
+                <div
+                  className="absolute inset-[-18%] scale-110 bg-cover bg-center opacity-24 blur-3xl saturate-150 dark:opacity-28"
+                  style={{ backgroundImage: `url("${analyzeBackdropUrl}")` }}
+                />
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/36 to-white/82 dark:via-slate-950/30 dark:to-slate-950/84" />
+              <div className="absolute left-1/2 top-0 h-20 w-[92vw] max-w-[1180px] -translate-x-1/2 rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-300/8" />
+            </div>
+          ) : null}
           </>
         )}
       </ConditionalPlaybackControls>

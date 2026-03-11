@@ -435,24 +435,27 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             : undefined;
           const containerClass = isActive
             ? showSegmentation && segmentationData && !isEmpty
-              ? 'bg-transparent border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
+              ? 'border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
               : 'bg-blue-50 dark:bg-blue-900/50 border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
             : isPast
               ? 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500'
               : isEmpty
                 ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600/40'
                 : showSegmentation && segmentationData
-                  ? 'bg-transparent border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
+                  ? 'border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
                   : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100';
+
+          const containerStyle = {
+            left: box.x,
+            width: box.width,
+            ...(segmentationColor ? { backgroundColor: segmentationColor } : {}),
+          };
 
           return (
             <div
               key={box.index}
-              className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden transition-colors duration-75 ${containerClass}`}
-              style={{
-                left: box.x,
-                width: box.width,
-              }}
+              className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden ${containerClass}`}
+              style={containerStyle}
             >
               <ChordCell
                 compact
@@ -471,7 +474,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                 showRomanNumerals={showRomanNumerals}
                 romanNumeral={romanNumeral}
                 accidentalPreference={accidentalPreference ?? undefined}
-                segmentationColor={segmentationColor}
+                segmentationColor={undefined}
               />
             </div>
           );

@@ -21,7 +21,7 @@ export const ScrollableTabContainer: React.FC<ScrollableTabContainerProps> = ({
 }) => {
   const rootClasses = [
     'chord-grid-window',
-    variant === 'card' ? 'bg-white dark:bg-content-bg rounded-lg overflow-hidden' : 'overflow-hidden'
+    variant === 'card' ? 'bg-transparent rounded-lg overflow-hidden' : 'overflow-hidden'
   ].join(' ');
 
   return (

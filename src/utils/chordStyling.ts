@@ -97,7 +97,8 @@ export const getChordStyle = (
   isClickable: boolean,
   hasPickupBeats: boolean,
   timeSignature: number,
-  pickupBeatsCount: number
+  pickupBeatsCount: number,
+  alignmentPaddingBeatCount: number = 0
 ): string => {
   // Clean base classes with minimal styling
   // CRITICAL: relative positioning required for absolute positioned beat number overlay
@@ -107,6 +108,7 @@ export const getChordStyle = (
 
   // Determine cell type
   const isEmpty = chord === '';
+  const isAlignmentPaddingBeat = isEmpty && beatIndex < alignmentPaddingBeatCount;
   const isPickupBeat = hasPickupBeats && beatIndex < timeSignature && beatIndex >= (timeSignature - pickupBeatsCount);
 
   // Clean default styling
@@ -124,8 +126,17 @@ export const getChordStyle = (
   // Ensure outline doesn't get clipped by parent overflow-hidden when highlighted
   classes += " outline-0 outline-offset-0";
 
+  // Alignment-only leading padding beats should visually disappear into the grid
+  if (isAlignmentPaddingBeat) {
+    classes = `${baseClasses} alignment-padding-cell bg-gray-100 dark:bg-gray-700 border-transparent dark:border-transparent`;
+    textColor = "text-gray-600 dark:text-gray-300";
+
+    if (isClickable) {
+      classes += " hover:bg-gray-150 dark:hover:bg-gray-650 hover:border-transparent dark:hover:border-transparent";
+    }
+  }
   // Clean empty cell styling with solid colors
-  if (isEmpty) {
+  else if (isEmpty) {
     classes = `${baseClasses} bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600`;
     textColor = "text-gray-600 dark:text-gray-300";
 

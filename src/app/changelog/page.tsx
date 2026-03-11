@@ -39,7 +39,8 @@ export default function ChangelogPage() {
         'IMPROVED: Guitar/piano playback UI — memoized guitar diagram focus updates and lighter piano key highlighting',
         'IMPROVED: Refactored analyze flow for better route handoff, model setup, and state management',
         'NEW: Analyze flow helpers/hooks/components added for route handoff, model setup, and related page/state updates',
-        'UI: Minor UI changes'
+        'UI: model selection page separated from analyze page',
+        'UI: dynamic background by blurring the video thumbnail'
       ],
       technical: [
         'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',

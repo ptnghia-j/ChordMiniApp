@@ -210,7 +210,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
             positionMode === 'relative'
               ? 'relative mb-2 w-full' // Inline positioning for responsive layout
               : 'absolute -top-12 left-0 right-2 md:right-12 z-60' // Absolute positioning for fixed layout
-          } md:hidden flex overflow-x-auto hide-scrollbar items-center gap-2.5 p-2 bg-white dark:bg-content-bg bg-opacity-50 dark:bg-opacity-60 backdrop-blur-sm rounded-lg shadow-md transition-colors duration-300`}
+          } md:hidden flex items-center gap-2.5 overflow-x-auto hide-scrollbar rounded-2xl border border-white/45 bg-white/55 p-2 shadow-lg backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/45`}
           style={{
             maxWidth: positionMode === 'relative' ? '100%' : 'calc(100vw - 100px)' // Full width for inline, constrained for absolute
           }}
@@ -283,21 +283,38 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           </div>
         </div>
       )}
-
-
-      <div className="relative">
-        {/* Minimize/Maximize button */}
-        <button
-          onClick={toggleVideoMinimization}
-          className="absolute -top-8 right-0 bg-gray-800 text-white p-1 rounded-t-md z-10 w-10 h-6 hidden md:flex items-center justify-center hover:bg-gray-700 transition-colors"
-          title={isVideoMinimized ? "Expand video player" : "Minimize video player"}
-        >
-          {isVideoMinimized ? (
-            <FaExpand className="h-3 w-3" />
-          ) : (
-            <FaCompress className="h-3 w-3" />
-          )}
-        </button>
+      <div className="relative overflow-hidden rounded-[24px] border border-white/45 bg-white/20 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.7)] backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/20">
+        {/* Desktop shrink/expand control */}
+        <div className="absolute right-3 top-3 z-20 hidden md:block">
+          <Tooltip
+            content={isVideoMinimized ? 'Expand video player' : 'Shrink video player'}
+            placement="left"
+            delay={300}
+            closeDelay={100}
+            classNames={{
+              base: 'max-w-xs',
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
+          >
+            <button
+              onClick={toggleVideoMinimization}
+              className="group inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-white/20 bg-slate-950/10 px-2.5 text-white shadow-[0_10px_30px_-14px_rgba(15,23,42,0.95)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-950/78 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+              aria-label={isVideoMinimized ? 'Expand video player' : 'Shrink video player'}
+              title={isVideoMinimized ? 'Expand video player' : 'Shrink video player'}
+            >
+              <span className="flex items-center gap-2">
+                {isVideoMinimized ? (
+                  <FaExpand className="h-3.5 w-3.5" />
+                ) : (
+                  <FaCompress className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden lg:inline text-[10px] font-semibold uppercase tracking-[0.16em] text-white/92">
+                  {isVideoMinimized ? 'Expand' : 'Shrink'}
+                </span>
+              </span>
+            </button>
+          </Tooltip>
+        </div>
 
         {/* Countdown overlay */}
         {isCountdownEnabled && isCountingDown && (

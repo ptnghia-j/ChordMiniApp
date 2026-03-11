@@ -26,6 +26,7 @@
 .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
   background-color: rgb(219, 234, 254) !important; /* bg-blue-100 */
   border-color: rgb(37, 99, 235) !important; /* border-blue-600 */
+  box-shadow: inset 0 0 0 1px rgb(37, 99, 235) !important;
   color: rgb(30, 58, 138) !important; /* text-blue-900 */
 }
 
@@ -33,6 +34,7 @@
 .dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
   background-color: rgb(30, 64, 175) !important; /* bg-blue-800 */
   border-color: rgb(96, 165, 250) !important; /* border-blue-400 */
+  box-shadow: inset 0 0 0 1px rgb(96, 165, 250) !important;
   color: rgb(219, 234, 254) !important; /* text-blue-100 */
 }
 
@@ -40,6 +42,7 @@
 .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
   background-color: rgb(229, 231, 235) !important; /* bg-gray-200 */
   border-color: rgb(37, 99, 235) !important; /* border-blue-600 */
+  box-shadow: inset 0 0 0 1px rgb(37, 99, 235) !important;
   color: rgb(75, 85, 99) !important; /* text-gray-600 */
 }
 
@@ -47,6 +50,7 @@
 .dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
   background-color: rgb(75, 85, 99) !important; /* bg-gray-600 */
   border-color: rgb(96, 165, 250) !important; /* border-blue-400 */
+  box-shadow: inset 0 0 0 1px rgb(96, 165, 250) !important;
   color: rgb(209, 213, 219) !important; /* text-gray-300 */
 }
 
@@ -63,7 +67,17 @@
 
 /* Ensure smooth transitions */
 .chord-cell {
+  box-sizing: border-box;
+  box-shadow: inset 0 0 0 1px rgba(209, 213, 219, 0.9);
   transition: background-color 150ms ease-in-out, border-color 150ms ease-in-out, color 150ms ease-in-out;
+}
+
+.dark .chord-cell {
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.98);
+}
+
+.chord-cell.alignment-padding-cell {
+  box-shadow: none;
 }
 
 /* 
