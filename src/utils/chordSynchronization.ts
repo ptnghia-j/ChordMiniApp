@@ -3,7 +3,7 @@
 
 import type { BeatInfo, ChordDetectionResult } from '@/types/audioAnalysis';
 
-export const DEFAULT_CHORD_ONSET_COMPENSATION_RATIO = 0.3;
+export const DEFAULT_CHORD_ONSET_COMPENSATION_RATIO = 0.25;
 
 export interface ChordSynchronizationOptions {
   onsetCompensationRatio?: number;

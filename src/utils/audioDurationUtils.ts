@@ -62,6 +62,10 @@ export async function getAudioDurationFromUrl(audioUrl: string, videoId?: string
  */
 export async function getAudioDurationFromFile(audioFile: File): Promise<number> {
   try {
+    if (typeof Audio === 'undefined' || typeof URL?.createObjectURL !== 'function') {
+      throw new Error('Audio duration detection from File is only available in browser environments');
+    }
+
     return new Promise((resolve, reject) => {
       const audio = new Audio();
 
