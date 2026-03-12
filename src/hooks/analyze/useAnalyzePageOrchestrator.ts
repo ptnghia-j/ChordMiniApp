@@ -756,15 +756,6 @@ export function useAnalyzePageOrchestrator({
         index === 0 || chord.chord !== rawChordData[index - 1].chord
       ));
 
-      const hasExistingSequenceCorrections = (sequenceCorrections?.correctedSequence?.length ?? 0) > 0;
-      const shouldPreserveAuthoritativeCorrections = needsRomanNumerals && hasExistingSequenceCorrections;
-      const romanNumeralChordData = shouldPreserveAuthoritativeCorrections && sequenceCorrections!.correctedSequence.length === chordData.length
-        ? chordData.map((chord, index) => ({
-            ...chord,
-            chord: sequenceCorrections!.correctedSequence[index] ?? chord.chord,
-          }))
-        : chordData;
-
       try {
         const cachedTranscription = await loadTranscriptionSnapshot(beatDetector, chordDetector);
         const cachedRomanNumerals = cachedTranscription?.romanNumerals ?? null;
@@ -773,6 +764,12 @@ export function useAnalyzePageOrchestrator({
         const hasCachedKeySignature = !!cachedTranscription?.keySignature;
         const hasCachedRomanNumerals = (cachedRomanNumerals?.analysis?.length ?? 0) > 0;
         const hasCachedSequenceCorrections = (cachedSequenceCorrections?.correctedSequence?.length ?? 0) > 0;
+        const hasCachedChordCorrections = Object.keys(cachedTranscription?.chordCorrections ?? {}).length > 0;
+        const needsInitialDetectionAfterCache = needsInitialDetection && !(
+          hasCachedKeySignature &&
+          (hasCachedSequenceCorrections || hasCachedChordCorrections)
+        );
+        const needsRomanNumeralsAfterCache = needsRomanNumerals && !hasCachedRomanNumerals;
 
         if (cachedTranscription?.chordCorrections) {
           syncChordCorrections(cachedTranscription.chordCorrections);
@@ -792,21 +789,35 @@ export function useAnalyzePageOrchestrator({
 
         const canReuseCachedDetection =
           (!!cachedTranscription) &&
-          !needsRomanNumerals &&
-          (!needsInitialDetection || (hasCachedKeySignature && (hasCachedSequenceCorrections || !!cachedTranscription?.chordCorrections)));
+          !needsInitialDetectionAfterCache &&
+          !needsRomanNumeralsAfterCache;
 
         if (canReuseCachedDetection) {
           return;
         }
 
+        const hasExistingSequenceCorrections = (sequenceCorrections?.correctedSequence?.length ?? 0) > 0;
+        const shouldPreserveAuthoritativeCorrections = needsRomanNumeralsAfterCache && hasExistingSequenceCorrections;
+        const effectiveSequenceSource = shouldPreserveAuthoritativeCorrections
+          ? sequenceCorrections
+          : (nextCachedSequenceCorrections ?? sequenceCorrections);
+        const includeRomanNumeralsInDetection = showRomanNumerals && needsRomanNumeralsAfterCache;
+        const romanNumeralChordData =
+          effectiveSequenceSource?.correctedSequence?.length === chordData.length
+            ? chordData.map((chord, index) => ({
+                ...chord,
+                chord: effectiveSequenceSource.correctedSequence[index] ?? chord.chord,
+              }))
+            : chordData;
+
         const { detectKey } = await import('@/services/audio/keyDetectionService');
-        const result = await detectKey(romanNumeralChordData, true, false, showRomanNumerals);
+        const result = await detectKey(romanNumeralChordData, true, false, includeRomanNumeralsInDetection);
 
         syncKeySignature(result.primaryKey);
 
         const nextResultSequenceCorrections = withRomanNumerals(result.sequenceCorrections ?? null, result.romanNumerals || null);
         const effectiveSequenceCorrections = shouldPreserveAuthoritativeCorrections
-          ? mergeSequenceCorrections(sequenceCorrections, nextResultSequenceCorrections)
+          ? mergeSequenceCorrections(effectiveSequenceSource, nextResultSequenceCorrections)
           : nextResultSequenceCorrections;
         const effectiveChordCorrections = shouldPreserveAuthoritativeCorrections
           ? (cachedTranscription?.chordCorrections ?? chordCorrections ?? null)

@@ -172,8 +172,8 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
       return {
         position: 'relative' as const,
         width: '100%',
-        maxWidth: isVideoMinimized ? '250px' : '500px',
-        minWidth: isVideoMinimized ? '200px' : '300px',
+        maxWidth: '100%',
+        minWidth: 0,
         pointerEvents: 'auto' as const,
         zIndex: 'auto'
       };
@@ -208,9 +208,9 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
         <div
           className={`${
             positionMode === 'relative'
-              ? 'relative mb-2 w-full' // Inline positioning for responsive layout
+              ? 'relative mb-1.5 w-full' // Inline positioning for responsive layout
               : 'absolute -top-12 left-0 right-2 md:right-12 z-60' // Absolute positioning for fixed layout
-          } md:hidden flex items-center gap-2.5 overflow-x-auto hide-scrollbar rounded-2xl border border-white/45 bg-white/55 p-2 shadow-lg backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/45`}
+          } md:hidden flex items-center gap-2 overflow-x-auto hide-scrollbar rounded-[20px] border border-white/45 bg-white/55 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-900/45`}
           style={{
             maxWidth: positionMode === 'relative' ? '100%' : 'calc(100vw - 100px)' // Full width for inline, constrained for absolute
           }}
@@ -283,7 +283,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           </div>
         </div>
       )}
-      <div className="relative overflow-hidden rounded-[24px] border border-white/45 bg-white/20 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.7)] backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/20">
+      <div className="relative overflow-hidden rounded-[20px] border border-white/45 bg-white/20 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.7)] backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/20 sm:rounded-[24px]">
         {/* Desktop shrink/expand control */}
         <div className="absolute right-3 top-3 z-20 hidden md:block">
           <Tooltip

@@ -6,7 +6,7 @@ import { ChordCell } from '@/components/chord-analysis/ChordCell';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
-import { getSegmentationColorForBeatIndex } from '@/utils/chordFormatting';
+import { getSegmentationCellClassNameForBeatIndex } from '@/utils/chordFormatting';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -430,10 +430,10 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             !!uncorrectedChords &&
             box.beatIndex < uncorrectedChords.length &&
             uncorrectedChords[box.beatIndex] !== box.chordName;
-          const segmentationColor = showSegmentation && segmentationData && !isPast && !isEmpty
-            ? getSegmentationColorForBeatIndex(box.beatIndex, [], segmentationData, true, undefined, box.startTime)
+          const segmentationClassName = showSegmentation && segmentationData && !isPast && !isEmpty
+            ? getSegmentationCellClassNameForBeatIndex(box.beatIndex, [], segmentationData, true, undefined, box.startTime)
             : undefined;
-          const containerClass = isActive
+          const containerClass = `${isActive
             ? showSegmentation && segmentationData && !isEmpty
               ? 'border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
               : 'bg-blue-50 dark:bg-blue-900/50 border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
@@ -443,12 +443,11 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                 ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600/40'
                 : showSegmentation && segmentationData
                   ? 'border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
-                  : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100';
+                  : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'} ${segmentationClassName || ''}`;
 
           const containerStyle = {
             left: box.x,
             width: box.width,
-            ...(segmentationColor ? { backgroundColor: segmentationColor } : {}),
           };
 
           return (
@@ -474,7 +473,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                 showRomanNumerals={showRomanNumerals}
                 romanNumeral={romanNumeral}
                 accidentalPreference={accidentalPreference ?? undefined}
-                segmentationColor={undefined}
+                segmentationClassName={undefined}
               />
             </div>
           );

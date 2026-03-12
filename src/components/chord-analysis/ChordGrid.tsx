@@ -763,10 +763,10 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       <BeatHighlighter cellRefsMap={cellRefsMapRef} theme={theme} isLoopEnabled={isLoopEnabled} />
 
       {/* Clean card container with minimal styling */}
-      <div className="overflow-hidden rounded-2xl border border-stone-300 bg-stone-50/90 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] transition-colors duration-300 dark:border-gray-600 dark:bg-gray-800/50 dark:shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)]">
+      <div className="overflow-hidden rounded-xl border border-stone-300 bg-stone-50/90 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] transition-colors duration-300 sm:rounded-2xl dark:border-gray-600 dark:bg-gray-800/50 dark:shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)]">
 
         {/* Header section using extracted component */}
-        <div className="border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 dark:border-white/10 dark:bg-gray-800/50">
+        <div className="border-b border-stone-200/80 bg-stone-50/95 px-2.5 py-1.5 sm:px-3 sm:py-2 dark:border-white/10 dark:bg-gray-800/50">
           <ChordGridHeader
             timeSignature={timeSignature}
             keySignature={keySignature}

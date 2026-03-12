@@ -6,22 +6,57 @@
 import { SegmentationResult } from '@/types/chatbotTypes';
 
 /**
- * Color mapping for different segment types
- * Uses light, semi-transparent colors that work well with existing UI
- * Avoids blue colors to prevent conflicts with beat animation colors
+ * Segmentation styling for different segment types.
+ * Keep both the raw accent color and the Tailwind cell class in one place so
+ * section headers and beat cells stay visually aligned without duplicate maps.
  */
-export const SEGMENTATION_COLOR_MAP: Record<string, string> = {
-  'intro': 'rgba(156, 163, 175, 0.3)', // Light gray
-  'outro': 'rgba(156, 163, 175, 0.3)', // Light gray
-  'verse': 'rgba(34, 197, 94, 0.3)', // Light green
-  'pre-chorus': 'rgba(251, 146, 60, 0.3)', // Light orange
-  'pre_chorus': 'rgba(251, 146, 60, 0.3)', // Light orange (alternative naming)
-  'chorus': 'rgba(244, 63, 94, 0.3)', // Light red/pink
-  'bridge': 'rgba(168, 85, 247, 0.3)', // Light purple
-  'instrumental': 'rgba(250, 204, 21, 0.3)', // Light yellow
-  'solo': 'rgba(250, 204, 21, 0.3)', // Light yellow (alternative for instrumental)
-  'breakdown': 'rgba(156, 163, 175, 0.2)', // Light gray (alternative)
+export const SEGMENTATION_STYLE_MAP: Record<string, { color: string; cellClassName: string }> = {
+  'intro': {
+    color: 'rgba(156, 163, 175, 0.3)',
+    cellClassName: '!bg-gray-400/25 dark:!bg-gray-800/20'
+  },
+  'outro': {
+    color: 'rgba(156, 163, 175, 0.3)',
+    cellClassName: '!bg-gray-400/25 dark:!bg-gray-800/20'
+  },
+  'verse': {
+    color: 'rgba(34, 197, 94, 0.3)',
+    cellClassName: '!bg-green-500/25 dark:!bg-green-800/20'
+  },
+  'pre-chorus': {
+    color: 'rgba(251, 146, 60, 0.3)',
+    cellClassName: '!bg-orange-400/25 dark:!bg-orange-800/20'
+  },
+  'pre_chorus': {
+    color: 'rgba(251, 146, 60, 0.3)',
+    cellClassName: '!bg-orange-400/25 dark:!bg-orange-800/20'
+  },
+  'chorus': {
+    color: 'rgba(244, 63, 94, 0.3)',
+    cellClassName: '!bg-rose-500/25 dark:!bg-rose-800/20'
+  },
+  'bridge': {
+    color: 'rgba(168, 85, 247, 0.3)',
+    cellClassName: '!bg-violet-500/25 dark:!bg-violet-800/20'
+  },
+  'instrumental': {
+    color: 'rgba(250, 204, 21, 0.3)',
+    cellClassName: '!bg-yellow-400/30 dark:!bg-yellow-800/20'
+  },
+  'solo': {
+    color: 'rgba(250, 204, 21, 0.3)',
+    cellClassName: '!bg-yellow-400/30 dark:!bg-yellow-800/20'
+  },
+  'breakdown': {
+    color: 'rgba(156, 163, 175, 0.2)',
+    cellClassName: '!bg-gray-400/20 dark:!bg-gray-800/15'
+  },
 };
+
+const DEFAULT_SEGMENTATION_STYLE = {
+  color: 'rgba(156, 163, 175, 0.2)',
+  cellClassName: '!bg-gray-400/20 dark:!bg-gray-400/15'
+} as const;
 
 /**
  * Extract base segment type from labels that may contain qualifiers
@@ -66,13 +101,55 @@ const extractBaseSegmentType = (segmentType: string): string => {
   return cleaned;
 };
 
+const getSegmentForBeat = (
+  beatIndex: number,
+  beats: (number | null)[],
+  segmentationData: SegmentationResult | null,
+  showSegmentation: boolean,
+  overrideTimestamp?: number | null
+) => {
+  if (!showSegmentation || !segmentationData?.segments) {
+    return undefined;
+  }
+
+  const beatTimestamp = overrideTimestamp !== undefined ? overrideTimestamp : beats[beatIndex];
+  if (typeof beatTimestamp !== 'number') {
+    return undefined;
+  }
+
+  let segment = segmentationData.segments.find(seg =>
+    beatTimestamp >= seg.startTime && beatTimestamp < seg.endTime
+  );
+
+  if (!segment && segmentationData.segments.length > 0) {
+    const lastSegment = segmentationData.segments[segmentationData.segments.length - 1];
+    if (beatTimestamp >= lastSegment.startTime && beatTimestamp <= lastSegment.endTime + 1) {
+      segment = lastSegment;
+    }
+
+    if (!segment) {
+      const firstSegment = segmentationData.segments[0];
+      if (beatTimestamp >= firstSegment.startTime - 1 && beatTimestamp < firstSegment.endTime) {
+        segment = firstSegment;
+      }
+    }
+  }
+
+  return segment;
+};
+
 /**
  * Get segmentation color for a specific segment type
  * Normalizes the segment type to handle variations in naming
  */
 export const getSegmentationColor = (segmentType: string): string => {
   const normalizedType = extractBaseSegmentType(segmentType);
-  return SEGMENTATION_COLOR_MAP[normalizedType] || 'rgba(156, 163, 175, 0.2)'; // Default light gray
+  return SEGMENTATION_STYLE_MAP[normalizedType]?.color || DEFAULT_SEGMENTATION_STYLE.color;
+};
+
+export const getSegmentationCellClassName = (segmentType: string): string => {
+  const normalizedType = extractBaseSegmentType(segmentType);
+  return SEGMENTATION_STYLE_MAP[normalizedType]?.cellClassName || DEFAULT_SEGMENTATION_STYLE.cellClassName;
 };
 
 /**
@@ -86,39 +163,21 @@ export const getSegmentationColorForBeat = (
   showSegmentation: boolean,
   overrideTimestamp?: number | null
 ): string | undefined => {
-  if (!showSegmentation || !segmentationData?.segments) {
-    return undefined;
-  }
-
-  // Use override timestamp if provided, otherwise fall back to beats array
-  const beatTimestamp = overrideTimestamp !== undefined ? overrideTimestamp : beats[beatIndex];
-  if (typeof beatTimestamp !== 'number') {
-    return undefined;
-  }
-
-  // Find the segment that contains this timestamp
-  let segment = segmentationData.segments.find(seg =>
-    beatTimestamp >= seg.startTime && beatTimestamp < seg.endTime
-  );
-
-  // If no exact match found, try to find the closest segment for better coverage
-  if (!segment && segmentationData.segments.length > 0) {
-    // For timestamps at the very end, use the last segment if it's close
-    const lastSegment = segmentationData.segments[segmentationData.segments.length - 1];
-    if (beatTimestamp >= lastSegment.startTime && beatTimestamp <= lastSegment.endTime + 1) {
-      segment = lastSegment;
-    }
-
-    // For timestamps at the very beginning, use the first segment if it's close
-    if (!segment) {
-      const firstSegment = segmentationData.segments[0];
-      if (beatTimestamp >= firstSegment.startTime - 1 && beatTimestamp < firstSegment.endTime) {
-        segment = firstSegment;
-      }
-    }
-  }
+  const segment = getSegmentForBeat(beatIndex, beats, segmentationData, showSegmentation, overrideTimestamp);
 
   return segment ? getSegmentationColor(segment.label || segment.type || 'unknown') : undefined;
+};
+
+export const getSegmentationCellClassNameForBeat = (
+  beatIndex: number,
+  beats: (number | null)[],
+  segmentationData: SegmentationResult | null,
+  showSegmentation: boolean,
+  overrideTimestamp?: number | null
+): string | undefined => {
+  const segment = getSegmentForBeat(beatIndex, beats, segmentationData, showSegmentation, overrideTimestamp);
+
+  return segment ? getSegmentationCellClassName(segment.label || segment.type || 'unknown') : undefined;
 };
 
 /**
@@ -126,12 +185,12 @@ export const getSegmentationColorForBeat = (
  * Used for tooltips, legends, and documentation
  */
 export const SEGMENTATION_COLOR_LEGEND = [
-  { type: 'Intro/Outro', color: 'rgba(156, 163, 175, 0.3)' },
-  { type: 'Verse', color: 'rgba(34, 197, 94, 0.3)' },
-  { type: 'Pre-Chorus', color: 'rgba(251, 146, 60, 0.3)' },
-  { type: 'Chorus', color: 'rgba(244, 63, 94, 0.3)' },
-  { type: 'Bridge', color: 'rgba(168, 85, 247, 0.3)' },
-  { type: 'Instrumental', color: 'rgba(250, 204, 21, 0.3)' },
+  { type: 'Intro/Outro', color: SEGMENTATION_STYLE_MAP.intro.color },
+  { type: 'Verse', color: SEGMENTATION_STYLE_MAP.verse.color },
+  { type: 'Pre-Chorus', color: SEGMENTATION_STYLE_MAP['pre-chorus'].color },
+  { type: 'Chorus', color: SEGMENTATION_STYLE_MAP.chorus.color },
+  { type: 'Bridge', color: SEGMENTATION_STYLE_MAP.bridge.color },
+  { type: 'Instrumental', color: SEGMENTATION_STYLE_MAP.instrumental.color },
 ] as const;
 
 /**

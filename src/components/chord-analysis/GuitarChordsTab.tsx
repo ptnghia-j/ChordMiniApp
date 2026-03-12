@@ -455,15 +455,15 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   };
 
   return (
-    <div className={`guitar-chords-tab space-y-3 sm:space-y-3 ${className}`}>
+    <div className={`guitar-chords-tab space-y-2 sm:space-y-3 ${className}`}>
       {/* Beat & Chord Progression Section */}
-      <div className="chord-grid-section">
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-y-2">
-          <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Beat & Chord Progression</h3>
-          <div className="flex items-center space-x-3">
+      <div className="chord-grid-section space-y-2">
+        <div className="mb-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 sm:text-lg">Beat & Chord Progression</h3>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
             {/* Capo control */}
-            <div className="flex items-center space-x-1.5">
-              <label htmlFor="capo-input" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="capo-input" className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
                 Capo:
               </label>
               <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -502,9 +502,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             {/* Shape/Sound label toggle - only visible when capo is active */}
             {capoFret > 0 && (
               <>
-                <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Label:</span>
+                <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">Label:</span>
                   <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                     <button
                       onClick={() => setCapoLabelMode('shape')}
@@ -526,17 +526,17 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             )}
 
             {/* Divider */}
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+            <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />
 
             {/* View mode toggle */}
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">View:</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">View:</span>
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-              <button onClick={() => setViewMode('animated')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'animated' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Animated</button>
-              <button onClick={() => setViewMode('summary')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Summary</button>
+              <button onClick={() => setViewMode('animated')} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-sm ${viewMode === 'animated' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Animated</button>
+              <button onClick={() => setViewMode('summary')} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-sm ${viewMode === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Summary</button>
             </div>
           </div>
         </div>
-        <ScrollableTabContainer heightClass="h-24 sm:h-32 md:h-40 lg:h-48">
+        <ScrollableTabContainer heightClass="h-[8.5rem] sm:h-32 md:h-40 lg:h-48">
           <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
         </ScrollableTabContainer>
       </div>
@@ -611,8 +611,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             </div>
           </div>
         ) : !isLoadingChords && (
-          <div className="summary-chord-view relative p-6">
-            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-6 text-center">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>
+          <div className="summary-chord-view relative p-4 sm:p-6">
+            <h3 className="mb-4 text-center text-base font-medium text-gray-700 dark:text-gray-300 sm:mb-6 sm:text-lg">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4 md:gap-6 justify-items-center">
               {uniqueChordDataForGuitarDiagrams.map(({name, data}, index) => (
                 <div key={index} className="flex justify-center">

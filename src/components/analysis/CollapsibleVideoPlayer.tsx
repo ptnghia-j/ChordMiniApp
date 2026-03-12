@@ -147,16 +147,12 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   // Collapsed mobile view - enhanced bar with video frame
   if (isMobile && isCollapsed) {
     return (
-      <>
-        {/* Spacer to preserve layout and prevent CLS when player is docked */}
-        <div aria-hidden="true" className="w-full aspect-video rounded-lg opacity-0 pointer-events-none select-none" />
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
-          {/* Enhanced control bar with video frame */}
-          <div className="flex items-center gap-3 px-4 py-3">
+      <div className="rounded-[22px] border border-white/15 bg-slate-950/90 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.88)] backdrop-blur-md">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
           {/* Left side - Video frame and controls */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
             {/* Mini video frame */}
-            <div className="w-20 h-12 bg-black rounded overflow-hidden flex-shrink-0 relative">
+            <div className="relative h-10 w-16 flex-shrink-0 overflow-hidden rounded-md bg-black sm:h-12 sm:w-20">
               <DynamicReactPlayer
                 ref={playerRef}
                 url={`https://www.youtube.com/watch?v=${videoId}`}
@@ -188,28 +184,28 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
             {/* Play/pause button - larger and more accessible for mobile */}
             <button
               onClick={isPlaying ? onPause : onPlay}
-              className="bg-gray-800 dark:bg-white text-white dark:text-gray-800 rounded-full w-12 h-12 flex items-center justify-center hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors duration-300 flex-shrink-0 shadow-lg"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg transition-colors duration-300 hover:bg-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
                 </svg>
               ) : (
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               )}
             </button>
 
             {/* Video progress slider */}
-            <div className="flex-1 min-w-0 flex items-center">
+            <div className="flex min-w-0 flex-1 items-center">
               <Slider
                 color="foreground"
                 renderThumb={(props) => (
                   <div
                     {...props}
-                    className="h-5 w-5 rounded-full bg-blue-400 dark:bg-blue-200"
+                    className="h-4 w-4 rounded-full bg-blue-400 dark:bg-blue-200"
                   />
                 )}
                 size="sm"
@@ -218,9 +214,9 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 maxValue={duration || 100}
                 value={currentTime}
                 onChange={(value) => onSeek && onSeek(Array.isArray(value) ? value[0] : value)}
-                className="w-5/6"
+                className="w-full"
                 classNames={{
-                  base: "max-w-md",
+                  base: "max-w-none",
                   track: "border-s-secondary-100",
                   filler: "bg-gradient-to-r from-primary-100 to-primary-500",
                 }}
@@ -231,18 +227,17 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           </div>
 
           {/* Right side - Expand button */}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-2">
             <button
               onClick={() => setIsCollapsed(false)}
-              className="text-gray-700 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="rounded-full p-2 text-white/90 transition-colors hover:bg-white/10 hover:text-blue-300"
               aria-label="Expand video player"
             >
               <FaExpand className="w-5 h-5" />
             </button>
           </div>
-          </div>
         </div>
-      </>
+      </div>
     );
   }
 

@@ -49,7 +49,7 @@ export interface ChordGridMeasureProps {
   // Function props
   getDisplayChord: (originalChord: string, visualIndex?: number) => { chord: string; wasCorrected: boolean };
   shouldShowChordLabel: (index: number) => boolean;
-  getSegmentationColorForBeatIndex: (beatIndex: number) => string | undefined;
+  getSegmentationClassNameForBeatIndex: (beatIndex: number) => string | undefined;
   handleBeatClick: (globalIndex: number) => void;
   isClickable: (globalIndex: number, chord: string) => boolean;
   getChordStyle: (chord: string, globalIndex: number, isClickable: boolean) => string;
@@ -85,7 +85,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
   sequenceCorrections,
   getDisplayChord,
   shouldShowChordLabel,
-  getSegmentationColorForBeatIndex,
+  getSegmentationClassNameForBeatIndex,
   handleBeatClick,
   isClickable,
   getChordStyle,
@@ -136,7 +136,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
           const isClickableCell = isClickable(globalIndex, chord);
 
           // Get segmentation color for this beat
-          const segmentationColor = getSegmentationColorForBeatIndex(globalIndex);
+          const segmentationClassName = getSegmentationClassNameForBeatIndex(globalIndex);
 
           // Get Roman numeral for this chord using chord sequence mapping
           // Only show Roman numeral when chord label is shown (chord changes)
@@ -169,7 +169,7 @@ const ChordGridMeasureComponent: React.FC<ChordGridMeasureProps> = ({
                 isEmpty={isEmpty}
                 displayChord={displayChord}
                 wasCorrected={wasCorrected}
-                segmentationColor={segmentationColor}
+                segmentationClassName={segmentationClassName}
                 onBeatClick={handleBeatClick}
                 getChordStyle={getChordStyle}
                 getDynamicFontSize={getDynamicFontSize}

@@ -16,7 +16,7 @@ export interface ChordCellProps {
   isEmpty: boolean;
   displayChord: string;
   wasCorrected: boolean;
-  segmentationColor?: string;
+  segmentationClassName?: string;
   onBeatClick: (globalIndex: number) => void;
   getChordStyle: (chord: string, globalIndex: number, isClickable: boolean) => string;
   getDynamicFontSize: (cellSize: number, chordLength: number) => string;
@@ -70,7 +70,7 @@ const areChordCellPropsEqual = (
   if (prevProps.showChordLabel !== nextProps.showChordLabel) return false;
   if (prevProps.isEmpty !== nextProps.isEmpty) return false;
   if (prevProps.wasCorrected !== nextProps.wasCorrected) return false;
-  if (prevProps.segmentationColor !== nextProps.segmentationColor) return false;
+  if (prevProps.segmentationClassName !== nextProps.segmentationClassName) return false;
   if (prevProps.accidentalPreference !== nextProps.accidentalPreference) return false;
 
   // Roman numerals and modulation
@@ -121,7 +121,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
   isEmpty,
   displayChord,
   wasCorrected,
-  segmentationColor,
+  segmentationClassName,
   onBeatClick,
   getChordStyle,
   getDynamicFontSize,
@@ -204,6 +204,12 @@ export const ChordCell = React.memo<ChordCellProps>(({
     ? `calc(${labelOverflowCells + 1} * 100% + ${labelOverflowGapPx}px)`
     : '100%';
 
+  const stateClassName = isInLoopRange
+    ? '!bg-blue-500/10 dark:!bg-blue-500/20 !border-blue-500/30 dark:!border-blue-500/50'
+    : modulationInfo?.isModulation
+      ? '!bg-green-300/20 dark:!bg-green-900/30 !border-green-500/50 dark:!border-green-500/70'
+      : segmentationClassName || '';
+
   return (
     <div
       ref={cellRef}
@@ -214,28 +220,12 @@ export const ChordCell = React.memo<ChordCellProps>(({
           : showRomanNumerals
             ? 'min-h-[3.3rem] sm:min-h-[4.2rem]' // 20% increase when Roman numerals shown
             : 'min-h-[2.75rem] sm:min-h-[3.5rem]'
-      } chord-cell`}
+      } ${stateClassName} chord-cell`}
       data-beat-index={globalIndex}
       data-is-empty={isEmpty ? "true" : "false"}
       style={{
         overflow: canOverflowLabel ? 'visible' : undefined,
         zIndex: canOverflowLabel ? 2 : undefined,
-        // Priority order: current beat (CSS class with !important) > loop range > modulation > segmentation
-        // Current beat highlighting is handled purely via CSS (see chord-grid.css)
-        // We still apply loop range inline styles even when the cell is the current beat;
-        // the CSS class will visually override them while active, and when the beat moves away
-        // the loop background remains without requiring a React re-render.
-        ...(
-          isInLoopRange ? {
-            backgroundColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)', // Light blue with opacity (blue-500 base)
-            border: isDarkMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(59, 130, 246, 0.3)'
-          } :
-          modulationInfo?.isModulation ? {
-            backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)', // Light green with opacity (green-500 base)
-            border: isDarkMode ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(34, 197, 94, 0.3)'
-          } :
-          segmentationColor ? { backgroundColor: segmentationColor } : {}
-        )
       }}
       title={
         modulationInfo?.isModulation
