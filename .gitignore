@@ -281,3 +281,5 @@ scripts/utilities
 
 __tests__/
 __test-results__/
+/python_backend
+python_backend/requirements.txt
