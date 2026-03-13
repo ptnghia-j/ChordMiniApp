@@ -8,6 +8,7 @@ import { ChatMessage, SongContext } from '@/types/chatbotTypes';
 import { createChatMessage, sendChatMessageWithLyricsRetrieval, truncateConversationHistory } from '@/services/api/chatbotService';
 import { useApiKeys } from '@/hooks/settings/useApiKeys';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
+import { useEmbeddedPanelHeight } from '@/hooks/ui/useEmbeddedPanelHeight';
 
 interface ChatbotInterfaceProps {
   isOpen: boolean;
@@ -33,7 +34,9 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const { getApiKey } = useApiKeys();
+  const embeddedHeight = useEmbeddedPanelHeight(embedded, panelRef);
 
   const clearConversation = () => {
     setMessages([createChatMessage('assistant', WELCOME_MESSAGE)]);
@@ -110,7 +113,9 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
             />
           )}
           <motion.div
+            ref={panelRef}
             className={`${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'} ${embedded ? '' : 'z-[9998]'} flex flex-col rounded-xl border border-white/45 bg-white/72 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] backdrop-blur-xl dark:border-white/12 dark:bg-slate-900/42 ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'} ${className}`}
+            style={embeddedHeight ? { height: `${embeddedHeight}px`, maxHeight: `${embeddedHeight}px`, minHeight: 0 } : undefined}
             initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
             exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
@@ -133,7 +138,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
               </div>
             </div>
 
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user' ? 'bg-blue-600 text-white' : 'border border-black/5 bg-white/78 text-neutral-800 dark:border-white/10 dark:bg-white/[0.06] dark:text-neutral-200'}`}>

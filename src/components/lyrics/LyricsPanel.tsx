@@ -6,6 +6,7 @@ import { Button } from '@heroui/react';
 import { HiMusicalNote, HiInformationCircle, HiTrash, HiXMark } from 'react-icons/hi2';
 import { getCurrentLyricsLine, parseVideoTitle, LRCTimestamp, LRCLibResponse } from '@/services/lyrics/lrclibService';
 import { searchLyricsWithFallback, type LyricsServiceResponse } from '@/services/lyrics/lyricsService';
+import { useEmbeddedPanelHeight } from '@/hooks/ui/useEmbeddedPanelHeight';
 
 interface LyricsPanelProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const embeddedHeight = useEmbeddedPanelHeight(embedded, panelRef);
 
   useEffect(() => {
     if (isOpen && searchInputRef.current) {
@@ -111,25 +114,54 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
     if (lrclibData?.synchronized_lyrics) return getCurrentLyricsLine(lrclibData.synchronized_lyrics, currentTime);
     return { currentIndex: -1 };
   })();
+  const syncedLyrics = enhancedLyricsData?.synchronized_lyrics || lrclibData?.synchronized_lyrics;
 
   useEffect(() => {
     if (hasSynced && displayMode === 'sync' && currentLyricsInfo.currentIndex >= 0) {
       const container = lyricsContainerRef.current;
-      const el = document.querySelector(`[data-lyrics-index="${currentLyricsInfo.currentIndex}"]`) as HTMLElement | null;
+      const el = container?.querySelector(`[data-lyrics-index="${currentLyricsInfo.currentIndex}"]`) as HTMLElement | null;
       if (container && el) {
-        const cRect = container.getBoundingClientRect();
-        const eRect = el.getBoundingClientRect();
-        const delta = (eRect.top - cRect.top) - (container.clientHeight / 2 - el.clientHeight / 2);
-        container.scrollBy({ top: delta, behavior: 'smooth' });
+        const lineCount = syncedLyrics?.length || 0;
+        const currentIndex = currentLyricsInfo.currentIndex;
+        const containerHeight = container.clientHeight;
+        const maxScrollTop = Math.max(0, container.scrollHeight - containerHeight);
+        const stickyTitle = container.querySelector('[data-lyrics-sticky-header]') as HTMLElement | null;
+        const topSafeArea = (stickyTitle?.offsetHeight || 0) + 12;
+        const isNearBottom = lineCount > 0 && currentIndex >= Math.max(0, lineCount - 3);
+        const bottomSafeArea = Math.min(140, Math.max(88, containerHeight * 0.28));
+        const safeViewportHeight = Math.max(1, containerHeight - topSafeArea - bottomSafeArea);
+        const topPinnedTarget = el.offsetTop - topSafeArea;
+        const centeredTarget = el.offsetTop - topSafeArea - (safeViewportHeight / 2) + (el.clientHeight / 2);
+
+        let targetScrollTop = 0;
+
+        if (isNearBottom) {
+          targetScrollTop = el.offsetTop - (containerHeight - bottomSafeArea - 12) + el.clientHeight;
+        } else {
+          // Ease from a top-pinned start into the centered reading position
+          // instead of switching modes abruptly after the first few lines.
+          const transitionStartIndex = 1;
+          const transitionEndIndex = 5;
+          const transitionProgress = Math.max(
+            0,
+            Math.min(1, (currentIndex - transitionStartIndex) / (transitionEndIndex - transitionStartIndex))
+          );
+
+          targetScrollTop = topPinnedTarget + ((centeredTarget - topPinnedTarget) * transitionProgress);
+        }
+
+        container.scrollTo({
+          top: Math.min(maxScrollTop, Math.max(0, targetScrollTop)),
+          behavior: 'smooth'
+        });
       }
     }
-  }, [currentLyricsInfo.currentIndex, lrclibData, enhancedLyricsData, displayMode, hasSynced]);
+  }, [currentLyricsInfo.currentIndex, displayMode, hasSynced, syncedLyrics]);
 
   const songTitle = enhancedLyricsData?.metadata?.title || lrclibData?.metadata?.title;
   const songArtist = enhancedLyricsData?.metadata?.artist || lrclibData?.metadata?.artist;
   const geniusUrl = enhancedLyricsData?.metadata?.genius_url;
 
-  const syncedLyrics = enhancedLyricsData?.synchronized_lyrics || lrclibData?.synchronized_lyrics;
   const hasAnyData = !!(lyricsData || lrclibData || enhancedLyricsData);
 
   const formatLyrics = (lyrics: string) =>
@@ -187,6 +219,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             />
           )}
           <motion.div
+            ref={panelRef}
             className={`
               ${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'}
               ${embedded ? '' : 'z-[9998]'}
@@ -196,6 +229,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
               ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96'}
               ${className}
             `}
+            style={embeddedHeight ? { height: `${embeddedHeight}px`, maxHeight: `${embeddedHeight}px`, minHeight: 0 } : undefined}
             initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
             exit={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
@@ -286,7 +320,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
             <div ref={lyricsContainerRef} className="relative flex-1 overflow-y-auto overscroll-contain">
               {/* Song title — sticky with subtle backdrop blur only */}
               {(songTitle || songArtist) && (
-                <div className="sticky top-0 z-10 isolate overflow-hidden border-b border-white/20 dark:border-white/5">
+                <div data-lyrics-sticky-header className="sticky top-0 z-10 isolate overflow-hidden border-b border-white/20 dark:border-white/5">
                   <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white/55 backdrop-blur-xl dark:bg-slate-950/30" />
                   <div className="px-4 pt-2 pb-1.5">
                     <h4 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">{songTitle}</h4>
@@ -301,7 +335,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
               )}
 
               {/* Lyrics content */}
-              <div className="px-4 pb-4">
+              <div className={`px-4 ${displayMode === 'sync' && syncedLyrics ? 'pt-2 pb-28' : 'pb-4'}`}>
                 {/* Loading */}
                 {isLoading && (
                   <div className="flex justify-center items-center py-16">

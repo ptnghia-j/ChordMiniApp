@@ -1029,7 +1029,12 @@ export default function YouTubeVideoAnalyzePage() {
 
         {/* Resizable split layout */}
         {/* Split layout switches to single-pane when both side panels are closed */}
-        <div className="h-[calc(100vh-180px)] min-h-0 px-4 pb-1">
+        <div
+          className="min-h-0 px-4 pb-1 transition-[height] duration-300"
+          style={{
+            height: `calc(100vh - 180px - ${(isLyricsPanelOpen || isChatbotOpen) ? 'var(--mobile-video-dock-height, 0px)' : '0px'})`
+          }}
+        >
           <AnalysisSplitLayout
             isSplit={isLyricsPanelOpen || isChatbotOpen}
             storageKey="analysis-split-layout-v1"

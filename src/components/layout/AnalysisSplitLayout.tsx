@@ -74,16 +74,16 @@ export default function AnalysisSplitLayout({
             <div
               className={`transition-colors ${
                 orientation === 'horizontal'
-                  ? 'w-4 md:w-5 h-full cursor-col-resize'
-                  : 'h-4 md:h-5 w-full cursor-row-resize'
+                  ? 'w-2 md:w-3 h-full cursor-col-resize'
+                  : 'h-2 md:h-3 w-full cursor-row-resize'
               }`}
             >
               {/* FIXED: Centered visible grabber glyph */}
               <div className="h-full w-full flex items-center justify-center">
                 <div className={`${
                   orientation === 'horizontal'
-                    ? 'h-12 w-1' // Increased height for better visibility
-                    : 'w-12 h-1' // Increased width for better visibility
+                    ? 'h-10 w-px'
+                    : 'w-10 h-px'
                 } rounded bg-gray-400 dark:bg-gray-500 shadow-sm group-hover:bg-gray-500 dark:group-hover:bg-gray-400 transition-colors`}/>
               </div>
               {/* FIXED: Centered bar background with better hover feedback */}

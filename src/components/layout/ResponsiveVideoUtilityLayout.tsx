@@ -95,6 +95,15 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
   const extraLift = panelsOpen ? 32 : 104;
   const shouldUseFixedMobileDock = !isMdUp && !isDockPinnedAboveFooter;
 
+  useEffect(() => {
+    const dockHeight = shouldUseFixedMobileDock ? layoutHeight + 12 : 0;
+    document.documentElement.style.setProperty('--mobile-video-dock-height', `${dockHeight}px`);
+
+    return () => {
+      document.documentElement.style.setProperty('--mobile-video-dock-height', '0px');
+    };
+  }, [layoutHeight, shouldUseFixedMobileDock]);
+
   return (
     <>
       {shouldUseFixedMobileDock ? (
@@ -102,6 +111,7 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
       ) : null}
       <div
         ref={layoutContainerRef}
+        data-mobile-video-dock={shouldUseFixedMobileDock ? 'true' : 'false'}
         className={
           shouldUseFixedMobileDock
             ? 'fixed inset-x-0 bottom-0 z-[80] flex flex-col items-stretch gap-2 px-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-1.5'
