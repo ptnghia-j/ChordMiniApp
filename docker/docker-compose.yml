@@ -30,7 +30,6 @@ services:
 
       # API Configuration (Public)
       - NEXT_PUBLIC_YOUTUBE_API_KEY=${NEXT_PUBLIC_YOUTUBE_API_KEY}
-      - NEXT_PUBLIC_PYTHON_API_URL=${NEXT_PUBLIC_PYTHON_API_URL:-http://backend:8080}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
 
       # Feature Flags (Public)
@@ -39,6 +38,8 @@ services:
       - NEXT_DISABLE_DEV_OVERLAY=${NEXT_DISABLE_DEV_OVERLAY:-true}
 
       # Server-Only Secrets (Never exposed to browser)
+      - PYTHON_API_URL=${PYTHON_API_URL:-http://backend:8080}
+      - SONGFORMER_API_URL=${SONGFORMER_API_URL:-http://backend:8080}
       - MUSIC_AI_API_KEY=${MUSIC_AI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GENIUS_API_KEY=${GENIUS_API_KEY}

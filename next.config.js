@@ -3,27 +3,6 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
-function toOrigin(value) {
-  if (!value) return null;
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
-}
-
-const dynamicConnectSrcOrigins = [
-  process.env.PYTHON_API_URL,
-  process.env.SONGFORMER_API_URL,
-  process.env.LOCAL_SONGFORMER_API_URL,
-  process.env.NEXT_PUBLIC_PYTHON_API_URL,
-  'http://localhost:5001',
-  'http://127.0.0.1:5001',
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
-  'https://songformer-ouqoeeszja-uc.a.run.app',
-].map(toOrigin).filter(Boolean);
-
 const connectSrcValues = Array.from(new Set([
   "'self'",
   'blob:',
@@ -43,7 +22,6 @@ const connectSrcValues = Array.from(new Set([
   'https://partner.googleadservices.com',
   'https://googleadservices.com',
   'https://quicktube.app',
-  'https://chordmini-backend-191567167632.us-central1.run.app',
   'https://lrclib.net',
   'https://api.genius.com',
   'https://vercel.com',
@@ -53,7 +31,6 @@ const connectSrcValues = Array.from(new Set([
   'https://api.vercel.com',
   'https://gleitz.github.io',
   'https://*.vocalremover.org',
-  ...dynamicConnectSrcOrigins,
 ]));
 
 const contentSecurityPolicy = [
@@ -231,16 +208,6 @@ const nextConfig = {
         source: '/github',
         destination: 'https://github.com/ptnghia-j/ChordMiniApp',
         permanent: false,
-      },
-    ];
-  },
-
-  // Rewrites for API proxying
-  async rewrites() {
-    return [
-      {
-        source: '/api/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5001'}/:path*`,
       },
     ];
   },

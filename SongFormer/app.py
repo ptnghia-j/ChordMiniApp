@@ -43,6 +43,7 @@ from muq import MuQ
 from musicfm.model.musicfm_25hz import MusicFM25Hz
 from postprocessing.functional import postprocess_functional_structure
 
+MUQ_HOME_PATH = Path("ckpts") / "MuQ"
 MUSICFM_HOME_PATH = Path("ckpts") / "MusicFM"
 AFTER_DOWNSAMPLING_FRAME_RATES = 8.333
 DATASET_LABEL = "SongForm-HX-8Class"
@@ -228,6 +229,16 @@ def load_checkpoint(checkpoint_path: str, device_name: str | None = None) -> dic
     raise ValueError("Unsupported checkpoint format. Use .pt or .safetensors")
 
 
+def require_local_model_files(model_name: str, model_dir: Path, required_files: tuple[str, ...]) -> Path:
+    missing_files = [str(model_dir / filename) for filename in required_files if not (model_dir / filename).is_file()]
+    if missing_files:
+        raise FileNotFoundError(
+            f"Missing required local {model_name} assets: {', '.join(missing_files)}. "
+            "Refusing to fall back to remote Hugging Face downloads."
+        )
+    return model_dir
+
+
 def initialize_models(
     model_name: str = DEFAULT_MODEL_NAME,
     checkpoint: str = DEFAULT_CHECKPOINT,
@@ -240,7 +251,8 @@ def initialize_models(
     logger.info("Initializing SongFormer on device=%s (%s)", device, device_reason)
 
     muq_start = time.perf_counter()
-    muq_model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
+    muq_dir = require_local_model_files("MuQ", MUQ_HOME_PATH, ("config.json", "model.safetensors"))
+    muq_model = MuQ.from_pretrained(str(muq_dir))
     muq_model = muq_model.to(device).eval()
     logger.info("Loaded MuQ model in %.2fs", time.perf_counter() - muq_start)
 
@@ -544,11 +556,11 @@ def create_app() -> Flask:
         return jsonify({
             "name": "SongFormer API",
             "status": "ok",
-            "endpoints": ["GET /healthz", "GET /api/songformer/info", "POST /api/songformer/segment"],
+            "endpoints": ["GET /api/songformer/health", "GET /api/songformer/info", "POST /api/songformer/segment"],
         })
 
-    @flask_app.get("/healthz")
-    def healthz():
+    @flask_app.get("/api/songformer/health")
+    def songformer_health():
         warmup = request.args.get("warmup", "false").lower() in {"1", "true", "yes"}
         if warmup:
             ensure_models_initialized()

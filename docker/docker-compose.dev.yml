@@ -10,14 +10,13 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-      args:
-        - NEXT_PUBLIC_PYTHON_API_URL=http://backend:8080
     container_name: chordmini-frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_PYTHON_API_URL=http://backend:8080
+      - PYTHON_API_URL=http://backend:8080
+      - SONGFORMER_API_URL=http://backend:8080
       - NEXT_TELEMETRY_DISABLED=1
       - PORT=3000
       - HOSTNAME=0.0.0.0

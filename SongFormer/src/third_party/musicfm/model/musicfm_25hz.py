@@ -15,6 +15,7 @@
 
 import json
 import random
+from pathlib import Path
 import torch
 from torch import nn
 from einops import rearrange
@@ -50,6 +51,7 @@ class MusicFM25Hz(nn.Module):
         is_flash=False,
         stat_path="./data/fma_stats.json",
         model_path="./data/pretrained_fma.pt",
+        config_path=None,
     ):
         super(MusicFM25Hz, self).__init__()
 
@@ -98,9 +100,18 @@ class MusicFM25Hz(nn.Module):
                 Wav2Vec2ConformerEncoder,
                 Wav2Vec2ConformerConfig,
             )
-        config = Wav2Vec2ConformerConfig.from_pretrained(
-            "facebook/wav2vec2-conformer-rope-large-960h-ft"
+        local_config_path = None
+        if config_path:
+            local_config_path = Path(config_path)
+        elif model_path:
+            local_config_path = Path(model_path).with_name("config.json")
+
+        config_source = (
+            str(local_config_path)
+            if local_config_path is not None and local_config_path.exists()
+            else "facebook/wav2vec2-conformer-rope-large-960h-ft"
         )
+        config = Wav2Vec2ConformerConfig.from_pretrained(config_source)
         config.num_hidden_layers = encoder_depth
         config.hidden_size = encoder_dim
 

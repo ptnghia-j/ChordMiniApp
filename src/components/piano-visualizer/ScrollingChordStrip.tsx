@@ -6,7 +6,7 @@ import { ChordCell } from '@/components/chord-analysis/ChordCell';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
-import { getSegmentationCellClassNameForBeatIndex } from '@/utils/chordFormatting';
+import { getSegmentationColorForBeatIndex } from '@/utils/chordFormatting';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -430,9 +430,10 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             !!uncorrectedChords &&
             box.beatIndex < uncorrectedChords.length &&
             uncorrectedChords[box.beatIndex] !== box.chordName;
-          const segmentationClassName = showSegmentation && segmentationData && !isPast && !isEmpty
-            ? getSegmentationCellClassNameForBeatIndex(box.beatIndex, [], segmentationData, true, undefined, box.startTime)
+          const segmentationColor = showSegmentation && segmentationData && !isPast && !isEmpty
+            ? getSegmentationColorForBeatIndex(box.beatIndex, [], segmentationData, true, undefined, box.startTime)
             : undefined;
+          const hasSegmentationOverlay = Boolean(segmentationColor);
           const containerClass = `${isActive
             ? showSegmentation && segmentationData && !isEmpty
               ? 'border-blue-400 dark:border-blue-500 text-blue-800 dark:text-blue-100'
@@ -443,7 +444,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                 ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600/40'
                 : showSegmentation && segmentationData
                   ? 'border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
-                  : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'} ${segmentationClassName || ''}`;
+                  : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'}`;
 
           const containerStyle = {
             left: box.x,
@@ -456,25 +457,38 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
               className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden ${containerClass}`}
               style={containerStyle}
             >
-              <ChordCell
-                compact
-                chord={box.chordName}
-                globalIndex={box.beatIndex}
-                displayChord={box.chordName}
-                isEmpty={isEmpty}
-                wasCorrected={wasCorrected}
-                cellSize={height - 2}
-                isDarkMode={isDarkMode}
-                showChordLabel={box.showLabel && box.width > 20}
-                isClickable={false}
-                onBeatClick={noopBeatClick}
-                getChordStyle={stripGetChordStyle}
-                getDynamicFontSize={stripGetDynamicFontSize}
-                showRomanNumerals={showRomanNumerals}
-                romanNumeral={romanNumeral}
-                accidentalPreference={accidentalPreference ?? undefined}
-                segmentationClassName={undefined}
-              />
+              {hasSegmentationOverlay && (
+                <>
+                  <div className="absolute inset-0 pointer-events-none bg-slate-950/50 dark:bg-black/60" />
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ backgroundColor: segmentationColor }}
+                  />
+                  <div className="absolute inset-0 pointer-events-none ring-1 ring-inset ring-black/20 dark:ring-white/10" />
+                </>
+              )}
+
+              <div className="relative z-[1] h-full">
+                <ChordCell
+                  compact
+                  chord={box.chordName}
+                  globalIndex={box.beatIndex}
+                  displayChord={box.chordName}
+                  isEmpty={isEmpty}
+                  wasCorrected={wasCorrected}
+                  cellSize={height - 2}
+                  isDarkMode={isDarkMode}
+                  showChordLabel={box.showLabel && box.width > 20}
+                  isClickable={false}
+                  onBeatClick={noopBeatClick}
+                  getChordStyle={stripGetChordStyle}
+                  getDynamicFontSize={stripGetDynamicFontSize}
+                  showRomanNumerals={showRomanNumerals}
+                  romanNumeral={romanNumeral}
+                  accidentalPreference={accidentalPreference ?? undefined}
+                  segmentationClassName={undefined}
+                />
+              </div>
             </div>
           );
         })}

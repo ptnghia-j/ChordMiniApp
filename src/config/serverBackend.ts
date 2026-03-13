@@ -16,7 +16,7 @@ function isLocalUrl(candidateUrl: string | undefined): boolean {
 }
 
 export function getPythonApiUrl(): string {
-  return process.env.PYTHON_API_URL || process.env.NEXT_PUBLIC_PYTHON_API_URL || DEFAULT_PYTHON_API_URL;
+  return process.env.PYTHON_API_URL || DEFAULT_PYTHON_API_URL;
 }
 
 export function getSongformerApiUrl(): string {

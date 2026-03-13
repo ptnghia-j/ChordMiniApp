@@ -10,52 +10,54 @@ import { SegmentationResult } from '@/types/chatbotTypes';
  * Keep both the raw accent color and the Tailwind cell class in one place so
  * section headers and beat cells stay visually aligned without duplicate maps.
  */
+const SEGMENTATION_CELL_VISIBILITY_BASE = 'backdrop-blur-[2px] ring-1 ring-inset ring-black/10 dark:ring-white/10';
+
 export const SEGMENTATION_STYLE_MAP: Record<string, { color: string; cellClassName: string }> = {
   'intro': {
     color: 'rgba(156, 163, 175, 0.3)',
-    cellClassName: '!bg-gray-400/25 dark:!bg-gray-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-gray-500/45 dark:!bg-gray-700/40`
   },
   'outro': {
     color: 'rgba(156, 163, 175, 0.3)',
-    cellClassName: '!bg-gray-400/25 dark:!bg-gray-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-gray-500/45 dark:!bg-gray-700/40`
   },
   'verse': {
     color: 'rgba(34, 197, 94, 0.3)',
-    cellClassName: '!bg-green-500/25 dark:!bg-green-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-green-500/45 dark:!bg-green-700/35`
   },
   'pre-chorus': {
     color: 'rgba(251, 146, 60, 0.3)',
-    cellClassName: '!bg-orange-400/25 dark:!bg-orange-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-orange-400/45 dark:!bg-orange-700/35`
   },
   'pre_chorus': {
     color: 'rgba(251, 146, 60, 0.3)',
-    cellClassName: '!bg-orange-400/25 dark:!bg-orange-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-orange-400/45 dark:!bg-orange-700/35`
   },
   'chorus': {
     color: 'rgba(244, 63, 94, 0.3)',
-    cellClassName: '!bg-rose-500/25 dark:!bg-rose-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-rose-500/45 dark:!bg-rose-700/35`
   },
   'bridge': {
     color: 'rgba(168, 85, 247, 0.3)',
-    cellClassName: '!bg-violet-500/25 dark:!bg-violet-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-violet-500/45 dark:!bg-violet-700/35`
   },
   'instrumental': {
     color: 'rgba(250, 204, 21, 0.3)',
-    cellClassName: '!bg-yellow-400/30 dark:!bg-yellow-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-yellow-400/50 dark:!bg-yellow-700/40`
   },
   'solo': {
     color: 'rgba(250, 204, 21, 0.3)',
-    cellClassName: '!bg-yellow-400/30 dark:!bg-yellow-800/20'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-yellow-400/50 dark:!bg-yellow-700/40`
   },
   'breakdown': {
     color: 'rgba(156, 163, 175, 0.2)',
-    cellClassName: '!bg-gray-400/20 dark:!bg-gray-800/15'
+    cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-gray-500/40 dark:!bg-gray-700/35`
   },
 };
 
 const DEFAULT_SEGMENTATION_STYLE = {
   color: 'rgba(156, 163, 175, 0.2)',
-  cellClassName: '!bg-gray-400/20 dark:!bg-gray-400/15'
+  cellClassName: `${SEGMENTATION_CELL_VISIBILITY_BASE} !bg-gray-500/40 dark:!bg-gray-500/30`
 } as const;
 
 /**

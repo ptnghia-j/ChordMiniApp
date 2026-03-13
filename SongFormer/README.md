@@ -4,7 +4,7 @@ Standalone Flask API for SongFormer structural segmentation, intended for local 
 
 ## Endpoints
 
-- `GET /healthz` — health check; add `?warmup=true` to preload models
+- `GET /api/songformer/health` — health check; add `?warmup=true` to preload models
 - `GET /api/songformer/info` — service metadata
 - `POST /api/songformer/segment` — run segmentation
 
@@ -96,6 +96,26 @@ SONGFORMER_API_URL=https://your-songformer-cloud-run-url
 - Cold starts can be noticeable because SongFormer loads multiple audio models
 - Prefer CPU with generous memory for testing; use GPU only if your deployment path supports it and you need lower latency
 
+### Fast redeploy for small SongFormer code changes
+
+The normal `gcloud builds submit ./SongFormer` path can re-upload a very large source bundle. For small changes such as `app.py` updates, a faster approach is to build an overlay image from the **currently deployed digest** and replace only `/app/app.py`, then deploy that new image.
+
+This avoids the large source upload and is a quick, safe way to roll out small SongFormer code changes to Cloud Run.
+
+Example:
+
+```bash
+TMPDIR=$(mktemp -d)
+cp SongFormer/app.py "$TMPDIR/app.py"
+cat > "$TMPDIR/Dockerfile" <<'EOF'
+FROM us-central1-docker.pkg.dev/<gcp-project-id>/cloud-run-source-deploy/songformer@sha256:<current-deployed-digest>
+WORKDIR /app
+COPY app.py /app/app.py
+EOF
+gcloud builds submit "$TMPDIR" --tag us-central1-docker.pkg.dev/<gcp-project-id>/cloud-run-source-deploy/songformer:quick-patch
+gcloud run deploy songformer --image us-central1-docker.pkg.dev/<gcp-project-id>/cloud-run-source-deploy/songformer:quick-patch --region us-central1
+```
+
 ## Docker
 
 Build locally:
@@ -113,15 +133,15 @@ docker run --rm -p 8080:8080 songformer-backend:local
 Smoke test:
 
 ```bash
-curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/api/songformer/health
 curl http://127.0.0.1:8080/api/songformer/info
 ```
 
 Example Google Container Registry tag for the current GCP project:
 
 ```bash
-docker tag songformer-backend:local gcr.io/chordmini-d29f9/songformer-backend:latest
-docker push gcr.io/chordmini-d29f9/songformer-backend:latest
+docker tag songformer-backend:local gcr.io/<gcp-project-id>/songformer-backend:latest
+docker push gcr.io/<gcp-project-id>/songformer-backend:latest
 ```
 
 ## Operational expectations
