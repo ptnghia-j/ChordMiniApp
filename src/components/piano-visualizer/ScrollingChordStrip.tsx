@@ -265,12 +265,15 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     const timeToNormalizedX = (time: number): number => {
       if (chordEvents.length === 0) return time * pixelsPerSecond;
 
+      const firstEvent = chordEvents[0];
+      const firstEventX = firstEvent.beatIndex * uniformBeatWidth;
+
       // Before first event
-      if (time <= chordEvents[0].startTime) {
-        // Scale linearly from 0 to the first cell's x
-        const firstStart = chordEvents[0].startTime;
-        if (firstStart <= 0) return 0;
-        return (time / firstStart) * 0; // stays at 0 before first event
+      if (time <= firstEvent.startTime) {
+        // Preserve the chord grid's absolute beat offset. Shift cells have no
+        // duration, but they still occupy visual beat slots before playback
+        // reaches the first timed event.
+        return firstEventX;
       }
 
       // After last event
@@ -279,7 +282,8 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       if (time >= lastEvent.endTime) {
         // Continue scrolling past the end at uniform rate
         const overshoot = time - lastEvent.endTime;
-        return (lastIdx + 1) * uniformBeatWidth + overshoot * pixelsPerSecond;
+        const lastEventSpan = Math.max(lastEvent.beatCount ?? 1, 1);
+        return (lastEvent.beatIndex + lastEventSpan) * uniformBeatWidth + overshoot * pixelsPerSecond;
       }
 
       // Binary search for the event containing `time`
@@ -297,16 +301,16 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       const fraction = eventDuration > 0
         ? (time - event.startTime) / eventDuration
         : 0;
-      return (lo + fraction) * uniformBeatWidth;
+      const eventBeatSpan = Math.max(event.beatCount ?? 1, 1);
+      return (event.beatIndex + fraction * eventBeatSpan) * uniformBeatWidth;
     };
 
 
     // ── Build chord boxes with uniform positions ──────────────────────────
-    const firstBeatIndex = chordEvents[0].beatIndex;
-
     const boxes = chordEvents.map((event, idx) => {
-      const uniformX = idx * uniformBeatWidth;
-      const isMeasureStart = idx > 0 && (event.beatIndex - firstBeatIndex) % timeSignature === 0;
+      const eventBeatSpan = Math.max(event.beatCount ?? 1, 1);
+      const uniformX = event.beatIndex * uniformBeatWidth;
+      const isMeasureStart = idx > 0 && event.beatIndex % timeSignature === 0;
 
       // Show chord label only when the chord VISUALLY differs from the
       // previous *visible* event.  This is critical because
@@ -334,7 +338,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
         startTime: event.startTime,
         endTime: event.endTime,
         x: uniformX + CELL_GAP / 2,
-        width: Math.max(uniformBeatWidth - CELL_GAP, 2),
+        width: Math.max(eventBeatSpan * uniformBeatWidth - CELL_GAP, 2),
         index: idx,
         isMeasureStart,
         separatorX: uniformX,
@@ -350,7 +354,9 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     return {
       chordBoxes: boxes,
       measureSeparators: separators,
-      totalWidth: chordEvents.length * uniformBeatWidth,
+      totalWidth: boxes.length > 0
+        ? boxes[boxes.length - 1].separatorX + boxes[boxes.length - 1].width + CELL_GAP / 2
+        : 0,
       timeToNormalizedX,
     };
   }, [chordEvents, pixelsPerSecond, timeSignature, accidentalPreference]);
