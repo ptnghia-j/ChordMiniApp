@@ -52,9 +52,15 @@ export const parseChordNotation = (chord: string): {
     } else if (qualityAndExtensions.startsWith('min') || qualityAndExtensions.startsWith('m')) {
       quality = 'minor';
       extensions = [qualityAndExtensions.replace(/^(min|m)/, '')].filter(Boolean);
+    } else if (qualityAndExtensions.includes('°')) {
+      quality = 'diminished';
+      extensions = [qualityAndExtensions.replace(/°/g, '')].filter(Boolean);
     } else if (qualityAndExtensions.includes('dim')) {
       quality = 'diminished';
       extensions = [qualityAndExtensions.replace('dim', '')].filter(Boolean);
+    } else if (qualityAndExtensions.includes('+')) {
+      quality = 'augmented';
+      extensions = [qualityAndExtensions.replace(/\+/g, '')].filter(Boolean);
     } else if (qualityAndExtensions.includes('aug')) {
       quality = 'augmented';
       extensions = [qualityAndExtensions.replace('aug', '')].filter(Boolean);

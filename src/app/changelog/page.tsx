@@ -31,19 +31,23 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.6.1',
-      date: 'March 11, 2026',
+      date: 'March 15, 2026',
       title: 'Analyze Flow & Playback UX Checks (In Development)',
       description: 'Current working tree includes analyze-flow refactors plus playback UX performance/alignment improvements and verification updates.',
       features: [
         'IMPROVED: Lyrics playback — stable display props, active-line-only time updates, and word-timing-aware chord placement',
         'IMPROVED: Guitar/piano playback UI — memoized guitar diagram focus updates and lighter piano key highlighting',
+        'FIX: Pitch-shifted chord labels now stay aligned between the beat chord grid and guitar chord diagrams',
+        'NEW: Guitar chord diagrams now preserve supported common slash-chord inversions before falling back to root-position shapes',
         'IMPROVED: Refactored analyze flow for better route handoff, model setup, and state management',
         'NEW: Analyze flow helpers/hooks/components added for route handoff, model setup, and related page/state updates',
+        'UI: Chord symbols now render diminished and double-accidental notation more consistently across pitch-shifted views',
         'UI: model selection page separated from analyze page',
         'UI: dynamic background by blurring the video thumbnail'
       ],
       technical: [
         'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',
+        'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting',
         'VALIDATION: Focused non-Playwright playback smoke tests passed; lint passed; build passed',
         'AUDIT: npm audit reports 1 moderate transitive vulnerability in file-type (fix available via npm audit fix)',
       ],

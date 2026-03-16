@@ -8,6 +8,7 @@
 
 // Import the official chord database
 import guitarChordsDb from '@tombatossals/chords-db/lib/guitar.json';
+import { getBassNoteFromInversion } from '@/utils/chordFormatting';
 
 interface ChordPosition {
   frets: number[];
@@ -41,12 +42,32 @@ interface ChordDatabase {
   };
 }
 
+interface ParsedChordName {
+  root: string;
+  suffix: string;
+  bass: string | null;
+}
+
+interface ChordLookupCandidate {
+  displayName: string;
+  normalizedRoot: string;
+  normalizedSuffix: string;
+  isExactInversion: boolean;
+}
+
 // Use the official chord database
 let guitarChords: ChordDatabase | null = null;
 
 async function loadChordDatabase(): Promise<ChordDatabase> {
   if (!guitarChords) {
     // Load the official @tombatossals/chords-db database
+    guitarChords = guitarChordsDb as ChordDatabase;
+  }
+  return guitarChords;
+}
+
+function getChordDatabaseSync(): ChordDatabase {
+  if (!guitarChords) {
     guitarChords = guitarChordsDb as ChordDatabase;
   }
   return guitarChords;
@@ -107,8 +128,10 @@ export class ChordMappingService {
     'min': 'minor',
     '-': 'minor',
     'dim': 'dim',
+    '°': 'dim',
     'o': 'dim',
     'dim7': 'dim7',
+    '°7': 'dim7',
     'aug': 'aug',
     '+': 'aug',
     'sus2': 'sus2',
@@ -159,6 +182,27 @@ export class ChordMappingService {
     'augmented': 'aug'
   };
 
+  private readonly bassEnharmonicMap: Record<string, string> = {
+    'Cb': 'B',
+    'B': 'Cb',
+    'C#': 'Db',
+    'Db': 'C#',
+    'D#': 'Eb',
+    'Eb': 'D#',
+    'E': 'Fb',
+    'Fb': 'E',
+    'E#': 'F',
+    'F': 'E#',
+    'F#': 'Gb',
+    'Gb': 'F#',
+    'G#': 'Ab',
+    'Ab': 'G#',
+    'A#': 'Bb',
+    'Bb': 'A#',
+    'B#': 'C',
+    'C': 'B#'
+  };
+
 
   public static getInstance(): ChordMappingService {
     if (!ChordMappingService.instance) {
@@ -167,54 +211,188 @@ export class ChordMappingService {
     return ChordMappingService.instance;
   }
 
-  /**
-   * Preprocesses chord names to handle inversions and normalize for guitar chord database compatibility
-   * @param chordName - Raw chord name from ML model (e.g., "C/E", "Am/G", "F#m7/A")
-   * @returns Normalized chord name without inversion for chord diagram lookup (e.g., "C", "Am", "F#m7")
-   * Note: This is only used for chord diagram lookup, not for display names
-   */
-  private preprocessChordName(chordName: string): string {
-    if (!chordName || chordName === 'N.C.') {
-      return chordName;
+  private normalizeNoteToken(note: string): string {
+    return note.trim().replace(/♯/g, '#').replace(/♭/g, 'b');
+  }
+
+  private getAccidentalPreference(note: string): 'sharp' | 'flat' | undefined {
+    if (/[b♭]/.test(note)) return 'flat';
+    if (/[#♯]/.test(note)) return 'sharp';
+    return undefined;
+  }
+
+  private getEnharmonicBassVariants(bass: string): string[] {
+    const normalizedBass = this.normalizeNoteToken(bass);
+    const variants = [normalizedBass];
+    const enharmonic = this.bassEnharmonicMap[normalizedBass];
+
+    if (enharmonic && enharmonic !== normalizedBass) {
+      variants.push(enharmonic);
     }
 
-    // Handle chord inversions by removing the bass note (everything after "/")
-    // Examples: "C/E" → "C", "Am/G" → "Am", "F#m7/A" → "F#m7"
-    // This is necessary because guitar chord diagrams don't accurately represent slash chord fingerings
-    // The original chord name with slash notation should be preserved for display purposes
-    const inversionMatch = chordName.match(/^([^/]+)\/(.+)$/);
-    if (inversionMatch) {
-      const rootChord = inversionMatch[1].trim();
-      return rootChord;
+    return Array.from(new Set(variants));
+  }
+
+  private normalizeBassNote(root: string, quality: string, bass: string): string {
+    const normalizedBass = this.normalizeNoteToken(bass);
+
+    if (/^[b#]?\d+$/.test(normalizedBass)) {
+      return getBassNoteFromInversion(
+        this.normalizeNoteToken(root),
+        quality,
+        normalizedBass,
+        this.getAccidentalPreference(root)
+      );
     }
 
-    return chordName;
+    return normalizedBass;
+  }
+
+  private formatDisplayChord(root: string, normalizedSuffix: string, bass?: string | null): string {
+    const normalizedRoot = this.normalizeNoteToken(root);
+    const displaySuffix = normalizedSuffix === 'major'
+      ? ''
+      : normalizedSuffix === 'minor'
+        ? 'm'
+        : normalizedSuffix;
+
+    return bass
+      ? `${normalizedRoot}${displaySuffix}/${bass}`
+      : `${normalizedRoot}${displaySuffix}`;
+  }
+
+  private formatSlashSuffix(normalizedSuffix: string, bass: string): string {
+    const prefix = normalizedSuffix === 'major'
+      ? ''
+      : normalizedSuffix === 'minor'
+        ? 'm'
+        : normalizedSuffix;
+
+    return `${prefix}/${bass}`;
+  }
+
+  private getFallbackOrder(normalizedSuffix: string): string[] {
+    if (normalizedSuffix === 'm13' || normalizedSuffix === 'm11') {
+      return ['m11', 'm9', 'm7', 'minor'];
+    }
+
+    if (normalizedSuffix === 'maj13' || normalizedSuffix === 'maj11') {
+      return ['maj13', 'maj9', 'maj7', 'major'];
+    }
+
+    if (normalizedSuffix === '13' || normalizedSuffix === '11') {
+      return [normalizedSuffix, '9', '7', 'major'];
+    }
+
+    if (normalizedSuffix === 'mMaj7' || normalizedSuffix === 'mmaj7') {
+      return ['mMaj7', 'mmaj7', 'm7', 'minor'];
+    }
+
+    return [];
+  }
+
+  private findChordDataForCandidate(rootChords: ChordData[], candidate: ChordLookupCandidate): ChordData | null {
+    const directMatch = rootChords.find(chord => chord.suffix === candidate.normalizedSuffix);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    if (candidate.isExactInversion) {
+      return null;
+    }
+
+    const tried = new Set<string>([candidate.normalizedSuffix]);
+    const fallbackOrder = this.getFallbackOrder(candidate.normalizedSuffix);
+
+    for (const suffix of fallbackOrder) {
+      if (tried.has(suffix)) continue;
+
+      const fallbackMatch = rootChords.find(chord => chord.suffix === suffix);
+      if (fallbackMatch) {
+        return fallbackMatch;
+      }
+
+      tried.add(suffix);
+    }
+
+    if (candidate.normalizedSuffix !== 'major') {
+      const majorChord = rootChords.find(chord => chord.suffix === 'major');
+      if (majorChord) {
+        return majorChord;
+      }
+    }
+
+    return null;
+  }
+
+  private buildLookupCandidates(chordName: string): ChordLookupCandidate[] {
+    const parsed = this.parseChordName(chordName);
+    if (!parsed) {
+      return [];
+    }
+
+    const normalizedRoot = this.normalizeRoot(parsed.root);
+    const normalizedSuffix = this.normalizeSuffix(parsed.suffix);
+    const candidates: ChordLookupCandidate[] = [];
+
+    if (parsed.bass) {
+      const displayBass = this.normalizeBassNote(parsed.root, parsed.suffix, parsed.bass);
+      const displayName = this.formatDisplayChord(parsed.root, normalizedSuffix, displayBass);
+
+      for (const lookupBass of this.getEnharmonicBassVariants(displayBass)) {
+        candidates.push({
+          displayName,
+          normalizedRoot,
+          normalizedSuffix: this.formatSlashSuffix(normalizedSuffix, lookupBass),
+          isExactInversion: true
+        });
+      }
+    }
+
+    candidates.push({
+      displayName: this.formatDisplayChord(parsed.root, normalizedSuffix),
+      normalizedRoot,
+      normalizedSuffix,
+      isExactInversion: false
+    });
+
+    return candidates.filter((candidate, index, allCandidates) => (
+      index === allCandidates.findIndex(other =>
+        other.displayName === candidate.displayName &&
+        other.normalizedRoot === candidate.normalizedRoot &&
+        other.normalizedSuffix === candidate.normalizedSuffix &&
+        other.isExactInversion === candidate.isExactInversion
+      )
+    ));
   }
 
   /**
    * Parse chord name from ML model output
    * Handles both standard notation ("Am", "F#7", "Bbmaj7") and colon notation ("C:minor", "F#:maj7")
    */
-  private parseChordName(chordName: string): { root: string; suffix: string } | null {
+  private parseChordName(chordName: string): ParsedChordName | null {
     // Handle "N.C." (No Chord) case
-    if (chordName === 'N.C.' || chordName === 'NC' || chordName === '') {
+    if (!chordName || chordName === 'N.C.' || chordName === 'NC') {
       return null;
     }
 
     // Remove any whitespace
     const cleanChord = chordName.trim();
+    const slashIndex = cleanChord.indexOf('/');
+    const chordPart = slashIndex >= 0 ? cleanChord.slice(0, slashIndex).trim() : cleanChord;
+    const bass = slashIndex >= 0 ? cleanChord.slice(slashIndex + 1).trim() : null;
 
     // Check for colon notation first (from ML models like "C:minor", "F#:maj7")
-    const colonMatch = cleanChord.match(/^([A-G][#b♯♭]?):(.+)$/);
+    const colonMatch = chordPart.match(/^([A-G][#b♯♭]?):(.+)$/);
     if (colonMatch) {
       const [, root, suffix] = colonMatch;
-      return { root, suffix };
+      return { root, suffix, bass };
     }
 
     // Enhanced chord pattern for standard notation
     // Matches: Root note (A-G) + optional accidental (#/b/♯/♭) + suffix (everything else)
     const chordPattern = /^([A-G])([#b♯♭]?)(.*)$/;
-    const match = cleanChord.match(chordPattern);
+    const match = chordPart.match(chordPattern);
 
     if (!match) {
       return null;
@@ -223,7 +401,7 @@ export class ChordMappingService {
     const [, rootNote, accidental, suffix] = match;
     const root = rootNote + accidental; // Combine root note with accidental
 
-    return { root, suffix };
+    return { root, suffix, bass };
   }
 
   /**
@@ -273,68 +451,45 @@ export class ChordMappingService {
    * Get chord data from database
    */
   public async getChordData(chordName: string): Promise<ChordData | null> {
-    // First preprocess the chord name to handle inversions
-    const preprocessedChord = this.preprocessChordName(chordName);
-
-    const parsed = this.parseChordName(preprocessedChord);
-    if (!parsed) {
-      return null;
-    }
-
-    const normalizedRoot = this.normalizeRoot(parsed.root);
-    const normalizedSuffix = this.normalizeSuffix(parsed.suffix);
-
-    // Load chord database
     const chordDb = await loadChordDatabase();
+    const lookupCandidates = this.buildLookupCandidates(chordName);
 
-    // Look up in chord database
-    const rootChords = chordDb.chords[normalizedRoot];
-    if (!rootChords) {
-      return null;
-    }
+    for (const candidate of lookupCandidates) {
+      const rootChords = chordDb.chords[candidate.normalizedRoot];
+      if (!rootChords) continue;
 
-    // Find matching suffix
-    const chordData = rootChords.find(chord => chord.suffix === normalizedSuffix);
-    if (chordData) {
-      return chordData;
-    }
-
-    // Hierarchical fallbacks for extended/complex suffixes
-    const tried = new Set<string>([normalizedSuffix]);
-    let fallbackOrder: string[] = [];
-
-    if (normalizedSuffix === 'm13' || normalizedSuffix === 'm11') {
-      // Minor extensions: prefer specific, then simplify
-      fallbackOrder = ['m11', 'm9', 'm7', 'minor'];
-    } else if (normalizedSuffix === 'maj13' || normalizedSuffix === 'maj11') {
-      // Major extensions
-      fallbackOrder = ['maj13', 'maj9', 'maj7', 'major'];
-    } else if (normalizedSuffix === '13' || normalizedSuffix === '11') {
-      // Dominant extensions
-      fallbackOrder = [normalizedSuffix, '9', '7', 'major'];
-    } else if (normalizedSuffix === 'mMaj7' || normalizedSuffix === 'mmaj7') {
-      // Minor-major seventh
-      fallbackOrder = ['mMaj7', 'mmaj7', 'm7', 'minor'];
-    }
-
-    for (const candidate of fallbackOrder) {
-      if (tried.has(candidate)) continue;
-      const alt = rootChords.find(chord => chord.suffix === candidate);
-      if (alt) {
-        return alt;
-      }
-      tried.add(candidate);
-    }
-
-    // Final fallback: try major chord if still not found
-    if (normalizedSuffix !== 'major') {
-      const majorChord = rootChords.find(chord => chord.suffix === 'major');
-      if (majorChord) {
-        return majorChord;
+      const chordData = this.findChordDataForCandidate(rootChords, candidate);
+      if (chordData) {
+        return chordData;
       }
     }
 
     return null;
+  }
+
+  /**
+   * Resolve the canonical chord label used by guitar diagrams.
+   * Prefers an exact slash-chord match when the database supports it, and
+   * otherwise falls back to the root-position label that will actually render.
+   */
+  public getPreferredDiagramChordName(chordName: string): string {
+    if (!chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC') {
+      return 'N.C.';
+    }
+
+    const chordDb = getChordDatabaseSync();
+    const lookupCandidates = this.buildLookupCandidates(chordName);
+
+    for (const candidate of lookupCandidates) {
+      const rootChords = chordDb.chords[candidate.normalizedRoot];
+      if (!rootChords) continue;
+
+      if (this.findChordDataForCandidate(rootChords, candidate)) {
+        return candidate.displayName;
+      }
+    }
+
+    return chordName;
   }
 
   /**

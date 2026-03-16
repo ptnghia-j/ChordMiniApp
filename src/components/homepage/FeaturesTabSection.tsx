@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Tabs, Tab, Tooltip } from '@heroui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
+import HeroPianoVisualizerMock from '@/components/homepage/HeroPianoVisualizerMock';
 
 // ============================================================
 // Mock Data
@@ -71,8 +72,6 @@ const LYRIC_LINES: MockLyricLine[] = [
     beatRange: [24, 32] },
   { words: [{ text: 'Hold', chord: 'C' }, { text: ' on ' }, { text: 'tight,', chord: 'Am' }, { text: " we'll be " }, { text: 'alright', chord: 'F' }],
     beatRange: [32, 40] },
-  { words: [{ text: 'Home', chord: 'G' }, { text: ' is where the ' }, { text: 'heart', chord: 'C' }, { text: ' resides' }],
-    beatRange: [40, 48] },
 ];
 
 const TAB_CONTENT = {
@@ -527,238 +526,17 @@ function LyricsMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: n
 // Mockup: Piano Visualizer (falling notes + keyboard)
 // ============================================================
 
-// MIDI note data for the visualizer mockup
-const PIANO_MOCK_NOTES: { chord: string; notes: number[]; startBeat: number; duration: number }[] = [
-  { chord: 'C', notes: [60, 64, 67], startBeat: 0, duration: 4 },
-  { chord: 'Am', notes: [57, 60, 64], startBeat: 4, duration: 4 },
-  { chord: 'F', notes: [53, 57, 60], startBeat: 8, duration: 4 },
-  { chord: 'G', notes: [55, 59, 62], startBeat: 12, duration: 4 },
-  { chord: 'C', notes: [60, 64, 67], startBeat: 16, duration: 4 },
-  { chord: 'Em', notes: [52, 55, 59], startBeat: 20, duration: 2 },
-  { chord: 'Am', notes: [57, 60, 64], startBeat: 22, duration: 2 },
-  { chord: 'F', notes: [53, 57, 60], startBeat: 24, duration: 4 },
-  { chord: 'G', notes: [55, 59, 62], startBeat: 28, duration: 4 },
-  { chord: 'Dm', notes: [50, 53, 57], startBeat: 32, duration: 4 },
-  { chord: 'G', notes: [55, 59, 62], startBeat: 36, duration: 2 },
-  { chord: 'G7', notes: [55, 59, 62, 65], startBeat: 38, duration: 2 },
-  { chord: 'Am', notes: [57, 60, 64], startBeat: 40, duration: 2 },
-  { chord: 'F', notes: [53, 57, 60], startBeat: 42, duration: 2 },
-  { chord: 'G', notes: [55, 59, 62], startBeat: 44, duration: 2 },
-  { chord: 'C', notes: [60, 64, 67], startBeat: 46, duration: 2 },
-];
-
-// White keys in range C3 (48) to C5 (72) — 15 white keys
-const VISUALIZER_RANGE_START = 48;
-const VISUALIZER_RANGE_END = 72;
-const VISUALIZER_WHITE_KEYS: number[] = (() => {
-  const whites: number[] = [];
-  for (let midi = VISUALIZER_RANGE_START; midi <= VISUALIZER_RANGE_END; midi++) {
-    const pc = midi % 12;
-    if ([0, 2, 4, 5, 7, 9, 11].includes(pc)) whites.push(midi);
-  }
-  return whites;
-})();
-
-function isBlackKey(midi: number) {
-  return [1, 3, 6, 8, 10].includes(midi % 12);
-}
-
-function getMockKeyX(midi: number, keyWidth: number): number {
-  // Position based on white key index
-  let whiteIdx = 0;
-  for (let m = VISUALIZER_RANGE_START; m < midi; m++) {
-    if (!isBlackKey(m)) whiteIdx++;
-  }
-  if (isBlackKey(midi)) {
-    return whiteIdx * keyWidth - keyWidth * 0.3;
-  }
-  return whiteIdx * keyWidth;
-}
-
-const INSTRUMENT_PALETTE = [
-  { name: 'Piano', color: '#60a5fa' },
-  { name: 'Guitar', color: '#34d399' },
-  { name: 'Bass', color: '#f87171' },
-];
-
-function PianoVisualizerMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: number }) {
-  const canvasW = 320;
-  const canvasH = 160;
-  const keyWidth = canvasW / VISUALIZER_WHITE_KEYS.length;
-  const keyboardH = 36;
-  const lookAhead = 16; // beats visible above
-  const lookBehind = 4;
-  const beatPx = canvasH / lookAhead;
-
-  // Active notes at current beat
-  const activeNotes = useMemo(() => {
-    const notes = new Set<number>();
-    for (const n of PIANO_MOCK_NOTES) {
-      if (currentBeat >= n.startBeat && currentBeat < n.startBeat + n.duration) {
-        n.notes.forEach(m => notes.add(m));
-      }
-    }
-    return notes;
-  }, [currentBeat]);
-
-  // Current chord for strip display
-  const currentChord = useMemo(() => {
-    for (let i = PIANO_MOCK_NOTES.length - 1; i >= 0; i--) {
-      if (currentBeat >= PIANO_MOCK_NOTES[i].startBeat) return PIANO_MOCK_NOTES[i].chord;
-    }
-    return 'C';
-  }, [currentBeat]);
-
+function PianoVisualizerMockup() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className={`rounded-xl p-3 sm:p-4 border shadow-lg ${
-        isDark ? 'bg-[#1E252E] border-gray-600/60' : 'bg-white border-gray-200'
-      }`}
     >
-      {/* Header with instrument legend */}
-      <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
-        <h4 className={`text-sm font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-          Piano Visualizer
-        </h4>
-        <div className="flex items-center gap-2">
-          {INSTRUMENT_PALETTE.map((inst) => (
-            <div key={inst.name} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: inst.color }} />
-              <span className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{inst.name}</span>
-            </div>
-          ))}
-          <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${
-            isDark ? 'bg-orange-800/40 border border-orange-400 text-orange-50' : 'bg-orange-50 border border-orange-200 text-orange-800'
-          }`}>MIDI</span>
-        </div>
-      </div>
-
-      {/* Current chord indicator */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`text-[10px] uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Playing:</span>
-        <span className={`font-varela text-sm font-semibold ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>{currentChord}</span>
-      </div>
-
-      {/* Falling notes + keyboard container */}
-      <div className="rounded-lg overflow-hidden" style={{ background: isDark ? '#0a0f1a' : '#111827' }}>
-        {/* Falling notes area */}
-        <svg width="100%" viewBox={`0 0 ${canvasW} ${canvasH}`} preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <linearGradient id="fadeTop" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={isDark ? '#0a0f1a' : '#111827'} stopOpacity="1" />
-              <stop offset="20%" stopColor={isDark ? '#0a0f1a' : '#111827'} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          {/* Grid lines for white keys */}
-          {VISUALIZER_WHITE_KEYS.map((midi, i) => (
-            <line
-              key={`grid-${midi}`}
-              x1={i * keyWidth} y1={0}
-              x2={i * keyWidth} y2={canvasH}
-              stroke={isDark ? '#1e293b' : '#1e293b'}
-              strokeWidth="0.5"
-            />
-          ))}
-
-          {/* Falling note rectangles */}
-          {PIANO_MOCK_NOTES.map((noteGroup, gi) => {
-            const noteStartY = canvasH - (noteGroup.startBeat - currentBeat + lookBehind) * beatPx;
-            const noteH = noteGroup.duration * beatPx;
-            const colorIdx = gi % INSTRUMENT_PALETTE.length;
-            const color = INSTRUMENT_PALETTE[colorIdx].color;
-
-            return noteGroup.notes
-              .filter(m => m >= VISUALIZER_RANGE_START && m <= VISUALIZER_RANGE_END)
-              .map((midi, ni) => {
-                const x = getMockKeyX(midi, keyWidth);
-                const w = isBlackKey(midi) ? keyWidth * 0.6 : keyWidth - 1;
-                const y = noteStartY - noteH;
-
-                // Skip notes completely out of view
-                if (y > canvasH || y + noteH < 0) return null;
-
-                const isCurrentlyPlaying = currentBeat >= noteGroup.startBeat && currentBeat < noteGroup.startBeat + noteGroup.duration;
-
-                return (
-                  <rect
-                    key={`${gi}-${ni}`}
-                    x={x + 0.5}
-                    y={Math.max(0, y)}
-                    width={w}
-                    height={Math.min(noteH, canvasH - Math.max(0, y))}
-                    rx={2}
-                    fill={color}
-                    opacity={isCurrentlyPlaying ? 0.9 : 0.5}
-                    className="transition-opacity duration-150"
-                  />
-                );
-              });
-          })}
-
-          {/* Top fade overlay */}
-          <rect x="0" y="0" width={canvasW} height={canvasH * 0.2} fill="url(#fadeTop)" />
-
-          {/* Sweep line at bottom */}
-          <line x1="0" y1={canvasH - lookBehind * beatPx} x2={canvasW} y2={canvasH - lookBehind * beatPx}
-            stroke="#60a5fa" strokeWidth="1.5" opacity="0.6" />
-        </svg>
-
-        {/* Mini piano keyboard */}
-        <div className="relative" style={{ height: keyboardH }}>
-          {/* White keys */}
-          <div className="flex h-full">
-            {VISUALIZER_WHITE_KEYS.map((midi) => {
-              const isActive = activeNotes.has(midi);
-              return (
-                <div
-                  key={midi}
-                  className="border-r transition-colors duration-75"
-                  style={{
-                    flex: 1,
-                    height: '100%',
-                    backgroundColor: isActive ? '#60a5fa' : (isDark ? '#d4d4d8' : '#f4f4f5'),
-                    borderColor: isDark ? '#52525b' : '#a1a1aa',
-                    borderBottomLeftRadius: 3,
-                    borderBottomRightRadius: 3,
-                  }}
-                />
-              );
-            })}
-          </div>
-          {/* Black keys */}
-          {(() => {
-            let whiteIdx = 0;
-            const blacks: React.ReactNode[] = [];
-            const pct = (v: number) => `${(v / VISUALIZER_WHITE_KEYS.length) * 100}%`;
-            for (let midi = VISUALIZER_RANGE_START; midi <= VISUALIZER_RANGE_END; midi++) {
-              if (isBlackKey(midi)) {
-                const isActive = activeNotes.has(midi);
-                blacks.push(
-                  <div
-                    key={midi}
-                    className="absolute top-0 transition-colors duration-75"
-                    style={{
-                      left: pct(whiteIdx - 0.3),
-                      width: pct(0.6),
-                      height: '60%',
-                      backgroundColor: isActive ? '#3b82f6' : (isDark ? '#27272a' : '#18181b'),
-                      borderBottomLeftRadius: 2,
-                      borderBottomRightRadius: 2,
-                    }}
-                  />
-                );
-              } else {
-                whiteIdx++;
-              }
-            }
-            return blacks;
-          })()}
-        </div>
-      </div>
+      <HeroPianoVisualizerMock
+        preset="feature"
+        className="mx-auto w-full max-w-[46rem] lg:max-w-[50rem]"
+      />
     </motion.div>
   );
 }
@@ -768,13 +546,21 @@ function PianoVisualizerMockup({ isDark, currentBeat }: { isDark: boolean; curre
 // ============================================================
 
 const COLOR_MAP: Record<string, string> = { blue: 'text-blue-500', green: 'text-green-500', purple: 'text-purple-500', orange: 'text-orange-500' };
+const FEATURE_PANEL_CLASS = 'grid grid-cols-1 gap-8 lg:grid-cols-5 lg:gap-12 lg:items-stretch min-h-[40rem] md:min-h-[36rem] lg:min-h-[28rem]';
+const FEATURE_TAB_CLASSNAMES = {
+  base: 'mx-auto flex w-full max-w-4xl justify-center',
+  tabList: 'mx-auto w-full justify-center rounded-full bg-white/75 px-2 py-1 shadow-sm backdrop-blur dark:bg-gray-800/50',
+  cursor: 'bg-slate-900 dark:bg-gray-900',
+  tab: 'text-sm sm:text-base text-gray-700 data-[selected=true]:text-white dark:text-gray-200 dark:data-[selected=true]:text-white',
+  tabContent: 'text-gray-700 group-data-[selected=true]:text-white dark:text-gray-200 dark:group-data-[selected=true]:text-white',
+};
 
 function FeatureContent({ title, description, features }: {
   title: string; description: string; features: { text: string; color: string }[];
 }) {
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
-      className="flex flex-col justify-center h-full space-y-4"
+      className="flex h-full flex-col justify-center space-y-4 px-1 py-2 sm:px-2"
     >
       <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{title}</h3>
       <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
@@ -828,31 +614,36 @@ export default function FeaturesTabSection() {
           aria-label="Feature tabs"
           selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as string)}
-          variant="underlined"
+          variant="light"
           color="primary"
-          classNames={{ tabList: 'gap-4 sm:gap-6 w-full justify-center mb-8', tab: 'text-sm sm:text-base py-2', panel: 'pt-0' }}
+          classNames={{
+            ...FEATURE_TAB_CLASSNAMES,
+            tabList: `${FEATURE_TAB_CLASSNAMES.tabList} mb-8 max-w-4xl gap-2 sm:gap-3`,
+            tab: `${FEATURE_TAB_CLASSNAMES.tab} px-3 py-2 sm:px-4`,
+            panel: 'pt-0',
+          }}
         >
           <Tab key="chord-grid" title="Beat & Chord Grid">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
+            <div className={FEATURE_PANEL_CLASS}>
               <div className="lg:col-span-3"><ChordGridMockup isDark={isDark} currentBeat={beat} /></div>
               <div className="lg:col-span-2"><FeatureContent {...TAB_CONTENT['chord-grid']} /></div>
             </div>
           </Tab>
           <Tab key="guitar" title="Guitar Tab">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
+            <div className={FEATURE_PANEL_CLASS}>
               <div className="lg:col-span-3"><GuitarMockup isDark={isDark} currentBeat={beat} /></div>
               <div className="lg:col-span-2"><FeatureContent {...TAB_CONTENT.guitar} /></div>
             </div>
           </Tab>
           <Tab key="lyrics" title="Lyrics Sync">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
+            <div className={FEATURE_PANEL_CLASS}>
               <div className="lg:col-span-3"><LyricsMockup isDark={isDark} currentBeat={beat} /></div>
               <div className="lg:col-span-2"><FeatureContent {...TAB_CONTENT.lyrics} /></div>
             </div>
           </Tab>
           <Tab key="piano-visualizer" title="Piano Visualizer">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
-              <div className="lg:col-span-3"><PianoVisualizerMockup isDark={isDark} currentBeat={beat} /></div>
+            <div className={FEATURE_PANEL_CLASS}>
+              <div className="lg:col-span-3"><PianoVisualizerMockup /></div>
               <div className="lg:col-span-2"><FeatureContent {...TAB_CONTENT['piano-visualizer']} /></div>
             </div>
           </Tab>

@@ -18,12 +18,13 @@ It also depends on **Firebase** for caching and persistence, and on several exte
 2. [`architecture/runtime-and-deployment.md`](./architecture/runtime-and-deployment.md)
 3. [`development/onboarding.md`](./development/onboarding.md)
 4. [`components/frontend-surfaces.md`](./components/frontend-surfaces.md)
-5. [`components/state-hooks-and-services.md`](./components/state-hooks-and-services.md)
-6. [`api/nextjs-route-handlers.md`](./api/nextjs-route-handlers.md)
-7. [`api/flask-backend.md`](./api/flask-backend.md)
-8. [`models/ml-models-and-persistence.md`](./models/ml-models-and-persistence.md)
-9. [`workflows/core-workflows.md`](./workflows/core-workflows.md)
-10. [`development/testing-strategy.md`](./development/testing-strategy.md)
+5. [`components/guitar-chord-diagrams.md`](./components/guitar-chord-diagrams.md)
+6. [`components/state-hooks-and-services.md`](./components/state-hooks-and-services.md)
+7. [`api/nextjs-route-handlers.md`](./api/nextjs-route-handlers.md)
+8. [`api/flask-backend.md`](./api/flask-backend.md)
+9. [`models/ml-models-and-persistence.md`](./models/ml-models-and-persistence.md)
+10. [`workflows/core-workflows.md`](./workflows/core-workflows.md)
+11. [`development/testing-strategy.md`](./development/testing-strategy.md)
 
 ## Folder map
 

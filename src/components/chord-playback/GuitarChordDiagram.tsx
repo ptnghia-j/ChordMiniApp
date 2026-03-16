@@ -56,6 +56,26 @@ const GUITAR_INSTRUMENT = {
   }
 };
 
+function reconstructChordNameFromChordData(chordData: ChordData): string {
+  const keyForDisplay = chordData.key === 'Csharp' ? 'C#'
+    : chordData.key === 'Fsharp' ? 'F#'
+    : chordData.key;
+
+  if (chordData.suffix === 'major') {
+    return keyForDisplay;
+  }
+
+  if (chordData.suffix.startsWith('/')) {
+    return `${keyForDisplay}${chordData.suffix}`;
+  }
+
+  if (chordData.suffix.startsWith('m/')) {
+    return `${keyForDisplay}${chordData.suffix}`;
+  }
+
+  return `${keyForDisplay}:${chordData.suffix}`;
+}
+
 const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
   chordData,
   positionIndex = 0,
@@ -200,9 +220,9 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
     return undefined;
   };
 
-  // Use the centralized chord formatting function for consistency with beat/chord grid
-  // For guitar chord diagrams, prioritize the actual chord data name over displayName
-  // since guitar diagrams don't support inversions and should show the lookup name
+  // Use the centralized chord formatting function for consistency with beat/chord grid.
+  // `displayName` is expected to already be resolved by the mapping service:
+  // exact inversion when supported, otherwise the root-position fallback label.
   // Determine which chord name to display based on capo label mode
   const getFormattedChordName = (): string => {
     // When capo is active and mode is 'sound', show the sounding chord name
@@ -211,24 +231,20 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
       return formatChordWithMusicalSymbols(soundingChordName, false, accidentalPreference);
     }
 
-    const accidentalPreference = deriveAccidentalPreference(displayName);
+    const accidentalPreference = deriveAccidentalPreference(displayName || reconstructChordNameFromChordData(chordData));
 
-    if (chordData) {
-      // Map DB key conventions to standard enharmonics for display
-      const keyForDisplay = chordData.key === 'Csharp' ? 'C#'
-        : chordData.key === 'Fsharp' ? 'F#'
-        : chordData.key;
-
-      // Reconstruct chord name from chord data (lookup name without slash inversions)
-      const reconstructedChord = chordData.suffix === 'major'
-        ? keyForDisplay
-        : `${keyForDisplay}:${chordData.suffix}`;
-
-      return formatChordWithMusicalSymbols(reconstructedChord, false, accidentalPreference); // Light mode
-    } else if (displayName) {
-      // Fallback to displayName; keep the grid's enharmonic preference
+    if (displayName) {
       return formatChordWithMusicalSymbols(displayName, false, accidentalPreference);
     }
+
+    if (chordData) {
+      return formatChordWithMusicalSymbols(
+        reconstructChordNameFromChordData(chordData),
+        false,
+        accidentalPreference
+      );
+    }
+
     return '';
   };
 

@@ -21,7 +21,7 @@ Chord progression visualization with synchronized beat detection and grid layout
 
 ![Guitar Diagrams](public/guitar_diagrams.png)
 
-Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring multiple chord positions and synchronized beat grid integration.
+Interactive guitar chord diagrams with **accurate fingering patterns** from the official @tombatossals/chords-db database, featuring multiple chord positions, synchronized beat grid integration, and exact slash-chord matching when the database includes a dedicated inversion shape.
 
 ### 🎹 Piano Visualizer 
 ![Piano Visualizer](public/piano_visualizer.png)

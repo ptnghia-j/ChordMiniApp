@@ -136,8 +136,16 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       return chordGridData;
     }
 
+    // Match the beat-grid behavior: when Gemini sequence corrections are available,
+    // transpose that corrected sequence directly instead of reapplying original-pitch
+    // corrections later in the rendering path.
+    const sourceChords = Array.isArray(sequenceCorrections?.correctedSequence)
+      && sequenceCorrections.correctedSequence.length === chordGridData.chords.length
+      ? sequenceCorrections.correctedSequence
+      : chordGridData.chords;
+
     // Transpose all chords in the grid
-    const transposedChords = chordGridData.chords.map((chord) => {
+    const transposedChords = sourceChords.map((chord) => {
       if (!chord || chord === 'N.C.' || chord === 'N' || chord === 'N/C' || chord === 'NC') {
         return chord;
       }
@@ -157,7 +165,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       chords: transposedChords,
       originalAudioMapping: transposedMapping
     };
-  }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey]);
+  }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey, sequenceCorrections]);
 
   // When capo is set, transpose chords DOWN by capo fret count to get the "shape" chord
   // e.g., capo on fret 2: song has D → guitarist plays C shape (D transposed -2 = C)
@@ -230,52 +238,42 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const mergedAnalysisResults = analysisResults ?? storeAnalysisResults;
   const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
   const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
+  const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
+  const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
+  const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
 
   const chordGroupOccurrenceMap = useMemo(() => buildChordOccurrenceMap(capoTransposedChordGridData.chords), [capoTransposedChordGridData.chords]);
-  const chordOccurrenceCorrectionMap = useMemo(() => buildChordOccurrenceCorrectionMap(sequenceCorrections), [sequenceCorrections]);
+  const chordOccurrenceCorrectionMap = useMemo(() => buildChordOccurrenceCorrectionMap(effectiveSequenceCorrections), [effectiveSequenceCorrections]);
   const chordSequenceIndexMap = useMemo(
-    () => buildChordSequenceIndexMap(capoTransposedChordGridData.chords, sequenceCorrections?.originalSequence),
-    [capoTransposedChordGridData.chords, sequenceCorrections]
+    () => buildChordSequenceIndexMap(capoTransposedChordGridData.chords, effectiveSequenceCorrections?.originalSequence),
+    [capoTransposedChordGridData.chords, effectiveSequenceCorrections]
   );
 
   // Chord correction for guitar diagrams (always applies corrections when available for consistent display)
   const applyCorrectedChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {
     if (!originalChord || originalChord === 'N.C.') return originalChord;
 
-    if (sequenceCorrections && visualIndex !== undefined) {
+    if (effectiveSequenceCorrections && visualIndex !== undefined) {
       return getDisplayChord(
         originalChord,
         visualIndex,
-        mergedShowCorrectedChords,
-        sequenceCorrections,
+        effectiveShowCorrectedChords,
+        effectiveSequenceCorrections,
         chordGroupOccurrenceMap,
         chordOccurrenceCorrectionMap,
         chordSequenceIndexMap,
       ).chord;
     }
 
-    if (!mergedShowCorrectedChords) return originalChord;
+    if (!effectiveShowCorrectedChords) return originalChord;
 
-    if (mergedChordCorrections) {
+    if (effectiveChordCorrections) {
       const rootNote = originalChord.includes(':') ? originalChord.split(':')[0] : (originalChord.match(/^([A-G][#b]?)/)?.[1] || originalChord);
-      const correction = mergedChordCorrections[rootNote as keyof typeof mergedChordCorrections];
+      const correction = effectiveChordCorrections[rootNote as keyof typeof effectiveChordCorrections];
       if (correction) return originalChord.replace(rootNote, correction as string);
     }
     return originalChord;
-  }, [mergedShowCorrectedChords, mergedChordCorrections, sequenceCorrections, chordGroupOccurrenceMap, chordOccurrenceCorrectionMap, chordSequenceIndexMap]);
-
-
-
-  // Helper function to extract root chord for guitar diagram lookup (strips bass note)
-  const getRootChordForDiagramLookup = useCallback((chordName: string): string => {
-    if (!chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC') {
-      return chordName;
-    }
-    // Strip inversion/bass note for guitar diagram lookup (C/E → C, C/G → C)
-    // This ensures we get playable root position chord diagrams
-    return chordName.split('/')[0].trim();
-  }, []);
-
+  }, [effectiveShowCorrectedChords, effectiveChordCorrections, effectiveSequenceCorrections, chordGroupOccurrenceMap, chordOccurrenceCorrectionMap, chordSequenceIndexMap]);
   const preprocessAndCorrectChordNameForGuitarDiagrams = useCallback((originalChord: string, visualIndex?: number): string => {
     // Normalize all "no chord" representations to a single canonical form
     if (!originalChord ||
@@ -287,11 +285,11 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       return 'N.C.'; // Use 'N.C.' as the canonical "no chord" representation
     }
     const correctedChord = applyCorrectedChordNameForGuitarDiagrams(originalChord, visualIndex);
-    return getRootChordForDiagramLookup(correctedChord);
-  }, [applyCorrectedChordNameForGuitarDiagrams, getRootChordForDiagramLookup]);
+    return chordMappingService.getPreferredDiagramChordName(correctedChord);
+  }, [applyCorrectedChordNameForGuitarDiagrams]);
 
-  // Build a mapping from capo-transposed (shape) chord name → sounding chord name
-  // Uses the same preprocessing (slash stripping + corrections) as the diagram rendering
+  // Build a mapping from capo-transposed (shape) chord name → sounding chord name.
+  // Uses the same preprocessing (corrections + exact inversion support with root fallback)
   // so that lookups by the preprocessed chordInfo.chord / name keys always match
   const shapeToSoundingMap = useMemo(() => {
     const map = new Map<string, string>();

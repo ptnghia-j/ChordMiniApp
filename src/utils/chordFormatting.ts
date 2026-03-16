@@ -54,7 +54,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   const MAJOR_TRIANGLE_STYLE = 'font-weight: 500; position:relative; top:-0.03em;';
   const SUPERSCRIPT_STYLE = 'font-weight: inherit; font-size: 0.7em; line-height: 1; vertical-align: super;';
   const PAREN_GROUP_STYLE = 'display: inline-flex; align-items: flex-start; font-weight: inherit; font-size: 0.7em; line-height: 1; position: relative; top: -0.42em; white-space: nowrap;';
-  const stylizeAccidentals = (text: string) => text.replace(/([♭♯𝄫𝄪])/g, `<span style="${ACCIDENTAL_STYLE}">$1</span>`);
+  const stylizeAccidentals = (text: string) => text.replace(/([♭♯𝄫𝄪])/gu, `<span style="${ACCIDENTAL_STYLE}">$1</span>`);
 
 
 
@@ -68,6 +68,21 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
 
     return chordName;
   }
+
+  const ROOT_PATTERN = /^([A-G])((?:##|bb|#|b|♯|♭|𝄪|𝄫)?)/;
+
+  const normalizeQualityForDisplay = (value: string) => {
+    if (!value) return value;
+
+    let normalizedQuality = value.trim();
+
+    // Normalize symbolic qualities into the textual forms the formatter already knows.
+    normalizedQuality = normalizedQuality
+      .replace(/°/g, 'dim')
+      .replace(/\+/g, 'aug');
+
+    return normalizedQuality;
+  };
 
   // Parse chord name - handle both colon and non-colon formats
   let root = '';
@@ -88,11 +103,10 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
       root = colonParts[0];
       quality = colonParts[1];
     } else {
-      // Non-colon format: "C#m", "B7", "F#dim", etc.
-      // Extract root note (handle sharps and flats)
-      const rootMatch = chordPart.match(/^([A-G][#b]?)/);
+      // Non-colon format: "C#m", "B7", "F#dim", "D##dim", etc.
+      const rootMatch = chordPart.match(ROOT_PATTERN);
       if (rootMatch) {
-        root = rootMatch[1];
+        root = `${rootMatch[1]}${rootMatch[2] || ''}`;
         quality = chordPart.substring(root.length);
       } else {
         root = chordPart;
@@ -107,11 +121,10 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
       root = colonParts[0];
       quality = colonParts[1];
     } else {
-      // Non-colon format: "C#m", "B7", "F#dim", etc.
-      // Extract root note (handle sharps and flats)
-      const rootMatch = chordName.match(/^([A-G][#b]?)/);
+      // Non-colon format: "C#m", "B7", "F#dim", "D##dim", etc.
+      const rootMatch = chordName.match(ROOT_PATTERN);
       if (rootMatch) {
-        root = rootMatch[1];
+        root = `${rootMatch[1]}${rootMatch[2] || ''}`;
         quality = chordName.substring(root.length);
       } else {
         root = chordName;
@@ -119,6 +132,9 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
       }
     }
   }
+
+  quality = normalizeQualityForDisplay(quality);
+  bassNote = bassNote ? bassNote.trim() : bassNote;
 
   // Normalize chord quality for consistent display
   // Convert "min" and "minor" to "m" for shorter, industry-standard notation
@@ -178,15 +194,14 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     }
   }
 
-  // Replace sharp (#) with proper Unicode sharp symbol (♯)
-  // Handle double sharps (##) with double sharp symbol (𝄪)
-  root = root.replace(/##/g, '𝄪').replace(/#/g, '♯');
+  // Replace ASCII accidentals with proper Unicode symbols.
+  // Handle double sharps (##) and double flats (bb) before single accidental replacement.
+  root = root.replace(/##/g, '𝄪').replace(/bb/g, '𝄫').replace(/#/g, '♯');
   if (bassNote) {
-    bassNote = bassNote.replace(/##/g, '𝄪').replace(/#/g, '♯');
+    bassNote = bassNote.replace(/##/g, '𝄪').replace(/bb/g, '𝄫').replace(/#/g, '♯');
   }
 
   // Replace flat (b) with proper Unicode flat symbol (♭) in root and bass notes
-  // Handle double flats (bb) with double flat symbol (𝄫)
   // More precise pattern: only replace 'b' when it's part of a note name (after A-G)
   root = root.replace(/([A-G])bb/g, '$1𝄫').replace(/([A-G])b/g, '$1♭');
   if (bassNote) {

@@ -36,6 +36,7 @@ const HERO_CHORD_EVENTS = buildChordTimeline(HERO_CHORDS, HERO_BEATS);
 
 interface HeroPianoVisualizerMockProps {
   className?: string;
+  preset?: 'hero' | 'feature';
 }
 
 function countWhiteKeys(startMidi: number, endMidi: number): number {
@@ -48,7 +49,10 @@ function countWhiteKeys(startMidi: number, endMidi: number): number {
   return count;
 }
 
-export default function HeroPianoVisualizerMock({ className = '' }: HeroPianoVisualizerMockProps) {
+export default function HeroPianoVisualizerMock({
+  className = '',
+  preset = 'hero',
+}: HeroPianoVisualizerMockProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const [isHovered, setIsHovered] = useState(false);
@@ -59,6 +63,28 @@ export default function HeroPianoVisualizerMock({ className = '' }: HeroPianoVis
   const containerRef = useRef<HTMLDivElement | null>(null);
   const animationStartRef = useRef<number | null>(null);
   const pausedTimeRef = useRef(HERO_IDLE_TIME);
+
+  const visualizerConfig = useMemo(() => (
+    preset === 'feature'
+      ? {
+          startMidi: 31, // G1 - clearer bass coverage
+          endMidi: 91, // G6 - extends the upper range for flute/violin motion
+          lookAheadSeconds: 5.9,
+          lookBehindSeconds: 0.9,
+          canvasHeight: 186,
+          keyboardHeight: 52,
+          minWhiteKeyWidth: 8,
+        }
+      : {
+          startMidi: HERO_RANGE_START,
+          endMidi: HERO_RANGE_END,
+          lookAheadSeconds: HERO_LOOK_AHEAD_SECONDS,
+          lookBehindSeconds: HERO_LOOK_BEHIND_SECONDS,
+          canvasHeight: HERO_CANVAS_HEIGHT,
+          keyboardHeight: HERO_KEYBOARD_HEIGHT,
+          minWhiteKeyWidth: 12,
+        }
+  ), [preset]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -97,13 +123,13 @@ export default function HeroPianoVisualizerMock({ className = '' }: HeroPianoVis
   }, [isHovered]);
 
   const whiteKeyWidth = useMemo(() => {
-    const whiteKeyCount = countWhiteKeys(HERO_RANGE_START, HERO_RANGE_END);
+    const whiteKeyCount = countWhiteKeys(visualizerConfig.startMidi, visualizerConfig.endMidi);
     if (containerWidth <= 0) {
-      return 18;
+      return preset === 'feature' ? 12 : 18;
     }
 
-    return Math.max(12, Math.floor(containerWidth / whiteKeyCount));
-  }, [containerWidth]);
+    return Math.max(visualizerConfig.minWhiteKeyWidth, Math.floor(containerWidth / whiteKeyCount));
+  }, [containerWidth, preset, visualizerConfig]);
 
   const currentChord = useMemo(() => {
     const activeEvent = HERO_CHORD_EVENTS.find(
@@ -172,12 +198,12 @@ export default function HeroPianoVisualizerMock({ className = '' }: HeroPianoVis
               chordEvents={HERO_CHORD_EVENTS}
               currentTime={currentTime}
               isPlaying={isHovered}
-              startMidi={HERO_RANGE_START}
-              endMidi={HERO_RANGE_END}
+              startMidi={visualizerConfig.startMidi}
+              endMidi={visualizerConfig.endMidi}
               whiteKeyWidth={whiteKeyWidth}
-              lookAheadSeconds={HERO_LOOK_AHEAD_SECONDS}
-              lookBehindSeconds={HERO_LOOK_BEHIND_SECONDS}
-              height={HERO_CANVAS_HEIGHT}
+              lookAheadSeconds={visualizerConfig.lookAheadSeconds}
+              lookBehindSeconds={visualizerConfig.lookBehindSeconds}
+              height={visualizerConfig.canvasHeight}
               activeInstruments={HERO_ACTIVE_INSTRUMENTS}
               bpm={HERO_BPM}
               timeSignature={HERO_TIME_SIGNATURE}
@@ -187,12 +213,12 @@ export default function HeroPianoVisualizerMock({ className = '' }: HeroPianoVis
 
           <div className="border-t border-white/10 bg-white/95 px-1 pb-1 pt-0.5 dark:bg-[#f8fafc]">
             <PianoKeyboard
-              startMidi={HERO_RANGE_START}
-              endMidi={HERO_RANGE_END}
+              startMidi={visualizerConfig.startMidi}
+              endMidi={visualizerConfig.endMidi}
               activeNotes={activeNotes}
               noteColors={noteColors}
               whiteKeyWidth={whiteKeyWidth}
-              height={HERO_KEYBOARD_HEIGHT}
+              height={visualizerConfig.keyboardHeight}
             />
           </div>
         </div>

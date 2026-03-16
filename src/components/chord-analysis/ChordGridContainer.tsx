@@ -130,10 +130,14 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       displayKey = quality ? `${targetKey} ${quality}` : targetKey;
     }
 
-    // CRITICAL FIX: Keep sequenceCorrections active even when pitch shift is enabled
-    // sequenceCorrections is used for Roman numeral mapping and should NOT be disabled
-    // Only disable visual chord correction display, not the underlying sequence data
-    const effectiveSequenceCorrections = sequenceCorrections; // Always use sequence corrections for Roman numeral mapping
+    // Pitch-shifted beat-grid labels must render from the transposed chord stream itself.
+    // Leaving original-pitch sequence corrections enabled here causes getDisplayChord()
+    // to overwrite the transposed labels with the untransposed sequence, which makes
+    // small shifts appear unchanged and larger shifts drift into wrong/N.C. labels.
+    //
+    // Roman numerals stay aligned through originalChordsForRomanNumerals, so the
+    // visual sequence-correction override should be disabled while pitch shift is on.
+    const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
     const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
     const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
 

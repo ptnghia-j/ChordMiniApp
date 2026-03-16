@@ -156,6 +156,8 @@ export function transposeChord(
 
   // Parse the chord
   const parsed = parseChordNotation(originalChord);
+  // const preserveDegreeSymbol = originalChord.includes('°');
+  const preserveAugmentedPlus = originalChord.includes('+');
   
   if (!parsed.isValid || !parsed.root) {
     console.warn(`⚠️ Invalid chord for transposition: ${originalChord}`);
@@ -188,9 +190,9 @@ export function transposeChord(
   if (parsed.quality === 'minor') {
     result += 'm';
   } else if (parsed.quality === 'diminished') {
-    result += 'dim';
+    result += '°';
   } else if (parsed.quality === 'augmented') {
-    result += 'aug';
+    result += preserveAugmentedPlus ? '+' : 'aug';
   }
   // Major chords don't need a suffix
 
