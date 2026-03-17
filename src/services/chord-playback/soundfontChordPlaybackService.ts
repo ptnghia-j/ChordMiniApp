@@ -15,6 +15,8 @@ import {
   type InstrumentName,
   type ScheduledNote,
 } from '@/utils/instrumentNoteGeneration';
+import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
+import type { SegmentationResult } from '@/types/chatbotTypes';
 import {
   DEFAULT_PIANO_VOLUME,
   DEFAULT_GUITAR_VOLUME,
@@ -51,6 +53,7 @@ export interface PlaybackTimingContext {
   totalDuration?: number;
   playbackTime?: number;
   beatCount?: number;
+  segmentationData?: SegmentationResult | null;
 }
 
 function resolvePatternBeatDuration(
@@ -87,12 +90,13 @@ interface ActiveScheduledNote {
 
 export class SoundfontChordPlaybackService {
   // Constants for chord playback
-  private static readonly CLUSTER_VOLUME_REDUCTION = 0.75; // Volume reduction for short chord clusters
-  private static readonly NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']; // Chromatic scale for sorting
   private static readonly DEFAULT_BPM = 120; // Default BPM fallback
   private static readonly SAMPLE_DURATION = 3.5; // Estimated soundfont sample duration in seconds
   private static readonly DENSITY_REFERENCE_VOICES = 3;
   private static readonly MIN_DENSITY_COMPENSATION = 0.72;
+  private static readonly PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.22;
+  private static readonly PIANO_LATE_ONSET_GRACE_SECONDS = 0.18;
+  private static readonly PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS = 0.12;
   private static readonly DEFAULT_ENVELOPE: InstrumentEnvelopeConfig = {
     decayTime: 0.45,
     releaseLeadTime: 0.02,
@@ -392,7 +396,7 @@ export class SoundfontChordPlaybackService {
       try {
         const instrumentMap: Record<string, string> = {
           'piano': 'acoustic_grand_piano',
-          'guitar': 'acoustic_guitar_nylon',
+          'guitar': 'acoustic_guitar_steel',
           'violin': 'violin',
           'flute': 'flute',
           'saxophone': 'alto_sax',
@@ -474,6 +478,8 @@ export class SoundfontChordPlaybackService {
     dynamicVelocity?: number,
     timingContext?: PlaybackTimingContext,
     timeSignature: number = 4,
+    guitarVoicing?: Partial<GuitarVoicingSelection>,
+    targetKey?: string,
   ): Promise<void> {
     if (!(await this.prepareForPlayback())) {
       return;
@@ -513,8 +519,10 @@ export class SoundfontChordPlaybackService {
         duration,
         beatDuration: bd,
         startTime: timingContext?.startTime,
-        totalDuration: timingContext?.totalDuration,
         timeSignature,
+        segmentationData: timingContext?.segmentationData,
+        guitarVoicing,
+        targetKey,
       });
       if (scheduledNotes.length > 0) {
         promises.push(
@@ -540,6 +548,8 @@ export class SoundfontChordPlaybackService {
     dynamicVelocity?: number,
     timingContext?: PlaybackTimingContext,
     timeSignature: number = 4,
+    guitarVoicing?: Partial<GuitarVoicingSelection>,
+    targetKey?: string,
   ): Promise<void> {
     if (!(await this.prepareForPlayback())) {
       return;
@@ -577,8 +587,10 @@ export class SoundfontChordPlaybackService {
       duration,
       beatDuration: resolvePatternBeatDuration(duration, bpm, timingContext),
       startTime: timingContext?.startTime,
-      totalDuration: timingContext?.totalDuration,
       timeSignature,
+      segmentationData: timingContext?.segmentationData,
+      guitarVoicing,
+      targetKey,
     });
 
     if (scheduledNotes.length === 0) {
@@ -661,14 +673,62 @@ export class SoundfontChordPlaybackService {
     const adjustedNotes = scheduledNotes
       .map((sn) => {
         const originalEndOffset = sn.startOffset + sn.duration;
+        const shouldRecoverLatePianoOnset = instrumentName === 'piano'
+          && sn.startOffset <= 0.0001
+          && elapsedInChord > 0
+          && elapsedInChord <= SoundfontChordPlaybackService.PIANO_LATE_ONSET_GRACE_SECONDS;
+
         if (originalEndOffset <= elapsedInChord) {
+          if (shouldRecoverLatePianoOnset) {
+            return {
+              ...sn,
+              startOffset: 0,
+              duration: Math.min(
+                sn.duration,
+                Math.max(
+                  SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
+                  sn.duration * 0.75,
+                ),
+              ),
+            } satisfies ScheduledNote;
+          }
           return null;
         }
 
         const adjustedStartOffset = Math.max(0, sn.startOffset - elapsedInChord);
         const adjustedDuration = originalEndOffset - Math.max(elapsedInChord, sn.startOffset);
+        const shouldClampLatePianoOnset = shouldRecoverLatePianoOnset
+          && adjustedStartOffset <= 0.0001
+          && adjustedDuration < SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS;
         if (adjustedDuration <= 0) {
+          if (shouldRecoverLatePianoOnset) {
+            return {
+              ...sn,
+              startOffset: 0,
+              duration: Math.min(
+                sn.duration,
+                Math.max(
+                  SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
+                  sn.duration * 0.75,
+                ),
+              ),
+            } satisfies ScheduledNote;
+          }
           return null;
+        }
+
+        if (shouldClampLatePianoOnset) {
+          return {
+            ...sn,
+            startOffset: 0,
+            duration: Math.min(
+              sn.duration,
+              Math.max(
+                SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
+                sn.duration * 0.75,
+              ),
+            ),
+          } satisfies ScheduledNote;
         }
 
         return {
@@ -692,6 +752,9 @@ export class SoundfontChordPlaybackService {
     // Play each scheduled note
     for (const sn of adjustedNotes) {
       const simultaneousNotes = onsetDensity.get(sn.startOffset.toFixed(4)) ?? 1;
+      const isShortPianoBlockChordOnset = instrumentName === 'piano'
+        && sn.startOffset <= 0.0001
+        && simultaneousNotes >= 3;
       const densityCompensation = Math.max(
         SoundfontChordPlaybackService.MIN_DENSITY_COMPENSATION,
         Math.sqrt(SoundfontChordPlaybackService.DENSITY_REFERENCE_VOICES / simultaneousNotes),
@@ -701,8 +764,16 @@ export class SoundfontChordPlaybackService {
         isChordSwitch,
         envelope,
       );
+      const pianoBlockChordBoost = isShortPianoBlockChordOnset
+        ? SoundfontChordPlaybackService.PIANO_BLOCK_CHORD_VELOCITY_BOOST
+        : 1.0;
       const velocity = Math.min(
-        baseVelocity * sn.velocityMultiplier * dynamicMultiplier * densityCompensation * switchAttackMultiplier,
+        baseVelocity
+          * sn.velocityMultiplier
+          * dynamicMultiplier
+          * densityCompensation
+          * switchAttackMultiplier
+          * pianoBlockChordBoost,
         127,
       );
       const noteStartTime = baseTime + sn.startOffset;
@@ -984,4 +1055,3 @@ export const getSoundfontChordPlaybackService = (): SoundfontChordPlaybackServic
   }
   return instance;
 };
-

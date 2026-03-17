@@ -468,6 +468,26 @@ export class ChordMappingService {
   }
 
   /**
+   * Synchronous chord-data lookup for render-time voicing resolution.
+   */
+  public getChordDataSync(chordName: string): ChordData | null {
+    const chordDb = getChordDatabaseSync();
+    const lookupCandidates = this.buildLookupCandidates(chordName);
+
+    for (const candidate of lookupCandidates) {
+      const rootChords = chordDb.chords[candidate.normalizedRoot];
+      if (!rootChords) continue;
+
+      const chordData = this.findChordDataForCandidate(rootChords, candidate);
+      if (chordData) {
+        return chordData;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Resolve the canonical chord label used by guitar diagrams.
    * Prefers an exact slash-chord match when the database supports it, and
    * otherwise falls back to the root-position label that will actually render.

@@ -308,10 +308,15 @@ export default function YouTubeVideoAnalyzePage() {
     }
   }, [initialAnalyzeHandoff, setDuration]);
 
-  const currentAnalyzeUrl = useMemo(() => {
-    const queryString = searchParams.toString();
-    return queryString ? `/analyze/${videoId}?${queryString}` : `/analyze/${videoId}`;
-  }, [searchParams, videoId]);
+  const currentBeatModelParam = routeParams.beatModel;
+  const currentChordModelParam = routeParams.chordModel;
+  const shouldSyncModelParams = useMemo(() => (
+    Boolean(videoId)
+    && (
+      currentBeatModelParam !== beatDetector
+      || currentChordModelParam !== chordDetector
+    )
+  ), [beatDetector, chordDetector, currentBeatModelParam, currentChordModelParam, videoId]);
 
   const canonicalAnalyzeUrl = useMemo(() => buildAnalyzePageUrl(videoId, {
     ...routeParams,
@@ -330,12 +335,12 @@ export default function YouTubeVideoAnalyzePage() {
   }, [thumbnailFromSearch, videoId]);
 
   useEffect(() => {
-    if (!videoId || !modelsInitialized || canonicalAnalyzeUrl === currentAnalyzeUrl) {
+    if (!videoId || !modelsInitialized || !shouldSyncModelParams) {
       return;
     }
 
     router.replace(canonicalAnalyzeUrl, { scroll: false });
-  }, [canonicalAnalyzeUrl, currentAnalyzeUrl, modelsInitialized, router, videoId]);
+  }, [canonicalAnalyzeUrl, modelsInitialized, router, shouldSyncModelParams, videoId]);
 
   useEffect(() => {
     if (!autoStartRequested) {

@@ -435,6 +435,14 @@ export class DynamicsAnalyzer {
   }
 
   private getMacroDynamicContour(time: number): number {
+    // When section-aware contouring is available, it already shapes the full-song
+    // arc including soft intros/outros and stronger middle sections. Applying the
+    // macro contour on top double-counts those edge fades and can over-flatten
+    // segmented songs, so keep the macro layer neutral in that case.
+    if (this.sectionContour.length > 0) {
+      return 1.0;
+    }
+
     const totalDuration = this.params?.totalDuration ?? this.energyContour?.duration;
     if (!totalDuration || !isFinite(totalDuration) || totalDuration <= 0) {
       return 1.0;

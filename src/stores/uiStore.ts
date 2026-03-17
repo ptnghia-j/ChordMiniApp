@@ -22,6 +22,11 @@ export type RomanNumeralData = {
   }>;
 };
 
+export interface GuitarVoicingSelection {
+  capoFret: number;
+  selectedPositions: Record<string, number>;
+}
+
 interface UIStore {
   // Tab management
   activeTab: ActiveTab;
@@ -91,6 +96,13 @@ interface UIStore {
   setIsFirebaseAudioAvailable: (available: boolean) => void;
   setOriginalKey: (key: string) => void;
 
+  // Shared guitar voicing state
+  guitarCapoFret: number;
+  guitarSelectedPositions: Record<string, number>;
+  setGuitarCapoFret: (fret: number) => void;
+  setGuitarSelectedPosition: (shapeChordName: string, positionIndex: number) => void;
+  clearGuitarSelectedPositions: () => void;
+
   // Editing handlers
   handleEditModeToggle: () => void;
   handleTitleSave: () => void;
@@ -130,6 +142,8 @@ export const useUIStore = create<UIStore>()(
       isFirebaseAudioAvailable: false,
       originalKey: 'C',
       targetKey: 'C',
+      guitarCapoFret: 0,
+      guitarSelectedPositions: {},
 
       // Tab management
       setActiveTab: (tab) => set({ activeTab: tab }, false, 'setActiveTab'),
@@ -325,6 +339,31 @@ export const useUIStore = create<UIStore>()(
           'setOriginalKey'
         ),
 
+      setGuitarCapoFret: (fret) =>
+        set(
+          {
+            guitarCapoFret: Math.max(0, Math.min(12, Math.floor(fret))),
+            guitarSelectedPositions: {},
+          },
+          false,
+          'setGuitarCapoFret'
+        ),
+
+      setGuitarSelectedPosition: (shapeChordName, positionIndex) =>
+        set(
+          (state) => ({
+            guitarSelectedPositions: {
+              ...state.guitarSelectedPositions,
+              [shapeChordName]: Math.max(0, Math.floor(positionIndex)),
+            },
+          }),
+          false,
+          'setGuitarSelectedPosition'
+        ),
+
+      clearGuitarSelectedPositions: () =>
+        set({ guitarSelectedPositions: {} }, false, 'clearGuitarSelectedPositions'),
+
       // Initialization methods
       initializeVideoTitle: (title) => set({ videoTitle: title, editedTitle: title }, false, 'initializeVideoTitle'),
 
@@ -419,3 +458,8 @@ export const useSetIsProcessingPitchShift = () => useUIStore((state) => state.se
 export const useSetPitchShiftError = () => useUIStore((state) => state.setPitchShiftError);
 export const useSetIsFirebaseAudioAvailable = () => useUIStore((state) => state.setIsFirebaseAudioAvailable);
 export const useResetPitchShift = () => useUIStore((state) => state.resetPitchShift);
+export const useGuitarCapoFret = () => useUIStore((state) => state.guitarCapoFret);
+export const useGuitarSelectedPositions = () => useUIStore((state) => state.guitarSelectedPositions);
+export const useSetGuitarCapoFret = () => useUIStore((state) => state.setGuitarCapoFret);
+export const useSetGuitarSelectedPosition = () => useUIStore((state) => state.setGuitarSelectedPosition);
+export const useClearGuitarSelectedPositions = () => useUIStore((state) => state.clearGuitarSelectedPositions);

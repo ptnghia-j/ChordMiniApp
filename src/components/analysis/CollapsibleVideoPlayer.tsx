@@ -12,8 +12,13 @@ import ReactPlayer from 'react-player';
 const DynamicReactPlayer = dynamic(() => import('react-player/youtube'), {
   ssr: false,
   loading: () => (
-    <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
-      <div className="text-white text-sm">Loading player...</div>
+    <div className="aspect-video rounded-lg border border-white/30 bg-white/55 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/40">
+      <div className="flex h-full items-center justify-center">
+        <div className="space-y-3">
+          <div className="mx-auto h-10 w-10 rounded-full bg-white/80 animate-pulse dark:bg-white/10" />
+          <div className="h-3 w-28 rounded-full bg-white/70 animate-pulse dark:bg-white/10" />
+        </div>
+      </div>
     </div>
   )
 });

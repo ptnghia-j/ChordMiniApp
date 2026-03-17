@@ -3,10 +3,13 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChordEvent, isBlackKey } from '@/utils/chordToMidi';
 import {
+  attachVisualNotePositions,
   generateAllInstrumentVisualNotes,
   mergeConsecutiveChordEvents,
   type ActiveInstrument,
 } from '@/utils/instrumentNoteGeneration';
+import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
+import type { SegmentationResult } from '@/types/chatbotTypes';
 
 // Re-export ActiveInstrument so existing consumers don't break
 export type { ActiveInstrument } from '@/utils/instrumentNoteGeneration';
@@ -36,6 +39,12 @@ interface FallingNotesCanvasProps {
   bpm?: number;
   /** Time signature (e.g. 3 for 3/4, defaults to 4) */
   timeSignature?: number;
+  /** Optional song segmentation for section-aware piano patterns */
+  segmentationData?: SegmentationResult | null;
+  /** Shared guitar diagram selection used to resolve guitar strumming voicings */
+  guitarVoicing?: Partial<GuitarVoicingSelection>;
+  /** Enharmonic target key for capo-transposed guitar shapes */
+  targetKey?: string;
   /** Callback: set of active MIDI notes at current time */
   onActiveNotesChange?: (notes: Set<number>, colors: Map<number, string>) => void;
 }
@@ -96,6 +105,9 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   activeInstruments = [],
   bpm,
   timeSignature,
+  segmentationData,
+  guitarVoicing,
+  targetKey,
   onActiveNotesChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -172,12 +184,17 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
 
   // Precompute instrument-specific visual notes when instruments are active
   // Uses shared module (single source of truth with audio playback)
-  const instrumentVisualNotes = useMemo(() => {
+  const instrumentVisualTimings = useMemo(() => {
     if (!hasInstruments || chordEvents.length === 0) return [];
     return generateAllInstrumentVisualNotes(
-      chordEvents, activeInstruments, midiKeyPositions, bpm, timeSignature,
+      chordEvents, activeInstruments, bpm, timeSignature, segmentationData, guitarVoicing, targetKey,
     );
-  }, [chordEvents, hasInstruments, activeInstruments, midiKeyPositions, bpm, timeSignature]);
+  }, [chordEvents, hasInstruments, activeInstruments, bpm, timeSignature, segmentationData, guitarVoicing, targetKey]);
+
+  const instrumentVisualNotes = useMemo(
+    () => attachVisualNotePositions(instrumentVisualTimings, midiKeyPositions),
+    [instrumentVisualTimings, midiKeyPositions],
+  );
 
   // ─── Render Frame ────────────────────────────────────────────────────────
 

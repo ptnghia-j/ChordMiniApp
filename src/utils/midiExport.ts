@@ -224,7 +224,7 @@ function generateInstrumentMidiNotes(
   dynamics.setParams({
     bpm,
     timeSignature,
-    totalDuration: getSongDurationFromEvents(merged),
+    totalDuration: totalSongDuration,
     segmentationData,
   });
 
@@ -245,7 +245,6 @@ function generateInstrumentMidiNotes(
       duration,
       beatDuration: eventBeatDuration,
       startTime,
-      totalDuration: totalSongDuration,
       timeSignature,
     });
 

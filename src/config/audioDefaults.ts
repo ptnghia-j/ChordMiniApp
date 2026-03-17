@@ -24,10 +24,10 @@ export const DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME = 20;
 export const DEFAULT_CHORD_PLAYBACK_VOLUME = 70;
 
 /** Piano instrument volume */
-export const DEFAULT_PIANO_VOLUME = 60;
+export const DEFAULT_PIANO_VOLUME = 40;
 
 /** Guitar instrument volume */
-export const DEFAULT_GUITAR_VOLUME = 50;
+export const DEFAULT_GUITAR_VOLUME = 40;
 
 /** Violin instrument volume */
 export const DEFAULT_VIOLIN_VOLUME = 50;

@@ -48,9 +48,7 @@ export default function ChangelogPage() {
       ],
       technical: [
         'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',
-        'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting',
-        'VALIDATION: Focused non-Playwright playback smoke tests passed; lint passed; build passed',
-      ],
+        'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting',      ],
       breaking: [
         'Refactoring across the app is in progress - expect changes to the feature and its implementation'
       ]

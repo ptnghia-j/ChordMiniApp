@@ -12,9 +12,17 @@ import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
 import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
-import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey, useRomanNumerals } from '@/stores/uiStore';
+import {
+  useGuitarCapoFret,
+  useGuitarSelectedPositions,
+  useIsPitchShiftEnabled,
+  usePitchShiftSemitones,
+  useTargetKey,
+  useRomanNumerals,
+} from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import {
@@ -30,6 +38,7 @@ import { DEFAULT_AUDIO_MIXER_SETTINGS, DEFAULT_PIANO_VOLUME } from '@/config/aud
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { isInstrumentalTime } from '@/utils/segmentationSections';
+import { findChordEventForPlayback as findPlayableChordEvent } from '@/utils/chordEventLookup';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,72 +90,13 @@ function hasPlayableNotes(event: ChordEvent): boolean {
   return event.notes.length > 0;
 }
 
-function findChordEventIndexByBeatIndex(events: ChordEvent[], beatIndex: number): number {
-  if (beatIndex < 0) return -1;
-
-  let lo = 0;
-  let hi = events.length - 1;
-  let idx = -1;
-
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (events[mid].beatIndex <= beatIndex) {
-      idx = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return idx;
-}
-
 function findChordEventForPlayback(
   events: ChordEvent[],
   currentTime: number,
   currentBeatIndex: number,
   toleranceSeconds = PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
 ): ChordEvent | null {
-  const exactEvent = events.find((event) => currentTime >= event.startTime && currentTime < event.endTime);
-
-  const beatEventIndex = findChordEventIndexByBeatIndex(events, currentBeatIndex);
-  const beatEvent = beatEventIndex >= 0 ? events[beatEventIndex] : null;
-
-  if (exactEvent && beatEvent && exactEvent.beatIndex !== beatEvent.beatIndex) {
-    const beatEventStartsSoon = beatEvent.startTime >= currentTime
-      && beatEvent.startTime - currentTime <= toleranceSeconds;
-
-    if (beatEventStartsSoon) {
-      return beatEvent;
-    }
-  }
-
-  if (exactEvent) {
-    return exactEvent;
-  }
-
-  if (beatEventIndex >= 0) {
-    const resolvedBeatEvent = events[beatEventIndex];
-    const resolvedBeatEventEnd = resolvedBeatEvent.endTime;
-    const withinBeatEventWindow = currentTime >= resolvedBeatEvent.startTime - toleranceSeconds
-      && currentTime < resolvedBeatEventEnd + toleranceSeconds;
-
-    if (withinBeatEventWindow) {
-      return resolvedBeatEvent;
-    }
-  }
-
-  const forwardEvent = events.find(
-    (event) => currentTime + toleranceSeconds >= event.startTime && currentTime < event.startTime,
-  );
-  if (forwardEvent) {
-    return forwardEvent;
-  }
-
-  const backwardEvent = [...events].reverse().find(
-    (event) => currentTime - toleranceSeconds < event.endTime && currentTime >= event.endTime,
-  );
-  return backwardEvent ?? null;
+  return findPlayableChordEvent(events, currentTime, currentBeatIndex, toleranceSeconds);
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -200,6 +150,8 @@ function usePianoOnlyPlayback(
   bpm: number,
   timeSignature: number = 4,
   segmentationData?: SegmentationResult | null,
+  guitarVoicing?: Partial<GuitarVoicingSelection>,
+  targetKey?: string,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
@@ -298,14 +250,24 @@ function usePianoOnlyPlayback(
       currentChordEvent.chordName,
     );
 
-    serviceRef.current.playChord(currentChordEvent.chordName, duration, bpm, dynamicVelocity, {
-      startTime: currentChordEvent.startTime,
-      playbackTime: currentTime,
-      totalDuration,
-      beatCount: currentChordEvent.beatCount,
-    }, timeSignature);
+    serviceRef.current.playChord(
+      currentChordEvent.chordName,
+      duration,
+      bpm,
+      dynamicVelocity,
+      {
+        startTime: currentChordEvent.startTime,
+        playbackTime: currentTime,
+        totalDuration,
+        beatCount: currentChordEvent.beatCount,
+        segmentationData,
+      },
+      timeSignature,
+      guitarVoicing,
+      targetKey,
+    );
     lastPlayedChordRef.current = currentChordEvent.chordName;
-  }, [bpm, currentBeatIndex, currentTime, merged, shouldActivate, timeSignature, totalDuration]);
+  }, [bpm, currentBeatIndex, currentTime, guitarVoicing, merged, segmentationData, shouldActivate, targetKey, timeSignature, totalDuration]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -357,6 +319,15 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const pitchShiftSemitones = usePitchShiftSemitones();
   const targetKey = useTargetKey();
+  const guitarCapoFret = useGuitarCapoFret();
+  const guitarSelectedPositions = useGuitarSelectedPositions();
+  const guitarVoicing = useMemo<Partial<GuitarVoicingSelection>>(
+    () => ({
+      capoFret: guitarCapoFret,
+      selectedPositions: guitarSelectedPositions,
+    }),
+    [guitarCapoFret, guitarSelectedPositions],
+  );
 
   // Local UI state
   const [speedIndex, setSpeedIndex] = useState(1); // Default: Normal
@@ -579,6 +550,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     detectedBpm || 120,
     timeSignature,
     segmentationData,
+    guitarVoicing,
+    targetKey,
   );
 
   // Determine active instruments for visualization
@@ -722,6 +695,9 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 activeInstruments={effectiveActiveInstruments}
                 bpm={detectedBpm || undefined}
                 timeSignature={timeSignature}
+                segmentationData={segmentationData}
+                guitarVoicing={guitarVoicing}
+                targetKey={targetKey}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

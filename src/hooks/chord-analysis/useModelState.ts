@@ -26,6 +26,10 @@ export interface UseModelStateOptions {
  */
 export const useModelState = (options: UseModelStateOptions = {}): ModelState => {
   const { initialBeatDetector = null, initialChordDetector = null } = options;
+  const previousInitialBeatDetectorRef = useRef<BeatDetectorType | null>(initialBeatDetector);
+  const previousInitialChordDetectorRef = useRef<ChordDetectorType | null>(
+    initialChordDetector ? getSafeChordModel(initialChordDetector) : null
+  );
 
   // Initialize model states with localStorage persistence
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
@@ -77,27 +81,32 @@ export const useModelState = (options: UseModelStateOptions = {}): ModelState =>
   }, [chordDetector]);
 
   useEffect(() => {
-    if (initialBeatDetector && initialBeatDetector !== beatDetector) {
+    if (initialBeatDetector && initialBeatDetector !== previousInitialBeatDetectorRef.current) {
+      previousInitialBeatDetectorRef.current = initialBeatDetector;
       const timer = window.setTimeout(() => {
         setBeatDetector(initialBeatDetector);
       }, 0);
 
       return () => window.clearTimeout(timer);
     }
-  }, [beatDetector, initialBeatDetector]);
+  }, [initialBeatDetector]);
 
   useEffect(() => {
-    if (initialChordDetector) {
-      const safeModel = getSafeChordModel(initialChordDetector);
-      if (safeModel !== chordDetector) {
-        const timer = window.setTimeout(() => {
-          setChordDetector(safeModel);
-        }, 0);
-
-        return () => window.clearTimeout(timer);
-      }
+    if (!initialChordDetector) {
+      return;
     }
-  }, [chordDetector, initialChordDetector]);
+
+    const safeModel = getSafeChordModel(initialChordDetector);
+
+    if (safeModel !== previousInitialChordDetectorRef.current) {
+      previousInitialChordDetectorRef.current = safeModel;
+      const timer = window.setTimeout(() => {
+        setChordDetector(safeModel);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
+    }
+  }, [initialChordDetector]);
 
   // Persist beat detector selection to localStorage
   useEffect(() => {

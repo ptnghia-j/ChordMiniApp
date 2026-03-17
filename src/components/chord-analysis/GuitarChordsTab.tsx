@@ -12,7 +12,15 @@ import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
 import { useCurrentBeatIndex } from '@/stores/playbackStore';
 import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zustand internally
-import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
+import {
+  useGuitarCapoFret,
+  useGuitarSelectedPositions,
+  useIsPitchShiftEnabled,
+  usePitchShiftSemitones,
+  useSetGuitarCapoFret,
+  useSetGuitarSelectedPosition,
+  useTargetKey,
+} from '@/stores/uiStore';
 import { transposeChord, calculateTargetKey } from '@/utils/chordTransposition';
 import {
   buildChordOccurrenceCorrectionMap,
@@ -115,20 +123,22 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
 
-  // Capo state: fret 0 = no capo, fret 1-12 = capo position
-  const [capoFret, setCapoFretRaw] = useState<number>(0);
+  // Shared guitar voicing state
+  const capoFret = useGuitarCapoFret();
+  const chordPositions = useGuitarSelectedPositions();
+  const setSharedCapoFret = useSetGuitarCapoFret();
+  const setSharedChordPosition = useSetGuitarSelectedPosition();
   // Capo label mode: 'shape' shows the chord shape name, 'sound' shows the sounding chord name
   const [capoLabelMode, setCapoLabelMode] = useState<'shape' | 'sound'>('shape');
 
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
-  const [chordPositions, setChordPositions] = useState<Map<string, number>>(new Map()); // Track position for each chord
 
   // Wrapped setter that clears chord data cache when capo changes (new chord shapes need to be loaded)
   const setCapoFret = useCallback((value: number | ((prev: number) => number)) => {
-    setCapoFretRaw(value);
+    const nextValue = typeof value === 'function' ? value(capoFret) : value;
+    setSharedCapoFret(nextValue);
     setChordDataCache(new Map());
-    setChordPositions(new Map());
-  }, []);
+  }, [capoFret, setSharedCapoFret]);
 
   // Apply pitch shift transposition to chord grid data if enabled
   const transposedChordGridData = useMemo(() => {
@@ -189,8 +199,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
   // Handle chord position changes
   const handlePositionChange = useCallback((chordName: string, positionIndex: number) => {
-    setChordPositions(prev => new Map(prev.set(chordName, positionIndex)));
-  }, []);
+    setSharedChordPosition(chordName, positionIndex);
+  }, [setSharedChordPosition]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -583,7 +593,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                       >
                         <GuitarChordDiagram
                           chordData={chordDataCache.get(chordInfo.chord) || null}
-                          positionIndex={chordPositions.get(chordInfo.chord) || 0}
+                          positionIndex={chordPositions[chordInfo.chord] || 0}
                           size={diagramConfig.size}
                           customWidth={diagramConfig.diagramWidth}
                           customHeight={diagramConfig.diagramHeight}
@@ -617,7 +627,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                 <div key={index} className="flex justify-center">
                   <GuitarChordDiagram
                     chordData={data}
-                    positionIndex={chordPositions.get(name) || 0}
+                    positionIndex={chordPositions[name] || 0}
                     size="medium"
                     showChordName={true}
                     className="hover:scale-105 transition-transform"

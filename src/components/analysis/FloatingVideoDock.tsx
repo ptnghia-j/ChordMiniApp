@@ -32,8 +32,10 @@ const RomanNumeralToggle = dynamic(() => import('@/components/analysis/RomanNume
 const CollapsibleVideoPlayer = dynamic(() => import('@/components/analysis/CollapsibleVideoPlayer'), {
   ssr: false,
   loading: () => (
-    <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
-      <div className="text-white">Loading player...</div>
+    <div className="aspect-video rounded-[18px] border border-white/35 bg-white/45 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/35">
+      <div className="flex h-full items-center justify-center">
+        <div className="h-10 w-32 rounded-full bg-white/70 animate-pulse dark:bg-white/10" />
+      </div>
     </div>
   )
 });

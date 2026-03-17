@@ -1,39 +1,33 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useEffect, useMemo } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-
-import Navigation from '@/components/common/Navigation';
 import { buildAnalyzePageUrl, readAnalyzeRouteParams } from '@/utils/analyzeRouteUtils';
 
-export default function AnalyzeModelSelectionPage() {
-  const params = useParams();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const videoId = params?.videoId as string;
-  const routeParams = readAnalyzeRouteParams(searchParams);
+interface AnalyzeModelSelectionPageProps {
+  params: Promise<{
+    videoId: string;
+  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
 
-  const analyzeUrl = useMemo(() => buildAnalyzePageUrl(videoId, {
+function toSearchParamReader(searchParams: Record<string, string | string[] | undefined>) {
+  return {
+    get: (key: string) => {
+      const value = searchParams[key];
+      return Array.isArray(value) ? value[0] ?? null : value ?? null;
+    },
+  };
+}
+
+export default async function AnalyzeModelSelectionPage({
+  params,
+  searchParams,
+}: AnalyzeModelSelectionPageProps) {
+  const { videoId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const routeParams = readAnalyzeRouteParams(toSearchParamReader(resolvedSearchParams));
+
+  redirect(buildAnalyzePageUrl(videoId, {
     ...routeParams,
     autoStart: false,
-  }), [routeParams, videoId]);
-
-  useEffect(() => {
-    if (!videoId) {
-      return;
-    }
-
-    router.replace(analyzeUrl, { scroll: false });
-  }, [analyzeUrl, router, videoId]);
-
-  return (
-    <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
-      <Navigation />
-      <main className="mx-auto flex min-h-[50vh] max-w-3xl items-center justify-center px-4 py-8">
-        <p className="text-sm text-default-500 dark:text-default-300">
-          Redirecting to analysis…
-        </p>
-      </main>
-    </div>
-  );
+  }));
 }
