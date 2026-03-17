@@ -38,6 +38,7 @@ export default function ChangelogPage() {
         'IMPROVED: Lyrics playback — stable display props, active-line-only time updates, and word-timing-aware chord placement',
         'IMPROVED: Guitar/piano playback UI — memoized guitar diagram focus updates and lighter piano key highlighting',
         'FIX: Pitch-shifted chord labels now stay aligned between the beat chord grid and guitar chord diagrams',
+        'FIX: Addressed capo, guitar diagrams and chord labels regression',
         'NEW: Guitar chord diagrams now preserve supported common slash-chord inversions before falling back to root-position shapes',
         'IMPROVED: Refactored analyze flow for better route handoff, model setup, and state management',
         'NEW: Analyze flow helpers/hooks/components added for route handoff, model setup, and related page/state updates',
@@ -49,7 +50,6 @@ export default function ChangelogPage() {
         'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',
         'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting',
         'VALIDATION: Focused non-Playwright playback smoke tests passed; lint passed; build passed',
-        'AUDIT: npm audit reports 1 moderate transitive vulnerability in file-type (fix available via npm audit fix)',
       ],
       breaking: [
         'Refactoring across the app is in progress - expect changes to the feature and its implementation'

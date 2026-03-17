@@ -76,6 +76,25 @@ function reconstructChordNameFromChordData(chordData: ChordData): string {
   return `${keyForDisplay}:${chordData.suffix}`;
 }
 
+function formatChordLabel(label?: string): string {
+  if (!label) {
+    return '';
+  }
+
+  if (label.includes(' | ')) {
+    return label
+      .split(' | ')
+      .map((part) => {
+        const accidentalPreference = /[b♭]/.test(part) ? 'flat' : /[#♯]/.test(part) ? 'sharp' : undefined;
+        return formatChordWithMusicalSymbols(part, false, accidentalPreference);
+      })
+      .join(' | ');
+  }
+
+  const accidentalPreference = /[b♭]/.test(label) ? 'flat' : /[#♯]/.test(label) ? 'sharp' : undefined;
+  return formatChordWithMusicalSymbols(label, false, accidentalPreference);
+}
+
 const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
   chordData,
   positionIndex = 0,
@@ -193,31 +212,15 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
   // Get the position to display (default to first position)
   const position = chordData.positions[Math.min(positionIndex, chordData.positions.length - 1)];
 
-  // Adjust frets and baseFret when capo is active
-  // When capo > 0:
-  //   - baseFret shifts up by capoFret (removes bold nut, shows fret number)
-  //   - Open strings (fret 0) are fretted by the capo, not open anymore
-  //     We keep them as 0 visually but the baseFret offset handles the position
-  //   - Muted strings (-1) remain muted
-  const adjustedBaseFret = capoFret > 0
-    ? position.baseFret + capoFret
-    : position.baseFret || 1;
-
   // Convert chord data to format expected by react-chords
   const chordForDiagram = {
     frets: position.frets,
     fingers: position.fingers,
     barres: position.barres || [],
     capo: position.capo || false,
-    baseFret: adjustedBaseFret
-  };
-
-  // Helper to derive accidental preference from a chord name
-  const deriveAccidentalPreference = (name?: string): 'sharp' | 'flat' | undefined => {
-    if (!name) return undefined;
-    if (/[b♭]/.test(name)) return 'flat';
-    if (/[#♯]/.test(name)) return 'sharp';
-    return undefined;
+    baseFret: capoFret > 0
+      ? (position.baseFret || 1) + capoFret
+      : (position.baseFret || 1)
   };
 
   // Use the centralized chord formatting function for consistency with beat/chord grid.
@@ -227,22 +230,15 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
   const getFormattedChordName = (): string => {
     // When capo is active and mode is 'sound', show the sounding chord name
     if (capoFret > 0 && capoLabelMode === 'sound' && soundingChordName) {
-      const accidentalPreference = deriveAccidentalPreference(soundingChordName);
-      return formatChordWithMusicalSymbols(soundingChordName, false, accidentalPreference);
+      return formatChordLabel(soundingChordName);
     }
 
-    const accidentalPreference = deriveAccidentalPreference(displayName || reconstructChordNameFromChordData(chordData));
-
     if (displayName) {
-      return formatChordWithMusicalSymbols(displayName, false, accidentalPreference);
+      return formatChordLabel(displayName);
     }
 
     if (chordData) {
-      return formatChordWithMusicalSymbols(
-        reconstructChordNameFromChordData(chordData),
-        false,
-        accidentalPreference
-      );
+      return formatChordLabel(reconstructChordNameFromChordData(chordData));
     }
 
     return '';
