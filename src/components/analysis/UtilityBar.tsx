@@ -4,13 +4,13 @@ import React, { memo } from 'react';
 import { Tooltip } from '@heroui/react';
 import { HiOutlineChatBubbleLeftRight, HiChevronDoubleDown, HiOutlineChevronDoubleDown } from 'react-icons/hi2';
 import { FaRegFileLines } from 'react-icons/fa6';
-import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import SegmentationToggleButton from '@/components/analysis/SegmentationToggleButton';
 import RomanNumeralToggle from '@/components/analysis/RomanNumeralToggle';
 import ChordPlaybackToggle from '@/components/chord-playback/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/analysis/ChordSimplificationToggle';
 import PitchShiftPopover from '@/components/chord-playback/PitchShiftPopover';
 import LoopPlaybackToggle from '@/components/analysis/LoopPlaybackToggle';
+import MetronomeControls from '@/components/chord-playback/MetronomeControls';
 import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useToggleSimplifyChords } from '@/stores/uiStore';
 
 interface UtilityBarProps {
@@ -170,21 +170,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
 
             {/* Metronome */}
             {metronome && (
-              <Tooltip
-                content={metronome.isEnabled ? 'Disable metronome' : 'Enable metronome'}
-                placement="top"
-                classNames={{
-                  content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-                }}
-              >
-                <button
-                  onClick={metronome.toggleMetronomeWithSync}
-                  className={`p-2 rounded-full transition-colors ${metronome.isEnabled ? 'bg-orange-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                  aria-label="Toggle metronome"
-                >
-                  {metronome.isEnabled ? <PiMetronomeBold className="h-5 w-5"/> : <PiMetronome className="h-5 w-5"/>}
-                </button>
-              </Tooltip>
+              <MetronomeControls onToggleWithSync={metronome.toggleMetronomeWithSync} />
             )}
 
             {/* Countdown */}
@@ -271,4 +257,3 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
 };
 
 export default memo(UtilityBar);
-

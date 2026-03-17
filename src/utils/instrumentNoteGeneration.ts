@@ -111,6 +111,8 @@ const PIANO_ARPEGGIO_PATTERNS_SPARSE: ReadonlyArray<readonly number[]> = [
 ];
 
 const PIANO_INITIAL_FIFTH_BRIDGE_THRESHOLD = 0.55;
+const SAXOPHONE_MIN_MIDI = 60; // C4
+const SAXOPHONE_MAX_MIDI = 84; // C6
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -291,7 +293,7 @@ export function generateNotesForInstrument(
       return generateFluteNotes(rootName, bassName, chordTones, duration, fullBeatDelay, durationInBeats);
 
     case 'saxophone':
-      return generateSaxophoneNotes(rootName, chordTones, duration, fullBeatDelay, durationInBeats);
+      return generateSaxophoneNotes(chordName, rootName, chordTones, duration, fullBeatDelay, durationInBeats, startTime);
 
     case 'bass':
       return generateBassNotes(bassName, duration);
@@ -552,59 +554,146 @@ function generateFluteNotes(
   fullBeatDelay: number,
   durationInBeats: number,
 ): ScheduledNote[] {
+  const phraseSeed = hashPatternSeed(`${rootName}:${bassName}:${duration.toFixed(3)}:${fullBeatDelay.toFixed(3)}`);
   const useLongPattern = durationInBeats >= PIANO_PATTERN_MIN_BEATS;
+  const upperNeighbor = chordTones.length >= 3
+    ? chordTones[2].noteName
+    : (chordTones.length >= 2 ? chordTones[1].noteName : rootName);
+  const supportTone = bassName === rootName && chordTones.length >= 2
+    ? chordTones[1].noteName
+    : bassName;
+
+  const pushFluteNote = (
+    noteName: string,
+    startOffset: number,
+    requestedDuration: number,
+    velocityMultiplier: number,
+  ): ScheduledNote | null => {
+    if (startOffset >= duration) return null;
+    const actualDuration = Math.min(requestedDuration, duration - startOffset);
+    if (actualDuration <= 0) return null;
+    const name = `${noteName}5`;
+    return {
+      noteName: name,
+      midi: noteNameToMidi(name),
+      startOffset,
+      duration: actualDuration,
+      velocityMultiplier,
+      isBass: false,
+    };
+  };
 
   if (!useLongPattern) {
-    const fluteNoteName = bassName === rootName && chordTones.length >= 2
-      ? chordTones[1].noteName
-      : bassName;
-    const name = `${fluteNoteName}5`;
-    const midi = noteNameToMidi(name);
-    return [{
-      noteName: name,
-      midi,
-      startOffset: 0,
-      duration,
-      velocityMultiplier: 1.0,
-      isBass: false,
-    }];
+    const primaryTone = (phraseSeed % 2 === 0) ? supportTone : upperNeighbor;
+    const ornamentOffset = Math.min(fullBeatDelay * 1.1, duration * 0.58);
+    const introNote = pushFluteNote(primaryTone, 0, Math.max(fullBeatDelay * 0.95, ornamentOffset), 0.96);
+    const ornamentNote = durationInBeats >= 1.5
+      ? pushFluteNote(upperNeighbor, ornamentOffset, Math.max(fullBeatDelay * 0.45, duration - ornamentOffset), 0.88)
+      : null;
+
+    return [introNote, ornamentNote].filter((note): note is ScheduledNote => note !== null);
   }
 
-  const flutePatternNote = chordTones.length >= 3
-    ? chordTones[2].noteName
-    : (chordTones.length >= 2 ? chordTones[1].noteName : bassName);
-  const name = `${flutePatternNote}5`;
-  const midi = noteNameToMidi(name);
-  const syncopatedOffset = fullBeatDelay * 1.5;
-  const syncopatedDuration = Math.max(fullBeatDelay * 0.5, duration - syncopatedOffset);
+  const phrase: Array<[string, number, number, number]> = [
+    [supportTone, 0, Math.max(fullBeatDelay * 0.9, fullBeatDelay * 1.1), 0.95],
+    [upperNeighbor, fullBeatDelay * 1.25, fullBeatDelay * 0.55, 0.86],
+    [supportTone, fullBeatDelay * 2, Math.max(fullBeatDelay * 0.7, duration - fullBeatDelay * 2), 0.91],
+  ];
 
-  return [{
-    noteName: name,
-    midi,
-    startOffset: 0,
-    duration: Math.max(fullBeatDelay, syncopatedOffset),
-    velocityMultiplier: 0.95,
-    isBass: false,
-  }, {
-    noteName: name,
-    midi,
-    startOffset: syncopatedOffset,
-    duration: Math.max(fullBeatDelay * 0.5, syncopatedDuration),
-    velocityMultiplier: 0.85,
-    isBass: false,
-  }];
+  return phrase
+    .map(([noteName, startOffset, requestedDuration, velocityMultiplier]) => (
+      pushFluteNote(noteName, startOffset, requestedDuration, velocityMultiplier)
+    ))
+    .filter((note): note is ScheduledNote => note !== null);
 }
 
 function generateSaxophoneNotes(
+  chordName: string,
   rootName: string,
   chordTones: MidiNote[],
   duration: number,
   fullBeatDelay: number,
   durationInBeats: number,
+  startTime?: number,
 ): ScheduledNote[] {
-  const guideTone = chordTones.length >= 2 ? chordTones[1].noteName : rootName;
-  const accentTone = chordTones.length >= 3 ? chordTones[2].noteName : guideTone;
   const notes: ScheduledNote[] = [];
+  const phraseSeed = hashPatternSeed(`${chordName}:${(startTime ?? 0).toFixed(3)}:${duration.toFixed(3)}`);
+  const rootIndex = NOTE_INDEX_MAP[rootName] ?? 0;
+  const chordIntervals = new Set(
+    chordTones.map((tone) => {
+      const toneIndex = NOTE_INDEX_MAP[tone.noteName];
+      if (toneIndex === undefined) return 0;
+      return (toneIndex - rootIndex + 12) % 12;
+    }),
+  );
+
+  const scaleIntervals = (() => {
+    const hasMinorThird = chordIntervals.has(3);
+    const hasMajorThird = chordIntervals.has(4);
+    const hasFlatFive = chordIntervals.has(6);
+    const hasPerfectFive = chordIntervals.has(7);
+    const hasMinorSeventh = chordIntervals.has(10);
+    const hasMajorSeventh = chordIntervals.has(11);
+
+    if (hasMinorThird && hasFlatFive) return [0, 1, 3, 5, 6, 8, 10];
+    if (hasMajorThird && hasMinorSeventh) return [0, 2, 4, 5, 7, 9, 10];
+    if (hasMinorThird && hasMajorSeventh) return [0, 2, 3, 5, 7, 9, 11];
+    if (hasMinorThird) return [0, 2, 3, 5, 7, 9, 10];
+    if (hasMajorThird && hasMajorSeventh) return [0, 2, 4, 6, 7, 9, 11];
+    if (hasMajorThird && !hasPerfectFive) return [0, 2, 4, 6, 8, 9, 11];
+    return [0, 2, 4, 5, 7, 9, 11];
+  })();
+
+  const arpeggioIntervals = Array.from(chordIntervals)
+    .filter((interval) => interval !== 0)
+    .sort((a, b) => a - b);
+  arpeggioIntervals.unshift(0);
+
+  const scaleNoteNames = scaleIntervals.map((interval) => {
+    const scaleIndex = (rootIndex + interval) % 12;
+    return CHROMATIC_SCALE[scaleIndex];
+  });
+  const arpeggioNoteNames = arpeggioIntervals.map((interval) => {
+    const scaleIndex = (rootIndex + interval) % 12;
+    return CHROMATIC_SCALE[scaleIndex];
+  });
+
+  const runPatterns: ReadonlyArray<readonly number[]> = [
+    [0, 1, 2, 3],
+    [2, 1, 0, 1],
+    [0, 2, 1, 3],
+    [3, 2, 1, 0],
+  ];
+  const arpPatterns: ReadonlyArray<readonly number[]> = [
+    [0, 1, 2, 1],
+    [0, 2, 1, 2],
+    [0, 1, 2, 3],
+    [0, 2, 3, 1],
+  ];
+  const selectedRunPattern = runPatterns[phraseSeed % runPatterns.length];
+  const selectedArpPattern = arpPatterns[(phraseSeed >> 2) % arpPatterns.length];
+  const resolveSaxOctave = (
+    stepIndex: number,
+    totalSteps: number,
+    useScaleRun: boolean,
+    phraseCycleIndex: number,
+  ) => {
+    const shouldLeanLower = ((phraseSeed + phraseCycleIndex) % 2) === 0;
+    if (totalSteps <= 1) {
+      return shouldLeanLower ? 4 : 5;
+    }
+
+    if (useScaleRun) {
+      if (stepIndex === totalSteps - 1) return 5;
+      return stepIndex <= 1 ? 4 : 5;
+    }
+
+    if (shouldLeanLower) {
+      return stepIndex === totalSteps - 1 ? 5 : 4;
+    }
+
+    return stepIndex === 0 ? 4 : 5;
+  };
 
   const pushNote = (
     noteName: string,
@@ -619,9 +708,21 @@ function generateSaxophoneNotes(
     if (actualDuration <= 0) return;
 
     const name = `${noteName}${octave}`;
-    const midi = noteNameToMidi(name);
+    let midi = noteNameToMidi(name);
+    while (midi < SAXOPHONE_MIN_MIDI) {
+      midi += 12;
+    }
+    while (midi > SAXOPHONE_MAX_MIDI) {
+      midi -= 12;
+    }
+    if (midi < SAXOPHONE_MIN_MIDI || midi > SAXOPHONE_MAX_MIDI) {
+      return;
+    }
+
+    const clampedOctave = Math.floor(midi / 12) - 1;
+    const clampedName = `${noteName}${clampedOctave}`;
     notes.push({
-      noteName: name,
+      noteName: clampedName,
       midi,
       startOffset,
       duration: actualDuration,
@@ -631,23 +732,48 @@ function generateSaxophoneNotes(
   };
 
   if (durationInBeats < 2) {
-    pushNote(guideTone, 5, 0, duration, 0.96);
+    const pickupNote = arpeggioNoteNames[Math.min(1, arpeggioNoteNames.length - 1)] ?? rootName;
+    pushNote(pickupNote, 4, 0, duration, 0.98);
     return notes;
   }
 
   if (durationInBeats < PIANO_PATTERN_MIN_BEATS) {
-    pushNote(guideTone, 5, 0, fullBeatDelay * 0.8, 0.94);
-    pushNote(accentTone, 5, fullBeatDelay * 1.5, duration, 1.04);
+    const stepDuration = Math.max(fullBeatDelay * 0.8, 0.22);
+    const phrase = durationInBeats < 3
+      ? selectedArpPattern.slice(0, 3)
+      : selectedRunPattern;
+
+    phrase.forEach((patternIndex, stepIndex) => {
+      const source = durationInBeats < 3 ? arpeggioNoteNames : scaleNoteNames;
+      const noteName = source[patternIndex % source.length] ?? rootName;
+      const octave = resolveSaxOctave(stepIndex, phrase.length, durationInBeats >= 3, 0);
+      const startOffset = stepIndex * stepDuration;
+      pushNote(noteName, octave, startOffset, stepDuration * 0.9, stepIndex === phrase.length - 1 ? 1.04 : 0.94);
+    });
     return notes;
   }
 
   const cycleDuration = fullBeatDelay * 2;
+  const stepDuration = Math.max(fullBeatDelay * 0.8, 0.2);
   for (let cycleStart = 0; cycleStart < duration - fullBeatDelay * 0.5; cycleStart += cycleDuration) {
-    pushNote(guideTone, 5, cycleStart, fullBeatDelay * 0.65, 0.94);
-    pushNote(accentTone, 5, cycleStart + fullBeatDelay * 1.5, fullBeatDelay * 0.4, 1.08);
+    const useScaleRun = ((Math.round(cycleStart / cycleDuration) + phraseSeed) % 2) === 0;
+    const phrase = useScaleRun ? selectedRunPattern : selectedArpPattern;
+    const source = useScaleRun ? scaleNoteNames : arpeggioNoteNames;
+    const phraseCycleIndex = Math.round(cycleStart / cycleDuration);
+
+    phrase.forEach((patternIndex, stepIndex) => {
+      const noteName = source[patternIndex % source.length] ?? rootName;
+      const octave = resolveSaxOctave(stepIndex, phrase.length, useScaleRun, phraseCycleIndex);
+      const startOffset = cycleStart + stepIndex * (stepDuration * 0.6);
+      const velocity = useScaleRun
+        ? (stepIndex === phrase.length - 1 ? 1.02 : 0.92 + stepIndex * 0.03)
+        : (stepIndex === 0 ? 1.0 : 0.95);
+      pushNote(noteName, octave, startOffset, stepDuration * (useScaleRun ? 0.7 : 0.85), velocity);
+    });
   }
 
-  pushNote(rootName, 6, Math.max(0, duration - fullBeatDelay), fullBeatDelay, 0.9);
+  const resolutionNote = arpeggioNoteNames[(phraseSeed + 1) % arpeggioNoteNames.length] ?? rootName;
+  pushNote(resolutionNote, 5, Math.max(0, duration - fullBeatDelay * 0.8), fullBeatDelay * 0.8, 0.96);
   return notes;
 }
 

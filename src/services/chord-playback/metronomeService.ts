@@ -8,16 +8,19 @@ import { audioContextManager } from '../audio/audioContextManager';
 export interface MetronomeOptions {
   volume: number; // 0.0 to 1.0
   soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long'; // Sound style selection
+  trackMode: 'metronome' | 'drum';
   clickDuration: number; // Duration of each click in seconds
 }
 
 export class MetronomeService {
+  private static readonly DRUM_TRACK_MASTER_GAIN = 0.45;
   private audioContext: AudioContext | null = null;
   private isInitialized = false;
   private isEnabled = false;
   private volume = 1.0; // Base volume (will be multiplied by gain boost)
   private volumeBoost = 3.0; // VOLUME BOOST: 3x gain multiplication for clear audibility over background music
   private soundStyle: 'traditional' | 'digital' | 'wood' | 'bell' | 'librosa_default' | 'librosa_pitched' | 'librosa_short' | 'librosa_long' = 'librosa_short';
+  private trackMode: 'metronome' | 'drum' = 'metronome';
   private clickDuration = 0.06; // 60ms clicks for better separation
 
   // PRE-GENERATED TRACK APPROACH: Store complete metronome audio tracks
@@ -28,7 +31,9 @@ export class MetronomeService {
 
   // Audio buffers for different sound styles (for click generation)
   private audioBuffers: Map<string, { downbeat: AudioBuffer; regular: AudioBuffer }> = new Map();
+  private renderedTrackCache: Map<string, AudioBuffer> = new Map();
   private isLoadingBuffers = false;
+  private settingsListeners: Set<() => void> = new Set();
 
   constructor() {
     // Defer AudioContext initialization until first use to avoid autoplay policy issues
@@ -358,8 +363,7 @@ export class MetronomeService {
 
       // Create audio nodes for click playback
 
-      // Use regular buffer for all beats (no downbeat emphasis)
-      const buffer = buffers.regular;
+      const buffer = isDownbeat ? buffers.downbeat : buffers.regular;
 
       // Create buffer source node
       const source = this.audioContext.createBufferSource();
@@ -370,7 +374,7 @@ export class MetronomeService {
 
       // Configure gain with aggressive envelope for better separation
       gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(this.volume, startTime + 0.002); // 2ms attack
+      gainNode.gain.linearRampToValueAtTime(this.volume * this.volumeBoost, startTime + 0.002); // 2ms attack
       gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + this.clickDuration * 0.8); // Faster decay for better separation
 
       // Connect nodes
@@ -406,6 +410,14 @@ export class MetronomeService {
       return null;
     }
 
+    const timeSignature = Math.max(1, _timeSignature);
+    const cacheKey = `${this.trackMode}:${this.soundStyle}:${duration.toFixed(3)}:${bpm}:${timeSignature}:${this.clickDuration.toFixed(3)}`;
+    const cachedTrack = this.renderedTrackCache.get(cacheKey);
+    if (cachedTrack) {
+      this.metronomeTrack = cachedTrack;
+      return cachedTrack;
+    }
+
     // Load audio buffers for the current sound style
     await this.loadAudioBuffers(this.soundStyle);
     const buffers = this.audioBuffers.get(this.soundStyle);
@@ -431,26 +443,25 @@ export class MetronomeService {
       // Skip beats that would extend beyond the track duration
       if (beatTime >= duration) break;
 
-      // Use regular beat sound for all beats (no downbeat emphasis)
-      const bufferToUse = buffers.regular;
+      const isDownbeat = beatIndex % timeSignature === 0;
+      if (this.trackMode === 'drum') {
+        this.renderDrumBeat(offlineContext, beatTime, beatInterval, isDownbeat, beatIndex, timeSignature);
+      } else {
+        const bufferToUse = isDownbeat ? buffers.downbeat : buffers.regular;
+        const source = offlineContext.createBufferSource();
+        const gainNode = offlineContext.createGain();
 
-      // Create audio source for this click
-      const source = offlineContext.createBufferSource();
-      const gainNode = offlineContext.createGain();
+        source.buffer = bufferToUse;
 
-      source.buffer = bufferToUse;
+        const clickVolume = this.volume * this.volumeBoost * (isDownbeat ? 1.08 : 0.92);
+        gainNode.gain.setValueAtTime(0, beatTime);
+        gainNode.gain.linearRampToValueAtTime(clickVolume, beatTime + 0.002);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, beatTime + this.clickDuration * 0.8);
 
-      // Apply uniform volume for all beats (no downbeat emphasis)
-      const baseVolume = this.volume * this.volumeBoost;
-      const clickVolume = baseVolume;
-      gainNode.gain.setValueAtTime(0, beatTime);
-      gainNode.gain.linearRampToValueAtTime(clickVolume, beatTime + 0.002); // 2ms attack
-      gainNode.gain.exponentialRampToValueAtTime(0.001, beatTime + this.clickDuration * 0.8); // Decay
-
-      // Connect and schedule
-      source.connect(gainNode);
-      gainNode.connect(offlineContext.destination);
-      source.start(beatTime);
+        source.connect(gainNode);
+        gainNode.connect(offlineContext.destination);
+        source.start(beatTime);
+      }
     }
 
     try {
@@ -460,6 +471,7 @@ export class MetronomeService {
 
       // Store the generated track
       this.metronomeTrack = renderedBuffer;
+      this.renderedTrackCache.set(cacheKey, renderedBuffer);
       return renderedBuffer;
     } catch (error) {
       console.error('Failed to render metronome track:', error);
@@ -699,6 +711,8 @@ export class MetronomeService {
     if (this.soundStyle === style) return;
 
     this.soundStyle = style;
+    this.metronomeTrack = null;
+    this.notifySettingsChanged();
 
     if (this.audioContext && this.isInitialized) {
       await this.loadAudioBuffers(style);
@@ -712,6 +726,17 @@ export class MetronomeService {
    */
   public getSoundStyle(): string {
     return this.soundStyle;
+  }
+
+  public async setTrackMode(mode: 'metronome' | 'drum'): Promise<void> {
+    if (this.trackMode === mode) return;
+    this.trackMode = mode;
+    this.metronomeTrack = null;
+    this.notifySettingsChanged();
+  }
+
+  public getTrackMode(): 'metronome' | 'drum' {
+    return this.trackMode;
   }
 
   /**
@@ -731,8 +756,13 @@ export class MetronomeService {
     if (options.soundStyle !== undefined) {
       await this.setSoundStyle(options.soundStyle);
     }
+    if (options.trackMode !== undefined) {
+      await this.setTrackMode(options.trackMode);
+    }
     if (options.clickDuration !== undefined) {
       this.clickDuration = options.clickDuration;
+      this.metronomeTrack = null;
+      this.notifySettingsChanged();
     }
   }
 
@@ -743,6 +773,7 @@ export class MetronomeService {
     return {
       volume: this.volume,
       soundStyle: this.soundStyle,
+      trackMode: this.trackMode,
       clickDuration: this.clickDuration
     };
   }
@@ -766,6 +797,7 @@ export class MetronomeService {
 
     // Clear audio buffers
     this.audioBuffers.clear();
+    this.renderedTrackCache.clear();
 
     // Do not close the shared AudioContext; just release local references
     this.audioContext = null;
@@ -799,14 +831,125 @@ export class MetronomeService {
     const wasEnabled = this.isEnabled;
     this.isEnabled = true;
 
-    // Use immediate scheduling for test click
     const currentTime = this.audioContext!.currentTime;
-    this.createClick(isDownbeat, currentTime + 0.1); // Schedule 100ms in the future
+    const testTime = currentTime + 0.1;
+    if (this.trackMode === 'drum') {
+      this.renderKick(this.audioContext!, testTime, isDownbeat ? 0.58 : 0.46);
+      if (isDownbeat) {
+        this.renderHiHat(this.audioContext!, testTime + 0.08, 0.14);
+      } else {
+        this.renderSnare(this.audioContext!, testTime, 0.42);
+      }
+    } else {
+      this.createClick(isDownbeat, testTime);
+    }
 
     // Restore previous state after a short delay
     setTimeout(() => {
       this.isEnabled = wasEnabled;
     }, 200);
+  }
+
+  public addSettingsListener(listener: () => void): () => void {
+    this.settingsListeners.add(listener);
+    return () => {
+      this.settingsListeners.delete(listener);
+    };
+  }
+
+  private notifySettingsChanged(): void {
+    this.settingsListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Metronome settings listener failed:', error);
+      }
+    });
+  }
+
+  private renderDrumBeat(
+    offlineContext: OfflineAudioContext,
+    beatTime: number,
+    beatInterval: number,
+    isDownbeat: boolean,
+    beatIndex: number,
+    timeSignature: number,
+  ): void {
+    const beatInBar = beatIndex % timeSignature;
+    this.renderKick(offlineContext, beatTime, isDownbeat ? 0.28 : 0.2);
+
+    const shouldAddSnare = timeSignature >= 4
+      ? beatInBar === 1 || beatInBar === 3
+      : beatInBar === Math.floor(timeSignature / 2);
+    if (shouldAddSnare) {
+      this.renderSnare(offlineContext, beatTime, 0.18);
+    }
+
+    this.renderHiHat(offlineContext, beatTime, 0.07);
+    const offbeatTime = beatTime + beatInterval * 0.5;
+    if (offbeatTime < offlineContext.length / offlineContext.sampleRate) {
+      this.renderHiHat(offlineContext, offbeatTime, 0.045);
+    }
+  }
+
+  private renderKick(context: BaseAudioContext, time: number, volume: number): void {
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, time);
+    osc.frequency.exponentialRampToValueAtTime(42, time + 0.12);
+    gain.gain.setValueAtTime(volume * this.volume * 0.42 * MetronomeService.DRUM_TRACK_MASTER_GAIN, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+    osc.connect(gain);
+    gain.connect(context.destination);
+    osc.start(time);
+    osc.stop(time + 0.18);
+  }
+
+  private renderSnare(context: BaseAudioContext, time: number, volume: number): void {
+    const bufferSize = Math.max(1, Math.floor(context.sampleRate * 0.12));
+    const noiseBuffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i += 1) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    noise.buffer = noiseBuffer;
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1400, time);
+    gain.gain.setValueAtTime(volume * this.volume * 0.34 * MetronomeService.DRUM_TRACK_MASTER_GAIN, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    noise.start(time);
+    noise.stop(time + 0.12);
+  }
+
+  private renderHiHat(context: BaseAudioContext, time: number, volume: number): void {
+    const bufferSize = Math.max(1, Math.floor(context.sampleRate * 0.05));
+    const noiseBuffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i += 1) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    noise.buffer = noiseBuffer;
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(6000, time);
+    gain.gain.setValueAtTime(volume * this.volume * 0.28 * MetronomeService.DRUM_TRACK_MASTER_GAIN, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    noise.start(time);
+    noise.stop(time + 0.05);
   }
 }
 
