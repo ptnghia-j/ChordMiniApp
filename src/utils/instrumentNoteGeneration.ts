@@ -16,6 +16,7 @@ import {
   type ChordEvent,
   type MidiNote,
 } from '@/utils/chordToMidi';
+import { getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
 import type { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
 import {
   buildGuitarStrumPattern,
@@ -112,7 +113,30 @@ const PIANO_ARPEGGIO_PATTERNS_SPARSE: ReadonlyArray<readonly number[]> = [
 
 const PIANO_INITIAL_FIFTH_BRIDGE_THRESHOLD = 0.55;
 const SAXOPHONE_MIN_MIDI = 60; // C4
-const SAXOPHONE_MAX_MIDI = 84; // C6
+const SAXOPHONE_MAX_MIDI = 76; // E5
+const SAXOPHONE_PREFERRED_MAX_MIDI = 72; // C5
+const SAXOPHONE_GRACE_NOTE_BEATS = 0.12;
+
+interface SaxPhraseEvent {
+  startBeat: number;
+  durationBeats: number;
+  velocityMultiplier: number;
+  scalePosition: number;
+  arpeggioOutline?: boolean;
+  graceFrom?: 'below' | 'above' | null;
+  ornamentType?: 'grace' | 'appoggiatura' | null;
+}
+
+interface ParsedSongKey {
+  rootName: string;
+  mode: 'major' | 'minor';
+  scaleNoteNames: string[];
+}
+
+const CHROMATIC_SCALE_SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const CHROMATIC_SCALE_FLATS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11] as const;
+const NATURAL_MINOR_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -213,6 +237,37 @@ function isSparsePianoSegment(segment: SongSegment | null): boolean {
   return descriptor.includes('intro') || descriptor.includes('outro');
 }
 
+function parseSongKey(
+  targetKey: string | undefined,
+  fallbackRootName: string,
+  chordIntervals: Set<number>,
+): ParsedSongKey {
+  const normalizedTargetKey = targetKey
+    ?.replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .trim();
+  const rootMatch = normalizedTargetKey?.match(/^([A-G][#b]?)/i);
+  const parsedRoot = rootMatch
+    ? `${rootMatch[1].charAt(0).toUpperCase()}${rootMatch[1].slice(1)}`
+    : fallbackRootName;
+  const explicitMode = normalizedTargetKey
+    ? (/minor|min\b|m$/i.test(normalizedTargetKey.slice(parsedRoot.length)) ? 'minor'
+      : (/major|maj\b/i.test(normalizedTargetKey.slice(parsedRoot.length)) ? 'major' : null))
+    : null;
+  const parsedMode: 'major' | 'minor' = explicitMode
+    ?? (normalizedTargetKey ? 'major' : (chordIntervals.has(3) && !chordIntervals.has(4) ? 'minor' : 'major'));
+  const accidentalPreference = getAccidentalPreferenceFromKey(normalizedTargetKey) ?? (parsedRoot.includes('b') ? 'flat' : 'sharp');
+  const chromaticScale = accidentalPreference === 'flat' ? CHROMATIC_SCALE_FLATS : CHROMATIC_SCALE_SHARPS;
+  const rootIndex = NOTE_INDEX_MAP[parsedRoot] ?? NOTE_INDEX_MAP[fallbackRootName] ?? 0;
+  const scaleIntervals = parsedMode === 'minor' ? NATURAL_MINOR_SCALE_INTERVALS : MAJOR_SCALE_INTERVALS;
+
+  return {
+    rootName: parsedRoot,
+    mode: parsedMode,
+    scaleNoteNames: scaleIntervals.map((interval) => chromaticScale[(rootIndex + interval) % 12]),
+  };
+}
+
 // ─── Core Note Generation ────────────────────────────────────────────────────
 
 /**
@@ -293,7 +348,7 @@ export function generateNotesForInstrument(
       return generateFluteNotes(rootName, bassName, chordTones, duration, fullBeatDelay, durationInBeats);
 
     case 'saxophone':
-      return generateSaxophoneNotes(chordName, rootName, chordTones, duration, fullBeatDelay, durationInBeats, startTime);
+      return generateSaxophoneNotes(chordName, rootName, chordTones, duration, fullBeatDelay, durationInBeats, startTime, targetKey);
 
     case 'bass':
       return generateBassNotes(bassName, duration);
@@ -615,6 +670,7 @@ function generateSaxophoneNotes(
   fullBeatDelay: number,
   durationInBeats: number,
   startTime?: number,
+  targetKey?: string,
 ): ScheduledNote[] {
   const notes: ScheduledNote[] = [];
   const phraseSeed = hashPatternSeed(`${chordName}:${(startTime ?? 0).toFixed(3)}:${duration.toFixed(3)}`);
@@ -626,73 +682,116 @@ function generateSaxophoneNotes(
       return (toneIndex - rootIndex + 12) % 12;
     }),
   );
-
-  const scaleIntervals = (() => {
-    const hasMinorThird = chordIntervals.has(3);
-    const hasMajorThird = chordIntervals.has(4);
-    const hasFlatFive = chordIntervals.has(6);
-    const hasPerfectFive = chordIntervals.has(7);
-    const hasMinorSeventh = chordIntervals.has(10);
-    const hasMajorSeventh = chordIntervals.has(11);
-
-    if (hasMinorThird && hasFlatFive) return [0, 1, 3, 5, 6, 8, 10];
-    if (hasMajorThird && hasMinorSeventh) return [0, 2, 4, 5, 7, 9, 10];
-    if (hasMinorThird && hasMajorSeventh) return [0, 2, 3, 5, 7, 9, 11];
-    if (hasMinorThird) return [0, 2, 3, 5, 7, 9, 10];
-    if (hasMajorThird && hasMajorSeventh) return [0, 2, 4, 6, 7, 9, 11];
-    if (hasMajorThird && !hasPerfectFive) return [0, 2, 4, 6, 8, 9, 11];
-    return [0, 2, 4, 5, 7, 9, 11];
-  })();
-
-  const arpeggioIntervals = Array.from(chordIntervals)
-    .filter((interval) => interval !== 0)
-    .sort((a, b) => a - b);
-  arpeggioIntervals.unshift(0);
-
-  const scaleNoteNames = scaleIntervals.map((interval) => {
-    const scaleIndex = (rootIndex + interval) % 12;
-    return CHROMATIC_SCALE[scaleIndex];
+  const songKey = parseSongKey(targetKey, rootName, chordIntervals);
+  const scaleNoteNames = songKey.scaleNoteNames;
+  const noteIndexToScaleDegree = new Map<number, number>();
+  scaleNoteNames.forEach((noteName, scaleDegree) => {
+    const noteIndex = NOTE_INDEX_MAP[noteName];
+    if (noteIndex !== undefined) {
+      noteIndexToScaleDegree.set(noteIndex, scaleDegree);
+    }
   });
-  const arpeggioNoteNames = arpeggioIntervals.map((interval) => {
-    const scaleIndex = (rootIndex + interval) % 12;
-    return CHROMATIC_SCALE[scaleIndex];
-  });
+  const normalizeScaleDegree = (degree: number) => ((degree % scaleNoteNames.length) + scaleNoteNames.length) % scaleNoteNames.length;
+  const degreeForPitchClass = (noteName: string) => {
+    const noteIndex = NOTE_INDEX_MAP[noteName];
+    if (noteIndex === undefined) return 0;
+    const directDegree = noteIndexToScaleDegree.get(noteIndex);
+    if (directDegree !== undefined) return directDegree;
 
-  const runPatterns: ReadonlyArray<readonly number[]> = [
-    [0, 1, 2, 3],
-    [2, 1, 0, 1],
-    [0, 2, 1, 3],
-    [3, 2, 1, 0],
-  ];
-  const arpPatterns: ReadonlyArray<readonly number[]> = [
-    [0, 1, 2, 1],
-    [0, 2, 1, 2],
-    [0, 1, 2, 3],
-    [0, 2, 3, 1],
-  ];
-  const selectedRunPattern = runPatterns[phraseSeed % runPatterns.length];
-  const selectedArpPattern = arpPatterns[(phraseSeed >> 2) % arpPatterns.length];
-  const resolveSaxOctave = (
-    stepIndex: number,
-    totalSteps: number,
-    useScaleRun: boolean,
-    phraseCycleIndex: number,
+    let bestDegree = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    scaleNoteNames.forEach((scaleNoteName, scaleDegree) => {
+      const scaleIndex = NOTE_INDEX_MAP[scaleNoteName];
+      if (scaleIndex === undefined) return;
+      const forward = (noteIndex - scaleIndex + 12) % 12;
+      const wrappedDistance = Math.min(forward, 12 - forward);
+      if (wrappedDistance < bestDistance) {
+        bestDistance = wrappedDistance;
+        bestDegree = scaleDegree;
+      }
+    });
+    return bestDegree;
+  };
+  const tonicDegree = degreeForPitchClass(songKey.rootName);
+  const orderedChordDegrees = chordTones.reduce<number[]>((degrees, tone) => {
+    const degree = degreeForPitchClass(tone.noteName);
+    if (!degrees.includes(degree)) {
+      degrees.push(degree);
+    }
+    return degrees;
+  }, []);
+  const chordDegrees = Array.from(new Set(orderedChordDegrees));
+  const guideToneDegrees = Array.from(new Set([
+    chordIntervals.has(3) ? degreeForPitchClass(CHROMATIC_SCALE_SHARPS[(rootIndex + 3) % 12]) : null,
+    chordIntervals.has(4) ? degreeForPitchClass(CHROMATIC_SCALE_SHARPS[(rootIndex + 4) % 12]) : null,
+    chordIntervals.has(10) ? degreeForPitchClass(CHROMATIC_SCALE_SHARPS[(rootIndex + 10) % 12]) : null,
+    chordIntervals.has(11) ? degreeForPitchClass(CHROMATIC_SCALE_SHARPS[(rootIndex + 11) % 12]) : null,
+  ].filter((degree): degree is number => typeof degree === 'number')));
+  const guideDegrees = Array.from(new Set([
+    ...guideToneDegrees,
+    ...chordDegrees,
+    tonicDegree,
+  ].filter((degree): degree is number => typeof degree === 'number')));
+
+  const absoluteScalePositionToNote = (scalePosition: number) => {
+    const scaleLength = scaleNoteNames.length;
+    const degree = normalizeScaleDegree(scalePosition);
+    const octave = 4 + Math.floor(scalePosition / scaleLength);
+    return {
+      noteName: scaleNoteNames[degree] ?? songKey.rootName,
+      octave,
+    };
+  };
+  const diatonicNeighbor = (noteName: string, direction: 'below' | 'above') => {
+    const scaleDegree = degreeForPitchClass(noteName);
+    const offset = direction === 'below' ? -1 : 1;
+    return scaleNoteNames[normalizeScaleDegree(scaleDegree + offset)] ?? noteName;
+  };
+  const nearestPositionFromPool = (referencePosition: number, degreePool: number[]): number => {
+    if (degreePool.length === 0) return referencePosition;
+    let bestPosition = referencePosition;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let octaveShift = -1; octaveShift <= 1; octaveShift += 1) {
+      degreePool.forEach((degree) => {
+        const candidate = degree + ((Math.floor(referencePosition / scaleNoteNames.length) + octaveShift) * scaleNoteNames.length);
+        const distance = Math.abs(candidate - referencePosition);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestPosition = candidate;
+        }
+      });
+    }
+    return bestPosition;
+  };
+  const beatPositionWithinMeasure = (beat: number) => {
+    const normalized = beat % 2;
+    return normalized < 0 ? normalized + 2 : normalized;
+  };
+  const isStrongHarmonicPosition = (beat: number) => {
+    const position = beatPositionWithinMeasure(beat);
+    return Math.abs(position) < 0.08 || Math.abs(position - 1) < 0.08;
+  };
+  const harmonicDegrees = Array.from(new Set([...guideDegrees, ...chordDegrees]));
+  const strongAnchorDegrees = chordDegrees.length > 0 ? chordDegrees : harmonicDegrees;
+  const skeletonDegrees = strongAnchorDegrees.length > 0 ? strongAnchorDegrees : guideDegrees;
+  const isChordCompatibleDegree = (scalePosition: number) => harmonicDegrees.includes(normalizeScaleDegree(scalePosition));
+  const constrainToHarmony = (
+    scalePosition: number,
+    startBeat: number,
+    durationBeatsValue: number,
+    preferGuideTone: boolean,
   ) => {
-    const shouldLeanLower = ((phraseSeed + phraseCycleIndex) % 2) === 0;
-    if (totalSteps <= 1) {
-      return shouldLeanLower ? 4 : 5;
+    const shouldAnchorToHarmony = isStrongHarmonicPosition(startBeat)
+      || durationBeatsValue >= 0.9
+      || preferGuideTone;
+    if (!shouldAnchorToHarmony || isChordCompatibleDegree(scalePosition)) {
+      return scalePosition;
     }
 
-    if (useScaleRun) {
-      if (stepIndex === totalSteps - 1) return 5;
-      return stepIndex <= 1 ? 4 : 5;
-    }
-
-    if (shouldLeanLower) {
-      return stepIndex === totalSteps - 1 ? 5 : 4;
-    }
-
-    return stepIndex === 0 ? 4 : 5;
+    const preferredPool = (isStrongHarmonicPosition(startBeat) || durationBeatsValue >= 0.9)
+      ? strongAnchorDegrees
+      : (preferGuideTone ? guideDegrees : harmonicDegrees);
+    return nearestPositionFromPool(scalePosition, preferredPool.length > 0 ? preferredPool : guideDegrees);
   };
 
   const pushNote = (
@@ -715,6 +814,9 @@ function generateSaxophoneNotes(
     while (midi > SAXOPHONE_MAX_MIDI) {
       midi -= 12;
     }
+    while (midi > SAXOPHONE_PREFERRED_MAX_MIDI && midi - 12 >= SAXOPHONE_MIN_MIDI) {
+      midi -= 12;
+    }
     if (midi < SAXOPHONE_MIN_MIDI || midi > SAXOPHONE_MAX_MIDI) {
       return;
     }
@@ -730,51 +832,496 @@ function generateSaxophoneNotes(
       isBass: false,
     });
   };
+  const scalePositionFromRenderedNote = (renderedNoteName: string): number | null => {
+    const match = renderedNoteName.match(/^([A-G][#b]?)(\d+)$/);
+    if (!match) return null;
+    const [, pitchClass, octaveValue] = match;
+    const octave = Number.parseInt(octaveValue, 10);
+    if (!Number.isFinite(octave)) return null;
+    return degreeForPitchClass(pitchClass) + ((octave - 4) * scaleNoteNames.length);
+  };
+  const finalizeSaxNotes = (): ScheduledNote[] => {
+    const compacted: ScheduledNote[] = [];
+    const sorted = [...notes].sort((a, b) => a.startOffset - b.startOffset || a.midi - b.midi);
+
+    for (const note of sorted) {
+      const previous = compacted[compacted.length - 1];
+      const noteCopy = { ...note };
+      const noteScalePosition = scalePositionFromRenderedNote(noteCopy.noteName);
+      const startsOnStrongPosition = isStrongHarmonicPosition(noteCopy.startOffset / fullBeatDelay);
+      if (
+        noteScalePosition !== null
+        && startsOnStrongPosition
+        && noteCopy.duration >= fullBeatDelay * 0.9
+        && !isChordCompatibleDegree(noteScalePosition)
+      ) {
+        const harmonicPosition = nearestPositionFromPool(noteScalePosition, strongAnchorDegrees);
+        const harmonicPitch = absoluteScalePositionToNote(harmonicPosition);
+        noteCopy.noteName = `${harmonicPitch.noteName}${harmonicPitch.octave}`;
+        noteCopy.midi = noteNameToMidi(noteCopy.noteName);
+      }
+
+      if (!previous) {
+        compacted.push(noteCopy);
+        continue;
+      }
+
+      const previousPitchClass = previous.noteName.replace(/\d+$/, '');
+      const currentPitchClass = noteCopy.noteName.replace(/\d+$/, '');
+      const samePitch = previousPitchClass === currentPitchClass;
+      const closeInTime = noteCopy.startOffset - previous.startOffset <= fullBeatDelay * 1.05;
+      if (!samePitch || !closeInTime) {
+        compacted.push(noteCopy);
+        continue;
+      }
+
+      const previousScalePosition = scalePositionFromRenderedNote(previous.noteName);
+      const repeatedScalePosition = scalePositionFromRenderedNote(noteCopy.noteName);
+      const repeatedIsChordTone = repeatedScalePosition !== null && isChordCompatibleDegree(repeatedScalePosition);
+
+      if (repeatedIsChordTone) {
+        previous.duration = Math.max(
+          previous.duration,
+          (noteCopy.startOffset + noteCopy.duration) - previous.startOffset,
+        );
+        previous.velocityMultiplier = Math.max(previous.velocityMultiplier, noteCopy.velocityMultiplier);
+        continue;
+      }
+
+      if (repeatedScalePosition !== null && previousScalePosition !== null) {
+        const motionDirection = repeatedScalePosition >= previousScalePosition ? 1 : -1;
+        const candidatePositions = [
+          repeatedScalePosition + motionDirection,
+          repeatedScalePosition - motionDirection,
+          repeatedScalePosition + 1,
+          repeatedScalePosition - 1,
+        ];
+        const alternativePosition = candidatePositions.find((candidate) => (
+          candidate >= 0
+          && candidate <= 13
+          && candidate !== previousScalePosition
+          && normalizeScaleDegree(candidate) !== normalizeScaleDegree(previousScalePosition)
+        ));
+
+        if (alternativePosition !== undefined) {
+          const alternativePitch = absoluteScalePositionToNote(alternativePosition);
+          compacted.push({
+            ...noteCopy,
+            noteName: `${alternativePitch.noteName}${alternativePitch.octave}`,
+            midi: noteNameToMidi(`${alternativePitch.noteName}${alternativePitch.octave}`),
+          });
+          continue;
+        }
+      }
+
+      if (compacted.length >= 3) {
+        const thirdPrevious = compacted[compacted.length - 3];
+        const secondPrevious = compacted[compacted.length - 2];
+        const thirdPreviousPitchClass = thirdPrevious.noteName.replace(/\d+$/, '');
+        const secondPreviousPitchClass = secondPrevious.noteName.replace(/\d+$/, '');
+        if (
+          thirdPreviousPitchClass === previousPitchClass
+          && secondPreviousPitchClass === currentPitchClass
+          && thirdPreviousPitchClass !== secondPreviousPitchClass
+        ) {
+          const antiOstinatoPosition = previousScalePosition !== null
+            ? nearestPositionFromPool(previousScalePosition + 1, strongAnchorDegrees)
+            : nearestPositionFromPool(7, strongAnchorDegrees);
+          const antiOstinatoPitch = absoluteScalePositionToNote(antiOstinatoPosition);
+          compacted.push({
+            ...noteCopy,
+            noteName: `${antiOstinatoPitch.noteName}${antiOstinatoPitch.octave}`,
+            midi: noteNameToMidi(`${antiOstinatoPitch.noteName}${antiOstinatoPitch.octave}`),
+          });
+          continue;
+        }
+      }
+
+      const harmonicFallbackPosition = previousScalePosition !== null
+        ? nearestPositionFromPool(previousScalePosition + 1, harmonicDegrees)
+        : nearestPositionFromPool(7, harmonicDegrees);
+      const harmonicFallback = absoluteScalePositionToNote(harmonicFallbackPosition);
+      compacted.push({
+        ...noteCopy,
+        noteName: `${harmonicFallback.noteName}${harmonicFallback.octave}`,
+        midi: noteNameToMidi(`${harmonicFallback.noteName}${harmonicFallback.octave}`),
+      });
+    }
+
+    const deOstinato: ScheduledNote[] = [];
+    compacted.forEach((noteCopy) => {
+      const window = deOstinato.slice(-3);
+      if (window.length === 3) {
+        const [first, second, third] = window;
+        const firstPitchClass = first.noteName.replace(/\d+$/, '');
+        const secondPitchClass = second.noteName.replace(/\d+$/, '');
+        const thirdPitchClass = third.noteName.replace(/\d+$/, '');
+        const currentPitchClass = noteCopy.noteName.replace(/\d+$/, '');
+        if (
+          firstPitchClass === thirdPitchClass
+          && secondPitchClass === currentPitchClass
+          && firstPitchClass !== secondPitchClass
+        ) {
+          const noteScalePosition = scalePositionFromRenderedNote(noteCopy.noteName) ?? nearestPositionFromPool(7, strongAnchorDegrees);
+          const replacementPosition = nearestPositionFromPool(noteScalePosition + 1, strongAnchorDegrees);
+          const replacementPitch = absoluteScalePositionToNote(replacementPosition);
+          deOstinato.push({
+            ...noteCopy,
+            noteName: `${replacementPitch.noteName}${replacementPitch.octave}`,
+            midi: noteNameToMidi(`${replacementPitch.noteName}${replacementPitch.octave}`),
+          });
+          return;
+        }
+      }
+
+      deOstinato.push(noteCopy);
+    });
+
+    return deOstinato;
+  };
+
+  const pushPhraseEvent = (
+    event: SaxPhraseEvent,
+    previousScalePosition: number | null,
+  ): number => {
+    let targetScalePosition = Math.max(0, Math.min(event.scalePosition, 13));
+    if (previousScalePosition !== null && targetScalePosition === previousScalePosition && !event.arpeggioOutline) {
+      const preserveHarmony = isStrongHarmonicPosition(event.startBeat) || event.durationBeats >= 0.9;
+      if (preserveHarmony) {
+        targetScalePosition = nearestPositionFromPool(
+          targetScalePosition + (event.velocityMultiplier >= 0.94 ? 1 : -1),
+          strongAnchorDegrees,
+        );
+      } else {
+        const upwardNeighbor = Math.min(13, targetScalePosition + 1);
+        const downwardNeighbor = Math.max(0, targetScalePosition - 1);
+        const preferredNeighbor = event.velocityMultiplier >= 0.94 ? upwardNeighbor : downwardNeighbor;
+        targetScalePosition = preferredNeighbor !== previousScalePosition
+          ? preferredNeighbor
+          : (preferredNeighbor === upwardNeighbor ? downwardNeighbor : upwardNeighbor);
+      }
+    }
+    const { noteName: targetNoteName, octave } = absoluteScalePositionToNote(targetScalePosition);
+    const leap = previousScalePosition === null ? 0 : targetScalePosition - previousScalePosition;
+
+    if (previousScalePosition !== null && !event.arpeggioOutline && Math.abs(leap) > 2 && event.durationBeats >= 0.75) {
+      const availablePassingSlots = Math.max(1, Math.floor(event.durationBeats / 0.5) - 1);
+      const passingCount = Math.min(Math.abs(leap) - 1, availablePassingSlots, 2);
+      const splitDuration = 0.5;
+      for (let passingIndex = 0; passingIndex < passingCount; passingIndex += 1) {
+        const passingScalePosition = previousScalePosition + Math.sign(leap) * (passingIndex + 1);
+        const { noteName: passingNoteName, octave: passingOctave } = absoluteScalePositionToNote(passingScalePosition);
+        pushNote(
+          passingNoteName,
+          passingOctave,
+          (event.startBeat + (splitDuration * passingIndex)) * fullBeatDelay,
+          splitDuration * fullBeatDelay,
+          Math.max(0.74, event.velocityMultiplier * 0.88),
+        );
+      }
+
+      const adjustedStartBeat = event.startBeat + splitDuration * passingCount;
+      const adjustedDurationBeats = Math.max(0.25, event.durationBeats - splitDuration * passingCount);
+      pushNote(
+        targetNoteName,
+        octave,
+        adjustedStartBeat * fullBeatDelay,
+        adjustedDurationBeats * fullBeatDelay,
+        event.velocityMultiplier,
+      );
+      return targetScalePosition;
+    }
+
+    const startBeat = event.startBeat;
+    const startOffset = startBeat * fullBeatDelay;
+    const requestedDuration = event.durationBeats * fullBeatDelay;
+
+    if (event.graceFrom) {
+      if (event.ornamentType === 'appoggiatura' && event.durationBeats >= 0.75) {
+        const stepDirection = event.graceFrom === 'below' ? -1 : 1;
+        const ornamentPositions = [
+          Math.max(0, Math.min(13, targetScalePosition + (stepDirection * 2))),
+          Math.max(0, Math.min(13, targetScalePosition + stepDirection)),
+        ];
+        const ornamentUnitBeats = Math.min(0.22, event.durationBeats * 0.22);
+        ornamentPositions.forEach((ornamentPosition, ornamentIndex) => {
+          const ornamentStartBeat = Math.max(0, startBeat - ((ornamentPositions.length - ornamentIndex) * ornamentUnitBeats));
+          const ornamentDurationBeats = ornamentUnitBeats * (ornamentIndex === ornamentPositions.length - 1 ? 1.15 : 0.9);
+          const ornamentPitch = absoluteScalePositionToNote(ornamentPosition);
+          pushNote(
+            ornamentPitch.noteName,
+            ornamentPitch.octave,
+            ornamentStartBeat * fullBeatDelay,
+            ornamentDurationBeats * fullBeatDelay,
+            Math.max(0.7, event.velocityMultiplier * (0.76 + ornamentIndex * 0.06)),
+          );
+        });
+      } else {
+        const graceStartBeat = Math.max(0, startBeat - SAXOPHONE_GRACE_NOTE_BEATS);
+        const graceDurationBeats = Math.min(SAXOPHONE_GRACE_NOTE_BEATS * 0.8, Math.max(0.05, startBeat - graceStartBeat));
+        const graceStartOffset = graceStartBeat * fullBeatDelay;
+        const graceDuration = graceDurationBeats * fullBeatDelay;
+        const graceNoteName = diatonicNeighbor(targetNoteName, event.graceFrom);
+
+        pushNote(
+          graceNoteName,
+          octave,
+          graceStartOffset,
+          graceDuration,
+          Math.max(0.66, event.velocityMultiplier * 0.76),
+        );
+      }
+    }
+
+    pushNote(targetNoteName, octave, startOffset, requestedDuration, event.velocityMultiplier);
+    return targetScalePosition;
+  };
+
+  const baseRegister = 3;
+  const primaryGuidePool = guideToneDegrees.length > 0 ? guideToneDegrees : guideDegrees;
+  const anchorScalePosition = nearestPositionFromPool(
+    baseRegister + primaryGuidePool[phraseSeed % Math.max(primaryGuidePool.length, 1)],
+    primaryGuidePool,
+  );
+  const motifPatternIndex = phraseSeed % 3;
+  const developmentShift = motifPatternIndex === 2 ? -1 : 1;
+  const clampScalePosition = (scalePosition: number) => Math.max(0, Math.min(13, scalePosition));
+  const chooseDistinctChordPosition = (
+    referencePosition: number,
+    direction: number,
+    pool: number[],
+    disallowPosition: number,
+  ) => {
+    const primaryCandidate = nearestPositionFromPool(referencePosition + direction, pool);
+    if (primaryCandidate !== disallowPosition) return primaryCandidate;
+
+    const fallbackCandidate = nearestPositionFromPool(referencePosition - direction, pool);
+    if (fallbackCandidate !== disallowPosition) return fallbackCandidate;
+
+    return primaryCandidate;
+  };
+  const buildScalePatternPositions = (
+    startPosition: number,
+    targetPosition: number,
+    noteCount: number,
+  ) => {
+    if (noteCount <= 1) return [targetPosition];
+
+    const direction = targetPosition === startPosition
+      ? developmentShift || 1
+      : Math.sign(targetPosition - startPosition);
+    const positions = [startPosition];
+    let currentPosition = startPosition;
+    for (let i = 1; i < noteCount - 1; i += 1) {
+      currentPosition = clampScalePosition(currentPosition + direction);
+      positions.push(currentPosition);
+    }
+    positions.push(targetPosition);
+    return positions;
+  };
+  const arpeggioContours: ReadonlyArray<readonly number[]> = [
+    [0, 1, 2, 3], // 1 3 5 8
+    [0, 2, 1, 3], // 1 5 3 8
+    [0, 3, 2, 1], // 1 8 5 3
+  ];
+  const patternProfiles: ReadonlyArray<{
+    kind: 'scale' | 'arpeggio';
+    direction?: 1 | -1;
+    contourIndex?: number;
+  }> = [
+    { kind: 'scale', direction: 1 },
+    { kind: 'arpeggio', contourIndex: 0 },
+    { kind: 'scale', direction: -1 },
+    { kind: 'arpeggio', contourIndex: 1 },
+    { kind: 'arpeggio', contourIndex: 2 },
+  ];
+  const buildArpeggioPatternPositions = (
+    anchorPosition: number,
+    arrivalPosition: number,
+    contourIndex: number,
+    noteCount: number,
+  ) => {
+    const rootDegree = orderedChordDegrees[0] ?? chordDegrees[0] ?? tonicDegree;
+    const thirdDegree = orderedChordDegrees[1] ?? rootDegree;
+    const fifthDegree = orderedChordDegrees[2] ?? thirdDegree;
+    const rootPosition = nearestPositionFromPool(anchorPosition, [rootDegree]);
+    const thirdPosition = nearestPositionFromPool(rootPosition + 1, [thirdDegree]);
+    const fifthPosition = nearestPositionFromPool(Math.max(rootPosition, thirdPosition) + 1, [fifthDegree]);
+    const octaveRootPosition = clampScalePosition(rootPosition + scaleNoteNames.length);
+    const slots = [
+      clampScalePosition(rootPosition),
+      clampScalePosition(thirdPosition),
+      clampScalePosition(fifthPosition),
+      clampScalePosition(octaveRootPosition),
+    ];
+    const contour = arpeggioContours[contourIndex % arpeggioContours.length] ?? arpeggioContours[0];
+    const selected = contour
+      .slice(0, noteCount)
+      .map((slotIndex) => slots[slotIndex] ?? slots[0])
+      .map(clampScalePosition);
+    if (selected.length > 0) {
+      selected[selected.length - 1] = clampScalePosition(arrivalPosition);
+    }
+    return selected;
+  };
+  const buildCell = (
+    cellStartBeat: number,
+    startScalePosition: number,
+    cellIndex: number,
+    isFinalCell: boolean,
+  ): SaxPhraseEvent[] => {
+    const cellAnchor = nearestPositionFromPool(startScalePosition, skeletonDegrees);
+    const selectedProfile = patternProfiles[(phraseSeed + cellIndex) % patternProfiles.length] ?? patternProfiles[0];
+    const arrivalPool = isFinalCell
+      ? [tonicDegree, ...(guideToneDegrees.length > 0 ? guideToneDegrees : strongAnchorDegrees)]
+      : (guideToneDegrees.length > 0 ? guideToneDegrees : strongAnchorDegrees);
+    const profileDirection = selectedProfile.direction ?? (developmentShift || 1);
+    const desiredArrival = nearestPositionFromPool(
+      cellAnchor + ((selectedProfile.kind === 'scale' ? 3 : 2) * profileDirection),
+      arrivalPool,
+    );
+    const arrivalPosition = desiredArrival === cellAnchor
+      ? chooseDistinctChordPosition(cellAnchor, profileDirection || 1, arrivalPool, cellAnchor)
+      : desiredArrival;
+    const cellKind = selectedProfile.kind;
+    const cellDurations = isFinalCell
+      ? [2]
+      : [0.5, 0.5, 0.5, 0.5];
+    const positions = cellKind === 'scale'
+      ? buildScalePatternPositions(cellAnchor, arrivalPosition, cellDurations.length)
+      : buildArpeggioPatternPositions(
+        cellAnchor,
+        arrivalPosition,
+        selectedProfile.contourIndex ?? (phraseSeed + cellIndex),
+        cellDurations.length,
+      );
+
+    return cellDurations.map((durationBeatsValue, stepIndex) => {
+      const startBeat = cellStartBeat + cellDurations.slice(0, stepIndex).reduce((sum, current) => sum + current, 0);
+      const isArrivalNote = stepIndex === cellDurations.length - 1;
+      const rawScalePosition = positions[stepIndex] ?? cellAnchor;
+      const durationValue = durationBeatsValue;
+      const anchoredRawPosition = stepIndex === 0
+        ? nearestPositionFromPool(
+          rawScalePosition,
+          isStrongHarmonicPosition(startBeat) ? strongAnchorDegrees : skeletonDegrees,
+        )
+        : (isArrivalNote ? nearestPositionFromPool(rawScalePosition, strongAnchorDegrees) : rawScalePosition);
+      const preferGuideTone = stepIndex === 0 || isArrivalNote;
+      const targetScalePosition = constrainToHarmony(
+        anchoredRawPosition,
+        startBeat,
+        durationValue,
+        preferGuideTone,
+      );
+      const arpeggioOutline = isArrivalNote
+        && cellKind === 'arpeggio'
+        && Math.abs(targetScalePosition - (positions[Math.max(0, stepIndex - 1)] ?? cellAnchor)) >= 2
+        && chordDegrees.includes(normalizeScaleDegree(targetScalePosition));
+      const shouldGrace = stepIndex === 0
+        && (
+          cellIndex === 0
+          || isFinalCell
+          || ((phraseSeed + cellIndex) % 3 === 1)
+        );
+
+      return {
+        startBeat,
+        durationBeats: durationValue,
+        velocityMultiplier: isArrivalNote
+          ? (isFinalCell ? 0.98 : 0.94)
+          : (0.86 + stepIndex * 0.05),
+        scalePosition: targetScalePosition,
+        arpeggioOutline,
+        graceFrom: shouldGrace ? (cellIndex === 0 ? 'below' : 'above') : null,
+        ornamentType: shouldGrace && durationValue >= 0.5 && ((phraseSeed + cellIndex) % 2 === 0)
+          ? 'appoggiatura'
+          : (shouldGrace ? 'grace' : null),
+      };
+    });
+  };
 
   if (durationInBeats < 2) {
-    const pickupNote = arpeggioNoteNames[Math.min(1, arpeggioNoteNames.length - 1)] ?? rootName;
-    pushNote(pickupNote, 4, 0, duration, 0.98);
-    return notes;
+    const { noteName: pickupNote, octave } = absoluteScalePositionToNote(anchorScalePosition);
+    if (durationInBeats >= 1.5) {
+      pushNote(diatonicNeighbor(pickupNote, 'below'), octave, 0, Math.min(duration * 0.12, fullBeatDelay * 0.14), 0.72);
+      pushNote(pickupNote, octave, Math.min(duration * 0.1, fullBeatDelay * 0.12), duration * 0.9, 0.98);
+      return finalizeSaxNotes();
+    }
+    pushNote(pickupNote, octave, 0, duration, 0.98);
+    return finalizeSaxNotes();
   }
 
-  if (durationInBeats < PIANO_PATTERN_MIN_BEATS) {
-    const stepDuration = Math.max(fullBeatDelay * 0.8, 0.22);
-    const phrase = durationInBeats < 3
-      ? selectedArpPattern.slice(0, 3)
-      : selectedRunPattern;
-
-    phrase.forEach((patternIndex, stepIndex) => {
-      const source = durationInBeats < 3 ? arpeggioNoteNames : scaleNoteNames;
-      const noteName = source[patternIndex % source.length] ?? rootName;
-      const octave = resolveSaxOctave(stepIndex, phrase.length, durationInBeats >= 3, 0);
-      const startOffset = stepIndex * stepDuration;
-      pushNote(noteName, octave, startOffset, stepDuration * 0.9, stepIndex === phrase.length - 1 ? 1.04 : 0.94);
+  const cellLengthBeats = 2;
+  const cellCount = Math.max(1, Math.floor(durationInBeats / cellLengthBeats));
+  let previousScalePosition: number | null = null;
+  let currentCellAnchor = anchorScalePosition;
+  for (let cellIndex = 0; cellIndex < cellCount; cellIndex += 1) {
+    const isFinalCell = cellIndex === cellCount - 1;
+    const phrase = buildCell(cellIndex * cellLengthBeats, currentCellAnchor, cellIndex, isFinalCell);
+    phrase.forEach((event) => {
+      previousScalePosition = pushPhraseEvent(event, previousScalePosition);
     });
-    return notes;
+    currentCellAnchor = nearestPositionFromPool(
+      (previousScalePosition ?? currentCellAnchor) + developmentShift,
+      isFinalCell ? [tonicDegree, ...guideDegrees] : guideDegrees,
+    );
   }
 
-  const cycleDuration = fullBeatDelay * 2;
-  const stepDuration = Math.max(fullBeatDelay * 0.8, 0.2);
-  for (let cycleStart = 0; cycleStart < duration - fullBeatDelay * 0.5; cycleStart += cycleDuration) {
-    const useScaleRun = ((Math.round(cycleStart / cycleDuration) + phraseSeed) % 2) === 0;
-    const phrase = useScaleRun ? selectedRunPattern : selectedArpPattern;
-    const source = useScaleRun ? scaleNoteNames : arpeggioNoteNames;
-    const phraseCycleIndex = Math.round(cycleStart / cycleDuration);
-
-    phrase.forEach((patternIndex, stepIndex) => {
-      const noteName = source[patternIndex % source.length] ?? rootName;
-      const octave = resolveSaxOctave(stepIndex, phrase.length, useScaleRun, phraseCycleIndex);
-      const startOffset = cycleStart + stepIndex * (stepDuration * 0.6);
-      const velocity = useScaleRun
-        ? (stepIndex === phrase.length - 1 ? 1.02 : 0.92 + stepIndex * 0.03)
-        : (stepIndex === 0 ? 1.0 : 0.95);
-      pushNote(noteName, octave, startOffset, stepDuration * (useScaleRun ? 0.7 : 0.85), velocity);
-    });
+  const consumedBeats = cellCount * cellLengthBeats;
+  const remainingBeats = durationInBeats - consumedBeats;
+  if (remainingBeats > 0.25) {
+    const tailTarget = constrainToHarmony(
+      nearestPositionFromPool(
+      (previousScalePosition ?? anchorScalePosition) + (remainingBeats >= 0.75 ? developmentShift : 0),
+      harmonicDegrees,
+      ),
+      consumedBeats,
+      remainingBeats,
+      true,
+    );
+    previousScalePosition = pushPhraseEvent({
+      startBeat: consumedBeats,
+      durationBeats: remainingBeats,
+      velocityMultiplier: 0.97,
+      scalePosition: tailTarget,
+      arpeggioOutline: false,
+      graceFrom: remainingBeats >= 0.75 ? 'below' : null,
+      ornamentType: remainingBeats >= 1 ? 'appoggiatura' : 'grace',
+    }, previousScalePosition);
   }
 
-  const resolutionNote = arpeggioNoteNames[(phraseSeed + 1) % arpeggioNoteNames.length] ?? rootName;
-  pushNote(resolutionNote, 5, Math.max(0, duration - fullBeatDelay * 0.8), fullBeatDelay * 0.8, 0.96);
-  return notes;
+  const latestNote = notes.reduce<ScheduledNote | null>((latest, note) => {
+    if (!latest) return note;
+    return note.startOffset >= latest.startOffset ? note : latest;
+  }, null);
+  const latestNoteScalePosition = latestNote ? scalePositionFromRenderedNote(latestNote.noteName) : null;
+  if (latestNote && remainingBeats <= 0.25) {
+    latestNote.duration = Math.max(latestNote.duration, duration - latestNote.startOffset);
+    latestNote.velocityMultiplier = Math.max(latestNote.velocityMultiplier, 0.99);
+  } else if (
+    latestNote
+    && latestNoteScalePosition !== null
+    && isChordCompatibleDegree(latestNoteScalePosition)
+    && latestNote.startOffset >= duration - (fullBeatDelay * 2.1)
+  ) {
+    latestNote.duration = Math.max(latestNote.duration, duration - latestNote.startOffset);
+    latestNote.velocityMultiplier = Math.max(latestNote.velocityMultiplier, 0.99);
+  } else {
+    const finalResolutionPosition = nearestPositionFromPool(
+      (previousScalePosition ?? anchorScalePosition) + developmentShift,
+      harmonicDegrees,
+    );
+    const finalResolution = absoluteScalePositionToNote(finalResolutionPosition >= 7 ? finalResolutionPosition : finalResolutionPosition + 7);
+    pushNote(
+      finalResolution.noteName,
+      finalResolution.octave,
+      Math.max(0, duration - fullBeatDelay),
+      fullBeatDelay,
+      0.99,
+    );
+  }
+  return finalizeSaxNotes();
 }
 
 function generateBassNotes(

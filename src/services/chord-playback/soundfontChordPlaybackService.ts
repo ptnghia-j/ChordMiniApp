@@ -79,6 +79,12 @@ interface InstrumentEnvelopeConfig {
   switchAttackRampWindow: number;
 }
 
+interface InstrumentRenderConfig {
+  soundfontInstrument: string;
+  soundfontKit?: string;
+  performanceVelocity: number;
+}
+
 interface ActiveScheduledNote {
   stopFn: (time?: number) => void;
   scheduledStartTime: number;
@@ -169,6 +175,33 @@ export class SoundfontChordPlaybackService {
       switchAttackRampWindow: 0.11,
     },
   };
+  private static readonly RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRenderConfig> = {
+    piano: {
+      soundfontInstrument: 'acoustic_grand_piano',
+      performanceVelocity: 88,
+    },
+    guitar: {
+      soundfontInstrument: 'acoustic_guitar_steel',
+      performanceVelocity: 84,
+    },
+    violin: {
+      soundfontInstrument: 'violin',
+      performanceVelocity: 92,
+    },
+    flute: {
+      soundfontInstrument: 'flute',
+      performanceVelocity: 90,
+    },
+    saxophone: {
+      soundfontInstrument: 'tenor_sax',
+      soundfontKit: 'MusyngKite',
+      performanceVelocity: 98,
+    },
+    bass: {
+      soundfontInstrument: 'electric_bass_finger',
+      performanceVelocity: 86,
+    },
+  };
 
   private audioContext: AudioContext | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -203,6 +236,14 @@ export class SoundfontChordPlaybackService {
   private getInstrumentEnvelope(instrumentName: string): InstrumentEnvelopeConfig {
     return SoundfontChordPlaybackService.ENVELOPE_BY_INSTRUMENT[instrumentName as InstrumentName]
       ?? SoundfontChordPlaybackService.DEFAULT_ENVELOPE;
+  }
+
+  private getInstrumentRenderConfig(instrumentName: string): InstrumentRenderConfig {
+    return SoundfontChordPlaybackService.RENDER_CONFIG_BY_INSTRUMENT[instrumentName as InstrumentName]
+      ?? {
+        soundfontInstrument: instrumentName,
+        performanceVelocity: 90,
+      };
   }
 
   private resetInstrumentRuntimeState(): void {
@@ -331,7 +372,8 @@ export class SoundfontChordPlaybackService {
    */
   private async loadInstrument(
     name: string,
-    instrumentName: string
+    instrumentName: string,
+    soundfontKit?: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     if (!this.audioContext) throw new Error('AudioContext not available');
@@ -346,6 +388,7 @@ export class SoundfontChordPlaybackService {
     }
     const instrument = new Soundfont(this.audioContext, {
       instrument: instrumentName,
+      ...(soundfontKit ? { kit: soundfontKit } : {}),
       decayTime: envelope.decayTime,
       loadLoopData: envelope.loadLoopData,
     });
@@ -394,21 +437,16 @@ export class SoundfontChordPlaybackService {
     const loadPromise = (async () => {
       this.loadingInstruments.add(instrumentName);
       try {
-        const instrumentMap: Record<string, string> = {
-          'piano': 'acoustic_grand_piano',
-          'guitar': 'acoustic_guitar_steel',
-          'violin': 'violin',
-          'flute': 'flute',
-          'saxophone': 'alto_sax',
-          'bass': 'electric_bass_finger'
-        };
-
-        const smplrInstrumentName = instrumentMap[instrumentName];
-        if (!smplrInstrumentName) {
+        const renderConfig = this.getInstrumentRenderConfig(instrumentName);
+        if (!renderConfig.soundfontInstrument) {
           throw new Error(`Unknown instrument: ${instrumentName}`);
         }
 
-        const instrument = await this.loadInstrument(instrumentName, smplrInstrumentName);
+        const instrument = await this.loadInstrument(
+          instrumentName,
+          renderConfig.soundfontInstrument,
+          renderConfig.soundfontKit,
+        );
         this.instruments.set(instrumentName, instrument);
         this.loadedInstruments.add(instrumentName);
       } finally {
@@ -636,6 +674,10 @@ export class SoundfontChordPlaybackService {
     const instrument = this.instruments.get(instrumentName);
     if (!instrument) return;
 
+    if (typeof instrument.output?.setVolume === 'function') {
+      instrument.output.setVolume(Math.round((Math.max(0, Math.min(100, volume)) / 100) * 127));
+    }
+
     // Clear any existing scheduled timeout for this instrument
     const existingTimeout = this.scheduledTimeouts.get(instrumentName);
     if (existingTimeout) {
@@ -653,7 +695,9 @@ export class SoundfontChordPlaybackService {
     this.cancelPendingInstrumentNotesForChordSwitch(instrumentName);
 
     // Calculate base velocity (0-127 MIDI scale)
-    const baseVelocity = (volume / 100) * 127;
+    const baseVelocity = typeof instrument.output?.setVolume === 'function'
+      ? this.getInstrumentRenderConfig(instrumentName).performanceVelocity
+      : (volume / 100) * 127;
 
     // Apply dynamic velocity if provided
     const dynamicMultiplier = dynamicVelocity !== undefined ? dynamicVelocity : 1.0;
