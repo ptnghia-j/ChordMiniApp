@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Navigation from '@/components/common/Navigation';
 
 // Helper function to parse and style change items with badges
@@ -31,7 +30,7 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.6.1',
-      date: 'March 15, 2026',
+      date: 'March 19, 2026',
       title: 'Analyze Flow & Playback UX Checks (In Development)',
       description: 'Current working tree includes analyze-flow refactors plus playback UX performance/alignment improvements and verification updates.',
       features: [
@@ -48,7 +47,9 @@ export default function ChangelogPage() {
       ],
       technical: [
         'IMPROVED: Chord/key/formatting pipeline touched across chord processing, synchronization, key detection, and display utilities',
-        'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting',      ],
+        'FIX: Disabled original-pitch correction overrides while pitch shift is active and added regression tests for chord grid, guitar tab, and formatting', 
+        'IMPROVED: minor refactoring, dead code removal, and documentation updates'     
+      ],
       breaking: [
         'Refactoring across the app is in progress - expect changes to the feature and its implementation'
       ]

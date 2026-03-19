@@ -1,35 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { ChatbotRequest, ChatbotResponse, ChatMessage } from '@/types/chatbotTypes';
 import { formatSongContextForAI, validateSongContext } from '@/services/api/chatbotService';
-import { GEMINI_MODEL_NAME } from '@/config/gemini';
+import { createGeminiClient, GEMINI_MODEL_NAME } from '@/config/gemini';
 
 export const maxDuration = 120; // 2 minutes for chatbot processing
 
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
-
-// Lazy initialization of Gemini API client to avoid build-time errors
-let _ai: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI | null {
-  if (_ai) return _ai;
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn('Gemini API Key not configured for chatbot service');
-    return null;
-  }
-
-  _ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      timeout: 120000 // 120 seconds timeout (maximum allowed)
-    }
-  });
-
-  return _ai;
-}
 
 /**
  * Generates a system prompt with song context for the AI chatbot
@@ -117,27 +94,13 @@ export async function POST(request: NextRequest) {
 
     // Create a Gemini AI instance with the appropriate API key
     // User-provided key takes precedence over environment variable
-    let geminiAI: GoogleGenAI;
-
-    if (geminiApiKey) {
-      // Use user-provided API key (BYOK)
-      geminiAI = new GoogleGenAI({
-        apiKey: geminiApiKey,
-        httpOptions: {
-          timeout: 120000 // 120 seconds timeout (maximum allowed)
-        }
-      });
-    } else {
-      // Use server-configured API key
-      const serverClient = getGeminiClient();
-      if (!serverClient) {
-        console.error('Gemini API key is missing');
-        return NextResponse.json(
-          { error: 'Chatbot service is not configured properly. Please provide a Gemini API key.' },
-          { status: 500 }
-        );
-      }
-      geminiAI = serverClient;
+    const geminiAI = createGeminiClient({ apiKey: geminiApiKey });
+    if (!geminiAI) {
+      console.error('Gemini API key is missing');
+      return NextResponse.json(
+        { error: 'Chatbot service is not configured properly. Please provide a Gemini API key.' },
+        { status: 500 }
+      );
     }
 
     // Format song context for AI

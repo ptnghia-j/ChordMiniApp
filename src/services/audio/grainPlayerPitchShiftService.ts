@@ -56,9 +56,7 @@ export class GrainPlayerPitchShiftService {
   private lowPassFilter: any | null = null; // Type will be Tone.Filter after lazy load
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private limiter: any | null = null; // Type will be Tone.Limiter after lazy load
-  private audioBuffer: AudioBuffer | null = null;
   private isInitialized = false;
-  private currentSemitones = 0;
 
   // Playback state
   private _isPlaying = false;
@@ -193,8 +191,6 @@ export class GrainPlayerPitchShiftService {
       // Connect GrainPlayer to signal chain
       this.grainPlayer.connect(this.lowPassFilter);
 
-      this.currentSemitones = semitones;
-
       // Wait for audio to load
       await new Promise<void>((resolve, reject) => {
         const checkLoaded = setInterval(() => {
@@ -249,9 +245,6 @@ export class GrainPlayerPitchShiftService {
   private handlePlayerLoad(): void {
     if (this.grainPlayer && this.grainPlayer.buffer) {
       this._duration = this.grainPlayer.buffer.duration;
-      this.audioBuffer = this.grainPlayer.buffer.get() as AudioBuffer;
-
-
     }
   }
 
@@ -265,9 +258,6 @@ export class GrainPlayerPitchShiftService {
    */
   setPitch(semitones: number): void {
     if (this.grainPlayer) {
-      // Store the user's desired semitones
-      this.currentSemitones = semitones;
-
       // Convert semitones to cents (100 cents = 1 semitone)
       const cents = semitones * 100;
 
@@ -513,7 +503,6 @@ export class GrainPlayerPitchShiftService {
     this._isPlaying = false;
     this._currentTime = 0;
     this._duration = 0;
-    this.audioBuffer = null;
   }
 
   /**
@@ -549,4 +538,3 @@ export function resetGrainPlayerPitchShiftService(): void {
     grainPlayerServiceInstance = null;
   }
 }
-

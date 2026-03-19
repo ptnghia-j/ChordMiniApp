@@ -61,12 +61,10 @@ export class CustomMusicAiClient {
   private baseUrl: string = 'https://api.music.ai';
   private apiPath: string = 'api'; // According to the documentation, the endpoint is /api/job
   private timeout: number;
-  private retries: number;
 
   constructor(config: { apiKey: string; timeout?: number; retries?: number; baseUrl?: string; apiPath?: string }) {
     this.apiKey = config.apiKey || '';
     this.timeout = config.timeout || 120000; // Default 120 seconds (maximum allowed)
-    this.retries = config.retries || 3; // Default 3 retries
 
     // Allow overriding the base URL and API path
     if (config.baseUrl) {

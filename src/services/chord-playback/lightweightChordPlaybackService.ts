@@ -165,7 +165,6 @@ export class LightweightChordPlaybackService {
   }
 
   public setDebugEnabled(enabled: boolean) { this.debugEnabled = enabled; }
-  private dlog(...args: unknown[]) { if (this.debugEnabled) console.log('[AudioDebug]', ...args); }
 
   private async initialize() {
     if (this.isInitialized) return;

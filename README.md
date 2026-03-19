@@ -449,4 +449,3 @@ For custom deployments, see the [Local Setup](#-quick-setup) section above. -->
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-

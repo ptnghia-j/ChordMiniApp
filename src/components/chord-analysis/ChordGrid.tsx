@@ -275,10 +275,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const { handleBeatClick, isClickable } = useChordInteractions(
     onBeatClick || null,
     beats,
-    hasPadding,
-    shiftCount,
-    paddingCount,
-    chords,
     originalAudioMapping
   );
 

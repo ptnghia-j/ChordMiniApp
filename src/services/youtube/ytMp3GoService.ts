@@ -68,7 +68,6 @@ export class YtMp3GoService {
   private readonly MAX_POLL_ATTEMPTS = 50; // 50 attempts = 250 seconds max (within 300s limit)
   private readonly POLL_INTERVAL = 5000; // 5 seconds between polls
   private readonly JOB_TIMEOUT = 15000; // 15 seconds for job creation
-  private readonly STATUS_TIMEOUT = 60000; // 60 seconds for status monitoring
 
   // Simple job tracking by video ID
   private readonly activeJobs = new Map<string, Promise<YtMp3GoResult>>();

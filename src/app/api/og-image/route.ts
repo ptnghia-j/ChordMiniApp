@@ -5,20 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * This is a placeholder implementation that returns a redirect to the logo
  * In production, you could use libraries like @vercel/og to generate dynamic images
  */
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  // Extract parameters for future dynamic image generation
-   
-  const _title = searchParams.get('title');
-   
-  const _videoId = searchParams.get('videoId');
-   
-  const _artist = searchParams.get('artist');
-   
-  const _key = searchParams.get('key');
-   
-  const _bpm = searchParams.get('bpm');
-
+export async function GET(_request: NextRequest) {
   try {
     // For now, redirect to the static logo
     // In production, you would generate a dynamic image here using the above parameters

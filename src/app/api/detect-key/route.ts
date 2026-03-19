@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { ThinkingLevel } from '@google/genai';
 import { firestoreDb } from '@/services/firebase/firebaseService';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import crypto from 'crypto';
-import { GEMINI_MODEL_NAME } from '@/config/gemini';
+import { createGeminiClient, GEMINI_MODEL_NAME } from '@/config/gemini';
 import { sanitizeLegacyCorrections, sanitizeSequenceCorrections } from '@/utils/keyDetectionCorrections';
 
 export const maxDuration = 240; // 4 minutes for key detection processing
@@ -11,28 +11,6 @@ export const maxDuration = 240; // 4 minutes for key detection processing
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
 const KEY_DETECTION_PROMPT_VERSION = 'v3-enharmonic-key-consistency';
-
-// Lazy initialization of Gemini API client to avoid build-time errors
-let _ai: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI | null {
-  if (_ai) return _ai;
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn('Gemini API Key not configured');
-    return null;
-  }
-
-  _ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      timeout: maxDuration * 1000 // Convert minutes to milliseconds
-    }
-  });
-
-  return _ai;
-}
 
 // Define types for chord data
 interface ChordData {
@@ -287,27 +265,16 @@ export async function POST(request: NextRequest) {
 
     // Create a Gemini AI instance only after the cache lookup misses.
     // User-provided key takes precedence over environment variable.
-    let geminiAI: GoogleGenAI;
-
-    if (geminiApiKey) {
-      // Use user-provided API key (BYOK)
-      geminiAI = new GoogleGenAI({
-        apiKey: geminiApiKey,
-        httpOptions: {
-          timeout: 120000 // 120 seconds timeout (maximum allowed)
-        }
-      });
-    } else {
-      // Use server-configured API key
-      const serverClient = getGeminiClient();
-      if (!serverClient) {
-        console.error('Gemini API key is missing');
-        return NextResponse.json(
-          { error: 'Key detection service is not configured properly. Please provide a Gemini API key.' },
-          { status: 500 }
-        );
-      }
-      geminiAI = serverClient;
+    const geminiAI = createGeminiClient({
+      apiKey: geminiApiKey,
+      timeoutMs: maxDuration * 1000
+    });
+    if (!geminiAI) {
+      console.error('Gemini API key is missing');
+      return NextResponse.json(
+        { error: 'Key detection service is not configured properly. Please provide a Gemini API key.' },
+        { status: 500 }
+      );
     }
 
     // Format chord progression for AI analysis

@@ -15,7 +15,7 @@ const PUBLIC_AUDIO_DIR = path.join(process.cwd(), 'public', 'audio');
  * @returns The audio file with appropriate headers
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ filename: string }> }
 ) {
   try {

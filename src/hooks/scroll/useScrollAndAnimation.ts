@@ -603,8 +603,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
             if (hasOriginalAudioMapping(chordGridData)) {
               // Use synchronized timing for chord grid
-              const syncedTimestamp = timingSyncService.getSyncedTimestamp(time, 'chords');
-              const adjustedTime = syncedTimestamp.syncedTime; // eslint-disable-line @typescript-eslint/no-unused-vars
+              timingSyncService.getSyncedTimestamp(time, 'chords');
               const animationBpm = analysisResults?.beatDetectionResult?.bpm || 120;
               const originalBeatDuration = Math.round((60 / animationBpm) * 1000) / 1000;
 

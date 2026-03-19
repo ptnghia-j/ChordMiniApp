@@ -164,7 +164,7 @@ export const getChordStyle = (
  * Calculates responsive grid layout configuration
  */
 export const calculateGridLayout = (
-  isUploadPage: boolean,
+  _isUploadPage: boolean,
   timeSignature: number,
   chordsLength: number,
   containerWidth: number,

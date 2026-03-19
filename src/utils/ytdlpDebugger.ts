@@ -23,7 +23,7 @@ export interface DebugInfo {
  * Debug yt-dlp download issues
  */
 export async function debugYtdlpDownload(
-  videoUrl: string,
+  _videoUrl: string,
   expectedFilename?: string,
   ytdlpOutput?: string
 ): Promise<DebugInfo> {

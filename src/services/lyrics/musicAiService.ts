@@ -200,30 +200,7 @@ const getChordPositionWithinLine = (line: LyricLine, chordTime: number): number 
   return clamp(Math.floor(relativeTime * Math.max(line.text.length - 1, 0)), 0, Math.max(line.text.length - 1, 0));
 };
 
-// Define interface for Music.ai SDK
-interface MusicAiSDK {
-  workflows: {
-    list: () => Promise<Array<{
-      slug: string;
-      name: string;
-      description?: string;
-    }>>;
-  };
-  jobs: {
-    create: (params: { workflow: string; input: Record<string, unknown> }) => Promise<{
-      id: string;
-      status: string;
-    }>;
-    get: (id: string) => Promise<{
-      id: string;
-      status: string;
-      result?: MusicAiJobResult;
-    }>;
-  };
-}
-
 class MusicAiService {
-  private musicAi: MusicAiSDK | null = null;
   private customClient: CustomMusicAiClient | null = null;
   private initialized: boolean = false;
 
@@ -271,7 +248,7 @@ class MusicAiService {
         try {
           const MusicAiModule = await import("@music.ai/sdk");
           const MusicAi = MusicAiModule.default || MusicAiModule;
-          this.musicAi = new MusicAi(sdkConfig) as unknown as MusicAiSDK;
+          new MusicAi(sdkConfig);
           this.customClient = new CustomMusicAiClient(sdkConfig);
 
           console.log('Music.ai SDK and custom client initialized successfully');
@@ -282,32 +259,6 @@ class MusicAiService {
           // Fallback: Use only the custom client if SDK import fails
           try {
             this.customClient = new CustomMusicAiClient(sdkConfig);
-            // Create a mock SDK object that delegates to custom client
-            this.musicAi = {
-              transcribe: async (audioUrl: string) => {
-                console.log('Using fallback transcription via custom client');
-                // Use the same logic as the main transcribeLyrics method but simplified
-                const workflowSlug = 'lyric-transcription-and-alignment';
-                const params: Record<string, string | number | boolean | object> = {
-                  audio: audioUrl,
-                  includeLyrics: true,
-                  transcribeLyrics: true,
-                  language: "en",
-                  model: "default",
-                  quality: "high"
-                };
-
-                const jobId = await this.customClient!.addJob(workflowSlug, params);
-                const job = await this.customClient!.waitForJobCompletion(jobId, 300000);
-
-                if (job.status === "SUCCEEDED" && job.result) {
-                  return job.result;
-                } else {
-                  throw new Error(`Transcription job failed: ${job.status}`);
-                }
-              }
-            } as unknown as MusicAiSDK;
-
             console.log('Fallback to custom client successful');
             this.initialized = true;
           } catch (fallbackError) {

@@ -801,38 +801,6 @@ export class AudioExtractionServiceSimplified {
 
 
   /**
-   * Select best audio format with priority: Opus > WebM > MP3 > M4A
-   */
-  private selectBestAudioFormat(formats: Array<{
-    type: string;
-    ext: string;
-    url: string;
-    bitrate?: number;
-    audioQuality?: string;
-    quality?: string;
-  }>): {
-    type: string;
-    ext: string;
-    url: string;
-    bitrate?: number;
-    audioQuality?: string;
-    quality?: string;
-  } {
-    const formatPriority = ['opus', 'webm', 'mp3', 'm4a'];
-
-    for (const preferredExt of formatPriority) {
-      const matchingFormats = formats.filter(f => f.ext === preferredExt);
-      if (matchingFormats.length > 0) {
-        return matchingFormats.reduce((best, current) =>
-          (current.bitrate || 0) > (best.bitrate || 0) ? current : best
-        );
-      }
-    }
-
-    return formats[0];
-  }
-
-  /**
    * Download audio file from URL with redirect handling
    */
   private async downloadAudioFromUrl(audioUrl: string): Promise<ArrayBuffer> {
@@ -888,20 +856,6 @@ export class AudioExtractionServiceSimplified {
         reject(new Error('Download timeout'));
       });
     });
-  }
-
-  /**
-   * Get content type from audio format extension
-   */
-  private getContentTypeFromFormat(ext: string): string {
-    const contentTypes: Record<string, string> = {
-      'opus': 'audio/opus',
-      'webm': 'audio/webm',
-      'mp3': 'audio/mpeg',
-      'm4a': 'audio/mp4'
-    };
-
-    return contentTypes[ext] || 'audio/mpeg';
   }
 
   /**
@@ -1657,16 +1611,6 @@ export class AudioExtractionServiceSimplified {
     // Formula: (bitrate in bits per second * duration in seconds) / 8 bits per byte
     const bitrateBytes = (bitrateKbps * 1000) / 8;
     return Math.round(bitrateBytes * durationSeconds);
-  }
-
-  /**
-   * Format file size for display
-   */
-  private formatFileSize(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    else if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    else return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   }
 
   // REMOVED: tryProxyServicesForGoogleVideo method

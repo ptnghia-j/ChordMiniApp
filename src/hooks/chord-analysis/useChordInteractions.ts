@@ -19,10 +19,6 @@ export interface AudioMappingItem {
 export const useChordInteractions = (
   onBeatClick: ((beatIndex: number, timestamp: number) => void) | null,
   beats: (number | null)[],
-  hasPadding: boolean,
-  shiftCount: number,
-  paddingCount: number,
-  chords: string[],
   originalAudioMapping?: AudioMappingItem[]
 ): ChordInteractions => {
 
