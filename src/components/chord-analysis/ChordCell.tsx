@@ -205,7 +205,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
     : '100%';
 
   const stateClassName = isInLoopRange
-    ? '!bg-blue-500/10 dark:!bg-blue-500/20 !border-blue-500/30 dark:!border-blue-500/50'
+    ? '!bg-blue-500/10 !border-blue-300/60 dark:!bg-blue-800/40 dark:!border-blue-400/35'
     : modulationInfo?.isModulation
       ? '!bg-green-300/20 dark:!bg-green-900/30 !border-green-500/50 dark:!border-green-500/70'
       : segmentationClassName || '';

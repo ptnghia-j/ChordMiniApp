@@ -33,20 +33,23 @@ export const useMetronomeSync = ({
   chordGridBeats: _chordGridBeats = [],  
   audioDuration = 0
 }: UseMetronomeSyncProps) => {
-  const isGeneratingTrack = useRef<boolean>(false);
   const lastPlayState = useRef<boolean>(isPlaying);
   const lastCurrentTime = useRef<number>(currentTime);
   const trackGenerationParams = useRef<{ bpm: number; timeSignature: number; duration: number; soundStyle: string; trackMode: string } | null>(null);
+  const generationPromiseRef = useRef<Promise<void> | null>(null);
 
   /**
    * PRE-GENERATED TRACK: Generate metronome track when parameters change
    */
-  const generateMetronomeTrack = useCallback(async () => {
-    if (isGeneratingTrack.current || audioDuration <= 0 || bpm <= 0) {
+  const generateMetronomeTrack = useCallback(async (forceRegenerate: boolean = false) => {
+    if (audioDuration <= 0 || bpm <= 0) {
       return;
     }
 
-    // Check if we need to regenerate the track
+    if (generationPromiseRef.current) {
+      await generationPromiseRef.current;
+    }
+
     const currentParams = {
       bpm,
       timeSignature,
@@ -56,29 +59,38 @@ export const useMetronomeSync = ({
     };
     const lastParams = trackGenerationParams.current;
 
-    if (lastParams &&
-        lastParams.bpm === currentParams.bpm &&
-        lastParams.timeSignature === currentParams.timeSignature &&
-        lastParams.duration === currentParams.duration &&
-        lastParams.soundStyle === currentParams.soundStyle &&
-        lastParams.trackMode === currentParams.trackMode &&
-        metronomeService.hasMetronomeTrack()) {
+    if (!forceRegenerate &&
+      lastParams &&
+      lastParams.bpm === currentParams.bpm &&
+      lastParams.timeSignature === currentParams.timeSignature &&
+      lastParams.duration === currentParams.duration &&
+      lastParams.soundStyle === currentParams.soundStyle &&
+      lastParams.trackMode === currentParams.trackMode &&
+      metronomeService.hasMetronomeTrack()) {
       return;
     }
 
-    isGeneratingTrack.current = true;
+    const generationTask = (async () => {
+      try {
+        const track = await metronomeService.generateMetronomeTrack(audioDuration, bpm, timeSignature);
+        if (track) {
+          trackGenerationParams.current = currentParams;
+        } else {
+          console.error('Failed to generate metronome track');
+        }
+      } catch (error) {
+        console.error('Error generating metronome track:', error);
+      }
+    })();
+
+    generationPromiseRef.current = generationTask;
 
     try {
-      const track = await metronomeService.generateMetronomeTrack(audioDuration, bpm, timeSignature);
-      if (track) {
-        trackGenerationParams.current = currentParams;
-      } else {
-        console.error('Failed to generate metronome track');
-      }
-    } catch (error) {
-      console.error('Error generating metronome track:', error);
+      await generationTask;
     } finally {
-      isGeneratingTrack.current = false;
+      if (generationPromiseRef.current === generationTask) {
+        generationPromiseRef.current = null;
+      }
     }
   }, [audioDuration, bpm, timeSignature]);
 
@@ -135,7 +147,7 @@ export const useMetronomeSync = ({
   useEffect(() => {
     const unsubscribe = metronomeService.addSettingsListener(() => {
       void (async () => {
-        await generateMetronomeTrack();
+        await generateMetronomeTrack(true);
         if (isPlaying && metronomeService.isMetronomeEnabled()) {
           metronomeService.startMetronomeTrack(currentTime);
         }

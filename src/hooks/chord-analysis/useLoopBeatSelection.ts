@@ -3,7 +3,7 @@
  * Manages sequential selection pattern and range expansion
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   useIsLoopEnabled,
   useLoopStartBeat,
@@ -19,6 +19,15 @@ export const useLoopBeatSelection = () => {
 
   // Track selection state: 'start' | 'end' | 'both'
   const selectionStateRef = useRef<'start' | 'end' | 'both'>('start');
+
+  useEffect(() => {
+    if (!isLoopEnabled) {
+      selectionStateRef.current = 'start';
+      return;
+    }
+
+    selectionStateRef.current = loopStartBeat === loopEndBeat ? 'end' : 'both';
+  }, [isLoopEnabled, loopStartBeat, loopEndBeat]);
 
   // Handle beat cell click for loop range selection
   const handleLoopBeatClick = useCallback((beatIndex: number) => {
@@ -73,4 +82,3 @@ export const useLoopBeatSelection = () => {
     isInLoopRange
   };
 };
-

@@ -41,7 +41,7 @@ import {
 import { useAudioInteractions } from '@/hooks/chord-playback/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/scroll/useScrollAndAnimation';
 import { usePlaybackState } from '@/hooks/chord-playback/usePlaybackState';
-import { useLoopPlayback } from '@/hooks/chord-playback/useLoopPlayback';
+import { useLoopPlayback, resolveLoopRange } from '@/hooks/chord-playback/useLoopPlayback';
 import { useApiKeys } from '@/hooks/settings/useApiKeys';
 
 
@@ -125,7 +125,7 @@ import ConditionalPlaybackControls from '@/components/chord-playback/Conditional
 // Import Zustand stores for direct initialization
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useIsLoopEnabled, useLoopStartBeat } from '@/stores/uiStore';
+import { useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
 
 import { usePlaybackStore } from '@/stores/playbackStore';
 
@@ -404,6 +404,7 @@ export default function YouTubeVideoAnalyzePage() {
   // Loop controls from UI store
   const isLoopEnabled = useIsLoopEnabled();
   const loopStartBeat = useLoopStartBeat();
+  const loopEndBeat = useLoopEndBeat();
 
 
   // YouTube player state
@@ -1246,11 +1247,11 @@ export default function YouTubeVideoAnalyzePage() {
               onEnded={() => {
                 if (!isLoopEnabled) return;
                 const beats = simplifiedChordGridData?.beats || [];
-                if (!beats.length) return;
-                if (loopStartBeat < 0 || loopStartBeat >= beats.length) return;
-                const startTimestamp = beats[loopStartBeat] ?? 0;
+                const resolvedLoopRange = resolveLoopRange(beats, loopStartBeat, loopEndBeat, duration);
+                if (!resolvedLoopRange) return;
+                const startTimestamp = resolvedLoopRange.startTimestamp;
                 try { (youtubePlayer as any)?.seekTo?.(startTimestamp, 'seconds'); } catch {}
-                setLastClickInfo({ visualIndex: loopStartBeat, timestamp: startTimestamp ?? 0, clickTime: Date.now() });
+                setLastClickInfo({ visualIndex: resolvedLoopRange.resolvedStartBeat, timestamp: startTimestamp, clickTime: Date.now() });
                 try { (youtubePlayer as any)?.playVideo?.(); } catch {}
                 setIsPlaying(true);
               }}

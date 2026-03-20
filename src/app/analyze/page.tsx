@@ -73,6 +73,7 @@ import { simplifyChordArray } from '@/utils/chordSimplification';
 import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
+import { resolveLoopRange } from '@/hooks/chord-playback/useLoopPlayback';
 import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useSegmentationState } from '@/hooks/lyrics/useSegmentationState';
 import { useAnalysisStore } from '@/stores/analysisStore';
@@ -876,16 +877,12 @@ const simplifiedChordGridData = useMemo(() => {
     if (!isLoopEnabled || !audioRef.current) return;
     const beats = (simplifiedChordGridData?.beats || []) as Array<number | null>;
     if (!beats.length) return;
-    if (loopStartBeat < 0 || loopEndBeat < 0 || loopStartBeat >= beats.length) return;
+    const resolvedLoopRange = resolveLoopRange(beats, loopStartBeat, loopEndBeat, duration);
+    if (!resolvedLoopRange) return;
 
-    const startTs = beats[loopStartBeat] ?? 0;
-    const endBeatTs = beats[loopEndBeat] ?? null;
-    const nextBeatTs = loopEndBeat + 1 < beats.length ? beats[loopEndBeat + 1] : null;
-    const boundary = nextBeatTs ?? (typeof duration === 'number' && duration > 0 ? Math.max(duration - 0.25, endBeatTs ?? 0) : (endBeatTs ?? 0) + 1);
-
-    if (typeof currentTime === 'number' && typeof boundary === 'number' && currentTime >= boundary) {
+    if (typeof currentTime === 'number' && currentTime >= resolvedLoopRange.endBoundary) {
       try {
-        audioRef.current.currentTime = startTs ?? 0;
+        audioRef.current.currentTime = resolvedLoopRange.startTimestamp;
         // Maintain play state for seamless looping
         if (isPlaying) audioRef.current.play?.();
       } catch {}

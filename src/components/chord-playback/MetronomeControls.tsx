@@ -57,8 +57,11 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
     if (!metronomeService) return;
     setTrackMode(newMode);
     await metronomeService.setTrackMode(newMode);
+    if (isEnabled) {
+      void metronomeService.testClick(false);
+    }
     setIsPopoverOpen(false);
-  }, [metronomeService]);
+  }, [isEnabled, metronomeService]);
 
   return (
     <Popover
@@ -70,24 +73,24 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
         content: 'p-0 border-none bg-transparent shadow-none',
       }}
     >
-      <div className={`${className}`}>
-        <Tooltip
-          content={isEnabled ? 'Metronome options' : 'Enable metronome'}
-          placement="top"
-          delay={500}
-          closeDelay={100}
-          classNames={{
-            base: 'max-w-xs',
-            content: 'bg-gray-900 dark:bg-gray-800 text-white border border-gray-700',
-          }}
-        >
-          <PopoverTrigger>
+      <PopoverTrigger>
+        <div className={`relative inline-block ${className}`}>
+          <Tooltip
+            content={isEnabled ? 'Metronome options' : 'Enable metronome'}
+            placement="top"
+            delay={500}
+            closeDelay={100}
+            classNames={{
+              base: 'max-w-xs',
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
+          >
             <motion.button
               onClick={handleToggle}
               className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
                 isEnabled
                   ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
               }`}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -100,9 +103,9 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
                 <PiMetronome className="h-4 w-4" />
               )}
             </motion.button>
-          </PopoverTrigger>
-        </Tooltip>
-      </div>
+          </Tooltip>
+        </div>
+      </PopoverTrigger>
 
       <PopoverContent>
         <div className="bg-white/70 dark:bg-content-bg/70 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg min-w-[240px] backdrop-blur-sm">

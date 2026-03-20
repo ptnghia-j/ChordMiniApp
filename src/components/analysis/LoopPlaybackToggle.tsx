@@ -41,6 +41,10 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
 
   // Local state to control popover visibility independently from loop state
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [startBeatInput, setStartBeatInput] = useState<string | null>(null);
+  const [endBeatInput, setEndBeatInput] = useState<string | null>(null);
+  const displayStartBeat = loopStartBeat >= 0 ? loopStartBeat + 1 : 1;
+  const displayEndBeat = loopEndBeat >= 0 ? loopEndBeat + 1 : Math.max(1, totalBeats);
 
   // Initialize loop range to full song when first enabled
   // Use -1 as sentinel value to detect uninitialized state (0 is a valid beat index)
@@ -66,37 +70,47 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
     }
   }, [isLoopEnabled, toggleLoop, totalBeats, setLoopRange]);
 
-  // Handle start beat input change
-  const handleStartBeatChange = useCallback((value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue)) return;
-
-    // Validate range
-    const clampedValue = Math.max(0, Math.min(numValue, totalBeats - 1));
-
-    // If new start > current end (and end is initialized), set end = start
-    if (loopEndBeat >= 0 && clampedValue > loopEndBeat) {
-      setLoopRange(clampedValue, clampedValue);
-    } else {
-      setLoopStartBeat(clampedValue);
+  const commitStartBeatInput = useCallback((rawValue: string) => {
+    if (totalBeats === 0) {
+      setStartBeatInput(null);
+      return;
     }
-  }, [totalBeats, loopEndBeat, setLoopStartBeat, setLoopRange]);
 
-  // Handle end beat input change
-  const handleEndBeatChange = useCallback((value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue)) return;
-
-    // Validate range
-    const clampedValue = Math.max(0, Math.min(numValue, totalBeats - 1));
-
-    // If new end < current start (and start is initialized), set start = end
-    if (loopStartBeat >= 0 && clampedValue < loopStartBeat) {
-      setLoopRange(clampedValue, clampedValue);
-    } else {
-      setLoopEndBeat(clampedValue);
+    const parsedValue = Number.parseInt(rawValue, 10);
+    if (Number.isNaN(parsedValue)) {
+      setStartBeatInput(null);
+      return;
     }
-  }, [totalBeats, loopStartBeat, setLoopEndBeat, setLoopRange]);
+
+    const nextStartBeat = Math.max(0, Math.min(parsedValue - 1, totalBeats - 1));
+
+    if (loopEndBeat >= 0 && nextStartBeat > loopEndBeat) {
+      setLoopRange(nextStartBeat, nextStartBeat);
+    } else {
+      setLoopStartBeat(nextStartBeat);
+    }
+  }, [loopEndBeat, setLoopRange, setLoopStartBeat, totalBeats]);
+
+  const commitEndBeatInput = useCallback((rawValue: string) => {
+    if (totalBeats === 0) {
+      setEndBeatInput(null);
+      return;
+    }
+
+    const parsedValue = Number.parseInt(rawValue, 10);
+    if (Number.isNaN(parsedValue)) {
+      setEndBeatInput(null);
+      return;
+    }
+
+    const nextEndBeat = Math.max(0, Math.min(parsedValue - 1, totalBeats - 1));
+
+    if (loopStartBeat >= 0 && nextEndBeat < loopStartBeat) {
+      setLoopRange(nextEndBeat, nextEndBeat);
+    } else {
+      setLoopEndBeat(nextEndBeat);
+    }
+  }, [loopStartBeat, setLoopEndBeat, setLoopRange, totalBeats]);
 
   const isDisabled = totalBeats === 0;
 
@@ -169,10 +183,21 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
                 type="number"
                 label="Start Beat"
                 labelPlacement="outside"
-                value={(loopStartBeat >= 0 ? loopStartBeat : 0).toString()}
-                onValueChange={handleStartBeatChange}
-                min={0}
-                max={totalBeats - 1}
+                aria-label="Start Beat"
+                value={startBeatInput ?? displayStartBeat.toString()}
+                onValueChange={setStartBeatInput}
+                onBlur={() => {
+                  commitStartBeatInput(startBeatInput ?? displayStartBeat.toString());
+                  setStartBeatInput(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitStartBeatInput(startBeatInput ?? displayStartBeat.toString());
+                    setStartBeatInput(null);
+                  }
+                }}
+                min={1}
+                max={Math.max(1, totalBeats)}
                 size="sm"
                 variant="bordered"
                 color="success"
@@ -189,10 +214,21 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
                 type="number"
                 label="End Beat"
                 labelPlacement="outside"
-                value={(loopEndBeat >= 0 ? loopEndBeat : Math.max(0, totalBeats - 1)).toString()}
-                onValueChange={handleEndBeatChange}
-                min={0}
-                max={totalBeats - 1}
+                aria-label="End Beat"
+                value={endBeatInput ?? displayEndBeat.toString()}
+                onValueChange={setEndBeatInput}
+                onBlur={() => {
+                  commitEndBeatInput(endBeatInput ?? displayEndBeat.toString());
+                  setEndBeatInput(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitEndBeatInput(endBeatInput ?? displayEndBeat.toString());
+                    setEndBeatInput(null);
+                  }
+                }}
+                min={1}
+                max={Math.max(1, totalBeats)}
                 size="sm"
                 variant="bordered"
                 color="success"
@@ -212,4 +248,3 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
 };
 
 export default LoopPlaybackToggle;
-
