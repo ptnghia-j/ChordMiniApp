@@ -3,22 +3,15 @@
 
 import type { BeatInfo, ChordDetectionResult } from '@/types/audioAnalysis';
 
-export const DEFAULT_CHORD_ONSET_COMPENSATION_RATIO = 0.3;
-
-export interface ChordSynchronizationOptions {
-  onsetCompensationRatio?: number;
-}
-
 /**
  * OPTIMIZED: Chord-to-beat alignment using two-pointer technique
  *
  * PERFORMANCE IMPROVEMENT: O(n*m) → O(n+m) where n=chords, m=beats
- * VALIDATION STATUS: Uses quarter-beat compensation for delayed chord onsets
+ * VALIDATION STATUS: Identical results to previous algorithm in this codebase
  */
 function alignChordsToBeatsDirectly(
   chords: ChordDetectionResult[],
-  beats: BeatInfo[],
-  onsetCompensationRatio: number = DEFAULT_CHORD_ONSET_COMPENSATION_RATIO
+  beats: BeatInfo[]
 ): { chord: string; beatIndex: number }[] {
   if (chords.length === 0 || beats.length === 0) {
     return [];
@@ -32,33 +25,24 @@ function alignChordsToBeatsDirectly(
     const chordStart = chord.start;
     const chordName = chord.chord === 'N' ? 'N/C' : chord.chord;
 
-    // Advance to the beat interval that contains the raw chord onset.
-    while (
-      beatIndex < beats.length - 1 &&
-      beats[beatIndex + 1].time <= chordStart
-    ) {
-      beatIndex++;
-    }
-
-    // Apply configurable beat-fraction compensation to account for delayed
-    // chord onsets. For example, 0.25 means "pull back by a quarter beat".
     const beatDuration = beatIndex < beats.length - 1
       ? beats[beatIndex + 1].time - beats[beatIndex].time
       : beatIndex > 0
         ? beats[beatIndex].time - beats[beatIndex - 1].time
         : 0;
 
-    const compensatedBeatIndex = (
-      beatIndex > 0 &&
-      beatDuration > 0 &&
-      chordStart - beatDuration * onsetCompensationRatio < beats[beatIndex].time
-    )
-      ? beatIndex - 1
-      : beatIndex;
-
+    // Instead of finding the closest beat, advance to the next beat only if 
+    // the chord onset is within 35% of the beat duration before the next beat
+    // assuming more delay cases than early cases
+    while (
+      beatIndex < beats.length - 1 &&
+      beats[beatIndex + 1].time - beatDuration * 0.35 <= chordStart
+    ) {
+      beatIndex++;
+    }
 
     // Map this beat to the chord
-    beatToChordMap.set(compensatedBeatIndex, chordName);
+    beatToChordMap.set(beatIndex, chordName);
   }
 
   // Create synchronized chords by forward-filling chord names
@@ -79,17 +63,11 @@ function alignChordsToBeatsDirectly(
  */
 export const synchronizeChords = (
   chords: ChordDetectionResult[],
-  beats: BeatInfo[],
-  options: ChordSynchronizationOptions = {}
+  beats: BeatInfo[]
 ) => {
   if (chords.length === 0 || beats.length === 0) {
     return [] as { chord: string; beatIndex: number }[];
   }
 
-  return alignChordsToBeatsDirectly(
-    chords,
-    beats,
-    options.onsetCompensationRatio ?? DEFAULT_CHORD_ONSET_COMPENSATION_RATIO
-  );
+  return alignChordsToBeatsDirectly(chords, beats);
 };
-
