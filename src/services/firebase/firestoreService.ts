@@ -8,8 +8,7 @@ import {
   getDocs,
   Timestamp
 } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from '@/config/firebase';
+import { db } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
 import { applyEnharmonicCorrection } from '@/utils/chordUtils';
 import { synchronizeChords } from '@/utils/chordSynchronization';
@@ -88,7 +87,6 @@ export interface TranscriptionData {
   rawResponse?: string | null;
   // Add Roman numeral analysis field
   romanNumerals?: RomanNumeralData | null;
-  syncVersion?: number;
 }
 
 function rebuildSynchronizedChordsIfNeeded(
@@ -183,49 +181,6 @@ const buildTranscriptionDocId = (
 
 // Flag to disable Firestore if CORS errors persist
 let firestoreDisabled = false;
-
-async function withAuthenticatedFirestoreWrite<T>(
-  operation: () => Promise<T>,
-  fallbackValue: T
-): Promise<T> {
-  if (!db || !auth || firestoreDisabled) {
-    return fallbackValue;
-  }
-
-  return new Promise((resolve) => {
-    let settled = false;
-    let unsubscribe = () => {};
-    const timeoutId = setTimeout(() => {
-      unsubscribe();
-      finish(fallbackValue);
-    }, 10000);
-
-    const finish = (value: T) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    unsubscribe = onAuthStateChanged(auth!, async (user) => {
-      unsubscribe();
-      clearTimeout(timeoutId);
-
-      if (!user) {
-        console.error('❌ User not authenticated, cannot save to Firestore');
-        console.error('❌ Authentication required for Firestore operations');
-        finish(fallbackValue);
-        return;
-      }
-
-      try {
-        finish(await operation());
-      } catch (error) {
-        console.error('❌ Authenticated Firestore write failed:', error);
-        finish(fallbackValue);
-      }
-    });
-  });
-}
 
 export interface TranscriptionEnrichmentUpdate {
   title?: string | null;
@@ -323,21 +278,17 @@ export async function saveTranscription(
   //   authType: typeof auth
   // });
 
-  if (!db || !auth || firestoreDisabled) {
+  if (!db || firestoreDisabled) {
     if (firestoreDisabled) {
       console.warn('❌ Firestore disabled due to CORS issues, skipping transcription save');
     } else if (!db) {
       console.warn('❌ Firebase Firestore not initialized, skipping transcription save');
-    } else if (!auth) {
-      console.warn('❌ Firebase Auth not initialized, skipping transcription save');
     }
     return false;
   }
 
-  return withAuthenticatedFirestoreWrite(
-    () => performFirestoreSave(transcriptionData),
-    false
-  );
+  // Public cache writes should not be blocked on anonymous auth readiness.
+  return performFirestoreSave(transcriptionData);
 }
 
 export async function updateTranscriptionEnrichment(
@@ -346,13 +297,11 @@ export async function updateTranscriptionEnrichment(
   chordModel: string,
   enrichment: TranscriptionEnrichmentUpdate
 ): Promise<boolean> {
-  if (!db || !auth || firestoreDisabled) {
+  if (!db || firestoreDisabled) {
     if (firestoreDisabled) {
       console.warn('❌ Firestore disabled due to CORS issues, skipping transcription enrichment update');
     } else if (!db) {
       console.warn('❌ Firebase Firestore not initialized, skipping transcription enrichment update');
-    } else {
-      console.warn('❌ Firebase Auth not initialized, skipping transcription enrichment update');
     }
     return false;
   }
@@ -379,7 +328,7 @@ export async function updateTranscriptionEnrichment(
     return true;
   }
 
-  return withAuthenticatedFirestoreWrite(async () => {
+  try {
     const docRef = doc(
       db!,
       TRANSCRIPTIONS_COLLECTION,
@@ -388,7 +337,18 @@ export async function updateTranscriptionEnrichment(
 
     await setDoc(docRef, sanitizedEnrichment, { merge: true });
     return true;
-  }, false);
+  } catch (error) {
+    console.error('❌ Failed to update transcription enrichment:', error);
+    if (error instanceof Error && (
+      error.message.includes('CORS') ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('NetworkError')
+    )) {
+      console.warn('🌐 Network/CORS error updating transcription enrichment - disabling Firestore for this session');
+      firestoreDisabled = true;
+    }
+    return false;
+  }
 }
 
 /**
@@ -530,7 +490,6 @@ async function performFirestoreSave(
       correctedChords: transcriptionData.correctedChords ?? transcriptionData.sequenceCorrections?.correctedSequence ?? null,
       originalChords: transcriptionData.originalChords ?? transcriptionData.sequenceCorrections?.originalSequence ?? null,
       romanNumerals: transcriptionData.romanNumerals ?? null,
-      syncVersion: transcriptionData.syncVersion,
       createdAt: Timestamp.now()
     };
 

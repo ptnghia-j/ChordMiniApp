@@ -151,7 +151,7 @@ export default function RootLayout({
         {/* Blocking script: apply dark class BEFORE first paint to prevent theme flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}setTimeout(function(){document.body.classList.add('theme-ready')},1500)})()`
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}if(document.body){document.body.classList.add('theme-ready')}else{document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('theme-ready')},{once:true})}})()`
           }}
         />
         {/* Critical CSS inlined for performance - eliminates render blocking */}
@@ -201,7 +201,7 @@ export default function RootLayout({
         {/* Critical CSS for above-the-fold content */}
         <CriticalCSS />
       </head>
-      <body className="font-sans min-h-screen flex flex-col">
+      <body className="font-sans min-h-screen flex flex-col" suppressHydrationWarning>
         <Providers>
           <ClientErrorBoundary>
             <CriticalPerformanceOptimizer />

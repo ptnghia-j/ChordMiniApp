@@ -50,9 +50,15 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   onSeek,
   onEnded
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const getInitialIsMobile = () => (
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+  const [isCollapsed, setIsCollapsed] = useState(() => getInitialIsMobile());
+  const [readyVideoId, setReadyVideoId] = useState<string | null>(null);
   const playerRef = useRef<ReactPlayer>(null);
+  const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const isPlayerReady = readyVideoId === videoId;
 
   // Sync playback rate with YouTube player
   useEffect(() => {
@@ -72,9 +78,10 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
       // Auto-collapse on mobile by default
-      if (window.innerWidth < 768) {
+      if (mobile) {
         setIsCollapsed(true);
       }
     };
@@ -87,6 +94,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   // Handle ReactPlayer ready event and expose internal YouTube player
   const handleReady = (player: ReactPlayer) => {
     playerRef.current = player;
+    setReadyVideoId(videoId);
 
     // Try to get the internal YouTube player instance
     try {
@@ -157,7 +165,16 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           {/* Left side - Video frame and controls */}
           <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
             {/* Mini video frame */}
-            <div className="relative h-10 w-16 flex-shrink-0 overflow-hidden rounded-md bg-black sm:h-12 sm:w-20">
+            <div className="relative h-10 w-16 flex-shrink-0 overflow-hidden rounded-md bg-slate-900 sm:h-12 sm:w-20">
+              <div
+                aria-hidden
+                className={`absolute inset-0 bg-cover bg-center transition-opacity duration-300 ${isPlayerReady ? 'opacity-0' : 'opacity-100'}`}
+                style={{ backgroundImage: `url("${thumbnailUrl}")` }}
+              />
+              <div
+                aria-hidden
+                className={`absolute inset-0 bg-gradient-to-br from-slate-900/30 via-slate-900/55 to-slate-950/85 transition-opacity duration-300 ${isPlayerReady ? 'opacity-0' : 'opacity-100'}`}
+              />
               <DynamicReactPlayer
                 ref={playerRef}
                 url={`https://www.youtube.com/watch?v=${videoId}`}
@@ -263,30 +280,50 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
       )}
 
       {/* Full video player */}
-      <div className="aspect-video bg-black rounded-lg overflow-hidden shadow-lg">
-        <DynamicReactPlayer
-          ref={playerRef}
-          url={`https://www.youtube.com/watch?v=${videoId}`}
-          width="100%"
-          height="100%"
-          controls={true}
-          playing={isPlaying}
-          playbackRate={playbackRate}
-          onReady={handleReady}
-          onPlay={onPlay}
-          onPause={onPause}
-          onEnded={onEnded}
-
-          onProgress={onProgress}
-          progressInterval={250}
-          muted={false}
-          config={{
-            playerVars: {
-              showinfo: 1,
-              origin: typeof window !== 'undefined' ? window.location.origin : undefined
-            }
-          }}
+      <div className="relative aspect-video rounded-lg overflow-hidden shadow-lg bg-slate-900">
+        <div
+          aria-hidden
+          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-300 ${isPlayerReady ? 'opacity-0' : 'opacity-100'}`}
+          style={{ backgroundImage: `url("${thumbnailUrl}")` }}
         />
+        <div
+          aria-hidden
+          className={`absolute inset-0 transition-opacity duration-300 ${isPlayerReady ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/25 via-slate-900/55 to-slate-950/90" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="space-y-3 text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur-sm animate-pulse" />
+              <div className="h-3 w-32 rounded-full bg-white/20 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        <div className={`absolute inset-0 transition-opacity duration-300 ${isPlayerReady ? 'opacity-100' : 'opacity-0'}`}>
+          <DynamicReactPlayer
+            ref={playerRef}
+            url={`https://www.youtube.com/watch?v=${videoId}`}
+            width="100%"
+            height="100%"
+            controls={true}
+            playing={isPlaying}
+            playbackRate={playbackRate}
+            onReady={handleReady}
+            onPlay={onPlay}
+            onPause={onPause}
+            onEnded={onEnded}
+
+            onProgress={onProgress}
+            progressInterval={250}
+            muted={false}
+            config={{
+              playerVars: {
+                showinfo: 1,
+                origin: typeof window !== 'undefined' ? window.location.origin : undefined
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   );

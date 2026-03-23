@@ -325,6 +325,7 @@ export default function YouTubeVideoAnalyzePage() {
   }), [beatDetector, chordDetector, routeParams, videoId]);
 
   const autoStartAttemptedRef = useRef(false);
+  const initialModelUrlSyncHandledRef = useRef(false);
 
   const analyzeBackdropUrl = useMemo(() => {
     if (thumbnailFromSearch) {
@@ -335,12 +336,37 @@ export default function YouTubeVideoAnalyzePage() {
   }, [thumbnailFromSearch, videoId]);
 
   useEffect(() => {
-    if (!videoId || !modelsInitialized || !shouldSyncModelParams) {
+    if (!videoId || !modelsInitialized) {
+      return;
+    }
+
+    const isMissingModelParams = !currentBeatModelParam || !currentChordModelParam;
+
+    // Avoid forcing a client-side route rewrite on first paint when the page
+    // already has explicit model params. That rewrite was causing a visible
+    // remount/flash while the analyze shell was still hydrating.
+    if (!initialModelUrlSyncHandledRef.current) {
+      initialModelUrlSyncHandledRef.current = true;
+
+      if (!isMissingModelParams) {
+        return;
+      }
+    }
+
+    if (!shouldSyncModelParams) {
       return;
     }
 
     router.replace(canonicalAnalyzeUrl, { scroll: false });
-  }, [canonicalAnalyzeUrl, modelsInitialized, router, shouldSyncModelParams, videoId]);
+  }, [
+    canonicalAnalyzeUrl,
+    currentBeatModelParam,
+    currentChordModelParam,
+    modelsInitialized,
+    router,
+    shouldSyncModelParams,
+    videoId,
+  ]);
 
   useEffect(() => {
     if (!autoStartRequested) {
@@ -943,7 +969,7 @@ export default function YouTubeVideoAnalyzePage() {
   ]);
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-gray-900">
+    <div className="relative min-h-screen bg-white dark:bg-slate-900">
       {/* Conditional Playback Controls */}
       <ConditionalPlaybackControls
         youtubePlayer={youtubePlayer}
@@ -981,7 +1007,7 @@ export default function YouTubeVideoAnalyzePage() {
               onChordPlaybackChange={handleChordPlaybackChange}
             />
 
-    <div className="relative z-30 isolate flex min-h-screen flex-col overflow-hidden bg-white dark:bg-dark-bg transition-colors duration-300">
+    <div className="relative z-30 isolate flex min-h-screen flex-col overflow-hidden bg-white dark:bg-slate-900 transition-colors duration-300">
       <AnalyzePageBackdrop
         thumbnailUrl={analyzeBackdropUrl}
         showFooterTransition={Boolean(analysisResults)}
