@@ -40,6 +40,336 @@ interface ChordGridData {
   }>;
 }
 
+interface VisualCompactionWindow {
+  startIndex: number;
+  endIndex: number;
+  targetModulo?: number;
+}
+
+function shouldLogAlignmentDebug(beatModel: string | undefined): boolean {
+  if (typeof window === 'undefined' || process.env.NODE_ENV !== 'development') {
+    return false;
+  }
+  return beatModel === 'madmom' && window.localStorage.getItem('alignmentDebug') === '1';
+}
+
+function logAlignmentDebug(label: string, payload: Record<string, unknown>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  console.info(`[alignment-debug] ${label}`, payload);
+}
+
+const SILENT_CHORD_VALUES = new Set(['', 'N', 'N/C', 'N.C.', 'NC']);
+
+function isSilentChord(chord: string | null | undefined): boolean {
+  return SILENT_CHORD_VALUES.has((chord || '').trim());
+}
+
+export function compactSilentRunsForVisualAlignment(
+  chordGridData: ChordGridData,
+  timeSignature: number,
+  enabled: boolean
+): ChordGridData {
+  if (!enabled || timeSignature <= 1 || chordGridData.chords.length === 0) {
+    return chordGridData;
+  }
+
+  const minSilentRunLength = Math.max(2, timeSignature - 1);
+  const nextChords: string[] = [];
+  const nextBeats: (number | null)[] = [];
+  const oldToNewVisualIndex = new Map<number, number>();
+
+  let oldIndex = 0;
+  let newIndex = 0;
+
+  while (oldIndex < chordGridData.chords.length) {
+    if (!isSilentChord(chordGridData.chords[oldIndex])) {
+      nextChords.push(chordGridData.chords[oldIndex]);
+      nextBeats.push(chordGridData.beats[oldIndex] ?? null);
+      oldToNewVisualIndex.set(oldIndex, newIndex);
+      oldIndex++;
+      newIndex++;
+      continue;
+    }
+
+    let runEnd = oldIndex;
+    while (runEnd < chordGridData.chords.length && isSilentChord(chordGridData.chords[runEnd])) {
+      runEnd++;
+    }
+
+    const runLength = runEnd - oldIndex;
+    const previousChord = oldIndex > 0 ? chordGridData.chords[oldIndex - 1] : '';
+    const nextChord = runEnd < chordGridData.chords.length ? chordGridData.chords[runEnd] : '';
+    const precededByMusic = !isSilentChord(previousChord);
+    const followedByMusic = !isSilentChord(nextChord);
+    const resumeVisualIndex = newIndex + runLength;
+    const cellsToRemove = resumeVisualIndex % timeSignature;
+    const canCompact =
+      precededByMusic &&
+      followedByMusic &&
+      runLength >= minSilentRunLength &&
+      cellsToRemove > 0 &&
+      cellsToRemove < runLength;
+
+    const keptCount = canCompact ? runLength - cellsToRemove : runLength;
+
+    for (let offset = 0; offset < keptCount; offset++) {
+      const sourceIndex = oldIndex + offset;
+      nextChords.push(chordGridData.chords[sourceIndex]);
+      nextBeats.push(chordGridData.beats[sourceIndex] ?? null);
+      oldToNewVisualIndex.set(sourceIndex, newIndex);
+      newIndex++;
+    }
+
+    const collapsedTargetIndex = Math.max(0, newIndex - 1);
+    for (let offset = keptCount; offset < runLength; offset++) {
+      oldToNewVisualIndex.set(oldIndex + offset, collapsedTargetIndex);
+    }
+
+    oldIndex = runEnd;
+  }
+
+  return {
+    ...chordGridData,
+    chords: nextChords,
+    beats: nextBeats,
+    originalAudioMapping: chordGridData.originalAudioMapping?.map((item) => ({
+      ...item,
+      visualIndex: oldToNewVisualIndex.get(item.visualIndex) ?? item.visualIndex,
+    })),
+  };
+}
+
+function buildSilentRunWindows(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): VisualCompactionWindow[] {
+  if (timeSignature <= 1 || chordGridData.chords.length === 0) {
+    return [];
+  }
+
+  const minSilentRunLength = Math.max(2, timeSignature - 1);
+  const windows: VisualCompactionWindow[] = [];
+  let index = 0;
+
+  while (index < chordGridData.chords.length) {
+    if (!isSilentChord(chordGridData.chords[index])) {
+      index++;
+      continue;
+    }
+
+    let runEnd = index;
+    while (runEnd < chordGridData.chords.length && isSilentChord(chordGridData.chords[runEnd])) {
+      runEnd++;
+    }
+
+    const previousChord = index > 0 ? chordGridData.chords[index - 1] : '';
+    const nextChord = runEnd < chordGridData.chords.length ? chordGridData.chords[runEnd] : '';
+    const precededByMusic = !isSilentChord(previousChord);
+    const followedByMusic = !isSilentChord(nextChord);
+
+    if (precededByMusic && followedByMusic && runEnd - index >= minSilentRunLength) {
+      windows.push({ startIndex: index, endIndex: runEnd });
+    }
+
+    index = runEnd;
+  }
+
+  return windows;
+}
+
+function findFirstBeatIndexAtOrAfter(beats: number[], time: number): number {
+  let left = 0;
+  let right = beats.length - 1;
+  let answer = beats.length;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (beats[mid] >= time) {
+      answer = mid;
+      right = mid - 1;
+    } else {
+      left = mid + 1;
+    }
+  }
+
+  return answer;
+}
+
+function compactVisualWindows(
+  chordGridData: ChordGridData,
+  windows: VisualCompactionWindow[],
+  timeSignature: number,
+  enabled: boolean
+): ChordGridData {
+  if (!enabled || timeSignature <= 1 || windows.length === 0) {
+    return chordGridData;
+  }
+
+  const normalizedWindows = [...windows]
+    .filter((window) => window.endIndex - window.startIndex >= 2)
+    .sort((a, b) => a.startIndex - b.startIndex);
+
+  if (normalizedWindows.length === 0) {
+    return chordGridData;
+  }
+
+  const nextChords: string[] = [];
+  const nextBeats: (number | null)[] = [];
+  const oldToNewVisualIndex = new Map<number, number>();
+
+  let oldIndex = 0;
+  let newIndex = 0;
+  let windowIndex = 0;
+
+  while (oldIndex < chordGridData.chords.length) {
+    const activeWindow = normalizedWindows[windowIndex];
+
+    if (!activeWindow || oldIndex < activeWindow.startIndex || oldIndex >= activeWindow.endIndex) {
+      nextChords.push(chordGridData.chords[oldIndex]);
+      nextBeats.push(chordGridData.beats[oldIndex] ?? null);
+      oldToNewVisualIndex.set(oldIndex, newIndex);
+      oldIndex++;
+      newIndex++;
+
+      if (activeWindow && oldIndex >= activeWindow.endIndex) {
+        windowIndex++;
+      }
+      continue;
+    }
+
+    const windowLength = activeWindow.endIndex - activeWindow.startIndex;
+    const resumeVisualIndex = newIndex + windowLength;
+    const targetModulo = Math.max(0, activeWindow.targetModulo ?? 0) % timeSignature;
+    const currentModulo = resumeVisualIndex % timeSignature;
+    const deltaForward = (targetModulo - currentModulo + timeSignature) % timeSignature;
+    const deltaBackward = deltaForward === 0 ? 0 : deltaForward - timeSignature;
+    const canShrink = windowLength + deltaBackward >= 1;
+    const adjustment =
+      canShrink && Math.abs(deltaBackward) <= Math.abs(deltaForward)
+        ? deltaBackward
+        : deltaForward;
+    const targetWindowLength = Math.max(1, windowLength + adjustment);
+
+    const copiedCount = Math.min(windowLength, targetWindowLength);
+
+    for (let offset = 0; offset < copiedCount; offset++) {
+      const sourceIndex = activeWindow.startIndex + offset;
+      nextChords.push(chordGridData.chords[sourceIndex]);
+      nextBeats.push(chordGridData.beats[sourceIndex] ?? null);
+      oldToNewVisualIndex.set(sourceIndex, newIndex);
+      newIndex++;
+    }
+
+    if (targetWindowLength > windowLength) {
+      const fillerChord = copiedCount > 0
+        ? chordGridData.chords[activeWindow.startIndex + copiedCount - 1] || 'N.C.'
+        : 'N.C.';
+      const extraCount = targetWindowLength - windowLength;
+      for (let extra = 0; extra < extraCount; extra++) {
+        nextChords.push(fillerChord || 'N.C.');
+        nextBeats.push(null);
+        newIndex++;
+      }
+    } else {
+      const collapsedTargetIndex = Math.max(0, newIndex - 1);
+      for (let offset = copiedCount; offset < windowLength; offset++) {
+        oldToNewVisualIndex.set(activeWindow.startIndex + offset, collapsedTargetIndex);
+      }
+    }
+
+    oldIndex = activeWindow.endIndex;
+    windowIndex++;
+  }
+
+  return {
+    ...chordGridData,
+    chords: nextChords,
+    beats: nextBeats,
+    originalAudioMapping: chordGridData.originalAudioMapping?.map((item) => ({
+      ...item,
+      visualIndex: oldToNewVisualIndex.get(item.visualIndex) ?? item.visualIndex,
+    })),
+  };
+}
+
+function buildGapCompactionWindows(
+  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>,
+  beatTimes: number[],
+  visualOffset: number,
+  beatDuration: number
+): VisualCompactionWindow[] {
+  if (beatTimes.length < 2 || chordIntervals.length < 2) {
+    return [];
+  }
+
+  const orderedChords = chordIntervals
+    .filter((chord) => typeof chord.start === 'number' && typeof chord.end === 'number' && chord.end > chord.start)
+    .sort((a, b) => (a.start as number) - (b.start as number));
+
+  const gapThreshold = Math.max(beatDuration * 2.5, 1.1);
+  const onsetLeadIn = beatDuration * 0.35;
+  const releaseTail = Math.min(beatDuration * 0.1, 0.08);
+  const windows: VisualCompactionWindow[] = [];
+
+  for (let i = 1; i < orderedChords.length; i++) {
+    const previousChord = orderedChords[i - 1];
+    const nextChord = orderedChords[i];
+    const gapDuration = (nextChord.start as number) - (previousChord.end as number);
+
+    if (!Number.isFinite(gapDuration) || gapDuration < gapThreshold) {
+      continue;
+    }
+
+    const gapStartBeatIndex = findFirstBeatIndexAtOrAfter(beatTimes, (previousChord.end as number) + releaseTail);
+    const resumeBeatIndex = findFirstBeatIndexAtOrAfter(beatTimes, (nextChord.start as number) - onsetLeadIn);
+
+    if (
+      gapStartBeatIndex < beatTimes.length &&
+      resumeBeatIndex <= beatTimes.length &&
+      resumeBeatIndex - gapStartBeatIndex >= 2
+    ) {
+      windows.push({
+        startIndex: visualOffset + gapStartBeatIndex,
+        endIndex: visualOffset + resumeBeatIndex,
+      });
+    }
+  }
+
+  return windows;
+}
+
+function resolveWindowTargetModulos(
+  chordGridData: ChordGridData,
+  windows: VisualCompactionWindow[],
+  timeSignature: number
+): VisualCompactionWindow[] {
+  if (windows.length === 0 || timeSignature <= 1) {
+    return windows;
+  }
+
+  const sortedWindows = [...windows].sort((a, b) => a.startIndex - b.startIndex);
+
+  return sortedWindows.map((window, index) => {
+    const nextWindowStart = sortedWindows[index + 1]?.startIndex ?? chordGridData.chords.length;
+    const segmentStart = window.endIndex;
+    const segmentEnd = Math.max(segmentStart, nextWindowStart);
+    const segmentChords = chordGridData.chords.slice(segmentStart, segmentEnd);
+    const hasMusicalContent = segmentChords.some((chord) => !isSilentChord(chord));
+
+    if (!hasMusicalContent) {
+      return { ...window, targetModulo: 0 };
+    }
+
+    return {
+      ...window,
+      targetModulo: calculateOptimalShift(segmentChords, timeSignature, 0),
+    };
+  });
+}
+
 /**
  * Calculate optimal shift for chord alignment with downbeats
  */
@@ -273,7 +603,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       };
     });
 
-    return {
+    const gridData: ChordGridData = {
       chords: finalChords,
       beats: finalBeats,
       hasPadding: true, // FIXED: Always true for consistency with ChordGrid frontend shifting
@@ -282,6 +612,58 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       totalPaddingCount: safePaddingCount + safeShiftCount,
       originalAudioMapping
     };
+
+    const beatDuration = bpm > 0 ? 60 / bpm : 0.5;
+    const gapWindows = resolveWindowTargetModulos(
+      gridData,
+      buildGapCompactionWindows(
+        analysisResults.chords || [],
+        regularBeats,
+        safeShiftCount + safePaddingCount,
+        beatDuration
+      ),
+      timeSignature
+    );
+
+    const compactedGapGridData = compactVisualWindows(
+      gridData,
+      gapWindows,
+      timeSignature,
+      analysisResults.beatModel === 'madmom'
+    );
+
+    const silentRunWindows = resolveWindowTargetModulos(
+      compactedGapGridData,
+      buildSilentRunWindows(compactedGapGridData, timeSignature),
+      timeSignature
+    );
+
+    const finalGridData = compactVisualWindows(
+      compactedGapGridData,
+      silentRunWindows,
+      timeSignature,
+      analysisResults.beatModel === 'madmom'
+    );
+
+    if (shouldLogAlignmentDebug(analysisResults.beatModel)) {
+      logAlignmentDebug('cnn-lstm-grid', {
+        timeSignature,
+        bpm,
+        shiftCount: safeShiftCount,
+        paddingCount: safePaddingCount,
+        rawChordCount: regularChords.length,
+        rawBeatCount: regularBeats.length,
+        initialGridCount: gridData.chords.length,
+        afterGapWindowCount: compactedGapGridData.chords.length,
+        finalGridCount: finalGridData.chords.length,
+        gapWindows,
+        silentRunWindows,
+        sampleBefore: gridData.chords.slice(0, 80),
+        sampleAfter: finalGridData.chords.slice(0, 80),
+      });
+    }
+
+    return finalGridData;
   }
 
   // Handle BTC models with comprehensive strategy
@@ -333,7 +715,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     };
   });
 
-  return {
+  const gridData: ChordGridData = {
     chords: btcFinalChords,
     beats: btcFinalBeats,
     hasPadding: true, // FIXED: Always true for consistency with ChordGrid frontend shifting
@@ -342,4 +724,56 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     totalPaddingCount: btcPaddingCount + btcShiftCount,
     originalAudioMapping: btcOriginalAudioMapping
   };
+
+  const beatDuration = btcBpm > 0 ? 60 / btcBpm : 0.5;
+  const gapWindows = resolveWindowTargetModulos(
+    gridData,
+    buildGapCompactionWindows(
+      analysisResults.chords || [],
+      btcBeats,
+      btcShiftCount + btcPaddingCount,
+      beatDuration
+    ),
+    timeSignature
+  );
+
+  const compactedGapGridData = compactVisualWindows(
+    gridData,
+    gapWindows,
+    timeSignature,
+    analysisResults.beatModel === 'madmom'
+  );
+
+  const silentRunWindows = resolveWindowTargetModulos(
+    compactedGapGridData,
+    buildSilentRunWindows(compactedGapGridData, timeSignature),
+    timeSignature
+  );
+
+  const finalGridData = compactVisualWindows(
+    compactedGapGridData,
+    silentRunWindows,
+    timeSignature,
+    analysisResults.beatModel === 'madmom'
+  );
+
+  if (shouldLogAlignmentDebug(analysisResults.beatModel)) {
+    logAlignmentDebug('btc-grid', {
+      timeSignature,
+      bpm: btcBpm,
+      shiftCount: btcShiftCount,
+      paddingCount: btcPaddingCount,
+      rawChordCount: btcChords.length,
+      rawBeatCount: btcBeats.length,
+      initialGridCount: gridData.chords.length,
+      afterGapWindowCount: compactedGapGridData.chords.length,
+      finalGridCount: finalGridData.chords.length,
+      gapWindows,
+      silentRunWindows,
+      sampleBefore: gridData.chords.slice(0, 80),
+      sampleAfter: finalGridData.chords.slice(0, 80),
+    });
+  }
+
+  return finalGridData;
 };

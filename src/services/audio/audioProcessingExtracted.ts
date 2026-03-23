@@ -506,7 +506,6 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
   } catch (error) {
     // If this request was aborted or became stale, do not update state
     if (abortSignal?.aborted || !isRequestStillCurrent(requestId)) {
-      console.log('\u26d4 Extraction aborted or stale; skipping state updates', { requestId, videoId });
       return;
     }
 

@@ -7,6 +7,8 @@ import Navigation from '@/components/common/Navigation';
 import AnimatedTitle from '@/components/homepage/AnimatedTitle';
 import HeroChordGridLyricsMock from '@/components/homepage/HeroChordGridLyricsMock';
 import HeroPianoVisualizerMock from '@/components/homepage/HeroPianoVisualizerMock';
+import HeroScrollingChordAnimation from '@/components/homepage/HeroScrollingChordAnimation';
+import IntegratedSearchContainer from '@/components/homepage/LazyIntegratedSearchContainer';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
@@ -47,16 +49,6 @@ const RecentVideos = dynamic(() => import('@/components/homepage/LazyRecentVideo
       </div>
     </div>
   ),
-  ssr: false
-});
-
-const HeroScrollingChordAnimation = dynamic(() => import('@/components/homepage/HeroScrollingChordAnimation'), {
-  loading: () => <div className="w-full h-24 bg-gray-200 dark:bg-slate-700 animate-pulse rounded-lg"></div>,
-  ssr: false
-});
-
-const IntegratedSearchContainer = dynamic(() => import('@/components/homepage/LazyIntegratedSearchContainer'), {
-  loading: () => <div className="animate-pulse bg-gray-200 dark:bg-slate-700 rounded-lg h-24"></div>,
   ssr: false
 });
 
@@ -180,11 +172,11 @@ function NewHomePageContentInner() {
               <AnimatedTitle text="Chord Mini" className="mb-3" />
               <div className="min-h-[2rem] flex items-center justify-center mt-2">
                 <motion.p
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   transition={{
                     delay: 0.3,
-                    duration: 1.2,
+                    duration: 0.8,
                     ease: "easeOut",
                   }}
                   className="text-base md:text-lg text-gray-500 dark:text-gray-400 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
@@ -211,9 +203,9 @@ function NewHomePageContentInner() {
 
             {/* Enhanced Scrolling Guitar Chord Animation - Below search box */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0, duration: 1 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.05, duration: 0.6 }}
               className="flex justify-center"
             >
               <HeroScrollingChordAnimation className="w-full max-w-6xl" />
@@ -225,9 +217,9 @@ function NewHomePageContentInner() {
             <div className="space-y-4">
               <div className="space-y-3">
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.6 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15, duration: 0.45 }}
                 >
                   <HeroChordGridLyricsMock />
                   <div className="p-3">
@@ -237,9 +229,9 @@ function NewHomePageContentInner() {
                 </motion.div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.6 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.25, duration: 0.45 }}
                 >
                   <HeroPianoVisualizerMock />
                   <div className="p-3">

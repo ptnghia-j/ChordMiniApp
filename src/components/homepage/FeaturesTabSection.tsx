@@ -245,9 +245,9 @@ function ChordGridMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
       className={`rounded-xl p-3 sm:p-4 border shadow-lg ${
         isDark ? 'bg-[#1E252E] border-gray-600/60' : 'bg-white border-gray-200'
       }`}
@@ -371,9 +371,9 @@ function GuitarMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: n
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
       className={`rounded-xl p-3 sm:p-4 border shadow-lg space-y-3 ${
         isDark ? 'bg-[#1E252E] border-gray-600/60' : 'bg-white border-gray-200'
       }`}
@@ -432,9 +432,9 @@ function LyricsMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: n
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
       className={`rounded-xl p-3 sm:p-4 border shadow-lg ${
         isDark ? 'bg-[#1E252E] border-gray-600/60' : 'bg-white border-gray-200'
       }`}
@@ -529,9 +529,9 @@ function LyricsMockup({ isDark, currentBeat }: { isDark: boolean; currentBeat: n
 function PianoVisualizerMockup() {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
     >
       <HeroPianoVisualizerMock
         preset="feature"
@@ -559,7 +559,7 @@ function FeatureContent({ title, description, features }: {
   title: string; description: string; features: { text: string; color: string }[];
 }) {
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.05 }}
       className="flex h-full flex-col justify-center space-y-4 px-1 py-2 sm:px-2"
     >
       <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{title}</h3>
@@ -598,10 +598,10 @@ export default function FeaturesTabSection() {
 
       <div className="relative z-10 max-w-7xl mx-auto px-6">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
           viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.4 }}
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Features</h2>

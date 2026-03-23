@@ -220,12 +220,10 @@ export class SmartFirebaseCache<T> {
    */
   private suppressWarning(key: string, message: string): void {
     if (!this.warningsSuppressed.has(key)) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`⚠️ ${message} (key: ${key})`);
-      }
       this.warningsSuppressed.add(key);
       // Track warning suppression
       this.trackPerformance('warning_suppressed', 0);
+      console.log(message);
     }
   }
 
@@ -282,9 +280,6 @@ export class SmartFirebaseCache<T> {
       this.warningsSuppressed.delete(key);
     });
 
-    if (keysToDelete.length > 0) {
-      console.log(`🧹 Cleaned up ${keysToDelete.length} expired cache entries`);
-    }
   }
 }
 

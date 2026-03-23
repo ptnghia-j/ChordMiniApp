@@ -25,12 +25,8 @@ const PerformanceMonitor: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-
-    if (process.env.NODE_ENV === 'development') {
-      // Development builds include extra overhead; use production for accurate Web Vitals.
-      console.info('ℹ️ PerformanceMonitor: Development metrics are slower by design. Check production for accurate Web Vitals.');
-    }
+    if (process.env.NODE_ENV !== 'development') return;
+    if (window.localStorage.getItem('performanceDebug') !== '1') return;
 
     // Track Largest Contentful Paint (LCP)
     const observeLCP = () => {
@@ -40,18 +36,15 @@ const PerformanceMonitor: React.FC = () => {
           const lastEntry = entries[entries.length - 1];
           metricsRef.current.lcp = lastEntry.startTime;
 
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📊 LCP:', lastEntry.startTime.toFixed(2), 'ms');
-            if (lastEntry.startTime > 2500) {
-              console.warn('⚠️ LCP is poor (>2.5s). Target: <2.5s');
-            }
+          console.log('📊 LCP:', lastEntry.startTime.toFixed(2), 'ms');
+          if (lastEntry.startTime > 2500) {
+            console.warn('⚠️ LCP is poor (>2.5s). Target: <2.5s');
           }
         });
 
         observer.observe({ entryTypes: ['largest-contentful-paint'] });
         return observer;
       } catch {
-        console.warn('LCP observation not supported');
         return null;
       }
     };
@@ -65,11 +58,9 @@ const PerformanceMonitor: React.FC = () => {
             const fid = (entry.processingStart || 0) - entry.startTime;
             metricsRef.current.fid = fid;
 
-            if (process.env.NODE_ENV === 'development') {
-              console.log('📊 FID:', fid.toFixed(2), 'ms');
-              if (fid > 100) {
-                console.warn('⚠️ FID is poor (>100ms). Target: <100ms');
-              }
+            console.log('📊 FID:', fid.toFixed(2), 'ms');
+            if (fid > 100) {
+              console.warn('⚠️ FID is poor (>100ms). Target: <100ms');
             }
           });
         });
@@ -77,7 +68,6 @@ const PerformanceMonitor: React.FC = () => {
         observer.observe({ entryTypes: ['first-input'] });
         return observer;
       } catch {
-        console.warn('FID observation not supported');
         return null;
       }
     };
@@ -98,25 +88,22 @@ const PerformanceMonitor: React.FC = () => {
 
           metricsRef.current.cls = clsValue;
 
-          if (process.env.NODE_ENV === 'development') {
-            const now = performance.now();
-            // Throttle CLS logs to once every 2s to reduce console noise
-            if (now - lastCLSLog > 2000) {
-              console.log('📊 CLS:', clsValue.toFixed(4));
-              lastCLSLog = now;
-            }
-            // Warn once after initial load window if threshold exceeded
-            if (!warned && clsValue > 0.1 && now > 5000) {
-              console.warn('⚠️ CLS is poor (>0.1). Target: <0.1');
-              warned = true;
-            }
+          const now = performance.now();
+          // Throttle CLS logs to once every 2s to reduce console noise
+          if (now - lastCLSLog > 2000) {
+            console.log('📊 CLS:', clsValue.toFixed(4));
+            lastCLSLog = now;
+          }
+          // Warn once after initial load window if threshold exceeded
+          if (!warned && clsValue > 0.1 && now > 5000) {
+            console.warn('⚠️ CLS is poor (>0.1). Target: <0.1');
+            warned = true;
           }
         });
 
         observer.observe({ entryTypes: ['layout-shift'] });
         return observer;
       } catch {
-        console.warn('CLS observation not supported');
         return null;
       }
     };
@@ -130,11 +117,9 @@ const PerformanceMonitor: React.FC = () => {
             if (entry.name === 'first-contentful-paint') {
               metricsRef.current.fcp = entry.startTime;
 
-              if (process.env.NODE_ENV === 'development') {
-                console.log('📊 FCP:', entry.startTime.toFixed(2), 'ms');
-                if (entry.startTime > 1800) {
-                  console.warn('⚠️ FCP is poor (>1.8s). Target: <1.8s');
-                }
+              console.log('📊 FCP:', entry.startTime.toFixed(2), 'ms');
+              if (entry.startTime > 1800) {
+                console.warn('⚠️ FCP is poor (>1.8s). Target: <1.8s');
               }
             }
           });
@@ -143,7 +128,6 @@ const PerformanceMonitor: React.FC = () => {
         observer.observe({ entryTypes: ['paint'] });
         return observer;
       } catch {
-        console.warn('FCP observation not supported');
         return null;
       }
     };
@@ -156,16 +140,12 @@ const PerformanceMonitor: React.FC = () => {
           const ttfb = navigationEntry.responseStart - navigationEntry.requestStart;
           metricsRef.current.ttfb = ttfb;
 
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📊 TTFB:', ttfb.toFixed(2), 'ms');
-            if (ttfb > 800) {
-              console.warn('⚠️ TTFB is poor (>800ms). Target: <800ms');
-            }
+          console.log('📊 TTFB:', ttfb.toFixed(2), 'ms');
+          if (ttfb > 800) {
+            console.warn('⚠️ TTFB is poor (>800ms). Target: <800ms');
           }
         }
-      } catch {
-        console.warn('TTFB measurement not supported');
-      }
+      } catch {}
     };
 
     // Track JavaScript bundle sizes
@@ -192,19 +172,15 @@ const PerformanceMonitor: React.FC = () => {
           }
         });
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log('📦 Total JS Bundle Size:', Math.round(totalJSSize / 1024), 'KB');
-          if (bundleInfo.length > 0) {
-            console.log('📦 Large Bundles (>50KB):', bundleInfo);
-          }
-
-          if (totalJSSize > 500000) { // 500KB
-            console.warn('⚠️ Total JS bundle is large (>500KB). Consider code splitting.');
-          }
+        console.log('📦 Total JS Bundle Size:', Math.round(totalJSSize / 1024), 'KB');
+        if (bundleInfo.length > 0) {
+          console.log('📦 Large Bundles (>50KB):', bundleInfo);
         }
-      } catch {
-        console.warn('Bundle size tracking not supported');
-      }
+
+        if (totalJSSize > 500000) { // 500KB
+          console.warn('⚠️ Total JS bundle is large (>500KB). Consider code splitting.');
+        }
+      } catch {}
     };
 
     // Track memory usage (if available)
@@ -213,7 +189,7 @@ const PerformanceMonitor: React.FC = () => {
         if ('memory' in performance) {
           const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
 
-          if (process.env.NODE_ENV === 'development' && memory) {
+          if (memory) {
             console.log('🧠 Memory Usage:', {
               used: Math.round(memory.usedJSHeapSize / 1048576) + ' MB',
               total: Math.round(memory.totalJSHeapSize / 1048576) + ' MB',
@@ -243,15 +219,13 @@ const PerformanceMonitor: React.FC = () => {
 
     // Generate performance report after 10 seconds
     const reportTimeout = setTimeout(() => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Performance Report:', {
-          LCP: metricsRef.current.lcp ? `${metricsRef.current.lcp.toFixed(2)}ms` : 'Not measured',
-          FID: metricsRef.current.fid ? `${metricsRef.current.fid.toFixed(2)}ms` : 'Not measured',
-          CLS: metricsRef.current.cls ? metricsRef.current.cls.toFixed(4) : 'Not measured',
-          FCP: metricsRef.current.fcp ? `${metricsRef.current.fcp.toFixed(2)}ms` : 'Not measured',
-          TTFB: metricsRef.current.ttfb ? `${metricsRef.current.ttfb.toFixed(2)}ms` : 'Not measured'
-        });
-      }
+      console.log('📊 Performance Report:', {
+        LCP: metricsRef.current.lcp ? `${metricsRef.current.lcp.toFixed(2)}ms` : 'Not measured',
+        FID: metricsRef.current.fid ? `${metricsRef.current.fid.toFixed(2)}ms` : 'Not measured',
+        CLS: metricsRef.current.cls ? metricsRef.current.cls.toFixed(4) : 'Not measured',
+        FCP: metricsRef.current.fcp ? `${metricsRef.current.fcp.toFixed(2)}ms` : 'Not measured',
+        TTFB: metricsRef.current.ttfb ? `${metricsRef.current.ttfb.toFixed(2)}ms` : 'Not measured'
+      });
     }, 10000);
 
     // Cleanup

@@ -193,11 +193,6 @@ export default function RootLayout({
 
         {/* Removed global image preloads: let Next/Image with priority handle above-the-fold assets on the pages that use them to avoid preload-not-used warnings. */}
 
-        {/* Resource hints for performance */}
-        <link rel="preconnect" href="https://i.ytimg.com" />
-        <link rel="preconnect" href="https://img.youtube.com" />
-        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
-
         {/* DNS prefetch for external services */}
         <link rel="dns-prefetch" href="//youtube.com" />
         <link rel="dns-prefetch" href="//googleapis.com" />
@@ -213,7 +208,7 @@ export default function RootLayout({
             <DesktopPerformanceOptimizer />
             <ServiceWorkerRegistration />
             <FirebaseInitializer />
-            <PerformanceMonitor />
+            {process.env.NODE_ENV === 'development' ? <PerformanceMonitor /> : null}
             <CorsErrorSuppression />
             {process.env.NODE_ENV === 'development' ? <DevIndicatorHider /> : null}
             <main className="flex-1">

@@ -12,6 +12,11 @@ import { useEffect } from 'react';
  */
 export default function DesktopPerformanceOptimizer() {
   useEffect(() => {
+    const performanceDebugEnabled =
+      process.env.NODE_ENV === 'development' &&
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem('performanceDebug') === '1';
+
     // 1. Optimize CSS loading to prevent render blocking
     const optimizeCSSLoading = () => {
       // Loading non-critical CSS manually is disabled; Next.js handles CSS injection from imports.
@@ -28,23 +33,7 @@ export default function DesktopPerformanceOptimizer() {
 
     // 2. Optimize LCP image discovery and loading
     const optimizeLCPImages = () => {
-      // Ensure LCP images are discoverable immediately
-      const lcpImages = document.querySelectorAll('[data-lcp-image]');
-      lcpImages.forEach((img) => {
-        if (img instanceof HTMLImageElement) {
-          // Force high priority loading
-          img.loading = 'eager';
-          img.fetchPriority = 'high';
-          
-          // Optimize image decoding
-          img.decoding = 'sync';
-          
-          // Prevent layout shifts
-          if (!img.style.aspectRatio && img.width && img.height) {
-            img.style.aspectRatio = `${img.width} / ${img.height}`;
-          }
-        }
-      });
+      // No-op: avoid post-paint image mutations that can force layout recalculation.
     };
 
     // 3. Implement resource bundling optimization
@@ -77,24 +66,7 @@ export default function DesktopPerformanceOptimizer() {
 
       // Optimize font loading
       const optimizeFontLoading = () => {
-        // Use font-display: swap for better perceived performance
-        const fontFaces = document.styleSheets;
-        Array.from(fontFaces).forEach(sheet => {
-          try {
-            const rules = sheet.cssRules || sheet.rules;
-            Array.from(rules).forEach(rule => {
-              if (rule instanceof CSSFontFaceRule) {
-                const style = rule.style as CSSStyleDeclaration & { fontDisplay?: string };
-                if (!style.fontDisplay) {
-                  style.fontDisplay = 'swap';
-                }
-              }
-            });
-          } catch (e) {
-            // Cross-origin stylesheets may throw errors
-            console.debug('Cannot access stylesheet rules:', e);
-          }
-        });
+        // No-op: font loading is handled by next/font at build time.
       };
 
       optimizeMainThread();
@@ -104,7 +76,7 @@ export default function DesktopPerformanceOptimizer() {
     // 5. Implement progressive enhancement
     const implementProgressiveEnhancement = () => {
       // Add performance observer for monitoring
-      if ('PerformanceObserver' in window) {
+      if ('PerformanceObserver' in window && performanceDebugEnabled) {
         const observer = new PerformanceObserver((list) => {
           const entries = list.getEntries();
           entries.forEach(entry => {

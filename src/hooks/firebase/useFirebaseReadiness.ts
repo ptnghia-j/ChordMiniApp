@@ -27,7 +27,6 @@ export const useFirebaseReadiness = () => {
         }
 
         setFirebaseReady(true);
-        console.log('✅ Firebase connection verified');
       } catch (error) {
         if (cancelled) {
           return;
@@ -42,7 +41,6 @@ export const useFirebaseReadiness = () => {
             return;
           }
 
-          console.log('🔄 Retrying Firebase connection...');
           void checkFirebaseReady();
         }, 2000);
       }

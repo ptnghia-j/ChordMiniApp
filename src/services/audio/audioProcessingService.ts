@@ -1,5 +1,6 @@
 import { analyzeAudioWithRateLimit, AnalysisResult, ChordDetectorType } from '@/services/chord-analysis/chordRecognitionService';
 import { getTranscription, saveTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
+import { CHORD_SYNCHRONIZATION_VERSION } from '@/utils/chordSynchronization';
 
 // Define error types for better type safety
 export interface ErrorWithSuggestion extends Error {
@@ -153,6 +154,7 @@ export class AudioProcessingService {
         bpm: analysisResults.beatDetectionResult?.bpm,
         beatShift: analysisResults.beatDetectionResult?.beatShift,
         audioDuration: analysisResults.audioDuration,
+        syncVersion: CHORD_SYNCHRONIZATION_VERSION,
         timestamp: new Date()
       };
 

@@ -48,9 +48,6 @@ export async function GET() {
       }
     }
 
-    // Log config keys for debugging (not values for security)
-    console.log('[/api/config] Serving public config with keys:', Object.keys(publicConfig));
-
     // Return config with strict no-cache headers
     return new Response(JSON.stringify(publicConfig), {
       status: 200,
@@ -100,4 +97,3 @@ export async function DELETE() {
 export async function PATCH() {
   return new Response('Method not allowed', { status: 405 });
 }
-

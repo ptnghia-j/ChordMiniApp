@@ -115,7 +115,10 @@ export async function apiRequest(
 
     return response;
   } catch (error) {
-    console.error(`API request error for ${url}:`, error);
+    const errorName = error instanceof Error ? error.name : '';
+    if (errorName !== 'AbortError') {
+      console.error(`API request error for ${url}:`, error);
+    }
     throw error;
   }
 }

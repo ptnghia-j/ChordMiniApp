@@ -138,7 +138,6 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               sizes="40px"
               className="mr-2 transition-transform duration-200 group-hover:scale-105 rounded-lg block dark:hidden"
               style={{ width: '40px', height: '40px' }}
-              priority
             />
             {/* Dark theme logo - hidden in light mode */}
             <Image
@@ -149,7 +148,6 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
               sizes="40px"
               className="mr-2 rounded-lg hidden transition-all duration-200 group-hover:scale-105 dark:block dark:opacity-60 dark:group-hover:opacity-85"
               style={{ width: '40px', height: '40px' }}
-              priority
             />
             <h1 className="text-xl font-nunito font-extrabold text-foreground transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 tracking-tight">
               ChordMini

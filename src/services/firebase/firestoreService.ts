@@ -12,6 +12,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
 import { applyEnharmonicCorrection } from '@/utils/chordUtils';
+import { CHORD_SYNCHRONIZATION_VERSION, synchronizeChords } from '@/utils/chordSynchronization';
 import { BeatInfo } from '../audio/beatDetectionService';
 
 // Extended interface for synchronized chords that may have additional properties
@@ -87,6 +88,29 @@ export interface TranscriptionData {
   rawResponse?: string | null;
   // Add Roman numeral analysis field
   romanNumerals?: RomanNumeralData | null;
+  syncVersion?: number;
+}
+
+function rebuildSynchronizedChordsIfNeeded(
+  data: TranscriptionData
+): { chord: string; beatIndex: number; beatNum?: number }[] {
+  const currentSyncVersion = data.syncVersion ?? 1;
+  const hasUsableInputs = Array.isArray(data.chords) && data.chords.length > 0 && Array.isArray(data.beats) && data.beats.length > 0;
+  const hasUsableSync = Array.isArray(data.synchronizedChords) && data.synchronizedChords.length === data.beats?.length;
+
+  if (!hasUsableInputs) {
+    return data.synchronizedChords ?? [];
+  }
+
+  if (currentSyncVersion >= CHORD_SYNCHRONIZATION_VERSION && hasUsableSync) {
+    return data.synchronizedChords;
+  }
+
+  const rebuilt = synchronizeChords(data.chords, data.beats);
+  return rebuilt.map((item, index) => ({
+    ...item,
+    beatNum: data.beats[index]?.beatNum,
+  }));
 }
 
 function buildLegacySequenceCorrections(data: TranscriptionData): SequenceCorrectionsData {
@@ -133,6 +157,7 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
 
   return {
     ...data,
+    synchronizedChords: rebuildSynchronizedChordsIfNeeded(data),
     keySignature: data.keySignature ?? data.primaryKey ?? null,
     keyModulation: data.keyModulation ?? data.modulation ?? null,
     chordCorrections: data.chordCorrections ?? data.corrections ?? null,
@@ -145,6 +170,7 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
         }
       : null,
     romanNumerals: data.romanNumerals ?? normalizedSequenceCorrections?.romanNumerals ?? null,
+    syncVersion: CHORD_SYNCHRONIZATION_VERSION,
   };
 }
 
@@ -506,6 +532,7 @@ async function performFirestoreSave(
       correctedChords: transcriptionData.correctedChords ?? transcriptionData.sequenceCorrections?.correctedSequence ?? null,
       originalChords: transcriptionData.originalChords ?? transcriptionData.sequenceCorrections?.originalSequence ?? null,
       romanNumerals: transcriptionData.romanNumerals ?? null,
+      syncVersion: transcriptionData.syncVersion ?? CHORD_SYNCHRONIZATION_VERSION,
       createdAt: Timestamp.now()
     };
 

@@ -168,7 +168,6 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
       const { getSoundfontChordPlaybackService } = await import('@/services/chord-playback/soundfontChordPlaybackService');
       const chordPlaybackService = getSoundfontChordPlaybackService();
       mixer.setChordPlaybackService(chordPlaybackService);
-      console.log('🎵 Soundfont chord playback service registered');
     } catch (error) {
       console.error('🎵 Failed to register soundfont chord playback service:', error);
       // Fallback to lightweight service
@@ -176,7 +175,6 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
         const { getLightweightChordPlaybackService } = await import('@/services/chord-playback/lightweightChordPlaybackService');
         const fallbackService = getLightweightChordPlaybackService();
         mixer.setChordPlaybackService(fallbackService);
-        console.log('🎵 Fallback to lightweight chord playback service');
       } catch (fallbackError) {
         console.error('🎵 Failed to register fallback chord playback service:', fallbackError);
       }

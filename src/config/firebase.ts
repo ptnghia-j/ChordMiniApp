@@ -93,7 +93,6 @@ async function initializeFirebase(): Promise<void> {
         setupAnonymousAuth();
       }
 
-      console.log('✅ Firebase initialized successfully with runtime config');
     } catch (error) {
       console.error('Error initializing Firebase:', error);
 

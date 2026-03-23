@@ -71,6 +71,7 @@ export default function ChangelogPage() {
         'PERFORMANCE: Piano visualizer timing now applies soft drift correction instead of re-anchoring every parent time update',
         'PERFORMANCE: Reduced redundant visualizer state churn from repeated resize, mixer, and active-note updates',
         'IMPROVED: Piano-only playback and MIDI export now use the same section-aware dynamics inputs for closer runtime/export parity',
+        'IMPROVED: Chord synchronization now aligns beats to the active chord interval instead of forward-filling forever. This preserves explicit silence gaps so a previous chord does not leak across dialogue breaks or cinematic cutaways.'
       ],
       breaking: [
         'Segmentation feature is in experimental mode - expect changes to the feature and its implementation'

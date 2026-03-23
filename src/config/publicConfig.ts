@@ -77,9 +77,6 @@ export async function loadPublicConfig(): Promise<PublicConfig> {
     return configCache;
   }
 
-  // Client-side: fetch from /api/config
-  console.log('[publicConfig] Loading runtime configuration from /api/config');
-
   configPromise = fetch('/api/config', { 
     cache: 'no-store',
     headers: {
@@ -93,8 +90,6 @@ export async function loadPublicConfig(): Promise<PublicConfig> {
       return res.json();
     })
     .then((config: PublicConfig) => {
-      console.log('[publicConfig] Runtime configuration loaded successfully');
-      console.log('[publicConfig] Config keys:', Object.keys(config));
       configCache = config;
       configPromise = null;
       return config;
@@ -150,7 +145,6 @@ export function getConfigValueSync(key: string, fallback?: string): string | und
 export function clearConfigCache(): void {
   configCache = null;
   configPromise = null;
-  console.log('[publicConfig] Configuration cache cleared');
 }
 
 /**

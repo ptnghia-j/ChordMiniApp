@@ -354,7 +354,6 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
             async () => transcribedVideos as unknown as Record<string, unknown>[],
             () => true
           );
-          console.log('✅ Cached recent videos data (initial list)');
         } catch (cacheError) {
           console.warn('Failed to cache recent videos:', cacheError);
         }
@@ -385,7 +384,6 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
               const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
               const enrichedList = transcribedVideos.map(v => enrichVideoWithAudioMetadata(v, audioFilesMap)) as unknown as Record<string, unknown>[];
               await recentVideosCache.get(cacheKey, async () => enrichedList, () => true);
-              console.log('✅ Cached recent videos data (enriched)');
             } catch {}
           }
         } catch {}
@@ -413,7 +411,6 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
   useEffect(() => {
     if (hasLoadedRef.current || !isVisible) return;
     hasLoadedRef.current = true;
-    console.log('🔍 RecentVideos component is visible, loading data...');
     void fetchVideos(false);
   }, [fetchVideos, isVisible]);
 
