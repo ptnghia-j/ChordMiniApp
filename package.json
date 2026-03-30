@@ -1,6 +1,6 @@
 {
   "name": "chord-mini-app",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "sideEffects": [
     "*.css",
@@ -22,6 +22,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "export-cookies": "node scripts/export-cookies.js",
+    "backfill:transcriptions:homepage": "node scripts/backfill-transcription-homepage-metadata.js",
+    "firebase:indexes:deploy": "firebase deploy --only firestore:indexes --project chordmini-d29f9",
     "analyze": "ANALYZE=true npm run build",
     "analyze:server": "BUNDLE_ANALYZE=server npm run build",
     "analyze:browser": "BUNDLE_ANALYZE=browser npm run build"

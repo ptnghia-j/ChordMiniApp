@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 
+export const maxDuration = 300;
+
 // Allow yt-dlp in production when explicitly configured via NEXT_PUBLIC_AUDIO_STRATEGY
 const isDevelopment = process.env.NODE_ENV === 'development';
 const allowYtDlpInProduction = process.env.NEXT_PUBLIC_AUDIO_STRATEGY === 'ytdlp';

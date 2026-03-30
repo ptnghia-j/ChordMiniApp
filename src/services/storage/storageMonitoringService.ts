@@ -1,12 +1,11 @@
 /**
  * Storage Monitoring Service for ChordMiniApp
  * 
- * Tracks Firebase Storage usage, costs, performance metrics, and cache analytics
- * for the audio file storage system migration.
+ * Tracks Firebase Storage usage, costs, performance metrics, and cache analytics.
  */
 
-import { collection, query, getDocs } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { getMetadata, listAll, ref } from 'firebase/storage';
+import { getStorageInstance } from '@/config/firebase';
 
 export interface StorageMetrics {
   totalFiles: number;
@@ -65,8 +64,9 @@ export class StorageMonitoringService {
     console.log('📊 Calculating storage metrics...');
 
     try {
-      if (!db) {
-        console.warn('Firebase not initialized');
+      const storage = await getStorageInstance();
+      if (!storage) {
+        console.warn('Firebase Storage not initialized');
         return {
           totalFiles: 0,
           totalStorageSize: 0,
@@ -79,9 +79,24 @@ export class StorageMonitoringService {
         };
       }
 
-      // Query audioFiles collection for storage files
-      const audioFilesQuery = query(collection(db, 'audioFiles'));
-      const audioFilesSnapshot = await getDocs(audioFilesQuery);
+      const audioRef = ref(storage, 'audio');
+      const audioFilesSnapshot = await listAll(audioRef);
+      const metadataEntries = await Promise.all(
+        audioFilesSnapshot.items.map(async (item) => {
+          try {
+            const metadata = await getMetadata(item);
+            return {
+              size: metadata.size || 0,
+              isStorageFile: true,
+            };
+          } catch {
+            return {
+              size: 0,
+              isStorageFile: true,
+            };
+          }
+        })
+      );
 
       let totalFiles = 0;
       let totalStorageSize = 0;
@@ -89,20 +104,14 @@ export class StorageMonitoringService {
       let totalStreamUrls = 0;
       let totalFileSize = 0;
 
-      audioFilesSnapshot.forEach((doc) => {
-        const data = doc.data();
+      metadataEntries.forEach((entry) => {
         totalFiles++;
-        
-        if (data.fileSize) {
-          totalFileSize += data.fileSize;
-        }
+        totalFileSize += entry.size;
 
-        if (data.isStreamUrl === false && data.storagePath) {
-          // This is a Firebase Storage file
+        if (entry.isStorageFile) {
           storageFiles++;
-          totalStorageSize += data.fileSize || 0;
+          totalStorageSize += entry.size;
         } else {
-          // This is a stream URL
           totalStreamUrls++;
         }
       });

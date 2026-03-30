@@ -124,7 +124,10 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
     analyzeAudioFromService,
     beatDetectorRef,
     chordDetectorRef,
-    videoId
+    videoId,
+    titleFromSearch,
+    channelFromSearch,
+    thumbnailFromSearch,
   } = deps;
 
   if (!audioProcessingState.audioUrl) {
@@ -244,6 +247,11 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
         prefetchedTranscription: cachedData ?? null,
         onTranscriptionSaved: (transcriptionData) => {
           deps.setTranscriptionSnapshot?.(transcriptionData);
+        },
+        searchMetadata: {
+          title: titleFromSearch,
+          channelTitle: channelFromSearch,
+          thumbnail: thumbnailFromSearch,
         },
       }
     );

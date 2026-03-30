@@ -587,7 +587,7 @@ export default function FeaturesTabSection() {
   const beat = useBeatAnimation();
 
   return (
-    <section id="features" className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
+    <section id="features" className="relative py-20 bg-transparent transition-colors duration-300 overflow-hidden rounded-b-[36px]">
       <div className="absolute inset-0 z-0 pointer-events-none">
         {isDark ? (
           <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%)' }} />

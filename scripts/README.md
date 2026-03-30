@@ -117,6 +117,61 @@ A simpler script specifically for deleting translation cache entries. This scrip
 node delete-translation-cache.js <VIDEO_ID>
 ```
 
+### 🛠️ `backfill-transcription-homepage-metadata.js` - Safe Homepage Metadata Backfill
+
+A Firestore admin maintenance script for backfilling the homepage optimization fields on `transcriptions` documents:
+
+- `isPrimaryVariant`
+- `displayPriority`
+- `searchableKeys`
+
+The script is intentionally conservative:
+
+- dry-run by default
+- single-video write mode supported with `--video-id <id> --write`
+- bulk write mode requires explicit `--all --write`
+
+#### Usage
+
+```bash
+# Preview all pending homepage metadata updates
+node scripts/backfill-transcription-homepage-metadata.js --dry-run
+
+# Preview one video's updates
+node scripts/backfill-transcription-homepage-metadata.js --video-id Y2ge3KrdeWs --dry-run
+
+# Apply updates for one video only
+node scripts/backfill-transcription-homepage-metadata.js --video-id Y2ge3KrdeWs --write
+
+# Apply the full one-time backfill across all transcription docs
+node scripts/backfill-transcription-homepage-metadata.js --all --write
+```
+
+#### What it does
+
+- Groups transcription documents by `videoId`
+- Chooses exactly one homepage-primary variant per video
+- Prefers `madmom` over `beat-transformer`
+- Prefers `chord-cnn-lstm` over `btc-sl`, then `btc-pl`
+- Derives enharmonic-aware `searchableKeys` like `['c# major', 'db major']`
+- Only patches documents whose values actually need to change
+
+#### Recommended rollout
+
+```bash
+# 1. Preview the impact first
+npm run backfill:transcriptions:homepage -- --dry-run
+
+# 2. Spot-check a single known video
+npm run backfill:transcriptions:homepage -- --video-id Y2ge3KrdeWs --dry-run
+
+# 3. Deploy Firestore indexes
+npm run firebase:indexes:deploy
+
+# 4. Run the one-time backfill when ready
+npm run backfill:transcriptions:homepage -- --all --write
+```
+
 ## Prerequisites
 
 1. **Environment Setup**: Ensure `.env.local` file contains valid Firebase configuration

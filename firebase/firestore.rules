@@ -61,25 +61,6 @@ service cloud.firestore {
       return true;
     }
 
-    // Audio files collection - for storing extracted audio metadata
-    match /audioFiles/{videoId} {
-      // Allow read access to everyone for caching functionality (including anonymous users)
-      allow read: if true;
-
-      // Allow write access with validation and rate limiting (including anonymous users)
-      allow create: if isValidVideoId(videoId) &&
-                       isValidAudioData(resource.data) &&
-                       isWithinRateLimit();
-
-      // Allow updates only if the structure is valid (including anonymous users)
-      allow update: if isValidVideoId(videoId) &&
-                       isValidAudioData(resource.data) &&
-                       isWithinRateLimit();
-
-      // Prevent deletion by regular users (only allow expiration)
-      allow delete: if false;
-    }
-
     // Legacy audio cache collection - for backward compatibility
     match /audioCache/{videoId} {
       // Allow read access to everyone for caching functionality (including anonymous users)

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { db } from '@/config/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, DocumentSnapshot, DocumentData, QuerySnapshot, doc, getDoc, where, documentId } from 'firebase/firestore';
-import { FiMusic, FiCloud, FiClock } from 'react-icons/fi';
-import { Card, CardBody, Button, Chip, Skeleton } from '@heroui/react';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, DocumentSnapshot, DocumentData, QuerySnapshot, QueryConstraint } from 'firebase/firestore';
+import { Card, CardBody, Button, Chip, Select, SelectItem, Skeleton } from '@heroui/react';
 import { useIsVisible } from '@/hooks/scroll/useIntersectionObserver';
 import { buildAnalyzePageUrl } from '@/utils/analyzeRouteUtils';
+import { buildSearchableKeys } from '@/utils/keySignatureUtils';
+import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 
 interface TranscribedVideo {
   videoId: string;
@@ -22,57 +22,59 @@ interface TranscribedVideo {
   bpm?: number;
   timeSignature?: number;
   keySignature?: string;
-  // Audio file metadata
-  audioFilename?: string;
-  audioUrl?: string;
-  isStreamUrl?: boolean;
-  fromCache?: boolean;
 }
 
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
-const AUDIO_FILES_COLLECTION = 'audioFiles';
-// Quick Win constants for improved UX and batching
-const TARGET_UNIQUE = 12;      // ensure 12 unique items on first load
-const PAGE_SIZE = 20;          // fetch larger pages internally
-const MAX_PAGES = 3;           // cap to avoid excessive reads
-
-const INITIAL_LOAD_COUNT = 12; // show 12 on first paint
-const LOAD_MORE_COUNT = 6;     // keep load-more size unchanged for now
-
-
-interface AudioFileMetadata {
-  audioFilename: string;
-  audioUrl: string;
-  isStreamUrl: boolean;
-  fromCache: boolean;
-  fileSize: number;
-  streamExpiresAt?: number;
+const PAGE_SIZE = 12;
+const LEGACY_QUERY_FETCH_LIMIT = PAGE_SIZE * 2;
+const MAX_SCAN_PAGES = 4;
+const ALL_KEYS_VALUE = 'all';
+const KEY_OPTIONS = [
+  { value: ALL_KEYS_VALUE, label: 'All Keys' },
+  { value: 'C major', label: 'C Major' },
+  { value: 'C minor', label: 'C Minor' },
+  { value: 'C# major', label: 'C# / D♭ Major' },
+  { value: 'C# minor', label: 'D♭ / C# Minor' },
+  { value: 'D major', label: 'D Major' },
+  { value: 'D minor', label: 'D Minor' },
+  { value: 'E♭ major', label: 'D# / E♭ Major' },
+  { value: 'E♭ minor', label: 'E♭ Minor' },
+  { value: 'E major', label: 'E Major' },
+  { value: 'E minor', label: 'E Minor' },
+  { value: 'F major', label: 'F Major' },
+  { value: 'F minor', label: 'F Minor' },
+  { value: 'F# major', label: 'F# / G♭ Major' },
+  { value: 'F# minor', label: 'G♭ / F# Minor' },
+  { value: 'G major', label: 'G Major' },
+  { value: 'G minor', label: 'G Minor' },
+  { value: 'A♭ major', label: 'A♭ Major' },
+  { value: 'A♭ minor', label: 'G# / A♭ Minor' },
+  { value: 'A major', label: 'A Major' },
+  { value: 'A minor', label: 'A Minor' },
+  { value: 'B♭ major', label: 'B♭ Major' },
+  { value: 'B♭ minor', label: 'A# / B♭ Minor' },
+  { value: 'B major', label: 'B Major' },
+  { value: 'B minor', label: 'B Minor' },
+];
+type QueryMode = 'primary' | 'legacy';
+type FirestoreTranscriptionDoc = {
+  videoId?: string;
+  beats?: unknown[];
+  chords?: unknown[];
+  createdAt?: { toMillis?: () => number; seconds?: number };
+  audioDuration?: number;
+  beatModel?: string;
+  chordModel?: string;
+  bpm?: number;
+  timeSignature?: number;
+  keySignature?: string;
+  primaryKey?: string;
   title?: string;
   channelTitle?: string;
-}
-
-// Helper: enrich a transcribed video with audio file metadata (pure, top-level)
-function enrichVideoWithAudioMetadata(
-  video: TranscribedVideo,
-  audioFilesMap: Map<string, AudioFileMetadata>
-): TranscribedVideo {
-  const audio = audioFilesMap.get(video.videoId);
-  return audio
-    ? {
-        ...video,
-        audioFilename: audio.audioFilename,
-        audioUrl: audio.audioUrl,
-        isStreamUrl: audio.isStreamUrl,
-        fromCache: audio.fromCache,
-        title:
-          audio.title && video.title === `Video ${video.videoId}`
-            ? audio.title
-            : video.title,
-        channelTitle: audio.channelTitle || video.channelTitle,
-      }
-    : video;
-}
-
+  thumbnail?: string;
+  searchableKeys?: string[];
+  isPrimaryVariant?: boolean;
+};
 
 export default function RecentVideos() {
   const [videos, setVideos] = useState<TranscribedVideo[]>([]);
@@ -82,6 +84,8 @@ export default function RecentVideos() {
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true); // State to track if more videos can be loaded
   const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(ALL_KEYS_VALUE);
+  const [queryMode, setQueryMode] = useState<QueryMode | null>(null);
 
   // PERFORMANCE FIX #5: Lazy load using Intersection Observer
   const [containerRef, isVisible] = useIsVisible<HTMLDivElement>({
@@ -90,130 +94,18 @@ export default function RecentVideos() {
     freezeOnceVisible: true // Only load once
   });
 
-const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
-    // Ensure Firebase is initialized
-    let firestoreDb = db;
-    if (!firestoreDb) {
-      try {
-        const { ensureFirebaseInitialized } = await import('@/config/firebase');
-        const { db: initializedDb } = await ensureFirebaseInitialized();
-        firestoreDb = initializedDb;
-      } catch (error) {
-        console.error('❌ Firebase initialization failed in fetchAudioFiles:', error);
-        return new Map<string, AudioFileMetadata>();
-      }
-    }
-
-    if (!firestoreDb || videoIds.length === 0) {
-
-      return new Map<string, AudioFileMetadata>();
-    }
-
-    const { audioMetadataCache } = await import('@/services/cache/smartFirebaseCache');
-
-    // Batched prefetch using Firestore `in` queries (chunks of 10)
-    const chunk = (arr: string[], size: number) => {
-      const out: string[][] = [];
-      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-      return out;
-    };
-
-    const mapFirestoreToMeta = (audioData: {
-      extractionService?: string;
-      audioUrl?: string;
-      isStreamUrl?: boolean;
-      fileSize?: number;
-      streamExpiresAt?: number;
-      title?: string;
-      channelTitle?: string;
-    }): AudioFileMetadata => ({
-      audioFilename: audioData?.extractionService || 'cached-audio',
-      audioUrl: audioData?.audioUrl || '',
-      isStreamUrl: !!audioData?.isStreamUrl,
-      fromCache: true,
-      fileSize: audioData?.fileSize || 0,
-      streamExpiresAt: audioData?.streamExpiresAt,
-      title: audioData?.title,
-      channelTitle: audioData?.channelTitle
-    });
-
-    const prefetchMap = new Map<string, AudioFileMetadata | null>();
-    let prefetchDone = false;
-
-    const batchedPrefetch = async () => {
-      if (prefetchDone || !firestoreDb) return;
-      prefetchDone = true;
-      try {
-        const audioCol = collection(firestoreDb, AUDIO_FILES_COLLECTION);
-        const batches = chunk(videoIds, 10);
-        const qsPromises = batches.map(ids => getDocs(query(audioCol, where(documentId(), 'in', ids))));
-        const snapshots = await Promise.all(qsPromises);
-        snapshots.forEach((snap) => {
-          snap.forEach((docSnap) => {
-            const data = docSnap.data();
-            prefetchMap.set(docSnap.id, data ? mapFirestoreToMeta(data) : null);
-          });
-        });
-        // Mark missing ids as null to avoid fallback
-        for (const id of videoIds) {
-          if (!prefetchMap.has(id)) prefetchMap.set(id, null);
-        }
-      } catch (e) {
-        console.warn('Batch audio prefetch failed, will fallback to per-doc fetch:', e);
-      }
-    };
-
-    const audioFilesMap = await audioMetadataCache.getBatch(
-      videoIds,
-      async (videoId: string) => {
-        try {
-          if (!firestoreDb) return null;
-          if (!prefetchDone) await batchedPrefetch();
-          if (prefetchMap.has(videoId)) {
-            return prefetchMap.get(videoId) as unknown as Record<string, unknown> | null;
-          }
-          // Fallback to per-doc get if not found via prefetch
-          const audioDocRef = doc(firestoreDb, AUDIO_FILES_COLLECTION, videoId);
-          const audioDocSnap = await getDoc(audioDocRef);
-          if (audioDocSnap.exists()) {
-            return mapFirestoreToMeta(audioDocSnap.data()) as unknown as Record<string, unknown>;
-          }
-          return null;
-        } catch {
-          return null;
-        }
-      },
-      (data: Record<string, unknown>) => !!(data.audioUrl && (data.audioFilename || data.title))
-    );
-
-    const resultMap = new Map<string, AudioFileMetadata>();
-    for (const [videoId, data] of audioFilesMap.entries()) {
-      if (data && typeof data === 'object') {
-        resultMap.set(videoId, data as unknown as AudioFileMetadata);
-      }
-    }
-
-    return resultMap;
-  }, []);
-
   const fetchVideos = useCallback(async (isLoadMore = false, skipCache = false) => {
-    // PERFORMANCE: Check cache first for initial load, then SWR-style background revalidate
     if (!isLoadMore && !skipCache) {
       try {
         const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
-        const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
-
-        const cachedData = await recentVideosCache.get(
-          cacheKey,
-          async () => null, // Don't fetch yet, just check cache
-          () => true
-        );
+        const cacheKey = `recent-videos-${PAGE_SIZE}-${selectedKey}`;
+        const cachedData = recentVideosCache.peek(cacheKey);
 
         if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
           console.log('✅ Using cached recent videos data (SWR)');
           setVideos(cachedData as unknown as TranscribedVideo[]);
           setLoading(false);
-          setHasMore(cachedData.length >= INITIAL_LOAD_COUNT);
+          setHasMore(cachedData.length >= PAGE_SIZE);
           // Background revalidate
           setTimeout(() => { void fetchVideos(false, true); }, 0);
           return;
@@ -261,85 +153,147 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
       }
 
       const transcriptionsRef = collection(firestoreDb, TRANSCRIPTIONS_COLLECTION);
-
-      // Containers shared by both initial load and load-more paths
-      const videoMap = new Map<string, TranscribedVideo>();
-      const videoIds: string[] = [];
       const existingVideoIds = new Set(isLoadMore ? videos.map(v => v.videoId) : []);
+      const selectedKeyVariants = selectedKey === ALL_KEYS_VALUE
+        ? []
+        : buildSearchableKeys(selectedKey);
 
-      const addFromSnapshot = (snap: QuerySnapshot<DocumentData>) => {
-        snap.forEach((d) => {
-          const data = d.data() as {
-            videoId?: string;
-            beats?: unknown[];
-            chords?: unknown[];
-            createdAt?: { toMillis?: () => number; seconds?: number };
-            audioDuration?: number;
-            beatModel?: string;
-            chordModel?: string;
-            bpm?: number;
-            timeSignature?: number;
-            keySignature?: string;
-            title?: string;
-          };
-          if (data.videoId && (data.beats?.length ?? 0) > 0 && (data.chords?.length ?? 0) > 0) {
-            if (existingVideoIds.has(data.videoId) || videoMap.has(data.videoId)) return;
-            const processedAt = data.createdAt?.toMillis?.() || (data.createdAt?.seconds ? data.createdAt.seconds * 1000 : Date.now());
-            videoIds.push(data.videoId);
-            videoMap.set(data.videoId, {
-              videoId: data.videoId,
-              title: data.title || `Video ${data.videoId}`,
-              thumbnailUrl: `https://i.ytimg.com/vi/${data.videoId}/mqdefault.jpg`,
-              processedAt,
-              duration: data.audioDuration,
-              beatModel: data.beatModel,
-              chordModel: data.chordModel,
-              bpm: data.bpm,
-              timeSignature: data.timeSignature || 4,
-              keySignature: data.keySignature,
-              audioFilename: undefined,
-              audioUrl: undefined,
-              isStreamUrl: false,
-              fromCache: false
-            });
-          }
-        });
+      const mapSnapshotDocToVideo = (docData: FirestoreTranscriptionDoc): TranscribedVideo | null => {
+        if (
+          !docData.videoId ||
+          existingVideoIds.has(docData.videoId) ||
+          (docData.beats?.length ?? 0) === 0 ||
+          (docData.chords?.length ?? 0) === 0
+        ) {
+          return null;
+        }
+
+        return {
+          videoId: docData.videoId,
+          title: docData.title || `Video ${docData.videoId}`,
+          channelTitle: docData.channelTitle || undefined,
+          thumbnailUrl: normalizeThumbnailUrl(docData.videoId, docData.thumbnail, 'mqdefault'),
+          processedAt: docData.createdAt?.toMillis?.() || (docData.createdAt?.seconds ? docData.createdAt.seconds * 1000 : Date.now()),
+          duration: docData.audioDuration,
+          beatModel: docData.beatModel,
+          chordModel: docData.chordModel,
+          bpm: docData.bpm,
+          timeSignature: docData.timeSignature || 4,
+          keySignature: docData.keySignature || docData.primaryKey,
+        };
       };
 
-      let lastVisibleLocal: DocumentSnapshot | null = null;
+      const matchesSelectedKey = (docData: FirestoreTranscriptionDoc) => {
+        if (selectedKeyVariants.length === 0) return true;
+        const docKeys = Array.isArray(docData.searchableKeys) && docData.searchableKeys.length > 0
+          ? docData.searchableKeys
+          : buildSearchableKeys(docData.keySignature || docData.primaryKey);
+        return docKeys.some((docKey) => selectedKeyVariants.includes(docKey));
+      };
 
-      if (isLoadMore) {
-        // Keep existing load-more behavior (6 unique items)
-        const q = lastDoc
-          ? query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(LOAD_MORE_COUNT))
-          : query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(LOAD_MORE_COUNT));
-        const qs = await getDocs(q);
-        addFromSnapshot(qs);
-        lastVisibleLocal = qs.docs[qs.docs.length - 1] || null;
-      } else {
-        // Multi-page accumulation to ensure 12 unique items on first load
-        let page = 0;
-        let cursor: DocumentSnapshot | null = null;
-        while (videoMap.size < TARGET_UNIQUE && page < MAX_PAGES) {
-          let qs: QuerySnapshot<DocumentData>;
-          if (cursor) {
-            const q1 = query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
-            qs = await getDocs(q1);
-          } else {
-            const q2 = query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
-            qs = await getDocs(q2);
-          }
-          addFromSnapshot(qs);
-          lastVisibleLocal = qs.docs[qs.docs.length - 1] || null;
-          if (!lastVisibleLocal || qs.empty) break;
-          cursor = lastVisibleLocal;
-          page++;
+      const fetchPrimaryPage = async (cursor: DocumentSnapshot | null) => {
+        const constraints: QueryConstraint[] = [
+          where('isPrimaryVariant', '==', true),
+        ];
+
+        if (selectedKeyVariants.length > 0) {
+          constraints.push(where('searchableKeys', 'array-contains-any', selectedKeyVariants));
         }
-      }
 
-      // Compute initial list and render immediately (audio metadata enrichment happens in background)
-      const transcribedVideos = Array.from(videoMap.values())
-        .slice(0, isLoadMore ? LOAD_MORE_COUNT : INITIAL_LOAD_COUNT);
+        constraints.push(orderBy('createdAt', 'desc'));
+
+        if (cursor) {
+          constraints.push(startAfter(cursor));
+        }
+
+        constraints.push(limit(PAGE_SIZE));
+
+        const snapshot = await getDocs(query(transcriptionsRef, ...constraints));
+        const pageVideos = snapshot.docs
+          .map((docSnapshot) => mapSnapshotDocToVideo(docSnapshot.data() as FirestoreTranscriptionDoc))
+          .filter((video): video is TranscribedVideo => Boolean(video));
+
+        return {
+          videos: pageVideos,
+          lastVisible: snapshot.docs[snapshot.docs.length - 1] || null,
+          hasMore: snapshot.size === PAGE_SIZE && snapshot.docs.length === PAGE_SIZE,
+        };
+      };
+
+      const fetchLegacyPage = async (cursor: DocumentSnapshot | null) => {
+        const videoMap = new Map<string, TranscribedVideo>();
+        let lastVisibleLocal: DocumentSnapshot | null = null;
+        let fetchedDocCount = 0;
+        let scanCursor = cursor;
+
+        const addFromSnapshot = (snap: QuerySnapshot<DocumentData>) => {
+          snap.forEach((docSnapshot) => {
+            const docData = docSnapshot.data() as FirestoreTranscriptionDoc;
+            if (!matchesSelectedKey(docData)) return;
+
+            const video = mapSnapshotDocToVideo(docData);
+            if (!video || videoMap.has(video.videoId)) return;
+            videoMap.set(video.videoId, video);
+          });
+        };
+
+        for (let page = 0; page < MAX_SCAN_PAGES; page += 1) {
+          const snapshot = scanCursor
+            ? await getDocs(query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(scanCursor), limit(LEGACY_QUERY_FETCH_LIMIT)))
+            : await getDocs(query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(LEGACY_QUERY_FETCH_LIMIT)));
+
+          addFromSnapshot(snapshot);
+          fetchedDocCount = snapshot.size;
+          lastVisibleLocal = snapshot.docs[snapshot.docs.length - 1] || null;
+          scanCursor = lastVisibleLocal;
+
+          if (videoMap.size >= PAGE_SIZE || fetchedDocCount < LEGACY_QUERY_FETCH_LIMIT) {
+            break;
+          }
+        }
+
+        return {
+          videos: Array.from(videoMap.values()).slice(0, PAGE_SIZE),
+          lastVisible: lastVisibleLocal,
+          hasMore: fetchedDocCount === LEGACY_QUERY_FETCH_LIMIT && !!lastVisibleLocal,
+        };
+      };
+
+      let transcribedVideos: TranscribedVideo[] = [];
+      let lastVisibleLocal: DocumentSnapshot | null = null;
+      let nextHasMore = false;
+
+      const preferredMode: QueryMode = isLoadMore ? (queryMode ?? 'primary') : 'primary';
+
+      if (preferredMode === 'primary') {
+        try {
+          const primaryResult = await fetchPrimaryPage(isLoadMore ? lastDoc : null);
+          transcribedVideos = primaryResult.videos;
+          lastVisibleLocal = primaryResult.lastVisible;
+          nextHasMore = primaryResult.hasMore;
+          setQueryMode('primary');
+
+          if (!isLoadMore && transcribedVideos.length === 0) {
+            const legacyResult = await fetchLegacyPage(null);
+            transcribedVideos = legacyResult.videos;
+            lastVisibleLocal = legacyResult.lastVisible;
+            nextHasMore = legacyResult.hasMore;
+            setQueryMode('legacy');
+          }
+        } catch (primaryError) {
+          console.warn('Primary recent videos query failed, using legacy fallback:', primaryError);
+          const legacyResult = await fetchLegacyPage(isLoadMore ? lastDoc : null);
+          transcribedVideos = legacyResult.videos;
+          lastVisibleLocal = legacyResult.lastVisible;
+          nextHasMore = legacyResult.hasMore;
+          setQueryMode('legacy');
+        }
+      } else {
+        const legacyResult = await fetchLegacyPage(isLoadMore ? lastDoc : null);
+        transcribedVideos = legacyResult.videos;
+        lastVisibleLocal = legacyResult.lastVisible;
+        nextHasMore = legacyResult.hasMore;
+      }
 
       if (isLoadMore) {
         setVideos(prev => [...prev, ...transcribedVideos]);
@@ -348,49 +302,15 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
         setLoading(false);
         try {
           const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
-          const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
-          await recentVideosCache.get(
-            cacheKey,
-            async () => transcribedVideos as unknown as Record<string, unknown>[],
-            () => true
-          );
+          const cacheKey = `recent-videos-${PAGE_SIZE}-${selectedKey}`;
+          recentVideosCache.set(cacheKey, transcribedVideos as unknown as Record<string, unknown>[], true);
         } catch (cacheError) {
           console.warn('Failed to cache recent videos:', cacheError);
         }
       }
 
-      // Background enrich with audio file metadata
-      const targetIds = transcribedVideos.map(v => v.videoId);
-      void (async () => {
-        try {
-          const audioFilesMap = await fetchAudioFiles(targetIds);
-          if (audioFilesMap.size === 0) return;
-
-          setVideos(prev => {
-            const map = new Map(prev.map(v => [v.videoId, v] as const));
-            for (const id of targetIds) {
-              const audioData = audioFilesMap.get(id);
-              if (!audioData) continue;
-              const v = map.get(id);
-              if (!v) continue;
-              map.set(id, enrichVideoWithAudioMetadata(v, audioFilesMap));
-            }
-            return Array.from(map.values());
-          });
-
-          if (!isLoadMore) {
-            try {
-              const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
-              const cacheKey = `recent-videos-${INITIAL_LOAD_COUNT}`;
-              const enrichedList = transcribedVideos.map(v => enrichVideoWithAudioMetadata(v, audioFilesMap)) as unknown as Record<string, unknown>[];
-              await recentVideosCache.get(cacheKey, async () => enrichedList, () => true);
-            } catch {}
-          }
-        } catch {}
-      })();
-
       setLastDoc(lastVisibleLocal || null);
-      setHasMore(!!lastVisibleLocal); // If there's no last doc, we've reached the end
+      setHasMore(nextHasMore);
 
     } catch (err) {
       console.error('Error fetching transcribed videos:', err);
@@ -399,20 +319,30 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
       setLoading(false);
       setLoadingMore(false);
     }
-    // FIX: Removed `videos` from dependency array. This hook now correctly depends
-    // only on the functions and pagination state it needs to run.
-  }, [lastDoc, hasMore, fetchAudioFiles, videos]);
+  }, [hasMore, lastDoc, queryMode, selectedKey, videos]);
 
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
 
   // PERFORMANCE FIX #5: Only fetch when component is visible (Intersection Observer)
   const hasLoadedRef = useRef(false);
+  const previousFilterRef = useRef(selectedKey);
   useEffect(() => {
-    if (hasLoadedRef.current || !isVisible) return;
-    hasLoadedRef.current = true;
-    void fetchVideos(false);
-  }, [fetchVideos, isVisible]);
+    if (!isVisible) return;
+
+    const filterChanged = previousFilterRef.current !== selectedKey;
+    if (!hasLoadedRef.current || filterChanged) {
+      hasLoadedRef.current = true;
+      previousFilterRef.current = selectedKey;
+      setVideos([]);
+      setLastDoc(null);
+      setHasMore(true);
+      setQueryMode(null);
+      setError(null);
+      setIsExpanded(false);
+      void fetchVideos(false);
+    }
+  }, [fetchVideos, isVisible, selectedKey]);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -436,39 +366,51 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
     return `${timeSignature}/4`;
   };
 
-  const getAudioSourceInfo = (video: TranscribedVideo) => {
-    if (!video.audioFilename && !video.audioUrl) {
-      return { type: 'Unknown', icon: FiMusic, color: 'text-gray-500' };
-    }
-    if (video.isStreamUrl) {
-      return { type: 'Stream', icon: FiCloud, color: 'text-blue-500', tooltip: 'Streamed from external service' };
-    }
-    return { type: 'Cached', icon: FiClock, color: 'text-green-500', tooltip: 'Loaded from cache' };
-  };
+  const selectedKeyLabel = KEY_OPTIONS.find((option) => option.value === selectedKey)?.label ?? selectedKey;
 
-  const formatExtractionService = (service?: string): string => {
-    if (!service) return 'Unknown source';
-    const serviceMap: Record<string, string> = {
-      'yt-mp3-go': 'yt-mp3-go',
-      'quicktube': 'QuickTube',
-      'yt-dlp': 'yt-dlp',
-      'firebase-storage-cache': 'Cache',
-      'cached-audio': 'Cached'
-    };
-    return serviceMap[service] || service;
-  };
-
+  const renderHeader = (status: React.ReactNode) => (
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
+          {status}
+        </div>
+        <div className="flex items-center gap-2 md:min-w-[250px]">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Key
+          </span>
+          <Select
+            aria-label="Filter recent analyses by key"
+            selectedKeys={[selectedKey]}
+            onSelectionChange={(keys) => {
+              if (keys === 'all') return;
+              const nextValue = Array.from(keys)[0];
+              if (typeof nextValue === 'string') {
+                setSelectedKey(nextValue);
+              }
+            }}
+            className="w-full"
+            size="sm"
+            variant="bordered"
+            color="default"
+            disallowEmptySelection
+          >
+            {KEY_OPTIONS.map((option) => (
+              <SelectItem key={option.value} textValue={option.label}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </Select>
+        </div>
+      </div>
+  );
 
   if (loading) {
     return (
       <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
-          <Chip size="sm" variant="flat" color="default">Loading...</Chip>
-        </div>
+        {renderHeader(<Chip size="sm" variant="flat" color="default">Loading...</Chip>)}
         <div className="max-h-96 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(INITIAL_LOAD_COUNT)].map((_, index) => (
+            {[...Array(PAGE_SIZE)].map((_, index) => (
               <Card key={index} className="w-full bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10">
                 <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
               </Card>
@@ -482,19 +424,22 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
   if (error || videos.length === 0) {
     return (
       <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
+        {renderHeader(
           <Chip size="sm" variant="flat" color={error ? "danger" : "default"}>
             {error ? "Error" : "Empty"}
           </Chip>
-        </div>
+        )}
         <div className="h-48 flex items-center justify-center">
           <div className="text-center">
             <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 mb-1">
-              {error ? 'Failed to load transcribed videos' : 'No recent transcriptions yet'}
+              {error ? 'Failed to load transcribed videos' : 'No recent transcriptions found'}
             </h4>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              {error ? 'Please retry or check your connection.' : 'New analyses will appear here as they are created.'}
+              {error
+                ? 'Please retry or check your connection.'
+                : selectedKey === ALL_KEYS_VALUE
+                  ? 'New analyses will appear here as they are created.'
+                  : `No recent analyses matched ${selectedKeyLabel}.`}
             </p>
           </div>
         </div>
@@ -504,13 +449,11 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
 
   return (
     <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
-      {/* Header row with title and count */}
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recently Transcribed Songs</h3>
+      {renderHeader(
         <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
           {videos.length} song{videos.length !== 1 ? 's' : ''}
         </Chip>
-      </div>
+      )}
 
       {/* Song cards grid - no outer container box */}
       <div className={`${isExpanded ? 'max-h-[672px]' : 'max-h-96'} overflow-y-auto scrollbar-thin transition-all duration-300 ease-in-out`}>
@@ -531,15 +474,30 @@ const fetchAudioFiles = useCallback(async (videoIds: string[]) => {
             >
               <CardBody className="p-3">
                 <div className="flex gap-3">
-                  <div className={`relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 ${video.fromCache ? 'border-2 border-green-400 dark:border-green-500' : 'border border-gray-200 dark:border-gray-500'}`}>
-                    <Image src={video.thumbnailUrl || '/hero-image-placeholder.svg'} alt={video.title || 'Video thumbnail'} fill sizes="80px" className="object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/hero-image-placeholder.svg'; }} />
+                  <div className="relative w-20 h-12 bg-gray-100 dark:bg-gray-600 rounded-md overflow-hidden flex-shrink-0 shadow-sm transition-all duration-300 border border-gray-200 dark:border-gray-500">
+                    {/* Intentionally use direct YouTube thumbnails to avoid Vercel image-optimization quota usage. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={video.thumbnailUrl || '/hero-image-placeholder.svg'}
+                      alt={video.title || 'Video thumbnail'}
+                      width={80}
+                      height={48}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => { e.currentTarget.src = '/hero-image-placeholder.svg'; }}
+                    />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200"></div>
                     {video.duration && <div className="absolute bottom-0.5 right-0.5 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded">{formatDuration(video.duration)}</div>}
-                    {video.fromCache && <div className="absolute top-1 left-1 w-2 h-2 bg-green-400 rounded-full border border-white shadow-sm" title="Cached"></div>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-1">{video.title}</h4>
-                    {(video.audioFilename || video.audioUrl) && (<div className="text-xs text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1">{(() => { const sourceInfo = getAudioSourceInfo(video); const IconComponent = sourceInfo.icon; return (<><IconComponent className={`w-3 h-3 ${sourceInfo.color}`} /> <span className={sourceInfo.color}>{sourceInfo.type}</span><span className="text-gray-500">•</span><span title={`Extracted using ${video.audioFilename || 'unknown service'}`}>{formatExtractionService(video.audioFilename)}</span></>);})()}</div>)}
+                    {video.channelTitle && (
+                      <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 truncate">
+                        {video.channelTitle}
+                      </div>
+                    )}
                     <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
                       <div className="flex items-center justify-between"><span>{formatDate(video.processedAt)}</span>{video.bpm && (<span className="text-blue-600 dark:text-blue-400 font-medium">{formatBPM(video.bpm)}</span>)}</div>
                       <div className="flex items-center justify-between">{video.timeSignature && (<span className="text-green-600 dark:text-green-400">{formatTimeSignature(video.timeSignature)}</span>)}{video.keySignature && (<span className="text-purple-600 dark:text-purple-400 font-medium">{video.keySignature}</span>)}</div>

@@ -1,9 +1,6 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
-import { db, getStorageInstance } from '@/config/firebase';
-import { doc, getDoc, setDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
-
-// Collection name for audio files - must match Firestore rules
-const AUDIO_FILES_COLLECTION = 'audioFiles';
+import { getStorageInstance } from '@/config/firebase';
+import { Timestamp } from 'firebase/firestore';
 
 // Interface for audio file data with enhanced metadata
 export interface AudioFileData {
@@ -31,13 +28,6 @@ export interface AudioFileData {
   videoViewCount?: number; // View count at time of extraction
 }
 
-// Extended interface for cached data that may have additional properties
-interface CachedAudioFileData extends AudioFileData {
-  invalid?: boolean;
-  expired?: boolean;
-  processedAt?: number;
-}
-
 /**
  * Find existing Firebase Storage audio file for a video ID
  * 
@@ -54,39 +44,6 @@ export async function findExistingAudioFile(
   storagePath: string;
   fileSize?: number;
 } | null> {
-  // Step 1: Fast path — check Firestore metadata for existing storagePath + audioUrl
-  // This avoids the expensive listAll() call that scans the entire audio/ directory
-  if (db) {
-    try {
-      const docRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data() as AudioFileData;
-        // Only use if not expired/invalid and has valid storage data
-        if (!('invalid' in data && data.invalid) &&
-            !('expired' in data && data.expired) &&
-            data.audioUrl && data.storagePath) {
-          // For stream URLs, check expiration
-          if (data.isStreamUrl && data.streamExpiresAt && Date.now() > data.streamExpiresAt) {
-            // Stream expired, fall through to storage scan
-          } else {
-            console.log(`✅ Found audio via Firestore metadata for ${videoId} (fast path)`);
-            return {
-              audioUrl: data.audioUrl,
-              storagePath: data.storagePath,
-              fileSize: data.fileSize || undefined
-            };
-          }
-        }
-      }
-    } catch (firestoreError) {
-      // Firestore lookup failed, fall through to storage scan
-      console.warn(`⚠️ Firestore metadata lookup failed for ${videoId}, falling back to storage scan:`, firestoreError);
-    }
-  }
-
-  // Step 2: Slow path — scan Firebase Storage (only if Firestore metadata not found)
   const storage = await getStorageInstance();
 
   if (!storage) {
@@ -249,7 +206,7 @@ export async function uploadAudioFile(
   // Get Firebase Storage instance (ensures initialization)
   const storage = await getStorageInstance();
 
-  if (!storage || !db) {
+  if (!storage) {
     console.warn('Firebase Storage not initialized, skipping upload');
     return null;
   }
@@ -351,76 +308,10 @@ export async function uploadAudioFile(
 export async function saveAudioFileMetadata(
   audioFileData: Omit<AudioFileData, 'createdAt'>
 ): Promise<boolean> {
-  if (!db) {
-    console.warn('Firebase not initialized, skipping audio file metadata save');
-    return false;
-  }
-
-  try {
-    console.log('Saving audio file metadata to Firestore (video ID-based):', {
-      videoId: audioFileData.videoId,
-      fileSize: audioFileData.fileSize,
-      actualFilename: audioFileData.title // This now contains the actual filename from QuickTube
-    });
-
-    // Skip authentication - Firebase security rules allow public access for caching
-    // This eliminates the 20-second timeout when anonymous auth fails
-
-    // Use video ID as the primary key (11-character YouTube ID)
-    const docId = audioFileData.videoId;
-
-    // Get the document reference
-    const docRef = doc(db, AUDIO_FILES_COLLECTION, docId);
-
-    // Prepare data for Firestore - sanitize undefined values
-    // Store enhanced metadata including video information from YouTube search results
-    const sanitizedData = {
-      videoId: audioFileData.videoId, // Primary key: 11-character YouTube ID
-      audioUrl: audioFileData.audioUrl,
-      videoUrl: audioFileData.videoUrl || null,
-      title: audioFileData.title || `YouTube Video ${audioFileData.videoId}`, // Clean title from search results OR actual filename from service - REQUIRED
-      actualFilename: audioFileData.title || `YouTube Video ${audioFileData.videoId}`, // Store actual filename for future reference
-      storagePath: audioFileData.storagePath,
-      videoStoragePath: audioFileData.videoStoragePath || null,
-      fileSize: audioFileData.fileSize,
-      videoFileSize: audioFileData.videoFileSize || null,
-      duration: audioFileData.duration || null,
-      isStreamUrl: audioFileData.isStreamUrl || false,
-      streamExpiresAt: audioFileData.streamExpiresAt || null,
-
-      // Enhanced metadata fields
-      channelTitle: audioFileData.channelTitle || null,
-      thumbnail: audioFileData.thumbnail || null,
-      extractionService: audioFileData.extractionService || null,
-      extractionTimestamp: audioFileData.extractionTimestamp || Date.now(),
-      videoDescription: audioFileData.videoDescription || null,
-      videoDuration: audioFileData.videoDuration || null,
-      videoPublishedAt: audioFileData.videoPublishedAt || null,
-      videoViewCount: audioFileData.videoViewCount || null,
-
-      createdAt: serverTimestamp()
-    };
-
-    // Save the document
-    await setDoc(docRef, sanitizedData);
-
-    console.log('Audio file metadata saved successfully to Firestore');
-    return true;
-  } catch (error) {
-    // Check for specific permission errors - these are expected and handled by fallback
-    if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
-      console.debug('Firestore permissions not configured for audio file metadata. Using fallback cache.');
-      return false; // Silent failure - fallback cache will handle it
-    }
-
-    // Log other errors normally
-    console.error('Error saving audio file metadata to Firestore:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    return false;
-  }
+  console.info(
+    `Skipping deprecated audioFiles metadata write for ${audioFileData.videoId}; Firebase Storage is the active source of truth.`
+  );
+  return true;
 }
 
 /**
@@ -429,130 +320,21 @@ export async function saveAudioFileMetadata(
  * @returns Audio file data if found, null otherwise
  */
 export async function getAudioFileMetadata(videoId: string): Promise<AudioFileData | null> {
-  if (!db) {
-    console.warn('Firebase not initialized, skipping audio file metadata retrieval');
-    return null;
-  }
-
   try {
-
-
-    // Skip authentication - Firebase security rules allow public access for caching
-    // This eliminates the 20-second timeout when anonymous auth fails
-
-    // Get the document reference
-    const docRef = doc(db, AUDIO_FILES_COLLECTION, videoId);
-
-    // Get the document
-    const docSnap = await getDoc(docRef);
-
-    // Check if the document exists
-    if (docSnap.exists()) {
-      console.log('Found cached audio file in Firestore');
-      const data = docSnap.data() as CachedAudioFileData;
-
-      // Read path: treat invalid/expired entries as cache misses without mutating metadata.
-      if (data.invalid || data.expired) {
-        console.log(`Cache entry for ${videoId} is marked as ${data.invalid ? 'invalid' : 'expired'}, will re-download`);
-        return null;
-      }
-
-      // Read path: treat expired stream URLs as stale without writing cleanup markers.
-      if (data.isStreamUrl && data.streamExpiresAt) {
-        const now = Date.now();
-        if (now > data.streamExpiresAt) {
-          console.log(`Stream URL for ${videoId} has expired, will re-extract`);
-
-          return null;
-        }
-
-        // Stream URL is still valid, return it
-        return data;
-      }
-
-      // For regular files, check if the entry is too old (more than 7 days)
-      const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() :
-                        data.createdAt?.seconds ? data.createdAt.seconds * 1000 :
-                        data.processedAt || Date.now() - 30 * 24 * 60 * 60 * 1000; // Use processedAt as fallback
-
-      const now = Date.now();
-      const ageInDays = (now - createdAt) / (1000 * 60 * 60 * 24);
-
-      if (ageInDays > 7) {
-        console.log(`Cache entry for ${videoId} is ${ageInDays.toFixed(1)} days old, treating as expired`);
-
-        return null;
-      }
-
-      // Check if the audioUrl is a public URL
-      if (data.audioUrl && (data.audioUrl.startsWith('http://') || data.audioUrl.startsWith('https://'))) {
-        console.log(`Audio file has a public URL: ${data.audioUrl}`);
-
-        // Skip URL validation to improve performance
-        // The client will handle invalid URLs
-
-        return data;
-      } else {
-        console.log(`Audio file has a local URL: ${data.audioUrl}`);
-
-        // For Music.ai API, we need a public URL
-        // Try to create a public URL using Firebase Storage
-        try {
-          // Check if we have a storage path
-          if (data.storagePath) {
-            console.log(`Attempting to get download URL for storage path: ${data.storagePath}`);
-
-            // Import Firebase Storage functions
-            const { ref, getDownloadURL } = await import('firebase/storage');
-            const { getStorageInstance } = await import('@/config/firebase');
-
-            const storage = await getStorageInstance();
-            if (!storage) {
-              console.warn('Firebase Storage not initialized');
-              return data;
-            }
-
-            // Create storage reference
-            const storageRef = ref(storage, data.storagePath);
-
-            // Get download URL
-            try {
-              const publicUrl = await getDownloadURL(storageRef);
-              console.log(`Generated public URL: ${publicUrl}`);
-
-              // Read path: resolve the public URL for this caller without updating Firestore.
-              return {
-                ...data,
-                audioUrl: publicUrl,
-              };
-            } catch (downloadError) {
-              console.error('Error getting download URL:', downloadError);
-
-              // If the file doesn't exist in storage, return null to trigger a re-download.
-              if (downloadError instanceof Error &&
-                  downloadError.toString().includes('storage/object-not-found')) {
-                console.log('File not found in Firebase Storage, will trigger re-download');
-
-                return null;
-              }
-
-              // For other errors, return the original data
-              return data;
-            }
-          }
-        } catch (storageError) {
-          console.error('Error accessing Firebase Storage:', storageError);
-          // Return the original data even if we couldn't get a public URL
-          return data;
-        }
-
-        // If we couldn't create a public URL, return the original data
-        return data;
-      }
+    const existingFile = await findExistingAudioFile(videoId);
+    if (!existingFile) {
+      return null;
     }
 
-
-    return null;
+    return {
+      videoId,
+      audioUrl: existingFile.audioUrl,
+      title: `YouTube Video ${videoId}`,
+      storagePath: existingFile.storagePath,
+      fileSize: existingFile.fileSize || 0,
+      createdAt: Timestamp.now(),
+      isStreamUrl: false,
+    };
   } catch (error) {
     console.error('Error getting audio file metadata from Firestore:', error);
     if (error instanceof Error) {
@@ -577,54 +359,13 @@ export async function saveStreamUrlMetadata(
   streamExpiresAt: number,
   videoUrl?: string
 ): Promise<boolean> {
-  if (!db) {
-    console.warn('Firebase not initialized, skipping stream URL metadata save');
-    return false;
-  }
-
-  try {
-    console.log('Saving stream URL metadata to Firestore:', {
-      videoId,
-      streamExpiresAt: new Date(streamExpiresAt).toISOString()
-    });
-
-    // Skip authentication - Firebase security rules allow public access for caching
-    // This eliminates the 20-second timeout when anonymous auth fails
-
-    // Create a unique document ID based on the video ID
-    const docId = videoId;
-
-    // Get the document reference
-    const docRef = doc(db, AUDIO_FILES_COLLECTION, docId);
-
-    // Prepare data for Firestore
-    const streamData = {
-      videoId,
-      audioUrl,
-      videoUrl: videoUrl || null,
-      storagePath: '', // No storage path for stream URLs
-      videoStoragePath: null,
-      fileSize: 0, // No file size for stream URLs
-      videoFileSize: null,
-      duration: null,
-      isStreamUrl: true,
-      streamExpiresAt,
-      createdAt: serverTimestamp()
-    };
-
-    // Save the document
-    await setDoc(docRef, streamData);
-
-    console.log('Stream URL metadata saved successfully to Firestore');
-    return true;
-  } catch (error) {
-    console.error('Error saving stream URL metadata to Firestore:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    return false;
-  }
+  console.info(
+    `Skipping deprecated audioFiles stream metadata write for ${videoId}; transient stream URLs are no longer persisted in Firestore.`
+  );
+  void audioUrl;
+  void streamExpiresAt;
+  void videoUrl;
+  return true;
 }
 
 /**

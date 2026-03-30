@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiPost } from '@/config/api';
 import { buildAnalyzePageUrl } from '@/utils/analyzeRouteUtils';
+import { normalizeThumbnailUrl, pickPreferredChannelTitle } from '@/utils/youtubeMetadata';
 
 // YouTube search result interface
 interface YouTubeSearchResult {
@@ -11,6 +12,7 @@ interface YouTubeSearchResult {
   title: string;
   thumbnail: string;
   channel: string;
+  channelTitle?: string;
   duration_string?: string;
   view_count?: number;
   upload_date?: string;
@@ -94,7 +96,17 @@ export const useSharedSearchState = () => {
         const data = await response.json();
 
         if (data.success && data.results) {
-          setSearchResults(data.results);
+          const normalizedResults = (data.results as YouTubeSearchResult[]).map((result) => {
+            const channelTitle = pickPreferredChannelTitle(result.channelTitle, result.channel);
+            return {
+              ...result,
+              channel: channelTitle || 'Unknown Channel',
+              channelTitle: channelTitle || undefined,
+              thumbnail: normalizeThumbnailUrl(result.id, result.thumbnail, 'mqdefault'),
+            };
+          });
+
+          setSearchResults(normalizedResults);
           setSearchError(null);
         } else {
           setSearchResults([]);
@@ -154,9 +166,11 @@ export const useSharedSearchState = () => {
   }, [searchQuery, extractVideoId, router, performSearch, setIsSearching, setSearchError]);
 
   // Handle video selection from search results
-  const handleVideoSelect = useCallback((videoId: string, title?: string) => {
+  const handleVideoSelect = useCallback((videoId: string, title?: string, metadata?: YouTubeSearchResult) => {
     router.push(buildAnalyzePageUrl(videoId, {
       title: title || null,
+      channel: pickPreferredChannelTitle(metadata?.channelTitle, metadata?.channel),
+      thumbnail: normalizeThumbnailUrl(videoId, metadata?.thumbnail, 'mqdefault'),
     }));
   }, [router]);
 

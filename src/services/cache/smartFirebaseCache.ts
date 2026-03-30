@@ -37,6 +37,37 @@ export class SmartFirebaseCache<T> {
   }
 
   /**
+   * Read from cache without triggering a fetch.
+   * Returns undefined when there is no fresh entry.
+   */
+  peek(key: string): T | null | undefined {
+    const cached = this.cache.get(key);
+    if (!cached) {
+      return undefined;
+    }
+
+    const now = Date.now();
+    const ttl = cached.isIncomplete ? this.config.incompleteRecordTtl : this.config.ttl;
+    if (now - cached.timestamp >= ttl && cached.errorCount < this.config.maxErrorCount) {
+      return undefined;
+    }
+
+    return cached.data;
+  }
+
+  /**
+   * Write directly to cache after a known-good fetch or update.
+   */
+  set(key: string, data: T | null, isComplete: boolean = true): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      isIncomplete: !isComplete,
+      errorCount: 0,
+    });
+  }
+
+  /**
    * Get cached data or execute query function
    */
   async get(
@@ -291,15 +322,15 @@ export const audioMetadataCache = new SmartFirebaseCache<Record<string, unknown>
 });
 
 export const transcriptionCache = new SmartFirebaseCache<Record<string, unknown>>({
-  ttl: 30 * 60 * 1000, // 30 minutes for transcriptions
-  incompleteRecordTtl: 2 * 60 * 60 * 1000, // 2 hours for incomplete transcriptions
+  ttl: 12 * 60 * 60 * 1000, // 12 hours for stable transcription data
+  incompleteRecordTtl: 4 * 60 * 60 * 1000, // 4 hours for incomplete transcriptions
   maxErrorCount: 3
 });
 
 // PERFORMANCE FIX #5: Cache for homepage recent videos list
 export const recentVideosCache = new SmartFirebaseCache<Record<string, unknown>[]>({
-  ttl: 15 * 60 * 1000, // 15 minutes for homepage recent videos (reduce Firestore reads)
-  incompleteRecordTtl: 10 * 60 * 1000, // 10 minutes for incomplete lists
+  ttl: 6 * 60 * 60 * 1000, // 6 hours for homepage recent videos
+  incompleteRecordTtl: 60 * 60 * 1000, // 1 hour for incomplete lists
   maxErrorCount: 3
 });
 

@@ -1,5 +1,12 @@
 import { analyzeAudioWithRateLimit, AnalysisResult, ChordDetectorType } from '@/services/chord-analysis/chordRecognitionService';
-import { getTranscription, saveTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
+import {
+  getTranscription,
+  normalizeTranscriptionData,
+  saveTranscription,
+  TranscriptionData,
+  updateTranscriptionEnrichment,
+} from '@/services/firebase/firestoreService';
+import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 
 // Define error types for better type safety
 export interface ErrorWithSuggestion extends Error {
@@ -26,6 +33,11 @@ export interface AudioProcessingState {
 export interface AnalyzeAudioFileOptions {
   prefetchedTranscription?: TranscriptionData | Omit<TranscriptionData, 'createdAt'> | null;
   onTranscriptionSaved?: (data: Omit<TranscriptionData, 'createdAt'>) => void;
+  searchMetadata?: {
+    title?: string | null;
+    channelTitle?: string | null;
+    thumbnail?: string | null;
+  };
 }
 
 export class AudioProcessingService {
@@ -105,6 +117,13 @@ export class AudioProcessingService {
     options?: AnalyzeAudioFileOptions
   ): Promise<AnalysisResult> {
     try {
+      const resolvedTitle = title || options?.searchMetadata?.title || undefined;
+      const resolvedThumbnail = normalizeThumbnailUrl(
+        videoId,
+        options?.searchMetadata?.thumbnail,
+        'mqdefault'
+      );
+
       // Check Firestore cache first
       const hasPrefetchedTranscription =
         options !== undefined && Object.prototype.hasOwnProperty.call(options, 'prefetchedTranscription');
@@ -114,6 +133,34 @@ export class AudioProcessingService {
         : await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
+        const needsTitle = !cachedData.title && !!resolvedTitle;
+        const needsChannelTitle = !cachedData.channelTitle && !!options?.searchMetadata?.channelTitle;
+        const needsThumbnail = !cachedData.thumbnail && !!resolvedThumbnail;
+
+        if (needsTitle || needsChannelTitle || needsThumbnail) {
+          const enriched = {
+            title: needsTitle ? resolvedTitle : undefined,
+            channelTitle: needsChannelTitle ? options?.searchMetadata?.channelTitle ?? undefined : undefined,
+            thumbnail: needsThumbnail ? resolvedThumbnail : undefined,
+          };
+
+          const updateSucceeded = await updateTranscriptionEnrichment(
+            videoId,
+            beatDetector,
+            chordDetector,
+            enriched
+          );
+
+          if (updateSucceeded && options?.onTranscriptionSaved) {
+            options.onTranscriptionSaved(
+              normalizeTranscriptionData({
+                ...cachedData,
+                ...enriched,
+              } as TranscriptionData)
+            );
+          }
+        }
+
         // Cache found - loading cached results
 
         // Convert cached data to AnalysisResult format
@@ -140,7 +187,9 @@ export class AudioProcessingService {
       // Cache the results (note: enharmonic correction data will be added later via updateTranscriptionWithKey)
       const transcriptionData = {
         videoId,
-        title, // Include video title for proper display in RecentVideos
+        title: resolvedTitle, // Include video title for proper display in RecentVideos
+        channelTitle: options?.searchMetadata?.channelTitle || undefined,
+        thumbnail: resolvedThumbnail,
         audioUrl,
         beats: analysisResults.beats,
         chords: analysisResults.chords,

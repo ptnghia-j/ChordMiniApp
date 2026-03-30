@@ -11,6 +11,8 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { promises as fs } from 'fs';
 
+export const maxDuration = 300;
+
 // Allow yt-dlp in production when explicitly configured via NEXT_PUBLIC_AUDIO_STRATEGY
 const isDevelopment = process.env.NODE_ENV === 'development';
 const allowYtDlpInProduction = process.env.NEXT_PUBLIC_AUDIO_STRATEGY === 'ytdlp';

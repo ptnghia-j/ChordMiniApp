@@ -182,5 +182,3 @@ export const ProcessingProvider: React.FC<ProcessingProviderProps> = ({ children
     </ProcessingContext.Provider>
   );
 };
-
-export default ProcessingContext;

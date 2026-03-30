@@ -29,6 +29,22 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.2',
+      date: 'March 29, 2026',
+      title: 'Homepage Filtering & Deployment Cleanup',
+      description: 'Adds musical-key filtering to recent analyses and ships a small set of UI and infrastructure updates.',
+      features: [
+        'UI Improvement: Enhanced contrast and visibility for chord timeline segments in the Piano Visualizer to prevent blending with video backgrounds.',
+        'Backend & Infrastructure: Refactored SongFormer health endpoints for Cloud Run compatibility and optimized model checkpoint tracking using Git LFS.',
+        'New Feature: Added the ability to filter the "Recently Analyzed" song history by musical key.'
+      ],
+      technical: [
+        'PERFORMANCE: Backfilled Firestore homepage metadata and added indexed primary-variant querying for cheaper recent-transcription loads with enharmonic-aware key search.'
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.6.1',
       date: 'March 19, 2026',
       title: 'Analyze Flow & Playback UX Checks (In Development)',

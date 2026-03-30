@@ -208,7 +208,6 @@ See the API Keys Setup section below for detailed instructions on obtaining thes
    - `translations` — Lyrics translation cache (docId: cacheKey based on content hash)
    - `lyrics` — Music.ai transcription results (docId: `videoId`)
    - `keyDetections` — Musical key analysis cache (docId: cacheKey)
-   - `audioFiles` — Audio file metadata and URLs (docId: `videoId`)
    - `segmentationJobs` — Async SongFormer segmentation jobs and persisted results (docId: `seg_<timestamp>_<uuid>`)
 
 5. **Enable Anonymous Authentication**

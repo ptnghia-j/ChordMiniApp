@@ -1,43 +1,90 @@
 /**
  * Firebase Storage Service - Simplified Video ID-Based Storage
  *
- * This service eliminates filename-based storage and uses video ID as the primary key:
- * 1. Store audio metadata using 11-character YouTube video ID
- * 2. Use YouTube search metadata (title, thumbnail) for indexing
- * 3. No filename sanitization or complex storage paths
- * 4. Direct video ID-based retrieval
+ * The deprecated Firestore `audioFiles` collection is no longer used.
+ * This helper now keeps short-lived in-memory metadata and falls back to
+ * Firebase Storage as the active source of truth for cached audio.
  */
 
-import { db } from '@/config/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { executeWithAuthRecovery } from '@/utils/authRecovery';
-import { safeAuthOperation } from '@/utils/clientOnlyFirebase';
 import { audioMetadataCache } from '@/services/cache/smartFirebaseCache';
 import { storageMonitoringService } from '@/services/storage/storageMonitoringService';
+import { findExistingAudioFile, findExistingAudioFiles } from '@/services/firebase/firebaseStorageService';
+import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 
-// Collection name for audio cache - matches existing Firebase data
-const AUDIO_CACHE_COLLECTION = 'audioFiles';
-
-// Simplified audio file data structure
 export interface SimplifiedAudioData extends Record<string, unknown> {
-  videoId: string; // Primary key: 11-character YouTube ID
-  audioUrl: string; // Direct download URL from extraction service
-  title: string; // Clean title from YouTube search results
-  thumbnail?: string; // Thumbnail URL from YouTube search
-  channelTitle?: string; // Channel name from YouTube search
-  duration?: number; // Duration in seconds
-  fileSize?: number; // File size if available
-  isStreamUrl: boolean; // True for external URLs, false for Firebase Storage URLs
-  streamExpiresAt?: number; // Expiration timestamp (only for stream URLs)
-  createdAt: unknown; // Firestore timestamp
+  videoId: string;
+  audioUrl: string;
+  title: string;
+  thumbnail?: string;
+  channelTitle?: string;
+  duration?: number;
+  fileSize?: number;
+  isStreamUrl: boolean;
+  streamExpiresAt?: number;
+  createdAt: unknown;
+  extractionService?: string;
+  extractionTimestamp?: number;
+  videoDuration?: string;
+  videoDescription?: string;
+  videoPublishedAt?: string;
+  videoViewCount?: number;
+}
 
-  // Enhanced metadata fields
-  extractionService?: string; // Which service was used (yt-mp3-go, quicktube, yt-dlp)
-  extractionTimestamp?: number; // When the audio was extracted
-  videoDuration?: string; // Original duration string from YouTube (e.g., "PT3M33S")
-  videoDescription?: string; // Video description (optional)
-  videoPublishedAt?: string; // When the video was published
-  videoViewCount?: number; // View count at time of extraction
+type SaveAudioMetadataInput = {
+  videoId: string;
+  audioUrl: string;
+  title: string;
+  thumbnail?: string;
+  channelTitle?: string;
+  duration?: number;
+  fileSize?: number;
+  isStreamUrl?: boolean;
+  streamExpiresAt?: number;
+  extractionService?: string;
+  extractionTimestamp?: number;
+  videoDuration?: string;
+  videoDescription?: string;
+  videoPublishedAt?: string;
+  videoViewCount?: number;
+};
+
+function toSimplifiedAudioData(data: SaveAudioMetadataInput): SimplifiedAudioData {
+  const isStreamUrl = data.isStreamUrl !== undefined
+    ? data.isStreamUrl
+    : (data.audioUrl.includes('quicktube.app') || data.audioUrl.includes('lukavukanovic.xyz'));
+
+  return {
+    videoId: data.videoId,
+    audioUrl: data.audioUrl,
+    title: data.title,
+    thumbnail: normalizeThumbnailUrl(data.videoId, data.thumbnail, 'mqdefault'),
+    channelTitle: data.channelTitle,
+    duration: data.duration || 0,
+    fileSize: data.fileSize || 0,
+    isStreamUrl,
+    streamExpiresAt: isStreamUrl ? data.streamExpiresAt : undefined,
+    extractionService: data.extractionService,
+    extractionTimestamp: data.extractionTimestamp || Date.now(),
+    videoDuration: data.videoDuration,
+    videoDescription: data.videoDescription,
+    videoPublishedAt: data.videoPublishedAt,
+    videoViewCount: data.videoViewCount,
+    createdAt: Date.now(),
+  };
+}
+
+function fromStorageResult(videoId: string, result: { audioUrl: string; fileSize?: number }): SimplifiedAudioData {
+  return {
+    videoId,
+    audioUrl: result.audioUrl,
+    title: `YouTube Video ${videoId}`,
+    thumbnail: normalizeThumbnailUrl(videoId, null, 'mqdefault'),
+    duration: 0,
+    fileSize: result.fileSize || 0,
+    isStreamUrl: false,
+    extractionTimestamp: Date.now(),
+    createdAt: Date.now(),
+  };
 }
 
 export class FirebaseStorageSimplified {
@@ -50,508 +97,115 @@ export class FirebaseStorageSimplified {
     return FirebaseStorageSimplified.instance;
   }
 
-  /**
-   * Save audio metadata using video ID as primary key
-   */
-  async saveAudioMetadata(data: {
-    videoId: string;
-    audioUrl: string;
-    title: string;
-    thumbnail?: string;
-    channelTitle?: string;
-    duration?: number;
-    fileSize?: number;
-    isStreamUrl?: boolean;
-    streamExpiresAt?: number;
-
-    // Enhanced metadata fields
-    extractionService?: string;
-    extractionTimestamp?: number;
-    videoDuration?: string;
-    videoDescription?: string;
-    videoPublishedAt?: string;
-    videoViewCount?: number;
-  }): Promise<boolean> {
-    // COLD START FIX: Enhanced Firebase initialization with retry logic
-    if (!db) {
-      console.warn('Firebase not initialized, attempting to initialize...');
-      try {
-        // Try to re-import and initialize Firebase
-        const { db: globalDb } = await import('@/config/firebase');
-        if (!globalDb) {
-          console.warn('Firebase initialization failed, skipping audio metadata save');
-          return false;
-        }
-      } catch (error) {
-        console.warn('Firebase re-initialization failed:', error);
-        return false;
-      }
-    }
-
-    console.log(`💾 Saving audio metadata for video ID: ${data.videoId}`);
-    console.log(`📝 Title: "${data.title}"`);
-
-    // Use client-side safe authentication recovery system
-    return await safeAuthOperation(
-      async () => {
-        return await executeWithAuthRecovery(
-          () => this._saveAudioMetadataAttempt(data, 1),
-          'saveAudioMetadata'
-        );
-      },
-      false, // Fallback value for SSR
-      'saveAudioMetadata'
-    ); // Should never reach here
+  async saveAudioMetadata(data: SaveAudioMetadataInput): Promise<boolean> {
+    audioMetadataCache.set(`audio_${data.videoId}`, toSimplifiedAudioData(data), true);
+    return true;
   }
 
-  /**
-   * Internal method to attempt saving audio metadata
-   */
-  private async _saveAudioMetadataAttempt(data: {
-    videoId: string;
-    audioUrl: string;
-    title: string;
-    thumbnail?: string;
-    channelTitle?: string;
-    duration?: number;
-    fileSize?: number;
-    isStreamUrl?: boolean;
-    streamExpiresAt?: number;
-    extractionService?: string;
-    extractionTimestamp?: number;
-    videoDuration?: string;
-    videoDescription?: string;
-    videoPublishedAt?: string;
-    videoViewCount?: number;
-  }, attempt: number): Promise<boolean> {
-
-    try {
-      console.log(`💾 Saving audio metadata for video ID: ${data.videoId}`);
-      console.log(`📝 Title: "${data.title}"`);
-
-      // Skip authentication - Firebase security rules allow public access for caching
-      // This eliminates the 20-second timeout when anonymous auth fails
-
-      // Use video ID as document ID
-      if (!db) {
-        console.error('Firebase db is null after initialization check');
-        return false;
-      }
-      const docRef = doc(db, AUDIO_CACHE_COLLECTION, data.videoId);
-
-      // Prepare simplified data structure
-      const isStreamUrl = data.isStreamUrl !== undefined ? data.isStreamUrl :
-                         (data.audioUrl.includes('quicktube.app') || data.audioUrl.includes('lukavukanovic.xyz'));
-
-      const audioData: SimplifiedAudioData = {
-        videoId: data.videoId,
-        audioUrl: data.audioUrl,
-        title: data.title,
-        thumbnail: data.thumbnail || `https://img.youtube.com/vi/${data.videoId}/mqdefault.jpg`,
-        channelTitle: data.channelTitle || 'Unknown Channel',
-        duration: data.duration || 0,
-        fileSize: data.fileSize || 0,
-        isStreamUrl,
-        ...(isStreamUrl && {
-          streamExpiresAt: data.streamExpiresAt || (Date.now() + (24 * 60 * 60 * 1000))
-        }), // Only include streamExpiresAt for stream URLs
-
-        // Enhanced metadata fields (filter out undefined values for Firebase)
-        ...(data.extractionService && { extractionService: data.extractionService }),
-        extractionTimestamp: data.extractionTimestamp || Date.now(),
-        ...(data.videoDuration && { videoDuration: data.videoDuration }),
-        ...(data.videoDescription && { videoDescription: data.videoDescription }),
-        ...(data.videoPublishedAt && { videoPublishedAt: data.videoPublishedAt }),
-        ...(data.videoViewCount && { videoViewCount: data.videoViewCount }),
-
-        createdAt: serverTimestamp()
-      };
-
-      // Save to Firestore
-      await setDoc(docRef, audioData);
-
-      console.log(`✅ Audio metadata saved successfully for ${data.videoId} (attempt ${attempt})`);
-      return true;
-
-    } catch (error) {
-      // Re-throw the error to be handled by the retry logic in the parent method
-      throw error;
-    }
+  async saveAudioMetadataBackground(data: SaveAudioMetadataInput): Promise<void> {
+    setTimeout(() => {
+      void this.saveAudioMetadata(data);
+    }, 0);
   }
 
-  /**
-   * NON-BLOCKING: Save audio metadata in background without blocking audio extraction
-   */
-  async saveAudioMetadataBackground(data: {
-    videoId: string;
-    audioUrl: string;
-    title: string;
-    thumbnail?: string;
-    channelTitle?: string;
-    duration: number;
-    fileSize: number;
-    isStreamUrl?: boolean;
-    streamExpiresAt?: number;
-    extractionService?: string;
-    extractionTimestamp?: number;
-    videoDuration?: string;
-    videoDescription?: string;
-    videoPublishedAt?: string;
-    videoViewCount?: number;
-  }): Promise<void> {
-    // Run cache operation in background without blocking
-    setTimeout(async () => {
-      try {
-        const success = await this.saveAudioMetadata(data);
-        if (success) {
-          console.log(`🔄 Background cache save successful for ${data.videoId}`);
-        } else {
-          console.warn(`⚠️ Background cache save failed for ${data.videoId} (non-blocking)`);
-        }
-      } catch (error) {
-        console.warn(`⚠️ Background cache save error for ${data.videoId} (non-blocking):`, error);
-      }
-    }, 0); // Execute on next tick
-  }
-
-  /**
-   * Get cached audio metadata by video ID with smart caching
-   */
   async getCachedAudioMetadata(videoId: string): Promise<SimplifiedAudioData | null> {
-    if (!db) {
-      // PERFORMANCE FIX: Try to initialize Firebase if not ready (race condition fix)
-      // MIGRATION: Updated to use @/config/firebase instead of @/lib/firebase-lazy
-      try {
-        const { getFirestoreInstance } = await import('@/config/firebase');
-        const firestoreInstance = await getFirestoreInstance();
-        if (!firestoreInstance) {
-          console.warn('Firebase not initialized and initialization failed');
-          return null;
-        }
-        // Update global db reference for future calls
-        const { db: globalDb } = await import('@/config/firebase');
-        if (!globalDb) {
-          console.warn('Firebase initialization succeeded but global db not available');
-          return null;
-        }
-      } catch (error) {
-        console.warn('Firebase initialization failed during cache check:', error);
-        return null;
-      }
-    }
-
     const result = await audioMetadataCache.get(
       `audio_${videoId}`,
       async () => {
-        try {
-          // Skip authentication - Firebase security rules allow public access for caching
-          // This eliminates the 20-second timeout when anonymous auth fails
-
-          if (!db) {
-            return null;
-          }
-
-          // Get document by video ID
-          const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
-          const docSnap = await getDoc(docRef);
-
-          if (!docSnap.exists()) {
-            return null;
-          }
-
-          const data = docSnap.data() as SimplifiedAudioData;
-
-          // Check if stream URL has expired
-          if (data.isStreamUrl && data.streamExpiresAt && Date.now() > data.streamExpiresAt) {
-            console.log(`⏰ Cached stream URL expired for ${videoId}`);
-
-            // Log cache miss due to expiration
-            try {
-              storageMonitoringService.logStorageOperation({
-                type: 'cache_miss',
-                videoId,
-                success: false,
-                error: 'Stream URL expired'
-              });
-            } catch (monitoringError) {
-              // Don't fail the main operation if monitoring fails
-              console.warn('Monitoring service unavailable:', monitoringError);
-            }
-
-            return null;
-          }
-
-          // PERFORMANCE P0-A: Skip URL verification for recently-cached entries
-          // The smart cache TTL already handles staleness; redundant HEAD requests add 1-3s latency
-          const cacheAge = Date.now() - (data.extractionTimestamp || 0);
-          const SKIP_VERIFY_THRESHOLD = 10 * 60 * 1000; // 10 minutes
-
-          if (cacheAge < SKIP_VERIFY_THRESHOLD || await this.verifyAudioUrl(data.audioUrl)) {
-            console.log(`✅ Found cached audio for ${videoId} (${data.isStreamUrl ? 'stream' : 'storage'} URL)${cacheAge < SKIP_VERIFY_THRESHOLD ? ' [verification skipped - recent entry]' : ''}`);
-
-            // Log cache hit
-            try {
-              storageMonitoringService.logStorageOperation({
-                type: 'cache_hit',
-                videoId,
-                fileSize: data.fileSize,
-                success: true
-              });
-            } catch (monitoringError) {
-              // Don't fail the main operation if monitoring fails
-              console.warn('Monitoring service unavailable:', monitoringError);
-            }
-
-            return data;
-          } else {
-            console.log(`❌ Cached audio URL no longer accessible for ${videoId}`);
-
-            // Log cache miss due to inaccessible URL
-            try {
-              storageMonitoringService.logStorageOperation({
-                type: 'cache_miss',
-                videoId,
-                success: false,
-                error: 'Audio URL no longer accessible'
-              });
-            } catch (monitoringError) {
-              // Don't fail the main operation if monitoring fails
-              console.warn('Monitoring service unavailable:', monitoringError);
-            }
-
-            return null;
-          }
-
-        } catch (error) {
-          if (error instanceof Error && (error.message.includes('PERMISSION_DENIED') || error.message.includes('permission-denied'))) {
-            // Use enhanced authentication recovery for permission errors
-            console.warn('⚠️ Firebase permission denied during cache read. Attempting authentication recovery...');
-
-            try {
-              return await executeWithAuthRecovery(async () => {
-                if (!db) return null;
-
-                const retryDocRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
-                const retryDocSnap = await getDoc(retryDocRef);
-
-                if (retryDocSnap.exists()) {
-                  const retryData = retryDocSnap.data() as SimplifiedAudioData;
-                  // Check if stream URL has expired
-                  if (retryData.isStreamUrl && retryData.streamExpiresAt && Date.now() > retryData.streamExpiresAt) {
-                    return null;
-                  }
-                  console.log(`✅ Cache read successful after authentication recovery`);
-                  return retryData;
-                }
-                return null;
-              }, 'getCachedAudioMetadata');
-            } catch (recoveryError) {
-              console.warn('❌ Authentication recovery failed for cache read:', recoveryError);
-              return null;
-            }
-          }
-          if (error instanceof Error && error.message.includes('Could not load the default credentials')) {
-            // Firebase Admin SDK authentication failed - this is expected without service account
-            console.warn('⚠️ Firebase Admin authentication failed (service account not configured)');
-            return null;
-          }
-          throw error; // Let smart cache handle other errors
+        const existingFile = await findExistingAudioFile(videoId);
+        if (!existingFile) {
+          return null;
         }
+
+        return fromStorageResult(videoId, existingFile);
       },
-      // Check if audio metadata is complete
-      (data: Record<string, unknown>) => {
-        return !!(data.audioUrl && data.title && (!data.isStreamUrl || data.streamExpiresAt));
-      }
+      (data: Record<string, unknown>) => Boolean(data.audioUrl && data.title)
     );
+
+    if (result) {
+      try {
+        storageMonitoringService.logStorageOperation({
+          type: 'cache_hit',
+          videoId,
+          fileSize: typeof result.fileSize === 'number' ? result.fileSize : undefined,
+          success: true,
+        });
+      } catch {}
+    }
 
     return result as SimplifiedAudioData | null;
   }
 
-  /**
-   * Verify if an audio URL is still accessible
-   */
-  private async verifyAudioUrl(audioUrl: string): Promise<boolean> {
-    try {
-      // For Firebase Storage URLs, skip verification to avoid CORS issues
-      // Firebase Storage URLs are generally reliable and don't need HEAD request verification
-      if (audioUrl.includes('firebasestorage.googleapis.com')) {
-        console.log(`🔥 Skipping verification for Firebase Storage URL (CORS-safe)`);
-        return true;
-      }
-
-      // For other URLs (stream URLs, etc.), perform HEAD request verification
-      // In production, be more lenient with timeouts and errors
-      const timeoutMs = process.env.NODE_ENV === 'production' ? 10000 : 5000;
-      const response = await fetch(audioUrl, {
-        method: 'HEAD',
-        signal: AbortSignal.timeout(timeoutMs)
-      });
-      return response.ok;
-    } catch (error) {
-      // In production, log the error but don't fail cache verification for network issues
-      if (process.env.NODE_ENV === 'production') {
-        console.warn(`⚠️ URL verification failed in production (treating as valid):`, error instanceof Error ? error.message : error);
-        return true; // Be more lenient in production
-      }
-      return false;
-    }
-  }
-
-  /**
-   * Check if audio is cached for a video ID
-   */
   async isAudioCached(videoId: string): Promise<boolean> {
     const cached = await this.getCachedAudioMetadata(videoId);
     return cached !== null;
   }
 
-  /**
-   * Get multiple cached audio files by video IDs with smart batch caching
-   */
   async getMultipleCachedAudio(videoIds: string[]): Promise<Map<string, SimplifiedAudioData>> {
-    if (!db || videoIds.length === 0) {
-      return new Map();
+    const results = new Map<string, SimplifiedAudioData>();
+    if (videoIds.length === 0) {
+      return results;
     }
 
-    // Use smart cache batch functionality
-    const cachedResults = await audioMetadataCache.getBatch(
-      videoIds,
-      async (videoId: string) => {
-        try {
-          // Skip authentication - Firebase security rules allow public access for caching
-          // This eliminates the 20-second timeout when anonymous auth fails
-
-          if (!db) {
-            return null;
-          }
-
-          // Get document by video ID
-          const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
-          const docSnap = await getDoc(docRef);
-
-          if (!docSnap.exists()) {
-            return null;
-          }
-
-          const data = docSnap.data() as SimplifiedAudioData;
-
-          // Check if stream URL has expired
-          if (data.isStreamUrl && data.streamExpiresAt && Date.now() > data.streamExpiresAt) {
-            return null;
-          }
-
-          // Verify the audio URL is still accessible
-          if (await this.verifyAudioUrl(data.audioUrl)) {
-            return data;
-          } else {
-            return null;
-          }
-
-        } catch (error) {
-          if (error instanceof Error && error.message.includes('PERMISSION_DENIED')) {
-            return null;
-          }
-          throw error;
-        }
-      },
-      // Check if audio metadata is complete
-      (data: Record<string, unknown>) => {
-        return !!(data.audioUrl && data.title && (!data.isStreamUrl || data.streamExpiresAt));
+    const uncachedIds: string[] = [];
+    for (const videoId of videoIds) {
+      const cached = audioMetadataCache.peek(`audio_${videoId}`);
+      if (cached && typeof cached === 'object') {
+        results.set(videoId, cached as SimplifiedAudioData);
+      } else {
+        uncachedIds.push(videoId);
       }
-    );
+    }
 
-    // Convert to the expected format, filtering out null values
-    const results = new Map<string, SimplifiedAudioData>();
-    for (const [videoId, data] of cachedResults.entries()) {
-      if (data) {
-        results.set(videoId, data as unknown as SimplifiedAudioData);
-      }
+    if (uncachedIds.length === 0) {
+      return results;
+    }
+
+    const storageResults = await findExistingAudioFiles(uncachedIds);
+    for (const [videoId, value] of storageResults.entries()) {
+      const normalized = fromStorageResult(videoId, value);
+      audioMetadataCache.set(`audio_${videoId}`, normalized, true);
+      results.set(videoId, normalized);
     }
 
     return results;
   }
 
-  /**
-   * Update audio metadata (e.g., when title is corrected)
-   */
   async updateAudioMetadata(videoId: string, updates: Partial<SimplifiedAudioData>): Promise<boolean> {
-    if (!db) {
-      console.warn('Firebase not initialized');
+    const cached = audioMetadataCache.peek(`audio_${videoId}`);
+    if (!cached || typeof cached !== 'object') {
       return false;
     }
 
-    try {
-      // Skip authentication - Firebase security rules allow public access for caching
-      // This eliminates the 20-second timeout when anonymous auth fails
-
-      const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
-        console.warn(`Cannot update non-existent audio metadata for ${videoId}`);
-        return false;
-      }
-
-      const currentData = docSnap.data() as SimplifiedAudioData;
-      const updatedData = {
-        ...currentData,
+    audioMetadataCache.set(
+      `audio_${videoId}`,
+      {
+        ...(cached as SimplifiedAudioData),
         ...updates,
-        videoId, // Ensure video ID is not changed
-        updatedAt: serverTimestamp()
-      };
-
-      await setDoc(docRef, updatedData);
-      console.log(`✅ Updated audio metadata for ${videoId}`);
-      return true;
-
-    } catch (error) {
-      console.error(`❌ Error updating audio metadata for ${videoId}:`, error);
-      return false;
-    }
+        videoId,
+      },
+      true
+    );
+    return true;
   }
 
-  /**
-   * Delete cached audio metadata
-   */
   async deleteCachedAudio(videoId: string): Promise<boolean> {
-    if (!db) {
-      console.warn('Firebase not initialized');
-      return false;
-    }
-
-    try {
-      // Skip authentication - Firebase security rules allow public access for caching
-      // This eliminates the 20-second timeout when anonymous auth fails
-
-      const docRef = doc(db, AUDIO_CACHE_COLLECTION, videoId);
-      await setDoc(docRef, { deleted: true, deletedAt: serverTimestamp() });
-      
-      console.log(`🗑️ Marked audio metadata as deleted for ${videoId}`);
-      return true;
-
-    } catch (error) {
-      console.error(`❌ Error deleting audio metadata for ${videoId}:`, error);
-      return false;
-    }
+    audioMetadataCache.invalidate(`audio_${videoId}`);
+    return true;
   }
 
-  /**
-   * Get cache statistics
-   */
   async getCacheStats(): Promise<{
     totalCached: number;
     validCached: number;
     expiredCached: number;
   }> {
-    // This would require a more complex query in a real implementation
-    // For now, return basic stats
+    const stats = audioMetadataCache.getStats();
     return {
-      totalCached: 0,
-      validCached: 0,
-      expiredCached: 0
+      totalCached: stats.totalEntries,
+      validCached: stats.totalEntries - stats.incompleteEntries,
+      expiredCached: stats.incompleteEntries,
     };
   }
 }
 
-// Export singleton instance
 export const firebaseStorageSimplified = FirebaseStorageSimplified.getInstance();

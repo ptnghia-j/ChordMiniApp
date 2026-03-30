@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { HiUpload } from 'react-icons/hi';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useSharedSearchState } from '@/hooks/search/useSharedSearchState';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -128,17 +127,22 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
                   <button
                     key={result.id}
                     onClick={() => {
-                      handleVideoSelect(result.id, result.title);
+                      handleVideoSelect(result.id, result.title, result);
                       setShowResults(false);
                     }}
                     className={`w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2`}
                   >
-                    <Image
+                    {/* Intentionally use direct YouTube thumbnails to avoid Vercel image-optimization quota usage. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={result.thumbnail}
                       alt={result.title}
                       width={32}
                       height={24}
                       className="w-8 h-6 object-cover rounded flex-shrink-0"
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
                     />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium truncate ${

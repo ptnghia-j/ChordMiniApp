@@ -2,7 +2,6 @@
 
 import React, { useState, FormEvent, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { HiUpload } from 'react-icons/hi';
 import { Tooltip } from '@heroui/react';
 
@@ -11,6 +10,7 @@ interface YouTubeSearchResult {
   title: string;
   thumbnail: string;
   channel: string;
+  channelTitle?: string;
   view_count?: number;
   upload_date?: string;
   description?: string;
@@ -201,12 +201,17 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                     onClick={() => handleVideoSelect(result.id, result.title, result)}
                   >
                     <div className="flex-shrink-0 w-20 h-12 relative overflow-hidden rounded-md">
-                      <Image
+                      {/* Intentionally use direct YouTube thumbnails to avoid Vercel image-optimization quota usage. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={result.thumbnail}
                         alt={result.title}
-                        className="object-cover"
-                        fill
-                        sizes="80px"
+                        width={80}
+                        height={48}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
                       />
                     </div>
                     <div className="ml-3 flex-1 min-w-0">

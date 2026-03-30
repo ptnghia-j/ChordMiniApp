@@ -6,12 +6,16 @@ import {
   query,
   where,
   getDocs,
-  Timestamp
+  Timestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
+import { transcriptionCache } from '@/services/cache/smartFirebaseCache';
 import { applyEnharmonicCorrection } from '@/utils/chordUtils';
+import { buildSearchableKeys } from '@/utils/keySignatureUtils';
 import { synchronizeChords } from '@/utils/chordSynchronization';
+import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 import { BeatInfo } from '../audio/beatDetectionService';
 
 // Extended interface for synchronized chords that may have additional properties
@@ -87,6 +91,9 @@ export interface TranscriptionData {
   rawResponse?: string | null;
   // Add Roman numeral analysis field
   romanNumerals?: RomanNumeralData | null;
+  isPrimaryVariant?: boolean;
+  displayPriority?: number | null;
+  searchableKeys?: string[];
 }
 
 function rebuildSynchronizedChordsIfNeeded(
@@ -179,6 +186,72 @@ const buildTranscriptionDocId = (
   chordModel: string
 ) => `${videoId}_${beatModel}_${chordModel}`;
 
+function getTranscriptionCacheKey(
+  videoId: string,
+  beatModel: string,
+  chordModel: string
+): string {
+  return buildTranscriptionDocId(videoId, beatModel, chordModel);
+}
+
+type HomepageVariantCandidate = {
+  docId: string;
+  beatModel?: string | null;
+  chordModel?: string | null;
+  createdAt?: Timestamp | { toMillis?: () => number; seconds?: number } | null;
+  keySignature?: string | null;
+  primaryKey?: string | null;
+};
+
+function getCreatedAtMillis(
+  createdAt: HomepageVariantCandidate['createdAt']
+): number {
+  if (!createdAt) return 0;
+  if (createdAt instanceof Timestamp) return createdAt.toMillis();
+  if (typeof createdAt.toMillis === 'function') return createdAt.toMillis();
+  if (typeof createdAt.seconds === 'number') return createdAt.seconds * 1000;
+  return 0;
+}
+
+function getHomepageVariantScore(candidate: HomepageVariantCandidate): number {
+  const beatRank: Record<string, number> = {
+    madmom: 0,
+    'beat-transformer': 1,
+  };
+  const chordRank: Record<string, number> = {
+    'chord-cnn-lstm': 0,
+    'btc-sl': 1,
+    'btc-pl': 2,
+  };
+
+  return (
+    (beatRank[candidate.beatModel || ''] ?? 99) * 100 +
+    (chordRank[candidate.chordModel || ''] ?? 99)
+  );
+}
+
+function buildHomepageVariantAssignments(candidates: HomepageVariantCandidate[]) {
+  const ranked = [...candidates].sort((a, b) => {
+    const scoreDiff = getHomepageVariantScore(a) - getHomepageVariantScore(b);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const createdAtDiff = getCreatedAtMillis(b.createdAt) - getCreatedAtMillis(a.createdAt);
+    if (createdAtDiff !== 0) return createdAtDiff;
+
+    return a.docId.localeCompare(b.docId);
+  });
+
+  const rankLookup = new Map(ranked.map((candidate, index) => [candidate.docId, index + 1]));
+  const primaryDocId = ranked[0]?.docId ?? null;
+
+  return candidates.map((candidate) => ({
+    docId: candidate.docId,
+    isPrimaryVariant: candidate.docId === primaryDocId,
+    displayPriority: rankLookup.get(candidate.docId) ?? null,
+    searchableKeys: buildSearchableKeys(candidate.keySignature ?? candidate.primaryKey ?? null),
+  }));
+}
+
 // Flag to disable Firestore if CORS errors persist
 let firestoreDisabled = false;
 
@@ -207,6 +280,8 @@ export async function getTranscription(
   beatModel: string,
   chordModel: string
 ): Promise<TranscriptionData | null> {
+  const cacheKey = getTranscriptionCacheKey(videoId, beatModel, chordModel);
+
   // Check if Firebase is initialized or disabled due to CORS issues
   if (!db || firestoreDisabled) {
     if (firestoreDisabled) {
@@ -218,10 +293,15 @@ export async function getTranscription(
   }
 
   try {
+    const cached = transcriptionCache.peek(cacheKey);
+    if (cached !== undefined) {
+      return cached ? normalizeTranscriptionData(cached as unknown as TranscriptionData) : null;
+    }
+
     // console.log(`Checking for cached transcription: videoId=${videoId}, beatModel=${beatModel}, chordModel=${chordModel}`);
 
     // Create a unique document ID based on the parameters
-    const docId = buildTranscriptionDocId(videoId, beatModel, chordModel);
+    const docId = cacheKey;
 
     // Get the document reference
     const docRef = doc(db, TRANSCRIPTIONS_COLLECTION, docId);
@@ -232,6 +312,7 @@ export async function getTranscription(
     // Check if the document exists
     if (docSnap.exists()) {
       const data = normalizeTranscriptionData(docSnap.data() as TranscriptionData);
+      transcriptionCache.set(cacheKey, data as unknown as Record<string, unknown>, true);
       // console.log('Found cached transcription in Firestore:', {
       //   videoId: data.videoId,
       //   timeSignature: data.timeSignature,
@@ -243,6 +324,7 @@ export async function getTranscription(
     }
 
     // console.log('No cached transcription found in Firestore');
+    transcriptionCache.set(cacheKey, null, false);
     return null;
   } catch (error) {
     console.error('Error getting transcription from Firestore:', error);
@@ -329,13 +411,30 @@ export async function updateTranscriptionEnrichment(
   }
 
   try {
+    const cacheKey = getTranscriptionCacheKey(videoId, beatModel, chordModel);
     const docRef = doc(
       db!,
       TRANSCRIPTIONS_COLLECTION,
-      buildTranscriptionDocId(videoId, beatModel, chordModel)
+      cacheKey
     );
 
     await setDoc(docRef, sanitizedEnrichment, { merge: true });
+
+    const cached = transcriptionCache.peek(cacheKey);
+    if (cached && typeof cached === 'object') {
+      const merged = normalizeTranscriptionData({
+        ...(cached as unknown as TranscriptionData),
+        ...sanitizedEnrichment,
+      } as TranscriptionData);
+      transcriptionCache.set(cacheKey, merged as unknown as Record<string, unknown>, true);
+    } else {
+      transcriptionCache.invalidate(cacheKey);
+    }
+
+    if (enrichment.keySignature !== undefined) {
+      await syncHomepageVariantMetadataForVideo(videoId);
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Failed to update transcription enrichment:', error);
@@ -349,6 +448,57 @@ export async function updateTranscriptionEnrichment(
     }
     return false;
   }
+}
+
+async function syncHomepageVariantMetadataForVideo(videoId: string): Promise<void> {
+  if (!db) return;
+
+  const variantsQuery = query(
+    collection(db, TRANSCRIPTIONS_COLLECTION),
+    where('videoId', '==', videoId)
+  );
+  const variantsSnapshot = await getDocs(variantsQuery);
+
+  if (variantsSnapshot.empty) return;
+
+  const assignments = buildHomepageVariantAssignments(
+    variantsSnapshot.docs.map((variantDoc) => {
+      const data = variantDoc.data() as Partial<TranscriptionData>;
+      return {
+        docId: variantDoc.id,
+        beatModel: data.beatModel,
+        chordModel: data.chordModel,
+        createdAt: data.createdAt,
+        keySignature: data.keySignature,
+        primaryKey: data.primaryKey,
+      };
+    })
+  );
+
+  const assignmentLookup = new Map(
+    assignments.map((assignment) => [assignment.docId, assignment])
+  );
+
+  const batch = writeBatch(db);
+
+  variantsSnapshot.docs.forEach((variantDoc) => {
+    const assignment = assignmentLookup.get(variantDoc.id);
+    if (!assignment) return;
+
+    batch.set(
+      variantDoc.ref,
+      {
+        isPrimaryVariant: assignment.isPrimaryVariant,
+        displayPriority: assignment.displayPriority,
+        searchableKeys: assignment.searchableKeys,
+      },
+      { merge: true }
+    );
+
+    transcriptionCache.invalidate(variantDoc.id);
+  });
+
+  await batch.commit();
 }
 
 /**
@@ -428,12 +578,21 @@ async function performFirestoreSave(
     //   firstSyncChord: transcriptionData.synchronizedChords?.[0]
     // });
 
+    const normalizedThumbnail = normalizeThumbnailUrl(
+      transcriptionData.videoId,
+      transcriptionData.thumbnail,
+      'mqdefault'
+    );
+    const createdAt = Timestamp.now();
+    const transcriptionKeySignature = transcriptionData.keySignature ?? transcriptionData.primaryKey ?? null;
+    const searchableKeys = buildSearchableKeys(transcriptionKeySignature);
+
     // Convert any complex objects to a format Firestore can handle
     const sanitizedData = {
       videoId: transcriptionData.videoId,
       title: transcriptionData.title || null, // Include video title for proper display
       channelTitle: transcriptionData.channelTitle || null,
-      thumbnail: transcriptionData.thumbnail || null,
+      thumbnail: normalizedThumbnail || null,
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
       beats: transcriptionData.beats.map((beat) => {
@@ -481,7 +640,7 @@ async function performFirestoreSave(
       beatShift: transcriptionData.beatShift ?? 0,
       // Include key signature fields (handle undefined)
       keySignature: transcriptionData.keySignature ?? null,
-      primaryKey: transcriptionData.keySignature ?? transcriptionData.primaryKey ?? null,
+      primaryKey: transcriptionKeySignature,
       keyModulation: transcriptionData.keyModulation ?? null,
       modulation: transcriptionData.keyModulation ?? transcriptionData.modulation ?? null,
       chordCorrections: transcriptionData.chordCorrections ?? null,
@@ -490,7 +649,8 @@ async function performFirestoreSave(
       correctedChords: transcriptionData.correctedChords ?? transcriptionData.sequenceCorrections?.correctedSequence ?? null,
       originalChords: transcriptionData.originalChords ?? transcriptionData.sequenceCorrections?.originalSequence ?? null,
       romanNumerals: transcriptionData.romanNumerals ?? null,
-      createdAt: Timestamp.now()
+      searchableKeys,
+      createdAt
     };
 
     // console.log('🔍 SANITIZED DATA STRUCTURE:', {
@@ -545,9 +705,74 @@ async function performFirestoreSave(
     //   synchronizedChordsIsArray: Array.isArray(sanitizedData.synchronizedChords)
     // });
 
-    // Save the document
+    const variantsQuery = query(
+      collection(db!, TRANSCRIPTIONS_COLLECTION),
+      where('videoId', '==', transcriptionData.videoId)
+    );
+    const variantsSnapshot = await getDocs(variantsQuery);
+    const siblingDocs = variantsSnapshot.docs.filter((variantDoc) => variantDoc.id !== docId);
+    const assignments = buildHomepageVariantAssignments([
+      ...siblingDocs.map((variantDoc) => {
+        const data = variantDoc.data() as Partial<TranscriptionData>;
+        return {
+          docId: variantDoc.id,
+          beatModel: data.beatModel,
+          chordModel: data.chordModel,
+          createdAt: data.createdAt,
+          keySignature: data.keySignature,
+          primaryKey: data.primaryKey,
+        };
+      }),
+      {
+        docId,
+        beatModel: transcriptionData.beatModel,
+        chordModel: transcriptionData.chordModel,
+        createdAt,
+        keySignature: transcriptionData.keySignature,
+        primaryKey: transcriptionKeySignature,
+      },
+    ]);
+    const assignmentLookup = new Map(
+      assignments.map((assignment) => [assignment.docId, assignment])
+    );
+    const currentAssignment = assignmentLookup.get(docId);
 
-    await setDoc(docRef, sanitizedData);
+    const batch = writeBatch(db!);
+
+    siblingDocs.forEach((variantDoc) => {
+      const assignment = assignmentLookup.get(variantDoc.id);
+      if (!assignment) return;
+
+      batch.set(
+        variantDoc.ref,
+        {
+          isPrimaryVariant: assignment.isPrimaryVariant,
+          displayPriority: assignment.displayPriority,
+          searchableKeys: assignment.searchableKeys,
+        },
+        { merge: true }
+      );
+      transcriptionCache.invalidate(variantDoc.id);
+    });
+
+    batch.set(docRef, {
+      ...sanitizedData,
+      isPrimaryVariant: currentAssignment?.isPrimaryVariant ?? true,
+      displayPriority: currentAssignment?.displayPriority ?? 1,
+      searchableKeys: currentAssignment?.searchableKeys ?? searchableKeys,
+    });
+
+    await batch.commit();
+    transcriptionCache.set(
+      docId,
+      normalizeTranscriptionData({
+        ...(sanitizedData as unknown as TranscriptionData),
+        isPrimaryVariant: currentAssignment?.isPrimaryVariant ?? true,
+        displayPriority: currentAssignment?.displayPriority ?? 1,
+        searchableKeys: currentAssignment?.searchableKeys ?? searchableKeys,
+      }) as unknown as Record<string, unknown>,
+      true
+    );
 
 
     return true;

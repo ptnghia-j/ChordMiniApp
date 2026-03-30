@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GetListByKeyword } from 'youtube-search-api';
 import { detectEnvironment } from '@/utils/environmentDetection';
+import { normalizeThumbnailUrl, pickPreferredChannelTitle } from '@/utils/youtubeMetadata';
 
 /**
  * Environment-Aware YouTube Search API Route
@@ -66,14 +67,14 @@ async function performYtDlpSearch(query: string, limit: number = 10): Promise<Re
     }) => ({
       id: item.id,
       title: item.title,
-      channelTitle: item.channelTitle,
-      channel: item.channelTitle, // Add channel for frontend compatibility
+      channelTitle: pickPreferredChannelTitle(item.channelTitle),
+      channel: pickPreferredChannelTitle(item.channelTitle) || 'Unknown Channel',
 
       viewCount: item.viewCount,
       view_count: item.viewCount, // Add view_count for frontend compatibility
       publishedAt: item.publishedAt,
       upload_date: item.publishedAt, // Add upload_date for frontend compatibility
-      thumbnail: item.thumbnail,
+      thumbnail: normalizeThumbnailUrl(item.id, item.thumbnail, 'mqdefault'),
       url: item.url,
       isLive: false
     })) || [];
@@ -108,30 +109,48 @@ async function performYouTubeSearch(query: string, limit: number = 10): Promise<
       throw new Error('No search results found');
     }
 
+    const extractThumbnail = (item: Record<string, unknown>, videoId: string): string => {
+      const thumbnailCandidates = [
+        item.thumbnail,
+        (item.thumbnail as { url?: string } | undefined)?.url,
+        ((item.thumbnail as { thumbnails?: Array<{ url?: string }> } | undefined)?.thumbnails || [])
+          .map((entry) => entry?.url)
+          .find((url) => typeof url === 'string' && url.trim().length > 0),
+        ((item.thumbnail_thumbnails as Array<{ url?: string }> | undefined) || [])
+          .map((entry) => entry?.url)
+          .find((url) => typeof url === 'string' && url.trim().length > 0),
+      ];
+
+      return normalizeThumbnailUrl(
+        videoId,
+        thumbnailCandidates.find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined,
+        'mqdefault'
+      );
+    };
+
     // Transform youtube-search-api results to match expected format
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = searchResults.items.map((item: any) => {
-      // // console.log(`🔍 Search result: ${item.title}`);
-
-      // Extract channel name from various possible fields
-      const channelName = item.channelTitle ||
-                         item.channel?.name ||
-                         item.channel?.title ||
-                         item.uploader ||
-                         item.uploaderName ||
-                         'Unknown';
-
-
+      const channelName = pickPreferredChannelTitle(
+        item.channelTitle,
+        item.channelName,
+        item.channel?.name,
+        item.channel?.title,
+        item.ownerText?.runs?.[0]?.text,
+        item.longBylineText?.runs?.[0]?.text,
+        item.shortBylineText?.runs?.[0]?.text,
+        item.uploader,
+        item.uploaderName
+      );
 
       return {
         id: item.id,
         title: item.title || 'Unknown Title',
         description: item.description || '',
-        // Use YouTube's standard thumbnail URLs to avoid domain configuration issues
-        thumbnail: `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
-
-        uploader: channelName,
-        channel: channelName, // Add channel for frontend compatibility
+        thumbnail: extractThumbnail(item, item.id),
+        uploader: channelName || 'Unknown Channel',
+        channelTitle: channelName || 'Unknown Channel',
+        channel: channelName || 'Unknown Channel',
         uploadDate: item.publishedTimeText || '',
         upload_date: item.publishedTimeText || '', // Add upload_date for frontend compatibility
         url: `https://www.youtube.com/watch?v=${item.id}`

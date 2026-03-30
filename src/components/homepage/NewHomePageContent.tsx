@@ -12,7 +12,6 @@ import IntegratedSearchContainer from '@/components/homepage/LazyIntegratedSearc
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
-import { FaMusic } from 'react-icons/fa';
 import { useSearchBoxVisibility } from '@/hooks/ui/useSearchBoxVisibility';
 import { useSharedSearchState } from '@/hooks/search/useSharedSearchState';
 import { motion, useScroll, useTransform } from 'framer-motion';
@@ -94,7 +93,39 @@ function NewHomePageContentInner() {
   }, [searchParams, searchQuery, updateSearchQuery]);
 
   return (
-    <div className="flex flex-col min-h-screen transition-colors duration-300">
+    <div className="relative flex flex-col min-h-screen transition-colors duration-300">
+      <div className="fixed inset-0 z-0 h-screen pointer-events-none">
+        {theme === 'dark' ? (
+          <div className="h-full w-full bg-black relative">
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(70% 55% at 50% 50%, #2a5d77 0%, #184058 18%, #0f2a43 34%, #0a1b30 50%, #071226 66%, #040d1c 80%, #020814 92%, #01040d 97%, #000309 100%), radial-gradient(160% 130% at 10% 10%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%), radial-gradient(160% 130% at 90% 90%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%)"
+              }}
+            />
+          </div>
+        ) : (
+          <div className="h-full w-full relative bg-white overflow-hidden">
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "#ffffff",
+                backgroundImage: `
+                  radial-gradient(
+                    circle at top center,
+                    rgba(70, 130, 180, 0.5),
+                    transparent 70%
+                  )
+                `,
+                filter: "blur(80px)",
+                backgroundRepeat: "no-repeat",
+              }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Navigation */}
       <Navigation showStickySearch={shouldShowStickySearch} />
 
@@ -109,62 +140,18 @@ function NewHomePageContentInner() {
           // scale: heroScale,
           minHeight: 'calc(100vh - 20px)',
         }}
-        className="relative flex items-start justify-center overflow-hidden bg-gray-50 dark:bg-dark-bg"
+        className="relative z-10 flex items-start justify-center overflow-hidden bg-transparent"
       >
-        {/* Hero Background - Consolidated effects */}
-        <div className="absolute inset-0 z-0">
-          {theme === 'dark' ? (
-            // Dark Mode: Subtle Midnight Mist effect - better integrated with navigation
-            // <div
-            //   className="absolute inset-0 z-0"
-            //   style={{
-            //     backgroundImage: `
-            //       radial-gradient(circle at 50% 100%, rgba(70, 85, 110, 0.3) 0%, transparent 10%),
-            //       radial-gradient(circle at 50% 100%, rgba(99, 102, 241, 0.25) 0%, transparent 20%),
-            //       radial-gradient(circle at 50% 100%, rgba(181, 184, 208, 0.2) 0%, transparent 50%)
-            //     `,
-            //   }}
-            // />
-
-            <div className="min-h-screen w-full bg-black relative">
-              {/* Deep Ocean Glow */}
-              <div
-                className="absolute inset-0 z-0"
-                style={{
-                  background:
-                  "radial-gradient(70% 55% at 50% 50%, #2a5d77 0%, #184058 18%, #0f2a43 34%, #0a1b30 50%, #071226 66%, #040d1c 80%, #020814 92%, #01040d 97%, #000309 100%), radial-gradient(160% 130% at 10% 10%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%), radial-gradient(160% 130% at 90% 90%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%)"
-                }}
-              />
-            </div>
-            
-          ) : (
-            // Light Mode: Blue Corner Glow Background (NO BLUR for performance)
-            <div className="min-h-screen w-full bg-white relative overflow-hidden">
-              {/* Blue Corner Glow Background */}
-              <div
-                className="absolute inset-0 z-0"
-                style={{
-                  backgroundImage: `
-                    radial-gradient(circle 600px at 0% 200px, #bfdbfe, transparent),
-                    radial-gradient(circle 600px at 100% 200px, #bfdbfe, transparent)
-                  `,
-                }}
-              />
-            </div>
-          )}
-        </div>
-
         {/* Decorative Music Notes - Only show after hydration to prevent mismatch */}
         {mounted && (
           <>
             <IoMusicalNote className="absolute top-8 left-8 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
             <IoMusicalNotes className="absolute top-8 right-8 w-12 h-12 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
-            <FaMusic className="absolute bottom-8 right-8 w-8 h-8 text-gray-600 dark:text-gray-300 opacity-50 dark:opacity-70 z-10" />
           </>
         )}
 
         {/* Split-Screen Layout */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-8">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-8 pb-20 lg:pb-24">
           {/* Left Side: Hero Content (60%) */}
           <div className="lg:col-span-3 space-y-8">
             {/* Title - Centered */}
@@ -179,7 +166,7 @@ function NewHomePageContentInner() {
                     duration: 0.8,
                     ease: "easeOut",
                   }}
-                  className="text-base md:text-lg text-gray-500 dark:text-gray-400 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
+                  className="text-base md:text-lg text-slate-600 dark:text-gray-400 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
                 >
                   Open source chord & beat detection application. Get your favorite songs transcribed!
                 </motion.p>
@@ -246,7 +233,7 @@ function NewHomePageContentInner() {
       </motion.section>
 
       {/* Recent Videos Section - Light source in the center */}
-      <section className="relative py-16 bg-white dark:bg-slate-800 transition-colors duration-300 min-h-[33vh] overflow-hidden">
+      <section className="relative z-20 -mt-10 w-full overflow-hidden rounded-[36px] border border-slate-200/80 bg-white py-16 shadow-[0_-24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-800 min-h-[33vh]">
         {/* Background Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {theme === 'dark' ? (
@@ -286,7 +273,7 @@ function NewHomePageContentInner() {
       <FeaturesTabSection />
 
       {/* Animated Support Section - Diffuse glow */}
-      <section className="relative py-20 bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
+      <section className="relative z-20 mx-0 w-full overflow-hidden rounded-t-[36px] border border-slate-200/80 bg-gray-50 py-20 shadow-[0_24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-900">
         {/* Background Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {theme === 'dark' ? (
@@ -307,7 +294,6 @@ function NewHomePageContentInner() {
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
               >
-                
                 <h3 className="text-lg font-medium flex items-center gap-2 text-gray-900 dark:text-white">
                   <HiSparkles className="w-5 h-5 text-primary" />
                   Support ChordMini
