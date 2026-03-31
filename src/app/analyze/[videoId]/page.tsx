@@ -416,23 +416,6 @@ export default function YouTubeVideoAnalyzePage() {
     return simplifyChords ? simplifySequenceCorrections(memoizedSequenceCorrections) : memoizedSequenceCorrections;
   }, [simplifyChords, memoizedSequenceCorrections]);
 
-  // Current state for playback
-  const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
-  const currentBeatIndexRef = useRef(-1);
-  const [currentDownbeatIndex, setCurrentDownbeatIndex] = useState(-1);
-  // Track recent user clicks for smart animation positioning
-  const [lastClickInfo, setLastClickInfo] = useState<{
-    visualIndex: number;
-    timestamp: number;
-    clickTime: number;
-  } | null>(null);
-  const [globalSpeedAdjustment, setGlobalSpeedAdjustment] = useState<number | null>(null); // Store calculated speed adjustment
-  // Loop controls from UI store
-  const isLoopEnabled = useIsLoopEnabled();
-  const loopStartBeat = useLoopStartBeat();
-  const loopEndBeat = useLoopEndBeat();
-
-
   // YouTube player state
   const [isVideoMinimized, setIsVideoMinimized] = useState(false);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
@@ -447,24 +430,17 @@ export default function YouTubeVideoAnalyzePage() {
     setIsFollowModeEnabled,
   });
 
-  // Use extracted audio interactions hook
   const {
-    toggleEnharmonicCorrection,
-  } = useAudioInteractions({
-    audioRef,
-    youtubePlayer,
-    setCurrentTime,
-    setDuration,
-    setIsPlaying,
-    currentBeatIndexRef,
+    currentBeatIndex,
     setCurrentBeatIndex,
+    currentBeatIndexRef,
+    currentDownbeatIndex,
+    setCurrentDownbeatIndex,
+    lastClickInfo,
     setLastClickInfo,
-    showCorrectedChords,
-    setShowCorrectedChords,
-  });
-
-  // Use playback state hook for YouTube event handlers
-  const {
+    globalSpeedAdjustment,
+    setGlobalSpeedAdjustment,
+    handleBeatClick,
     handleYouTubeReady,
     handleYouTubeProgress,
   } = usePlaybackState({
@@ -475,6 +451,19 @@ export default function YouTubeVideoAnalyzePage() {
     setAudioPlayerState,
     setDuration,
     isFollowModeEnabled
+  });
+
+  // Loop controls from UI store
+  const isLoopEnabled = useIsLoopEnabled();
+  const loopStartBeat = useLoopStartBeat();
+  const loopEndBeat = useLoopEndBeat();
+
+  // Use extracted audio interactions hook
+  const {
+    toggleEnharmonicCorrection,
+  } = useAudioInteractions({
+    showCorrectedChords,
+    setShowCorrectedChords,
   });
 
   // Font size state (not part of lyrics hook)
@@ -824,6 +813,7 @@ export default function YouTubeVideoAnalyzePage() {
     youtubePlayer,
     isPlaying,
     currentTime,
+    playbackRate,
     analysisResults,
     currentBeatIndex,
     currentBeatIndexRef,
@@ -902,6 +892,15 @@ export default function YouTubeVideoAnalyzePage() {
     extractAudioFromYouTube(true);
   }, [extractAudioFromYouTube]);
 
+  useEffect(() => {
+    const playbackStore = usePlaybackStore.getState();
+    playbackStore.setBeatClickHandler(handleBeatClick);
+
+    return () => {
+      usePlaybackStore.getState().setBeatClickHandler(null);
+    };
+  }, [handleBeatClick]);
+
   // Initialize Zustand stores with page state
   // CRITICAL FIX: This useEffect should only run on initial mount or when non-Zustand state changes
   // Do NOT include Zustand-managed state (showRomanNumerals, simplifyChords, romanNumeralData) in dependencies
@@ -951,7 +950,6 @@ export default function YouTubeVideoAnalyzePage() {
     playbackStore.setPlaybackRate(playbackRate);
     playbackStore.setYoutubePlayer(youtubePlayer);
     playbackStore.setAudioRef(audioRef as any);
-    playbackStore.setCurrentBeatIndex(currentBeatIndex);
     playbackStore.setIsVideoMinimized(isVideoMinimized);
     playbackStore.setIsFollowModeEnabled(isFollowModeEnabled);
   }, [
@@ -964,7 +962,7 @@ export default function YouTubeVideoAnalyzePage() {
     lyrics, showLyrics, hasCachedLyrics, isTranscribingLyrics, lyricsError,
     videoTitle, showSegmentation,
     isChatbotOpen, isLyricsPanelOpen,
-    isPlaying, currentTime, duration, playbackRate, youtubePlayer, currentBeatIndex,
+    isPlaying, currentTime, duration, playbackRate, youtubePlayer,
     isVideoMinimized, isFollowModeEnabled, audioRef
   ]);
 
@@ -1002,6 +1000,7 @@ export default function YouTubeVideoAnalyzePage() {
               isPlaying={isPlaying}
               currentTime={currentTime}
               segmentationData={segmentationData}
+              audioUrl={audioProcessingState.audioUrl || null}
               bpm={bpm}
               timeSignature={timeSignature}
               onChordPlaybackChange={handleChordPlaybackChange}
@@ -1154,6 +1153,7 @@ export default function YouTubeVideoAnalyzePage() {
                           currentBeatIndex={currentBeatIndex}
                           isPlaying={isPlaying}
                           isChordPlaybackEnabled={chordPlayback.isEnabled}
+                          audioUrl={audioProcessingState.audioUrl || null}
                         />
                       )}
                     </div>

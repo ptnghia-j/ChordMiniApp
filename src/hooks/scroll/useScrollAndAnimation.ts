@@ -30,6 +30,7 @@ export interface ScrollAndAnimationDependencies {
   youtubePlayer: YouTubePlayer | null; // YouTube player for timing
   isPlaying: boolean;
   currentTime: number;
+  playbackRate: number;
   analysisResults: AnalysisResult | null;
 
   // Beat tracking state
@@ -66,6 +67,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     youtubePlayer,
     isPlaying,
     currentTime,
+    playbackRate,
     analysisResults,
     currentBeatIndex,
     currentBeatIndexRef,
@@ -251,20 +253,37 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const PHASE_SWITCH_BUFFER = 0.03; // 30ms buffer between pre-beat and model phase
   const OFF_DWELL_SECONDS = 0.08; // require 80ms before turning highlight off (-1)
   const CLICK_OVERRIDE_WINDOW_MS = 800; // extended window to cover seek latency
+  const CLICK_SETTLE_TOLERANCE_SECONDS = 0.12;
 
   // ANTI-JITTER: Centralized state update function to prevent multiple conflicting updates
-  const updateBeatIndexSafely = useCallback((newBeatIndex: number) => {
-    // Only update if the beat index actually changed
-    if (currentBeatIndexRef.current !== newBeatIndex) {
-      unstable_batchedUpdates(() => {
+  const updateBeatIndexSafely = useCallback((
+    newBeatIndex: number,
+    options?: {
+      downbeatIndex?: number;
+      emitTime?: number;
+    }
+  ) => {
+    const beatChanged = currentBeatIndexRef.current !== newBeatIndex;
+
+    if (!beatChanged && typeof options?.downbeatIndex !== 'number') {
+      return;
+    }
+
+    unstable_batchedUpdates(() => {
+      if (beatChanged) {
         currentBeatIndexRef.current = newBeatIndex;
         setCurrentBeatIndex(newBeatIndex);
-        // Track emission for dwell/monotonic guards
         lastEmittedBeatRef.current = newBeatIndex;
-        // lastEmitTimeRef is updated by the rAF loop when time is known
-      });
-    }
-  }, [setCurrentBeatIndex, currentBeatIndexRef]);
+        if (typeof options?.emitTime === 'number') {
+          lastEmitTimeRef.current = options.emitTime;
+        }
+      }
+
+      if (typeof options?.downbeatIndex === 'number') {
+        setCurrentDownbeatIndex(options.downbeatIndex);
+      }
+    });
+  }, [setCurrentBeatIndex, currentBeatIndexRef, setCurrentDownbeatIndex]);
 
   // PERFORMANCE FIX #3: Optimized auto-scrolling with reduced frequency
   const scrollToCurrentBeat = useCallback(() => {
@@ -428,9 +447,24 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
         return;
       }
 
-      const time = isPitchShiftTimeAuthorityActive
+      const rawTime = isPitchShiftTimeAuthorityActive
         ? currentTimeRef.current
         : youtubePlayer!.getCurrentTime();
+      let time = rawTime;
+
+      if (lastClickInfo) {
+        const timeSinceClickMs = Date.now() - lastClickInfo.clickTime;
+        if (timeSinceClickMs < CLICK_OVERRIDE_WINDOW_MS) {
+          const clickElapsedSeconds = (timeSinceClickMs / 1000) * Math.max(playbackRate, 0.1);
+          const virtualClickTime = lastClickInfo.timestamp + clickElapsedSeconds;
+          const shouldUseVirtualClickTime =
+            Math.abs(rawTime - virtualClickTime) > CLICK_SETTLE_TOLERANCE_SECONDS;
+
+          if (shouldUseVirtualClickTime) {
+            time = virtualClickTime;
+          }
+        }
+      }
 
       // PERFORMANCE P3-H: Skip computation if player time hasn't meaningfully changed
       // This avoids redundant binary searches and state updates on near-identical frames
@@ -521,8 +555,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
 
               if (bestPaddingIndex !== -1) {
                 const finalBeatIndex = shiftCount + bestPaddingIndex;
-                updateBeatIndexSafely(finalBeatIndex);
-                lastEmitTimeRef.current = time;
+                updateBeatIndexSafely(finalBeatIndex, { emitTime: time });
               }
             } else {
               // No padding cells, use virtual beat estimation for early animation
@@ -552,8 +585,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
                   const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
 
                   if (isShiftCell || isPaddingCell || !isEmptyCell) {
-                    updateBeatIndexSafely(virtualBeatIndex);
-                    lastEmitTimeRef.current = time;
+                    updateBeatIndexSafely(virtualBeatIndex, { emitTime: time });
                   }
                 }
               }
@@ -561,30 +593,6 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
           } else if (time > animationRangeStart + PHASE_SWITCH_BUFFER) {
             // PHASE 2: Model beats (first detected beat onwards)
             // Use ChordGrid's beat array for consistency with click handling
-
-            // Check if we have smart click positioning active
-            let useClickPosition = false;
-            if (lastClickInfo) {
-              const timeSinceClick = Date.now() - lastClickInfo.clickTime;
-              const timeDifference = Math.abs(time - lastClickInfo.timestamp);
-              const prevTime = prevTimeRef.current;
-              const isRewinding = time + 1e-6 < prevTime;
-
-              // Immediate snap for first 200ms to ensure visual reset
-              // Extended window to cover seek latency until player time reflects target or rewind is detected
-              const withinInitialSnap = timeSinceClick < 200;
-              const withinExtendedWindow = timeSinceClick < CLICK_OVERRIDE_WINDOW_MS;
-              const playerNotAtTargetYet = timeDifference > 0.25; // YT seek can lag; keep override until close
-
-              if (withinInitialSnap || (withinExtendedWindow && (isRewinding || playerNotAtTargetYet))) {
-                updateBeatIndexSafely(lastClickInfo.visualIndex);
-                lastEmitTimeRef.current = time;
-                useClickPosition = true; // skip normal tracking this frame
-              }
-            }
-
-            // Only proceed with normal beat tracking if not using click position
-            if (!useClickPosition) {
 
             // ENHANCED STRATEGY: Use originalAudioMapping for precise timing when available
             type ChordGridDataWithMapping = ChordGridData & {
@@ -759,22 +767,15 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
               (currentBeatIndexRef.current !== stableFinalBeat);
 
             if (shouldUpdate) {
-              // ANTI-JITTER: Single consolidated state update with downbeat
-              unstable_batchedUpdates(() => {
-                if (currentBeatIndexRef.current !== stableFinalBeat) {
-                  currentBeatIndexRef.current = stableFinalBeat;
-                  setCurrentBeatIndex(stableFinalBeat);
-                  lastEmittedBeatRef.current = stableFinalBeat;
-                  lastEmitTimeRef.current = time;
-                }
-                setCurrentDownbeatIndex(currentDownbeat);
+              updateBeatIndexSafely(stableFinalBeat, {
+                downbeatIndex: currentDownbeat,
+                emitTime: time,
               });
               lastStateUpdateTimeRef.current = now;
             }
 
 
           }
-        } // End of normal beat tracking (if !useClickPosition)
       }
 
       // PERFORMANCE OPTIMIZATION: Schedule next frame for smooth 60fps updates
@@ -797,7 +798,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // CRITICAL FIX: Include isPlaying to ensure animation starts/stops when playback changes
   // The effect will restart the loop when isPlaying becomes true
   // and cleanup will stop it when isPlaying becomes false
-  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, setCurrentTime, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely, isPitchShiftTimeAuthorityActive]); // Updated to use centralized beat updates
+  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, setCurrentTime, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely, playbackRate, isPitchShiftTimeAuthorityActive]); // Updated to use centralized beat updates
 
   return {
     scrollToCurrentBeat,

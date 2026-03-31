@@ -6,6 +6,7 @@ import {
   attachVisualNotePositions,
   generateAllInstrumentVisualNotes,
   mergeConsecutiveChordEvents,
+  type SignalDynamicsSource,
   type ActiveInstrument,
 } from '@/utils/instrumentNoteGeneration';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
@@ -45,6 +46,10 @@ interface FallingNotesCanvasProps {
   guitarVoicing?: Partial<GuitarVoicingSelection>;
   /** Enharmonic target key for capo-transposed guitar shapes */
   targetKey?: string;
+  /** Optional signal-aware dynamics source so visuals mirror playback note patterns */
+  signalDynamicsSource?: SignalDynamicsSource | null;
+  /** Playback position used to apply the same in-chord scheduling adjustments as audio playback */
+  playbackTime?: number;
   /** Callback: set of active MIDI notes at current time */
   onActiveNotesChange?: (notes: Set<number>, colors: Map<number, string>) => void;
 }
@@ -108,6 +113,8 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   segmentationData,
   guitarVoicing,
   targetKey,
+  signalDynamicsSource,
+  playbackTime,
   onActiveNotesChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,9 +194,28 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   const instrumentVisualTimings = useMemo(() => {
     if (!hasInstruments || chordEvents.length === 0) return [];
     return generateAllInstrumentVisualNotes(
-      chordEvents, activeInstruments, bpm, timeSignature, segmentationData, guitarVoicing, targetKey,
+      chordEvents,
+      activeInstruments,
+      bpm,
+      timeSignature,
+      segmentationData,
+      guitarVoicing,
+      targetKey,
+      signalDynamicsSource,
+      playbackTime,
     );
-  }, [chordEvents, hasInstruments, activeInstruments, bpm, timeSignature, segmentationData, guitarVoicing, targetKey]);
+  }, [
+    chordEvents,
+    hasInstruments,
+    activeInstruments,
+    bpm,
+    timeSignature,
+    segmentationData,
+    guitarVoicing,
+    targetKey,
+    signalDynamicsSource,
+    playbackTime,
+  ]);
 
   const instrumentVisualNotes = useMemo(
     () => attachVisualNotePositions(instrumentVisualTimings, midiKeyPositions),
@@ -306,20 +332,20 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
 
       const noteTopY = hitLineY - noteTopTime * pixelsPerSecond;
       const noteBottomY = hitLineY - noteBottomTime * pixelsPerSecond;
+      const isActive = noteStartTime <= time && noteEndTime > time;
+      const anchoredBottomY = isActive ? hitLineY : noteTopY;
 
       const drawTop = Math.max(noteBottomY, 0);
-      const drawBottom = Math.min(noteTopY, h);
+      const drawBottom = Math.min(anchoredBottomY, h);
       if (drawTop >= h || drawBottom <= 0) return null;
       const drawHeight = drawBottom - drawTop;
 
       let opacity = 1.0;
-      if (noteTopTime < -lookBehindSeconds * 0.5) {
+      if (!isActive && noteTopTime < -lookBehindSeconds * 0.5) {
         opacity = Math.max(0, 1 + (noteTopTime / lookBehindSeconds));
       } else if (noteTopTime > lookAheadSeconds * 0.8) {
         opacity = Math.max(0.3, 1 - (noteTopTime - lookAheadSeconds * 0.8) / (lookAheadSeconds * 0.2));
       }
-
-      const isActive = noteStartTime <= time && noteEndTime > time;
 
       return { drawTop, drawHeight, opacity, isActive };
     };

@@ -24,10 +24,10 @@ export const DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME = 20;
 export const DEFAULT_CHORD_PLAYBACK_VOLUME = 70;
 
 /** Piano instrument volume */
-export const DEFAULT_PIANO_VOLUME = 40;
+export const DEFAULT_PIANO_VOLUME = 45;
 
 /** Guitar instrument volume */
-export const DEFAULT_GUITAR_VOLUME = 40;
+export const DEFAULT_GUITAR_VOLUME = 45;
 
 /** Violin instrument volume */
 export const DEFAULT_VIOLIN_VOLUME = 50;
@@ -39,7 +39,7 @@ export const DEFAULT_FLUTE_VOLUME = 50;
 export const DEFAULT_SAXOPHONE_VOLUME = 0;
 
 /** Automatic saxophone volume used during instrumental sections */
-export const DEFAULT_AUTO_SAXOPHONE_VOLUME = 45;
+export const DEFAULT_AUTO_SAXOPHONE_VOLUME = 55;
 
 /** Bass instrument volume */
 export const DEFAULT_BASS_VOLUME = 50;

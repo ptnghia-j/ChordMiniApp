@@ -21,6 +21,12 @@
 
 import { audioContextManager } from './audioContextManager';
 import type { SegmentationResult, SongSegment } from '@/types/chatbotTypes';
+import type {
+  AudioDynamicsAnalysisResult,
+  ChordSignalDynamics,
+  SignalIntensityBand,
+  SignalFeatureContour,
+} from './audioDynamicsTypes';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -174,6 +180,22 @@ function easeInOutSine(t: number): number {
   return 0.5 - 0.5 * Math.cos(Math.PI * clamped);
 }
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  if (Math.abs(edge1 - edge0) <= Number.EPSILON) {
+    return value >= edge1 ? 1 : 0;
+  }
+  const normalized = clamp01((value - edge0) / (edge1 - edge0));
+  return normalized * normalized * (3 - 2 * normalized);
+}
+
+function mix(start: number, end: number, amount: number): number {
+  return start + (end - start) * clamp01(amount);
+}
+
 function interpolateContour(
   time: number,
   startTime: number,
@@ -239,6 +261,7 @@ function getBaseSectionTarget(sectionType: string): number {
 export class DynamicsAnalyzer {
   private params: DynamicsParams | null = null;
   private energyContour: EnergyContour | null = null;
+  private signalAnalysis: AudioDynamicsAnalysisResult | null = null;
   private sectionContour: SectionContourPoint[] = [];
   /** Smoothed velocity to prevent abrupt jumps between consecutive chords */
   private lastVelocity: number | null = null;
@@ -251,6 +274,26 @@ export class DynamicsAnalyzer {
   setParams(params: DynamicsParams): void {
     this.params = params;
     this.sectionContour = this.buildSectionContour(params);
+  }
+
+  setSignalAnalysis(signalAnalysis: AudioDynamicsAnalysisResult | null): void {
+    this.signalAnalysis = signalAnalysis;
+    if (!signalAnalysis) {
+      this.energyContour = null;
+      return;
+    }
+
+    this.energyContour = {
+      values: signalAnalysis.energy.values,
+      timeStep: signalAnalysis.energy.timeStep,
+      duration: signalAnalysis.energy.duration,
+      minRms: signalAnalysis.energy.min,
+      maxRms: signalAnalysis.energy.max,
+    };
+  }
+
+  getSignalAnalysis(): AudioDynamicsAnalysisResult | null {
+    return this.signalAnalysis;
   }
 
   private buildSectionContour(params: DynamicsParams): SectionContourPoint[] {
@@ -434,6 +477,148 @@ export class DynamicsAnalyzer {
     return this.energyContour !== null;
   }
 
+  hasSignalAnalysis(): boolean {
+    return this.signalAnalysis !== null;
+  }
+
+  private sampleContourAverage(
+    contour: SignalFeatureContour,
+    time: number,
+    duration: number,
+  ): number {
+    const clampedStart = Math.max(0, Math.min(time, contour.duration));
+    const clampedEnd = Math.max(clampedStart, Math.min(clampedStart + duration, contour.duration));
+    const startIndex = Math.max(0, Math.min(contour.values.length - 1, Math.floor(clampedStart / contour.timeStep)));
+    const endIndex = Math.max(
+      startIndex + 1,
+      Math.min(contour.values.length, Math.ceil(clampedEnd / contour.timeStep)),
+    );
+
+    let sum = 0;
+    let count = 0;
+    for (let index = startIndex; index < endIndex; index += 1) {
+      sum += contour.values[index] ?? 0;
+      count += 1;
+    }
+
+    return count > 0 ? sum / count : contour.values[startIndex] ?? 0;
+  }
+
+  private sampleContourPeak(
+    contour: SignalFeatureContour,
+    time: number,
+    duration: number,
+  ): number {
+    const clampedStart = Math.max(0, Math.min(time, contour.duration));
+    const clampedEnd = Math.max(clampedStart, Math.min(clampedStart + duration, contour.duration));
+    const startIndex = Math.max(0, Math.min(contour.values.length - 1, Math.floor(clampedStart / contour.timeStep)));
+    const endIndex = Math.max(
+      startIndex + 1,
+      Math.min(contour.values.length, Math.ceil(clampedEnd / contour.timeStep)),
+    );
+
+    let peak = 0;
+    for (let index = startIndex; index < endIndex; index += 1) {
+      peak = Math.max(peak, contour.values[index] ?? 0);
+    }
+    return peak;
+  }
+
+  private sampleContourCenteredAverage(
+    contour: SignalFeatureContour,
+    centerTime: number,
+    duration: number,
+  ): number {
+    const halfWindow = Math.max(duration, contour.timeStep) * 0.5;
+    const startTime = Math.max(0, centerTime - halfWindow);
+    const sampleDuration = Math.max(contour.timeStep, Math.min(contour.duration - startTime, halfWindow * 2));
+    return this.sampleContourAverage(contour, startTime, sampleDuration);
+  }
+
+  private resolveIntensityBand(intensity: number): SignalIntensityBand {
+    const quietness = this.signalAnalysis
+      ? 1 - smoothstep(this.signalAnalysis.intensity.p25 * 0.92, this.signalAnalysis.intensity.p50 + 0.02, intensity)
+      : 1 - smoothstep(0.32, 0.56, intensity);
+    const fullness = this.signalAnalysis
+      ? smoothstep(this.signalAnalysis.intensity.p50 - 0.04, this.signalAnalysis.intensity.p75 + 0.04, intensity)
+      : smoothstep(0.48, 0.78, intensity);
+
+    if (quietness >= 0.64 && fullness < 0.46) return 'quiet';
+    if (fullness >= 0.64 && quietness < 0.42) return 'loud';
+    return 'medium';
+  }
+
+  getSignalDynamics(time: number, chordDuration: number = 0.4): ChordSignalDynamics | null {
+    if (!this.signalAnalysis) {
+      return null;
+    }
+
+    const contour = this.signalAnalysis.intensity;
+    const averagingWindow = Math.max(
+      contour.timeStep * 2,
+      Math.min(chordDuration > 0 ? chordDuration : 0.4, 1.6),
+    );
+    const onsetWindow = Math.max(
+      this.signalAnalysis.onset.timeStep * 2,
+      Math.min(Math.max(0.14, averagingWindow * 0.35), 0.32),
+    );
+    const patternWindow = Math.max(
+      contour.timeStep * 4,
+      Math.min(Math.max(chordDuration * 1.85, 0.9), 2.8),
+    );
+    const patternCenterTime = time + Math.max(0.08, chordDuration * 0.45);
+
+    const energy = this.sampleContourAverage(this.signalAnalysis.energy, time, averagingWindow);
+    const spectralFlux = this.sampleContourAverage(this.signalAnalysis.spectralFlux, time, onsetWindow);
+    const onsetStrength = this.sampleContourPeak(this.signalAnalysis.onset, time, onsetWindow);
+    const baseIntensity = this.sampleContourAverage(this.signalAnalysis.intensity, time, averagingWindow);
+    const smoothedPatternIntensity = this.sampleContourCenteredAverage(
+      this.signalAnalysis.intensity,
+      patternCenterTime,
+      patternWindow,
+    );
+    const smoothedFlux = this.sampleContourCenteredAverage(
+      this.signalAnalysis.spectralFlux,
+      patternCenterTime,
+      Math.max(onsetWindow * 1.75, 0.48),
+    );
+    const smoothedOnset = this.sampleContourCenteredAverage(
+      this.signalAnalysis.onset,
+      patternCenterTime,
+      Math.max(onsetWindow * 1.4, 0.34),
+    );
+    const reactiveIntensity = Math.max(baseIntensity, baseIntensity * 0.82 + onsetStrength * 0.18);
+    const intensity = mix(smoothedPatternIntensity, reactiveIntensity, 0.34);
+    const normalizedIntensity = easeInOutSine(
+      smoothstep(contour.p25 * 0.85, Math.max(contour.p90, contour.p75 + 0.08), intensity),
+    );
+    const quietness = 1 - easeInOutSine(
+      smoothstep(contour.p25 * 0.9, contour.p50 + 0.03, intensity),
+    );
+    const fullness = easeInOutSine(
+      smoothstep(contour.p50 - 0.05, contour.p75 + 0.05, intensity),
+    );
+    const motion = easeInOutSine(
+      clamp01(mix(smoothedFlux, onsetStrength, 0.28) * 0.52 + normalizedIntensity * 0.48),
+    );
+    const attack = easeInOutSine(
+      smoothstep(0.18, 0.82, mix(smoothedOnset, onsetStrength, 0.55)),
+    );
+
+    return {
+      energy,
+      spectralFlux,
+      onsetStrength,
+      intensity,
+      normalizedIntensity,
+      quietness,
+      fullness,
+      motion,
+      attack,
+      intensityBand: this.resolveIntensityBand(intensity),
+    };
+  }
+
   private getMacroDynamicContour(time: number): number {
     // When section-aware contouring is available, it already shapes the full-song
     // arc including soft intros/outros and stronger middle sections. Applying the
@@ -482,6 +667,8 @@ export class DynamicsAnalyzer {
     time: number,
     beatIndex?: number,
     chordName?: string,
+    chordDuration?: number,
+    signalDynamics?: ChordSignalDynamics | null,
   ): number {
     // =====================================================================
     // The velocity is built from two component groups:
@@ -527,7 +714,20 @@ export class DynamicsAnalyzer {
     let volatile = 0.75; // Base mid-level velocity
 
     // 4. Audio energy contour (optional)
-    if (this.energyContour) {
+    const resolvedSignalDynamics = signalDynamics ?? this.getSignalDynamics(time, chordDuration);
+    if (resolvedSignalDynamics) {
+      const curvedSignalVelocity = mix(
+        MIN_VELOCITY + 0.06,
+        MAX_VELOCITY - 0.02,
+        resolvedSignalDynamics.normalizedIntensity,
+      );
+      const signalVelocity = mix(curvedSignalVelocity, resolvedSignalDynamics.intensity, 0.2);
+      volatile = volatile * (1 - ENERGY_INFLUENCE) + signalVelocity * ENERGY_INFLUENCE;
+      volatile *= 1 + resolvedSignalDynamics.motion * 0.018;
+      if (resolvedSignalDynamics.attack > 0.52) {
+        volatile *= 1 + (resolvedSignalDynamics.attack - 0.52) * 0.028;
+      }
+    } else if (this.energyContour) {
       const idx = Math.floor(time / this.energyContour.timeStep);
       const clamped = Math.max(0, Math.min(idx, this.energyContour.values.length - 1));
       const rms = this.energyContour.values[clamped];
@@ -580,7 +780,7 @@ export class DynamicsAnalyzer {
     if (this.lastVelocity !== null && this.lastVelocityTime !== null) {
       const timeSinceLast = Math.abs(time - this.lastVelocityTime);
       if (timeSinceLast < 4.0) {
-        const alpha = timeSinceLast < 0.8 ? 0.3 : timeSinceLast < 2.0 ? 0.45 : 0.65;
+        const alpha = timeSinceLast < 0.8 ? 0.2 : timeSinceLast < 2.0 ? 0.34 : 0.52;
         volatile = alpha * volatile + (1 - alpha) * this.lastVelocity;
       }
     }
@@ -614,6 +814,7 @@ export class DynamicsAnalyzer {
   reset(): void {
     this.params = null;
     this.energyContour = null;
+    this.signalAnalysis = null;
     this.sectionContour = [];
     this.lastVelocity = null;
     this.lastVelocityTime = null;

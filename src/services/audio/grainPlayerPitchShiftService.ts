@@ -357,6 +357,12 @@ export class GrainPlayerPitchShiftService {
       // Update current time
       this._currentTime = Math.max(0, Math.min(time, this._duration));
 
+      // Publish the seek target immediately so UI consumers do not sit on the
+      // previous service time until the next 50ms tracking tick.
+      if (this.onTimeUpdateCallback) {
+        this.onTimeUpdateCallback(this._currentTime);
+      }
+
       // Restart playback from new position if was playing
       if (wasPlaying) {
         this.grainPlayer.start(undefined, this._currentTime);

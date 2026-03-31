@@ -11,7 +11,8 @@ import {
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
 import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
-import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
+import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
+import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
@@ -81,6 +82,8 @@ interface PianoVisualizerTabProps {
   isChordPlaybackEnabled?: boolean;
   /** High-frequency beat index from the shared playback tracker */
   currentBeatIndex?: number;
+  /** Resolved audio URL used for background signal analysis */
+  audioUrl?: string | null;
 }
 
 const PLAYBACK_EVENT_BOUNDARY_TOLERANCE = 0.08;
@@ -149,13 +152,13 @@ function usePianoOnlyPlayback(
   isChordPlaybackEnabled: boolean,
   bpm: number,
   timeSignature: number = 4,
+  dynamicsAnalyzer: DynamicsAnalyzer,
   segmentationData?: SegmentationResult | null,
   guitarVoicing?: Partial<GuitarVoicingSelection>,
   targetKey?: string,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
-  const dynamicsAnalyzerRef = useRef(new DynamicsAnalyzer());
   const pianoOnlyActiveRef = useRef(false);
   const eventMissStartedAtRef = useRef<number | null>(null);
 
@@ -171,15 +174,6 @@ function usePianoOnlyPlayback(
     () => (merged.length > 0 ? merged[merged.length - 1].endTime : undefined),
     [merged],
   );
-
-  useEffect(() => {
-    dynamicsAnalyzerRef.current.setParams({
-      bpm,
-      timeSignature,
-      totalDuration,
-      segmentationData,
-    });
-  }, [bpm, segmentationData, timeSignature, totalDuration]);
 
   // Activate / deactivate piano-only mode
   useEffect(() => {
@@ -244,10 +238,13 @@ function usePianoOnlyPlayback(
     const duration = currentChordEvent.endTime - currentChordEvent.startTime;
 
     // Calculate dynamic velocity for musical expression
-    const dynamicVelocity = dynamicsAnalyzerRef.current.getVelocityMultiplier(
+    const signalDynamics = dynamicsAnalyzer.getSignalDynamics(currentChordEvent.startTime, duration);
+    const dynamicVelocity = dynamicsAnalyzer.getVelocityMultiplier(
       currentChordEvent.startTime,
       currentChordEvent.beatIndex,
       currentChordEvent.chordName,
+      duration,
+      signalDynamics,
     );
 
     serviceRef.current.playChord(
@@ -261,13 +258,26 @@ function usePianoOnlyPlayback(
         totalDuration,
         beatCount: currentChordEvent.beatCount,
         segmentationData,
+        signalDynamics,
       },
       timeSignature,
       guitarVoicing,
       targetKey,
     );
     lastPlayedChordRef.current = currentChordEvent.chordName;
-  }, [bpm, currentBeatIndex, currentTime, guitarVoicing, merged, segmentationData, shouldActivate, targetKey, timeSignature, totalDuration]);
+  }, [
+    bpm,
+    currentBeatIndex,
+    currentTime,
+    dynamicsAnalyzer,
+    guitarVoicing,
+    merged,
+    segmentationData,
+    shouldActivate,
+    targetKey,
+    timeSignature,
+    totalDuration,
+  ]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -305,6 +315,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   isPlaying = false,
   isChordPlaybackEnabled = false,
   currentBeatIndex = -1,
+  audioUrl,
 }) => {
   // Zustand store fallbacks
   const storeAnalysisResults = useAnalysisResults();
@@ -430,6 +441,10 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       transposedChordGridData.shiftCount,
     );
   }, [correctedChords, transposedChordGridData]);
+  const mergedPlayableChordEvents = useMemo(
+    () => mergeConsecutiveChordEvents(chordEvents.filter(hasPlayableNotes)),
+    [chordEvents],
+  );
 
   // Compute accidental preference for consistent sharp/flat rendering.
   // Key signature (from Gemini) is authoritative; heuristic is fallback.
@@ -446,6 +461,24 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const { showRomanNumerals, romanNumeralData } = useRomanNumerals();
 
   const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
+  const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
+  const totalDuration = useMemo(
+    () => (mergedPlayableChordEvents.length > 0
+      ? mergedPlayableChordEvents[mergedPlayableChordEvents.length - 1].endTime
+      : undefined),
+    [mergedPlayableChordEvents],
+  );
+  const dynamicsParams = useMemo(
+    () => ({
+      bpm: detectedBpm || 120,
+      timeSignature,
+      totalDuration,
+      segmentationData,
+    }),
+    [detectedBpm, segmentationData, timeSignature, totalDuration],
+  );
+  const dynamicsAnalyzer = useSharedAudioDynamics(audioUrl, dynamicsParams);
+  const signalAnalysis = dynamicsAnalyzer.getSignalAnalysis();
 
   // Shifted original chords for roman numeral beat-to-sequence mapping
   const shiftedOriginalChords = useMemo(() => {
@@ -537,9 +570,6 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     setNoteColors(colors);
   }, []);
 
-  // MIDI export handler
-  const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
-
   // Piano-only auto-playback: plays piano when visualizer tab is active but chord playback is off
   usePianoOnlyPlayback(
     chordEvents,
@@ -549,6 +579,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     isChordPlaybackEnabled,
     detectedBpm || 120,
     timeSignature,
+    dynamicsAnalyzer,
     segmentationData,
     guitarVoicing,
     targetKey,
@@ -572,11 +603,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       bpm: detectedBpm || undefined,
       timeSignature, // Use detected time signature
       segmentationData,
+      signalAnalysis,
     });
     if (midiData.length > 0) {
       downloadMidiFile(midiData, 'chord-progression.mid');
     }
-  }, [chordEvents, activeInstruments, detectedBpm, segmentationData, timeSignature]);
+  }, [activeInstruments, chordEvents, detectedBpm, segmentationData, signalAnalysis, timeSignature]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -698,6 +730,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 segmentationData={segmentationData}
                 guitarVoicing={guitarVoicing}
                 targetKey={targetKey}
+                signalDynamicsSource={dynamicsAnalyzer}
+                playbackTime={currentTime}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

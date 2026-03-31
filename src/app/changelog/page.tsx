@@ -29,6 +29,23 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.2.5',
+      date: 'March 31, 2026',
+      title: 'Playback Alignment & Signal-Driven Pattern Dynamics',
+      description: 'Improves playback/visual/export parity and makes chord accompaniment react more musically to the source audio signal.',
+      features: [
+        'IMPROVED: Piano visualizer falling notes now track the same in-chord scheduling adjustments used by runtime chord playback, reducing drift between what you hear and what you see.',
+        'IMPROVED: Loud sections can now reinforce piano bass with octave doubling for a wider, stronger low-end foundation.',
+        'IMPROVED: Chord accompaniment now transitions more gradually between sparse and dense patterns instead of switching abruptly.'
+      ],
+      technical: [
+        'IMPROVED: Better alignment for local tempo and playback-position changes by sharing the same late-onset recovery and in-chord trimming rules between audio playback and piano-roll note scheduling.',
+        'NEW: Signal/amplitude-analysis-driven pattern shaping now derives smoothed energy, motion, fullness, quietness, and attack controls from the analyzed audio so velocity curves and instrument patterns follow the source dynamics more naturally.'
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.6.2',
       date: 'March 29, 2026',
       title: 'Homepage Filtering & Deployment Cleanup',
@@ -41,7 +58,9 @@ export default function ChangelogPage() {
       technical: [
         'PERFORMANCE: Backfilled Firestore homepage metadata and added indexed primary-variant querying for cheaper recent-transcription loads with enharmonic-aware key search.'
       ],
-      breaking: []
+      breaking: [
+        'No dependence on Vercel image optimization for cost reduction.'
+      ]
     },
 
     {

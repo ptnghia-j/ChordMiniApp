@@ -31,6 +31,7 @@ interface ChordGridData {
 interface ChordGridContainerProps {
   analysisResults?: AnalysisResult | null;
   chordGridData: ChordGridData; // Accept comprehensive chord grid data as prop
+  onBeatClick?: (beatIndex: number, timestamp: number) => void;
   keySignature?: string | null;
   isDetectingKey?: boolean;
   isChatbotOpen: boolean;
@@ -69,6 +70,7 @@ interface ChordGridContainerProps {
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
   analysisResults,
   chordGridData, // Use the comprehensive chord grid data passed as prop
+  onBeatClick: onBeatClickProp,
   keySignature,
   isDetectingKey,
   isChatbotOpen,
@@ -193,12 +195,13 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   ]);
 
   // Get click handler from Zustand store
-  const { onBeatClick } = useBeatHandlers();
+  const { onBeatClick: storeOnBeatClick } = useBeatHandlers();
+  const effectiveOnBeatClick = onBeatClickProp ?? storeOnBeatClick;
 
   // PERFORMANCE OPTIMIZATION: Memoize click handler to prevent recreation
   const memoizedOnBeatClick = React.useCallback((beatIndex: number, timestamp: number) => {
-    onBeatClick(beatIndex, timestamp);
-  }, [onBeatClick]);
+    effectiveOnBeatClick(beatIndex, timestamp);
+  }, [effectiveOnBeatClick]);
 
   // Render ChordGrid with optimized props
   return (

@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
 import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
+import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
+import { usePlaybackStore } from '@/stores/playbackStore';
 
 // Types for playback state management
 interface ClickInfo {
@@ -91,10 +93,13 @@ export const usePlaybackState = ({
 
   // Create stable setter functions with useCallback to prevent infinite loops
   const setCurrentBeatIndex = useCallback((index: number) => {
+    currentBeatIndexRef.current = index;
+    usePlaybackStore.getState().setCurrentBeatIndex(index);
     setCurrentBeatIndexState(index);
   }, []);
 
   const setCurrentDownbeatIndex = useCallback((index: number) => {
+    usePlaybackStore.getState().setCurrentDownbeatIndex(index);
     setCurrentDownbeatIndexState(index);
   }, []);
 
@@ -119,26 +124,40 @@ export const usePlaybackState = ({
     setAudioPlayerState(prev => ({ ...prev, currentTime: time }));
   }, [setAudioPlayerState]);
 
-  // Beat click navigation: YouTube-only seeking with click tracking
+  // Beat click navigation: seek the active playback source and update jump state once.
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
-    // Seek YouTube player (primary audio source)
-    if (youtubePlayer && youtubePlayer.seekTo) {
-      youtubePlayer.seekTo(timestamp, 'seconds');
-      setCurrentTime(timestamp);
-    }
+    const clickTime = Date.now();
 
-    // FIXED: Direct state update without override mechanism
-    // Set the beat index immediately and record click info for smart animation
-    currentBeatIndexRef.current = beatIndex;
+    // Establish the clicked beat as the immediate visual source of truth before
+    // asynchronous media players catch up to the target timestamp.
+    setCurrentTime(timestamp);
     setCurrentBeatIndex(beatIndex);
-
-    // Record click info for smart animation positioning
     setLastClickInfo({
       visualIndex: beatIndex,
-      timestamp: timestamp,
-      clickTime: Date.now()
+      timestamp,
+      clickTime,
     });
-  }, [youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
+
+    const playbackStore = usePlaybackStore.getState();
+    playbackStore.setCurrentTime(timestamp);
+
+    if (isPitchShiftEnabled && isPitchShiftReady) {
+      try {
+        getPitchShiftService()?.seek(timestamp);
+      } catch {}
+    }
+
+    if (youtubePlayer && youtubePlayer.seekTo) {
+      try {
+        youtubePlayer.seekTo(timestamp, 'seconds');
+      } catch {}
+    } else if (audioRef.current) {
+      try {
+        audioRef.current.currentTime = timestamp;
+      } catch {}
+    }
+
+  }, [audioRef, isPitchShiftEnabled, isPitchShiftReady, youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
 
   // YouTube player event handlers (lines 1150-1191): Comprehensive player integration
   const handleYouTubeReady = useCallback((player: unknown) => {

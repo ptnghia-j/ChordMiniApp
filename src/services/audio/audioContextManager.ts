@@ -10,6 +10,13 @@ export class AudioContextManager {
   private _ctx: AudioContext | null = null;
   private _isInitializing = false;
 
+  private getContextState(ctx: AudioContext | null = this._ctx): AudioContextState | 'interrupted' | 'closed' {
+    if (!ctx) {
+      return 'closed';
+    }
+    return ctx.state as AudioContextState | 'interrupted';
+  }
+
   static get instance(): AudioContextManager {
     if (!this._instance) this._instance = new AudioContextManager();
     return this._instance;
@@ -42,14 +49,44 @@ export class AudioContextManager {
 
   async resume(): Promise<void> {
     if (!this._ctx) return;
-    if (this._ctx.state === 'closed') return;
-    if (this._ctx.state === 'suspended' && !this._isInitializing) {
+    const currentState = this.getContextState();
+    if (currentState === 'closed') return;
+
+    if ((currentState === 'suspended' || currentState === 'interrupted') && !this._isInitializing) {
       this._isInitializing = true;
       try {
         await this._ctx.resume();
       } finally {
         this._isInitializing = false;
       }
+    }
+
+    const resumedState = this.getContextState();
+    const shouldRecreateContext = resumedState === 'interrupted'
+      || (
+        resumedState === 'suspended'
+        && typeof document !== 'undefined'
+        && document.visibilityState === 'visible'
+      );
+
+    if (!shouldRecreateContext) {
+      return;
+    }
+
+    const staleContext = this._ctx;
+    this._ctx = null;
+
+    try {
+      await staleContext?.close();
+    } catch {
+      // Some browsers refuse to close a context that is already effectively gone.
+      // In that case we still continue by creating a fresh one below.
+    }
+
+    const freshContext = this.getContext();
+    const freshState = this.getContextState(freshContext);
+    if (freshState === 'suspended' || freshState === 'interrupted') {
+      await freshContext.resume();
     }
   }
 
@@ -85,4 +122,3 @@ export class AudioContextManager {
 }
 
 export const audioContextManager = AudioContextManager.instance;
-

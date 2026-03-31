@@ -44,6 +44,8 @@ interface VisualCompactionWindow {
   startIndex: number;
   endIndex: number;
   targetModulo?: number;
+  mode?: 'shrink_only' | 'expand_only';
+  source?: 'gap' | 'silence' | 'tempo' | 'leading_silence';
 }
 
 function shouldLogAlignmentDebug(beatModel: string | undefined): boolean {
@@ -65,6 +67,157 @@ const SILENT_CHORD_VALUES = new Set(['', 'N', 'N/C', 'N.C.', 'NC']);
 
 function isSilentChord(chord: string | null | undefined): boolean {
   return SILENT_CHORD_VALUES.has((chord || '').trim());
+}
+
+function getBeatDurationsAroundWindow(
+  beats: (number | null)[],
+  startIndex: number,
+  endIndex: number
+): number[] {
+  const durations: number[] = [];
+
+  for (let index = Math.max(1, startIndex); index < Math.min(beats.length, endIndex); index += 1) {
+    const previousBeat = beats[index - 1];
+    const currentBeat = beats[index];
+
+    if (typeof previousBeat === 'number' && typeof currentBeat === 'number' && currentBeat > previousBeat) {
+      durations.push(currentBeat - previousBeat);
+    }
+  }
+
+  return durations;
+}
+
+function average(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function buildExpandedLeadingSilenceTimestamps(
+  beats: (number | null)[],
+  windowStart: number,
+  windowEnd: number,
+  extraCount: number
+): (number | null)[] {
+  if (extraCount <= 0) {
+    return [];
+  }
+
+  let previousNumericBeat: number | null = null;
+  for (let index = Math.min(windowEnd, beats.length) - 1; index >= Math.max(0, windowStart); index -= 1) {
+    const beat = beats[index];
+    if (typeof beat === 'number') {
+      previousNumericBeat = beat;
+      break;
+    }
+  }
+
+  let nextNumericBeat: number | null = null;
+  for (let index = Math.max(0, windowEnd); index < beats.length; index += 1) {
+    const beat = beats[index];
+    if (typeof beat === 'number') {
+      nextNumericBeat = beat;
+      break;
+    }
+  }
+
+  const nearbyDurations = getBeatDurationsAroundWindow(
+    beats,
+    Math.max(0, windowStart - 4),
+    Math.min(beats.length, windowEnd + 5)
+  );
+  const fallbackStep = nearbyDurations.length > 0 ? average(nearbyDurations) : 0.5;
+
+  const startTime = previousNumericBeat ?? 0;
+  const endTime = (
+    nextNumericBeat !== null && nextNumericBeat > startTime
+      ? nextNumericBeat
+      : startTime + (fallbackStep * (extraCount + 1))
+  );
+  const step = (endTime - startTime) / (extraCount + 1);
+
+  return Array.from({ length: extraCount }, (_, index) => {
+    const candidate = startTime + (step * (index + 1));
+    return Number.isFinite(candidate) ? candidate : null;
+  });
+}
+
+function findTempoChangeBoundaries(
+  beats: (number | null)[],
+  timeSignature: number
+): Array<{ boundaryIndex: number; prevBeatDuration: number; nextBeatDuration: number; ratio: number }> {
+  const windowSize = Math.max(timeSignature, 4);
+  const boundaries: Array<{ boundaryIndex: number; prevBeatDuration: number; nextBeatDuration: number; ratio: number }> = [];
+
+  for (let index = windowSize * 2; index < beats.length - windowSize; index += 1) {
+    const previousDurations = getBeatDurationsAroundWindow(beats, index - windowSize, index);
+    const nextDurations = getBeatDurationsAroundWindow(beats, index, index + windowSize);
+
+    if (previousDurations.length < Math.max(2, Math.floor(windowSize / 2)) || nextDurations.length < Math.max(2, Math.floor(windowSize / 2))) {
+      continue;
+    }
+
+    const previousAverage = average(previousDurations);
+    const nextAverage = average(nextDurations);
+    if (previousAverage <= 0 || nextAverage <= 0) {
+      continue;
+    }
+
+    const ratio = Math.max(previousAverage, nextAverage) / Math.min(previousAverage, nextAverage);
+    if (ratio >= 1.7) {
+      const previousBoundary = boundaries[boundaries.length - 1];
+      if (previousBoundary && index - previousBoundary.boundaryIndex < timeSignature) {
+        continue;
+      }
+
+      boundaries.push({
+        boundaryIndex: index,
+        prevBeatDuration: previousAverage,
+        nextBeatDuration: nextAverage,
+        ratio,
+      });
+    }
+  }
+
+  return boundaries;
+}
+
+function scoreLeadingExpansion(
+  chords: string[],
+  segmentStart: number,
+  segmentEnd: number,
+  timeSignature: number,
+  extraBeats: number
+): number {
+  const chordStartIndices: number[] = [];
+
+  for (let index = segmentStart; index < segmentEnd; index += 1) {
+    const chord = chords[index];
+    if (isSilentChord(chord)) {
+      continue;
+    }
+
+    const previousChord = index > segmentStart ? chords[index - 1] : '';
+    if (index === segmentStart || isSilentChord(previousChord) || previousChord !== chord) {
+      chordStartIndices.push(index);
+    }
+  }
+
+  if (chordStartIndices.length === 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  return chordStartIndices.slice(0, 8).reduce((score, chordStartIndex, order) => {
+    const visualIndex = chordStartIndex + extraBeats;
+    const modulo = visualIndex % timeSignature;
+    const distanceToDownbeat = Math.min(modulo, (timeSignature - modulo) % timeSignature);
+    const weight = order === 0 ? 20 : Math.max(4, 12 - (order * 2));
+
+    if (distanceToDownbeat === 0) {
+      return score + weight;
+    }
+
+    return score - (distanceToDownbeat * weight);
+  }, -extraBeats * 0.25);
 }
 
 export function compactSilentRunsForVisualAlignment(
@@ -171,7 +324,7 @@ function buildSilentRunWindows(
     const followedByMusic = !isSilentChord(nextChord);
 
     if (precededByMusic && followedByMusic && runEnd - index >= minSilentRunLength) {
-      windows.push({ startIndex: index, endIndex: runEnd });
+      windows.push({ startIndex: index, endIndex: runEnd, mode: 'shrink_only', source: 'silence' });
     }
 
     index = runEnd;
@@ -209,7 +362,10 @@ function compactVisualWindows(
   }
 
   const normalizedWindows = [...windows]
-    .filter((window) => window.endIndex - window.startIndex >= 2)
+    .filter((window) => {
+      const windowLength = window.endIndex - window.startIndex;
+      return window.mode === 'expand_only' ? windowLength >= 1 : windowLength >= 2;
+    })
     .sort((a, b) => a.startIndex - b.startIndex);
 
   if (normalizedWindows.length === 0) {
@@ -247,13 +403,31 @@ function compactVisualWindows(
     const deltaForward = (targetModulo - currentModulo + timeSignature) % timeSignature;
     const deltaBackward = deltaForward === 0 ? 0 : deltaForward - timeSignature;
     const canShrink = windowLength + deltaBackward >= 1;
-    const adjustment =
-      canShrink && Math.abs(deltaBackward) <= Math.abs(deltaForward)
-        ? deltaBackward
-        : deltaForward;
+    let adjustment = 0;
+
+    if (activeWindow.mode === 'expand_only') {
+      adjustment = deltaForward;
+    } else if (activeWindow.mode === 'shrink_only') {
+      adjustment = canShrink && deltaBackward < 0 ? deltaBackward : 0;
+    } else {
+      adjustment =
+        canShrink && Math.abs(deltaBackward) <= Math.abs(deltaForward)
+          ? deltaBackward
+          : deltaForward;
+    }
     const targetWindowLength = Math.max(1, windowLength + adjustment);
 
     const copiedCount = Math.min(windowLength, targetWindowLength);
+    const prependLeadingPadding = activeWindow.source === 'leading_silence' && targetWindowLength > windowLength;
+
+    if (prependLeadingPadding) {
+      const extraCount = targetWindowLength - windowLength;
+      for (let extra = 0; extra < extraCount; extra++) {
+        nextChords.push('');
+        nextBeats.push(null);
+        newIndex++;
+      }
+    }
 
     for (let offset = 0; offset < copiedCount; offset++) {
       const sourceIndex = activeWindow.startIndex + offset;
@@ -263,14 +437,27 @@ function compactVisualWindows(
       newIndex++;
     }
 
-    if (targetWindowLength > windowLength) {
-      const fillerChord = copiedCount > 0
-        ? chordGridData.chords[activeWindow.startIndex + copiedCount - 1] || 'N.C.'
-        : 'N.C.';
+    if (targetWindowLength > windowLength && !prependLeadingPadding) {
+      const isSilentWindow = chordGridData.chords
+        .slice(activeWindow.startIndex, activeWindow.endIndex)
+        .every((chord) => isSilentChord(chord));
+      const fillerChord = isSilentWindow
+        ? 'N.C.'
+        : (copiedCount > 0
+          ? chordGridData.chords[activeWindow.startIndex + copiedCount - 1] || 'N.C.'
+          : 'N.C.');
       const extraCount = targetWindowLength - windowLength;
+      const extraBeatTimestamps = activeWindow.source === 'leading_silence'
+        ? buildExpandedLeadingSilenceTimestamps(
+          chordGridData.beats,
+          activeWindow.startIndex,
+          activeWindow.endIndex,
+          extraCount
+        )
+        : Array(extraCount).fill(null);
       for (let extra = 0; extra < extraCount; extra++) {
         nextChords.push(fillerChord || 'N.C.');
-        nextBeats.push(null);
+        nextBeats.push(extraBeatTimestamps[extra] ?? null);
         newIndex++;
       }
     } else {
@@ -334,11 +521,112 @@ function buildGapCompactionWindows(
       windows.push({
         startIndex: visualOffset + gapStartBeatIndex,
         endIndex: visualOffset + resumeBeatIndex,
+        mode: 'shrink_only',
+        source: 'gap',
       });
     }
   }
 
   return windows;
+}
+
+function buildTempoChangeWindows(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): Array<VisualCompactionWindow & { prevBeatDuration: number; nextBeatDuration: number; ratio: number }> {
+  if (timeSignature <= 1 || chordGridData.chords.length < timeSignature * 3) {
+    return [];
+  }
+
+  return findTempoChangeBoundaries(chordGridData.beats, timeSignature).flatMap((boundary) => {
+    const windowEnd = boundary.boundaryIndex;
+    if (windowEnd <= 1 || windowEnd > chordGridData.chords.length) {
+      return [];
+    }
+
+    const trailingChord = chordGridData.chords[windowEnd - 1];
+    if (isSilentChord(trailingChord)) {
+      return [];
+    }
+
+    let trailingStart = windowEnd - 1;
+    while (trailingStart > 0 && chordGridData.chords[trailingStart - 1] === trailingChord) {
+      trailingStart -= 1;
+    }
+
+    const maxShrink = Math.min(3, timeSignature - 1);
+    const startIndex = Math.max(trailingStart + 1, windowEnd - maxShrink);
+
+    if (windowEnd - startIndex < 1) {
+      return [];
+    }
+
+    return [{
+      startIndex,
+      endIndex: windowEnd,
+      mode: 'shrink_only' as const,
+      source: 'tempo' as const,
+      prevBeatDuration: boundary.prevBeatDuration,
+      nextBeatDuration: boundary.nextBeatDuration,
+      ratio: boundary.ratio,
+    }];
+  });
+}
+
+function buildLeadingSilenceExpansionWindow(
+  chordGridData: ChordGridData,
+  sortedFollowupFlags: VisualCompactionWindow[],
+  timeSignature: number
+): VisualCompactionWindow | null {
+  if (sortedFollowupFlags.length === 0 || timeSignature <= 1 || chordGridData.chords.length === 0) {
+    return null;
+  }
+
+  let runEnd = 0;
+  while (runEnd < chordGridData.chords.length && isSilentChord(chordGridData.chords[runEnd])) {
+    runEnd += 1;
+  }
+
+  if (runEnd === 0 || runEnd >= chordGridData.chords.length) {
+    return null;
+  }
+
+  const nextFlagStart = sortedFollowupFlags[0]?.startIndex ?? chordGridData.chords.length;
+  if (nextFlagStart <= runEnd) {
+    return null;
+  }
+
+  const maxExtraBeats = Math.min(3, timeSignature - 1);
+  let bestExtraBeats = 0;
+  let bestScore = scoreLeadingExpansion(chordGridData.chords, runEnd, nextFlagStart, timeSignature, 0);
+
+  for (let extraBeats = 1; extraBeats <= maxExtraBeats; extraBeats += 1) {
+    const candidateScore = scoreLeadingExpansion(
+      chordGridData.chords,
+      runEnd,
+      nextFlagStart,
+      timeSignature,
+      extraBeats
+    );
+
+    if (candidateScore > bestScore + 0.5) {
+      bestScore = candidateScore;
+      bestExtraBeats = extraBeats;
+    }
+  }
+
+  if (bestExtraBeats === 0) {
+    return null;
+  }
+
+  const currentModulo = runEnd % timeSignature;
+  return {
+    startIndex: 0,
+    endIndex: runEnd,
+    targetModulo: (currentModulo + bestExtraBeats) % timeSignature,
+    mode: 'expand_only',
+    source: 'leading_silence',
+  };
 }
 
 function resolveWindowTargetModulos(
@@ -637,10 +925,22 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       buildSilentRunWindows(compactedGapGridData, timeSignature),
       timeSignature
     );
+    const tempoChangeWindows = resolveWindowTargetModulos(
+      compactedGapGridData,
+      buildTempoChangeWindows(compactedGapGridData, timeSignature),
+      timeSignature
+    );
+    const followupFlags = [...silentRunWindows, ...tempoChangeWindows]
+      .sort((a, b) => a.startIndex - b.startIndex);
+    const leadingSilenceWindow = buildLeadingSilenceExpansionWindow(
+      compactedGapGridData,
+      followupFlags,
+      timeSignature
+    );
 
     const finalGridData = compactVisualWindows(
       compactedGapGridData,
-      silentRunWindows,
+      leadingSilenceWindow ? [leadingSilenceWindow, ...followupFlags] : followupFlags,
       timeSignature,
       analysisResults.beatModel === 'madmom'
     );
@@ -658,6 +958,8 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
         finalGridCount: finalGridData.chords.length,
         gapWindows,
         silentRunWindows,
+        tempoChangeWindows,
+        leadingSilenceWindow,
         sampleBefore: gridData.chords.slice(0, 80),
         sampleAfter: finalGridData.chords.slice(0, 80),
       });
@@ -749,10 +1051,22 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     buildSilentRunWindows(compactedGapGridData, timeSignature),
     timeSignature
   );
+  const tempoChangeWindows = resolveWindowTargetModulos(
+    compactedGapGridData,
+    buildTempoChangeWindows(compactedGapGridData, timeSignature),
+    timeSignature
+  );
+  const followupFlags = [...silentRunWindows, ...tempoChangeWindows]
+    .sort((a, b) => a.startIndex - b.startIndex);
+  const leadingSilenceWindow = buildLeadingSilenceExpansionWindow(
+    compactedGapGridData,
+    followupFlags,
+    timeSignature
+  );
 
   const finalGridData = compactVisualWindows(
     compactedGapGridData,
-    silentRunWindows,
+    leadingSilenceWindow ? [leadingSilenceWindow, ...followupFlags] : followupFlags,
     timeSignature,
     analysisResults.beatModel === 'madmom'
   );
@@ -770,6 +1084,8 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       finalGridCount: finalGridData.chords.length,
       gapWindows,
       silentRunWindows,
+      tempoChangeWindows,
+      leadingSilenceWindow,
       sampleBefore: gridData.chords.slice(0, 80),
       sampleAfter: finalGridData.chords.slice(0, 80),
     });

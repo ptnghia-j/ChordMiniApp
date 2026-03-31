@@ -1196,6 +1196,7 @@ const simplifiedChordGridData = useMemo(() => {
                         currentTime={currentTime}
                         isPlaying={isPlaying}
                         isChordPlaybackEnabled={chordPlayback.isEnabled}
+                        audioUrl={audioProcessingState.audioUrl || null}
                       />
                     )}
                   </div>
@@ -1268,6 +1269,7 @@ const simplifiedChordGridData = useMemo(() => {
                       isPlaying={isPlaying}
                       currentTime={currentTime}
                       segmentationData={segmentationData}
+                      audioUrl={audioProcessingState.audioUrl || null}
                       bpm={analysisResults?.beatDetectionResult?.bpm || 120}
                       timeSignature={timeSignature}
                       onChordPlaybackChange={handleChordPlaybackChange}

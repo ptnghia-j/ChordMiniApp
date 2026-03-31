@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { RefObject } from 'react';
 
+type BeatClickHandler = (beatIndex: number, timestamp: number) => void;
+
 // Identity wrapper to disable devtools middleware in production with proper typing
 function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
   fn: import('zustand/vanilla').StateCreator<S, Mps, Mcs>
@@ -23,6 +25,7 @@ interface PlaybackStore {
   // Beat tracking
   currentBeatIndex: number;
   currentDownbeatIndex: number;
+  beatClickHandler: BeatClickHandler | null;
 
   // Video UI state
   isVideoMinimized: boolean;
@@ -37,6 +40,7 @@ interface PlaybackStore {
   setYoutubePlayer: (player: unknown) => void;
   setCurrentBeatIndex: (index: number) => void;
   setCurrentDownbeatIndex: (index: number) => void;
+  setBeatClickHandler: (handler: BeatClickHandler | null) => void;
   setIsVideoMinimized: (minimized: boolean) => void;
   setIsFollowModeEnabled: (enabled: boolean) => void;
 
@@ -67,8 +71,9 @@ export const usePlaybackStore = create<PlaybackStore>()(
       playbackRate: 1,
       audioRef: null,
       youtubePlayer: null,
-      currentBeatIndex: 0,
-      currentDownbeatIndex: 0,
+      currentBeatIndex: -1,
+      currentDownbeatIndex: -1,
+      beatClickHandler: null,
       isVideoMinimized: false,
       isFollowModeEnabled: true,
 
@@ -88,6 +93,8 @@ export const usePlaybackStore = create<PlaybackStore>()(
       setCurrentBeatIndex: (index) => set({ currentBeatIndex: index }, false, 'setCurrentBeatIndex'),
 
       setCurrentDownbeatIndex: (index) => set({ currentDownbeatIndex: index }, false, 'setCurrentDownbeatIndex'),
+
+      setBeatClickHandler: (handler) => set({ beatClickHandler: handler }, false, 'setBeatClickHandler'),
 
       setIsVideoMinimized: (minimized) => set({ isVideoMinimized: minimized }, false, 'setIsVideoMinimized'),
 
@@ -140,20 +147,9 @@ export const usePlaybackStore = create<PlaybackStore>()(
       // Beat click handler
       onBeatClick: (beatIndex, timestamp) => {
         const state = get();
+        const delegatedHandler = state.beatClickHandler;
         const player = state.youtubePlayer as { seekTo?: (time: number, allowSeekAhead: string) => void } | null;
         const audioRef = state.audioRef as RefObject<HTMLAudioElement> | null;
-
-        // Prefer YouTube player when present
-        if (player && typeof player.seekTo === 'function') {
-          try { player.seekTo(timestamp, 'seconds'); } catch {}
-        } else if (audioRef?.current) {
-          // Fallback to HTMLAudioElement for the upload page
-          try {
-            audioRef.current.currentTime = timestamp;
-            // If paused, keep state consistent with click navigation expectations
-            // Do not auto-play here; leave play/pause to user controls
-          } catch {}
-        }
 
         set(
           {
@@ -163,6 +159,27 @@ export const usePlaybackStore = create<PlaybackStore>()(
           false,
           'onBeatClick'
         );
+
+        if (delegatedHandler) {
+          try {
+            delegatedHandler(beatIndex, timestamp);
+          } catch (error) {
+            console.error('Failed to delegate beat click handler:', error);
+          }
+        } else {
+          // Prefer YouTube player when present
+          if (player && typeof player.seekTo === 'function') {
+            try { player.seekTo(timestamp, 'seconds'); } catch {}
+          } else if (audioRef?.current) {
+            // Fallback to HTMLAudioElement for the upload page
+            try {
+              audioRef.current.currentTime = timestamp;
+              // If paused, keep state consistent with click navigation expectations
+              // Do not auto-play here; leave play/pause to user controls
+            } catch {}
+          }
+        }
+
       },
 
       // Reset state
@@ -173,8 +190,9 @@ export const usePlaybackStore = create<PlaybackStore>()(
             currentTime: 0,
             duration: 0,
             playbackRate: 1,
-            currentBeatIndex: 0,
-            currentDownbeatIndex: 0,
+            currentBeatIndex: -1,
+            currentDownbeatIndex: -1,
+            beatClickHandler: null,
             isVideoMinimized: false,
             isFollowModeEnabled: true,
           },
@@ -218,4 +236,3 @@ export const useVideoUIControls = () =>
     toggleVideoMinimization: state.toggleVideoMinimization,
     toggleFollowMode: state.toggleFollowMode,
   }));
-

@@ -93,12 +93,12 @@ const TAB_CONTENT = {
       { text: 'Verified fingering patterns with multiple chord positions', color: 'green' },
       { text: 'Animated chord progression synced with audio playback', color: 'green' },
       { text: 'Responsive layout adapting to any screen size', color: 'green' },
-      { text: 'Proper musical notation with ♯ and ♭ symbols', color: 'green' },
+      { text: 'To be updated ...', color: 'green' },
     ],
   },
   lyrics: {
     title: 'Lead Sheet & Lyrics',
-    description: 'Synchronized lyrics with chord annotations and AI-powered translation support.',
+    description: 'Synchronized lyrics with chord annotations and external-AI translation support.',
     features: [
       { text: 'Word-level timing synchronization via Music.ai', color: 'purple' },
       { text: 'Chords positioned precisely above corresponding words', color: 'purple' },
@@ -114,6 +114,7 @@ const TAB_CONTENT = {
       { text: 'Full 88-key piano keyboard with active note highlighting', color: 'orange' },
       { text: 'Multi-instrument support: Piano, Guitar, Violin, Flute, Bass', color: 'orange' },
       { text: 'One-click MIDI export of chord progressions', color: 'orange' },
+      { text: 'To be updated ...', color: 'orange' },
     ],
   },
 };
@@ -606,7 +607,7 @@ export default function FeaturesTabSection() {
         >
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Features</h2>
           <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            Powerful music analysis tools for chord recognition, beat detection, and lyrics synchronization
+            Music analysis tools for chord recognition, beat detection, and lyrics synchronization
           </p>
         </motion.div>
 

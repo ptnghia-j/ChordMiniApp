@@ -10,13 +10,16 @@
 import { audioContextManager } from '../audio/audioContextManager';
 import { parseChordToMidiNotes } from '@/utils/chordToMidi';
 import {
+  adjustScheduledNotesForPlayback,
   generateNotesForInstrument,
   beatDurationFromBpm,
+  DEFAULT_LATE_PIANO_MIN_AUDIBLE_SECONDS,
   type InstrumentName,
   type ScheduledNote,
 } from '@/utils/instrumentNoteGeneration';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SegmentationResult } from '@/types/chatbotTypes';
+import type { ChordSignalDynamics } from '@/services/audio/audioDynamicsTypes';
 import {
   DEFAULT_PIANO_VOLUME,
   DEFAULT_GUITAR_VOLUME,
@@ -24,6 +27,10 @@ import {
   DEFAULT_FLUTE_VOLUME,
   DEFAULT_BASS_VOLUME,
 } from '@/config/audioDefaults';
+import {
+  getInstrumentEnvelopeProfile,
+  type InstrumentEnvelopeConfig,
+} from './instrumentEnvelopeConfig';
 
 // Lazy load smplr to reduce initial bundle size
 let SmplrModule: typeof import('smplr') | null = null;
@@ -54,6 +61,7 @@ export interface PlaybackTimingContext {
   playbackTime?: number;
   beatCount?: number;
   segmentationData?: SegmentationResult | null;
+  signalDynamics?: ChordSignalDynamics | null;
 }
 
 function resolvePatternBeatDuration(
@@ -66,17 +74,6 @@ function resolvePatternBeatDuration(
     return duration / beatCount;
   }
   return beatDurationFromBpm(bpm);
-}
-
-interface InstrumentEnvelopeConfig {
-  decayTime: number;
-  releaseLeadTime: number;
-  sustainTailSeconds: number;
-  naturalFinishWindow: number;
-  loadLoopData: boolean;
-  crossfadeOverlapSeconds: number;
-  switchAttackFloor: number;
-  switchAttackRampWindow: number;
 }
 
 interface InstrumentRenderConfig {
@@ -98,83 +95,14 @@ export class SoundfontChordPlaybackService {
   // Constants for chord playback
   private static readonly DEFAULT_BPM = 120; // Default BPM fallback
   private static readonly SAMPLE_DURATION = 3.5; // Estimated soundfont sample duration in seconds
+  private static readonly SUSTAIN_RETRIGGER_SEGMENT_SECONDS = 2.75;
+  private static readonly SUSTAIN_RETRIGGER_OVERLAP_SECONDS = 0.16;
+  private static readonly SUSTAIN_RETRIGGER_VELOCITY_SCALE = 0.94;
   private static readonly DENSITY_REFERENCE_VOICES = 3;
   private static readonly MIN_DENSITY_COMPENSATION = 0.72;
   private static readonly PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.22;
   private static readonly PIANO_LATE_ONSET_GRACE_SECONDS = 0.18;
-  private static readonly PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS = 0.12;
-  private static readonly DEFAULT_ENVELOPE: InstrumentEnvelopeConfig = {
-    decayTime: 0.45,
-    releaseLeadTime: 0.02,
-    sustainTailSeconds: 0.04,
-    naturalFinishWindow: 0.22,
-    loadLoopData: false,
-    crossfadeOverlapSeconds: 0.05,
-    switchAttackFloor: 0.76,
-    switchAttackRampWindow: 0.16,
-  };
-  private static readonly ENVELOPE_BY_INSTRUMENT: Record<InstrumentName, InstrumentEnvelopeConfig> = {
-    piano: {
-      decayTime: 0.52,
-      releaseLeadTime: 0.025,
-      sustainTailSeconds: 0.04,
-      naturalFinishWindow: 0.26,
-      loadLoopData: false,
-      crossfadeOverlapSeconds: 0.06,
-      switchAttackFloor: 0.7,
-      switchAttackRampWindow: 0.16,
-    },
-    guitar: {
-      decayTime: 0.34,
-      releaseLeadTime: 0.02,
-      sustainTailSeconds: 0.03,
-      naturalFinishWindow: 0.2,
-      loadLoopData: false,
-      crossfadeOverlapSeconds: 0.05,
-      switchAttackFloor: 0.74,
-      switchAttackRampWindow: 0.13,
-    },
-    violin: {
-      decayTime: 0.72,
-      releaseLeadTime: 0.045,
-      sustainTailSeconds: 0.06,
-      naturalFinishWindow: 0.42,
-      loadLoopData: true,
-      crossfadeOverlapSeconds: 0.08,
-      switchAttackFloor: 0.82,
-      switchAttackRampWindow: 0.18,
-    },
-    flute: {
-      decayTime: 0.66,
-      releaseLeadTime: 0.04,
-      sustainTailSeconds: 0.05,
-      naturalFinishWindow: 0.36,
-      loadLoopData: true,
-      crossfadeOverlapSeconds: 0.075,
-      switchAttackFloor: 0.8,
-      switchAttackRampWindow: 0.17,
-    },
-    saxophone: {
-      decayTime: 0.62,
-      releaseLeadTime: 0.04,
-      sustainTailSeconds: 0.05,
-      naturalFinishWindow: 0.34,
-      loadLoopData: true,
-      crossfadeOverlapSeconds: 0.075,
-      switchAttackFloor: 0.8,
-      switchAttackRampWindow: 0.17,
-    },
-    bass: {
-      decayTime: 0.28,
-      releaseLeadTime: 0.018,
-      sustainTailSeconds: 0.025,
-      naturalFinishWindow: 0.18,
-      loadLoopData: false,
-      crossfadeOverlapSeconds: 0.04,
-      switchAttackFloor: 0.78,
-      switchAttackRampWindow: 0.11,
-    },
-  };
+  private static readonly PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS = DEFAULT_LATE_PIANO_MIN_AUDIBLE_SECONDS;
   private static readonly RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRenderConfig> = {
     piano: {
       soundfontInstrument: 'acoustic_grand_piano',
@@ -234,8 +162,7 @@ export class SoundfontChordPlaybackService {
   }
 
   private getInstrumentEnvelope(instrumentName: string): InstrumentEnvelopeConfig {
-    return SoundfontChordPlaybackService.ENVELOPE_BY_INSTRUMENT[instrumentName as InstrumentName]
-      ?? SoundfontChordPlaybackService.DEFAULT_ENVELOPE;
+    return getInstrumentEnvelopeProfile(instrumentName as InstrumentName);
   }
 
   private getInstrumentRenderConfig(instrumentName: string): InstrumentRenderConfig {
@@ -303,7 +230,7 @@ export class SoundfontChordPlaybackService {
       return false;
     }
 
-    return !!this.audioContext && this.audioContext.state !== 'closed';
+    return !!this.audioContext && this.audioContext.state === 'running';
   }
 
   private getSwitchAttackMultiplier(
@@ -325,6 +252,40 @@ export class SoundfontChordPlaybackService {
 
     const rampProgress = startOffset / envelope.switchAttackRampWindow;
     return envelope.switchAttackFloor + ((1 - envelope.switchAttackFloor) * rampProgress);
+  }
+
+  private buildSustainRetriggerPlan(note: ScheduledNote): ScheduledNote[] {
+    if (note.duration <= SoundfontChordPlaybackService.SAMPLE_DURATION) {
+      return [note];
+    }
+
+    const overlap = SoundfontChordPlaybackService.SUSTAIN_RETRIGGER_OVERLAP_SECONDS;
+    const segment = SoundfontChordPlaybackService.SUSTAIN_RETRIGGER_SEGMENT_SECONDS;
+    const stride = Math.max(0.5, segment - overlap);
+    const segments: ScheduledNote[] = [];
+
+    for (let segmentStart = note.startOffset; segmentStart < note.startOffset + note.duration - 0.001; segmentStart += stride) {
+      const elapsedWithinNote = segmentStart - note.startOffset;
+      const remainingWithinNote = note.duration - elapsedWithinNote;
+      if (remainingWithinNote <= 0) {
+        break;
+      }
+
+      const requestedDuration = Math.min(segment + overlap, remainingWithinNote);
+      const isFirstSegment = elapsedWithinNote <= 0.0001;
+      segments.push({
+        ...note,
+        startOffset: segmentStart,
+        duration: requestedDuration,
+        velocityMultiplier: note.velocityMultiplier * (
+          isFirstSegment
+            ? 1
+            : SoundfontChordPlaybackService.SUSTAIN_RETRIGGER_VELOCITY_SCALE
+        ),
+      });
+    }
+
+    return segments.length > 0 ? segments : [note];
   }
 
   /**
@@ -559,6 +520,7 @@ export class SoundfontChordPlaybackService {
         startTime: timingContext?.startTime,
         timeSignature,
         segmentationData: timingContext?.segmentationData,
+        signalDynamics: timingContext?.signalDynamics,
         guitarVoicing,
         targetKey,
       });
@@ -627,6 +589,7 @@ export class SoundfontChordPlaybackService {
       startTime: timingContext?.startTime,
       timeSignature,
       segmentationData: timingContext?.segmentationData,
+      signalDynamics: timingContext?.signalDynamics,
       guitarVoicing,
       targetKey,
     });
@@ -714,87 +677,30 @@ export class SoundfontChordPlaybackService {
     const elapsedInChord = timingContext?.playbackTime !== undefined && timingContext?.startTime !== undefined
       ? Math.max(0, timingContext.playbackTime - timingContext.startTime)
       : 0;
-    const adjustedNotes = scheduledNotes
-      .map((sn) => {
-        const originalEndOffset = sn.startOffset + sn.duration;
-        const shouldRecoverLatePianoOnset = instrumentName === 'piano'
-          && sn.startOffset <= 0.0001
-          && elapsedInChord > 0
-          && elapsedInChord <= SoundfontChordPlaybackService.PIANO_LATE_ONSET_GRACE_SECONDS;
-
-        if (originalEndOffset <= elapsedInChord) {
-          if (shouldRecoverLatePianoOnset) {
-            return {
-              ...sn,
-              startOffset: 0,
-              duration: Math.min(
-                sn.duration,
-                Math.max(
-                  SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
-                  sn.duration * 0.75,
-                ),
-              ),
-            } satisfies ScheduledNote;
-          }
-          return null;
-        }
-
-        const adjustedStartOffset = Math.max(0, sn.startOffset - elapsedInChord);
-        const adjustedDuration = originalEndOffset - Math.max(elapsedInChord, sn.startOffset);
-        const shouldClampLatePianoOnset = shouldRecoverLatePianoOnset
-          && adjustedStartOffset <= 0.0001
-          && adjustedDuration < SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS;
-        if (adjustedDuration <= 0) {
-          if (shouldRecoverLatePianoOnset) {
-            return {
-              ...sn,
-              startOffset: 0,
-              duration: Math.min(
-                sn.duration,
-                Math.max(
-                  SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
-                  sn.duration * 0.75,
-                ),
-              ),
-            } satisfies ScheduledNote;
-          }
-          return null;
-        }
-
-        if (shouldClampLatePianoOnset) {
-          return {
-            ...sn,
-            startOffset: 0,
-            duration: Math.min(
-              sn.duration,
-              Math.max(
-                SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
-                sn.duration * 0.75,
-              ),
-            ),
-          } satisfies ScheduledNote;
-        }
-
-        return {
-          ...sn,
-          startOffset: adjustedStartOffset,
-          duration: adjustedDuration,
-        } satisfies ScheduledNote;
-      })
-      .filter((sn): sn is ScheduledNote => sn !== null);
+    const adjustedNotes = adjustScheduledNotesForPlayback(scheduledNotes, {
+      instrumentName: instrumentName as InstrumentName,
+      elapsedInChord,
+      latePianoOnsetGraceSeconds: SoundfontChordPlaybackService.PIANO_LATE_ONSET_GRACE_SECONDS,
+      latePianoMinAudibleSeconds: SoundfontChordPlaybackService.PIANO_LATE_ONSET_MIN_AUDIBLE_SECONDS,
+    });
 
     if (adjustedNotes.length === 0) {
       return;
     }
 
+    const sustainedRetriggerInstruments = new Set<InstrumentName>(['violin', 'flute']);
+    const playbackNotes = instrumentName && sustainedRetriggerInstruments.has(instrumentName as InstrumentName)
+      ? adjustedNotes.flatMap((note) => this.buildSustainRetriggerPlan(note))
+      : adjustedNotes;
+
     const onsetDensity = new Map<string, number>();
-    for (const note of adjustedNotes) {
+    for (const note of playbackNotes) {
       const onsetKey = note.startOffset.toFixed(4);
       onsetDensity.set(onsetKey, (onsetDensity.get(onsetKey) ?? 0) + 1);
     }
 
     // Play each scheduled note
-    for (const sn of adjustedNotes) {
+    for (const sn of playbackNotes) {
       const simultaneousNotes = onsetDensity.get(sn.startOffset.toFixed(4)) ?? 1;
       const isShortPianoBlockChordOnset = instrumentName === 'piano'
         && sn.startOffset <= 0.0001
@@ -824,8 +730,11 @@ export class SoundfontChordPlaybackService {
       // Let smplr shape the release via decayTime and keep only a tiny sustain tail.
       const smplrDuration = sn.duration + envelope.sustainTailSeconds;
       const supportsLooping = typeof instrument.hasLoops === 'boolean' ? instrument.hasLoops : true;
+      const shouldUseRetriggerSustain = sustainedRetriggerInstruments.has(instrumentName as InstrumentName)
+        && sn.duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
       const needsLoop = isSustainedInstrument
         && supportsLooping
+        && !shouldUseRetriggerSustain
         && sn.duration > SoundfontChordPlaybackService.SAMPLE_DURATION;
 
       const stopFn = instrument.start({
@@ -853,7 +762,7 @@ export class SoundfontChordPlaybackService {
     this.activeNotes.set(instrumentName, activeNotesForInstrument);
 
     // Schedule safety timeout (fires slightly before smplr's internal timeout)
-    const remainingDuration = adjustedNotes.reduce(
+    const remainingDuration = playbackNotes.reduce(
       (maxEnd, note) => Math.max(maxEnd, note.startOffset + note.duration + envelope.sustainTailSeconds + envelope.decayTime),
       0,
     );

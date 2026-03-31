@@ -17,6 +17,7 @@
 import type { ChordEvent } from './chordToMidi';
 import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { SegmentationResult } from '@/types/chatbotTypes';
+import type { AudioDynamicsAnalysisResult } from '@/services/audio/audioDynamicsTypes';
 import {
   beatDurationFromBpm,
   generateNotesForInstrument,
@@ -211,6 +212,7 @@ function generateInstrumentMidiNotes(
   channel: number,
   timeSignature: number = 4,
   segmentationData?: SegmentationResult | null,
+  signalAnalysis?: AudioDynamicsAnalysisResult | null,
 ): MidiNoteEvent[] {
   const midiEvents: MidiNoteEvent[] = [];
   const BASE_VELOCITY = 80;
@@ -227,6 +229,7 @@ function generateInstrumentMidiNotes(
     totalDuration: totalSongDuration,
     segmentationData,
   });
+  dynamics.setSignalAnalysis(signalAnalysis ?? null);
 
   const beatDuration = beatDurationFromBpm(bpm);
 
@@ -238,7 +241,14 @@ function generateInstrumentMidiNotes(
 
     // Compute dynamic velocity for this chord event
     const estimatedBeatIndex = event.beatIndex ?? Math.round(startTime / beatDuration);
-    const dynamicMultiplier = dynamics.getExportVelocity(startTime, estimatedBeatIndex, chordName);
+    const signalDynamics = dynamics.getSignalDynamics(startTime, duration);
+    const dynamicMultiplier = dynamics.getVelocityMultiplier(
+      startTime,
+      estimatedBeatIndex,
+      chordName,
+      duration,
+      signalDynamics,
+    );
     const scheduledNotes = generateNotesForInstrument(instrumentName as InstrumentName, {
       chordName,
       chordNotes,
@@ -246,6 +256,8 @@ function generateInstrumentMidiNotes(
       beatDuration: eventBeatDuration,
       startTime,
       timeSignature,
+      segmentationData,
+      signalDynamics,
     });
 
     for (const scheduledNote of scheduledNotes) {
@@ -277,6 +289,8 @@ export interface MidiExportOptions {
   bpm?: number;
   /** Optional song segmentation used for section-aware velocity shaping */
   segmentationData?: SegmentationResult | null;
+  /** Optional analyzed signal contours so export matches signal-driven playback patterns */
+  signalAnalysis?: AudioDynamicsAnalysisResult | null;
 }
 
 /**
@@ -358,6 +372,7 @@ export function exportChordEventsToMidi(
       channel,
       timeSignature,
       segmentationData,
+      options?.signalAnalysis,
     );
     const displayName = inst.name.charAt(0).toUpperCase() + inst.name.slice(1);
     return buildTrackChunk(midiNotes, channel, program, displayName);

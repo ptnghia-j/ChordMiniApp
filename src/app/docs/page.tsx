@@ -20,7 +20,7 @@ import {
   FiAlertCircle,
   FiInfo
 } from 'react-icons/fi';
-import { Card, CardBody } from '@heroui/react';
+import { Card, CardBody, Chip } from '@heroui/react';
 
 // Reusable Status Icon Component
 const StatusIcon = ({ status }: { status: 'Operational' | 'Degraded' | 'Offline' | 'Active' | 'Enabled' }) => {
@@ -31,6 +31,51 @@ const StatusIcon = ({ status }: { status: 'Operational' | 'Degraded' | 'Offline'
   
   return <div className={`w-3 h-3 ${colorClass} rounded-full animate-pulse`}></div>;
 };
+
+interface ModelCardProps {
+  status: 'Operational' | 'Degraded' | 'Offline' | 'Active' | 'Enabled';
+  title: string;
+  description: React.ReactNode;
+  footer: React.ReactNode;
+  badgeLabel?: string;
+  badgeColor?: 'success' | 'warning';
+  accentClassName?: string;
+}
+
+const ModelCard = ({
+  status,
+  title,
+  description,
+  footer,
+  badgeLabel,
+  badgeColor = 'success',
+  accentClassName = 'border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900',
+}: ModelCardProps) => (
+  <Card shadow="sm" className={`transition-all hover:shadow-lg ${accentClassName}`}>
+    <CardBody className="p-6">
+      <div className="flex items-center gap-3 mb-3">
+        <StatusIcon status={status} />
+        <h4 className="font-semibold text-gray-900 dark:text-white">{title}</h4>
+        {badgeLabel ? (
+          <Chip
+            size="sm"
+            variant="flat"
+            color={badgeColor}
+            className="font-medium"
+          >
+            {badgeLabel}
+          </Chip>
+        ) : null}
+      </div>
+      <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+        {description}
+      </p>
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        {footer}
+      </div>
+    </CardBody>
+  </Card>
+);
 
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>('welcome');
@@ -53,7 +98,6 @@ export default function DocsPage() {
       'endpoints',
       'examples',
       'sample-responses',
-      'troubleshooting',
       'status'
     ];
 
@@ -148,9 +192,6 @@ export default function DocsPage() {
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                     Support
                   </h3>
-                  <a href="#troubleshooting" className={navItemClasses('troubleshooting')}>
-                    <FiAlertCircle className="w-4 h-4" /> Troubleshooting
-                  </a>
                   <a href="#status" className={navItemClasses('status')}>
                     <FiServer className="w-4 h-4" /> Status
                   </a>
@@ -172,7 +213,7 @@ export default function DocsPage() {
                     ChordMini API Documentation
                   </h1>
                   <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                    A comprehensive guide to using our powerful audio analysis API, covering beat detection, chord recognition, and more.
+                    A comprehensive guide to using our audio analysis API, covering beat detection, chord recognition, and more.
                   </p>
                 </div>
               </section>
@@ -333,78 +374,60 @@ export default function DocsPage() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Beat Detection Models</h3>
                 <div className="grid md:grid-cols-2 gap-6 mb-8">
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-slate-900">
-                    <div className="flex items-center gap-3 mb-3">
-                      <StatusIcon status="Operational" />
-                      <h4 className="font-semibold text-gray-900 dark:text-white">Madmom</h4>
-                      <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Default</span>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                      Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4).
-                    </p>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      <strong>Best for:</strong> Pop, Rock, Electronic music
-                    </div>
-                  </div>
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-slate-900">
-                    <div className="flex items-center gap-3 mb-3">
-                      <StatusIcon status="Operational" />
-                      <h4 className="font-semibold text-gray-900 dark:text-white">Beat-Transformer</h4>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                      DL model with 5-channel audio separation, flexible in time signatures, slow processing speed.
-                    </p>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      <strong>Best for:</strong> Complex mixes, layered instrumentation
-                    </div>
-                  </div>
+                  <ModelCard
+                    status="Operational"
+                    title="Madmom"
+                    badgeLabel="Default"
+                    description="Neural network with high accuracy and speed, best for common time signatures (3/4, 4/4)."
+                    footer={<><strong>Best for:</strong> Pop, Rock, Electronic music</>}
+                  />
+                  <ModelCard
+                    status="Operational"
+                    title="Beat-Transformer"
+                    description="DL model with 5-channel audio separation, flexible in time signatures, slow processing speed."
+                    footer={<><strong>Best for:</strong> Complex mixes, layered instrumentation</>}
+                  />
                 </div>
 
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Chord Recognition Models</h3>
                 <div className="grid gap-6">
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-slate-900">
-                    <div className="flex items-center gap-3 mb-3">
-                      <StatusIcon status="Operational" />
-                      <h4 className="font-semibold text-gray-900 dark:text-white">Chord-CNN-LSTM</h4>
-                      <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">Default</span>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                      Convolutional and LSTM neural network for chord recognition with 301 chord labels. Excellent balance of accuracy and performance.
-                    </p>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      <strong>Labels:</strong> 301 chord types • <strong>Best for:</strong> General purpose chord recognition
-                    </div>
-                  </div>
+                  <ModelCard
+                    status="Operational"
+                    title="Chord-CNN-LSTM"
+                    badgeLabel="Default"
+                    description="Convolutional and LSTM neural network for chord recognition with 301 chord labels. Excellent balance of accuracy and performance."
+                    footer={<><strong>Labels:</strong> 301 chord types • <strong>Best for:</strong> General purpose chord recognition</>}
+                  />
                   {isDevelopmentEnvironment() && (
                     <>
-                      <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
-                        <div className="flex items-center gap-3 mb-3">
-                          <StatusIcon status="Degraded" />
-                          <h4 className="font-semibold text-gray-900 dark:text-white">BTC SL (Supervised Learning)</h4>
-                          <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
-                        </div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                          Transformer model with 170 chord labels, supervised learning approach.
-                          <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          <strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development
-                        </div>
-                      </div>
-                      <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
-                        <div className="flex items-center gap-3 mb-3">
-                          <StatusIcon status="Degraded" />
-                          <h4 className="font-semibold text-gray-900 dark:text-white">BTC PL (Pseudo-Label)</h4>
-                          <span className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded-full">DEV ONLY</span>
-                        </div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-                          Transformer model with 170 chord labels, pseudo-label training approach.
-                          <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          <strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development
-                        </div>
-                      </div>
+                      <ModelCard
+                        status="Degraded"
+                        title="BTC SL (Supervised Learning)"
+                        badgeLabel="DEV ONLY"
+                        badgeColor="warning"
+                        accentClassName="border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20"
+                        description={
+                          <>
+                            Transformer model with 170 chord labels, supervised learning approach.
+                            <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
+                          </>
+                        }
+                        footer={<><strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development</>}
+                      />
+                      <ModelCard
+                        status="Degraded"
+                        title="BTC PL (Pseudo-Label)"
+                        badgeLabel="DEV ONLY"
+                        badgeColor="warning"
+                        accentClassName="border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20"
+                        description={
+                          <>
+                            Transformer model with 170 chord labels, pseudo-label training approach.
+                            <strong className="text-orange-600 dark:text-orange-400"> Development only - requires local repository cloning.</strong>
+                          </>
+                        }
+                        footer={<><strong>Labels:</strong> 170 chord types • <strong>Best for:</strong> Research and development</>}
+                      />
                     </>
                   )}
                 </div>

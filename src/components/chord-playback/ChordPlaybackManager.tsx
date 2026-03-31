@@ -34,6 +34,7 @@ interface ChordPlaybackManagerProps {
   isPlaying: boolean;
   currentTime: number;
   segmentationData?: SegmentationResult | null;
+  audioUrl?: string | null;
   bpm?: number; // Beats per minute for dynamic timing (optional, defaults to 120)
   timeSignature?: number; // Beats per measure (e.g. 3 for 3/4, defaults to 4)
   onChordPlaybackChange: (chordPlayback: {
@@ -57,6 +58,7 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
   isPlaying,
   currentTime,
   segmentationData,
+  audioUrl,
   bpm,
   timeSignature,
   onChordPlaybackChange
@@ -75,6 +77,7 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
     isPlaying,
     currentTime,
     segmentationData,
+    audioUrl,
     bpm, // Pass BPM for dynamic timing
     timeSignature, // Pass time signature for pattern selection
   });
@@ -117,4 +120,3 @@ export const ChordPlaybackManager: React.FC<ChordPlaybackManagerProps> = ({
   // This component doesn't render anything
   return null;
 };
-
