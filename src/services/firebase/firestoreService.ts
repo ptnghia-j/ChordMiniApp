@@ -161,6 +161,15 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
 
   return {
     ...data,
+    chords: Array.isArray(data.chords)
+      ? data.chords.map((chord) => ({
+          ...chord,
+          time:
+            typeof chord?.time === 'number' && Number.isFinite(chord.time)
+              ? chord.time
+              : (typeof chord?.start === 'number' && Number.isFinite(chord.start) ? chord.start : 0),
+        }))
+      : [],
     synchronizedChords: rebuildSynchronizedChordsIfNeeded(data),
     keySignature: data.keySignature ?? data.primaryKey ?? null,
     keyModulation: data.keyModulation ?? data.modulation ?? null,
@@ -607,6 +616,10 @@ async function performFirestoreSave(
         // console.log(`🔍 Processing chord ${index}:`, chord);
         return {
           chord: chord.chord,
+          time:
+            typeof chord.time === 'number' && Number.isFinite(chord.time)
+              ? chord.time
+              : chord.start,
           start: chord.start,
           end: chord.end,
           confidence: chord.confidence

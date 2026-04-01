@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import {
+  AudioMappingItem,
   createShiftedChords,
   buildChordOccurrenceMap,
   buildChordOccurrenceCorrectionMap,
@@ -27,7 +28,8 @@ export const useChordDataProcessing = (
   timeSignature: number,
   shiftCount: number,
   showCorrectedChords: boolean,
-  sequenceCorrections: SequenceCorrections | null
+  sequenceCorrections: SequenceCorrections | null,
+  originalAudioMapping?: AudioMappingItem[]
 ): ChordDataProcessing => {
   
   // Create shifted chord array with optimal alignment
@@ -46,8 +48,12 @@ export const useChordDataProcessing = (
   }, [sequenceCorrections]);
 
   const chordSequenceIndexMap = useMemo(() => {
-    return buildChordSequenceIndexMap(shiftedChords, sequenceCorrections?.originalSequence);
-  }, [shiftedChords, sequenceCorrections]);
+    return buildChordSequenceIndexMap(
+      shiftedChords,
+      sequenceCorrections?.originalSequence,
+      originalAudioMapping
+    );
+  }, [shiftedChords, sequenceCorrections, originalAudioMapping]);
 
   // Chord display function with corrections
   const getDisplayChordLocal = useMemo(() => {

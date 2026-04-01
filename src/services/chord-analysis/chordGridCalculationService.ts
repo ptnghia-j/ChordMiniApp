@@ -52,7 +52,7 @@ function shouldLogAlignmentDebug(beatModel: string | undefined): boolean {
   if (typeof window === 'undefined' || process.env.NODE_ENV !== 'development') {
     return false;
   }
-  return beatModel === 'madmom' && window.localStorage.getItem('alignmentDebug') === '1';
+  return beatModel === 'madmom';
 }
 
 function logAlignmentDebug(label: string, payload: Record<string, unknown>): void {
@@ -576,7 +576,8 @@ function buildTempoChangeWindows(
 function buildLeadingSilenceExpansionWindow(
   chordGridData: ChordGridData,
   sortedFollowupFlags: VisualCompactionWindow[],
-  timeSignature: number
+  timeSignature: number,
+  existingLeadingOffset: number
 ): VisualCompactionWindow | null {
   if (sortedFollowupFlags.length === 0 || timeSignature <= 1 || chordGridData.chords.length === 0) {
     return null;
@@ -588,6 +589,13 @@ function buildLeadingSilenceExpansionWindow(
   }
 
   if (runEnd === 0 || runEnd >= chordGridData.chords.length) {
+    return null;
+  }
+
+  // Preserve the old "local first-segment realignment" behavior for short intros,
+  // but avoid double-applying offset when the song already has a long leading
+  // silent beat run beyond the explicit padding/shift we computed globally.
+  if (existingLeadingOffset > 0 && runEnd > existingLeadingOffset + timeSignature) {
     return null;
   }
 
@@ -817,7 +825,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     if (typeof firstBeat === 'number') {
       // Upload workflow: beats is number[]
       firstDetectedBeat = firstBeat;
-    } else if (typeof firstBeat === 'object' && firstBeat?.time) {
+    } else if (typeof firstBeat === 'object' && typeof firstBeat?.time === 'number') {
       // YouTube workflow: beats is BeatInfo[]
       firstDetectedBeat = firstBeat.time;
     }
@@ -852,7 +860,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
         if (typeof beat === 'number') {
           // Upload workflow: beats is number[]
           return beat;
-        } else if (typeof beat === 'object' && beat?.time) {
+        } else if (typeof beat === 'object' && typeof beat?.time === 'number') {
           // YouTube workflow: beats is BeatInfo[]
           return beat.time;
         }
@@ -875,7 +883,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
         if (typeof beat === 'number') {
           // Upload workflow: beats is number[]
           originalTimestamp = beat;
-        } else if (typeof beat === 'object' && beat?.time) {
+        } else if (typeof beat === 'object' && typeof beat?.time === 'number') {
           // YouTube workflow: beats is BeatInfo[]
           originalTimestamp = beat.time;
         }
@@ -935,7 +943,8 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     const leadingSilenceWindow = buildLeadingSilenceExpansionWindow(
       compactedGapGridData,
       followupFlags,
-      timeSignature
+      timeSignature,
+      safePaddingCount + safeShiftCount
     );
 
     const finalGridData = compactVisualWindows(
@@ -946,16 +955,28 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
     );
 
     if (shouldLogAlignmentDebug(analysisResults.beatModel)) {
+      const leadingSilentRunLength = (() => {
+        let runLength = 0;
+        while (runLength < compactedGapGridData.chords.length && isSilentChord(compactedGapGridData.chords[runLength])) {
+          runLength += 1;
+        }
+        return runLength;
+      })();
       logAlignmentDebug('cnn-lstm-grid', {
         timeSignature,
         bpm,
+        firstDetectedBeat,
         shiftCount: safeShiftCount,
         paddingCount: safePaddingCount,
+        totalLeadingOffset: safePaddingCount + safeShiftCount,
+        leadingSilentRunLength,
         rawChordCount: regularChords.length,
         rawBeatCount: regularBeats.length,
         initialGridCount: gridData.chords.length,
         afterGapWindowCount: compactedGapGridData.chords.length,
         finalGridCount: finalGridData.chords.length,
+        firstRegularBeats: regularBeats.slice(0, 16),
+        firstRegularChords: regularChords.slice(0, 16),
         gapWindows,
         silentRunWindows,
         tempoChangeWindows,
@@ -977,7 +998,7 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
       if (typeof beat === 'number') {
         // Upload workflow: beats is number[]
         return beat;
-      } else if (typeof beat === 'object' && beat?.time) {
+      } else if (typeof beat === 'object' && typeof beat?.time === 'number') {
         // YouTube workflow: beats is BeatInfo[]
         return beat.time;
       }
@@ -1061,7 +1082,8 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   const leadingSilenceWindow = buildLeadingSilenceExpansionWindow(
     compactedGapGridData,
     followupFlags,
-    timeSignature
+    timeSignature,
+    btcPaddingCount + btcShiftCount
   );
 
   const finalGridData = compactVisualWindows(
@@ -1072,16 +1094,28 @@ export const getChordGridData = (analysisResults: AnalysisResult | null): ChordG
   );
 
   if (shouldLogAlignmentDebug(analysisResults.beatModel)) {
+    const leadingSilentRunLength = (() => {
+      let runLength = 0;
+      while (runLength < compactedGapGridData.chords.length && isSilentChord(compactedGapGridData.chords[runLength])) {
+        runLength += 1;
+      }
+      return runLength;
+    })();
     logAlignmentDebug('btc-grid', {
       timeSignature,
       bpm: btcBpm,
+      firstDetectedBeat: btcFirstDetectedBeatTime,
       shiftCount: btcShiftCount,
       paddingCount: btcPaddingCount,
+      totalLeadingOffset: btcPaddingCount + btcShiftCount,
+      leadingSilentRunLength,
       rawChordCount: btcChords.length,
       rawBeatCount: btcBeats.length,
       initialGridCount: gridData.chords.length,
       afterGapWindowCount: compactedGapGridData.chords.length,
       finalGridCount: finalGridData.chords.length,
+      firstRegularBeats: btcBeats.slice(0, 16),
+      firstRegularChords: btcChords.slice(0, 16),
       gapWindows,
       silentRunWindows,
       tempoChangeWindows,

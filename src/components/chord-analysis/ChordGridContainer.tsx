@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import ChordGrid from '@/components/chord-analysis/ChordGrid';
 import { useAnalysisResults, useKeySignature, useIsDetectingKey, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
 import { useBeatHandlers } from '@/stores/playbackStore';
@@ -192,6 +192,36 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     mergedRomanNumeralData,
     isPitchShiftEnabled,
     targetKey
+  ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || process.env.NODE_ENV !== 'development') {
+      return;
+    }
+
+    console.info('[alignment-debug] chord-grid-container', {
+      isDetectingKey: mergedIsDetectingKey,
+      showCorrectedChords: mergedShowCorrectedChords,
+      effectiveShowCorrectedChords: stableProps.showCorrectedChords,
+      keySignature: mergedKeySignature,
+      sequenceOriginalLength: sequenceCorrections?.originalSequence?.length ?? 0,
+      sequenceCorrectedLength: sequenceCorrections?.correctedSequence?.length ?? 0,
+      gridLength: chordGridData.chords.length,
+      paddingCount: chordGridData.paddingCount,
+      shiftCount: chordGridData.shiftCount,
+      firstGridChords: chordGridData.chords.slice(0, 24),
+      firstEffectiveChords: stableProps.chords.slice(0, 24),
+    });
+  }, [
+    chordGridData.chords,
+    chordGridData.paddingCount,
+    chordGridData.shiftCount,
+    mergedIsDetectingKey,
+    mergedKeySignature,
+    mergedShowCorrectedChords,
+    sequenceCorrections,
+    stableProps.chords,
+    stableProps.showCorrectedChords,
   ]);
 
   // Get click handler from Zustand store

@@ -145,7 +145,8 @@ export const getChordComparisonKey = (chord: string): string => {
  */
 export const buildChordSequenceIndexMap = (
   shiftedChords: string[],
-  referenceSequence?: string[]
+  referenceSequence?: string[],
+  originalAudioMapping?: AudioMappingItem[]
 ): number[] => {
   const map = Array.from({ length: shiftedChords.length }, () => -1);
 
@@ -190,6 +191,51 @@ export const buildChordSequenceIndexMap = (
   }
 
   const normalizedReference = referenceSequence.map(getChordComparisonKey);
+
+  if (originalAudioMapping?.length) {
+    const sortedAudioMapping = [...originalAudioMapping].sort((left, right) => left.audioIndex - right.audioIndex);
+    const visualIndexToSequenceIndex = new Map<number, number>();
+    let referenceIndex = -1;
+    let lastNormalizedChord: string | null = null;
+
+    for (const item of sortedAudioMapping) {
+      const normalizedChord = getChordComparisonKey(item.chord);
+
+      if (!normalizedChord || normalizedChord === 'N') {
+        lastNormalizedChord = null;
+        continue;
+      }
+
+      if (normalizedChord === lastNormalizedChord) {
+        continue;
+      }
+
+      let matchedIndex = -1;
+      for (let i = referenceIndex + 1; i < normalizedReference.length; i += 1) {
+        if (normalizedReference[i] === normalizedChord) {
+          matchedIndex = i;
+          break;
+        }
+      }
+
+      if (matchedIndex >= 0) {
+        referenceIndex = matchedIndex;
+      }
+
+      if (!visualIndexToSequenceIndex.has(item.visualIndex)) {
+        visualIndexToSequenceIndex.set(item.visualIndex, matchedIndex);
+      }
+
+      lastNormalizedChord = normalizedChord;
+    }
+
+    for (let visualIndex = 0; visualIndex < shiftedChords.length; visualIndex += 1) {
+      map[visualIndex] = visualIndexToSequenceIndex.get(visualIndex) ?? -1;
+    }
+
+    return map;
+  }
+
   let referenceIndex = -1;
 
   groups.forEach((group) => {
@@ -200,10 +246,6 @@ export const buildChordSequenceIndexMap = (
         matchedIndex = i;
         break;
       }
-    }
-
-    if (matchedIndex === -1) {
-      matchedIndex = referenceIndex + 1 < normalizedReference.length ? referenceIndex + 1 : referenceIndex;
     }
 
     if (matchedIndex >= 0) {
@@ -293,19 +335,16 @@ export const getDisplayChord = (
     return { chord: originalChord, wasCorrected: false };
   }
 
+  if (!showCorrectedChords) {
+    return { chord: originalChord, wasCorrected: false };
+  }
+
   if (sequenceCorrections && visualIndex !== undefined && chordSequenceIndexMap) {
     const sequenceIndex = chordSequenceIndexMap[visualIndex] ?? -1;
 
     if (sequenceIndex >= 0) {
       const sequenceOriginal = sequenceCorrections.originalSequence[sequenceIndex];
       const sequenceCorrected = sequenceCorrections.correctedSequence[sequenceIndex];
-
-      if (!showCorrectedChords) {
-        return {
-          chord: sequenceOriginal ?? originalChord,
-          wasCorrected: false,
-        };
-      }
 
       if (sequenceCorrected) {
         return {
@@ -316,11 +355,6 @@ export const getDisplayChord = (
     }
   }
 
-  // Early return when corrections are disabled and no authoritative sequence override is available
-  if (!showCorrectedChords) {
-    return { chord: originalChord, wasCorrected: false };
-  }
-  
   // Duplicate-aware sequence-based corrections
   if (sequenceCorrections && visualIndex !== undefined) {
     const targetOccurrence = chordGroupOccurrenceMap[visualIndex] ?? 0;
