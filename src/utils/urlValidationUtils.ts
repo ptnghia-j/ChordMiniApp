@@ -14,6 +14,76 @@ export interface UrlValidationResult {
   responseTime?: number;
 }
 
+const DEFAULT_ALLOWED_AUDIO_DOMAINS = [
+  'quicktube.app',
+  'dl.quicktube.app',
+  'storage.googleapis.com',
+  'firebasestorage.googleapis.com',
+  'lukavukanovic.xyz',
+  'ytdown.io',
+  'ytcontent.net',
+  'archive.org',
+  'us.archive.org',
+] as const;
+
+export interface SafeAudioSourceValidationOptions {
+  allowDevelopmentLocalhost?: boolean;
+  allowedDomains?: readonly string[];
+}
+
+function isHostnameAllowed(hostname: string, allowedDomains: readonly string[]): boolean {
+  return allowedDomains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
+}
+
+function isDevelopmentLocalhost(url: URL): boolean {
+  if (process.env.NODE_ENV !== 'development') {
+    return false;
+  }
+
+  return ['localhost', '127.0.0.1'].includes(url.hostname);
+}
+
+/**
+ * Parse and validate an audio source URL before any server-side fetch.
+ */
+export function parseAndValidateAudioSourceUrl(
+  url: string,
+  options: SafeAudioSourceValidationOptions = {}
+): URL {
+  const {
+    allowDevelopmentLocalhost = false,
+    allowedDomains = DEFAULT_ALLOWED_AUDIO_DOMAINS,
+  } = options;
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error('Invalid URL format');
+  }
+  const isLocalhost = allowDevelopmentLocalhost && isDevelopmentLocalhost(parsedUrl);
+  const isHttp = parsedUrl.protocol === 'http:';
+  const isHttps = parsedUrl.protocol === 'https:';
+
+  if (!isHttps && !(isLocalhost && isHttp)) {
+    throw new Error('Only HTTPS URLs are allowed');
+  }
+
+  if (parsedUrl.username || parsedUrl.password) {
+    throw new Error('URL credentials are not allowed');
+  }
+
+  if (!isLocalhost && !isHostnameAllowed(parsedUrl.hostname, allowedDomains)) {
+    throw new Error('URL domain not allowed');
+  }
+
+  if (!isLocalhost && parsedUrl.port && !['80', '443'].includes(parsedUrl.port)) {
+    throw new Error('URL port not allowed');
+  }
+
+  return parsedUrl;
+}
+
 /**
  * Validate that a URL is accessible with a HEAD request
  * @param url The URL to validate
@@ -173,8 +243,15 @@ export async function waitForUrlAccessibility(
  * @returns True if it's a Firebase Storage URL
  */
 export function isFirebaseStorageUrl(url: string): boolean {
-  return url.includes('firebasestorage.googleapis.com') || 
-         url.includes('storage.googleapis.com');
+  try {
+    const parsedUrl = new URL(url);
+    return isHostnameAllowed(parsedUrl.hostname, [
+      'firebasestorage.googleapis.com',
+      'storage.googleapis.com',
+    ]);
+  } catch {
+    return false;
+  }
 }
 
 /**

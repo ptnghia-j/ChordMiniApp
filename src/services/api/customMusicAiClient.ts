@@ -6,6 +6,8 @@
  */
 
 import axios from 'axios';
+import path from 'path';
+import { tmpdir } from 'os';
 
 // Types for fetch fallback client
 interface FetchConfig {
@@ -17,6 +19,22 @@ interface FetchResponse<T = unknown> {
   status: number;
   data: T;
 }
+
+const isPathWithinRoot = (candidatePath: string, rootPath: string): boolean => {
+  const relativePath = path.relative(rootPath, candidatePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+};
+
+const assertReadableLocalFilePath = (filePath: string): string => {
+  const resolvedPath = path.resolve(filePath);
+  const allowedRoots = [process.cwd(), tmpdir()];
+
+  if (!allowedRoots.some(rootPath => isPathWithinRoot(resolvedPath, rootPath))) {
+    throw new Error('Local file path is outside allowed directories');
+  }
+
+  return resolvedPath;
+};
 
 // Helper function to create a fetch-based fallback client
 const createFetchFallback = () => {
@@ -677,9 +695,10 @@ export class CustomMusicAiClient {
     try {
       // Import fs module
       const fs = await import('fs/promises');
+      const safeFilePath = assertReadableLocalFilePath(filePath);
 
       // Read the file
-      const fileData = await fs.readFile(filePath);
+      const fileData = await fs.readFile(safeFilePath);
 
       // Upload the file
       return await this.uploadFile(fileData, contentType);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { audioMetadataService } from '@/services/audio/audioMetadataService';
-import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
+import { isFirebaseStorageUrl, parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
 
 /**
  * Audio Duration Detection API Route
@@ -60,35 +60,18 @@ export async function POST(request: NextRequest) {
           console.log(`⚠️ No cached file found for ${videoId}, proceeding with URL-based detection`);
         }
       } catch (cacheError) {
-        console.warn(`⚠️ Cache lookup failed for ${videoId}:`, cacheError);
+        console.warn('⚠️ Cache lookup failed during audio-duration request', { videoId, cacheError });
       }
     }
 
     // Validate URL to prevent SSRF attacks
     try {
-      const url = new URL(audioUrl);
-      
-      // Only allow specific domains for security
-      const allowedDomains = [
-        'quicktube.app',
-        'dl.quicktube.app',
-        'storage.googleapis.com',
-        'firebasestorage.googleapis.com',
-        'lukavukanovic.xyz', // yt-mp3-go fallback service
-        'ytdown.io', // ytdown primary domain
-        'ytcontent.net' // ytdown CDN domain
-      ];
-      
-      if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
-        return NextResponse.json(
-          { success: false, error: 'URL domain not allowed' },
-          { status: 403 }
-        );
-      }
-    } catch {
+      parseAndValidateAudioSourceUrl(audioUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL format';
       return NextResponse.json(
-        { success: false, error: 'Invalid URL format' },
-        { status: 400 }
+        { success: false, error: message },
+        { status: message === 'Invalid URL format' ? 400 : 403 }
       );
     }
 
@@ -169,6 +152,7 @@ export async function POST(request: NextRequest) {
  * Try to get duration from HTTP headers with Firebase Storage retry logic
  */
 async function getDurationFromHeaders(audioUrl: string): Promise<number> {
+  parseAndValidateAudioSourceUrl(audioUrl);
   const isFirebaseUrl = isFirebaseStorageUrl(audioUrl);
   const maxRetries = isFirebaseUrl ? 3 : 1;
 
@@ -234,6 +218,7 @@ async function getDurationFromHeaders(audioUrl: string): Promise<number> {
  * Estimate duration from file size with Firebase Storage retry logic
  */
 async function estimateDurationFromFileSize(audioUrl: string): Promise<number> {
+  parseAndValidateAudioSourceUrl(audioUrl);
   const isFirebaseUrl = isFirebaseStorageUrl(audioUrl);
   const maxRetries = isFirebaseUrl ? 3 : 1;
 

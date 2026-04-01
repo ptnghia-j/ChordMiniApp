@@ -91,7 +91,7 @@ export async function findExistingAudioFile(
     };
 
   } catch (error) {
-    console.error(`❌ Error searching Firebase Storage for ${videoId}:`, error);
+    console.error('❌ Error searching Firebase Storage', { videoId, error });
     return null;
   }
 }

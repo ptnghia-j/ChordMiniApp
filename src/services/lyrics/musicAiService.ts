@@ -8,6 +8,8 @@
 import { CustomMusicAiClient } from "@/services/api/customMusicAiClient";
 import { apiKeyStorage } from "@/services/cache/apiKeyStorageService";
 import type { LyricWordTiming } from "@/types/musicAiTypes";
+import path from 'path';
+import { tmpdir } from 'os';
 
 // Define types for the Music.ai SDK responses
 interface ChordData {
@@ -92,6 +94,34 @@ interface ChordResultData {
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+
+const isPathWithinRoot = (candidatePath: string, rootPath: string): boolean => {
+  const relativePath = path.relative(rootPath, candidatePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+};
+
+const resolveLocalAudioFilePath = (audioUrl: string): string => {
+  const projectRoot = process.cwd();
+  const publicRoot = path.join(projectRoot, 'public');
+
+  let resolvedPath: string;
+  if (audioUrl.startsWith('file://')) {
+    resolvedPath = path.normalize(audioUrl.slice('file://'.length));
+  } else if (audioUrl.startsWith('/audio/')) {
+    resolvedPath = path.resolve(publicRoot, `.${audioUrl}`);
+  } else if (audioUrl.startsWith('/')) {
+    resolvedPath = path.resolve(publicRoot, `.${audioUrl}`);
+  } else {
+    resolvedPath = path.resolve(projectRoot, audioUrl);
+  }
+
+  const allowedRoots = [projectRoot, tmpdir()];
+  if (!allowedRoots.some(rootPath => isPathWithinRoot(resolvedPath, rootPath))) {
+    throw new Error('Audio file path is outside allowed directories');
+  }
+
+  return resolvedPath;
+};
 
 const buildLinesFromWordTimestamps = (words: WordTimestamp[]): LyricLine[] => {
   const lines: LyricLine[] = [];
@@ -310,19 +340,7 @@ class MusicAiService {
 
         try {
           // Get the full path to the file
-          let filePath = audioUrl;
-
-          if (audioUrl.startsWith('file://')) {
-            filePath = audioUrl.replace('file://', '');
-          } else if (audioUrl.startsWith('/audio/')) {
-            // For paths like /audio/sample.mp3, look in the public directory
-            filePath = `${process.cwd()}/public${audioUrl}`;
-          } else if (audioUrl.startsWith('/')) {
-            // For absolute paths starting with /, assume they're relative to public
-            filePath = `${process.cwd()}/public${audioUrl}`;
-          } else {
-            filePath = `${process.cwd()}${audioUrl}`;
-          }
+          const filePath = resolveLocalAudioFilePath(audioUrl);
 
           console.log(`Using file path: ${filePath}`);
 
@@ -576,19 +594,7 @@ class MusicAiService {
 
         try {
           // Get the full path to the file
-          let filePath = audioUrl;
-
-          if (audioUrl.startsWith('file://')) {
-            filePath = audioUrl.replace('file://', '');
-          } else if (audioUrl.startsWith('/audio/')) {
-            // For paths like /audio/sample.mp3, look in the public directory
-            filePath = `${process.cwd()}/public${audioUrl}`;
-          } else if (audioUrl.startsWith('/')) {
-            // For absolute paths starting with /, assume they're relative to public
-            filePath = `${process.cwd()}/public${audioUrl}`;
-          } else {
-            filePath = `${process.cwd()}${audioUrl}`;
-          }
+          const filePath = resolveLocalAudioFilePath(audioUrl);
 
           console.log(`Using file path: ${filePath}`);
 

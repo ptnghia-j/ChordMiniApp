@@ -6,6 +6,8 @@
  * direct URLs to eliminate the upload bottleneck.
  */
 
+import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
+
 export interface ParallelPipelineOptions {
   videoId: string;
   title: string;
@@ -320,8 +322,7 @@ export function canUseDirectUrlWithBackend(url: string): boolean {
     const isHttpUrl = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
 
     // Exclude Firebase Storage URLs to avoid conflicts with our Firebase upload logic
-    const isFirebaseStorage = url.includes('firebasestorage.googleapis.com') ||
-                              url.includes('storage.googleapis.com');
+    const isFirebaseStorage = isFirebaseStorageUrl(url);
 
     console.log(`🔍 URL compatibility check: ${url.substring(0, 50)}...`);
     console.log(`   Protocol: ${urlObj.protocol}, HTTP: ${isHttpUrl}, Firebase: ${isFirebaseStorage}`);

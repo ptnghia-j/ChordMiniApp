@@ -176,7 +176,7 @@ export class AudioExtractionServiceSimplified {
             };
           }
         } catch (storageError) {
-          console.warn(`⚠️ Firebase Storage check failed for ${videoId}:`, storageError);
+          console.warn('⚠️ Firebase Storage check failed during audio extraction', { videoId, storageError });
         }
 
         // Step 2: Check simplified Firestore cache as fallback
@@ -203,7 +203,7 @@ export class AudioExtractionServiceSimplified {
       const downloadResult = await ytDlpService.downloadAudio(videoUrl, videoId);
 
       if (!downloadResult.success || !downloadResult.audioUrl) {
-        console.error(`❌ yt-dlp download failed for ${videoId}:`, downloadResult.error);
+        console.error('❌ yt-dlp download failed', { videoId, error: downloadResult.error });
 
         // In development, provide additional debugging information
         if (process.env.NODE_ENV === 'development') {
@@ -372,7 +372,7 @@ export class AudioExtractionServiceSimplified {
       };
 
     } catch (error) {
-      console.error(`❌ yt-dlp extraction failed for ${videoId}:`, error);
+      console.error('❌ yt-dlp extraction failed', { videoId, error });
 
       return {
         success: false,
@@ -999,7 +999,8 @@ export class AudioExtractionServiceSimplified {
             console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
 
             // Save detailed metadata to Firestore with enhanced video information
-            console.log(`💾 Saving Firebase Storage metadata for ${videoId}:`, {
+            console.log('💾 Saving Firebase Storage metadata', {
+              videoId,
               title,
               channelTitle: videoMetadata.channelTitle,
               extractionService: 'yt-mp3-go',
@@ -1072,7 +1073,7 @@ export class AudioExtractionServiceSimplified {
       };
 
     } catch (error) {
-      console.error(`❌ yt-mp3-go extraction failed for ${videoId}:`, error);
+      console.error('❌ yt-mp3-go extraction failed', { videoId, error });
 
       return {
         success: false,

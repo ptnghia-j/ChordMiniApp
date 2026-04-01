@@ -128,7 +128,7 @@ export class SmartFirebaseCache<T> {
       return data;
 
     } catch (error) {
-      console.error(`❌ Firebase query failed for ${key}:`, error);
+      console.error('❌ Firebase query failed', { key, error });
       
       // Update error count
       const errorCount = (cached?.errorCount || 0) + 1;

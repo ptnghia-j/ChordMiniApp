@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
+import { isFirebaseStorageUrl, parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
 
 /**
  * Fetch audio with Firebase Storage-aware retry logic
@@ -9,6 +9,7 @@ async function fetchAudioWithRetry(
   fetchUrl: string,
   maxRetries: number = 3
 ): Promise<Response> {
+  parseAndValidateAudioSourceUrl(fetchUrl, { allowDevelopmentLocalhost: true });
   const isFirebaseUrl = isFirebaseStorageUrl(fetchUrl);
   const retries = isFirebaseUrl ? Math.max(maxRetries, 5) : maxRetries; // More retries for Firebase
   const baseTimeout = isFirebaseUrl ? 30000 : 120000; // Shorter timeout for Firebase retries
@@ -159,43 +160,18 @@ export async function GET(request: NextRequest) {
           console.log(`⚠️ No cached file found for ${videoId}, proceeding with Firebase URL fetch`);
         }
       } catch (cacheError) {
-        console.warn(`⚠️ Cache lookup failed for ${videoId}:`, cacheError);
+        console.warn('⚠️ Cache lookup failed during proxy-audio request', { videoId, cacheError });
       }
     }
 
     // Validate URL to prevent SSRF attacks
     try {
-      const url = new URL(audioUrl);
-
-      // Only allow specific domains for security
-      const allowedDomains = [
-        'quicktube.app',
-        'dl.quicktube.app',
-        'storage.googleapis.com',
-        'firebasestorage.googleapis.com',
-        'lukavukanovic.xyz', // yt-mp3-go fallback service
-        'ytdown.io', // ytdown primary domain
-        'ytcontent.net', // ytdown CDN domain
-        'archive.org', // Internet Archive for test audio
-        'us.archive.org' // Internet Archive CDN
-      ];
-
-      // Allow localhost URLs in development environment
-      const isDevelopment = process.env.NODE_ENV === 'development';
-      if (isDevelopment) {
-        allowedDomains.push('localhost', '127.0.0.1');
-      }
-
-      if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
-        return NextResponse.json(
-          { error: 'URL domain not allowed' },
-          { status: 403 }
-        );
-      }
-    } catch {
+      parseAndValidateAudioSourceUrl(audioUrl, { allowDevelopmentLocalhost: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL format';
       return NextResponse.json(
-        { error: 'Invalid URL format' },
-        { status: 400 }
+        { error: message },
+        { status: message === 'Invalid URL format' ? 400 : 403 }
       );
     }
 
@@ -444,25 +420,10 @@ export async function HEAD(request: NextRequest) {
     // If not cached or not Firebase URL, validate domain and proxy HEAD
     const fetchUrl = audioUrl;
     try {
-      const url = new URL(audioUrl);
-      const allowedDomains = [
-        'quicktube.app',
-        'dl.quicktube.app',
-        'storage.googleapis.com',
-        'firebasestorage.googleapis.com',
-        'lukavukanovic.xyz',
-        'ytdown.io',
-        'ytcontent.net',
-        'archive.org', // Internet Archive for test audio
-        'us.archive.org' // Internet Archive CDN
-      ];
-      const isDevelopment = process.env.NODE_ENV === 'development';
-      if (isDevelopment) allowedDomains.push('localhost','127.0.0.1');
-      if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
-        return new NextResponse(null, { status: 403 });
-      }
-    } catch {
-      return new NextResponse(null, { status: 400 });
+      parseAndValidateAudioSourceUrl(audioUrl, { allowDevelopmentLocalhost: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL format';
+      return new NextResponse(null, { status: message === 'Invalid URL format' ? 400 : 403 });
     }
 
     try {

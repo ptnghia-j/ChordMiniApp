@@ -46,7 +46,9 @@ export default function ChangelogPage() {
         'REFACTORING: Refactored metronome service for maintenance and better separation of concerns',
         'REFACTORING: Refactored soundfont chord playback service for better maintainability and separation of concerns',
       ],
-      breaking: []
+      breaking: [
+        'FIX: Various security vulnerabilities addressed.'
+      ]
     },
 
     {

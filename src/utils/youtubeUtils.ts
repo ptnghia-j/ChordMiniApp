@@ -14,8 +14,24 @@
 export function convertToPrivacyEnhancedUrl(url: string): string {
   if (!url) return url;
 
-  // Replace youtube.com with youtube-nocookie.com
-  return url.replace('youtube.com', 'youtube-nocookie.com');
+  try {
+    const parsedUrl = new URL(url);
+    const youtubeHosts = new Map<string, string>([
+      ['youtube.com', 'youtube-nocookie.com'],
+      ['www.youtube.com', 'www.youtube-nocookie.com'],
+      ['m.youtube.com', 'www.youtube-nocookie.com'],
+    ]);
+
+    const replacementHost = youtubeHosts.get(parsedUrl.hostname);
+    if (!replacementHost) {
+      return url;
+    }
+
+    parsedUrl.hostname = replacementHost;
+    return parsedUrl.toString();
+  } catch {
+    return url;
+  }
 }
 
 /**

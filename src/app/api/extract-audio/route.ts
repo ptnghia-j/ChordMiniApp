@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         // Fallback: create metadata from available data
         const fallbackMetadata: YouTubeVideoMetadata = {
           id: videoId,
-          title: originalTitle || `YouTube Video ${videoId}`,
+          title: typeof originalTitle === 'string' && originalTitle.length > 0 ? originalTitle : 'YouTube Video',
           thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
           channelTitle: 'Unknown Channel'
         };
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!result.success) {
-        console.error(`❌ Simplified extraction failed for ${videoId}:`, result.error);
+        console.error('❌ Simplified extraction failed', { videoId, error: result.error });
         return NextResponse.json(
           {
             success: false,
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       });
 
     } catch (extractionError) {
-      console.error(`❌ Simplified extraction error for ${videoId}:`, extractionError);
+      console.error('❌ Simplified extraction error', { videoId, extractionError });
 
       const errorMessage = extractionError instanceof Error ? extractionError.message : 'Unknown error';
 

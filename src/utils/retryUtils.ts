@@ -6,6 +6,7 @@
  */
 
 import { createSafeTimeoutSignal } from './environmentUtils';
+import { parseAndValidateAudioSourceUrl } from './urlValidationUtils';
 
 export interface RetryStrategy {
   name: string;
@@ -92,6 +93,7 @@ export async function retryFetch(
   url: string,
   options: RetryOptions = {}
 ): Promise<RetryResult> {
+  parseAndValidateAudioSourceUrl(url, { allowDevelopmentLocalhost: true });
   const {
     maxAttempts = RETRY_STRATEGIES.length,
     baseDelay = 1000,

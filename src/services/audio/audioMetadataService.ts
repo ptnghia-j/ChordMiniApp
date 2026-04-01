@@ -6,6 +6,7 @@
  */
 
 import { parseBuffer } from 'music-metadata';
+import { parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
 
 export interface AudioMetadata {
   duration: number; // Duration in seconds
@@ -33,6 +34,7 @@ export class AudioMetadataService {
    */
   async extractMetadataFromUrl(audioUrl: string): Promise<AudioMetadata | null> {
     try {
+      parseAndValidateAudioSourceUrl(audioUrl);
       console.log(`🎵 Extracting audio metadata from: ${audioUrl}`);
 
       // Download the audio file
@@ -108,6 +110,7 @@ export class AudioMetadataService {
    */
   async extractMetadataFromPartialDownload(audioUrl: string, maxBytes: number = 2 * 1024 * 1024): Promise<AudioMetadata | null> {
     try {
+      parseAndValidateAudioSourceUrl(audioUrl);
 
 
       // Download only the first part of the file

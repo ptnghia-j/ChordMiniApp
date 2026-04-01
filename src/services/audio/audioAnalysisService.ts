@@ -6,6 +6,7 @@
  */
 
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
 import { detectBeatsFromFile, detectBeatsWithRateLimit, detectBeatsFromFirebaseUrl } from '@/services/audio/beatDetectionService';
@@ -302,7 +303,7 @@ export async function analyzeAudioWithRateLimit(
       try {
         let results: BeatDetectionBackendResponse;
 
-        if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+        if (isLocalhost && typeof audioInput === 'string' && isFirebaseStorageUrl(audioInput)) {
           results = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
         } else {
           results = await detectBeatsWithRateLimit(audioFile, beatDetector);
@@ -464,7 +465,7 @@ export async function analyzeAudio(
   console.log(`Detecting beats using ${beatDetector} model...`);
   let beatResults: BeatDetectionBackendResponse;
   try {
-    if (isLocalhost && typeof audioInput === 'string' && audioInput.includes('firebasestorage.googleapis.com')) {
+    if (isLocalhost && typeof audioInput === 'string' && isFirebaseStorageUrl(audioInput)) {
       beatResults = await detectBeatsFromFirebaseUrl(audioInput, beatDetector, videoId);
     } else {
       beatResults = await detectBeatsFromFile(audioFile, beatDetector);
@@ -578,5 +579,4 @@ export async function analyzeAudio(
     }
   };
 }
-
 

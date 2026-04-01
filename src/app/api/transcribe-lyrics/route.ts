@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import musicAiService from '@/services/lyrics/musicAiService';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { firebaseApp } from '@/services/firebase/firebaseService';
+import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 interface CachedLyricsData {
   lyrics?: string;
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       forceRefresh,
       checkCacheOnly,
       musicAiApiKey: musicAiApiKey ? musicAiApiKey.substring(0, 8) + '...' : 'NOT_PROVIDED',
-      isFirebaseUrl: audioPath?.includes('firebasestorage.googleapis.com'),
+      isFirebaseUrl: typeof audioPath === 'string' ? isFirebaseStorageUrl(audioPath) : false,
       hasAudioPath: !!audioPath
     });
 
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
     let finalAudioPath = audioPath;
 
     // If audioPath is provided and looks like a Firebase Storage URL, use it directly
-    if (finalAudioPath && (finalAudioPath.startsWith('https://firebasestorage.googleapis.com') || finalAudioPath.startsWith('https://storage.googleapis.com'))) {
+    if (typeof finalAudioPath === 'string' && isFirebaseStorageUrl(finalAudioPath)) {
       console.log(`✅ [API] Using Firebase Storage URL for transcription: ${finalAudioPath}`);
       console.log('🔥 [API] Firebase Storage URL detected - should work with Music.AI');
     } else if (!finalAudioPath) {
