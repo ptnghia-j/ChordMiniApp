@@ -138,6 +138,7 @@ export default function YouTubeVideoAnalyzePage() {
   const videoId = params?.videoId as string;
   const routeParams = readAnalyzeRouteParams(searchParams);
   const titleFromSearch = routeParams.title;
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const durationFromSearch = routeParams.duration;
   const channelFromSearch = routeParams.channel;
   const thumbnailFromSearch = routeParams.thumbnail;
@@ -147,6 +148,18 @@ export default function YouTubeVideoAnalyzePage() {
     routeParams.beatModel,
     routeParams.chordModel
   ));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateViewportMode = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewportMode();
+    mediaQuery.addEventListener('change', updateViewportMode);
+
+    return () => mediaQuery.removeEventListener('change', updateViewportMode);
+  }, []);
 
   const {
     stage,
@@ -495,6 +508,18 @@ export default function YouTubeVideoAnalyzePage() {
     const shouldMinimize = isChatbotOpen || isLyricsPanelOpen || activeTab === 'guitarChords' || activeTab === 'pianoVisualizer';
     setIsVideoMinimized(shouldMinimize);
   }, [isChatbotOpen, isLyricsPanelOpen, activeTab]);
+
+  const splitLayoutHeight = useMemo(() => {
+    if (!isLyricsPanelOpen && !isChatbotOpen) {
+      return 'calc(100vh - 180px)';
+    }
+
+    if (isCompactViewport) {
+      return 'calc(100vh - 180px - var(--mobile-video-dock-height, 0px) - 5.5rem)';
+    }
+
+    return 'calc(100vh - 180px - var(--mobile-video-dock-height, 0px))';
+  }, [isChatbotOpen, isCompactViewport, isLyricsPanelOpen]);
 
   // Create a wrapper for handleTitleSave that uses setVideoTitle from useAudioProcessing
   const handleTitleSave = useCallback(() => {
@@ -967,7 +992,7 @@ export default function YouTubeVideoAnalyzePage() {
   ]);
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-slate-900">
+    <div className="relative min-h-screen bg-background dark:bg-slate-900">
       {/* Conditional Playback Controls */}
       <ConditionalPlaybackControls
         youtubePlayer={youtubePlayer}
@@ -1006,7 +1031,7 @@ export default function YouTubeVideoAnalyzePage() {
               onChordPlaybackChange={handleChordPlaybackChange}
             />
 
-    <div className="relative z-30 isolate flex min-h-screen flex-col overflow-hidden bg-white dark:bg-slate-900 transition-colors duration-300">
+    <div className="relative z-30 isolate flex min-h-screen flex-col overflow-hidden bg-background dark:bg-slate-900 transition-colors duration-300">
       <AnalyzePageBackdrop
         thumbnailUrl={analyzeBackdropUrl}
         showFooterTransition={Boolean(analysisResults)}
@@ -1063,14 +1088,14 @@ export default function YouTubeVideoAnalyzePage() {
         <div
           className="min-h-0 px-4 pb-1 transition-[height] duration-300"
           style={{
-            height: `calc(100vh - 180px - ${(isLyricsPanelOpen || isChatbotOpen) ? 'var(--mobile-video-dock-height, 0px)' : '0px'})`
+            height: splitLayoutHeight
           }}
         >
           <AnalysisSplitLayout
             isSplit={isLyricsPanelOpen || isChatbotOpen}
-            storageKey="analysis-split-layout-v1"
+            storageKey="analysis-split-layout-sidepanels-v3"
             defaultDesktopLayout={[60, 40]}
-            defaultMobileLayout={[60, 40]}
+            defaultMobileLayout={[66, 34]}
             left={(
               <div className="pr-2">
                 {analysisResults && audioProcessingState.isAnalyzed ? (

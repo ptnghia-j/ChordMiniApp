@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
 import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead, GiSaxophone } from 'react-icons/gi';
-import { Tooltip, Slider, Divider, Button } from '@heroui/react';
+import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { useIsPitchShiftEnabled } from '@/stores/uiStore';
+import UtilityPopoverPanel from '@/components/analysis/UtilityPopoverPanel';
+import { getAppSliderClassNames } from '@/components/ui/appSliderStyles';
 
 interface ChordPlaybackToggleProps {
   isEnabled: boolean;
@@ -42,11 +43,10 @@ interface ChordPlaybackToggleProps {
   } | null;
 }
 
-// ─── Slider track class overrides ────────────────────────────────────────────
-// HeroUI Slider applies `data-[fill-start=true]:border-s-primary` (blue) to the
-// track edges by default.  Override to match our filler colours.
-const GREEN_TRACK = "bg-gray-200 dark:bg-gray-600 h-1.5 data-[fill-start=true]:border-s-green-500 dark:data-[fill-start=true]:border-s-green-400 data-[fill-end=true]:border-e-green-500 dark:data-[fill-end=true]:border-e-green-400";
-const RED_TRACK   = "bg-gray-200 dark:bg-gray-600 h-1.5 data-[fill-start=true]:border-s-red-500 dark:data-[fill-start=true]:border-s-red-400 data-[fill-end=true]:border-e-red-500 dark:data-[fill-end=true]:border-e-red-400";
+const MIXER_SECTION_HEADING_CLASS = "text-xs font-bold uppercase tracking-[0.14em] text-gray-600 dark:text-gray-300";
+const MIXER_LABEL_CLASS = "flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200";
+const MIXER_VALUE_CLASS = "min-w-[2.75rem] rounded-md bg-gray-100 px-1.5 py-0.5 text-right text-sm font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300";
+const MIXER_SLIDER_BASE_CLASS = "max-w-full gap-0.5";
 
 /**
  * Toggle button for chord playback with toggle-based control panel
@@ -67,67 +67,32 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
   className = '',
   youtubePlayer
 }) => {
-  const [showControls, setShowControls] = useState(false);
-  const [isControlPanelVisible, setIsControlPanelVisible] = useState(true);
-  const controlsRef = useRef<HTMLDivElement>(null);
+  const successSliderClassNames = getAppSliderClassNames('success');
+  const dangerSliderClassNames = getAppSliderClassNames('danger');
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [audioSettings, setAudioSettings] = useState<AudioMixerSettings | null>(null);
 
   // Get pitch shift state to determine audio source label
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
 
-  // Draggable state
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [position, setPosition] = useState({ x: 0, y: 0 });
   const audioRef = usePlaybackStore((s) => s.audioRef);
 
-  const dragRef = useRef<HTMLDivElement>(null);
   const audioMixer = useRef<ReturnType<typeof getAudioMixerService> | null>(null);
 
   // Track which slider is being actively dragged to prevent race conditions
   const [activeSlider, setActiveSlider] = useState<string | null>(null);
 
-  // CRITICAL FIX: Sync showControls with isEnabled state
-  // The button click handler can't reliably predict the new isEnabled value
-  // because onClick() triggers async state updates through the parent
-  // Instead, watch isEnabled and update showControls accordingly
   useEffect(() => {
     if (isEnabled) {
-      // Chord playback is enabled, show the control panel
-      setShowControls(true);
-      setIsControlPanelVisible(true);
+      setIsPopoverOpen(true);
     } else {
-      // Chord playback is disabled, hide the control panel
-      setShowControls(false);
-      setIsControlPanelVisible(true);
+      setIsPopoverOpen(false);
     }
   }, [isEnabled]);
 
-  // Handle button click - just toggle chord playback
-  // The effect above will handle showing/hiding the panel
   const handleButtonClick = () => {
-    onClick(); // Toggle chord playback (state update happens in parent)
+    onClick();
   };
-
-  // Handle clicking outside the control panel to close it
-  const handleClickOutside = (event: MouseEvent) => {
-    if (controlsRef.current && !controlsRef.current.contains(event.target as Node)) {
-      setShowControls(false);
-    }
-  };
-
-  // Add/remove click outside listener
-  useEffect(() => {
-    if (showControls) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showControls]);
 
   // Initialize audio mixer, listen for settings changes, and get initial settings
   // The logic is consolidated into a single, reliable useEffect hook.
@@ -239,193 +204,89 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
     }
   }, [isPitchShiftEnabled, audioSettings]);
 
-  // Effect to hide control panel when chord playback is disabled
-  useEffect(() => {
-    if (!isEnabled) {
-      setShowControls(false);
-    }
-  }, [isEnabled, showControls, isControlPanelVisible]);
-
-  // Fallback effect to ensure audioSettings is initialized when chord playback is enabled
-  // This ensures the control panel can appear even if the main audio mixer effect fails
-  useEffect(() => {
-    if (isEnabled && showControls && !audioSettings) {
-      // Set default settings as fallback so the panel can appear
-      setAudioSettings({ ...DEFAULT_AUDIO_MIXER_SETTINGS });
-    }
-  }, [isEnabled, showControls, audioSettings]);
-
-  // Draggable functionality
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!dragRef.current) return;
-
-    const rect = dragRef.current.getBoundingClientRect();
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-
-    // Prevent text selection during drag
-    e.preventDefault();
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-
-    const newPosition = {
-      x: e.clientX - dragOffset.x,
-      y: e.clientY - dragOffset.y
-    };
-
-    // Keep panel within viewport bounds
-    const maxX = window.innerWidth - 400; // Approximate panel width
-    const maxY = window.innerHeight - 300; // Approximate panel height
-
-    setPosition({
-      x: Math.max(0, Math.min(newPosition.x, maxX)),
-      y: Math.max(0, Math.min(newPosition.y, maxY))
-    });
-  }, [isDragging, dragOffset]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Add global mouse event listeners for dragging
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  // Close button handler
-  const handleClosePanel = () => {
-    setIsControlPanelVisible(false);
-  };
-
-
-
   return (
-    <div className="relative group">
-      {/* Main toggle button */}
-      <div>
-        <Tooltip
-          content={isEnabled ? "Disable chord playback" : "Enable chord playback"}
-          placement="top"
-          delay={500}
-          closeDelay={100}
-          classNames={{
-            content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-          }}
-        >
-          <motion.button
-            onClick={handleButtonClick}
-            className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-              isEnabled
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
-            } ${className}`}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            aria-label={isEnabled ? "Disable chord playback" : "Enable chord playback"}
-            aria-pressed={isEnabled}
+    <Popover
+      placement="top"
+      offset={10}
+      isOpen={isPopoverOpen && isEnabled}
+      onOpenChange={setIsPopoverOpen}
+      classNames={{
+        content: 'p-0 border-none bg-transparent shadow-none'
+      }}
+    >
+      <PopoverTrigger>
+        <div className="relative group">
+          <Tooltip
+            content={isEnabled ? "Disable chord playback" : "Enable chord playback"}
+            placement="top"
+            delay={500}
+            closeDelay={100}
+            classNames={{
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
           >
-            {isEnabled ? (
-              <HiMusicalNote className="h-4 w-4" />
-            ) : (
-              <HiOutlineMusicalNote className="h-4 w-4" />
-            )}
-          </motion.button>
-        </Tooltip>
+            <motion.button
+              onClick={handleButtonClick}
+              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+                isEnabled
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+              } ${className}`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              aria-label={isEnabled ? "Disable chord playback" : "Enable chord playback"}
+              aria-pressed={isEnabled}
+            >
+              {isEnabled ? (
+                <HiMusicalNote className="h-4 w-4" />
+              ) : (
+                <HiOutlineMusicalNote className="h-4 w-4" />
+              )}
+            </motion.button>
+          </Tooltip>
 
-        {/* Beta tag */}
-        <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold">
-          BETA
+          <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold">
+            BETA
+          </div>
         </div>
-      </div>
+      </PopoverTrigger>
 
-
-
-      {/* Portal-based control panel - renders outside all parent containers */}
-      {(() => {
-        const shouldShowPanel = showControls && isEnabled && isControlPanelVisible && typeof window !== 'undefined';
-
-        if (!shouldShowPanel) return null;
-
-        return createPortal(
-          <AnimatePresence>
-            <motion.div
-              key="audio-mixer-panel"
-              ref={(el) => { dragRef.current = el as HTMLDivElement | null; controlsRef.current = el as HTMLDivElement | null; }}
-              initial={{ opacity: 0, scale: 0.9, y: -20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className={`fixed bg-white/60 dark:bg-content-bg/60 text-gray-900 dark:text-gray-100 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 w-[360px] max-h-[80vh] ${isDragging ? 'cursor-grabbing' : ''}`}
-              style={{
-                left: position.x || '50%',
-                top: position.y || '50%',
-                transform: position.x && position.y ? 'none' : 'translate(-50%, -50%)',
-                zIndex: 2147483647,
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
-                backdropFilter: 'blur(16px)',
-                pointerEvents: 'auto',
-              }}
+      <PopoverContent>
+        <UtilityPopoverPanel
+          title="Audio Mixer"
+          headerStartContent={<HiMusicalNote className="h-5 w-5 text-green-600 dark:text-green-400" />}
+          headerEndContent={
+            <Button
+              isIconOnly
+              radius="sm"
+              size="sm"
+              variant="light"
+              onPress={() => setIsPopoverOpen(false)}
+              aria-label="Close audio mixer"
+              className="text-gray-500 dark:text-gray-400"
             >
-            {/* Draggable panel header with close button */}
-            <div
-              className={`flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-              onMouseDown={handleMouseDown}
-            >
-              <div className="flex items-center gap-2 select-none">
-                <HiMusicalNote className="h-5 w-5 text-green-600 dark:text-green-400" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Audio Mixer</h3>
-              </div>
-              <Button
-                isIconOnly
-                radius="sm"
-                size="sm"
-                variant="light"
-                onPress={handleClosePanel}
-                onMouseDown={(e) => e.stopPropagation()} // Prevent dragging when clicking close button
-                aria-label="Close audio mixer"
-                className="text-gray-500 dark:text-gray-400"
-              >
-                <HiXMark className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Scrollable content area */}
-            <div className="overflow-y-auto max-h-[calc(80vh-80px)] p-4 space-y-4"
-              style={{
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'rgb(156 163 175) transparent'
-              }}
-            >
+              <HiXMark className="h-5 w-5" />
+            </Button>
+          }
+          bodyClassName="overflow-y-auto max-h-[min(78vh,38rem)] w-[320px] space-y-3 p-3"
+        >
 
               {audioSettings ? (
                 <>
                   {/* Master Volume Controls */}
-                  <div className="space-y-4">
-                    <div className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                  <div className="space-y-2.5">
+                    <div className={MIXER_SECTION_HEADING_CLASS}>
                       Master Controls
                     </div>
 
                     {/* Master Volume */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <HiSpeakerWave className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <HiSpeakerWave className="h-3.5 w-3.5" />
                           Master
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.masterVolume)}%
                         </span>
                       </div>
@@ -438,6 +299,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -451,23 +313,21 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Master volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
 
                     {/* YouTube / Pitch-Shifted Audio Volume */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <HiVideoCamera className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <HiVideoCamera className="h-3.5 w-3.5" />
                           {isPitchShiftEnabled ? 'Pitch-Shifted Audio' : (youtubePlayer ? 'YouTube Video' : 'Original Audio')}
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(isPitchShiftEnabled ? audioSettings.pitchShiftedAudioVolume : audioSettings.youtubeVolume)}%
                         </span>
                       </div>
@@ -479,6 +339,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color={isPitchShiftEnabled ? 'success' : 'danger'}
                           size="sm"
                           step={1}
                           minValue={0}
@@ -517,23 +378,21 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label={isPitchShiftEnabled ? "Pitch-shifted audio volume control" : (youtubePlayer ? "YouTube video volume control" : "Original audio volume control")}
                           classNames={{
-                            base: "max-w-full",
-                            track: isPitchShiftEnabled ? GREEN_TRACK : RED_TRACK,
-                            filler: isPitchShiftEnabled ? "bg-green-500 dark:bg-green-400" : "bg-red-500 dark:bg-red-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...(isPitchShiftEnabled ? successSliderClassNames : dangerSliderClassNames),
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Chord Playback Master Volume */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <HiMusicalNote className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <HiMusicalNote className="h-3.5 w-3.5" />
                           Chord Playback
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.chordPlaybackVolume)}%
                         </span>
                       </div>
@@ -545,6 +404,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -558,32 +418,30 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Chord playback master volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <Divider className="my-4 border-gray-200 dark:border-gray-600" />
+                  <Divider className="my-2.5 border-gray-200 dark:border-gray-600" />
 
                   {/* Individual Instrument Controls */}
-                  <div className="space-y-4">
-                    <div className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                  <div className="space-y-2.5">
+                    <div className={MIXER_SECTION_HEADING_CLASS}>
                       Instruments
                     </div>
 
                     {/* Piano volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <MdPiano className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <MdPiano className="h-3.5 w-3.5" />
                           Piano
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.pianoVolume)}%
                         </span>
                       </div>
@@ -595,6 +453,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -610,23 +469,21 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Piano volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Guitar volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <GiGuitar className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <GiGuitar className="h-3.5 w-3.5" />
                           Guitar
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.guitarVolume)}%
                         </span>
                       </div>
@@ -638,6 +495,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -653,23 +511,21 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Guitar volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Violin volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <GiViolin className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <GiViolin className="h-3.5 w-3.5" />
                           Violin
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.violinVolume)}%
                         </span>
                       </div>
@@ -681,6 +537,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -696,23 +553,21 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Violin volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Flute volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <GiFlute className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <GiFlute className="h-3.5 w-3.5" />
                           Flute
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.fluteVolume)}%
                         </span>
                       </div>
@@ -724,6 +579,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -739,26 +595,24 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Flute volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Saxophone volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
                         <label
-                          className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                          className={MIXER_LABEL_CLASS}
                           title="Auto-on during instrumental sections. Outside them, raise the slider to hear saxophone manually."
                         >
-                          <GiSaxophone className="h-4 w-4" />
+                          <GiSaxophone className="h-3.5 w-3.5" />
                           Saxophone
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.saxophoneVolume)}%
                         </span>
                       </div>
@@ -770,6 +624,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -784,26 +639,24 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Saxophone volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-300">
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
                         Auto-on in instrumental sections; manual everywhere else.
                       </p>
                     </div>
 
                     {/* Bass volume control */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                          <GiGuitarBassHead className="h-4 w-4" />
+                    <div className="space-y-1">
+                      <div className="mb-1 flex items-center justify-between gap-2.5">
+                        <label className={MIXER_LABEL_CLASS}>
+                          <GiGuitarBassHead className="h-3.5 w-3.5" />
                           Bass
                         </label>
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                        <span className={MIXER_VALUE_CLASS}>
                           {Math.round(audioSettings.bassVolume)}%
                         </span>
                       </div>
@@ -815,6 +668,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         }}
                       >
                         <Slider
+                          color="success"
                           size="sm"
                           step={1}
                           minValue={0}
@@ -829,17 +683,15 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                           className="w-full"
                           aria-label="Bass volume control"
                           classNames={{
-                            base: "max-w-full",
-                            track: GREEN_TRACK,
-                            filler: "bg-green-500 dark:bg-green-400",
-                            thumb: "bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0"
+                            base: MIXER_SLIDER_BASE_CLASS,
+                            ...successSliderClassNames,
                           }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <Divider className="my-4 border-gray-200 dark:border-gray-600" />
+                  <Divider className="my-2.5 border-gray-200 dark:border-gray-600" />
 
                   {/* Action buttons */}
                   <div className="flex gap-2">
@@ -873,32 +725,15 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                     </Button>
                   </div>
 
-                  {/* Status indicator */}
-                  <div className="text-xs text-center text-gray-500 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-600">
-                    {isEnabled ? (
-                      <span className="text-green-600 dark:text-green-400 font-medium flex items-center justify-center gap-1">
-                        <HiMusicalNote className="h-3 w-3" />
-                        Chord playback active
-                      </span>
-                    ) : (
-                      <span>
-                        Click button to enable chord playback
-                      </span>
-                    )}
-                  </div>
                 </>
               ) : (
-                <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                <div className="py-7 text-sm text-center text-gray-500 dark:text-gray-400">
                   Loading audio settings...
                 </div>
               )}
-            </div>
-          </motion.div>
-          </AnimatePresence>,
-          document.body
-        );
-      })()}
-    </div>
+        </UtilityPopoverPanel>
+      </PopoverContent>
+    </Popover>
   );
 };
 

@@ -11,6 +11,8 @@ import React, { useCallback, useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
+import UtilityPopoverPanel from '@/components/analysis/UtilityPopoverPanel';
+import { getAppSliderClassNames } from '@/components/ui/appSliderStyles';
 import { MIN_SEMITONES, MAX_SEMITONES } from '@/utils/chordTransposition';
 import {
   useIsPitchShiftEnabled,
@@ -31,6 +33,7 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
   playbackRate,
   setPlaybackRate,
 }) => {
+  const successSliderClassNames = getAppSliderClassNames('success');
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const togglePitchShift = useTogglePitchShift();
   const pitchShiftSemitones = usePitchShiftSemitones();
@@ -134,83 +137,72 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
       </PopoverTrigger>
       
       <PopoverContent>
-        <div className="bg-white/60 dark:bg-content-bg/60 border border-gray-300 dark:border-gray-600 rounded-lg p-4 pb-6 shadow-lg min-w-[280px] backdrop-blur-sm">
-          {/* Slider with value display */}
-          <div className="space-y-3">
-            {/* Pitch Shift Slider */}
-            <div className="pb-2 pitch-shift-slider">
-              <Slider
-                label="Pitch Shift"
-                size="sm"
-                color="success"
-                step={1}
-                minValue={MIN_SEMITONES}
-                maxValue={MAX_SEMITONES}
-                value={pitchShiftSemitones}
-                onChange={handleSliderChange}
-                isDisabled={isProcessingPitchShift}
-                showTooltip={true}
-                getValue={(value) => formatSemitones(Array.isArray(value) ? value[0] : value)}
-                marks={[
-                  { value: MIN_SEMITONES, label: `${MIN_SEMITONES}` },
-                  { value: 0, label: '0' },
-                  { value: MAX_SEMITONES, label: `+${MAX_SEMITONES}` }
-                ]}
-                classNames={{
-                  base: 'max-w-full mb-2',
-                  label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
-                  value: 'text-sm font-semibold text-green-600 dark:text-green-400',
-                  track: 'bg-gray-200 dark:bg-gray-700',
-                  filler: 'bg-green-500',
-                  thumb: 'shadow-md border-2 border-green-500 dark:border-green-500',
-                  mark: 'text-xs'
-                }}
-              />
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-gray-200 dark:border-gray-700 my-3" />
-
-            {/* Playback Speed Slider */}
-            <div className="pb-2 pitch-shift-slider">
-              <Slider
-                label="Playback Speed"
-                size="sm"
-                color="success"
-                step={0.25}
-                minValue={0.25}
-                maxValue={2.0}
-                value={playbackRate}
-                onChange={handlePlaybackRateChange}
-                isDisabled={isProcessingPitchShift}
-                showTooltip={true}
-                getValue={(value) => `${(Array.isArray(value) ? value[0] : value).toFixed(2)}x`}
-                marks={[
-                  { value: 0.25, label: '0.25x' },
-                  { value: 1.0, label: '1.0x' },
-                  { value: 2.0, label: '2.0x' }
-                ]}
-                classNames={{
-                  base: 'max-w-full mb-2',
-                  label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
-                  value: 'text-sm font-semibold text-green-600 dark:text-green-400',
-                  track: 'bg-gray-200 dark:bg-gray-700',
-                  filler: 'bg-green-500',
-                  thumb: 'shadow-md border-2 border-green-500 dark:border-green-500',
-                  mark: 'text-xs'
-                }}
-              />
-            </div>
-
-            {/* Processing indicator */}
-            {isProcessingPitchShift && (
-              <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Processing...</span>
-              </div>
-            )}
+        <UtilityPopoverPanel bodyClassName="space-y-3 p-4 pb-6 min-w-[280px]">
+          <div className="pb-2 pitch-shift-slider">
+            <Slider
+              label="Pitch Shift"
+              size="sm"
+              color="success"
+              step={1}
+              minValue={MIN_SEMITONES}
+              maxValue={MAX_SEMITONES}
+              value={pitchShiftSemitones}
+              onChange={handleSliderChange}
+              isDisabled={isProcessingPitchShift}
+              showTooltip={true}
+              getValue={(value) => formatSemitones(Array.isArray(value) ? value[0] : value)}
+              marks={[
+                { value: MIN_SEMITONES, label: `${MIN_SEMITONES}` },
+                { value: 0, label: '0' },
+                { value: MAX_SEMITONES, label: `+${MAX_SEMITONES}` }
+              ]}
+              classNames={{
+                base: 'max-w-full mb-2',
+                label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                ...successSliderClassNames,
+                mark: 'text-xs'
+              }}
+            />
           </div>
-        </div>
+
+          <div className="border-t border-white/20 dark:border-white/10 my-3" />
+
+          <div className="pb-2 pitch-shift-slider">
+            <Slider
+              label="Playback Speed"
+              size="sm"
+              color="success"
+              step={0.25}
+              minValue={0.25}
+              maxValue={2.0}
+              value={playbackRate}
+              onChange={handlePlaybackRateChange}
+              isDisabled={isProcessingPitchShift}
+              showTooltip={true}
+              getValue={(value) => `${(Array.isArray(value) ? value[0] : value).toFixed(2)}x`}
+              marks={[
+                { value: 0.25, label: '0.25x' },
+                { value: 1.0, label: '1.0x' },
+                { value: 2.0, label: '2.0x' }
+              ]}
+              classNames={{
+                base: 'max-w-full mb-2',
+                label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                ...successSliderClassNames,
+                mark: 'text-xs'
+              }}
+            />
+          </div>
+
+          {isProcessingPitchShift && (
+            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span>Processing...</span>
+            </div>
+          )}
+        </UtilityPopoverPanel>
       </PopoverContent>
     </Popover>
     </>
@@ -218,4 +210,3 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
 };
 
 export default PitchShiftPopover;
-

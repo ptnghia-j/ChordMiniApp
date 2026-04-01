@@ -129,6 +129,8 @@
   body {
     font-family: inherit;
     line-height: var(--typography-body-line-height);
+    background-color: #faf6ee;
+    color: #111827;
   }
 
   h1,

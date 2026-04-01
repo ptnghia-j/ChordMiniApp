@@ -106,11 +106,11 @@ function NewHomePageContentInner() {
             />
           </div>
         ) : (
-          <div className="h-full w-full relative bg-white overflow-hidden">
+          <div className="h-full w-full relative bg-background overflow-hidden">
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 z-0"
               style={{
-                background: "#ffffff",
+                background: "#faf6ee",
                 backgroundImage: `
                   radial-gradient(
                     circle at top center,

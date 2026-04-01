@@ -17,6 +17,8 @@ interface LyricsPanelProps {
   embedded?: boolean;
 }
 
+const FLOATING_PANEL_CLASSES = 'w-[20.5rem] max-w-[calc(100vw-1rem)] h-[calc(100vh-9.85rem)] max-h-[590px] min-h-[340px] max-sm:left-3 max-sm:right-3 max-sm:bottom-[calc(var(--mobile-video-dock-height,0px)+1.35rem)] max-sm:w-auto max-sm:max-w-none max-sm:h-[calc(100vh-var(--mobile-video-dock-height,0px)-9.6rem)] max-sm:max-h-[calc(100vh-var(--mobile-video-dock-height,0px)-9.6rem)] max-sm:min-h-[280px] sm:bottom-16 sm:right-4 sm:w-[20.5rem] sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-9.85rem)] sm:max-h-[590px] sm:min-h-[340px]';
+
 const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   isOpen,
   onClose,
@@ -226,7 +228,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
               relative isolate flex flex-col
               border border-white/45 dark:border-white/12
               shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] rounded-xl overflow-hidden
-              ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96'}
+              ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : FLOATING_PANEL_CLASSES}
               ${className}
             `}
             style={embeddedHeight ? { height: `${embeddedHeight}px`, maxHeight: `${embeddedHeight}px`, minHeight: 0 } : undefined}

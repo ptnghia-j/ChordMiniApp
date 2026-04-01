@@ -1,8 +1,7 @@
 import React from 'react';
 import { Button, Popover, PopoverTrigger, PopoverContent, Slider } from '@heroui/react';
 import { HiGlobeAlt } from 'react-icons/hi';
-
-const FONT_SLIDER_TRACK = 'bg-gray-200 dark:bg-gray-700 h-1.5 data-[fill-start=true]:border-s-green-500 dark:data-[fill-start=true]:border-s-green-400 data-[fill-end=true]:border-e-green-500 dark:data-[fill-end=true]:border-e-green-400';
+import { getAppSliderClassNames } from '@/components/ui/appSliderStyles';
 
 // Types
 interface TranslatedLyrics {
@@ -53,6 +52,7 @@ export const LyricsControls: React.FC<LyricsControlsProps> = ({
   setSelectedLanguages,
   setIsLanguageMenuOpen
 }) => {
+  const successSliderClassNames = getAppSliderClassNames('success');
   return (
     <>
       {/* Single-row controls: font slider + translate */}
@@ -62,6 +62,7 @@ export const LyricsControls: React.FC<LyricsControlsProps> = ({
           <span className={`text-xs whitespace-nowrap ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Font</span>
           <Slider
             aria-label="Font size"
+            color="success"
             size="sm"
             step={1}
             minValue={12}
@@ -70,9 +71,7 @@ export const LyricsControls: React.FC<LyricsControlsProps> = ({
             onChange={(val) => onFontSizeChange(Array.isArray(val) ? val[0] : val)}
             className="w-24"
             classNames={{
-              track: FONT_SLIDER_TRACK,
-              filler: 'bg-green-500 dark:bg-green-400',
-              thumb: 'bg-white shadow-md border-2 border-green-500 dark:border-green-400',
+              ...successSliderClassNames,
             }}
           />
           <span className={`text-xs tabular-nums ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{fontSize}px</span>

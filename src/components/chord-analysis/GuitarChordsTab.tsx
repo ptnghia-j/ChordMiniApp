@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,8 +20,10 @@ import {
   useSetGuitarCapoFret,
   useSetGuitarSelectedPosition,
   useTargetKey,
+  useUIStore,
 } from '@/stores/uiStore';
 import { transposeChord, calculateTargetKey } from '@/utils/chordTransposition';
+import { DEFAULT_MAX_CAPO_SUGGESTION_FRET, suggestCapoPosition } from '@/utils/guitarVoicing';
 import {
   buildChordOccurrenceCorrectionMap,
   buildChordOccurrenceMap,
@@ -29,6 +31,7 @@ import {
   getDisplayChord,
 } from '@/utils/chordProcessing';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
+import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
 
 
 // Lazy load heavy guitar chord diagram component
@@ -130,12 +133,22 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const setSharedChordPosition = useSetGuitarSelectedPosition();
   // Capo label mode: 'shape' shows the chord shape name, 'sound' shows the sounding chord name
   const [capoLabelMode, setCapoLabelMode] = useState<'shape' | 'sound'>('shape');
+  const [isCapoPreviewOpen, setIsCapoPreviewOpen] = useState(false);
+  const hasUserAdjustedCapoRef = useRef(false);
+  const capoSuggestionSignatureRef = useRef('');
+  const capoPreviewCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
   // Wrapped setter that clears chord data cache when capo changes (new chord shapes need to be loaded)
-  const setCapoFret = useCallback((value: number | ((prev: number) => number)) => {
+  const setCapoFret = useCallback((value: number | ((prev: number) => number), options?: { isUserInitiated?: boolean }) => {
     const nextValue = typeof value === 'function' ? value(capoFret) : value;
+    if (!Number.isFinite(nextValue)) {
+      return;
+    }
+    if (options?.isUserInitiated !== false) {
+      hasUserAdjustedCapoRef.current = true;
+    }
     setSharedCapoFret(nextValue);
     setChordDataCache(new Map());
   }, [capoFret, setSharedCapoFret]);
@@ -323,6 +336,84 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     };
   }, [transposedChordGridData.chords, getProcessedSoundingChordName, getProcessedShapeChordName]);
 
+  const capoSuggestionTargetKey = useMemo(() => (
+    (isPitchShiftEnabled && targetKey) ? targetKey : (keySignature || targetKey || 'C')
+  ), [isPitchShiftEnabled, keySignature, targetKey]);
+
+  const uniqueSoundingChordsForCapoSuggestion = useMemo(() => (
+    Array.from(
+      new Set(
+        processedChordData.entries
+          .map((entry) => entry.sounding)
+          .filter((chord) => chord && chord !== 'N.C.')
+      )
+    )
+  ), [processedChordData.entries]);
+
+  const capoSuggestionSignature = useMemo(() => (
+    uniqueSoundingChordsForCapoSuggestion.join('||')
+  ), [uniqueSoundingChordsForCapoSuggestion]);
+
+  const suggestedCapo = useMemo(() => (
+    suggestCapoPosition(uniqueSoundingChordsForCapoSuggestion, {
+      maxCapo: DEFAULT_MAX_CAPO_SUGGESTION_FRET,
+      targetKey: capoSuggestionTargetKey,
+    })
+  ), [uniqueSoundingChordsForCapoSuggestion, capoSuggestionTargetKey]);
+
+  const openCapoPreview = useCallback(() => {
+    if (capoPreviewCloseTimeoutRef.current) {
+      clearTimeout(capoPreviewCloseTimeoutRef.current);
+      capoPreviewCloseTimeoutRef.current = null;
+    }
+    setIsCapoPreviewOpen(true);
+  }, []);
+
+  const scheduleCapoPreviewClose = useCallback(() => {
+    if (capoPreviewCloseTimeoutRef.current) {
+      clearTimeout(capoPreviewCloseTimeoutRef.current);
+    }
+    capoPreviewCloseTimeoutRef.current = setTimeout(() => {
+      setIsCapoPreviewOpen(false);
+      capoPreviewCloseTimeoutRef.current = null;
+    }, 120);
+  }, []);
+
+  const handleCapoPreviewBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const nextFocusedElement = event.relatedTarget as Node | null;
+    if (nextFocusedElement && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+    scheduleCapoPreviewClose();
+  }, [scheduleCapoPreviewClose]);
+
+  useEffect(() => (
+    () => {
+      if (capoPreviewCloseTimeoutRef.current) {
+        clearTimeout(capoPreviewCloseTimeoutRef.current);
+      }
+    }
+  ), []);
+
+  useEffect(() => {
+    if (capoSuggestionSignatureRef.current === capoSuggestionSignature) {
+      return;
+    }
+
+    capoSuggestionSignatureRef.current = capoSuggestionSignature;
+    hasUserAdjustedCapoRef.current = false;
+  }, [capoSuggestionSignature]);
+
+  useEffect(() => {
+    if (!suggestedCapo || hasUserAdjustedCapoRef.current) {
+      return;
+    }
+
+    if (capoFret !== suggestedCapo.capoFret) {
+      useUIStore.getState().setGuitarCapoFret(suggestedCapo.capoFret);
+    }
+  }, [suggestedCapo, capoFret]);
+
 
   // Unique chords for guitar diagrams (always applies corrections for consistent display)
   const uniqueChordsForGuitarDiagrams = useMemo(() => {
@@ -467,48 +558,9 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         <div className="mb-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 sm:text-lg">Beat & Chord Progression</h3>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
-            {/* Capo control */}
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="capo-input" className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
-                Capo:
-              </label>
-              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <button
-                  onClick={() => setCapoFret(prev => Math.max(0, prev - 1))}
-                  disabled={capoFret === 0}
-                  className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-l-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
-                  aria-label="Decrease capo fret"
-                >
-                  −
-                </button>
-                <input
-                  id="capo-input"
-                  type="number"
-                  min={0}
-                  max={12}
-                  value={capoFret}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val) && val >= 0 && val <= 12) setCapoFret(val);
-                  }}
-                  className="w-8 h-8 text-center text-sm font-medium bg-transparent border-0 focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  aria-label="Capo fret position"
-                />
-                <button
-                  onClick={() => setCapoFret(prev => Math.min(12, prev + 1))}
-                  disabled={capoFret === 12}
-                  className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-r-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
-                  aria-label="Increase capo fret"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Shape/Sound label toggle - only visible when capo is active */}
+            {/* Shape/Sound label toggle - appears to the left so capo stays in place beside view */}
             {capoFret > 0 && (
               <>
-                <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />
                 <div className="flex items-center gap-1.5">
                   <span className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">Label:</span>
                   <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
@@ -528,8 +580,81 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                     </button>
                   </div>
                 </div>
+                <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />
               </>
             )}
+
+            {/* Capo control */}
+            <div
+              className="relative flex items-center gap-2"
+              onMouseEnter={openCapoPreview}
+              onMouseLeave={scheduleCapoPreviewClose}
+              onFocus={openCapoPreview}
+              onBlur={handleCapoPreviewBlur}
+            >
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="capo-input" className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
+                  Capo:
+                </label>
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <button
+                    onClick={() => setCapoFret(prev => Math.max(0, prev - 1))}
+                    disabled={capoFret === 0}
+                    className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-l-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                    aria-label="Decrease capo fret"
+                  >
+                    −
+                  </button>
+                  <input
+                    id="capo-input"
+                    type="number"
+                    min={0}
+                    max={12}
+                    value={capoFret}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 0 && val <= 12) setCapoFret(val);
+                    }}
+                    className="w-8 h-8 text-center text-sm font-medium bg-transparent border-0 focus:outline-none focus:ring-0 text-gray-800 dark:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label="Capo fret position"
+                  />
+                  <button
+                    onClick={() => setCapoFret(prev => Math.min(12, prev + 1))}
+                    disabled={capoFret === 12}
+                    className="w-7 h-8 flex items-center justify-center text-sm font-bold rounded-r-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                    aria-label="Increase capo fret"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {isCapoPreviewOpen && (
+                  <>
+                    <div
+                      aria-hidden="true"
+                      className="absolute left-0 top-full z-30 h-3 w-[min(22rem,calc(100vw-2rem))] sm:left-auto sm:right-0"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="absolute left-0 top-[calc(100%+0.25rem)] z-40 w-[min(22rem,calc(100vw-2rem))] sm:left-auto sm:right-0"
+                      onMouseEnter={openCapoPreview}
+                      onMouseLeave={scheduleCapoPreviewClose}
+                    >
+                      <CapoNeckPreview
+                        capoFret={capoFret}
+                        suggestedCapoFret={suggestedCapo?.capoFret ?? null}
+                        onCapoFretChange={(fret) => setCapoFret(fret)}
+                      />
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Divider */}
             <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />

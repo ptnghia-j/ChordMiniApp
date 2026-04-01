@@ -62,7 +62,8 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
    git lfs pull
    ```
 
-   `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
+   > [!NOTE]
+   > `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
 
    #### Verify that submodules are populated
    ```
@@ -71,20 +72,21 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
    ls -la python_backend/models/ChordMini/
    ```
 
-   #### If chord recognition encounters issue with fluidsynth:
+   > [!NOTE]
+   > If chord recognition encounters issue with fluidsynth:
    Install FluidSynth for MIDI synthesis
-   ```
-      
-   # --- Windows ---
-   choco install fluidsynth
-
-   # --- macOS ---
-   brew install fluidsynth
-
-   # --- Linux (Debian/Ubuntu-based) ---
-   sudo apt update
-   sudo apt install fluidsynth
-   ```
+   >
+   > ```
+   > # --- Windows ---
+   > choco install fluidsynth
+   >
+   > # --- macOS ---
+   > brew install fluidsynth
+   >
+   > # --- Linux (Debian/Ubuntu-based) ---
+   > sudo apt update
+   > sudo apt install fluidsynth
+   > ```
 
 2. **Environment setup**
    ```bash
@@ -156,7 +158,9 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
    docker compose -f docker-compose.prod.yml down
    ```
 
-> **Note:** If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
+   > [!NOTE]
+   > `If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
+
 
 ### Docker Desktop GUI (Alternative)
 
@@ -380,15 +384,14 @@ cd python_backend && python app.py
 npm run dev
 ```
 
-**Import errors:**
-```bash
-# Ensure virtual environment is activated
-source myenv/bin/activate  # macOS/Linux
-myenv\Scripts\activate     # Windows
-
-# Reinstall dependencies
-pip install -r requirements.txt
-```
+> [!IMPORTANT]
+> ```bash
+> # Ensure virtual environment is activated
+> source myenv/bin/activate  # macOS/Linux
+> myenv\Scripts\activate     # Windows
+> # Reinstall dependencies
+> pip install -r requirements.txt
+> ```
 
 <!-- ### Key Workflow Features
 

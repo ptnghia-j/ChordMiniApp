@@ -24,7 +24,18 @@ export interface GuitarStrumStroke {
   direction: GuitarStrumDirection;
 }
 
+export interface SuggestedCapoPosition {
+  capoFret: number;
+  score: number;
+  uniqueChordCount: number;
+  missingShapes: number;
+  barreShapes: number;
+  totalBarres: number;
+  averageRelativeFret: number;
+}
+
 const SHORT_GUITAR_CHORD_BEATS = 3;
+export const DEFAULT_MAX_CAPO_SUGGESTION_FRET = 7;
 
 function isNoChord(chordName: string | null | undefined): boolean {
   return !chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC';
@@ -56,6 +67,112 @@ function buildFallbackVoicing(chordName: string): ResolvedGuitarVoicing | null {
     midi,
     noteNames: midi.map((value) => midiToNoteName(value)),
   };
+}
+
+type ChordPositionDifficulty = {
+  score: number;
+  hasBarre: boolean;
+  barreCount: number;
+  relativeBaseFret: number;
+  openStrings: number;
+};
+
+function estimateChordPositionDifficulty(
+  position: {
+    frets: number[];
+    baseFret?: number;
+    barres?: number[];
+  },
+): ChordPositionDifficulty {
+  const frets = Array.isArray(position.frets) ? position.frets : [];
+  const barreCount = Array.isArray(position.barres) ? position.barres.length : 0;
+  const relativeBaseFret = Math.max(1, Number(position.baseFret) || 1);
+  const openStrings = frets.filter((fret) => fret === 0).length;
+  const mutedStrings = frets.filter((fret) => fret < 0).length;
+  const pressedFrets = frets.filter((fret) => fret > 0);
+  const fretSpan = pressedFrets.length > 1
+    ? Math.max(...pressedFrets) - Math.min(...pressedFrets)
+    : 0;
+
+  return {
+    score:
+      (barreCount * 5) +
+      (Math.max(0, relativeBaseFret - 1) * 1.35) +
+      (Math.max(0, fretSpan - 4) * 0.75) +
+      (Math.max(0, mutedStrings - 1) * 0.2) -
+      (openStrings * 0.2),
+    hasBarre: barreCount > 0,
+    barreCount,
+    relativeBaseFret,
+    openStrings,
+  };
+}
+
+function getEasiestChordPositionDifficulty(
+  chordData: {
+    positions?: Array<{
+      frets: number[];
+      baseFret: number;
+      barres: number[];
+    }>;
+  } | null,
+): ChordPositionDifficulty | null {
+  const positions = chordData?.positions;
+  if (!positions || positions.length === 0) {
+    return null;
+  }
+
+  return positions.reduce<ChordPositionDifficulty | null>((best, position) => {
+    const difficulty = estimateChordPositionDifficulty(position);
+    if (!best) {
+      return difficulty;
+    }
+
+    if (difficulty.score !== best.score) {
+      return difficulty.score < best.score ? difficulty : best;
+    }
+
+    if (difficulty.barreCount !== best.barreCount) {
+      return difficulty.barreCount < best.barreCount ? difficulty : best;
+    }
+
+    if (difficulty.relativeBaseFret !== best.relativeBaseFret) {
+      return difficulty.relativeBaseFret < best.relativeBaseFret ? difficulty : best;
+    }
+
+    if (difficulty.openStrings !== best.openStrings) {
+      return difficulty.openStrings > best.openStrings ? difficulty : best;
+    }
+
+    return best;
+  }, null);
+}
+
+function compareCapoSuggestions(
+  candidate: SuggestedCapoPosition,
+  currentBest: SuggestedCapoPosition,
+): number {
+  if (candidate.missingShapes !== currentBest.missingShapes) {
+    return candidate.missingShapes - currentBest.missingShapes;
+  }
+
+  if (candidate.barreShapes !== currentBest.barreShapes) {
+    return candidate.barreShapes - currentBest.barreShapes;
+  }
+
+  if (candidate.totalBarres !== currentBest.totalBarres) {
+    return candidate.totalBarres - currentBest.totalBarres;
+  }
+
+  if (candidate.score !== currentBest.score) {
+    return candidate.score - currentBest.score;
+  }
+
+  if (candidate.averageRelativeFret !== currentBest.averageRelativeFret) {
+    return candidate.averageRelativeFret - currentBest.averageRelativeFret;
+  }
+
+  return candidate.capoFret - currentBest.capoFret;
 }
 
 export function resolveGuitarShapeChordName(
@@ -127,6 +244,75 @@ export function resolveGuitarVoicingMidiNotes(
   return voicing.midi
     .map(midiToMidiNote)
     .filter((note): note is MidiNote => note !== null);
+}
+
+export function suggestCapoPosition(
+  soundingChordNames: string[],
+  options: {
+    maxCapo?: number;
+    targetKey?: string;
+  } = {},
+): SuggestedCapoPosition | null {
+  const uniqueSoundingChords = Array.from(
+    new Set(
+      soundingChordNames
+        .map((chord) => chord?.trim())
+        .filter((chord): chord is string => Boolean(chord) && !isNoChord(chord))
+    )
+  );
+
+  if (uniqueSoundingChords.length === 0) {
+    return null;
+  }
+
+  const maxCapo = Math.max(0, Math.min(12, Math.floor(options.maxCapo ?? DEFAULT_MAX_CAPO_SUGGESTION_FRET)));
+  const targetKey = options.targetKey ?? 'C';
+
+  let bestSuggestion: SuggestedCapoPosition | null = null;
+
+  for (let capoFret = 0; capoFret <= maxCapo; capoFret += 1) {
+    let totalScore = 0;
+    let totalRelativeFret = 0;
+    let missingShapes = 0;
+    let barreShapes = 0;
+    let totalBarres = 0;
+
+    for (const soundingChordName of uniqueSoundingChords) {
+      const shapeChordName = resolveGuitarShapeChordName(soundingChordName, capoFret, targetKey);
+      const chordData = chordMappingService.getChordDataSync(shapeChordName);
+      const easiestPosition = getEasiestChordPositionDifficulty(chordData);
+
+      if (!easiestPosition) {
+        missingShapes += 1;
+        totalScore += 12;
+        totalRelativeFret += 8;
+        continue;
+      }
+
+      totalScore += easiestPosition.score;
+      totalRelativeFret += easiestPosition.relativeBaseFret;
+      totalBarres += easiestPosition.barreCount;
+      if (easiestPosition.hasBarre) {
+        barreShapes += 1;
+      }
+    }
+
+    const suggestion: SuggestedCapoPosition = {
+      capoFret,
+      score: Number(totalScore.toFixed(3)),
+      uniqueChordCount: uniqueSoundingChords.length,
+      missingShapes,
+      barreShapes,
+      totalBarres,
+      averageRelativeFret: Number((totalRelativeFret / uniqueSoundingChords.length).toFixed(3)),
+    };
+
+    if (!bestSuggestion || compareCapoSuggestions(suggestion, bestSuggestion) < 0) {
+      bestSuggestion = suggestion;
+    }
+  }
+
+  return bestSuggestion;
 }
 
 export function buildGuitarStrumPattern(

@@ -186,7 +186,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
       position: position as 'sticky' | 'fixed',
       bottom: positionMode === 'sticky' ? undefined : '88px',
       top: positionMode === 'sticky' ? '8px' : undefined,
-      right: isChatbotOpen || isLyricsPanelOpen ? '420px' : '4px',
+      right: isChatbotOpen || isLyricsPanelOpen ? '392px' : '4px',
       maxWidth: isVideoMinimized ? '250px' : '500px',
       minWidth: isVideoMinimized ? '200px' : '300px',
       pointerEvents: 'auto' as const,

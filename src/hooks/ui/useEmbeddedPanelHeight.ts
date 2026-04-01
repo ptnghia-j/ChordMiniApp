@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 const MOBILE_BREAKPOINT = 768;
-const PANEL_GAP_PX = 12;
+const PANEL_GAP_PX = 64;
 
 export const useEmbeddedPanelHeight = (
   embedded: boolean,

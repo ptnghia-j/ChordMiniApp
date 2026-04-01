@@ -12,6 +12,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Input } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { HiArrowPath } from 'react-icons/hi2';
+import UtilityPopoverPanel from '@/components/analysis/UtilityPopoverPanel';
 import {
   useIsLoopEnabled,
   useLoopStartBeat,
@@ -168,80 +169,73 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
       </PopoverTrigger>
       
       <PopoverContent>
-        <div className="bg-white/60 dark:bg-content-bg/60 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg min-w-[280px] backdrop-blur-sm">
-          {/* Loop range inputs */}
-          <div className="space-y-3">
-            {/* Header */}
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">
-              Loop Range
-            </div>
-
-            {/* Compact side-by-side inputs */}
-            <div className="flex gap-3">
-              {/* Start beat input */}
-              <Input
-                type="number"
-                label="Start Beat"
-                labelPlacement="outside"
-                aria-label="Start Beat"
-                value={startBeatInput ?? displayStartBeat.toString()}
-                onValueChange={setStartBeatInput}
-                onBlur={() => {
+        <UtilityPopoverPanel
+          title="Loop Range"
+          titleClassName="text-center"
+          bodyClassName="space-y-3 p-4 min-w-[280px]"
+        >
+          <div className="flex gap-3">
+            <Input
+              type="number"
+              label="Start Beat"
+              labelPlacement="outside"
+              aria-label="Start Beat"
+              value={startBeatInput ?? displayStartBeat.toString()}
+              onValueChange={setStartBeatInput}
+              onBlur={() => {
+                commitStartBeatInput(startBeatInput ?? displayStartBeat.toString());
+                setStartBeatInput(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
                   commitStartBeatInput(startBeatInput ?? displayStartBeat.toString());
                   setStartBeatInput(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    commitStartBeatInput(startBeatInput ?? displayStartBeat.toString());
-                    setStartBeatInput(null);
-                  }
-                }}
-                min={1}
-                max={Math.max(1, totalBeats)}
-                size="sm"
-                variant="bordered"
-                color="success"
-                classNames={{
-                  base: 'flex-1',
-                  label: 'text-xs text-gray-600 dark:text-gray-400 mb-1',
-                  input: 'text-sm text-center',
-                  inputWrapper: 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
-                }}
-              />
+                }
+              }}
+              min={1}
+              max={Math.max(1, totalBeats)}
+              size="sm"
+              variant="bordered"
+              color="success"
+              classNames={{
+                base: 'flex-1',
+                label: 'text-xs text-gray-600 dark:text-gray-400 mb-1',
+                input: 'text-sm text-center',
+                inputWrapper: 'bg-white/65 dark:bg-slate-900/35 border-white/25 dark:border-white/10'
+              }}
+            />
 
-              {/* End beat input */}
-              <Input
-                type="number"
-                label="End Beat"
-                labelPlacement="outside"
-                aria-label="End Beat"
-                value={endBeatInput ?? displayEndBeat.toString()}
-                onValueChange={setEndBeatInput}
-                onBlur={() => {
+            <Input
+              type="number"
+              label="End Beat"
+              labelPlacement="outside"
+              aria-label="End Beat"
+              value={endBeatInput ?? displayEndBeat.toString()}
+              onValueChange={setEndBeatInput}
+              onBlur={() => {
+                commitEndBeatInput(endBeatInput ?? displayEndBeat.toString());
+                setEndBeatInput(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
                   commitEndBeatInput(endBeatInput ?? displayEndBeat.toString());
                   setEndBeatInput(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    commitEndBeatInput(endBeatInput ?? displayEndBeat.toString());
-                    setEndBeatInput(null);
-                  }
-                }}
-                min={1}
-                max={Math.max(1, totalBeats)}
-                size="sm"
-                variant="bordered"
-                color="success"
-                classNames={{
-                  base: 'flex-1',
-                  label: 'text-xs text-gray-600 dark:text-gray-400 mb-1',
-                  input: 'text-sm text-center',
-                  inputWrapper: 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
-                }}
-              />
-            </div>
+                }
+              }}
+              min={1}
+              max={Math.max(1, totalBeats)}
+              size="sm"
+              variant="bordered"
+              color="success"
+              classNames={{
+                base: 'flex-1',
+                label: 'text-xs text-gray-600 dark:text-gray-400 mb-1',
+                input: 'text-sm text-center',
+                inputWrapper: 'bg-white/65 dark:bg-slate-900/35 border-white/25 dark:border-white/10'
+              }}
+            />
           </div>
-        </div>
+        </UtilityPopoverPanel>
       </PopoverContent>
     </Popover>
   );

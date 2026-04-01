@@ -959,8 +959,8 @@ const simplifiedChordGridData = useMemo(() => {
   ]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="flex flex-col min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
+    <div className="min-h-screen bg-background dark:bg-gray-900">
+      <div className="flex flex-col min-h-screen bg-background dark:bg-dark-bg transition-colors duration-300">
       {/* Use the Navigation component */}
       <Navigation />
 

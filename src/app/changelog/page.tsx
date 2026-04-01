@@ -35,6 +35,8 @@ export default function ChangelogPage() {
       description: ' Improves beat synchronization robustness, refactors chord recognition service for better maintainability, and includes minor UI improvements and bug fixes.',
       features: [
         'IMPROVED: Enhanced beat synchronization robustness with improved handling of tempo changes, silent sections for more accurate chord-beat alignment.',
+        'NEW: Added capo suggested position and pop-up panel visualization of the guitar neck for capo adjustment',
+        'IMPROVED: HeroUI component updates for pop-up panels across toggle buttons for UI consistency',
       ],
       technical: [
         'REFACTORING: Refactored chord recognition service to smaller, more manageable components, reduce code duplication, and improve maintainability.',

@@ -95,7 +95,7 @@ export default function SettingsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                          <FiMoon className="w-4 h-4 text-white" />
+                          <FiMoon className="w-4 h-4 text-blue" />
                         </div>
                         <div>
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Dark Mode</h4>
@@ -166,7 +166,7 @@ export default function SettingsPage() {
                     />
                     <Divider />
                     <PrivacyItem
-                      icon={<FiDatabase className="w-4 h-4 text-white" />}
+                      icon={<FiDatabase className="w-4 h-4 text-blue" />}
                       iconBg="bg-primary-50 dark:bg-primary-900/20"
                       title="Cache Data"
                       description="Analysis results are cached in Firebase for performance. No personal data is stored."

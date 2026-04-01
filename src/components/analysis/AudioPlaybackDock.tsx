@@ -3,6 +3,7 @@
 import React, { memo, useMemo, useState } from 'react';
 import { Button, Tooltip, Popover, PopoverTrigger, PopoverContent, Slider } from '@heroui/react';
 import { FaPlay, FaPause } from 'react-icons/fa';
+import { getAppSliderClassNames } from '@/components/ui/appSliderStyles';
 
 export interface AudioPlaybackDockProps {
   isPlaying: boolean;
@@ -30,6 +31,7 @@ const AudioPlaybackDock: React.FC<AudioPlaybackDockProps> = ({
   bpm,
 }) => {
   const [open, setOpen] = useState(false);
+  const primarySliderClassNames = getAppSliderClassNames('primary');
   const formatTime = (t: number) => {
     if (!isFinite(t) || t < 0) return '0:00';
     const minutes = Math.floor(t / 60);
@@ -75,6 +77,7 @@ const AudioPlaybackDock: React.FC<AudioPlaybackDockProps> = ({
       <div className="min-w-[160px] w-[240px] sm:w-[280px] md:w-[320px]">
         <Slider
           aria-label="Playback position"
+          color="primary"
           size="sm"
           step={0.01}
           minValue={0}
@@ -86,9 +89,7 @@ const AudioPlaybackDock: React.FC<AudioPlaybackDockProps> = ({
           }}
           className="w-full"
           classNames={{
-            track: 'bg-gray-200 dark:bg-gray-700 h-1.5',
-            filler: 'bg-blue-500 dark:bg-blue-400',
-            thumb: 'bg-white border-0 shadow-lg w-4 h-4 after:bg-white after:border-0'
+            ...primarySliderClassNames,
           }}
         />
         <div className="flex items-center justify-between mt-1 text-[10px] text-gray-600 dark:text-gray-300">

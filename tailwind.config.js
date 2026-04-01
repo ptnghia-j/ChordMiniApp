@@ -1,6 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 const { heroui } = require("@heroui/react");
 
+const LIGHT_WARM_BACKGROUND = "#FAF6EE";
+const LIGHT_WARM_SURFACE = "#FDFBF6";
+const LIGHT_WARM_SURFACE_SECONDARY = "#F5EFE4";
+const LIGHT_WARM_SURFACE_TERTIARY = "#EDE3D4";
+const LIGHT_WARM_SURFACE_QUATERNARY = "#E0D5C2";
+const LIGHT_WARM_DIVIDER = "#DCCFBA";
+
 module.exports = {
   darkMode: 'class',
   content: [
@@ -77,13 +84,13 @@ module.exports = {
     themes: {
       light: {
         colors: {
-          background: "#ffffff", // Main light background
+          background: LIGHT_WARM_BACKGROUND, // Main light background
           foreground: "#000000",
-          content1: "#ffffff", // Content container background
-          content2: "#f8fafc", // Secondary content background
-          content3: "#f1f5f9", // Tertiary content background
-          content4: "#e2e8f0", // Quaternary content background
-          divider: "#e2e8f0", // Border color for light mode
+          content1: LIGHT_WARM_SURFACE, // Content container background
+          content2: LIGHT_WARM_SURFACE_SECONDARY, // Secondary content background
+          content3: LIGHT_WARM_SURFACE_TERTIARY, // Tertiary content background
+          content4: LIGHT_WARM_SURFACE_QUATERNARY, // Quaternary content background
+          divider: LIGHT_WARM_DIVIDER, // Border color for light mode
           primary: {
             50: "#e3f2fd",
             100: "#bbdefb",

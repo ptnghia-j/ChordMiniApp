@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { FaExpand, FaCompress } from 'react-icons/fa';
 import { Slider } from '@heroui/react';
+import { getAppSliderClassNames } from '@/components/ui/appSliderStyles';
 
 // Import ReactPlayer type for TypeScript
 import ReactPlayer from 'react-player';
@@ -224,12 +225,6 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
             <div className="flex min-w-0 flex-1 items-center">
               <Slider
                 color="foreground"
-                renderThumb={(props) => (
-                  <div
-                    {...props}
-                    className="h-4 w-4 rounded-full bg-blue-400 dark:bg-blue-200"
-                  />
-                )}
                 size="sm"
                 step={0.1}
                 minValue={0}
@@ -239,8 +234,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 className="w-full"
                 classNames={{
                   base: "max-w-none",
-                  track: "border-s-secondary-100",
-                  filler: "bg-gradient-to-r from-primary-100 to-primary-500",
+                  ...getAppSliderClassNames('primary'),
                 }}
                 formatOptions={{style: "unit", unit: "second"}}
                 aria-label="Video progress"

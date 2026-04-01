@@ -63,11 +63,11 @@ export default function StatusPage() {
                       endpoints.some(e => e.status === 'online') ? 'partial' : 'offline';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-dark-bg transition-colors duration-300">
+    <div className="min-h-screen bg-background dark:bg-dark-bg transition-colors duration-300">
       <Navigation />
       
       {/* Hero Section */}
-      <div className=" bg-white dark:bg-dark-bg text-black dark:text-white">
+      <div className=" bg-background dark:bg-dark-bg text-black dark:text-white">
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           <div className="text-center">
             <div className="flex items-center justify-center gap-3 mb-3">

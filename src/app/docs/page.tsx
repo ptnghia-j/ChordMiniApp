@@ -125,8 +125,8 @@ export default function DocsPage() {
   const navItemClasses = (id: string) =>
     `flex items-center gap-2 text-sm py-2 px-3 rounded-md transition-colors ${
       activeSection === id
-        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold'
-        : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-gray-800'
+        ? 'bg-[#E8EDF6] dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold'
+        : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-[#F5EFE4] dark:hover:bg-gray-800'
     }`;
 
   const infoCardClass = (type: 'info' | 'warning' | 'success') => {
@@ -141,14 +141,14 @@ export default function DocsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-content-bg transition-colors duration-300">
+    <div className="min-h-screen bg-background dark:bg-content-bg transition-colors duration-300">
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         <div className="lg:grid lg:grid-cols-4 lg:gap-8">
           {/* Sidebar Navigation */}
-          <div className="hidden lg:block lg:col-span-1">
-            <div className="sticky top-20 py-8 bg-white dark:bg-content-bg transition-colors duration-300">
-              <nav className="space-y-6">
+          <div className="hidden lg:block lg:col-span-1 bg-[#FAF6EE] dark:bg-content-bg transition-colors duration-300">
+            <div className="sticky top-20 rounded-2xl bg-[#FAF6EE] py-8 dark:bg-content-bg transition-colors duration-300">
+              <nav className="space-y-6 bg-[#FAF6EE] dark:bg-content-bg">
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                     Welcome

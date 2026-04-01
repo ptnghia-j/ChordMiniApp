@@ -19,6 +19,7 @@ interface ChatbotInterfaceProps {
 }
 
 const WELCOME_MESSAGE = `Hello! I'm your AI music assistant. I can help you understand this song's chord progressions, beat patterns, harmonic movement, structure, and lyrics. What would you like to explore?`;
+const FLOATING_PANEL_CLASSES = 'w-[20.5rem] max-w-[calc(100vw-1rem)] h-[calc(100vh-9.85rem)] max-h-[590px] min-h-[340px] max-sm:left-3 max-sm:right-3 max-sm:bottom-[calc(var(--mobile-video-dock-height,0px)+1.35rem)] max-sm:w-auto max-sm:max-w-none max-sm:h-[calc(100vh-var(--mobile-video-dock-height,0px)-9.6rem)] max-sm:max-h-[calc(100vh-var(--mobile-video-dock-height,0px)-9.6rem)] max-sm:min-h-[280px] sm:bottom-16 sm:right-4 sm:w-[20.5rem] sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-9.85rem)] sm:max-h-[590px] sm:min-h-[340px]';
 
 const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
   isOpen,
@@ -114,7 +115,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
           )}
           <motion.div
             ref={panelRef}
-            className={`${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'} ${embedded ? '' : 'z-[9998]'} flex flex-col rounded-xl border border-white/45 bg-white/72 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] backdrop-blur-xl dark:border-white/12 dark:bg-slate-900/42 ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : 'w-96 max-w-[calc(100vw-2rem)] h-[calc(100vh-8rem)] max-h-[700px] min-h-[400px] sm:bottom-16 sm:right-4 sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[calc(100vh-8rem)] sm:max-h-[700px] sm:min-h-[400px]'} ${className}`}
+            className={`${embedded ? 'relative' : 'fixed bottom-16 right-4 max-sm:bottom-0 max-sm:right-0 max-sm:left-0'} ${embedded ? '' : 'z-[9998]'} flex flex-col rounded-xl border border-white/45 bg-white/72 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.72)] backdrop-blur-xl dark:border-white/12 dark:bg-slate-900/42 ${embedded ? 'w-full h-full max-h-none min-h-[400px]' : FLOATING_PANEL_CLASSES} ${className}`}
             style={embeddedHeight ? { height: `${embeddedHeight}px`, maxHeight: `${embeddedHeight}px`, minHeight: 0 } : undefined}
             initial={embedded ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
             animate={embedded ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
