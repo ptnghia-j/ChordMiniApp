@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import BeatHighlighter from './BeatHighlighter';
 import {
   formatRomanNumeral,
@@ -526,38 +526,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       sequenceCorrections
     );
   }, [chords, shiftedChords, romanNumeralData, sequenceCorrections, originalChordsForRomanNumerals, hasPadding, actualBeatsPerMeasure, shiftCount]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || process.env.NODE_ENV !== 'development') {
-      return;
-    }
-
-    const sample = shiftedChords.slice(0, 24).map((chord, index) => ({
-      index,
-      sourceChord: chord,
-      displayChord: getDisplayChordLocal(chord, index).chord,
-      mappedSequenceIndex: sequenceCorrections ? (beatToChordSequenceMap[index] ?? -1) : -1,
-      correctionSequenceIndex: sequenceCorrections ? -999 : -1,
-      beat: beats[index],
-    }));
-
-    console.info('[alignment-debug] chord-grid-visual-sample', {
-      showCorrectedChords,
-      sequenceOriginalLength: sequenceCorrections?.originalSequence.length ?? 0,
-      sequenceCorrectedLength: sequenceCorrections?.correctedSequence.length ?? 0,
-      shiftedChordLength: shiftedChords.length,
-      originalAudioMappingLength: originalAudioMapping?.length ?? 0,
-      sample,
-    });
-  }, [
-    beatToChordSequenceMap,
-    beats,
-    getDisplayChordLocal,
-    originalAudioMapping,
-    sequenceCorrections,
-    shiftedChords,
-    showCorrectedChords,
-  ]);
 
   // Memoize Roman numeral formatting to avoid per-cell recomputation on toggles
   const formatRomanNumeralMemo = useMemo(() => {

@@ -404,6 +404,24 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const lastTimeUpdateRef = useRef<number>(0);
   const TIME_UPDATE_INTERVAL = 100; // Keep visual/audio consumers fresher to reduce residual interpolation snaps
 
+  useEffect(() => {
+    if (!lastClickInfo) {
+      return;
+    }
+
+    // Manual beat jumps must also reset the animation hook's internal rewind
+    // guards. Otherwise a backward seek can inherit the prior forward-only
+    // state and appear frozen until playback catches back up.
+    currentTimeRef.current = lastClickInfo.timestamp;
+    prevTimeRef.current = lastClickInfo.timestamp;
+    lastComputedTimeRef.current = Number.NEGATIVE_INFINITY;
+    lastStateUpdateTimeRef.current = 0;
+    lastStableBeatRef.current = lastClickInfo.visualIndex;
+    beatStabilityCounterRef.current = STABILITY_THRESHOLD;
+    lastEmittedBeatRef.current = lastClickInfo.visualIndex;
+    lastEmitTimeRef.current = lastClickInfo.timestamp;
+  }, [lastClickInfo]);
+
   // Update current time and check for current beat
   useEffect(() => {
     // CRITICAL FIX: Only set up animation loop when playing

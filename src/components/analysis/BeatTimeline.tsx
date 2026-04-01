@@ -21,7 +21,7 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
   downbeats = [],
   currentBeatIndex,
   currentDownbeatIndex,
-  duration,
+  duration: _duration,
   className = '',
   embedded = false,
 }) => {
@@ -43,13 +43,57 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
   }, [beats, currentBeatIndex]);
 
   const processedDownbeats = useMemo(() => {
-    if (!downbeats?.map) return [];
-    return downbeats.map((beatTime, index) => ({
-      time: beatTime,
-      index,
-      isCurrent: index === currentDownbeatIndex
-    }));
-  }, [downbeats, currentDownbeatIndex]);
+    if (!processedBeats.length) return [];
+
+    const measureStartTimes =
+      downbeats.length > 0
+        ? downbeats
+        : processedBeats
+            .filter((beat) => beat.isDownbeat)
+            .map((beat) => beat.time);
+
+    const findClosestBeatIndex = (time: number): number => {
+      let left = 0;
+      let right = processedBeats.length - 1;
+
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const beatTime = processedBeats[mid]?.time ?? 0;
+
+        if (beatTime < time) {
+          left = mid + 1;
+        } else {
+          right = mid - 1;
+        }
+      }
+
+      if (left <= 0) return 0;
+      if (left >= processedBeats.length) return processedBeats.length - 1;
+
+      const previousIndex = left - 1;
+      const previousDistance = Math.abs((processedBeats[previousIndex]?.time ?? 0) - time);
+      const nextDistance = Math.abs((processedBeats[left]?.time ?? 0) - time);
+
+      return nextDistance < previousDistance ? left : previousIndex;
+    };
+
+    const seenBeatIndexes = new Set<number>();
+
+    return measureStartTimes
+      .map((beatTime, index) => {
+        const beatIndex = findClosestBeatIndex(beatTime);
+        if (seenBeatIndexes.has(beatIndex)) return null;
+        seenBeatIndexes.add(beatIndex);
+
+        return {
+          time: beatTime,
+          index,
+          beatIndex,
+          isCurrent: index === currentDownbeatIndex,
+        };
+      })
+      .filter((downbeat): downbeat is { time: number; index: number; beatIndex: number; isCurrent: boolean } => downbeat !== null);
+  }, [currentDownbeatIndex, downbeats, processedBeats]);
 
   useEffect(() => {
     if (scrollContainerRef.current && currentBeatIndex >= 0) {
@@ -114,7 +158,7 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
             </div>
           ))}
 
-          {processedDownbeats.map(({ time, index: dbIndex, isCurrent }) => (
+          {processedDownbeats.map(({ beatIndex, index: dbIndex, isCurrent }) => (
             <div
               key={`db-${dbIndex}`}
               className={`absolute bottom-0 w-[3px] rounded-t-full ${
@@ -123,7 +167,7 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = React.memo(({
                   : 'h-full bg-red-400/25 dark:bg-red-300/20'
               }`}
               style={{
-                left: `${(time / duration) * (processedBeats.length * BEAT_WIDTH)}px`,
+                left: `${beatIndex * BEAT_WIDTH}px`,
                 transform: 'translateX(-1.5px)',
               }}
             />

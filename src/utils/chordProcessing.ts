@@ -3,6 +3,8 @@
  * Extracted from ChordGrid component for reusability and testability
  */
 
+import { calculateOptimalShift as calculateCanonicalOptimalShift } from '@/services/chord-analysis/gridShifting';
+
 export interface AudioMappingItem {
   chord: string;
   timestamp: number;
@@ -262,64 +264,6 @@ export const buildChordSequenceIndexMap = (
 };
 
 /**
- * Calculates optimal beat shift for chord alignment with downbeats
- * Uses scoring algorithm to find shift that maximizes chord changes on downbeats
- */
-export const calculateOptimalShift = (
-  chords: string[], 
-  timeSignature: number,
-  hasPadding: boolean = false,
-  shiftCount: number = 0
-): number => {
-  // Use the shift count from backend if available, otherwise calculate
-  if (hasPadding && shiftCount !== undefined) {
-    return shiftCount;
-  }
-
-  if (chords.length === 0) {
-    return 0;
-  }
-
-  let bestShift = 0;
-  let maxChordChanges = 0;
-
-  // Test each possible shift value (0 to timeSignature-1)
-  for (let shift = 0; shift < timeSignature; shift++) {
-    let chordChangeCount = 0;
-
-    // Check each beat position after applying the shift
-    for (let i = shift; i < chords.length; i++) {
-      const currentChord = chords[i];
-      const previousChord = i > shift ? chords[i - 1] : '';
-
-      // Detect chord change: current chord differs from previous beat's chord
-      const isChordChange = currentChord && currentChord !== '' &&
-                           currentChord !== previousChord && previousChord !== '' &&
-                           currentChord !== 'N.C.' && currentChord !== 'N/C' && currentChord !== 'N';
-
-      // Calculate beat position in measure after shift
-      const beatInMeasure = ((i + shift) % timeSignature) + 1;
-      const isDownbeat = beatInMeasure === 1;
-
-      // Score: chord change that occurs on a downbeat
-      if (isChordChange && isDownbeat) {
-        chordChangeCount++;
-      }
-    }
-
-    if (chordChangeCount > maxChordChanges) {
-      maxChordChanges = chordChangeCount;
-      bestShift = shift;
-    } else if (chordChangeCount === maxChordChanges && shift < bestShift) {
-      // When tied, prefer the smaller shift value (earliest alignment)
-      bestShift = shift;
-    }
-  }
-
-  return bestShift;
-};
-
-/**
  * Applies chord corrections at display time
  */
 export const getDisplayChord = (
@@ -490,14 +434,14 @@ export const createShiftedChords = (
   chords: string[],
   hasPadding: boolean,
   timeSignature: number,
-  shiftCount: number = 0
+  _shiftCount: number = 0
 ): string[] => {
   if (hasPadding) {
     // Backend already provided correctly ordered chords with padding/shift
     return chords;
   } else {
     // Apply ChordGrid's own shift logic
-    const computedOptimalShift = calculateOptimalShift(chords, timeSignature, hasPadding, shiftCount);
+    const computedOptimalShift = calculateCanonicalOptimalShift(chords, timeSignature, 0);
     return chords.length > 0 ? [
       ...Array(computedOptimalShift).fill(''), // Add empty cells at the beginning
       ...chords // Original chords follow after the shift

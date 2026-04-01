@@ -114,8 +114,8 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
         data-mobile-video-dock={shouldUseFixedMobileDock ? 'true' : 'false'}
         className={
           shouldUseFixedMobileDock
-            ? 'fixed inset-x-0 bottom-0 z-[80] flex flex-col items-stretch gap-2 px-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-1.5'
-            : 'relative z-[60] flex flex-col items-stretch gap-2 px-2.5 pb-0 sm:px-4 sm:pb-0 md:flex-row md:items-end md:gap-3'
+            ? 'pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-stretch gap-2 px-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-1.5'
+            : 'pointer-events-none relative z-[60] flex flex-col items-stretch gap-2 px-2.5 pb-0 sm:px-4 sm:pb-0 md:flex-row md:items-end md:gap-3'
         }
         style={{ marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -28 : -88)) : 0 }}
       >
@@ -123,7 +123,7 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/50 via-slate-950/18 to-transparent dark:from-slate-950/72" />
         ) : null}
         <div
-          className="relative z-[1] flex-1 w-full min-w-0 max-w-full md:order-1 md:w-auto"
+          className="pointer-events-auto relative z-[1] flex-1 w-full min-w-0 max-w-full md:order-1 md:w-auto"
           style={{
             maxWidth: isMdUp ? (typeof utilityBarWidth === 'number' ? `${utilityBarWidth}px` : utilityBarWidth) : '100%',
             minWidth: '280px',
@@ -136,7 +136,7 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
 
         <div
           ref={videoContainerRef}
-          className="relative z-[1] flex-shrink-0 transition-all duration-300 md:order-2"
+          className="pointer-events-auto relative z-[1] flex-shrink-0 transition-all duration-300 md:order-2"
           style={{
             width: isMdUp ? `${videoWidthPx}px` : '100%',
             minWidth: isMdUp ? (isVideoMinimized ? '200px' : '260px') : '0',

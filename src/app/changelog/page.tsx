@@ -29,6 +29,25 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.2.7',
+      date: 'April 1, 2026',
+      title: 'Beat synchronization enhancement, Refactoring, minor UI changes and fixes',
+      description: ' Improves beat synchronization robustness, refactors chord recognition service for better maintainability, and includes minor UI improvements and bug fixes.',
+      features: [
+        'IMPROVED: Enhanced beat synchronization robustness with improved handling of tempo changes, silent sections for more accurate chord-beat alignment.',
+      ],
+      technical: [
+        'REFACTORING: Refactored chord recognition service to smaller, more manageable components, reduce code duplication, and improve maintainability.',
+        'FIX: Addressed beat timeline under analysis summary section not aligning with actual beat playback',
+        'FIX: Resolved visible beat chord cells in chord grid not clickable due to hit-area problems where container accepted pointer-events',
+        'FIX: Pitch shift beat click seeking now correctly aligns the animation with the audio playback',
+        'REFACTORING: Refactored metronome service for maintenance and better separation of concerns',
+        'REFACTORING: Refactored soundfont chord playback service for better maintainability and separation of concerns',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.6.2.5',
       date: 'March 31, 2026',
       title: 'Playback Alignment & Signal-Driven Pattern Dynamics',
