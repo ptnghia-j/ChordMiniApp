@@ -226,13 +226,21 @@ jest.mock('firebase/firestore', () => ({
 
 // Mock dynamic imports
 jest.mock('next/dynamic', () => (func) => {
+  // 1. Resolve the component once, outside the render loop
+  const ResolvedComponent = func();
+
   const DynamicComponent = (props) => {
-    const Component = func()
-    return Component.default ? <Component.default {...props} /> : <Component {...props} />
-  }
-  DynamicComponent.displayName = 'DynamicComponent'
-  return DynamicComponent
-})
+    // 2. Handle both ES modules (.default) and commonJS/direct returns
+    const ComponentToRender = ResolvedComponent.default 
+      ? ResolvedComponent.default 
+      : ResolvedComponent;
+
+    return <ComponentToRender {...props} />;
+  };
+
+  DynamicComponent.displayName = 'DynamicComponent';
+  return DynamicComponent;
+});
 
 // Suppress specific warnings in tests
 const originalError = console.error

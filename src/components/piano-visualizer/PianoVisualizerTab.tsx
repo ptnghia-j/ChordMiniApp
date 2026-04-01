@@ -19,19 +19,12 @@ import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKey
 import {
   useGuitarCapoFret,
   useGuitarSelectedPositions,
-  useIsPitchShiftEnabled,
-  usePitchShiftSemitones,
   useTargetKey,
   useRomanNumerals,
 } from '@/stores/uiStore';
-import { transposeChord } from '@/utils/chordTransposition';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import {
-  buildChordOccurrenceCorrectionMap,
-  buildChordOccurrenceMap,
-  buildChordSequenceIndexMap,
   createShiftedChords,
-  getDisplayChord,
 } from '@/utils/chordProcessing';
 import { buildBeatToChordSequenceMap, formatRomanNumeral } from '@/utils/chordFormatting';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
@@ -40,6 +33,7 @@ import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionS
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { isInstrumentalTime } from '@/utils/segmentationSections';
 import { findChordEventForPlayback as findPlayableChordEvent } from '@/utils/chordEventLookup';
+import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -327,8 +321,6 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const storeKeySignature = useKeySignature();
 
   // Pitch shift
-  const isPitchShiftEnabled = useIsPitchShiftEnabled();
-  const pitchShiftSemitones = usePitchShiftSemitones();
   const targetKey = useTargetKey();
   const guitarCapoFret = useGuitarCapoFret();
   const guitarSelectedPositions = useGuitarSelectedPositions();
@@ -387,60 +379,23 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   const speed = SPEED_PRESETS[speedIndex];
 
-  // Apply pitch shift to chord grid data
-  const transposedChordGridData = useMemo(() => {
-    if (!isPitchShiftEnabled || pitchShiftSemitones === 0 || !chordGridData) {
-      return chordGridData;
-    }
-    const transposedChords = chordGridData.chords.map((chord) => {
-      if (!chord || chord === 'N.C.' || chord === 'N' || chord === 'N/C' || chord === 'NC') return chord;
-      return transposeChord(chord, pitchShiftSemitones, targetKey ?? undefined);
-    });
-    return { ...chordGridData, chords: transposedChords };
-  }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey]);
-
-  // Apply chord corrections
-  const correctedChords = useMemo(() => {
-    if (!transposedChordGridData) return [];
-    const chords = [...transposedChordGridData.chords];
-
-    if (sequenceCorrections) {
-      const chordGroupOccurrenceMap = buildChordOccurrenceMap(chords);
-      const chordOccurrenceCorrectionMap = buildChordOccurrenceCorrectionMap(sequenceCorrections);
-      const chordSequenceIndexMap = buildChordSequenceIndexMap(chords);
-      return chords.map((chord, index) => getDisplayChord(
-        chord,
-        index,
-        mergedShowCorrectedChords,
-        sequenceCorrections,
-        chordGroupOccurrenceMap,
-        chordOccurrenceCorrectionMap,
-        chordSequenceIndexMap,
-      ).chord);
-    }
-
-    if (mergedShowCorrectedChords && mergedChordCorrections) {
-      return chords.map((chord) => {
-        if (!chord) return chord;
-        const rootNote = chord.includes(':') ? chord.split(':')[0] : (chord.match(/^([A-G][#b]?)/)?.[1] || chord);
-        const correction = mergedChordCorrections[rootNote];
-        return correction ? chord.replace(rootNote, correction) : chord;
-      });
-    }
-
-    return chords;
-  }, [transposedChordGridData, mergedShowCorrectedChords, mergedChordCorrections, sequenceCorrections]);
+  const { resolvedChordGridData, displayedChords } = useResolvedChordDisplayData({
+    chordGridData,
+    showCorrectedChords: mergedShowCorrectedChords,
+    chordCorrections: mergedChordCorrections,
+    sequenceCorrections,
+  });
 
   // Build chord event timeline for the piano roll
   const chordEvents = useMemo<ChordEvent[]>(() => {
-    if (!transposedChordGridData) return [];
+    if (!resolvedChordGridData) return [];
     return buildChordTimeline(
-      correctedChords,
-      transposedChordGridData.beats,
-      transposedChordGridData.paddingCount,
-      transposedChordGridData.shiftCount,
+      displayedChords,
+      resolvedChordGridData.beats,
+      resolvedChordGridData.paddingCount,
+      resolvedChordGridData.shiftCount,
     );
-  }, [correctedChords, transposedChordGridData]);
+  }, [displayedChords, resolvedChordGridData]);
   const mergedPlayableChordEvents = useMemo(
     () => mergeConsecutiveChordEvents(chordEvents.filter(hasPlayableNotes)),
     [chordEvents],
@@ -450,11 +405,11 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   // Key signature (from Gemini) is authoritative; heuristic is fallback.
   const accidentalPreference = useMemo(() => {
     return getDisplayAccidentalPreference({
-      chords: correctedChords,
+      chords: displayedChords,
       keySignature: storeKeySignature,
       preserveExactSpelling: Boolean(sequenceCorrections),
     });
-  }, [storeKeySignature, correctedChords, sequenceCorrections]);
+  }, [storeKeySignature, displayedChords, sequenceCorrections]);
 
   // ── Roman numeral support (shared with ChordGrid via stores) ──────────────
 
@@ -678,7 +633,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           timeSignature={timeSignature}
           accidentalPreference={accidentalPreference}
           beatRomanNumerals={beatRomanNumerals}
-          uncorrectedChords={transposedChordGridData?.chords}
+          uncorrectedChords={resolvedChordGridData?.chords}
           segmentationData={segmentationData}
         />
       </div>

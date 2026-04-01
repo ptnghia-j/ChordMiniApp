@@ -5,7 +5,7 @@ import ChordGrid from '@/components/chord-analysis/ChordGrid';
 import { useAnalysisResults, useKeySignature, useIsDetectingKey, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
 import { useBeatHandlers } from '@/stores/playbackStore';
 import { useRomanNumerals, useShowSegmentation, useIsPitchShiftEnabled, useTargetKey } from '@/stores/uiStore';
-import { useTransposedChordData } from '@/hooks/chord-analysis/useTransposedChordData';
+import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { SegmentationResult } from '@/types/chatbotTypes';
 
@@ -109,14 +109,19 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const targetKey = useTargetKey();
 
-  // Apply pitch shift transposition if enabled
-  const { transposedChordGridData } = useTransposedChordData({
+  const {
+    resolvedChordGridData,
+    effectiveShowCorrectedChords,
+    effectiveChordCorrections,
+    effectiveSequenceCorrections,
+  } = useResolvedChordDisplayData({
     chordGridData,
-    correctedSequence: sequenceCorrections?.correctedSequence || null,
+    showCorrectedChords: mergedShowCorrectedChords,
+    chordCorrections: mergedChordCorrections,
+    sequenceCorrections,
   });
 
-  // Use transposed data if available, otherwise use original
-  const effectiveChordGridData = transposedChordGridData || chordGridData;
+  const effectiveChordGridData = resolvedChordGridData || chordGridData;
 
   const stableProps = React.useMemo(() => {
     const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
@@ -131,17 +136,6 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       // Combine transposed note with original quality
       displayKey = quality ? `${targetKey} ${quality}` : targetKey;
     }
-
-    // Pitch-shifted beat-grid labels must render from the transposed chord stream itself.
-    // Leaving original-pitch sequence corrections enabled here causes getDisplayChord()
-    // to overwrite the transposed labels with the untransposed sequence, which makes
-    // small shifts appear unchanged and larger shifts drift into wrong/N.C. labels.
-    //
-    // Roman numerals stay aligned through originalChordsForRomanNumerals, so the
-    // visual sequence-correction override should be disabled while pitch shift is on.
-    const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
-    const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
-    const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
 
     return {
       chords: effectiveChordGridData.chords,
@@ -183,15 +177,15 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     mergedKeySignature,
     mergedIsDetectingKey,
     isUploadPage,
-    mergedShowCorrectedChords,
-    mergedChordCorrections,
-    sequenceCorrections,
     segmentationData,
     showSegmentation,
     mergedShowRomanNumerals,
     mergedRomanNumeralData,
     isPitchShiftEnabled,
-    targetKey
+    targetKey,
+    effectiveShowCorrectedChords,
+    effectiveChordCorrections,
+    effectiveSequenceCorrections,
   ]);
 
   // Get click handler from Zustand store

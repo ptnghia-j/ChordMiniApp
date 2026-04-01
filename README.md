@@ -62,31 +62,31 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
    git lfs pull
    ```
 
-   > [!NOTE]
-   > `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
+#### Verify that `git lfs pull` completed
+> [!NOTE]
+> `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
 
-   #### Verify that submodules are populated
-   ```
-   ls -la python_backend/models/Beat-Transformer/
-   ls -la python_backend/models/Chord-CNN-LSTM/
-   ls -la python_backend/models/ChordMini/
-   ```
+#### Verify that submodules are populated
+```bash
+ls -la python_backend/models/Beat-Transformer/
+ls -la python_backend/models/Chord-CNN-LSTM/
+ls -la python_backend/models/ChordMini/
+```
 
-   > [!NOTE]
-   > If chord recognition encounters issue with fluidsynth:
-   Install FluidSynth for MIDI synthesis
-   >
-   > ```
-   > # --- Windows ---
-   > choco install fluidsynth
-   >
-   > # --- macOS ---
-   > brew install fluidsynth
-   >
-   > # --- Linux (Debian/Ubuntu-based) ---
-   > sudo apt update
-   > sudo apt install fluidsynth
-   > ```
+> [!NOTE]
+> If chord recognition encounters an issue with FluidSynth, install it for MIDI synthesis.
+>
+> ```bash
+> # --- Windows ---
+> choco install fluidsynth
+>
+> # --- macOS ---
+> brew install fluidsynth
+>
+> # --- Linux (Debian/Ubuntu-based) ---
+> sudo apt update
+> sudo apt install fluidsynth
+> ```
 
 2. **Environment setup**
    ```bash
@@ -158,8 +158,8 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
    docker compose -f docker-compose.prod.yml down
    ```
 
-   > [!NOTE]
-   > `If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
+> [!NOTE]
+> If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
 
 
 ### Docker Desktop GUI (Alternative)

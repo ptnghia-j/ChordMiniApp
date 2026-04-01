@@ -15,8 +15,6 @@ import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zust
 import {
   useGuitarCapoFret,
   useGuitarSelectedPositions,
-  useIsPitchShiftEnabled,
-  usePitchShiftSemitones,
   useSetGuitarCapoFret,
   useSetGuitarSelectedPosition,
   useTargetKey,
@@ -24,12 +22,7 @@ import {
 } from '@/stores/uiStore';
 import { transposeChord, calculateTargetKey } from '@/utils/chordTransposition';
 import { DEFAULT_MAX_CAPO_SUGGESTION_FRET, suggestCapoPosition } from '@/utils/guitarVoicing';
-import {
-  buildChordOccurrenceCorrectionMap,
-  buildChordOccurrenceMap,
-  buildChordSequenceIndexMap,
-  getDisplayChord,
-} from '@/utils/chordProcessing';
+import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
 
@@ -117,9 +110,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 }) => {
   const currentBeatIndex = useCurrentBeatIndex();
 
-  // Get pitch shift state from Zustand store
-  const isPitchShiftEnabled = useIsPitchShiftEnabled();
-  const pitchShiftSemitones = usePitchShiftSemitones();
   const targetKey = useTargetKey();
 
   const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
@@ -153,52 +143,13 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     setChordDataCache(new Map());
   }, [capoFret, setSharedCapoFret]);
 
-  // Apply pitch shift transposition to chord grid data if enabled
-  const transposedChordGridData = useMemo(() => {
-    if (!isPitchShiftEnabled || pitchShiftSemitones === 0 || !chordGridData) {
-      return chordGridData;
-    }
-
-    // Match the beat-grid behavior: when Gemini sequence corrections are available,
-    // transpose that corrected sequence directly instead of reapplying original-pitch
-    // corrections later in the rendering path.
-    const sourceChords = Array.isArray(sequenceCorrections?.correctedSequence)
-      && sequenceCorrections.correctedSequence.length === chordGridData.chords.length
-      ? sequenceCorrections.correctedSequence
-      : chordGridData.chords;
-
-    // Transpose all chords in the grid
-    const transposedChords = sourceChords.map((chord) => {
-      if (!chord || chord === 'N.C.' || chord === 'N' || chord === 'N/C' || chord === 'NC') {
-        return chord;
-      }
-      return transposeChord(chord, pitchShiftSemitones, targetKey ?? undefined);
-    });
-
-    // Transpose originalAudioMapping if it exists
-    const transposedMapping = chordGridData.originalAudioMapping?.map(mapping => ({
-      ...mapping,
-      chord: mapping.chord && mapping.chord !== 'N.C.' && mapping.chord !== 'N' && mapping.chord !== 'N/C' && mapping.chord !== 'NC'
-        ? transposeChord(mapping.chord, pitchShiftSemitones, targetKey ?? undefined)
-        : mapping.chord
-    }));
-
-    return {
-      ...chordGridData,
-      chords: transposedChords,
-      originalAudioMapping: transposedMapping
-    };
-  }, [chordGridData, isPitchShiftEnabled, pitchShiftSemitones, targetKey, sequenceCorrections]);
-
   // When capo is set, transpose chords DOWN by capo fret count to get the "shape" chord
   // e.g., capo on fret 2: song has D → guitarist plays C shape (D transposed -2 = C)
   const capoTargetKey = useMemo(() => {
     if (capoFret === 0) return 'C';
-    // When pitch shift is active, prefer targetKey for consistent enharmonic spelling
-    // with the pitch-shifted chord grid; fall back to keySignature otherwise
-    const baseKey = (isPitchShiftEnabled && targetKey) ? targetKey : (keySignature || targetKey || 'C');
+    const baseKey = targetKey || keySignature || 'C';
     return calculateTargetKey(baseKey, -capoFret);
-  }, [capoFret, keySignature, targetKey, isPitchShiftEnabled]);
+  }, [capoFret, keySignature, targetKey]);
 
   // Responsive diagram sizing for animated view - diagram dimensions scale with screen
   const diagramConfig = useMemo(() => {
@@ -235,16 +186,15 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const mergedAnalysisResults = analysisResults ?? storeAnalysisResults;
   const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
   const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
-  const effectiveShowCorrectedChords = isPitchShiftEnabled ? false : mergedShowCorrectedChords;
-  const effectiveChordCorrections = isPitchShiftEnabled ? null : mergedChordCorrections;
-  const effectiveSequenceCorrections = isPitchShiftEnabled ? null : sequenceCorrections;
-
-  const chordGroupOccurrenceMap = useMemo(() => buildChordOccurrenceMap(transposedChordGridData.chords), [transposedChordGridData.chords]);
-  const chordOccurrenceCorrectionMap = useMemo(() => buildChordOccurrenceCorrectionMap(effectiveSequenceCorrections), [effectiveSequenceCorrections]);
-  const chordSequenceIndexMap = useMemo(
-    () => buildChordSequenceIndexMap(transposedChordGridData.chords, effectiveSequenceCorrections?.originalSequence),
-    [transposedChordGridData.chords, effectiveSequenceCorrections]
-  );
+  const {
+    resolvedChordGridData,
+    displayedChords,
+  } = useResolvedChordDisplayData({
+    chordGridData,
+    showCorrectedChords: mergedShowCorrectedChords,
+    chordCorrections: mergedChordCorrections,
+    sequenceCorrections,
+  });
 
   const normalizeChordNameForDisplay = useCallback((originalChord: string): string => {
     if (!originalChord ||
@@ -259,32 +209,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   }, []);
 
   // This matches the beat-grid display: corrections/enharmonic updates first, capo transposition later.
-  const getProcessedSoundingChordName = useCallback((originalChord: string, visualIndex?: number): string => {
+  const getProcessedSoundingChordName = useCallback((originalChord: string): string => {
     const normalizedChord = normalizeChordNameForDisplay(originalChord);
     if (normalizedChord === 'N.C.') return normalizedChord;
 
-    if (effectiveSequenceCorrections && visualIndex !== undefined) {
-      return getDisplayChord(
-        normalizedChord,
-        visualIndex,
-        effectiveShowCorrectedChords,
-        effectiveSequenceCorrections,
-        chordGroupOccurrenceMap,
-        chordOccurrenceCorrectionMap,
-        chordSequenceIndexMap,
-      ).chord;
-    }
-
-    if (!effectiveShowCorrectedChords) return normalizedChord;
-
-    if (effectiveChordCorrections) {
-      const rootNote = normalizedChord.includes(':') ? normalizedChord.split(':')[0] : (normalizedChord.match(/^([A-G][#b]?)/)?.[1] || normalizedChord);
-      const correction = effectiveChordCorrections[rootNote as keyof typeof effectiveChordCorrections];
-      if (correction) return normalizedChord.replace(rootNote, correction as string);
-    }
-
     return normalizedChord;
-  }, [normalizeChordNameForDisplay, effectiveShowCorrectedChords, effectiveChordCorrections, effectiveSequenceCorrections, chordGroupOccurrenceMap, chordOccurrenceCorrectionMap, chordSequenceIndexMap]);
+  }, [normalizeChordNameForDisplay]);
 
   const getProcessedShapeChordName = useCallback((soundingChord: string): string => {
     const normalizedChord = normalizeChordNameForDisplay(soundingChord);
@@ -304,8 +234,8 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   // chords into the same renderable diagram, so animated playback needs an
   // index-based lookup instead of a shape-name-only map.
   const processedChordData = useMemo(() => {
-    const entries = transposedChordGridData.chords.map((chord, index) => {
-      const sounding = getProcessedSoundingChordName(chord, index);
+    const entries = displayedChords.map((chord) => {
+      const sounding = getProcessedSoundingChordName(chord);
       const shape = getProcessedShapeChordName(sounding);
       return { sounding, shape };
     });
@@ -334,11 +264,11 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         ])
       ),
     };
-  }, [transposedChordGridData.chords, getProcessedSoundingChordName, getProcessedShapeChordName]);
+  }, [displayedChords, getProcessedSoundingChordName, getProcessedShapeChordName]);
 
   const capoSuggestionTargetKey = useMemo(() => (
-    (isPitchShiftEnabled && targetKey) ? targetKey : (keySignature || targetKey || 'C')
-  ), [isPitchShiftEnabled, keySignature, targetKey]);
+    targetKey || keySignature || 'C'
+  ), [keySignature, targetKey]);
 
   const uniqueSoundingChordsForCapoSuggestion = useMemo(() => (
     Array.from(
@@ -418,19 +348,19 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   // Unique chords for guitar diagrams (always applies corrections for consistent display)
   const uniqueChordsForGuitarDiagrams = useMemo(() => {
     const chordSet = new Set<string>();
-    if (transposedChordGridData.originalAudioMapping?.length) {
-      transposedChordGridData.originalAudioMapping.forEach(mapping => {
+    if (resolvedChordGridData?.originalAudioMapping?.length) {
+      resolvedChordGridData.originalAudioMapping.forEach(mapping => {
         const processedChord = processedChordData.entries[mapping.visualIndex]?.shape;
         if (processedChord) chordSet.add(processedChord);
       });
     } else {
-      const skipCount = (transposedChordGridData.paddingCount || 0) + (transposedChordGridData.shiftCount || 0);
+      const skipCount = (resolvedChordGridData?.paddingCount || 0) + (resolvedChordGridData?.shiftCount || 0);
       processedChordData.entries.slice(skipCount).forEach((entry) => {
         if (entry.shape) chordSet.add(entry.shape);
       });
     }
     return Array.from(chordSet).sort();
-  }, [transposedChordGridData.originalAudioMapping, transposedChordGridData.paddingCount, transposedChordGridData.shiftCount, processedChordData.entries]);
+  }, [resolvedChordGridData, processedChordData.entries]);
 
   const currentChordNameForCache = useMemo(() => {
     return processedChordData.entries[currentBeatIndex]?.shape || null;
@@ -478,21 +408,24 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     if (!processedChordData.entries.length) return [];
     const uniqueProgression = [];
     let lastChord = null;
-    const skipCount = (transposedChordGridData.paddingCount || 0) + (transposedChordGridData.shiftCount || 0);
+    const skipCount = (resolvedChordGridData?.paddingCount || 0) + (resolvedChordGridData?.shiftCount || 0);
     for (let i = 0; i < processedChordData.entries.length; i++) {
       const shapeChord = processedChordData.entries[i]?.shape || 'N.C.';
-      const isShiftCell = i < (transposedChordGridData.shiftCount || 0) && !shapeChord;
-      const isPaddingCell = i >= (transposedChordGridData.shiftCount || 0) && i < skipCount && shapeChord === 'N.C.' && transposedChordGridData.hasPadding;
+      const isShiftCell = i < (resolvedChordGridData?.shiftCount || 0) && !shapeChord;
+      const isPaddingCell = i >= (resolvedChordGridData?.shiftCount || 0)
+        && i < skipCount
+        && shapeChord === 'N.C.'
+        && Boolean(resolvedChordGridData?.hasPadding);
       if (isShiftCell || isPaddingCell) continue;
       if (shapeChord) {
         if (shapeChord !== lastChord) {
-          uniqueProgression.push({ chord: shapeChord, startIndex: i, timestamp: transposedChordGridData.beats[i] || 0 });
+          uniqueProgression.push({ chord: shapeChord, startIndex: i, timestamp: resolvedChordGridData?.beats[i] || 0 });
           lastChord = shapeChord;
         }
       }
     }
     return uniqueProgression;
-  }, [processedChordData.entries, transposedChordGridData.paddingCount, transposedChordGridData.shiftCount, transposedChordGridData.hasPadding, transposedChordGridData.beats]);
+  }, [processedChordData.entries, resolvedChordGridData]);
 
   const currentChordInProgressionIndex = useMemo(() => {
     const progression = getUniqueChordProgressionForGuitarDiagrams;
@@ -688,10 +621,10 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                   {visibleChordRange.map((chordInfo) => {
                     // Get segmentation color for this chord position
                     // Use the timestamp from the chord info for accurate mapping
-                    const timestamp = transposedChordGridData.beats[chordInfo.startIndex];
+                    const timestamp = resolvedChordGridData?.beats[chordInfo.startIndex];
                     const segmentationColor = getSegmentationColorForBeat(
                       chordInfo.startIndex,
-                      transposedChordGridData.beats,
+                      resolvedChordGridData?.beats || [],
                       segmentationData,
                       showSegmentation,
                       typeof timestamp === 'number' ? timestamp : undefined

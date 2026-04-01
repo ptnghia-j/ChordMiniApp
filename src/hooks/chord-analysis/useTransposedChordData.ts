@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
 import { transposeChord } from '@/utils/chordTransposition';
 
-interface ChordGridData {
+export interface ChordGridData {
   chords: string[];
   beats: (number | null)[];
   hasPadding: boolean;
@@ -66,9 +66,15 @@ export const useTransposedChordData = ({
       return transposeChord(chord, pitchShiftSemitones, targetKey);
     });
 
+    const transposedOriginalAudioMapping = chordGridData.originalAudioMapping?.map((mapping) => ({
+      ...mapping,
+      chord: transposeChord(mapping.chord, pitchShiftSemitones, targetKey),
+    }));
+
     return {
       ...chordGridData,
       chords: transposedChords,
+      originalAudioMapping: transposedOriginalAudioMapping,
     };
   }, [chordGridData, correctedSequence, shouldTranspose, pitchShiftSemitones, targetKey]);
 
@@ -77,4 +83,3 @@ export const useTransposedChordData = ({
     isTransposed: shouldTranspose,
   };
 };
-
