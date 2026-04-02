@@ -16,6 +16,7 @@ The files below are the maintained set for the current repository state:
 8. [`workflows/core-workflows.md`](./workflows/core-workflows.md)
 9. [`development/onboarding.md`](./development/onboarding.md)
 10. [`development/testing-strategy.md`](./development/testing-strategy.md)
+11. [`development/test-coverage-audit.md`](./development/test-coverage-audit.md)
 
 If a statement in another doc conflicts with one of the files above, trust the maintained set.
 
@@ -37,7 +38,7 @@ ChordMini is a split-runtime application:
 | API boundaries | `api/nextjs-route-handlers.md`, `api/flask-backend.md` |
 | models + persistence | `models/ml-models-and-persistence.md` |
 | workflows | `workflows/core-workflows.md` |
-| contributor setup | `development/onboarding.md`, `development/testing-strategy.md` |
+| contributor setup | `development/onboarding.md`, `development/testing-strategy.md`, `development/test-coverage-audit.md` |
 
 ## Archival material
 
@@ -66,3 +67,4 @@ Read them as historical/reference notes only unless they are explicitly refreshe
 8. [`models/ml-models-and-persistence.md`](./models/ml-models-and-persistence.md)
 9. [`workflows/core-workflows.md`](./workflows/core-workflows.md)
 10. [`development/testing-strategy.md`](./development/testing-strategy.md)
+11. [`development/test-coverage-audit.md`](./development/test-coverage-audit.md)

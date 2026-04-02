@@ -24,6 +24,7 @@ interface AnalysisSummaryProps {
   };
   audioDuration?: number;
   videoTitle?: string;
+  usageCount?: number;
   children?: React.ReactNode;
 }
 
@@ -31,6 +32,7 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
   analysisResults,
   audioDuration = 0,
   videoTitle,
+  usageCount = 0,
   children,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -88,12 +90,14 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
     { label: 'Beats', value: analysisResults.beats?.length ?? 0, color: 'success' as const },
     { label: 'BPM', value: bpm ?? 'N/A', color: 'secondary' as const },
     { label: 'Time', value: timeSig, color: 'primary' as const },
+    { label: 'Uses', value: usageCount, color: 'warning' as const },
     { label: 'Common', value: mostCommonChord, color: 'warning' as const },
   ];
 
   const detailRows = [
     { label: 'Beat Model', value: analysisResults.beatModel || 'Unknown' },
     { label: 'Chord Model', value: analysisResults.chordModel || 'Unknown' },
+    { label: 'Usage Count', value: String(usageCount) },
     { label: 'Time Signature', value: timeSig },
     { label: 'Duration', value: formatTime(audioDuration) },
     ...(analysisResults.downbeats?.length

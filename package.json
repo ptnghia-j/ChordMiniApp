@@ -23,6 +23,7 @@
     "test:coverage": "jest --coverage",
     "export-cookies": "node scripts/export-cookies.js",
     "backfill:transcriptions:homepage": "node scripts/backfill-transcription-homepage-metadata.js",
+    "backfill:transcriptions:usage": "node scripts/backfill-transcription-usage-count.js",
     "firebase:indexes:deploy": "firebase deploy --only firestore:indexes --project chordmini-d29f9",
     "analyze": "ANALYZE=true npm run build",
     "analyze:server": "BUNDLE_ANALYZE=server npm run build",
@@ -80,7 +81,9 @@
     "zustand": "^4.5.2"
   },
   "overrides": {
-    "minimatch": ">=10.2.1"
+    "test-exclude": {
+      "minimatch": "3.1.5"
+    }
   },
   "devDependencies": {
     "@babel/core": "^7.27.7",

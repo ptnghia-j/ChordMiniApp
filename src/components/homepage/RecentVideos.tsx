@@ -22,6 +22,7 @@ interface TranscribedVideo {
   bpm?: number;
   timeSignature?: number;
   keySignature?: string;
+  usageCount?: number;
 }
 
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
@@ -74,6 +75,7 @@ type FirestoreTranscriptionDoc = {
   thumbnail?: string;
   searchableKeys?: string[];
   isPrimaryVariant?: boolean;
+  usageCount?: number;
 };
 
 export default function RecentVideos() {
@@ -180,6 +182,7 @@ export default function RecentVideos() {
           bpm: docData.bpm,
           timeSignature: docData.timeSignature || 4,
           keySignature: docData.keySignature || docData.primaryKey,
+          usageCount: docData.usageCount,
         };
       };
 
@@ -366,6 +369,15 @@ export default function RecentVideos() {
     return `${timeSignature}/4`;
   };
 
+  const formatUsageCount = (usageCount?: number) => {
+    const normalizedUsageCount =
+      typeof usageCount === 'number' && Number.isFinite(usageCount) && usageCount >= 0
+        ? usageCount
+        : 0;
+
+    return `${normalizedUsageCount} use${normalizedUsageCount === 1 ? '' : 's'}`;
+  };
+
   const selectedKeyLabel = KEY_OPTIONS.find((option) => option.value === selectedKey)?.label ?? selectedKey;
 
   const renderHeader = (status: React.ReactNode) => (
@@ -500,7 +512,11 @@ export default function RecentVideos() {
                     )}
                     <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
                       <div className="flex items-center justify-between"><span>{formatDate(video.processedAt)}</span>{video.bpm && (<span className="text-blue-600 dark:text-blue-400 font-medium">{formatBPM(video.bpm)}</span>)}</div>
-                      <div className="flex items-center justify-between">{video.timeSignature && (<span className="text-green-600 dark:text-green-400">{formatTimeSignature(video.timeSignature)}</span>)}{video.keySignature && (<span className="text-purple-600 dark:text-purple-400 font-medium">{video.keySignature}</span>)}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">{formatUsageCount(video.usageCount)}</span>
+                        {video.timeSignature && (<span className="text-green-600 dark:text-green-400">{formatTimeSignature(video.timeSignature)}</span>)}
+                        {video.keySignature && (<span className="text-purple-600 dark:text-purple-400 font-medium truncate">{video.keySignature}</span>)}
+                      </div>
                     </div>
                   </div>
                 </div>

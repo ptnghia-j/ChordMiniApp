@@ -3,11 +3,13 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   query,
   where,
   getDocs,
   Timestamp,
-  writeBatch
+  writeBatch,
+  increment
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
@@ -94,6 +96,7 @@ export interface TranscriptionData {
   isPrimaryVariant?: boolean;
   displayPriority?: number | null;
   searchableKeys?: string[];
+  usageCount?: number;
 }
 
 function rebuildSynchronizedChordsIfNeeded(
@@ -183,13 +186,17 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
         }
       : null,
     romanNumerals: data.romanNumerals ?? normalizedSequenceCorrections?.romanNumerals ?? null,
+    usageCount:
+      typeof data.usageCount === 'number' && Number.isFinite(data.usageCount) && data.usageCount >= 0
+        ? data.usageCount
+        : 0,
   };
 }
 
 // Collection name
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
 
-const buildTranscriptionDocId = (
+export const buildTranscriptionDocId = (
   videoId: string,
   beatModel: string,
   chordModel: string
@@ -459,6 +466,67 @@ export async function updateTranscriptionEnrichment(
   }
 }
 
+export async function incrementTranscriptionUsage(
+  videoId: string,
+  beatModel: string,
+  chordModel: string
+): Promise<boolean> {
+  if (!db || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('❌ Firestore disabled due to CORS issues, skipping transcription usage increment');
+    } else if (!db) {
+      console.warn('❌ Firebase Firestore not initialized, skipping transcription usage increment');
+    }
+    return false;
+  }
+
+  const cacheKey = getTranscriptionCacheKey(videoId, beatModel, chordModel);
+  const docRef = doc(db, TRANSCRIPTIONS_COLLECTION, cacheKey);
+
+  try {
+    await updateDoc(docRef, {
+      usageCount: increment(1),
+    });
+
+    const cached = transcriptionCache.peek(cacheKey);
+    if (cached && typeof cached === 'object') {
+      const normalizedCached = normalizeTranscriptionData(cached as unknown as TranscriptionData);
+      transcriptionCache.set(
+        cacheKey,
+        {
+          ...normalizedCached,
+          usageCount: (normalizedCached.usageCount ?? 0) + 1,
+        } as unknown as Record<string, unknown>,
+        true
+      );
+    } else {
+      transcriptionCache.invalidate(cacheKey);
+    }
+
+    return true;
+  } catch (error) {
+    if (error instanceof Error) {
+      const firestoreError = error as Error & { code?: string };
+      if (firestoreError.code === 'not-found') {
+        console.warn(`⚠️ Cannot increment usageCount for missing transcription doc: ${cacheKey}`);
+        return false;
+      }
+
+      if (
+        error.message.includes('CORS') ||
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError')
+      ) {
+        console.warn('🌐 Network/CORS error incrementing transcription usage - disabling Firestore for this session');
+        firestoreDisabled = true;
+      }
+    }
+
+    console.error('❌ Failed to increment transcription usage:', error);
+    return false;
+  }
+}
+
 async function syncHomepageVariantMetadataForVideo(videoId: string): Promise<void> {
   if (!db) return;
 
@@ -663,6 +731,10 @@ async function performFirestoreSave(
       originalChords: transcriptionData.originalChords ?? transcriptionData.sequenceCorrections?.originalSequence ?? null,
       romanNumerals: transcriptionData.romanNumerals ?? null,
       searchableKeys,
+      usageCount:
+        typeof transcriptionData.usageCount === 'number' && Number.isFinite(transcriptionData.usageCount) && transcriptionData.usageCount >= 0
+          ? transcriptionData.usageCount
+          : 0,
       createdAt
     };
 

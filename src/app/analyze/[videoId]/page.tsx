@@ -33,6 +33,7 @@ import { useAudioProcessing } from '@/hooks/audio/useAudioProcessing';
 import { useAudioPlayer } from '@/hooks/chord-playback/useAudioPlayer';
 import { useModelState } from '@/hooks/chord-analysis/useModelState';
 import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrchestrator';
+import { useAnalysisUsageTracker } from '@/hooks/analyze/useAnalysisUsageTracker';
 import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
 import { transcribeLyricsWithAI as transcribeLyricsWithAIService } from '@/services/audio/audioProcessingExtracted';
 import {
@@ -270,6 +271,9 @@ export default function YouTubeVideoAnalyzePage() {
     cacheAvailable,
     cacheCheckCompleted,
     cacheCheckInProgress,
+    hasPersistedActiveTranscription,
+    activeTranscriptionUsageCount,
+    incrementActiveTranscriptionUsageCount,
     keySignature,
     isDetectingKey,
     chordCorrections,
@@ -313,6 +317,17 @@ export default function YouTubeVideoAnalyzePage() {
     updateRomanNumeralData,
     analyzeAudioFromService,
     skipInitialCacheBootstrap: Boolean(initialAnalyzeHandoff),
+  });
+
+  useAnalysisUsageTracker({
+    videoId,
+    beatDetector,
+    chordDetector,
+    isAnalyzed: audioProcessingState.isAnalyzed,
+    isPlaying,
+    duration,
+    hasPersistedTranscription: hasPersistedActiveTranscription,
+    onUsageCountIncrement: incrementActiveTranscriptionUsageCount,
   });
 
   useEffect(() => {
@@ -1145,6 +1160,7 @@ export default function YouTubeVideoAnalyzePage() {
                             analysisResults={analysisResults}
                             audioDuration={duration}
                             videoTitle={videoTitle}
+                            usageCount={activeTranscriptionUsageCount}
                           >
                             <BeatTimeline
                               beats={analysisResults?.beats || []}

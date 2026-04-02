@@ -202,6 +202,7 @@ export class AudioProcessingService {
         bpm: analysisResults.beatDetectionResult?.bpm,
         beatShift: analysisResults.beatDetectionResult?.beatShift,
         audioDuration: analysisResults.audioDuration,
+        usageCount: 0,
         timestamp: new Date()
       };
 

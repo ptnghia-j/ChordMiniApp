@@ -109,11 +109,18 @@ export function calculateTargetKey(
   originalKey: string,
   semitones: number
 ): string {
+  const normalizedKey = originalKey.trim();
+  const minorSuffixMatch = normalizedKey.match(/m(?!aj)$/i);
+  const hasMinorSuffix = Boolean(minorSuffixMatch);
+  const keyRoot = hasMinorSuffix
+    ? normalizedKey.slice(0, minorSuffixMatch!.index)
+    : normalizedKey;
+
   // Determine if original key uses flats
-  const originalUsesFlats = usesFlats(originalKey);
+  const originalUsesFlats = usesFlats(keyRoot);
   
   // Transpose the key note
-  const transposedKey = transposeNote(originalKey, semitones, originalKey);
+  const transposedKey = transposeNote(keyRoot, semitones, keyRoot);
   
   // Determine if transposed key should use flats or sharps
   // Preserve the original preference unless it results in a double accidental
@@ -121,19 +128,20 @@ export function calculateTargetKey(
   
   // If the transposed key naturally uses the same accidental type, use it
   if (originalUsesFlats === transposedUsesFlats) {
-    return transposedKey;
+    return hasMinorSuffix ? `${transposedKey}m` : transposedKey;
   }
   
   // Otherwise, use the chromatic scale that matches the original preference
   const chromaticScale = originalUsesFlats ? CHROMATIC_SCALE_FLATS : CHROMATIC_SCALE_SHARPS;
-  const originalIndex = chromaticScale.findIndex(n => n === originalKey);
+  const originalIndex = chromaticScale.findIndex(n => n === keyRoot);
   
   if (originalIndex !== -1) {
     const newIndex = (originalIndex + semitones + 12) % 12;
-    return chromaticScale[newIndex];
+    const nextKey = chromaticScale[newIndex];
+    return hasMinorSuffix ? `${nextKey}m` : nextKey;
   }
   
-  return transposedKey;
+  return hasMinorSuffix ? `${transposedKey}m` : transposedKey;
 }
 
 /**
@@ -306,4 +314,3 @@ export function parseSemitones(value: string): number {
   // Clamp to valid range (-6 to +6)
   return Math.max(-6, Math.min(6, parsed));
 }
-

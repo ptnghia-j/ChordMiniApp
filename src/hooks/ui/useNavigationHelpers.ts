@@ -4,6 +4,7 @@ export interface NavigationHelpersDependencies {
   // State setters for UI controls
   setIsVideoMinimized: (updater: (prev: boolean) => boolean) => void;
   setIsFollowModeEnabled: (updater: (prev: boolean) => boolean) => void;
+  navigateToUrl?: (url: string) => void;
 }
 
 export interface NavigationHelpers {
@@ -20,13 +21,14 @@ export const useNavigationHelpers = (deps: NavigationHelpersDependencies): Navig
   const {
     setIsVideoMinimized,
     setIsFollowModeEnabled,
+    navigateToUrl = (url: string) => window.location.assign(url),
   } = deps;
 
   // Handle "Try Another Video" action
   const handleTryAnotherVideo = useCallback(() => {
     // Navigate back to search
-    window.location.href = '/';
-  }, []);
+    navigateToUrl('/');
+  }, [navigateToUrl]);
 
   // Function to toggle video minimization
   const toggleVideoMinimization = useCallback(() => {

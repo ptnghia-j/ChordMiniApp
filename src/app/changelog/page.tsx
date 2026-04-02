@@ -35,16 +35,17 @@ export default function ChangelogPage() {
       description: ' Improves beat synchronization robustness, refactors chord recognition service for better maintainability, and includes minor UI improvements and bug fixes.',
       features: [
         'IMPROVED: Enhanced beat synchronization robustness with improved handling of tempo changes, silent sections for more accurate chord-beat alignment.',
-        'NEW: Added capo suggested position and pop-up panel visualization of the guitar neck for capo adjustment',
-        'IMPROVED: HeroUI component updates for pop-up panels across toggle buttons for UI consistency',
+        'NEW: Added capo suggested position and pop-up panel visualization of the guitar neck for capo adjustment.',
+        'IMPROVED: HeroUI component updates for pop-up panels across toggle buttons for UI consistency.',
+        'NEW: Added usage count for each analysis for metadata insights.',
       ],
       technical: [
         'REFACTORING: Refactored chord recognition service to smaller, more manageable components, reduce code duplication, and improve maintainability.',
-        'FIX: Addressed beat timeline under analysis summary section not aligning with actual beat playback',
-        'FIX: Resolved visible beat chord cells in chord grid not clickable due to hit-area problems where container accepted pointer-events',
-        'FIX: Pitch shift beat click seeking now correctly aligns the animation with the audio playback',
-        'REFACTORING: Refactored metronome service for maintenance and better separation of concerns',
-        'REFACTORING: Refactored soundfont chord playback service for better maintainability and separation of concerns',
+        'FIX: Addressed beat timeline under analysis summary section not aligning with actual beat playback.',
+        'FIX: Resolved visible beat chord cells in chord grid not clickable due to hit-area problems where container accepted pointer-events.',
+        'FIX: Pitch shift beat click seeking now correctly aligns the animation with the audio playback.',
+        'REFACTORING: Refactored metronome service for maintenance and better separation of concerns.',
+        'REFACTORING: Refactored soundfont chord playback service for better maintainability and separation of concerns.',
       ],
       breaking: [
         'FIX: Various security vulnerabilities addressed.'

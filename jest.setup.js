@@ -148,12 +148,9 @@ jest.mock('tone', () => {
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,
-  // Uncomment to ignore specific console methods
-  // log: jest.fn(),
-  // debug: jest.fn(),
-  // info: jest.fn(),
-  // warn: jest.fn(),
-  // error: jest.fn(),
+  log: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
 }
 
 // Mock next/router

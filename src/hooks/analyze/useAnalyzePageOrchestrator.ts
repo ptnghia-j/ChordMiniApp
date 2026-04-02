@@ -293,14 +293,63 @@ export function useAnalyzePageOrchestrator({
   const audioExtractionAbortControllerRef = useRef<AbortController | null>(null);
   const transcriptionSnapshotsRef = useRef<Record<string, TranscriptionSnapshot | null | undefined>>({});
   const romanNumeralDataRef = useRef<RomanNumeralSnapshot | null>(null);
+  const [persistedSnapshotKeys, setPersistedSnapshotKeys] = useState<Record<string, true>>({});
+  const [snapshotUsageCounts, setSnapshotUsageCounts] = useState<Record<string, number>>({});
+
+  const storeTranscriptionSnapshot = useCallback((
+    snapshot: TranscriptionSnapshot | null,
+    snapshotBeatDetector = beatDetector,
+    snapshotChordDetector = chordDetector
+  ) => {
+    const snapshotKey = buildSnapshotKey(videoId, snapshotBeatDetector, snapshotChordDetector);
+    transcriptionSnapshotsRef.current[snapshotKey] = snapshot;
+    setSnapshotUsageCounts((current) => {
+      const nextUsageCount = snapshot?.usageCount;
+      const normalizedUsageCount =
+        typeof nextUsageCount === 'number' && Number.isFinite(nextUsageCount) && nextUsageCount >= 0
+          ? nextUsageCount
+          : 0;
+
+      if (current[snapshotKey] === normalizedUsageCount) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [snapshotKey]: normalizedUsageCount,
+      };
+    });
+
+    setPersistedSnapshotKeys((current) => {
+      const hasPersistedSnapshot = Boolean(snapshot);
+      const alreadyTracked = Object.prototype.hasOwnProperty.call(current, snapshotKey);
+
+      if (hasPersistedSnapshot) {
+        if (alreadyTracked) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [snapshotKey]: true,
+        };
+      }
+
+      if (!alreadyTracked) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[snapshotKey];
+      return next;
+    });
+  }, [beatDetector, chordDetector, videoId]);
 
   const setTranscriptionSnapshot = useCallback(
     (snapshot: TranscriptionSnapshot | null, snapshotBeatDetector = beatDetector, snapshotChordDetector = chordDetector) => {
-      transcriptionSnapshotsRef.current[
-        buildSnapshotKey(videoId, snapshotBeatDetector, snapshotChordDetector)
-      ] = snapshot;
+      storeTranscriptionSnapshot(snapshot, snapshotBeatDetector, snapshotChordDetector);
     },
-    [beatDetector, chordDetector, videoId]
+    [beatDetector, chordDetector, storeTranscriptionSnapshot]
   );
 
   const loadTranscriptionSnapshot = useCallback(async (
@@ -314,9 +363,9 @@ export function useAnalyzePageOrchestrator({
     }
 
     const snapshot = await getTranscription(videoId, snapshotBeatDetector, snapshotChordDetector);
-    transcriptionSnapshotsRef.current[snapshotKey] = snapshot;
+    storeTranscriptionSnapshot(snapshot, snapshotBeatDetector, snapshotChordDetector);
     return snapshot;
-  }, [beatDetector, chordDetector, videoId]);
+  }, [beatDetector, chordDetector, storeTranscriptionSnapshot, videoId]);
 
   const syncKeySignature = useCallback((nextKeySignature: string | null) => {
     setKeySignature((current) => current === nextKeySignature ? current : nextKeySignature);
@@ -346,6 +395,8 @@ export function useAnalyzePageOrchestrator({
 
   useEffect(() => {
     transcriptionSnapshotsRef.current = {};
+    setPersistedSnapshotKeys({});
+    setSnapshotUsageCounts({});
     audioExtractionAbortControllerRef.current?.abort();
     audioExtractionAbortControllerRef.current = null;
     romanNumeralDataRef.current = null;
@@ -361,6 +412,17 @@ export function useAnalyzePageOrchestrator({
   useEffect(() => {
     setInitialCacheCheckDone(false);
   }, [videoId]);
+
+  const activeTranscriptionDocId = buildSnapshotKey(videoId, beatDetector, chordDetector);
+  const hasPersistedActiveTranscription = Boolean(persistedSnapshotKeys[activeTranscriptionDocId]);
+  const activeTranscriptionUsageCount = snapshotUsageCounts[activeTranscriptionDocId] ?? 0;
+
+  const incrementActiveTranscriptionUsageCount = useCallback(() => {
+    setSnapshotUsageCounts((current) => ({
+      ...current,
+      [activeTranscriptionDocId]: (current[activeTranscriptionDocId] ?? 0) + 1,
+    }));
+  }, [activeTranscriptionDocId]);
 
   useEffect(() => {
     return () => {
@@ -976,6 +1038,10 @@ export function useAnalyzePageOrchestrator({
     cacheAvailable,
     cacheCheckCompleted,
     cacheCheckInProgress,
+    activeTranscriptionDocId,
+    hasPersistedActiveTranscription,
+    activeTranscriptionUsageCount,
+    incrementActiveTranscriptionUsageCount,
     keySignature,
     isDetectingKey,
     chordCorrections,
