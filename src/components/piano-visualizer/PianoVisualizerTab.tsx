@@ -66,6 +66,20 @@ interface PianoVisualizerTabProps {
   sequenceCorrections?: {
     originalSequence: string[];
     correctedSequence: string[];
+    keyAnalysis?: {
+      sections: Array<{
+        startIndex: number;
+        endIndex: number;
+        key: string;
+        chords: string[];
+      }>;
+      modulations?: Array<{
+        fromKey: string;
+        toKey: string;
+        atIndex: number;
+        atTime?: number;
+      }>;
+    };
   } | null;
   segmentationData?: SegmentationResult | null;
   /** Current playback time in seconds */
@@ -476,6 +490,29 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return map;
   }, [chordEvents, beatToChordSequenceMap, romanNumeralData, showRomanNumerals]);
 
+  const beatModulations = useMemo(() => {
+    const modulations = sequenceCorrections?.keyAnalysis?.modulations;
+    if (!modulations?.length) return undefined;
+
+    const map = new Map<number, { isModulation: true; fromKey: string; toKey: string }>();
+
+    for (const event of chordEvents) {
+      const seqIdx = beatToChordSequenceMap[event.beatIndex];
+      if (seqIdx === undefined) continue;
+
+      const modulation = modulations.find((entry) => entry.atIndex === seqIdx);
+      if (!modulation) continue;
+
+      map.set(event.beatIndex, {
+        isModulation: true,
+        fromKey: modulation.fromKey,
+        toKey: modulation.toKey,
+      });
+    }
+
+    return map;
+  }, [beatToChordSequenceMap, chordEvents, sequenceCorrections?.keyAnalysis?.modulations]);
+
   // Compute dynamic white key width to fit the full 88-key range
   const whiteKeyWidth = useMemo(() => {
     if (containerWidth <= 0) return 14; // default before measurement
@@ -633,6 +670,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           timeSignature={timeSignature}
           accidentalPreference={accidentalPreference}
           beatRomanNumerals={beatRomanNumerals}
+          beatModulations={beatModulations}
           uncorrectedChords={resolvedChordGridData?.chords}
           segmentationData={segmentationData}
         />

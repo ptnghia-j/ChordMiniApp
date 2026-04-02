@@ -1312,7 +1312,10 @@ export default function YouTubeVideoAnalyzePage() {
                 }
               }}
               onEnded={() => {
-                if (!isLoopEnabled) return;
+                if (!isLoopEnabled) {
+                  setIsPlaying(false);
+                  return;
+                }
                 const beats = simplifiedChordGridData?.beats || [];
                 const resolvedLoopRange = resolveLoopRange(beats, loopStartBeat, loopEndBeat, duration);
                 if (!resolvedLoopRange) return;

@@ -404,6 +404,19 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   const lastTimeUpdateRef = useRef<number>(0);
   const TIME_UPDATE_INTERVAL = 100; // Keep visual/audio consumers fresher to reduce residual interpolation snaps
 
+  const resetAnimationTrackingState = useCallback((timestamp: number, visualIndex: number = -1) => {
+    const shouldSeedBeat = visualIndex >= 0;
+
+    currentTimeRef.current = timestamp;
+    prevTimeRef.current = timestamp;
+    lastComputedTimeRef.current = Number.NEGATIVE_INFINITY;
+    lastStateUpdateTimeRef.current = 0;
+    lastStableBeatRef.current = shouldSeedBeat ? visualIndex : -1;
+    beatStabilityCounterRef.current = shouldSeedBeat ? STABILITY_THRESHOLD : 0;
+    lastEmittedBeatRef.current = shouldSeedBeat ? visualIndex : -1;
+    lastEmitTimeRef.current = timestamp;
+  }, []);
+
   useEffect(() => {
     if (!lastClickInfo) {
       return;
@@ -412,15 +425,8 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
     // Manual beat jumps must also reset the animation hook's internal rewind
     // guards. Otherwise a backward seek can inherit the prior forward-only
     // state and appear frozen until playback catches back up.
-    currentTimeRef.current = lastClickInfo.timestamp;
-    prevTimeRef.current = lastClickInfo.timestamp;
-    lastComputedTimeRef.current = Number.NEGATIVE_INFINITY;
-    lastStateUpdateTimeRef.current = 0;
-    lastStableBeatRef.current = lastClickInfo.visualIndex;
-    beatStabilityCounterRef.current = STABILITY_THRESHOLD;
-    lastEmittedBeatRef.current = lastClickInfo.visualIndex;
-    lastEmitTimeRef.current = lastClickInfo.timestamp;
-  }, [lastClickInfo]);
+    resetAnimationTrackingState(lastClickInfo.timestamp, lastClickInfo.visualIndex);
+  }, [lastClickInfo, resetAnimationTrackingState]);
 
   // Update current time and check for current beat
   useEffect(() => {
@@ -482,6 +488,14 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
             time = virtualClickTime;
           }
         }
+      }
+
+      const REWIND_RESET_THRESHOLD_SECONDS = 0.2;
+      if (time + REWIND_RESET_THRESHOLD_SECONDS < prevTimeRef.current) {
+        // Native YouTube replay/scrub actions can jump backward without going
+        // through the beat-grid click path. Reset the forward-only guards so
+        // the animation can immediately re-lock to the new timeline position.
+        resetAnimationTrackingState(time);
       }
 
       // PERFORMANCE P3-H: Skip computation if player time hasn't meaningfully changed
@@ -816,7 +830,7 @@ export const useScrollAndAnimation = (deps: ScrollAndAnimationDependencies): Scr
   // CRITICAL FIX: Include isPlaying to ensure animation starts/stops when playback changes
   // The effect will restart the loop when isPlaying becomes true
   // and cleanup will stop it when isPlaying becomes false
-  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, setCurrentTime, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely, playbackRate, isPitchShiftTimeAuthorityActive]); // Updated to use centralized beat updates
+  }, [isPlaying, analysisResults, youtubePlayer, chordGridData, globalSpeedAdjustment, lastClickInfo, currentBeatIndexRef, setCurrentBeatIndex, setCurrentDownbeatIndex, setGlobalSpeedAdjustment, setCurrentTime, findCurrentBeatIndexWithHysteresis, findCurrentAudioMappingIndex, updateBeatIndexSafely, playbackRate, isPitchShiftTimeAuthorityActive, resetAnimationTrackingState]); // Updated to use centralized beat updates
 
   return {
     scrollToCurrentBeat,

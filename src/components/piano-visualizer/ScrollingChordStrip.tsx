@@ -2,7 +2,7 @@
 
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import type { ChordEvent } from '@/utils/chordToMidi';
-import { ChordCell } from '@/components/chord-analysis/ChordCell';
+import { ChordCell, type ChordCellProps } from '@/components/chord-analysis/ChordCell';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
@@ -30,6 +30,8 @@ interface ScrollingChordStripProps {
 
   /** Pre-computed map from beatIndex → formatted roman numeral (ReactElement|string) */
   beatRomanNumerals?: Map<number, React.ReactElement | string>;
+  /** Pre-computed map from beatIndex → modulation marker for key changes */
+  beatModulations?: Map<number, ChordCellProps['modulationInfo']>;
   /** Original (uncorrected, transposed) chords array for wasCorrected detection */
   uncorrectedChords?: string[];
   /** Optional segmentation result used for section coloring */
@@ -134,6 +136,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   timeSignature = 4,
   accidentalPreference,
   beatRomanNumerals,
+  beatModulations,
   uncorrectedChords,
   segmentationData,
 }) => {
@@ -429,6 +432,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             showRomanNumerals && box.showLabel && beatRomanNumerals
               ? beatRomanNumerals.get(box.beatIndex)
               : undefined;
+          const modulationInfo = beatModulations?.get(box.beatIndex);
 
           // Corrected chord detection (compare with uncorrected/transposed original)
           const wasCorrected =
@@ -491,6 +495,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                   getDynamicFontSize={stripGetDynamicFontSize}
                   showRomanNumerals={showRomanNumerals}
                   romanNumeral={romanNumeral}
+                  modulationInfo={modulationInfo}
                   accidentalPreference={accidentalPreference ?? undefined}
                   segmentationClassName={undefined}
                 />
