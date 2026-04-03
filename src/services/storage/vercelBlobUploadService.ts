@@ -33,8 +33,11 @@ export interface VercelBlobUploadResult {
 
 class VercelBlobUploadService {
   // Keep this aligned with Vercel's body size limit usage policy.
-  // We only switch to Blob for payloads that exceed 4.5MB.
+  // We switch to Blob before the raw file hits 4.5MB: multipart FormData adds
+  // boundaries/headers so a ~4.3MB file can still trigger FUNCTION_PAYLOAD_TOO_LARGE
+  // on POST /api/* if we only compared against the full 4.5MB limit.
   private readonly VERCEL_SIZE_LIMIT = 4.5 * 1024 * 1024;
+  private readonly MULTIPART_BODY_HEADROOM_BYTES = 512 * 1024;
 
   /**
    * Check if we're running in localhost development mode
@@ -55,7 +58,8 @@ class VercelBlobUploadService {
    * Check if file should use blob upload based on environment and file size
    * - Localhost development: Never use blob upload (send directly to Python backend)
    * - Server-side (Docker/API routes): Never use blob upload (client SDK requires browser)
-   * - Production client-side: Use blob upload for files > 4.5MB if blob is configured
+   * - Production client-side: Use blob upload when file size is within headroom of
+   *   Vercel's ~4.5MB serverless body limit (multipart overhead), if blob is configured
    */
   shouldUseBlobUpload(fileSize: number): boolean {
     // Skip blob upload in localhost development
@@ -72,7 +76,8 @@ class VercelBlobUploadService {
     }
 
     // In production, check file size and blob availability
-    const isLargeFile = fileSize > this.VERCEL_SIZE_LIMIT;
+    const sizeThreshold = this.VERCEL_SIZE_LIMIT - this.MULTIPART_BODY_HEADROOM_BYTES;
+    const isLargeFile = fileSize > sizeThreshold;
     const isBlobAvailable = this.isBlobConfigured();
 
 
@@ -432,8 +437,8 @@ class VercelBlobUploadService {
   /**
    * Process audio file with automatic routing based on environment and file size
    * - Localhost development: Always use direct Python backend (no blob upload)
-   * - Production small files (<=4.5MB): Use standard Vercel proxy
-   * - Production large files (>4.5MB): Use Vercel Blob upload
+   * - Production small files (below size threshold with multipart headroom): standard proxy
+   * - Production larger files: Vercel Blob upload
    */
   async processAudioFile(
     audioFile: File,

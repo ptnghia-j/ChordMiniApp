@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to ChordMini! This guide will help you get started with contributing to our open-source music analysis tool for chords, beats, lyrics, and visualization workflows.
 
+Note: We especially welcome contribution from the research and ML community to help improve our core music analysis algorithms and models.
+
 ## 📝 Code Style Guidelines
 
 ### TypeScript Standards
