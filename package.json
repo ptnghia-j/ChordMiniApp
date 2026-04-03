@@ -59,6 +59,7 @@
     "music-metadata": "^11.3.0",
     "next": "^16.1.6",
     "node-fetch": "^3.3.2",
+    "opensheetmusicdisplay": "^1.9.7",
     "phaze-vocoder": "github:olvb/phaze",
     "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.30.0",

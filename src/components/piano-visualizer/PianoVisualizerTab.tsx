@@ -1,20 +1,24 @@
 'use client';
 
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { Tabs, Tab } from '@heroui/react';
 import { ScrollingChordStrip } from '@/components/piano-visualizer/ScrollingChordStrip';
 import { PianoKeyboard } from '@/components/piano-visualizer/PianoKeyboard';
 import { FallingNotesCanvas, type ActiveInstrument } from '@/components/piano-visualizer/FallingNotesCanvas';
+import SheetMusicDisplay from '@/components/piano-visualizer/SheetMusicDisplay';
 import {
   buildChordTimeline,
   type ChordEvent,
 } from '@/utils/chordToMidi';
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
-import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
+import { beatDurationFromBpm, generateNotesForInstrument, mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SheetSageResult } from '@/types/sheetSage';
+import { createScorePartDataFromSheetSage, type ScorePartData } from '@/utils/musicXmlExport';
+import { useMusicXmlRenderer } from '@/hooks/piano-visualizer/useMusicXmlRenderer';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import {
@@ -152,6 +156,7 @@ const INSTRUMENT_COLORS: Record<string, string> = {
   bass: '#f87171',    // red-400
 };
 const MELODIC_TRANSCRIPTION_COLOR = '#22d3ee';
+type VisualizerDisplayMode = 'piano-roll' | 'sheet-music';
 
 // ─── Piano-Only Auto-Playback Hook ───────────────────────────────────────────
 
@@ -357,6 +362,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   // Local UI state
   const [speedIndex, setSpeedIndex] = useState(1); // Default: Normal
+  const [displayMode, setDisplayMode] = useState<VisualizerDisplayMode>('piano-roll');
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
   const [noteColors, setNoteColors] = useState<Map<number, string>>(new Map());
   const activeNotesSignatureRef = useRef('');
@@ -591,6 +597,74 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return [{ name: 'Piano', color: INSTRUMENT_COLORS.piano }];
   }, [isChordPlaybackEnabled, activeInstruments]);
 
+  const scoreParts = useMemo<ScorePartData[]>(() => {
+    const bpm = detectedBpm || 120;
+    const mergedEvents = mergeConsecutiveChordEvents(chordEvents);
+    const beatDuration = beatDurationFromBpm(bpm);
+    const accompanimentParts: ScorePartData[] = effectiveActiveInstruments.map((instrument) => {
+      const instrumentName = instrument.name.toLowerCase();
+      const noteEvents = mergedEvents.flatMap((event) => {
+        const duration = Math.max(0.01, event.endTime - event.startTime);
+        const eventBeatCount = Math.max(1, event.beatCount ?? 1);
+        const eventBeatDuration = duration > 0 ? duration / eventBeatCount : beatDuration;
+        const signalDynamics = dynamicsAnalyzer.getSignalDynamics(event.startTime, duration);
+        const scheduledNotes = generateNotesForInstrument(instrumentName as Parameters<typeof generateNotesForInstrument>[0], {
+          chordName: event.chordName,
+          chordNotes: event.notes,
+          duration,
+          beatDuration: eventBeatDuration,
+          startTime: event.startTime,
+          timeSignature,
+          segmentationData,
+          signalDynamics,
+          guitarVoicing,
+          targetKey,
+        });
+
+        return scheduledNotes.map((note) => ({
+          pitch: note.midi,
+          onset: event.startTime + note.startOffset,
+          offset: event.startTime + note.startOffset + note.duration,
+        }));
+      });
+
+      return {
+        id: instrumentName.replace(/\s+/g, '-'),
+        name: instrument.name,
+        instrumentName,
+        notes: noteEvents,
+      };
+    }).filter((part) => part.notes.length > 0);
+
+    const parts: ScorePartData[] = [];
+    if (showMelodicOverlay && sheetSageResult?.noteEvents?.length) {
+      parts.push(createScorePartDataFromSheetSage('melody', 'Melody', sheetSageResult.noteEvents));
+    }
+
+    parts.push(...accompanimentParts);
+
+    return parts;
+  }, [
+    chordEvents,
+    detectedBpm,
+    dynamicsAnalyzer,
+    effectiveActiveInstruments,
+    guitarVoicing,
+    segmentationData,
+    sheetSageResult,
+    showMelodicOverlay,
+    targetKey,
+    timeSignature,
+  ]);
+  const musicXmlOptions = useMemo(() => ({
+    bpm: detectedBpm || undefined,
+    timeSignature,
+    title: 'ChordMini Piano Visualizer',
+  }), [detectedBpm, timeSignature]);
+  const { musicXml: sheetMusicXml, isComputing: isComputingSheetMusic } = useMusicXmlRenderer(scoreParts, musicXmlOptions);
+  const hasSheetMusicData = scoreParts.length > 0;
+  const effectiveDisplayMode: VisualizerDisplayMode = hasSheetMusicData ? displayMode : 'piano-roll';
+
   const legendInstruments = useMemo(() => {
     if (showMelodicOverlay && melodyOverlayNotes.length > 0) {
       return [...effectiveActiveInstruments, { name: 'Melody', color: MELODIC_TRANSCRIPTION_COLOR }];
@@ -653,7 +727,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
             Chord Timeline
           </h3>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 flex-wrap justify-end">
             {/* MIDI download button */}
             {chordEvents.length > 0 && (
               <button
@@ -668,8 +742,27 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               </button>
             )}
 
+            {hasSheetMusicData && (
+              <Tabs
+                aria-label="Piano visualizer display mode"
+                selectedKey={effectiveDisplayMode}
+                onSelectionChange={(key) => setDisplayMode(key as VisualizerDisplayMode)}
+                size="sm"
+                radius="full"
+                classNames={{
+                  tabList: 'bg-gray-100 dark:bg-gray-800 p-1',
+                  cursor: 'bg-white dark:bg-gray-700 shadow-sm',
+                  tab: 'h-7 px-3',
+                  tabContent: 'text-xs font-medium text-gray-700 group-data-[selected=true]:text-gray-900 dark:text-gray-300 dark:group-data-[selected=true]:text-white',
+                }}
+              >
+                <Tab key="piano-roll" title="Piano Roll" />
+                <Tab key="sheet-music" title="Sheet Music" />
+              </Tabs>
+            )}
+
             {/* Speed selector */}
-            <div className="flex items-center space-x-1.5">
+            <div className={`flex items-center space-x-1.5 ${effectiveDisplayMode === 'sheet-music' ? 'opacity-50' : ''}`}>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Speed:
               </label>
@@ -678,6 +771,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                   <button
                     key={preset.label}
                     onClick={() => setSpeedIndex(idx)}
+                    disabled={effectiveDisplayMode === 'sheet-music'}
                     className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                       speedIndex === idx
                         ? 'bg-blue-600 text-white shadow-sm'
@@ -708,76 +802,83 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         />
       </div>
 
-      {/* Piano Visualizer Section */}
-      <div
-        ref={containerRef}
-        className="piano-visualizer-section bg-gray-950 dark:bg-gray-950 rounded-lg overflow-hidden"
-      >
-        {/* Instrument legend (shown when instruments are visualized) */}
-        {legendInstruments.length > 0 && (
-          <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-900/60 border-b border-gray-800">
-            <span className="text-xs uppercase tracking-[0.12em] text-gray-500 font-medium">
-              {isChordPlaybackEnabled ? 'Instruments:' : 'Visualizer Voices:'}
-            </span>
-            {legendInstruments.map((inst) => (
-              <div key={inst.name} className="flex items-center gap-1.5">
-                <div
-                  className="w-2.5 h-2.5 rounded-sm"
-                  style={{ backgroundColor: inst.color }}
-                />
-                <span className="text-xs font-medium text-gray-400">{inst.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Falling notes + keyboard wrapper */}
-        <div className="relative overflow-x-auto overflow-y-hidden">
-          <div
-            className="flex flex-col items-center mx-auto"
-            style={{ minWidth: keyboardWidth }}
-          >
-            {/* Falling notes canvas */}
-            <div className="w-full flex justify-center">
-              <FallingNotesCanvas
-                chordEvents={chordEvents}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                startMidi={PIANO_START_MIDI}
-                endMidi={PIANO_END_MIDI}
-                whiteKeyWidth={whiteKeyWidth}
-                lookAheadSeconds={speed.lookAhead}
-                lookBehindSeconds={0.5}
-                height={280}
-                activeInstruments={effectiveActiveInstruments}
-                bpm={detectedBpm || undefined}
-                timeSignature={timeSignature}
-                segmentationData={segmentationData}
-                guitarVoicing={guitarVoicing}
-                targetKey={targetKey}
-                signalDynamicsSource={dynamicsAnalyzer}
-                playbackTime={currentTime}
-                extraVisualNotes={melodyOverlayNotes}
-                onActiveNotesChange={handleActiveNotesChange}
-              />
+      {effectiveDisplayMode === 'sheet-music' ? (
+        <SheetMusicDisplay
+          className="w-full"
+          musicXml={sheetMusicXml}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          bpm={detectedBpm || 120}
+          isComputing={isComputingSheetMusic}
+        />
+      ) : (
+        <div
+          ref={containerRef}
+          className="piano-visualizer-section rounded-lg overflow-hidden bg-gray-950 dark:bg-gray-950"
+        >
+          {/* Instrument legend (shown when instruments are visualized) */}
+          {legendInstruments.length > 0 && (
+            <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-900/60 border-b border-gray-800">
+              <span className="text-xs uppercase tracking-[0.12em] text-gray-500 font-medium">
+                {isChordPlaybackEnabled ? 'Instruments:' : 'Visualizer Voices:'}
+              </span>
+              {legendInstruments.map((inst) => (
+                <div key={inst.name} className="flex items-center gap-1.5">
+                  <div
+                    className="w-2.5 h-2.5 rounded-sm"
+                    style={{ backgroundColor: inst.color }}
+                  />
+                  <span className="text-xs font-medium text-gray-400">{inst.name}</span>
+                </div>
+              ))}
             </div>
+          )}
 
-            {/* Piano keyboard */}
-            <div className="w-full flex justify-center pb-2 bg-gradient-to-b from-gray-950 to-gray-900">
-              <PianoKeyboard
-                startMidi={PIANO_START_MIDI}
-                endMidi={PIANO_END_MIDI}
-                activeNotes={activeNotes}
-                noteColors={noteColors}
-                whiteKeyWidth={whiteKeyWidth}
-                height={60}
-              />
+          <div className="relative overflow-x-auto overflow-y-hidden">
+            <div
+              className="flex flex-col items-center mx-auto"
+              style={{ minWidth: keyboardWidth }}
+            >
+              {/* Falling notes canvas */}
+              <div className="w-full flex justify-center">
+                <FallingNotesCanvas
+                  chordEvents={chordEvents}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  startMidi={PIANO_START_MIDI}
+                  endMidi={PIANO_END_MIDI}
+                  whiteKeyWidth={whiteKeyWidth}
+                  lookAheadSeconds={speed.lookAhead}
+                  lookBehindSeconds={0.5}
+                  height={280}
+                  activeInstruments={effectiveActiveInstruments}
+                  bpm={detectedBpm || undefined}
+                  timeSignature={timeSignature}
+                  segmentationData={segmentationData}
+                  guitarVoicing={guitarVoicing}
+                  targetKey={targetKey}
+                  signalDynamicsSource={dynamicsAnalyzer}
+                  playbackTime={currentTime}
+                  extraVisualNotes={melodyOverlayNotes}
+                  onActiveNotesChange={handleActiveNotesChange}
+                />
+              </div>
+
+              {/* Piano keyboard */}
+              <div className="w-full flex justify-center pb-2 bg-gradient-to-b from-gray-950 to-gray-900">
+                <PianoKeyboard
+                  startMidi={PIANO_START_MIDI}
+                  endMidi={PIANO_END_MIDI}
+                  activeNotes={activeNotes}
+                  noteColors={noteColors}
+                  whiteKeyWidth={whiteKeyWidth}
+                  height={60}
+                />
+              </div>
             </div>
           </div>
         </div>
-
-
-      </div>
+      )}
     </div>
   );
 };
