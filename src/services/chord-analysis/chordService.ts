@@ -23,9 +23,9 @@ export async function recognizeChordsWithRateLimit(
       throw new Error('Invalid audio file for chord recognition');
     }
 
-    // Blob path for > 4.0MB files
+    // Blob path for > 4.5MB files
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.0MB, using Vercel Blob upload`);
+      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.5MB, using Vercel Blob upload`);
 
       try {
         const blobResult = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, model);

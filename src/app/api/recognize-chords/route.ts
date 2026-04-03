@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       if (isLocalhost) {
         console.log(`🏠 Localhost development - using direct Python backend for ${fileSizeMB.toFixed(2)}MB file`);
       } else {
-        console.log(`🔄 Production small file (${fileSizeMB.toFixed(2)}MB <= 4.0MB) - using direct processing`);
+        console.log(`🔄 Production small file (${fileSizeMB.toFixed(2)}MB <= 4.5MB) - using direct processing`);
       }
     }
 

@@ -1,4 +1,5 @@
 import type { SheetSageResult } from '@/types/sheetSage';
+import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
 
 function buildSourceFilename(sourceName: string | undefined | null): string {
   const baseName = (sourceName || 'sheetsage-input').replace(/[^\w.-]+/g, '_');
@@ -42,6 +43,20 @@ export async function requestSheetSageTranscription(
   videoId?: string | null,
 ): Promise<SheetSageResult> {
   const sourceFile = await resolveSheetSageAudioFile(audioFile, audioUrl, videoId);
+
+  if (vercelBlobUploadService.shouldUseBlobUpload(sourceFile.size)) {
+    const blobResult = await vercelBlobUploadService.transcribeSheetSageBlobUpload(
+      sourceFile,
+      videoId || undefined,
+    );
+
+    if (!blobResult.success || !blobResult.data) {
+      throw new Error(blobResult.error || 'Sheet Sage transcription failed');
+    }
+
+    return blobResult.data as SheetSageResult;
+  }
+
   const formData = new FormData();
   formData.append('file', sourceFile, sourceFile.name);
   if (videoId) {

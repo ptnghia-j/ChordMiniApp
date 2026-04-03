@@ -12,6 +12,14 @@ import { getPythonApiUrl } from '@/config/serverBackend';
 // Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
 export const maxDuration = 300; // 5 minutes for ML processing
 
+function shouldDeleteBlobAfterProcessing(formData: FormData): boolean {
+  const raw = formData.get('delete_blob');
+  if (typeof raw !== 'string') return true;
+
+  const normalized = raw.trim().toLowerCase();
+  return !(normalized === '0' || normalized === 'false' || normalized === 'no');
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get the backend URL
@@ -21,6 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Get the form data from the request
     const formData = await request.formData();
+    const shouldDeleteBlob = shouldDeleteBlobAfterProcessing(formData);
 
     // Validate that we have a Blob URL
     const blobUrlEntry = formData.get('blob_url');
@@ -63,14 +72,18 @@ export async function POST(request: NextRequest) {
     const audioBuffer = await blobResponse.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
 
-    // Cleanup: delete the blob now that we have the data in memory. Awaited to
-    // ensure it runs reliably in serverless environments, but failures are
-    // treated as non-critical.
-    try {
-      await del(blobUrl);
-      console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
-    } catch (err) {
-      console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+    // Cleanup: delete the blob now that we have the data in memory.
+    // When delete_blob=0 this route keeps the blob for another processor and
+    // external cleanup.
+    if (shouldDeleteBlob) {
+      try {
+        await del(blobUrl);
+        console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+      } catch (err) {
+        console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+      }
+    } else {
+      console.log('ℹ️ Skipping blob deletion after download (delete_blob=0)');
     }
 
     // Extract filename from blob URL or use default

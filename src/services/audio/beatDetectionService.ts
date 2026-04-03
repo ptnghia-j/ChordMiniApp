@@ -298,7 +298,7 @@ export async function detectBeatsFromFile(
       throw new Error('Invalid audio file for beat detection');
     }
 
-    // Check if file should use Vercel Blob upload (> 4.0MB)
+    // Check if file should use Vercel Blob upload (> 4.5MB)
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
 
 

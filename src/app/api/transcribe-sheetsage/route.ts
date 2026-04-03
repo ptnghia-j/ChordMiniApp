@@ -3,6 +3,8 @@ import { getSheetSageApiUrl } from '@/config/serverBackend';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import type { SheetSageResult } from '@/types/sheetSage';
 import { setDocumentWithAdminAccess } from '@/services/firebase/firestoreAdminService';
+import { del } from '@vercel/blob';
+import { validateBlobUrl } from '@/utils/blobValidation';
 
 export const maxDuration = 300;
 
@@ -28,6 +30,54 @@ function buildBackendUnavailableMessage(message: string): string {
 
 function isValidVideoId(videoId: string): boolean {
   return /^[a-zA-Z0-9_-]{11}$/.test(videoId);
+}
+
+function shouldDeleteBlobAfterProcessing(formData: FormData): boolean {
+  const raw = formData.get('delete_blob');
+  if (typeof raw !== 'string') return true;
+
+  const normalized = raw.trim().toLowerCase();
+  return !(normalized === '0' || normalized === 'false' || normalized === 'no');
+}
+
+async function resolveAudioFileFromRequest(formData: FormData): Promise<File> {
+  const file = formData.get('file');
+  if (file instanceof File) {
+    return file;
+  }
+
+  const blobUrlEntry = formData.get('blob_url');
+  if (typeof blobUrlEntry !== 'string') {
+    throw new Error('No audio file provided');
+  }
+
+  const blobUrl = validateBlobUrl(blobUrlEntry);
+  const shouldDeleteBlob = shouldDeleteBlobAfterProcessing(formData);
+
+  const blobResponse = await fetch(blobUrl);
+  if (!blobResponse.ok) {
+    throw new Error(`Failed to download audio from Vercel Blob: ${blobResponse.status} ${blobResponse.statusText}`);
+  }
+
+  const audioBuffer = await blobResponse.arrayBuffer();
+  const contentType = blobResponse.headers.get('content-type') || 'audio/mpeg';
+  const audioBlob = new Blob([audioBuffer], { type: contentType });
+
+  const urlParts = blobUrl.split('/');
+  const fileName = urlParts[urlParts.length - 1] || 'audio-upload';
+
+  if (shouldDeleteBlob) {
+    try {
+      await del(blobUrl);
+      console.log(`🗑️ [SheetSage] Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+    } catch (error) {
+      console.warn('⚠️ [SheetSage] Non-critical: failed to delete blob after download:', error);
+    }
+  } else {
+    console.log('ℹ️ [SheetSage] Skipping blob deletion after download (delete_blob=0)');
+  }
+
+  return new File([audioBlob], fileName, { type: contentType });
 }
 
 function normalizeMelodyResultForCache(videoId: string, result: SheetSageResult) {
@@ -83,13 +133,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const file = formData.get('file');
     const videoIdField = formData.get('videoId');
     const videoId = typeof videoIdField === 'string' ? videoIdField.trim() : '';
 
-    if (!(file instanceof File)) {
+    let file: File;
+    try {
+      file = await resolveAudioFileFromRequest(formData);
+    } catch (resolveError) {
       return NextResponse.json(
-        { success: false, error: 'No audio file provided' },
+        {
+          success: false,
+          error: resolveError instanceof Error ? resolveError.message : 'No audio file provided',
+        },
         { status: 400 },
       );
     }

@@ -140,65 +140,88 @@ async function handleBlobPath(
   audioDuration?: number,
   _videoId?: string
 ): Promise<AnalysisResult> {
-  // Chords
-  const chordBlob = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, chordDetector);
-  if (!chordBlob.success) {
-    const err = chordBlob.error || 'Unknown blob upload error';
-    throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${err}. Please try a smaller file or check your internet connection.`);
-  }
-  const chordResp = chordBlob.data as { success: boolean; chords?: ChordDetectionResult[] };
-  if (!chordResp.chords || !Array.isArray(chordResp.chords)) {
-    throw new Error('Invalid chord recognition response: chords array not found or not an array');
-  }
-  const chordResults = chordResp.chords as ChordDetectionResult[];
+  let blobUrl: string | null = null;
 
-  // Beats
-  let beatResults: BeatDetectionBackendResponse;
   try {
-    const beatBlob = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, beatDetector);
-    if (!beatBlob.success) {
-      console.warn(`⚠️ Vercel Blob beat detection failed: ${beatBlob.error}, using empty beats array`);
-      beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
-    } else {
-      beatResults = beatBlob.data as BeatDetectionBackendResponse;
+    // Upload once, then reuse for both chord and beat processing.
+    blobUrl = await vercelBlobUploadService.uploadToBlob(audioFile);
 
-      // Normalize time_signature from string "6/4" to numeric 6 for production blob path
-      const tsRaw = (beatResults as BeatDetectionBackendResponse).time_signature;
-      const tsNum = typeof tsRaw === 'number' ? tsRaw
-                  : (typeof tsRaw === 'string'
-                     ? (tsRaw.includes('/') ? parseInt(tsRaw.split('/')[0], 10) : parseInt(tsRaw, 10))
-                     : undefined);
-      if (typeof tsNum === 'number' && !isNaN(tsNum)) {
-        (beatResults as BeatDetectionBackendResponse).time_signature = tsNum; // ensure numeric for toBeatInfo and UI
-      }
-
-      if (!beatResults.beats || !Array.isArray(beatResults.beats)) {
-        console.warn('⚠️ Invalid beat detection response from blob upload, using empty beats array');
-        beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
-      }
+    // Chords
+    const chordBlob = await vercelBlobUploadService.recognizeChordsFromBlobUrl(blobUrl, chordDetector, {
+      deleteAfterProcessing: false,
+    });
+    if (!chordBlob.success) {
+      const err = chordBlob.error || 'Unknown blob upload error';
+      throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${err}. Please try a smaller file or check your internet connection.`);
     }
-  } catch (e) {
-    console.warn(`⚠️ Beat detection failed for blob upload: ${e}, using empty beats array`);
-    beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
-  }
 
-  // If backend provided dual downbeat candidates (Madmom), auto-select best (3/4 vs 4/4) using chord-change heuristic
-  try {
-    const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
-    if (candidates) {
+    const chordResp = chordBlob.data as { success: boolean; chords?: ChordDetectionResult[] };
+    if (!chordResp.chords || !Array.isArray(chordResp.chords)) {
+      throw new Error('Invalid chord recognition response: chords array not found or not an array');
+    }
+    const chordResults = chordResp.chords as ChordDetectionResult[];
 
-      try {
-        const worker = getChordAnalysisWorker();
-        if (worker) {
-          const result = await worker.chooseMeterAndDownbeats(
-            chordResults,
-            beatResults.beats as number[],
-            candidates
-          );
-          beatResults.downbeats = result.downbeats;
-          beatResults.time_signature = result.timeSignature;
-          console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
-        } else {
+    // Beats
+    let beatResults: BeatDetectionBackendResponse;
+    try {
+      const beatBlob = await vercelBlobUploadService.detectBeatsFromBlobUrl(blobUrl, beatDetector, {
+        deleteAfterProcessing: false,
+      });
+      if (!beatBlob.success) {
+        console.warn(`⚠️ Vercel Blob beat detection failed: ${beatBlob.error}, using empty beats array`);
+        beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+      } else {
+        beatResults = beatBlob.data as BeatDetectionBackendResponse;
+
+        // Normalize time_signature from string "6/4" to numeric 6 for production blob path
+        const tsRaw = (beatResults as BeatDetectionBackendResponse).time_signature;
+        const tsNum = typeof tsRaw === 'number' ? tsRaw
+                    : (typeof tsRaw === 'string'
+                       ? (tsRaw.includes('/') ? parseInt(tsRaw.split('/')[0], 10) : parseInt(tsRaw, 10))
+                       : undefined);
+        if (typeof tsNum === 'number' && !isNaN(tsNum)) {
+          (beatResults as BeatDetectionBackendResponse).time_signature = tsNum;
+        }
+
+        if (!beatResults.beats || !Array.isArray(beatResults.beats)) {
+          console.warn('⚠️ Invalid beat detection response from blob upload, using empty beats array');
+          beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ Beat detection failed for blob upload: ${e}, using empty beats array`);
+      beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
+    }
+
+    // If backend provided dual downbeat candidates (Madmom), auto-select best (3/4 vs 4/4) using chord-change heuristic
+    try {
+      const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
+      if (candidates) {
+
+        try {
+          const worker = getChordAnalysisWorker();
+          if (worker) {
+            const result = await worker.chooseMeterAndDownbeats(
+              chordResults,
+              beatResults.beats as number[],
+              candidates
+            );
+            beatResults.downbeats = result.downbeats;
+            beatResults.time_signature = result.timeSignature;
+            console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+          } else {
+            const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+            const tempSync = synchronizeChords(chordResults, beatsForSync);
+            const chordSeries = tempSync.map((s) => s.chord);
+            const s3 = scoreDownbeatAlignment(chordSeries, 3);
+            const s4 = scoreDownbeatAlignment(chordSeries, 4);
+            const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+            beatResults.downbeats = candidates[String(winner)] || [];
+            beatResults.time_signature = winner;
+            console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+          }
+        } catch (workerErr) {
+          console.warn('Worker computation failed, using main thread fallback:', workerErr);
           const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
           const tempSync = synchronizeChords(chordResults, beatsForSync);
           const chordSeries = tempSync.map((s) => s.chord);
@@ -209,53 +232,46 @@ async function handleBlobPath(
           beatResults.time_signature = winner;
           console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
         }
-      } catch (workerErr) {
-        console.warn('Worker computation failed, using main thread fallback:', workerErr);
-        const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
-        const tempSync = synchronizeChords(chordResults, beatsForSync);
-        const chordSeries = tempSync.map((s) => s.chord);
-        const s3 = scoreDownbeatAlignment(chordSeries, 3);
-        const s4 = scoreDownbeatAlignment(chordSeries, 4);
-        const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
-        beatResults.downbeats = candidates[String(winner)] || [];
-        beatResults.time_signature = winner;
-        console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
       }
+    } catch (selErr) {
+      console.warn('Downbeat candidate selection (blob path) skipped due to error:', selErr);
     }
-  } catch (selErr) {
-    console.warn('Downbeat candidate selection (blob path) skipped due to error:', selErr);
-  }
 
-  const beats = toBeatInfo(beatResults);
-  let synchronizedChords;
-  try {
-    const worker = getChordAnalysisWorker();
-    if (worker) {
-      synchronizedChords = await worker.synchronizeChords(chordResults, beats);
-    } else {
-      synchronizedChords = synchronizeChords(chordResults, beats);
+    const beats = toBeatInfo(beatResults);
+    let synchronizedChords;
+    try {
+      const worker = getChordAnalysisWorker();
+      if (worker) {
+        synchronizedChords = await worker.synchronizeChords(chordResults, beats);
+      } else {
+        synchronizedChords = synchronizeChords(chordResults, beats);
+      }
+      if (!synchronizedChords || !Array.isArray(synchronizedChords)) throw new Error('Chord synchronization failed: invalid result format');
+    } catch (e) {
+      console.error('Error in blob API chord synchronization:', e);
+      synchronizedChords = beats.map((_, index) => ({ chord: 'N/C', beatIndex: index }));
     }
-    if (!synchronizedChords || !Array.isArray(synchronizedChords)) throw new Error('Chord synchronization failed: invalid result format');
-  } catch (e) {
-    console.error('Error in blob API chord synchronization:', e);
-    synchronizedChords = beats.map((_, index) => ({ chord: 'N/C', beatIndex: index }));
-  }
 
-  return {
-    chords: chordResults,
-    beats,
-    downbeats: beatResults.downbeats || [],
-    downbeats_with_measures: [],
-    synchronizedChords,
-    chordModel: chordDetector,
-    beatModel: beatDetector,
-    audioDuration,
-    beatDetectionResult: {
-      time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
-      bpm: typeof beatResults.bpm === 'number' ? beatResults.bpm : (typeof (beatResults as unknown as { BPM?: number }).BPM === 'number' ? (beatResults as unknown as { BPM?: number }).BPM : undefined),
-      beatShift: 0
+    return {
+      chords: chordResults,
+      beats,
+      downbeats: beatResults.downbeats || [],
+      downbeats_with_measures: [],
+      synchronizedChords,
+      chordModel: chordDetector,
+      beatModel: beatDetector,
+      audioDuration,
+      beatDetectionResult: {
+        time_signature: typeof beatResults.time_signature === 'number' ? beatResults.time_signature : undefined,
+        bpm: typeof beatResults.bpm === 'number' ? beatResults.bpm : (typeof (beatResults as unknown as { BPM?: number }).BPM === 'number' ? (beatResults as unknown as { BPM?: number }).BPM : undefined),
+        beatShift: 0
+      }
+    };
+  } finally {
+    if (blobUrl) {
+      await vercelBlobUploadService.deleteBlob(blobUrl);
     }
-  };
+  }
 }
 
 export async function analyzeAudioWithRateLimit(

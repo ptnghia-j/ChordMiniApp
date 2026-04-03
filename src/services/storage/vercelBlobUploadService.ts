@@ -32,7 +32,9 @@ export interface VercelBlobUploadResult {
 }
 
 class VercelBlobUploadService {
-  private readonly VERCEL_SIZE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB conservative limit
+  // Keep this aligned with Vercel's body size limit usage policy.
+  // We only switch to Blob for payloads that exceed 4.5MB.
+  private readonly VERCEL_SIZE_LIMIT = 4.5 * 1024 * 1024;
 
   /**
    * Check if we're running in localhost development mode
@@ -53,7 +55,7 @@ class VercelBlobUploadService {
    * Check if file should use blob upload based on environment and file size
    * - Localhost development: Never use blob upload (send directly to Python backend)
    * - Server-side (Docker/API routes): Never use blob upload (client SDK requires browser)
-   * - Production client-side: Use blob upload for files > 4.0MB if blob is configured
+   * - Production client-side: Use blob upload for files > 4.5MB if blob is configured
    */
   shouldUseBlobUpload(fileSize: number): boolean {
     // Skip blob upload in localhost development
@@ -120,48 +122,43 @@ class VercelBlobUploadService {
     return hasToken;
   }
 
+  private async postBlobProcessing(endpoint: string, formData: FormData): Promise<unknown> {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+      signal: createSafeTimeoutSignal(800000), // 13+ minutes
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || errorData.details || `Backend processing failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   /**
    * Delete a blob URL via the /api/blob/delete endpoint.
-   * This is a fire-and-forget safety net — the primary deletion happens
-   * server-side in the blob processing API routes. Errors are logged
-   * but never block the caller.
+   * Use this when a route is called with delete_blob=0 and cleanup is done explicitly.
    */
-  private deleteBlobUrl(blobUrl: string): void {
+  async deleteBlob(blobUrl: string): Promise<void> {
     if (!blobUrl) return;
 
-    fetch('/api/blob/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: blobUrl }),
-      keepalive: true, // Ensure the request completes even during page transitions
-    })
-      .then(async (res) => {
-        if (res.ok) {
-          // The API returns { alreadyDeleted: true } when the blob was already
-          // removed server-side, so parse the body to distinguish.
-          const data = await res.json().catch(() => ({}));
-          if (data.alreadyDeleted) {
-            console.info(`\u2139\uFE0F Client cleanup: blob already deleted by server`);
-          } else {
-            console.log(`\uD83D\uDDD1\uFE0F Client cleanup: blob deleted`);
-          }
-        } else if (res.status >= 500) {
-          // Server-side issue — log as warning so misconfigurations are visible
-          console.warn(
-            '\u26A0\uFE0F Client cleanup: server error during blob deletion (non-critical):',
-            res.status, res.statusText
-          );
-        } else {
-          // Unexpected client error codes
-          console.warn(
-            '\u26A0\uFE0F Client cleanup: unexpected response during blob deletion (non-critical):',
-            res.status, res.statusText
-          );
-        }
-      })
-      .catch((err) => {
-        console.warn('\u26A0\uFE0F Client cleanup: blob deletion request failed (non-critical):', err);
+    try {
+      const response = await fetch('/api/blob/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: blobUrl }),
+        keepalive: true,
       });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        console.warn('⚠️ Blob deletion returned non-OK status (non-critical):', response.status, payload);
+      }
+    } catch (error) {
+      console.warn('⚠️ Blob deletion request failed (non-critical):', error);
+    }
   }
 
   /**
@@ -208,6 +205,143 @@ class VercelBlobUploadService {
     }
   }
 
+  async detectBeatsFromBlobUrl(
+    blobUrl: string,
+    detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+    options: { deleteAfterProcessing?: boolean } = {}
+  ): Promise<VercelBlobUploadResult> {
+    const startTime = Date.now();
+
+    try {
+      const formData = new FormData();
+      formData.append('blob_url', blobUrl);
+      formData.append('detector', detector);
+      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+
+      if (detector === 'beat-transformer') {
+        formData.append('force', 'true');
+      }
+
+      const result = await this.postBlobProcessing('/api/detect-beats-blob', formData);
+
+      return {
+        success: true,
+        data: result,
+        blobUrl,
+        processingTime: Date.now() - startTime,
+      };
+    } catch (error) {
+      console.error('❌ Blob beat detection failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  async recognizeChordsFromBlobUrl(
+    blobUrl: string,
+    model: string = 'chord-cnn-lstm',
+    options: { deleteAfterProcessing?: boolean } = {}
+  ): Promise<VercelBlobUploadResult> {
+    const startTime = Date.now();
+
+    try {
+      const formData = new FormData();
+      formData.append('blob_url', blobUrl);
+      formData.append('model', model);
+      formData.append('detector', model);
+      formData.append('chord_dict', (model === 'btc-sl' || model === 'btc-pl') ? 'large_voca' : 'full');
+      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+
+      const result = await this.postBlobProcessing('/api/recognize-chords-blob', formData);
+
+      return {
+        success: true,
+        data: result,
+        blobUrl,
+        processingTime: Date.now() - startTime,
+      };
+    } catch (error) {
+      console.error('❌ Blob chord recognition failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  async transcribeSheetSageFromBlobUrl(
+    blobUrl: string,
+    videoId?: string,
+    options: { deleteAfterProcessing?: boolean } = {}
+  ): Promise<VercelBlobUploadResult> {
+    const startTime = Date.now();
+
+    try {
+      const formData = new FormData();
+      formData.append('blob_url', blobUrl);
+      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+      if (videoId) {
+        formData.append('videoId', videoId);
+      }
+
+      const payload = await this.postBlobProcessing('/api/transcribe-sheetsage', formData) as {
+        success?: boolean;
+        data?: unknown;
+        error?: string;
+      };
+
+      if (!payload?.success || !payload?.data) {
+        throw new Error(payload?.error || 'Sheet Sage transcription failed');
+      }
+
+      return {
+        success: true,
+        data: payload.data,
+        blobUrl,
+        processingTime: Date.now() - startTime,
+      };
+    } catch (error) {
+      console.error('❌ Sheet Sage blob transcription failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  async transcribeSheetSageBlobUpload(
+    audioFile: File,
+    videoId?: string,
+    onProgress?: (percent: number) => void
+  ): Promise<VercelBlobUploadResult> {
+    const startTime = Date.now();
+
+    try {
+      if (onProgress) onProgress(10);
+      const blobUrl = await this.uploadToBlob(audioFile);
+      if (onProgress) onProgress(35);
+
+      const result = await this.transcribeSheetSageFromBlobUrl(blobUrl, videoId, {
+        deleteAfterProcessing: true,
+      });
+
+      if (onProgress) onProgress(100);
+
+      return {
+        ...result,
+        blobUrl,
+        processingTime: Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   /**
    * Detect beats using Vercel Blob upload for large files
    */
@@ -217,50 +351,29 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
-    let blobUrl: string | undefined;
-    
+
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      blobUrl = await this.uploadToBlob(audioFile);
+      const blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
-
-      
-      const formData = new FormData();
-      formData.append('blob_url', blobUrl);
-      formData.append('detector', detector);
-
-      // Force Beat-Transformer when explicitly requested to mirror non-blob path behavior
-      if (detector === 'beat-transformer') {
-        formData.append('force', 'true');
-      }
-
-      const response = await fetch(`/api/detect-beats-blob`, {
-        method: 'POST',
-        body: formData,
-        signal: createSafeTimeoutSignal(800000) // 13+ minutes
+      // deleteAfterProcessing=true keeps cleanup on the server route and avoids duplicate client delete calls.
+      const result = await this.detectBeatsFromBlobUrl(blobUrl, detector, {
+        deleteAfterProcessing: true,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Backend processing failed: ${response.status}`);
-      }
-
-      const result = await response.json();
       const processingTime = Date.now() - startTime;
-      
 
       if (onProgress) onProgress(100);
 
       return {
-        success: true,
-        data: result,
+        ...result,
         blobUrl,
-        processingTime
+        processingTime,
       };
 
     } catch (error) {
@@ -269,13 +382,6 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
-    } finally {
-      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
-      // Primary deletion already happens server-side in the API route;
-      // this is a safety net for cases where the route didn't reach its del() call.
-      if (blobUrl) {
-        this.deleteBlobUrl(blobUrl);
-      }
     }
   }
 
@@ -288,49 +394,30 @@ class VercelBlobUploadService {
     onProgress?: (percent: number) => void
   ): Promise<VercelBlobUploadResult> {
     const startTime = Date.now();
-    let blobUrl: string | undefined;
-    
+
     try {
 
 
       // Step 1: Upload to Vercel Blob
       if (onProgress) onProgress(10);
-      blobUrl = await this.uploadToBlob(audioFile);
+      const blobUrl = await this.uploadToBlob(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send Blob URL to Python backend for processing
 
-      
-      const formData = new FormData();
-      formData.append('blob_url', blobUrl);
-      formData.append('model', model);
-      // Ensure backend knows which detector to run; Python expects 'detector'
-      formData.append('detector', model);
-      // Provide chord_dict here because this path bypasses the Next.js route that normally injects it
-      formData.append('chord_dict', (model === 'btc-sl' || model === 'btc-pl') ? 'large_voca' : 'full');
-
-      const response = await fetch(`/api/recognize-chords-blob`, {
-        method: 'POST',
-        body: formData,
-        signal: createSafeTimeoutSignal(800000) // 13+ minutes
+      // deleteAfterProcessing=true keeps cleanup on the server route and avoids duplicate client delete calls.
+      const result = await this.recognizeChordsFromBlobUrl(blobUrl, model, {
+        deleteAfterProcessing: true,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Backend processing failed: ${response.status}`);
-      }
-
-      const result = await response.json();
       const processingTime = Date.now() - startTime;
-      
 
       if (onProgress) onProgress(100);
 
       return {
-        success: true,
-        data: result,
+        ...result,
         blobUrl,
-        processingTime
+        processingTime,
       };
 
     } catch (error) {
@@ -339,21 +426,14 @@ class VercelBlobUploadService {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
-    } finally {
-      // Best-effort cleanup: delete the blob whether processing succeeded or failed.
-      // Primary deletion already happens server-side in the API route;
-      // this is a safety net for cases where the route didn't reach its del() call.
-      if (blobUrl) {
-        this.deleteBlobUrl(blobUrl);
-      }
     }
   }
 
   /**
    * Process audio file with automatic routing based on environment and file size
    * - Localhost development: Always use direct Python backend (no blob upload)
-   * - Production small files (<4.0MB): Use standard Vercel proxy
-   * - Production large files (>4.0MB): Use Vercel Blob upload
+   * - Production small files (<=4.5MB): Use standard Vercel proxy
+   * - Production large files (>4.5MB): Use Vercel Blob upload
    */
   async processAudioFile(
     audioFile: File,
