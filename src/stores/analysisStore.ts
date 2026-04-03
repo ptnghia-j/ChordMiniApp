@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { LyricsData } from '@/types/musicAiTypes';
+import { SheetSageResult } from '@/types/sheetSage';
 
 // Identity wrapper to disable devtools middleware in production with proper typing
 function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
@@ -41,6 +42,14 @@ interface AnalysisStore {
   chordCorrections: Record<string, string> | null;
   showCorrectedChords: boolean;
 
+  // SheetSage state
+  sheetSageResult: SheetSageResult | null;
+  isComputingSheetSage: boolean;
+  sheetSageError: string | null;
+  isCheckingSheetSageBackend: boolean;
+  isSheetSageBackendAvailable: boolean | null;
+  sheetSageBackendError: string | null;
+
   // Analysis operations
   startAnalysis: () => void;
   completeAnalysis: (results: AnalysisResult) => void;
@@ -78,6 +87,15 @@ interface AnalysisStore {
   // Chord corrections operations
   setChordCorrections: (corrections: Record<string, string> | null) => void;
   setShowCorrectedChords: (show: boolean) => void;
+
+  // SheetSage operations
+  setSheetSageResult: (result: SheetSageResult | null) => void;
+  setIsComputingSheetSage: (computing: boolean) => void;
+  setSheetSageError: (error: string | null) => void;
+  setIsCheckingSheetSageBackend: (checking: boolean) => void;
+  setIsSheetSageBackendAvailable: (available: boolean | null) => void;
+  setSheetSageBackendError: (error: string | null) => void;
+  clearSheetSage: () => void;
 }
 
 export const useAnalysisStore = create<AnalysisStore>()(
@@ -102,6 +120,12 @@ export const useAnalysisStore = create<AnalysisStore>()(
       isDetectingKey: false,
       chordCorrections: null,
       showCorrectedChords: false,
+      sheetSageResult: null,
+      isComputingSheetSage: false,
+      sheetSageError: null,
+      isCheckingSheetSageBackend: false,
+      isSheetSageBackendAvailable: null,
+      sheetSageBackendError: null,
 
       // Analysis operations
       startAnalysis: () =>
@@ -149,6 +173,12 @@ export const useAnalysisStore = create<AnalysisStore>()(
             hasCachedLyrics: false,
             isTranscribingLyrics: false,
             lyricsError: null,
+            sheetSageResult: null,
+            isComputingSheetSage: false,
+            sheetSageError: null,
+            isCheckingSheetSageBackend: false,
+            isSheetSageBackendAvailable: null,
+            sheetSageBackendError: null,
           },
           false,
           'resetAnalysis'
@@ -231,6 +261,34 @@ export const useAnalysisStore = create<AnalysisStore>()(
       setChordCorrections: (corrections) => set({ chordCorrections: corrections }, false, 'setChordCorrections'),
 
       setShowCorrectedChords: (show) => set({ showCorrectedChords: show }, false, 'setShowCorrectedChords'),
+
+      // SheetSage operations
+      setSheetSageResult: (result) => set({ sheetSageResult: result }, false, 'setSheetSageResult'),
+
+      setIsComputingSheetSage: (computing) =>
+        set({ isComputingSheetSage: computing }, false, 'setIsComputingSheetSage'),
+
+      setSheetSageError: (error) => set({ sheetSageError: error }, false, 'setSheetSageError'),
+
+      setIsCheckingSheetSageBackend: (checking) =>
+        set({ isCheckingSheetSageBackend: checking }, false, 'setIsCheckingSheetSageBackend'),
+
+      setIsSheetSageBackendAvailable: (available) =>
+        set({ isSheetSageBackendAvailable: available }, false, 'setIsSheetSageBackendAvailable'),
+
+      setSheetSageBackendError: (error) =>
+        set({ sheetSageBackendError: error }, false, 'setSheetSageBackendError'),
+
+      clearSheetSage: () =>
+        set(
+          {
+            sheetSageResult: null,
+            isComputingSheetSage: false,
+            sheetSageError: null,
+          },
+          false,
+          'clearSheetSage'
+        ),
     }),
     { name: 'AnalysisStore' }
   )
@@ -263,6 +321,12 @@ export const useIsDetectingKey = () => useAnalysisStore((state) => state.isDetec
 
 export const useChordCorrections = () => useAnalysisStore((state) => state.chordCorrections);
 export const useShowCorrectedChords = () => useAnalysisStore((state) => state.showCorrectedChords);
+export const useSheetSageResult = () => useAnalysisStore((state) => state.sheetSageResult);
+export const useIsComputingSheetSage = () => useAnalysisStore((state) => state.isComputingSheetSage);
+export const useSheetSageError = () => useAnalysisStore((state) => state.sheetSageError);
+export const useIsCheckingSheetSageBackend = () => useAnalysisStore((state) => state.isCheckingSheetSageBackend);
+export const useIsSheetSageBackendAvailable = () => useAnalysisStore((state) => state.isSheetSageBackendAvailable);
+export const useSheetSageBackendError = () => useAnalysisStore((state) => state.sheetSageBackendError);
 
 // Action selectors
 export const useAnalysisActions = () =>
@@ -290,3 +354,13 @@ export const useLyricsActions = () =>
     setHasCachedLyrics: state.setHasCachedLyrics,
   }));
 
+export const useSheetSageActions = () =>
+  useAnalysisStore((state) => ({
+    setSheetSageResult: state.setSheetSageResult,
+    setIsComputingSheetSage: state.setIsComputingSheetSage,
+    setSheetSageError: state.setSheetSageError,
+    setIsCheckingSheetSageBackend: state.setIsCheckingSheetSageBackend,
+    setIsSheetSageBackendAvailable: state.setIsSheetSageBackendAvailable,
+    setSheetSageBackendError: state.setSheetSageBackendError,
+    clearSheetSage: state.clearSheetSage,
+  }));

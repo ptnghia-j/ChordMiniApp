@@ -6,6 +6,7 @@ export interface SoundfontChordPlaybackOptions {
   pianoVolume: number;
   guitarVolume: number;
   violinVolume: number;
+  melodyVolume: number;
   fluteVolume: number;
   saxophoneVolume: number;
   bassVolume: number;
@@ -49,6 +50,7 @@ export interface SoundfontInstrumentInstance {
     decayTime: number;
     loop: boolean;
   }) => ((time?: number) => void) | undefined;
+  stop?: (sample?: { stopId?: string | number; time?: number } | string | number) => void;
 }
 
 export interface LoadableInstrument {

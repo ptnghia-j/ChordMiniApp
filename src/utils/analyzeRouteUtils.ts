@@ -1,4 +1,5 @@
 import { BeatDetectorType, ChordDetectorType } from '@/hooks/chord-analysis/useModelState';
+import { getSafeBeatModel, getSafeChordModel } from '@/utils/modelFiltering';
 
 type QueryParamReader = {
   get: (key: string) => string | null;
@@ -29,12 +30,16 @@ function safeDecode(value: string | null): string | null {
 
 export function sanitizeBeatModel(value: string | null | undefined): BeatDetectorType | null {
   if (!value) return null;
-  return VALID_BEAT_MODELS.includes(value as BeatDetectorType) ? (value as BeatDetectorType) : null;
+  return VALID_BEAT_MODELS.includes(value as BeatDetectorType)
+    ? getSafeBeatModel(value as BeatDetectorType)
+    : null;
 }
 
 export function sanitizeChordModel(value: string | null | undefined): ChordDetectorType | null {
   if (!value) return null;
-  return VALID_CHORD_MODELS.includes(value as ChordDetectorType) ? (value as ChordDetectorType) : null;
+  return VALID_CHORD_MODELS.includes(value as ChordDetectorType)
+    ? getSafeChordModel(value as ChordDetectorType)
+    : null;
 }
 
 export function readAnalyzeRouteParams(searchParams: QueryParamReader | null | undefined): Required<AnalyzeRouteParams> {

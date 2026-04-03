@@ -114,6 +114,11 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
   }, [loopStartBeat, setLoopEndBeat, setLoopRange, totalBeats]);
 
   const isDisabled = totalBeats === 0;
+  const buttonClassName = `h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0 ${
+    isLoopEnabled
+      ? 'bg-green-600 text-white hover:bg-green-700'
+      : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+  } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
   return (
     <Popover
@@ -146,11 +151,7 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
             <motion.button
               onClick={handleToggleClick}
               disabled={isDisabled}
-              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-                isLoopEnabled
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
-              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={buttonClassName}
               whileHover={!isDisabled ? { scale: 1.02 } : {}}
               whileTap={!isDisabled ? { scale: 0.98 } : {}}
               aria-label={
@@ -162,7 +163,7 @@ export const LoopPlaybackToggle: React.FC<LoopPlaybackToggleProps> = ({
               }
               aria-pressed={isLoopEnabled}
             >
-              <HiArrowPath className="h-5 w-5" />
+              <HiArrowPath className="h-4 w-4" />
             </motion.button>
           </Tooltip>
         </div>

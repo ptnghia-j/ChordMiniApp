@@ -21,6 +21,7 @@ import {
   DEFAULT_BASS_VOLUME,
   DEFAULT_FLUTE_VOLUME,
   DEFAULT_GUITAR_VOLUME,
+  DEFAULT_MELODY_VOLUME,
   DEFAULT_PIANO_VOLUME,
   DEFAULT_VIOLIN_VOLUME,
 } from '@/config/audioDefaults';
@@ -66,6 +67,7 @@ export class SoundfontChordPlaybackService {
     pianoVolume: DEFAULT_PIANO_VOLUME,
     guitarVolume: DEFAULT_GUITAR_VOLUME,
     violinVolume: DEFAULT_VIOLIN_VOLUME,
+    melodyVolume: DEFAULT_MELODY_VOLUME,
     fluteVolume: DEFAULT_FLUTE_VOLUME,
     saxophoneVolume: 0,
     bassVolume: DEFAULT_BASS_VOLUME,
@@ -136,6 +138,20 @@ export class SoundfontChordPlaybackService {
     }
 
     return !!this.audioContext && this.audioContext.state === 'running';
+  }
+
+  async prepareInstrumentForPlayback(instrumentName: InstrumentName): Promise<boolean> {
+    const ready = await this.prepareForPlayback();
+    if (!ready) {
+      return false;
+    }
+
+    try {
+      await this.instrumentRegistry.ensureLoaded(instrumentName);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async initialize(): Promise<void> {
@@ -255,6 +271,29 @@ export class SoundfontChordPlaybackService {
     });
 
     if (scheduledNotes.length === 0) {
+      return;
+    }
+
+    await this.playScheduledNotes(instrumentName, scheduledNotes, volume, dynamicVelocity, timingContext);
+  }
+
+  async playScheduledInstrument(
+    instrumentName: InstrumentName,
+    scheduledNotes: ScheduledNote[],
+    dynamicVelocity?: number,
+    timingContext?: PlaybackTimingContext,
+  ): Promise<void> {
+    if (!(await this.prepareForPlayback())) {
+      return;
+    }
+
+    if (scheduledNotes.length === 0) {
+      this.stopInstrumentNotes(instrumentName);
+      return;
+    }
+
+    const volume = this.getVolumeForInstrument(instrumentName);
+    if (volume <= 0) {
       return;
     }
 
@@ -492,6 +531,7 @@ export class SoundfontChordPlaybackService {
     this.scheduleUnloadIfMuted('piano', options.pianoVolume);
     this.scheduleUnloadIfMuted('guitar', options.guitarVolume);
     this.scheduleUnloadIfMuted('violin', options.violinVolume);
+    this.scheduleUnloadIfMuted('melodyViolin', options.melodyVolume);
     this.scheduleUnloadIfMuted('flute', options.fluteVolume);
     this.scheduleUnloadIfMuted('saxophone', options.saxophoneVolume);
     this.scheduleUnloadIfMuted('bass', options.bassVolume);
@@ -506,18 +546,49 @@ export class SoundfontChordPlaybackService {
   }
 
   softStopAll(): void {
+    const loadedInstrumentNames: InstrumentName[] = [];
     this.instrumentRegistry.forEachLoadedInstrument((instrumentName) => {
+      loadedInstrumentNames.push(instrumentName);
+    });
+    this.softStopInstruments(loadedInstrumentNames);
+  }
+
+  stopAll(): void {
+    const loadedInstrumentNames: InstrumentName[] = [];
+    this.instrumentRegistry.forEachLoadedInstrument((instrumentName) => {
+      loadedInstrumentNames.push(instrumentName);
+    });
+    this.stopInstruments(loadedInstrumentNames);
+  }
+
+  softStopInstruments(instrumentNames: InstrumentName[]): void {
+    instrumentNames.forEach((instrumentName) => {
       this.softStopInstrumentNotes(instrumentName);
     });
   }
 
-  stopAll(): void {
-    this.scheduledTimeouts.forEach((timeoutId) => {
-      clearTimeout(timeoutId);
-    });
-    this.scheduledTimeouts.clear();
+  stopInstruments(instrumentNames: InstrumentName[]): void {
+    instrumentNames.forEach((instrumentName) => {
+      const previousGeneration = this.instrumentGeneration.get(instrumentName) ?? 0;
+      this.instrumentGeneration.set(instrumentName, previousGeneration + 1);
 
-    this.instrumentRegistry.forEachLoadedInstrument((instrumentName) => {
+      const timeoutId = this.scheduledTimeouts.get(instrumentName);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this.scheduledTimeouts.delete(instrumentName);
+      }
+    });
+
+    instrumentNames.forEach((instrumentName) => {
+      const instrument = this.instrumentRegistry.getInstrument(instrumentName);
+      if (typeof instrument?.stop === 'function') {
+        try {
+          instrument.stop();
+        } catch {
+          // Best effort: continue with active note cancellation below.
+        }
+      }
+
       const activeNotesForInstrument = this.activeNotes.get(instrumentName);
       if (!activeNotesForInstrument || activeNotesForInstrument.length === 0) {
         return;
@@ -525,13 +596,17 @@ export class SoundfontChordPlaybackService {
 
       const now = this.audioContext?.currentTime ?? 0;
       activeNotesForInstrument.forEach((note) => {
-        note.stopFn(now + Math.min(note.releaseLeadTime, 0.02));
+        const noteHasStarted = now >= note.scheduledStartTime - 0.005;
+        note.stopFn(noteHasStarted ? now + Math.min(note.releaseLeadTime, 0.02) : now);
       });
       this.activeNotes.set(instrumentName, []);
     });
   }
 
   dispose(): void {
+    this.scheduledTimeouts.forEach((timeoutId) => {
+      clearTimeout(timeoutId);
+    });
     this.stopAll();
     this.activeNotes.clear();
     this.scheduledTimeouts.clear();
@@ -572,6 +647,7 @@ export class SoundfontChordPlaybackService {
       piano: this.options.pianoVolume,
       guitar: this.options.guitarVolume,
       violin: this.options.violinVolume,
+      melodyViolin: this.options.melodyVolume,
       flute: this.options.fluteVolume,
       saxophone: this.options.saxophoneVolume,
       bass: this.options.bassVolume,

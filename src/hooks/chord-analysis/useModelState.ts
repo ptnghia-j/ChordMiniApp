@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getSafeChordModel } from '@/utils/modelFiltering';
+import { getSafeBeatModel, getSafeChordModel } from '@/utils/modelFiltering';
 
 // Define detector types
 export type BeatDetectorType = 'madmom' | 'beat-transformer';
@@ -26,7 +26,9 @@ export interface UseModelStateOptions {
  */
 export const useModelState = (options: UseModelStateOptions = {}): ModelState => {
   const { initialBeatDetector = null, initialChordDetector = null } = options;
-  const previousInitialBeatDetectorRef = useRef<BeatDetectorType | null>(initialBeatDetector);
+  const previousInitialBeatDetectorRef = useRef<BeatDetectorType | null>(
+    initialBeatDetector ? getSafeBeatModel(initialBeatDetector) : null,
+  );
   const previousInitialChordDetectorRef = useRef<ChordDetectorType | null>(
     initialChordDetector ? getSafeChordModel(initialChordDetector) : null
   );
@@ -34,13 +36,13 @@ export const useModelState = (options: UseModelStateOptions = {}): ModelState =>
   // Initialize model states with localStorage persistence
   const [beatDetector, setBeatDetector] = useState<BeatDetectorType>(() => {
     if (initialBeatDetector) {
-      return initialBeatDetector;
+      return getSafeBeatModel(initialBeatDetector);
     }
 
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_beat_detector');
       if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
-        return saved as BeatDetectorType;
+        return getSafeBeatModel(saved as BeatDetectorType);
       }
       // If saved value was 'auto', default to 'madmom'
       if (saved === 'auto') {
@@ -82,9 +84,10 @@ export const useModelState = (options: UseModelStateOptions = {}): ModelState =>
 
   useEffect(() => {
     if (initialBeatDetector && initialBeatDetector !== previousInitialBeatDetectorRef.current) {
-      previousInitialBeatDetectorRef.current = initialBeatDetector;
+      const safeModel = getSafeBeatModel(initialBeatDetector);
+      previousInitialBeatDetectorRef.current = safeModel;
       const timer = window.setTimeout(() => {
-        setBeatDetector(initialBeatDetector);
+        setBeatDetector(safeModel);
       }, 0);
 
       return () => window.clearTimeout(timer);

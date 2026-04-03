@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead, GiSaxophone } from 'react-icons/gi';
+import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
@@ -69,6 +69,11 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
 }) => {
   const successSliderClassNames = getAppSliderClassNames('success');
   const dangerSliderClassNames = getAppSliderClassNames('danger');
+  const buttonClassName = `h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0 ${
+    isEnabled
+      ? 'bg-green-600 text-white hover:bg-green-700'
+      : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+  } ${className}`;
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [audioSettings, setAudioSettings] = useState<AudioMixerSettings | null>(null);
 
@@ -227,11 +232,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
           >
             <motion.button
               onClick={handleButtonClick}
-              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-                isEnabled
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
-              } ${className}`}
+              className={buttonClassName}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               aria-label={isEnabled ? "Disable chord playback" : "Enable chord playback"}
@@ -601,54 +602,6 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                         />
                       </div>
                     </div>
-
-                    {/* Saxophone volume control */}
-                    <div className="space-y-1">
-                      <div className="mb-1 flex items-center justify-between gap-2.5">
-                        <label
-                          className={MIXER_LABEL_CLASS}
-                          title="Auto-on during instrumental sections. Outside them, raise the slider to hear saxophone manually."
-                        >
-                          <GiSaxophone className="h-3.5 w-3.5" />
-                          Saxophone
-                        </label>
-                        <span className={MIXER_VALUE_CLASS}>
-                          {Math.round(audioSettings.saxophoneVolume)}%
-                        </span>
-                      </div>
-                      <div
-                        onMouseDown={() => setActiveSlider('saxophone')}
-                        onMouseUp={() => setActiveSlider(null)}
-                        onMouseLeave={() => {
-                          if (activeSlider === 'saxophone') setActiveSlider(null);
-                        }}
-                      >
-                        <Slider
-                          color="success"
-                          size="sm"
-                          step={1}
-                          minValue={0}
-                          maxValue={100}
-                          value={audioSettings.saxophoneVolume}
-                          onChange={(value) => {
-                            if (activeSlider === 'saxophone' || activeSlider === null) {
-                              const vol = Array.isArray(value) ? value[0] : value;
-                              audioMixer.current?.setSaxophoneVolume(vol);
-                            }
-                          }}
-                          className="w-full"
-                          aria-label="Saxophone volume control"
-                          classNames={{
-                            base: MIXER_SLIDER_BASE_CLASS,
-                            ...successSliderClassNames,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
-                        Auto-on in instrumental sections; manual everywhere else.
-                      </p>
-                    </div>
-
                     {/* Bass volume control */}
                     <div className="space-y-1">
                       <div className="mb-1 flex items-center justify-between gap-2.5">

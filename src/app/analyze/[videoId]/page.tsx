@@ -29,6 +29,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { SongContext } from '@/types/chatbotTypes';
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
+import { useMelodicTranscriptionPlayback } from '@/hooks/chord-playback/useMelodicTranscriptionPlayback';
 import { useAudioProcessing } from '@/hooks/audio/useAudioProcessing';
 import { useAudioPlayer } from '@/hooks/chord-playback/useAudioPlayer';
 import { useModelState } from '@/hooks/chord-analysis/useModelState';
@@ -105,6 +106,7 @@ import FloatingVideoDock from '@/components/analysis/FloatingVideoDock';
 import AnalysisHeader from '@/components/analysis/AnalysisHeader';
 import ResultsTabs from '@/components/homepage/ResultsTabs';
 import ProcessingBanners from '@/components/analysis/ProcessingBanners';
+import MelodyTranscriptionStatusToast from '@/components/analysis/MelodyTranscriptionStatusToast';
 
 import AnalysisSplitLayout from '@/components/layout/AnalysisSplitLayout';
 
@@ -114,6 +116,9 @@ import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEF
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 import { buildAnalyzePageUrl, readAnalyzeRouteParams } from '@/utils/analyzeRouteUtils';
 import { consumeAnalyzeSessionHandoff } from '@/utils/analyzeSessionHandoff';
+import { requestSheetSageTranscription } from '@/services/sheetsage/sheetSageTranscriptionClient';
+import { getCachedSheetSageMelody } from '@/services/sheetsage/sheetSageCacheClient';
+import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 // Import new hooks and contexts
 import { useFirebaseReadiness } from '@/hooks/firebase/useFirebaseReadiness';
 import { useYouTubeSetup } from '@/hooks/youtube/useYouTubeSetup';
@@ -129,10 +134,13 @@ import { useUIStore } from '@/stores/uiStore';
 import { useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
 
 import { usePlaybackStore } from '@/stores/playbackStore';
+import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
 
 
 
 export default function YouTubeVideoAnalyzePage() {
+  const showSheetSage = true;
+  useSheetSageBackendAvailability(showSheetSage);
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -510,6 +518,14 @@ export default function YouTubeVideoAnalyzePage() {
     handleTitleChange,
     handleChordEdit,
   } = useTabsAndEditing(videoTitle || '');
+  const sheetSageResult = useAnalysisStore((state) => state.sheetSageResult);
+  const isComputingSheetSage = useAnalysisStore((state) => state.isComputingSheetSage);
+  const sheetSageError = useAnalysisStore((state) => state.sheetSageError);
+  const isCheckingSheetSageBackend = useAnalysisStore((state) => state.isCheckingSheetSageBackend);
+  const isSheetSageBackendAvailable = useAnalysisStore((state) => state.isSheetSageBackendAvailable);
+  const sheetSageBackendError = useAnalysisStore((state) => state.sheetSageBackendError);
+  const isMelodicTranscriptionPlaybackEnabled = useUIStore((state) => state.isMelodicTranscriptionPlaybackEnabled);
+  const setIsMelodicTranscriptionPlaybackEnabled = useUIStore((state) => state.setIsMelodicTranscriptionPlaybackEnabled);
 
   // Chatbot state
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
@@ -520,9 +536,23 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Auto-minimize video when panels are open or when Guitar Chords / Piano Visualizer tab is active
   useEffect(() => {
-    const shouldMinimize = isChatbotOpen || isLyricsPanelOpen || activeTab === 'guitarChords' || activeTab === 'pianoVisualizer';
+    const shouldMinimize = isChatbotOpen
+      || isLyricsPanelOpen
+      || activeTab === 'guitarChords'
+      || activeTab === 'pianoVisualizer';
     setIsVideoMinimized(shouldMinimize);
   }, [isChatbotOpen, isLyricsPanelOpen, activeTab]);
+
+  const hasSheetSageNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
+  const hasSheetSageAudioSource = Boolean(audioProcessingState.audioUrl);
+  const hasReadySheetSageBackend = isSheetSageBackendAvailable === true;
+  const melodicTranscriptionDisabledReason = isCheckingSheetSageBackend
+    ? 'Checking Sheet Sage backend...'
+    : !hasReadySheetSageBackend
+      ? (sheetSageBackendError || 'Sheet Sage backend unavailable.')
+    : !hasSheetSageAudioSource
+    ? 'Wait for extracted audio before computing melodic transcription.'
+    : undefined;
 
   const splitLayoutHeight = useMemo(() => {
     if (!isLyricsPanelOpen && !isChatbotOpen) {
@@ -588,6 +618,52 @@ export default function YouTubeVideoAnalyzePage() {
   useEffect(() => {
     resetSegmentation();
   }, [videoId, resetSegmentation]);
+
+  useEffect(() => {
+    useAnalysisStore.getState().clearSheetSage();
+    setIsMelodicTranscriptionPlaybackEnabled(false);
+  }, [audioProcessingState.audioUrl, setIsMelodicTranscriptionPlaybackEnabled]);
+
+  useEffect(() => {
+    if (
+      !showSheetSage
+      || !videoId
+      || !audioProcessingState.isExtracted
+      || !audioProcessingState.audioUrl
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const analysisActions = useAnalysisStore.getState();
+
+    const loadCachedMelody = async () => {
+      try {
+        const cachedResult = await getCachedSheetSageMelody(videoId);
+        if (cancelled || !cachedResult) {
+          return;
+        }
+
+        analysisActions.setSheetSageResult(cachedResult);
+        analysisActions.setSheetSageError(null);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load cached melody transcription:', error);
+        }
+      }
+    };
+
+    void loadCachedMelody();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    audioProcessingState.audioUrl,
+    audioProcessingState.isExtracted,
+    showSheetSage,
+    videoId,
+  ]);
 
   const segmentationDisabledReason = !buildSongContext.audioUrl
     ? 'Song segmentation becomes available after audio extraction finishes.'
@@ -741,6 +817,62 @@ export default function YouTubeVideoAnalyzePage() {
   const handleChordPlaybackChange = useCallback((newChordPlayback: UseChordPlaybackReturn) => {
     setChordPlayback(newChordPlayback);
   }, []);
+
+  const toggleMelodicTranscriptionPlayback = useCallback(async () => {
+    if (!hasSheetSageAudioSource || isComputingSheetSage || !hasReadySheetSageBackend) {
+      return;
+    }
+
+    const analysisActions = useAnalysisStore.getState();
+
+    if (isMelodicTranscriptionPlaybackEnabled) {
+      setIsMelodicTranscriptionPlaybackEnabled(false);
+      return;
+    }
+
+    if (!hasSheetSageNotes) {
+      analysisActions.setIsComputingSheetSage(true);
+      analysisActions.setSheetSageError(null);
+
+      try {
+        const cachedResult = await getCachedSheetSageMelody(videoId);
+        const result = cachedResult ?? await requestSheetSageTranscription(null, audioProcessingState.audioUrl || null, videoId);
+        analysisActions.setSheetSageResult(result);
+        analysisActions.setSheetSageError(null);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown Sheet Sage error';
+        analysisActions.setSheetSageError(message);
+        analysisActions.setIsComputingSheetSage(false);
+        return;
+      } finally {
+        analysisActions.setIsComputingSheetSage(false);
+      }
+    }
+
+    setActiveTab('pianoVisualizer');
+    setIsMelodicTranscriptionPlaybackEnabled(true);
+  }, [
+    audioProcessingState.audioUrl,
+    hasSheetSageAudioSource,
+    hasReadySheetSageBackend,
+    hasSheetSageNotes,
+    isComputingSheetSage,
+    isMelodicTranscriptionPlaybackEnabled,
+    setActiveTab,
+    setIsMelodicTranscriptionPlaybackEnabled,
+    videoId,
+  ]);
+
+  useMelodicTranscriptionPlayback({
+    sheetSageResult,
+    audioUrl: audioProcessingState.audioUrl || null,
+    segmentationData,
+    audioRef,
+    youtubePlayer,
+    currentTime,
+    isPlaying,
+    isEnabled: isMelodicTranscriptionPlaybackEnabled,
+  });
 
   // Countdown state
   const [isCountdownEnabled, setIsCountdownEnabled] = useState<boolean>(false);
@@ -1076,6 +1208,12 @@ export default function YouTubeVideoAnalyzePage() {
         onTryAnotherVideo={handleTryAnotherVideo}
         onRetry={() => extractAudioFromYouTube(true)}
       />
+      <MelodyTranscriptionStatusToast
+        isComputing={isComputingSheetSage}
+        durationSeconds={duration || (durationFromSearch ? Number(durationFromSearch) : 0)}
+        hasResult={hasSheetSageNotes}
+        errorMessage={sheetSageError}
+      />
 
       {/* Main viewport area - no page-level scrolling; panes will scroll independently */}
       <div className="flex-1 min-h-0">
@@ -1195,8 +1333,11 @@ export default function YouTubeVideoAnalyzePage() {
                           isPlaying={isPlaying}
                           isChordPlaybackEnabled={chordPlayback.isEnabled}
                           audioUrl={audioProcessingState.audioUrl || null}
+                          sheetSageResult={sheetSageResult}
+                          showMelodicOverlay={isMelodicTranscriptionPlaybackEnabled && hasSheetSageNotes}
                         />
                       )}
+
                     </div>
 
 	                    {activeTab === 'lyricsChords' && (
@@ -1220,6 +1361,11 @@ export default function YouTubeVideoAnalyzePage() {
 	                    <p className="mt-1 text-sm text-default-500 dark:text-default-400">
 	                      Choose your models above, then open cached results or run a fresh analysis.
 	                    </p>
+	                    {!isDevelopmentEnvironment() && (
+	                      <p className="mt-1 text-xs text-white/95 dark:text-white/95">
+	                        For other experimental models, clone the repository and build the app from source.
+	                      </p>
+	                    )}
 	                  </div>
                 )}
               </div>
@@ -1329,6 +1475,16 @@ export default function YouTubeVideoAnalyzePage() {
               youtubeEmbedUrl={audioProcessingState.youtubeEmbedUrl}
               videoUrl={audioProcessingState.videoUrl}
               youtubePlayer={youtubePlayer}
+              melodicTranscriptionPlayback={showSheetSage ? {
+                isEnabled: isMelodicTranscriptionPlaybackEnabled,
+                hasTranscription: hasSheetSageNotes,
+                isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
+                disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                disabledReason: melodicTranscriptionDisabledReason,
+                errorMessage: sheetSageBackendError || sheetSageError,
+                canAdjustVolume: hasSheetSageNotes,
+                togglePlayback: toggleMelodicTranscriptionPlayback,
+              } : undefined}
               showTopToggles={true} // Mobile-only via md:hidden inside FloatingVideoDock; desktop uses UtilityBar
               positionMode="relative" // Use relative positioning for responsive layout
               timeSignature={timeSignature}
@@ -1342,6 +1498,16 @@ export default function YouTubeVideoAnalyzePage() {
             <UtilityBar className="hidden md:block"
               isFollowModeEnabled={isFollowModeEnabled}
               chordPlayback={chordPlayback}
+              melodicTranscriptionPlayback={showSheetSage ? {
+                isEnabled: isMelodicTranscriptionPlaybackEnabled,
+                hasTranscription: hasSheetSageNotes,
+                isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
+                disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                disabledReason: melodicTranscriptionDisabledReason,
+                errorMessage: sheetSageBackendError || sheetSageError,
+                canAdjustVolume: hasSheetSageNotes,
+                togglePlayback: toggleMelodicTranscriptionPlayback,
+              } : undefined}
               youtubePlayer={youtubePlayer}
               playbackRate={playbackRate}
               setPlaybackRate={(rate: number) => {

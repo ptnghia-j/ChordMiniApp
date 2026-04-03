@@ -32,6 +32,9 @@ export const DEFAULT_GUITAR_VOLUME = 45;
 /** Violin instrument volume */
 export const DEFAULT_VIOLIN_VOLUME = 50;
 
+/** Dedicated melodic-transcription playback volume */
+export const DEFAULT_MELODY_VOLUME = 75;
+
 /** Flute instrument volume */
 export const DEFAULT_FLUTE_VOLUME = 50;
 
@@ -61,6 +64,7 @@ export const DEFAULT_AUDIO_MIXER_SETTINGS = {
   pianoVolume: DEFAULT_PIANO_VOLUME,
   guitarVolume: DEFAULT_GUITAR_VOLUME,
   violinVolume: DEFAULT_VIOLIN_VOLUME,
+  melodyVolume: DEFAULT_MELODY_VOLUME,
   fluteVolume: DEFAULT_FLUTE_VOLUME,
   saxophoneVolume: DEFAULT_SAXOPHONE_VOLUME,
   bassVolume: DEFAULT_BASS_VOLUME,

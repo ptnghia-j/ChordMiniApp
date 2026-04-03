@@ -10,3 +10,6 @@
 [submodule "python_backend/beat_transformer_minimal/Beat-Transformer"]
 	path = python_backend/beat_transformer_minimal/Beat-Transformer
 	url = https://github.com/ptnghia-j/beat-transformer-model.git
+[submodule "sheetsage/src/sheetsage_upstream"]
+	path = sheetsage/src/sheetsage_upstream
+	url = https://github.com/chrisdonahue/sheetsage.git

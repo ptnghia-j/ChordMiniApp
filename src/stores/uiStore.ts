@@ -10,7 +10,7 @@ function identityDevtools<S, Mps extends [] = [], Mcs extends [] = []>(
 }
 
 // UI state types
-export type ActiveTab = 'beatChordMap' | 'guitarChords' | 'lyricsChords';
+export type ActiveTab = 'beatChordMap' | 'guitarChords' | 'lyricsChords' | 'pianoVisualizer';
 
 export type RomanNumeralData = {
   analysis: string[];
@@ -66,6 +66,11 @@ interface UIStore {
   simplifyChords: boolean;
   setSimplifyChords: (val: boolean) => void;
   toggleSimplifyChords: () => void;
+
+  // Sheet Sage melodic playback
+  isMelodicTranscriptionPlaybackEnabled: boolean;
+  setIsMelodicTranscriptionPlaybackEnabled: (enabled: boolean) => void;
+  toggleMelodicTranscriptionPlayback: () => void;
 
   // Loop playback
   isLoopEnabled: boolean;
@@ -131,6 +136,7 @@ export const useUIStore = create<UIStore>()(
       romanNumeralData: null,
       showSegmentation: false,
       simplifyChords: false,
+      isMelodicTranscriptionPlaybackEnabled: false,
       isLoopEnabled: false,
       loopStartBeat: -1,
       loopEndBeat: -1,
@@ -260,6 +266,19 @@ export const useUIStore = create<UIStore>()(
 
       toggleSimplifyChords: () =>
         set((state) => ({ simplifyChords: !state.simplifyChords }), false, 'toggleSimplifyChords'),
+
+      // Sheet Sage melodic playback
+      setIsMelodicTranscriptionPlaybackEnabled: (enabled) =>
+        set({ isMelodicTranscriptionPlaybackEnabled: enabled }, false, 'setIsMelodicTranscriptionPlaybackEnabled'),
+
+      toggleMelodicTranscriptionPlayback: () =>
+        set(
+          (state) => ({
+            isMelodicTranscriptionPlaybackEnabled: !state.isMelodicTranscriptionPlaybackEnabled,
+          }),
+          false,
+          'toggleMelodicTranscriptionPlayback'
+        ),
 
       // Loop playback
       setIsLoopEnabled: (enabled) => set({ isLoopEnabled: enabled }, false, 'setIsLoopEnabled'),
@@ -422,6 +441,12 @@ export const useToggleSegmentation = () => useUIStore((state) => state.toggleSeg
 
 export const useSimplifyChords = () => useUIStore((state) => state.simplifyChords);
 export const useToggleSimplifyChords = () => useUIStore((state) => state.toggleSimplifyChords);
+export const useIsMelodicTranscriptionPlaybackEnabled = () =>
+  useUIStore((state) => state.isMelodicTranscriptionPlaybackEnabled);
+export const useSetIsMelodicTranscriptionPlaybackEnabled = () =>
+  useUIStore((state) => state.setIsMelodicTranscriptionPlaybackEnabled);
+export const useToggleMelodicTranscriptionPlayback = () =>
+  useUIStore((state) => state.toggleMelodicTranscriptionPlayback);
 
 export const useIsLoopEnabled = () => useUIStore((state) => state.isLoopEnabled);
 export const useLoopStartBeat = () => useUIStore((state) => state.loopStartBeat);

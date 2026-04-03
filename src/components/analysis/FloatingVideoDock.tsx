@@ -22,6 +22,7 @@ const ChordSimplificationToggle = dynamic(() => import('@/components/analysis/Ch
 });
 
 import ChordPlaybackToggle from '@/components/chord-playback/ChordPlaybackToggle';
+import MelodicTranscriptionToggle from '@/components/analysis/MelodicTranscriptionToggle';
 import { useSimplifySelector } from '@/contexts/selectors'; // Now uses Zustand internally
 
 const RomanNumeralToggle = dynamic(() => import('@/components/analysis/RomanNumeralToggle'), {
@@ -96,6 +97,16 @@ interface FloatingVideoDockProps {
 
   // UI options
   showTopToggles?: boolean;
+  melodicTranscriptionPlayback?: {
+    isEnabled: boolean;
+    hasTranscription: boolean;
+    isLoading?: boolean;
+    disabled?: boolean;
+    disabledReason?: string;
+    errorMessage?: string | null;
+    canAdjustVolume?: boolean;
+    togglePlayback: () => void;
+  };
 
   // Positioning mode
   positionMode?: 'fixed' | 'sticky' | 'relative';
@@ -139,12 +150,14 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   videoUrl,
   youtubePlayer,
   showTopToggles = true,
+  melodicTranscriptionPlayback,
   positionMode = 'fixed',
   isCountdownEnabled = false,
   isCountingDown = false,
   countdownDisplay,
   timeSignature,
 }) => {
+  const utilityCircleButtonClass = 'h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0';
   // Roman numerals from Zustand store
   const showRomanNumerals = useShowRomanNumerals();
   const toggleRomanNumerals = useToggleRomanNumerals();
@@ -229,7 +242,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
           >
             <button
               onClick={toggleFollowMode}
-              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+              className={`${utilityCircleButtonClass} ${
                 isFollowModeEnabled
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
@@ -268,6 +281,21 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
               youtubePlayer={youtubePlayer}
             />
           </div>
+
+          {melodicTranscriptionPlayback && (
+            <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>
+              <MelodicTranscriptionToggle
+                isEnabled={melodicTranscriptionPlayback.isEnabled}
+                hasTranscription={melodicTranscriptionPlayback.hasTranscription}
+                isLoading={melodicTranscriptionPlayback.isLoading}
+                disabled={melodicTranscriptionPlayback.disabled}
+                disabledReason={melodicTranscriptionPlayback.disabledReason}
+                errorMessage={melodicTranscriptionPlayback.errorMessage}
+                canAdjustVolume={melodicTranscriptionPlayback.canAdjustVolume}
+                onClick={melodicTranscriptionPlayback.togglePlayback}
+              />
+            </div>
+          )}
 
           {/* Chord simplification toggle - reserve space to prevent layout shift */}
           <div style={{ opacity: analysisResults ? 1 : 0, pointerEvents: analysisResults ? 'auto' : 'none' }}>

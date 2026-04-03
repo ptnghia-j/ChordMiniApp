@@ -1,0 +1,15 @@
+.venv
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+src/sheetsage_upstream/cloudrun/
+src/sheetsage_upstream/docker/
+src/sheetsage_upstream/notebooks/
+src/sheetsage_upstream/.gitignore
+src/sheetsage_upstream/.dockerignore
+src/sheetsage_upstream/.pre-commit-config.yaml
+src/sheetsage_upstream/sheetsage/__pycache__/
+src/sheetsage_upstream/sheetsage/*_test.py

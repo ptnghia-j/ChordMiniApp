@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
-import { getAudioMixerService } from '@/services/chord-playback/audioMixerService';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import {
   DEFAULT_PIANO_VOLUME,
   DEFAULT_GUITAR_VOLUME,
   DEFAULT_VIOLIN_VOLUME,
   DEFAULT_FLUTE_VOLUME,
-  DEFAULT_AUTO_SAXOPHONE_VOLUME,
 } from '@/config/audioDefaults';
 import { useGuitarCapoFret, useGuitarSelectedPositions, useTargetKey } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
-import { isInstrumentalTime } from '@/utils/segmentationSections';
 import { isNoChordChordName } from '@/utils/chordToMidi';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import { findChordEventForPlayback, findChordEventIndexByBeatIndex } from '@/utils/chordEventLookup';
+import type { InstrumentName } from '@/utils/instrumentNoteGeneration';
 
 export interface UseChordPlaybackProps {
   currentBeatIndex: number;
@@ -73,6 +71,7 @@ interface ScheduledChordLookupEvent {
 const FOREGROUND_EVENT_BOUNDARY_TOLERANCE = 0.08;
 const EVENT_MISS_GRACE_PERIOD = 0.12;
 const CHORD_EVENT_CATCH_UP_MAX_SECONDS = 0.22;
+const CHORD_PLAYBACK_INSTRUMENTS: InstrumentName[] = ['piano', 'guitar', 'violin', 'flute', 'saxophone', 'bass'];
 
 /**
  * Build a list of distinct chord-change events from beats/chords arrays.
@@ -218,9 +217,6 @@ export const useChordPlayback = ({
   const [violinVolume, setViolinVolumeState] = useState(DEFAULT_VIOLIN_VOLUME);
   const [fluteVolume, setFluteVolumeState] = useState(DEFAULT_FLUTE_VOLUME);
   const [isReady, setIsReady] = useState(false);
-  const [effectiveManualSaxophoneVolume, setEffectiveManualSaxophoneVolume] = useState(0);
-  const [effectiveAutomaticSaxophoneVolume, setEffectiveAutomaticSaxophoneVolume] = useState(0);
-  const [hasManualSaxophoneOverride, setHasManualSaxophoneOverride] = useState(false);
   const guitarCapoFret = useGuitarCapoFret();
   const guitarSelectedPositions = useGuitarSelectedPositions();
   const targetKey = useTargetKey();
@@ -281,18 +277,8 @@ export const useChordPlayback = ({
   const isReadyRef = useRef(isReady);
   const currentTimeRef = useRef(currentTime);
   const estimatedSongDurationRef = useRef(estimatedSongDuration);
-  const previousShouldEnableSaxophoneRef = useRef(false);
-  const previousAppliedSaxophoneVolumeRef = useRef(0);
   const eventMissStartedAtRef = useRef<number | null>(null);
   const lastRecoveryAttemptAtRef = useRef(0);
-
-  const shouldEnableSaxophone = isEnabled
-    && !!segmentationData
-    && isInstrumentalTime(segmentationData, currentTime);
-
-  const appliedSaxophoneVolume = shouldEnableSaxophone && !hasManualSaxophoneOverride
-    ? effectiveAutomaticSaxophoneVolume
-    : effectiveManualSaxophoneVolume;
 
   useEffect(() => { chordsRef.current = chords; }, [chords]);
   useEffect(() => { beatsRef.current = beats; }, [beats]);
@@ -303,25 +289,6 @@ export const useChordPlayback = ({
   useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { estimatedSongDurationRef.current = estimatedSongDuration; }, [estimatedSongDuration]);
-
-  useEffect(() => {
-    const mixer = getAudioMixerService();
-
-    const syncSaxophoneVolume = () => {
-      const settings = mixer.getSettings();
-      const effectiveVolumes = mixer.getEffectiveVolumes();
-
-      setHasManualSaxophoneOverride(settings.saxophoneVolume > 0);
-      setEffectiveManualSaxophoneVolume(effectiveVolumes.saxophone);
-      setEffectiveAutomaticSaxophoneVolume(
-        (DEFAULT_AUTO_SAXOPHONE_VOLUME / 100) * (effectiveVolumes.chordPlayback / 100) * 100,
-      );
-    };
-
-    syncSaxophoneVolume();
-    const unsubscribe = mixer.addListener(syncSaxophoneVolume);
-    return unsubscribe;
-  }, []);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -347,84 +314,6 @@ export const useChordPlayback = ({
       fluteVolume
     });
   }, [isEnabled, pianoVolume, guitarVolume, violinVolume, fluteVolume]);
-
-  useEffect(() => {
-    chordPlaybackService.current.updateOptions({
-      saxophoneVolume: appliedSaxophoneVolume,
-    });
-  }, [appliedSaxophoneVolume]);
-
-  useEffect(() => {
-    const saxophoneJustActivated = shouldEnableSaxophone && !previousShouldEnableSaxophoneRef.current;
-    const saxophoneJustBecameAudible = appliedSaxophoneVolume > 0
-      && previousAppliedSaxophoneVolumeRef.current === 0;
-    const saxophoneVolumeChangedWhileAudible = appliedSaxophoneVolume > 0
-      && previousAppliedSaxophoneVolumeRef.current > 0
-      && appliedSaxophoneVolume !== previousAppliedSaxophoneVolumeRef.current;
-
-    if (
-      (saxophoneJustActivated || saxophoneJustBecameAudible || saxophoneVolumeChangedWhileAudible)
-      && isEnabled
-      && isReady
-      && isPlaying
-      && appliedSaxophoneVolume > 0
-    ) {
-      const activeEvent = findScheduledChordEventForPlayback(chordLookupSchedule, currentTime, currentBeatIndex);
-
-      if (activeEvent && activeEvent.beatIndex === lastPlayedChordIndex.current) {
-        const signalDynamics = audioUrl
-          ? dynamicsAnalyzer.getSignalDynamics(activeEvent.audioTime, activeEvent.duration)
-          : null;
-        const dynamicVelocity = dynamicsAnalyzer.getVelocityMultiplier(
-          activeEvent.audioTime,
-          activeEvent.beatIndex,
-          activeEvent.chord,
-          activeEvent.duration,
-          signalDynamics,
-        );
-
-        void chordPlaybackService.current.playChordInstrument(
-          'saxophone',
-          activeEvent.chord,
-          activeEvent.duration,
-          bpm,
-          dynamicVelocity,
-          {
-            startTime: activeEvent.audioTime,
-            totalDuration: estimatedSongDuration,
-            playbackTime: currentTime,
-            beatCount: activeEvent.beatCount,
-            segmentationData,
-            signalDynamics,
-          },
-          timeSignature,
-          guitarVoicing,
-          targetKey,
-        );
-      }
-    }
-
-    previousShouldEnableSaxophoneRef.current = shouldEnableSaxophone;
-    previousAppliedSaxophoneVolumeRef.current = appliedSaxophoneVolume;
-  }, [
-    appliedSaxophoneVolume,
-    audioUrl,
-    bpm,
-    currentBeatIndex,
-    chordLookupSchedule,
-    currentTime,
-    dynamicsAnalyzer,
-    estimatedSongDuration,
-    hasManualSaxophoneOverride,
-    isEnabled,
-    isPlaying,
-    isReady,
-    segmentationData,
-    shouldEnableSaxophone,
-    timeSignature,
-    guitarVoicing,
-    targetKey,
-  ]);
 
   // ─── Background Tab Chord Scheduling ─────────────────────────────────────
   // When the browser tab loses focus, rAF stops → currentBeatIndex freezes →
@@ -635,7 +524,7 @@ export const useChordPlayback = ({
         // Use soft crossfade stop instead of hard stopAll and only after a
         // brief grace window so single missed timing ticks do not create an
         // audible drop-out between adjacent chords.
-        chordPlaybackService.current.softStopAll();
+        chordPlaybackService.current.softStopInstruments(CHORD_PLAYBACK_INSTRUMENTS);
         lastPlayedChord.current = null;
         lastPlayedChordIndex.current = -1;
         eventMissStartedAtRef.current = null;
@@ -701,7 +590,7 @@ export const useChordPlayback = ({
   // Stop playback when paused or disabled
   useEffect(() => {
     if (!isPlaying || !isEnabled) {
-      chordPlaybackService.current.stopAll();
+      chordPlaybackService.current.stopInstruments(CHORD_PLAYBACK_INSTRUMENTS);
       lastPlayedChord.current = null;
       lastPlayedChordIndex.current = -1;
       eventMissStartedAtRef.current = null;
@@ -748,7 +637,7 @@ export const useChordPlayback = ({
   useEffect(() => {
     const service = chordPlaybackService.current;
     return () => {
-      service.stopAll();
+      service.stopInstruments(CHORD_PLAYBACK_INSTRUMENTS);
     };
   }, []);
 

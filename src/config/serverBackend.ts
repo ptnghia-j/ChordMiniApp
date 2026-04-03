@@ -1,6 +1,7 @@
 const DEFAULT_PYTHON_API_URL = 'http://localhost:5001';
 const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
 const DEFAULT_LOCAL_SONGFORMER_API_URL = 'http://localhost:8080';
+const DEFAULT_LOCAL_SHEETSAGE_API_URL = 'http://localhost:8082';
 
 function isLocalUrl(candidateUrl: string | undefined): boolean {
   if (!candidateUrl) {
@@ -28,6 +29,17 @@ export function getSongformerApiUrl(): string {
   return localSongformerUrl && isLocalUrl(localSongformerUrl)
     ? localSongformerUrl
     : DEFAULT_LOCAL_SONGFORMER_API_URL;
+}
+
+export function getSheetSageApiUrl(): string {
+  if (process.env.VERCEL_ENV === 'production') {
+    return process.env.SHEETSAGE_API_URL || getPythonApiUrl();
+  }
+
+  const localSheetSageUrl = process.env.LOCAL_SHEETSAGE_API_URL || process.env.SHEETSAGE_API_URL;
+  return localSheetSageUrl && isLocalUrl(localSheetSageUrl)
+    ? localSheetSageUrl
+    : DEFAULT_LOCAL_SHEETSAGE_API_URL;
 }
 
 export function getFrontendBaseUrl(): string {

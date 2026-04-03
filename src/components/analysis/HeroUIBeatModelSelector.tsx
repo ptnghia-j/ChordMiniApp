@@ -3,6 +3,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
 import { getModelInfo, ModelInfoResult } from '@/services/audio/beatDetectionService';
+import {
+  filterBeatModels,
+  getAvailableBeatModels,
+  getBeatModelDescription,
+  getSafeBeatModel,
+  isDevelopmentEnvironment,
+} from '@/utils/modelFiltering';
 
 type ModelType = 'madmom' | 'beat-transformer';
 
@@ -27,14 +34,11 @@ const HeroUIBeatModelSelector = ({
   disabled = false,
 }: HeroUIBeatModelSelectorProps) => {
   const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ModelType>(defaultValue);
-  const [loading, setLoading] = useState(true);
+  const [selectedModel, setSelectedModel] = useState<ModelType>(getSafeBeatModel(defaultValue));
+  const [loading] = useState(false);
 
   // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
-    // Immediately show UI without waiting for backend
-    setLoading(false);
-
     const fetchModelInfo = async () => {
       try {
         // Fetch model info in background without blocking UI
@@ -51,8 +55,15 @@ const HeroUIBeatModelSelector = ({
   }, []);
 
   useEffect(() => {
-    setSelectedModel(defaultValue);
-  }, [defaultValue]);
+    const safeDefault = getSafeBeatModel(defaultValue);
+    const timer = window.setTimeout(() => {
+      setSelectedModel(safeDefault);
+    }, 0);
+    if (safeDefault !== defaultValue) {
+      onChange(safeDefault);
+    }
+    return () => window.clearTimeout(timer);
+  }, [defaultValue, onChange]);
 
   const handleSelectionChange = (keys: 'all' | Set<React.Key>) => {
     if (keys !== 'all') {
@@ -69,20 +80,48 @@ const HeroUIBeatModelSelector = ({
       id: 'beat-transformer',
       name: modelInfo?.model_info?.['beat-transformer']?.name || 'Beat-Transformer',
       description: modelInfo?.model_info?.['beat-transformer']?.description ||
-                  'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
+                  getBeatModelDescription('beat-transformer'),
       available: modelInfo?.beat_transformer_available || false
     },
     {
       id: 'madmom',
       name: modelInfo?.model_info?.['madmom']?.name || 'Madmom',
       description: modelInfo?.model_info?.['madmom']?.description ||
-                        'Neural network with high accuracy and speed, best for common time signature',
+                        getBeatModelDescription('madmom'),
       available: modelInfo?.madmom_available || false
     }
   ], [modelInfo]);
 
-  // Always show all models; availability reflects backend warm/cold status only
-  const availableModels = useMemo(() => modelOptions, [modelOptions]);
+  const availableModels = useMemo(() => {
+    const modelMap = new Map(modelOptions.map((model) => [model.id, model] as const));
+    const preferredOrder = filterBeatModels(getAvailableBeatModels());
+    const filtered = preferredOrder
+      .map((id) => modelMap.get(id))
+      .filter((model): model is ModelOption => Boolean(model));
+
+    return filtered.length > 0 ? filtered : filterBeatModels(modelOptions.map((model) => model.id))
+      .map((id) => modelMap.get(id))
+      .filter((model): model is ModelOption => Boolean(model));
+  }, [modelOptions]);
+
+  useEffect(() => {
+    if (availableModels.length === 0) {
+      return;
+    }
+
+    const isSelectedAvailable = availableModels.some((model) => model.id === selectedModel);
+    if (isSelectedAvailable) {
+      return;
+    }
+
+    const safeModel = availableModels[0].id;
+    const timer = window.setTimeout(() => {
+      setSelectedModel(safeModel);
+      onChange(safeModel);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [availableModels, onChange, selectedModel]);
 
   const selectedModelObject = modelOptions.find(model => model.id === selectedModel);
   const baseDescription = selectedModelObject?.description || "Choose the beat detection model for audio analysis";
@@ -150,9 +189,9 @@ const HeroUIBeatModelSelector = ({
           >
             <div className="flex items-center justify-between w-full">
               <span className="font-medium">{model.name}</span>
-              {model.id === 'beat-transformer' && (
-                <Chip size="sm" color="primary" variant="flat">
-                  BETA
+              {model.id === 'beat-transformer' && isDevelopmentEnvironment() && (
+                <Chip size="sm" color="warning" variant="flat">
+                  DEV
                 </Chip>
               )}
             </div>

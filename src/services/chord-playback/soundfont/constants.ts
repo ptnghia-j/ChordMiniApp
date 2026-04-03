@@ -12,8 +12,8 @@ export const MIN_DENSITY_COMPENSATION = 0.72;
 export const PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.22;
 export const PIANO_LATE_ONSET_GRACE_SECONDS = 0.18;
 export const UNLOAD_DELAY_MS = 30000;
-export const SUSTAIN_RETRIGGER_INSTRUMENTS = new Set<InstrumentName>(['violin', 'flute']);
-export const NATIVE_LOOP_INSTRUMENTS = new Set<InstrumentName>(['violin', 'flute', 'saxophone']);
+export const SUSTAIN_RETRIGGER_INSTRUMENTS = new Set<InstrumentName>(['violin', 'melodyViolin', 'flute']);
+export const NATIVE_LOOP_INSTRUMENTS = new Set<InstrumentName>(['violin', 'melodyViolin', 'flute', 'saxophone']);
 
 export const RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRenderConfig> = {
   piano: {
@@ -25,6 +25,10 @@ export const RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRende
     performanceVelocity: 84,
   },
   violin: {
+    soundfontInstrument: 'violin',
+    performanceVelocity: 92,
+  },
+  melodyViolin: {
     soundfontInstrument: 'violin',
     performanceVelocity: 92,
   },

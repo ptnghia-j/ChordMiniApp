@@ -11,9 +11,11 @@ import {
 } from '@/utils/instrumentNoteGeneration';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SegmentationResult } from '@/types/chatbotTypes';
+import type { SheetSageVisualNote } from '@/utils/sheetSagePlayback';
 
 // Re-export ActiveInstrument so existing consumers don't break
 export type { ActiveInstrument } from '@/utils/instrumentNoteGeneration';
+export type ExtraVisualNote = SheetSageVisualNote;
 
 interface FallingNotesCanvasProps {
   /** Chord events to render as falling notes */
@@ -50,6 +52,8 @@ interface FallingNotesCanvasProps {
   signalDynamicsSource?: SignalDynamicsSource | null;
   /** Playback position used to apply the same in-chord scheduling adjustments as audio playback */
   playbackTime?: number;
+  /** Optional precomputed overlay notes such as melodic transcription */
+  extraVisualNotes?: ExtraVisualNote[];
   /** Callback: set of active MIDI notes at current time */
   onActiveNotesChange?: (notes: Set<number>, colors: Map<number, string>) => void;
 }
@@ -115,6 +119,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   targetKey,
   signalDynamicsSource,
   playbackTime,
+  extraVisualNotes = [],
   onActiveNotesChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -396,6 +401,25 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       }
     }
 
+    for (const note of extraVisualNotes) {
+      const pos = midiKeyPositions.get(note.midi);
+      if (!pos) continue;
+      if (note.endTime < windowStart || note.startTime > windowEnd) continue;
+
+      const geom = computeNoteGeometry(note.startTime, note.endTime);
+      if (!geom) continue;
+
+      const noteX = pos.x + 1;
+      const noteW = pos.width - 2;
+
+      if (geom.isActive) {
+        activeNotes.add(note.midi);
+        activeColors.set(note.midi, note.color);
+      }
+
+      drawNote(noteX, noteW, geom.drawTop, geom.drawHeight, note.color, geom.isActive, geom.opacity, note.labelText);
+    }
+
     ctx.restore();
 
     // Only notify parent when active notes actually changed (prevents excessive re-renders)
@@ -407,7 +431,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       prevActiveSignatureRef.current = activeSignature;
       onActiveNotesChange?.(activeNotes, activeColors);
     }
-  }, [eventPositions, instrumentVisualNotes, whiteKeyXPositions, lookAheadSeconds, lookBehindSeconds, onActiveNotesChange, hasInstruments]);
+  }, [eventPositions, extraVisualNotes, instrumentVisualNotes, midiKeyPositions, whiteKeyXPositions, lookAheadSeconds, lookBehindSeconds, onActiveNotesChange, hasInstruments]);
 
   // Keep renderFrameRef in sync with the latest renderFrame callback.
   useEffect(() => {

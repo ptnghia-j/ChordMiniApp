@@ -67,12 +67,14 @@ const PianoVisualizerTab = dynamic(() => import('@/components/piano-visualizer/P
   loading: () => <div className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />,
   ssr: false
 });
+
 import { useProcessing } from '@/contexts/ProcessingContext';
 import BeatTimeline from '@/components/analysis/BeatTimeline';
 import { simplifyChordArray } from '@/utils/chordSimplification';
 import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
+import { useMelodicTranscriptionPlayback } from '@/hooks/chord-playback/useMelodicTranscriptionPlayback';
 import { resolveLoopRange } from '@/hooks/chord-playback/useLoopPlayback';
 import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useSegmentationState } from '@/hooks/lyrics/useSegmentationState';
@@ -89,8 +91,14 @@ import ResultsTabs from '@/components/homepage/ResultsTabs';
 import type { TabKey } from '@/components/homepage/ResultsTabs';
 import { searchLyricsWithFallback } from '@/services/lyrics/lyricsService';
 import type { LyricsData } from '@/types/musicAiTypes';
+import { requestSheetSageTranscription } from '@/services/sheetsage/sheetSageTranscriptionClient';
+import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
+import { getSafeBeatModel, getSafeChordModel } from '@/utils/modelFiltering';
+import MelodyTranscriptionStatusToast from '@/components/analysis/MelodyTranscriptionStatusToast';
 
 export default function LocalAudioAnalyzePage() {
+  const showSheetSage = true;
+  useSheetSageBackendAvailability(showSheetSage);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -186,7 +194,7 @@ export default function LocalAudioAnalyzePage() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_beat_detector');
       if (saved && ['madmom', 'beat-transformer'].includes(saved)) {
-        return saved as BeatDetectorType;
+        return getSafeBeatModel(saved as BeatDetectorType);
       }
       // If saved value was 'auto', default to 'madmom'
       if (saved === 'auto') {
@@ -200,7 +208,7 @@ export default function LocalAudioAnalyzePage() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('chordmini_chord_detector');
       if (saved && ['chord-cnn-lstm', 'btc-sl', 'btc-pl'].includes(saved)) {
-        return saved as ChordDetectorType;
+        return getSafeChordModel(saved as ChordDetectorType);
       }
     }
     return 'chord-cnn-lstm';
@@ -381,6 +389,14 @@ export default function LocalAudioAnalyzePage() {
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabKey>('beatChordMap');
+  const sheetSageResult = useAnalysisStore((state) => state.sheetSageResult);
+  const isComputingSheetSage = useAnalysisStore((state) => state.isComputingSheetSage);
+  const sheetSageError = useAnalysisStore((state) => state.sheetSageError);
+  const isCheckingSheetSageBackend = useAnalysisStore((state) => state.isCheckingSheetSageBackend);
+  const isSheetSageBackendAvailable = useAnalysisStore((state) => state.isSheetSageBackendAvailable);
+  const sheetSageBackendError = useAnalysisStore((state) => state.sheetSageBackendError);
+  const isMelodicTranscriptionPlaybackEnabled = useUIStore((state) => state.isMelodicTranscriptionPlaybackEnabled);
+  const setIsMelodicTranscriptionPlaybackEnabled = useUIStore((state) => state.setIsMelodicTranscriptionPlaybackEnabled);
 
 
   // Key signature and chord correction states - now with proper key detection
@@ -416,6 +432,59 @@ export default function LocalAudioAnalyzePage() {
 
   // Note: simplifyChords, showRomanNumerals, showSegmentation are managed by Zustand
   // and accessed directly by child components via their own selectors
+  const hasSheetSageNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
+  const hasSheetSageAudioSource = Boolean(audioFile || audioProcessingState.audioUrl);
+  const hasReadySheetSageBackend = isSheetSageBackendAvailable === true;
+  const melodicTranscriptionDisabledReason = isCheckingSheetSageBackend
+    ? 'Checking Sheet Sage backend...'
+    : !hasReadySheetSageBackend
+      ? (sheetSageBackendError || 'Sheet Sage backend unavailable.')
+    : !hasSheetSageAudioSource
+    ? 'Load audio before computing melodic transcription.'
+    : undefined;
+
+  const toggleMelodicTranscriptionPlayback = useCallback(async () => {
+    if (!hasSheetSageAudioSource || isComputingSheetSage || !hasReadySheetSageBackend) {
+      return;
+    }
+
+    const analysisActions = useAnalysisStore.getState();
+
+    if (isMelodicTranscriptionPlaybackEnabled) {
+      setIsMelodicTranscriptionPlaybackEnabled(false);
+      return;
+    }
+
+    if (!hasSheetSageNotes) {
+      analysisActions.setIsComputingSheetSage(true);
+      analysisActions.setSheetSageError(null);
+
+      try {
+        const result = await requestSheetSageTranscription(audioFile, audioProcessingState.audioUrl || null);
+        analysisActions.setSheetSageResult(result);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown Sheet Sage error';
+        analysisActions.setSheetSageError(message);
+        analysisActions.setIsComputingSheetSage(false);
+        return;
+      } finally {
+        analysisActions.setIsComputingSheetSage(false);
+      }
+    }
+
+    setActiveTab('pianoVisualizer');
+    setIsMelodicTranscriptionPlaybackEnabled(true);
+  }, [
+    audioFile,
+    audioProcessingState.audioUrl,
+    hasSheetSageAudioSource,
+    hasReadySheetSageBackend,
+    hasSheetSageNotes,
+    isComputingSheetSage,
+    isMelodicTranscriptionPlaybackEnabled,
+    setActiveTab,
+    setIsMelodicTranscriptionPlaybackEnabled,
+  ]);
 
   // Use pitch shift audio hook
   usePitchShiftAudio({
@@ -427,6 +496,16 @@ export default function LocalAudioAnalyzePage() {
     playbackRate,
     setIsPlaying,
     setCurrentTime,
+  });
+
+  useMelodicTranscriptionPlayback({
+    sheetSageResult,
+    audioUrl: audioProcessingState.audioUrl || null,
+    segmentationData,
+    audioRef,
+    currentTime,
+    isPlaying,
+    isEnabled: isMelodicTranscriptionPlaybackEnabled,
   });
 
   // Persist model preferences to localStorage
@@ -958,6 +1037,11 @@ const simplifiedChordGridData = useMemo(() => {
     isPlaying, currentTime, duration, playbackRate, currentBeatIndex
   ]);
 
+  useEffect(() => {
+    useAnalysisStore.getState().clearSheetSage();
+    setIsMelodicTranscriptionPlaybackEnabled(false);
+  }, [audioProcessingState.audioUrl, setIsMelodicTranscriptionPlaybackEnabled]);
+
   return (
     <div className="min-h-screen bg-background dark:bg-gray-900">
       <div className="flex flex-col min-h-screen bg-background dark:bg-dark-bg transition-colors duration-300">
@@ -968,6 +1052,12 @@ const simplifiedChordGridData = useMemo(() => {
       <ProcessingStatusBanner
         audioUrl={audioProcessingState.audioUrl || undefined}
         beatDetector={beatDetector}
+      />
+      <MelodyTranscriptionStatusToast
+        isComputing={isComputingSheetSage}
+        durationSeconds={duration}
+        hasResult={hasSheetSageNotes}
+        errorMessage={sheetSageError}
       />
 
       <main className="flex-grow container mx-auto px-1 sm:px-2 md:px-3" style={{ maxWidth: "98%" }}>
@@ -1197,8 +1287,11 @@ const simplifiedChordGridData = useMemo(() => {
                         isPlaying={isPlaying}
                         isChordPlaybackEnabled={chordPlayback.isEnabled}
                         audioUrl={audioProcessingState.audioUrl || null}
+                        sheetSageResult={sheetSageResult}
+                        showMelodicOverlay={isMelodicTranscriptionPlaybackEnabled && hasSheetSageNotes}
                       />
                     )}
+
                   </div>
 
                 </div>
@@ -1213,6 +1306,16 @@ const simplifiedChordGridData = useMemo(() => {
                         <UtilityBar
                           isFollowModeEnabled={isFollowModeEnabled}
                           chordPlayback={chordPlayback}
+                          melodicTranscriptionPlayback={showSheetSage ? {
+                            isEnabled: isMelodicTranscriptionPlaybackEnabled,
+                            hasTranscription: hasSheetSageNotes,
+                            isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
+                            disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                            disabledReason: melodicTranscriptionDisabledReason,
+                            errorMessage: sheetSageBackendError || sheetSageError,
+                            canAdjustVolume: hasSheetSageNotes,
+                            togglePlayback: toggleMelodicTranscriptionPlayback,
+                          } : undefined}
                           youtubePlayer={undefined}
                           playbackRate={playbackRate}
                           setPlaybackRate={(rate: number) => changePlaybackRate(rate)}

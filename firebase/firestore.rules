@@ -205,6 +205,18 @@ service cloud.firestore {
                        ];
     }
 
+    // Melody collection - for storing Sheet Sage melody transcription results
+    match /melody/{documentId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if request.auth != null &&
+                       request.auth.token.email in [
+                         'ptnghia@csu.fullerton.edu',
+                         'phantrongnghia510@gmail.com'
+                       ];
+    }
+
     // Admin collection - restricted to trusted maintainers
     match /admin/{document=**} {
       // Only allow access to specific admin users

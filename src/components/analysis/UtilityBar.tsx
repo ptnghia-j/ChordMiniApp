@@ -8,6 +8,7 @@ import { FaRegFileLines } from 'react-icons/fa6';
 import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
 import SegmentationToggleButton from '@/components/analysis/SegmentationToggleButton';
 import RomanNumeralToggle from '@/components/analysis/RomanNumeralToggle';
+import MelodicTranscriptionToggle from '@/components/analysis/MelodicTranscriptionToggle';
 import ChordPlaybackToggle from '@/components/chord-playback/ChordPlaybackToggle';
 import ChordSimplificationToggle from '@/components/analysis/ChordSimplificationToggle';
 import PitchShiftPopover from '@/components/chord-playback/PitchShiftPopover';
@@ -29,6 +30,16 @@ interface UtilityBarProps {
     setGuitarVolume: (v: number) => void;
     setViolinVolume: (v: number) => void;
     setFluteVolume: (v: number) => void;
+  };
+  melodicTranscriptionPlayback?: {
+    isEnabled: boolean;
+    hasTranscription: boolean;
+    isLoading?: boolean;
+    disabled?: boolean;
+    disabledReason?: string;
+    errorMessage?: string | null;
+    canAdjustVolume?: boolean;
+    togglePlayback: () => void;
   };
   youtubePlayer?: Parameters<typeof ChordPlaybackToggle>[0]['youtubePlayer'];
 
@@ -84,6 +95,7 @@ interface UtilityBarMetronomeControlProps {
 const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
   onToggleWithSync,
 }) => {
+  const utilityCircleButtonClass = 'h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0';
   const [isEnabled, setIsEnabled] = useState(false);
   const [trackMode, setTrackMode] = useState<'metronome' | 'drum'>('metronome');
   const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
@@ -161,7 +173,7 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
           >
             <motion.button
               onClick={handleToggle}
-              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
+              className={`${utilityCircleButtonClass} ${
                 isEnabled
                   ? 'bg-orange-600 text-white hover:bg-orange-700'
                   : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
@@ -215,6 +227,7 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
 const UtilityBar: React.FC<UtilityBarProps> = ({
   isFollowModeEnabled,
   chordPlayback,
+  melodicTranscriptionPlayback,
   youtubePlayer,
   playbackRate,
   setPlaybackRate,
@@ -234,6 +247,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   className = '',
   isUploadPage = false
 }) => {
+  const utilityCircleButtonClass = 'h-9 w-9 min-w-9 rounded-full inline-flex items-center justify-center p-0 transition-colors';
   // Roman numerals from Zustand store
   const showRomanNumerals = useShowRomanNumerals();
   const toggleRomanNumerals = useToggleRomanNumerals();
@@ -260,10 +274,10 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleFollowMode}
-                className={`p-2 rounded-full transition-colors ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                className={`${utilityCircleButtonClass} ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle auto-scroll"
               >
-                {isFollowModeEnabled ? <HiChevronDoubleDown className="h-5 w-5"/> : <HiOutlineChevronDoubleDown className="h-5 w-5"/>}
+                {isFollowModeEnabled ? <HiChevronDoubleDown className="h-4 w-4"/> : <HiOutlineChevronDoubleDown className="h-4 w-4"/>}
               </button>
             </Tooltip>
 
@@ -287,6 +301,19 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
               onFluteVolumeChange={chordPlayback.setFluteVolume}
               youtubePlayer={youtubePlayer || null}
             />
+
+            {melodicTranscriptionPlayback && (
+              <MelodicTranscriptionToggle
+                isEnabled={melodicTranscriptionPlayback.isEnabled}
+                hasTranscription={melodicTranscriptionPlayback.hasTranscription}
+                isLoading={melodicTranscriptionPlayback.isLoading}
+                disabled={melodicTranscriptionPlayback.disabled}
+                disabledReason={melodicTranscriptionPlayback.disabledReason}
+                errorMessage={melodicTranscriptionPlayback.errorMessage}
+                canAdjustVolume={melodicTranscriptionPlayback.canAdjustVolume}
+                onClick={melodicTranscriptionPlayback.togglePlayback}
+              />
+            )}
 
             {/* Simplify */}
             <ChordSimplificationToggle
@@ -320,11 +347,11 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
             >
               <button
                 onClick={toggleCountdown}
-                className={`p-2 rounded-full transition-colors ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                className={`${utilityCircleButtonClass} ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                 aria-label="Toggle countdown"
               >
                 {/* Simple timer glyph */}
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 2h4"/>
                   <path d="M12 14V8"/>
                   <circle cx="12" cy="14" r="7"/>
@@ -362,10 +389,10 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 >
                   <button
                     onClick={toggleLyricsPanel}
-                    className={`p-2 rounded-full transition-colors ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                    className={`${utilityCircleButtonClass} ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                     aria-label="Toggle lyrics panel"
                   >
-                    <FaRegFileLines className="h-5 w-5"/>
+                    <FaRegFileLines className="h-4 w-4"/>
                   </button>
                 </Tooltip>
 
@@ -378,10 +405,10 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                 >
                   <button
                     onClick={toggleChatbot}
-                    className={`p-2 rounded-full transition-colors ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                    className={`${utilityCircleButtonClass} ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                     aria-label="Toggle AI chat"
                   >
-                    <HiOutlineChatBubbleLeftRight className="h-5 w-5"/>
+                    <HiOutlineChatBubbleLeftRight className="h-4 w-4"/>
                   </button>
                 </Tooltip>
               </>

@@ -1,6 +1,6 @@
 # ChordMini
 
-Open-source music analysis tool for chord recognition, beat tracking, piano visualizer, guitar diagrams, and lyrics synchronization.
+Open-source music analysis tool for chord recognition, beat tracking, piano visualizer, guitar diagrams, lyrics synchronization, and experimental melody transcription.
 
 
 ## Features Overview
@@ -28,6 +28,10 @@ Interactive guitar chord diagrams with **accurate fingering patterns** from the 
 
 Real-time piano roll visualization with falling MIDI notes synchronized to chord playback. Features a scrolling chord strip, interactive keyboard highlighting, smoother playback-synced rendering, segmentation-aware dynamics shaping, and **MIDI file export** for importing chord progressions into any DAW.
 
+### 🎻 Experimental Melody Transcription
+
+Sheet Sage can optionally add an estimated melodic line on top of the Piano Visualizer, with separate playback, caching, and MIDI export support. This feature is still experimental: inference is slower than the main beat/chord pipeline, and note timing or accuracy may vary depending on the song and vocal/instrument mix.
+
 ###  🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](public/leadsheet.png)
 
@@ -40,6 +44,7 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 ### Prerequisites
 - **Node.js 18+** and **npm**
 - **Python 3.9+** (for backend)
+- **Docker** (recommended for the standalone Sheet Sage melody service)
 - **Git LFS** (for SongFormer checkpoints)
 - **Firebase account** (free tier)
 - **Gemini API** (free tier)
@@ -96,6 +101,7 @@ ls -la python_backend/models/ChordMini/
    Edit `.env.local`:
    ```bash
    NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5001
+   LOCAL_SHEETSAGE_API_URL=http://localhost:8082
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
@@ -118,7 +124,15 @@ ls -la python_backend/models/ChordMini/
    npm run dev
    ```
 
-5. **Open application**
+5. **Optional: start the experimental Sheet Sage melody backend** (Terminal 3)
+   ```bash
+   cd sheetsage
+   docker build --platform=linux/amd64 -t sheetsage-backend:local .
+   docker run --rm --platform=linux/amd64 -p 8082:8082 -v "$(pwd)/cache:/app/cache" sheetsage-backend:local
+   ```
+   For the standalone service image, Cloud Run deployment commands, and asset notes, see [sheetsage/README.md](sheetsage/README.md).
+
+6. **Open application**
 
    Visit [http://localhost:3000](http://localhost:3000)
 
@@ -213,6 +227,7 @@ See the API Keys Setup section below for detailed instructions on obtaining thes
    - `lyrics` — Music.ai transcription results (docId: `videoId`)
    - `keyDetections` — Musical key analysis cache (docId: cacheKey)
    - `segmentationJobs` — Async SongFormer segmentation jobs and persisted results (docId: `seg_<timestamp>_<uuid>`)
+   - `melody` — Experimental Sheet Sage melody transcription cache (docId: `videoId`)
 
 5. **Enable Anonymous Authentication**
    - In Firebase Console: Authentication → Sign-in method → enable Anonymous
