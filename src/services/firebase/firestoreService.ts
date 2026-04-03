@@ -107,6 +107,50 @@ export interface MelodyTranscriptionData extends SheetSageResult {
   createdAt: Timestamp;
 }
 
+function toPositiveBeatNum(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value > 0 ? value : undefined;
+}
+
+function toPersistedBeatNum(value: unknown): number | null {
+  return toPositiveBeatNum(value) ?? null;
+}
+
+function toPersistedSource(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function sanitizeSynchronizedChords(
+  synchronizedChords: TranscriptionData['synchronizedChords'] | undefined
+): { chord: string; beatIndex: number; beatNum?: number }[] {
+  if (!Array.isArray(synchronizedChords)) {
+    return [];
+  }
+
+  return synchronizedChords
+    .filter((item): item is { chord: string; beatIndex: number; beatNum?: number } => (
+      Boolean(item)
+      && typeof item.chord === 'string'
+      && typeof item.beatIndex === 'number'
+      && Number.isFinite(item.beatIndex)
+      && item.beatIndex >= 0
+    ))
+    .map((item) => {
+      const beatNum = toPositiveBeatNum(item.beatNum);
+      return beatNum !== undefined
+        ? { chord: item.chord, beatIndex: item.beatIndex, beatNum }
+        : { chord: item.chord, beatIndex: item.beatIndex };
+    });
+}
+
 function rebuildSynchronizedChordsIfNeeded(
   data: TranscriptionData
 ): { chord: string; beatIndex: number; beatNum?: number }[] {
@@ -114,18 +158,20 @@ function rebuildSynchronizedChordsIfNeeded(
   const hasUsableSync = Array.isArray(data.synchronizedChords) && data.synchronizedChords.length === data.beats?.length;
 
   if (!hasUsableInputs) {
-    return data.synchronizedChords ?? [];
+    return sanitizeSynchronizedChords(data.synchronizedChords);
   }
 
   if (hasUsableSync) {
-    return data.synchronizedChords;
+    return sanitizeSynchronizedChords(data.synchronizedChords);
   }
 
   const rebuilt = synchronizeChords(data.chords, data.beats);
-  return rebuilt.map((item, index) => ({
-    ...item,
-    beatNum: data.beats[index]?.beatNum,
-  }));
+  return rebuilt.map((item, index) => {
+    const beatNum = toPositiveBeatNum(data.beats[index]?.beatNum);
+    return beatNum !== undefined
+      ? { ...item, beatNum }
+      : { chord: item.chord, beatIndex: item.beatIndex };
+  });
 }
 
 function buildLegacySequenceCorrections(data: TranscriptionData): SequenceCorrectionsData {
@@ -850,7 +896,7 @@ async function performFirestoreSave(
         return {
           time: beat.time,
           strength: beat.strength || 0,
-          beatNum: beat.beatNum || 0
+          beatNum: toPersistedBeatNum(beat.beatNum)
         };
       }),
       chords: transcriptionData.chords.map((chord) => {
@@ -881,8 +927,8 @@ async function performFirestoreSave(
         return {
           chord: sc.chord,
           beatIndex: sc.beatIndex,
-          beatNum: sc.beatNum || 0,
-          source: (sc as ExtendedSynchronizedChord).source || 'detected' // Preserve source field for timing compensation
+          beatNum: toPersistedBeatNum(sc.beatNum),
+          source: toPersistedSource((sc as ExtendedSynchronizedChord).source)
         };
       }),
       audioDuration: transcriptionData.audioDuration || 0,
@@ -910,25 +956,6 @@ async function performFirestoreSave(
           : 0,
       createdAt
     };
-
-    // console.log('🔍 SANITIZED DATA STRUCTURE:', {
-    //   totalFields: Object.keys(sanitizedData).length,
-    //   fieldNames: Object.keys(sanitizedData),
-    //   videoId: sanitizedData.videoId,
-    //   videoIdValid: typeof sanitizedData.videoId === 'string' && sanitizedData.videoId.length === 11,
-    //   beatModel: sanitizedData.beatModel,
-    //   beatModelValid: typeof sanitizedData.beatModel === 'string' && sanitizedData.beatModel.length > 0,
-    //   chordModel: sanitizedData.chordModel,
-    //   chordModelValid: typeof sanitizedData.chordModel === 'string' && sanitizedData.chordModel.length > 0,
-    //   beatsCount: sanitizedData.beats.length,
-    //   beatsValid: Array.isArray(sanitizedData.beats),
-    //   chordsCount: sanitizedData.chords.length,
-    //   chordsValid: Array.isArray(sanitizedData.chords),
-    //   synchronizedChordsCount: sanitizedData.synchronizedChords.length,
-    //   synchronizedChordsValid: Array.isArray(sanitizedData.synchronizedChords),
-    //   createdAtType: typeof sanitizedData.createdAt,
-    //   createdAtValid: sanitizedData.createdAt instanceof Timestamp
-    // });
 
     // Final validation before saving
     // const requiredFields = ['videoId', 'beatModel', 'chordModel', 'beats', 'chords', 'synchronizedChords', 'createdAt'];
@@ -1032,7 +1059,6 @@ async function performFirestoreSave(
       true
     );
 
-
     return true;
   } catch (error) {
     // Enhanced error logging for debugging
@@ -1043,14 +1069,12 @@ async function performFirestoreSave(
         errorType: error.constructor.name,
         message: error.message,
         name: error.name,
-        stack: error.stack?.substring(0, 1000), // More stack trace for debugging
-        // Check for specific error patterns
+        stack: error.stack?.substring(0, 1000),
         isPermissionError: error.message.includes('Missing or insufficient permissions'),
         isNetworkError: error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError'),
         isValidationError: error.message.includes('Invalid document'),
         isQuotaError: error.message.includes('quota'),
         isAuthError: error.message.includes('auth') || error.message.includes('authentication'),
-        // Extract error code if available
         errorCode: (error as { code?: string }).code || 'unknown',
         errorDetails: (error as { details?: string }).details || 'none'
       });

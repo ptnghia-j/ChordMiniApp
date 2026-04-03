@@ -375,6 +375,20 @@ export default function LocalAudioAnalyzePage() {
   // Metronome state
   const [isMetronomeEnabled, setIsMetronomeEnabled] = useState<boolean>(false);
 
+  const disableMetronomeService = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    void import('@/services/chord-playback/metronomeService')
+      .then(({ metronomeService }) => {
+        void metronomeService.setEnabled(false, 0);
+      })
+      .catch(() => {
+        // Best-effort cleanup during navigation.
+      });
+  }, []);
+
   const toggleFollowMode = () => setIsFollowModeEnabled(prev => !prev);
   const toggleLyricsPanel = () => setIsLyricsPanelOpen(prev => !prev);
   const toggleChatbot = () => setIsChatbotOpen(prev => !prev);
@@ -1002,8 +1016,12 @@ const simplifiedChordGridData = useMemo(() => {
         clearTimeout(stageTimeoutRef.current);
         stageTimeoutRef.current = null;
       }
+
+      useUIStore.getState().resetAnalysisUtilityBarState();
+      usePlaybackStore.getState().setIsFollowModeEnabled(true);
+      disableMetronomeService();
     };
-  }, [cancelCountdown]);
+  }, [cancelCountdown, disableMetronomeService]);
 
 
   // Initialize Zustand stores with page state

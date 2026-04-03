@@ -6,6 +6,7 @@ import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { SheetSageResult } from '@/types/sheetSage';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { YouTubePlayer } from '@/types/youtube';
+import { useIsPitchShiftEnabled, useIsPitchShiftReady, usePitchShiftSemitones } from '@/stores/uiStore';
 import { buildPreparedSheetSageMelodyNotes, buildScheduledSheetSageMelodyNotes } from '@/utils/sheetSagePlayback';
 
 interface UseMelodicTranscriptionPlaybackProps {
@@ -46,6 +47,10 @@ export function useMelodicTranscriptionPlayback({
 
   const hasNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const shouldActivate = isEnabled && isPlaying && hasNotes;
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const isPitchShiftReady = useIsPitchShiftReady();
+  const pitchShiftSemitones = usePitchShiftSemitones();
+  const melodyPitchShiftSemitones = isPitchShiftEnabled && isPitchShiftReady ? pitchShiftSemitones : 0;
   const melodyTotalDuration = useMemo(
     () => sheetSageResult?.noteEvents?.[sheetSageResult.noteEvents.length - 1]?.offset
       ?? sheetSageResult?.beatTimes?.[sheetSageResult.beatTimes.length - 1]
@@ -66,9 +71,13 @@ export function useMelodicTranscriptionPlayback({
   const preparedMelodyNotes = useMemo(
     () => {
       void signalAnalysis;
-      return buildPreparedSheetSageMelodyNotes(sheetSageResult, dynamicsAnalyzer);
+      return buildPreparedSheetSageMelodyNotes(
+        sheetSageResult,
+        dynamicsAnalyzer,
+        melodyPitchShiftSemitones,
+      );
     },
-    [dynamicsAnalyzer, sheetSageResult, signalAnalysis],
+    [dynamicsAnalyzer, melodyPitchShiftSemitones, sheetSageResult, signalAnalysis],
   );
 
   const resolvePreciseTransportTime = useCallback(() => {

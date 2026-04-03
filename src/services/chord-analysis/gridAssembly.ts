@@ -68,6 +68,18 @@ function extractFirstDetectedBeat(analysisResults: GridAnalysisResult): number {
   return getBeatTime(firstBeat) ?? 0;
 }
 
+function countLeadingSilentChords(chords: string[]): number {
+  let count = 0;
+  while (count < chords.length) {
+    const chord = chords[count];
+    if (!GRID_ALIGNMENT_CONFIG.silentChordValues.includes(chord as typeof GRID_ALIGNMENT_CONFIG.silentChordValues[number])) {
+      break;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 function buildOriginalAudioMapping(
   synchronizedChords: GridAnalysisResult['synchronizedChords'],
   beatTimes: number[],
@@ -121,6 +133,7 @@ function buildInitialGridData(params: {
 
 export function getChordGridData(analysisResults: GridAnalysisResult | null): ChordGridData {
   if (!analysisResults || !analysisResults.synchronizedChords || analysisResults.synchronizedChords.length === 0) {
+
     return {
       chords: [],
       beats: [],
@@ -148,6 +161,15 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   const safePaddingCount = Math.max(0, Number.isFinite(paddingCount) ? Math.floor(paddingCount) : 0);
   const safeShiftCount = Math.max(0, Number.isFinite(shiftCount) ? Math.floor(shiftCount) : 0);
   const adapter = getGridAssemblyAdapter(analysisResults.chordModel, safePaddingCount, safeShiftCount);
+  const globalOffsetCount = safePaddingCount + safeShiftCount;
+  const leadingSilentRunLength = countLeadingSilentChords(regularChords);
+  const hasLongLeadingSilenceWithGlobalOffset =
+    globalOffsetCount > 0 &&
+    leadingSilentRunLength > globalOffsetCount + timeSignature;
+  const isLocalCompactionEnabled =
+    GRID_ALIGNMENT_CONFIG.enableLocalCompaction &&
+    analysisResults.beatModel === GRID_ALIGNMENT_CONFIG.localCompactionBeatModel &&
+    !hasLongLeadingSilenceWithGlobalOffset;
 
   const initialGridData = buildInitialGridData({
     regularChords,
@@ -160,12 +182,14 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     synchronizedChords: analysisResults.synchronizedChords,
   });
 
-  return runVisualCompactionPipeline({
+  const compactedGridData = runVisualCompactionPipeline({
     chordGridData: initialGridData,
     chordIntervals: analysisResults.chords || [],
     beatTimes: regularBeats,
     timeSignature,
     beatDuration: bpm > 0 ? 60 / bpm : GRID_ALIGNMENT_CONFIG.padding.fallbackBeatDurationSeconds,
-    enabled: analysisResults.beatModel === GRID_ALIGNMENT_CONFIG.localCompactionBeatModel,
+    enabled: isLocalCompactionEnabled,
   });
+
+  return compactedGridData;
 }

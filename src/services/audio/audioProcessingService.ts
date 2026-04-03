@@ -133,6 +133,7 @@ export class AudioProcessingService {
         : await getTranscription(videoId, beatDetector, chordDetector);
 
       if (cachedData) {
+
         const needsTitle = !cachedData.title && !!resolvedTitle;
         const needsChannelTitle = !cachedData.channelTitle && !!options?.searchMetadata?.channelTitle;
         const needsThumbnail = !cachedData.thumbnail && !!resolvedThumbnail;
@@ -183,6 +184,11 @@ export class AudioProcessingService {
 
       // Perform analysis with rate limiting
       const analysisResults = await analyzeAudioWithRateLimit(audioUrl, beatDetector as 'auto' | 'madmom' | 'beat-transformer', chordDetector as ChordDetectorType, videoId);
+      const normalizedAnalysisResults = {
+        ...analysisResults,
+        beatModel: analysisResults.beatModel || beatDetector,
+        chordModel: analysisResults.chordModel || chordDetector,
+      };
 
       // Cache the results (note: enharmonic correction data will be added later via updateTranscriptionWithKey)
       const transcriptionData = {
@@ -191,17 +197,17 @@ export class AudioProcessingService {
         channelTitle: options?.searchMetadata?.channelTitle || undefined,
         thumbnail: resolvedThumbnail,
         audioUrl,
-        beats: analysisResults.beats,
-        chords: analysisResults.chords,
-        downbeats: analysisResults.downbeats,
-        downbeats_with_measures: analysisResults.downbeats_with_measures,
-        synchronizedChords: analysisResults.synchronizedChords,
+        beats: normalizedAnalysisResults.beats,
+        chords: normalizedAnalysisResults.chords,
+        downbeats: normalizedAnalysisResults.downbeats,
+        downbeats_with_measures: normalizedAnalysisResults.downbeats_with_measures,
+        synchronizedChords: normalizedAnalysisResults.synchronizedChords,
         beatModel: beatDetector,
         chordModel: chordDetector,
-        timeSignature: analysisResults.beatDetectionResult?.time_signature,
-        bpm: analysisResults.beatDetectionResult?.bpm,
-        beatShift: analysisResults.beatDetectionResult?.beatShift,
-        audioDuration: analysisResults.audioDuration,
+        timeSignature: normalizedAnalysisResults.beatDetectionResult?.time_signature,
+        bpm: normalizedAnalysisResults.beatDetectionResult?.bpm,
+        beatShift: normalizedAnalysisResults.beatDetectionResult?.beatShift,
+        audioDuration: normalizedAnalysisResults.audioDuration,
         usageCount: 0,
         timestamp: new Date()
       };
@@ -211,7 +217,7 @@ export class AudioProcessingService {
         options?.onTranscriptionSaved?.(transcriptionData);
       }
 
-      return analysisResults;
+      return normalizedAnalysisResults;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 

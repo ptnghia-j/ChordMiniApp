@@ -137,7 +137,8 @@ async function handleBlobPath(
   audioFile: File,
   beatDetector: 'auto' | 'madmom' | 'beat-transformer',
   chordDetector: ChordDetectorType,
-  audioDuration?: number
+  audioDuration?: number,
+  _videoId?: string
 ): Promise<AnalysisResult> {
   // Chords
   const chordBlob = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, chordDetector);
@@ -185,6 +186,7 @@ async function handleBlobPath(
   try {
     const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
     if (candidates) {
+
       try {
         const worker = getChordAnalysisWorker();
         if (worker) {
@@ -274,13 +276,13 @@ export async function analyzeAudioWithRateLimit(
     audioFile = audioInput;
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
+      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration, videoId);
     }
   } else if (typeof audioInput === 'string') {
     audioFile = await fetchFileFromUrl(audioInput, videoId);
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
     if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration);
+      return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration, videoId);
     }
   } else if (audioInput instanceof AudioBuffer) {
     if (!audioInput || audioInput.length === 0) throw new Error('AudioBuffer is empty or invalid');
@@ -350,22 +352,34 @@ export async function analyzeAudioWithRateLimit(
     })()
   ]);
 
-// Auto-select downbeats (3/4 vs 4/4) if candidates provided (Madmom)
-try {
-  const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
-  if (candidates) {
-    try {
-      const worker = getChordAnalysisWorker();
-      if (worker) {
-        const result = await worker.chooseMeterAndDownbeats(
-          chordResults,
-          beatResults.beats as number[],
-          candidates
-        );
-        beatResults.downbeats = result.downbeats;
-        beatResults.time_signature = result.timeSignature;
-        console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
-      } else {
+  // Auto-select downbeats (3/4 vs 4/4) if candidates provided (Madmom)
+  try {
+    const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
+    if (candidates) {
+      try {
+        const worker = getChordAnalysisWorker();
+        if (worker) {
+          const result = await worker.chooseMeterAndDownbeats(
+            chordResults,
+            beatResults.beats as number[],
+            candidates
+          );
+          beatResults.downbeats = result.downbeats;
+          beatResults.time_signature = result.timeSignature;
+          console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+        } else {
+          const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
+          const tempSync = synchronizeChords(chordResults, beatsForSync);
+          const chordSeries = tempSync.map((s) => s.chord);
+          const s3 = scoreDownbeatAlignment(chordSeries, 3);
+          const s4 = scoreDownbeatAlignment(chordSeries, 4);
+          const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
+          beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
+          beatResults.time_signature = winner;
+          console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+        }
+      } catch (workerErr) {
+        console.warn('Worker computation failed, using main thread fallback:', workerErr);
         const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
         const tempSync = synchronizeChords(chordResults, beatsForSync);
         const chordSeries = tempSync.map((s) => s.chord);
@@ -376,22 +390,10 @@ try {
         beatResults.time_signature = winner;
         console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
       }
-    } catch (workerErr) {
-      console.warn('Worker computation failed, using main thread fallback:', workerErr);
-      const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
-      const tempSync = synchronizeChords(chordResults, beatsForSync);
-      const chordSeries = tempSync.map((s) => s.chord);
-      const s3 = scoreDownbeatAlignment(chordSeries, 3);
-      const s4 = scoreDownbeatAlignment(chordSeries, 4);
-      const winner: 3 | 4 = s3.score > s4.score ? 3 : 4;
-      beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
-      beatResults.time_signature = winner;
-      console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
     }
+  } catch (selErr) {
+    console.warn('Downbeat candidate selection skipped due to error:', selErr);
   }
-} catch (selErr) {
-  console.warn('Downbeat candidate selection skipped due to error:', selErr);
-}
 
   const beats = toBeatInfo(beatResults);
 
@@ -410,12 +412,15 @@ try {
   }
   synchronizedChords = synchronizedChords.filter((sc) => sc && typeof sc.beatIndex === 'number' && !isNaN(sc.beatIndex) && sc.beatIndex >= 0 && sc.beatIndex < beats.length && typeof (sc as { chord?: string }).chord === 'string');
 
+  const reportedBeatModel = (beatResults as unknown as { model?: string }).model;
+  const effectiveBeatModel = reportedBeatModel || beatDetector;
+
   return {
     chords: chordResults,
     beats,
     downbeats: beatResults.downbeats,
     synchronizedChords,
-    beatModel: (beatResults as unknown as { model?: string }).model,
+    beatModel: effectiveBeatModel,
     chordModel: chordDetector,
     audioDuration,
     beatDetectionResult: {
@@ -565,12 +570,15 @@ export async function analyzeAudio(
     synchronizedChords = synchronizeChords(chordResults, beats) as { chord: string; beatIndex: number }[];
   }
 
+  const reportedBeatModel = (beatResults as unknown as { model?: string }).model;
+  const effectiveBeatModel = reportedBeatModel || beatDetector;
+
   return {
     chords: chordResults,
     beats,
     downbeats: beatResults.downbeats,
     synchronizedChords,
-    beatModel: (beatResults as unknown as { model?: string }).model,
+    beatModel: effectiveBeatModel,
     chordModel: chordDetector,
     audioDuration,
     beatDetectionResult: {
@@ -579,4 +587,3 @@ export async function analyzeAudio(
     }
   };
 }
-

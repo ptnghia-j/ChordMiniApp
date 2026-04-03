@@ -230,6 +230,9 @@ export default function YouTubeVideoAnalyzePage() {
     initialChordDetector: routeParams.chordModel,
   });
 
+  useEffect(() => {
+  }, [beatDetector, chordDetector, routeParams.autoStart, routeParams.beatModel, routeParams.chordModel, videoId]);
+
   const { firebaseReady } = useFirebaseReadiness();
 
   // Extract state from audio player hook
@@ -887,6 +890,7 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Metronome state
   const [isMetronomeEnabled, setIsMetronomeEnabled] = useState<boolean>(false);
+  const previousVideoIdRef = useRef<string | null>(null);
 
   const timeSignature = analysisResults?.beatDetectionResult?.time_signature || 4;
   const bpm = analysisResults?.beatDetectionResult?.bpm || 120;
@@ -963,6 +967,61 @@ export default function YouTubeVideoAnalyzePage() {
 
     return ok;
   }, [isCountdownEnabled, timeSignature, bpm, youtubePlayer]);
+
+  const disableMetronomeService = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    void import('@/services/chord-playback/metronomeService')
+      .then(({ metronomeService }) => {
+        void metronomeService.setEnabled(false, 0);
+      })
+      .catch(() => {
+        // Best-effort cleanup during navigation.
+      });
+  }, []);
+
+  const resetUtilityBarForVideoSwitch = useCallback(() => {
+    useUIStore.getState().resetAnalysisUtilityBarState();
+    usePlaybackStore.getState().setIsFollowModeEnabled(true);
+
+    setIsMelodicTranscriptionPlaybackEnabled(false);
+    resetSegmentation();
+    setIsFollowModeEnabled(true);
+    setIsCountdownEnabled(false);
+    cancelCountdown();
+    countdownStateRef.current.completed = false;
+
+    if (chordPlayback.isEnabled) {
+      chordPlayback.togglePlayback();
+    }
+
+    setIsMetronomeEnabled(false);
+    disableMetronomeService();
+  }, [
+    cancelCountdown,
+    chordPlayback,
+    disableMetronomeService,
+    resetSegmentation,
+    setIsMelodicTranscriptionPlaybackEnabled,
+  ]);
+
+  useEffect(() => {
+    if (previousVideoIdRef.current && previousVideoIdRef.current !== videoId) {
+      resetUtilityBarForVideoSwitch();
+    }
+
+    previousVideoIdRef.current = videoId;
+  }, [resetUtilityBarForVideoSwitch, videoId]);
+
+  useEffect(() => {
+    return () => {
+      useUIStore.getState().resetAnalysisUtilityBarState();
+      usePlaybackStore.getState().setIsFollowModeEnabled(true);
+      disableMetronomeService();
+    };
+  }, [disableMetronomeService]);
 
   // Reset countdown flags when playback is paused
   useEffect(() => {

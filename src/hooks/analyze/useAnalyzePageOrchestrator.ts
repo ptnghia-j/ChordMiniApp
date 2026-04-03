@@ -359,7 +359,8 @@ export function useAnalyzePageOrchestrator({
     const snapshotKey = buildSnapshotKey(videoId, snapshotBeatDetector, snapshotChordDetector);
 
     if (Object.prototype.hasOwnProperty.call(transcriptionSnapshotsRef.current, snapshotKey)) {
-      return transcriptionSnapshotsRef.current[snapshotKey] ?? null;
+      const inMemorySnapshot = transcriptionSnapshotsRef.current[snapshotKey] ?? null;
+      return inMemorySnapshot;
     }
 
     const snapshot = await getTranscription(videoId, snapshotBeatDetector, snapshotChordDetector);

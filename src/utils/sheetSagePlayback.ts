@@ -37,6 +37,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function clampMidiPitch(midi: number): number {
+  return Math.max(0, Math.min(127, Math.round(midi)));
+}
+
 function getMelodicPlaybackAdvanceSeconds(): number {
   if (typeof window === 'undefined') {
     return MELODIC_PLAYBACK_BASE_ADVANCE_SECONDS;
@@ -226,6 +230,7 @@ export function buildScheduledSheetSagePianoNotes(
 export function buildPreparedSheetSageMelodyNotes(
   result: SheetSageResult | null,
   dynamicsAnalyzer?: DynamicsAnalyzer | null,
+  pitchShiftSemitones: number = 0,
 ): PreparedSheetSageMelodyNote[] {
   if (!result?.noteEvents?.length) {
     return [];
@@ -235,7 +240,8 @@ export function buildPreparedSheetSageMelodyNotes(
     .slice()
     .sort((left, right) => left.onset - right.onset || left.pitch - right.pitch)
     .map((event) => {
-      const noteName = midiToNoteName(event.pitch);
+      const transposedMidi = clampMidiPitch(event.pitch + pitchShiftSemitones);
+      const noteName = midiToNoteName(transposedMidi);
       const duration = event.offset - event.onset;
 
       if (duration <= 0.01) {
@@ -275,7 +281,7 @@ export function buildPreparedSheetSageMelodyNotes(
 
       return {
         noteName,
-        midi: event.pitch,
+        midi: transposedMidi,
         onset: event.onset,
         offset: event.offset,
         velocityMultiplier: blendedVelocity,
@@ -325,13 +331,14 @@ export function buildScheduledSheetSageMelodyNotes(
 export function buildSheetSageExtraVisualNotes(
   result: SheetSageResult | null,
   color: string,
+  pitchShiftSemitones: number = 0,
 ): SheetSageVisualNote[] {
   if (!result?.noteEvents?.length) {
     return [];
   }
 
   return result.noteEvents.map((event) => ({
-    midi: event.pitch,
+    midi: clampMidiPitch(event.pitch + pitchShiftSemitones),
     startTime: event.onset,
     endTime: event.offset,
     color,

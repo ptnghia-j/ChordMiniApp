@@ -167,8 +167,8 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
       return;
     }
 
-    cursorElement.style.background = 'rgba(37, 99, 235, 0.18)';
-    cursorElement.style.border = '2px solid rgba(37, 99, 235, 0.55)';
+    cursorElement.style.background = 'rgba(37, 99, 235, 0.22)';
+    cursorElement.style.border = 'none';
     cursorElement.style.borderRadius = '8px';
     cursorElement.style.boxSizing = 'border-box';
     cursorElement.style.pointerEvents = 'none';
@@ -390,7 +390,7 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
           {activeMeasureBox && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute rounded-lg border-2 border-blue-500/60 bg-blue-500/18"
+              className="pointer-events-none absolute rounded-lg bg-[rgba(37,99,235,0.22)]"
               style={{
                 top: activeMeasureBox.top,
                 left: activeMeasureBox.left,

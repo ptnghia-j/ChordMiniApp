@@ -23,6 +23,7 @@ import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKey
 import {
   useGuitarCapoFret,
   useGuitarSelectedPositions,
+  usePitchShiftSemitones,
   useTargetKey,
   useRomanNumerals,
 } from '@/stores/uiStore';
@@ -430,12 +431,13 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   const speed = SPEED_PRESETS[speedIndex];
 
-  const { resolvedChordGridData, displayedChords } = useResolvedChordDisplayData({
+  const { resolvedChordGridData, displayedChords, isPitchShiftActive } = useResolvedChordDisplayData({
     chordGridData,
     showCorrectedChords: mergedShowCorrectedChords,
     chordCorrections: mergedChordCorrections,
     sequenceCorrections,
   });
+  const pitchShiftSemitones = usePitchShiftSemitones();
 
   // Build chord event timeline for the piano roll
   const chordEvents = useMemo<ChordEvent[]>(() => {
@@ -570,9 +572,16 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return instruments;
   }, [isChordPlaybackEnabled, mixerSettings]);
 
+  const melodyOverlayPitchShiftSemitones = isPitchShiftActive ? pitchShiftSemitones : 0;
   const melodyOverlayNotes = useMemo(
-    () => showMelodicOverlay ? buildSheetSageExtraVisualNotes(sheetSageResult, MELODIC_TRANSCRIPTION_COLOR) : [],
-    [sheetSageResult, showMelodicOverlay],
+    () => showMelodicOverlay
+      ? buildSheetSageExtraVisualNotes(
+        sheetSageResult,
+        MELODIC_TRANSCRIPTION_COLOR,
+        melodyOverlayPitchShiftSemitones,
+      )
+      : [],
+    [melodyOverlayPitchShiftSemitones, sheetSageResult, showMelodicOverlay],
   );
 
   // Calculate keyboard width

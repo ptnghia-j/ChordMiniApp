@@ -32,10 +32,21 @@ const HARMLESS_CORS_PATTERNS = [
   /www-widgetapi\.js.*Unable to post message/,
   /Unable to post message to https:\/\/www\.youtube(?:-nocookie)?\.com.*Recipient has origin/,
 
+  // Firestore WebChannel listen transport noise (browser privacy/CORS quirks)
+  /firestore\.googleapis\.com\/google\.firestore\.v1\.Firestore\/Listen\/channel/i,
+  /Fetch API cannot load .*firestore\.googleapis\.com.*Listen\/channel.*access control checks/i,
+
   // Generic CORS patterns for embedded content
   /Access to .* from origin .* has been blocked by CORS policy/,
   /Cross-Origin Request Blocked/,
   /Mixed Content: The page at .* was loaded over HTTPS, but requested an insecure/
+];
+
+const NOISY_DEV_LOG_PATTERNS = [
+  /^\[Fast Refresh\]/,
+  /^\[HMR\]\s+connected/,
+  /^\[BEAT_DRIFT_DEBUG\]/,
+  /Found existing audio file in Firebase Storage/,
 ];
 
 /**
@@ -78,18 +89,18 @@ export function isHarmlessCorsError(error: string | Error): boolean {
   return false;
 }
 
+function isNoisyDevLog(message: string): boolean {
+  return NOISY_DEV_LOG_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 /**
  * Enhanced console error handler that filters out harmless CORS warnings
  */
 export function setupCorsErrorSuppression(): void {
-  // Only suppress in production to maintain debugging capabilities in development
-  if (process.env.NODE_ENV !== 'production') {
-    return;
-  }
-  
   // Store original console methods
   const originalError = console.error;
   const originalWarn = console.warn;
+  const originalLog = console.log;
   
   // Override console.error to filter harmless CORS errors
   console.error = (...args: unknown[]) => {
@@ -108,13 +119,20 @@ export function setupCorsErrorSuppression(): void {
       originalWarn.apply(console, args);
     }
   };
+
+  console.log = (...args: unknown[]) => {
+    const logMessage = args.join(' ');
+    if (!isNoisyDevLog(logMessage)) {
+      originalLog.apply(console, args);
+    }
+  };
 }
 
 /**
  * Window error handler for unhandled CORS errors
  */
 export function setupWindowErrorHandler(): void {
-  if (typeof window === 'undefined' || process.env.NODE_ENV !== 'production') {
+  if (typeof window === 'undefined') {
     return;
   }
   

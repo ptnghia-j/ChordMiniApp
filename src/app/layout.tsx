@@ -151,7 +151,12 @@ export default function RootLayout({
         {/* Blocking script: apply dark class BEFORE first paint to prevent theme flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}if(document.body){document.body.classList.add('theme-ready')}else{document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('theme-ready')},{once:true})}})()`
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark')}}catch(e){}if(document.body){document.body.classList.add('theme-ready')}else{document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('theme-ready')},{once:true})}})()`
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var noisyLog=/^\\[Fast Refresh\\]|^\\[HMR\\]\\s+connected|^\\[BEAT_DRIFT_DEBUG\\]|Found existing audio file in Firebase Storage/;var noisyErr=/firestore\\.googleapis\\.com\\/google\\.firestore\\.v1\\.Firestore\\/Listen\\/channel|Fetch API cannot load .*Listen\\/channel.*access control checks/i;var ol=console.log,ow=console.warn,oe=console.error;console.log=function(){var s=Array.prototype.join.call(arguments,' ');if(noisyLog.test(s))return;ol.apply(console,arguments)};console.warn=function(){var s=Array.prototype.join.call(arguments,' ');if(noisyErr.test(s))return;ow.apply(console,arguments)};console.error=function(){var s=Array.prototype.join.call(arguments,' ');if(noisyErr.test(s))return;oe.apply(console,arguments)}}catch(e){}})()`
           }}
         />
         {/* Critical CSS inlined for performance - eliminates render blocking */}

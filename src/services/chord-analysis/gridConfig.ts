@@ -1,4 +1,5 @@
 export const GRID_ALIGNMENT_CONFIG = {
+  enableLocalCompaction: true,
   localCompactionBeatModel: 'madmom',
   silentChordValues: ['', 'N', 'N/C', 'N.C.', 'NC'],
   padding: {

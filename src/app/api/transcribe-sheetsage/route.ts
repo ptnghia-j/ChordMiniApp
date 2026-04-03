@@ -168,9 +168,10 @@ export async function GET(request: NextRequest) {
           initialized: Boolean(payload?.initialized),
           assetUnavailable: Boolean(payload?.assetUnavailable),
           error: response.ok ? null : normalizedError,
+          statusCode: response.status,
           runtime: payload?.runtime ?? null,
         },
-        { status: response.status },
+        { status: 200 },
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown Sheet Sage health error';
@@ -188,8 +189,9 @@ export async function GET(request: NextRequest) {
             : isTimeoutFailure
               ? 'Timed out while checking Sheet Sage backend readiness.'
               : message,
+          statusCode: 503,
         },
-        { status: 503 },
+        { status: 200 },
       );
     }
   }

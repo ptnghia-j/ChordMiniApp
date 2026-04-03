@@ -14,15 +14,12 @@ export type BeatDetectorType = 'madmom' | 'beat-transformer';
  * @returns true if BTC models should be shown (local development), false if hidden (production)
  */
 export function areExperimentalModelsAvailable(): boolean {
-  // Check if we're in a browser environment
-  if (typeof window === 'undefined') {
-    return false;
+  const envOverride = process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_MODELS;
+  if (envOverride === '1' || envOverride === 'true') {
+    return true;
   }
 
-  const origin = window.location.origin;
-  const isLocalDevelopment = origin.includes('localhost') || origin.includes('127.0.0.1');
-
-  return isLocalDevelopment;
+  return process.env.NODE_ENV === 'development';
 }
 
 export function areBTCModelsAvailable(): boolean {

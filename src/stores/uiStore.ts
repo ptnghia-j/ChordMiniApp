@@ -108,6 +108,9 @@ interface UIStore {
   setGuitarSelectedPosition: (shapeChordName: string, positionIndex: number) => void;
   clearGuitarSelectedPositions: () => void;
 
+  // Utility bar reset
+  resetAnalysisUtilityBarState: () => void;
+
   // Editing handlers
   handleEditModeToggle: () => void;
   handleTitleSave: () => void;
@@ -383,6 +386,28 @@ export const useUIStore = create<UIStore>()(
       clearGuitarSelectedPositions: () =>
         set({ guitarSelectedPositions: {} }, false, 'clearGuitarSelectedPositions'),
 
+      resetAnalysisUtilityBarState: () =>
+        set(
+          (state) => ({
+            showRomanNumerals: false,
+            romanNumeralData: null,
+            showSegmentation: false,
+            simplifyChords: false,
+            isMelodicTranscriptionPlaybackEnabled: false,
+            isLoopEnabled: false,
+            loopStartBeat: -1,
+            loopEndBeat: -1,
+            isPitchShiftEnabled: false,
+            isPitchShiftReady: false,
+            pitchShiftSemitones: 0,
+            isProcessingPitchShift: false,
+            pitchShiftError: null,
+            targetKey: state.originalKey,
+          }),
+          false,
+          'resetAnalysisUtilityBarState'
+        ),
+
       // Initialization methods
       initializeVideoTitle: (title) => set({ videoTitle: title, editedTitle: title }, false, 'initializeVideoTitle'),
 
@@ -483,6 +508,7 @@ export const useSetIsProcessingPitchShift = () => useUIStore((state) => state.se
 export const useSetPitchShiftError = () => useUIStore((state) => state.setPitchShiftError);
 export const useSetIsFirebaseAudioAvailable = () => useUIStore((state) => state.setIsFirebaseAudioAvailable);
 export const useResetPitchShift = () => useUIStore((state) => state.resetPitchShift);
+export const useResetAnalysisUtilityBarState = () => useUIStore((state) => state.resetAnalysisUtilityBarState);
 export const useGuitarCapoFret = () => useUIStore((state) => state.guitarCapoFret);
 export const useGuitarSelectedPositions = () => useUIStore((state) => state.guitarSelectedPositions);
 export const useSetGuitarCapoFret = () => useUIStore((state) => state.setGuitarCapoFret);
