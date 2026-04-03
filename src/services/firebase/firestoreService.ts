@@ -13,12 +13,14 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { ChordDetectionResult } from '@/services/chord-analysis/chordRecognitionService';
+import type { SheetSageResult } from '@/types/sheetSage';
 import { transcriptionCache } from '@/services/cache/smartFirebaseCache';
 import { applyEnharmonicCorrection } from '@/utils/chordUtils';
 import { buildSearchableKeys } from '@/utils/keySignatureUtils';
 import { synchronizeChords } from '@/utils/chordSynchronization';
 import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 import { BeatInfo } from '../audio/beatDetectionService';
+import { SmartFirebaseCache } from '@/services/cache/smartFirebaseCache';
 
 // Extended interface for synchronized chords that may have additional properties
 interface ExtendedSynchronizedChord {
@@ -97,6 +99,12 @@ export interface TranscriptionData {
   displayPriority?: number | null;
   searchableKeys?: string[];
   usageCount?: number;
+}
+
+export interface MelodyTranscriptionData extends SheetSageResult {
+  videoId: string;
+  model: string;
+  createdAt: Timestamp;
 }
 
 function rebuildSynchronizedChordsIfNeeded(
@@ -195,6 +203,9 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
 
 // Collection name
 const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
+const MELODY_COLLECTION = 'melody';
+const MELODY_MODEL_ID = 'sheetsage-v0.2-handcrafted-melody-transformer';
+const melodyCache = new SmartFirebaseCache<MelodyTranscriptionData>();
 
 export const buildTranscriptionDocId = (
   videoId: string,
@@ -202,12 +213,66 @@ export const buildTranscriptionDocId = (
   chordModel: string
 ) => `${videoId}_${beatModel}_${chordModel}`;
 
+export const buildMelodyDocId = (videoId: string) => videoId;
+
 function getTranscriptionCacheKey(
   videoId: string,
   beatModel: string,
   chordModel: string
 ): string {
   return buildTranscriptionDocId(videoId, beatModel, chordModel);
+}
+
+function getMelodyCacheKey(videoId: string): string {
+  return buildMelodyDocId(videoId);
+}
+
+function normalizeMelodyTranscriptionData(data: MelodyTranscriptionData): MelodyTranscriptionData {
+  const noteEvents = Array.isArray(data.noteEvents)
+    ? [...data.noteEvents]
+      .filter((note) => (
+        typeof note?.onset === 'number'
+        && Number.isFinite(note.onset)
+        && typeof note?.offset === 'number'
+        && Number.isFinite(note.offset)
+        && typeof note?.pitch === 'number'
+        && Number.isFinite(note.pitch)
+        && typeof note?.velocity === 'number'
+        && Number.isFinite(note.velocity)
+      ))
+      .sort((left, right) => (
+        left.onset - right.onset
+        || left.pitch - right.pitch
+        || left.offset - right.offset
+      ))
+      .map((note) => ({
+        onset: note.onset,
+        offset: Math.max(note.offset, note.onset),
+        pitch: Math.max(0, Math.min(127, Math.round(note.pitch))),
+        velocity: Math.max(0, Math.min(127, Math.round(note.velocity))),
+      }))
+    : [];
+
+  const beatTimes = Array.isArray(data.beatTimes)
+    ? data.beatTimes.filter((beatTime) => typeof beatTime === 'number' && Number.isFinite(beatTime))
+    : [];
+
+  return {
+    ...data,
+    noteEvents,
+    noteEventCount: noteEvents.length,
+    beatTimes,
+    beatsPerMeasure:
+      typeof data.beatsPerMeasure === 'number' && Number.isFinite(data.beatsPerMeasure) && data.beatsPerMeasure > 0
+        ? data.beatsPerMeasure
+        : 4,
+    tempoBpm:
+      typeof data.tempoBpm === 'number' && Number.isFinite(data.tempoBpm) && data.tempoBpm > 0
+        ? data.tempoBpm
+        : 120,
+    model: data.model || MELODY_MODEL_ID,
+    source: 'sheetsage',
+  };
 }
 
 type HomepageVariantCandidate = {
@@ -354,6 +419,114 @@ export async function getTranscription(
       }
     }
     return null;
+  }
+}
+
+export async function getMelodyTranscription(
+  videoId: string,
+): Promise<MelodyTranscriptionData | null> {
+  const cacheKey = getMelodyCacheKey(videoId);
+
+  if (!db && !firestoreDisabled) {
+    try {
+      const { ensureFirebaseInitialized } = await import('@/config/firebase');
+      await ensureFirebaseInitialized();
+    } catch (error) {
+      console.warn('Failed to initialize Firebase before melody retrieval:', error);
+    }
+  }
+
+  if (!db || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('Firestore disabled due to CORS issues, skipping melody retrieval');
+    } else {
+      console.warn('Firebase not initialized, skipping melody retrieval');
+    }
+    return null;
+  }
+
+  try {
+    const cached = melodyCache.peek(cacheKey);
+    if (cached !== undefined) {
+      return cached ? normalizeMelodyTranscriptionData(cached as MelodyTranscriptionData) : null;
+    }
+
+    const docRef = doc(db, MELODY_COLLECTION, cacheKey);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      const data = normalizeMelodyTranscriptionData(docSnap.data() as MelodyTranscriptionData);
+      melodyCache.set(cacheKey, data, true);
+      return data;
+    }
+
+    melodyCache.set(cacheKey, null, false);
+    return null;
+  } catch (error) {
+    console.error('Error getting melody transcription from Firestore:', error);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        console.warn('Network/CORS error accessing Firestore - disabling Firestore for this session');
+        firestoreDisabled = true;
+      }
+    }
+    return null;
+  }
+}
+
+/**
+ * Save a melody transcription to the database
+ * @param videoId YouTube video ID
+ * @param melodyData The melody transcription data to save
+ * @returns True if successful, false otherwise
+ */
+export async function saveMelodyTranscription(
+  videoId: string,
+  melodyData: SheetSageResult,
+): Promise<boolean> {
+  if (!db && !firestoreDisabled) {
+    try {
+      const { ensureFirebaseInitialized } = await import('@/config/firebase');
+      await ensureFirebaseInitialized();
+    } catch (error) {
+      console.warn('Failed to initialize Firebase before melody save:', error);
+    }
+  }
+
+  if (!db || firestoreDisabled) {
+    if (firestoreDisabled) {
+      console.warn('❌ Firestore disabled due to CORS issues, skipping melody save');
+    } else if (!db) {
+      console.warn('❌ Firebase Firestore not initialized, skipping melody save');
+    }
+    return false;
+  }
+
+  try {
+    const docId = buildMelodyDocId(videoId);
+    const docRef = doc(db, MELODY_COLLECTION, docId);
+    const sanitizedData = normalizeMelodyTranscriptionData({
+      ...melodyData,
+      videoId,
+      model: MELODY_MODEL_ID,
+      createdAt: Timestamp.now(),
+    });
+
+    await setDoc(docRef, sanitizedData, { merge: true });
+    melodyCache.set(docId, sanitizedData, true);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save melody transcription:', error);
+    if (error instanceof Error && (
+      error.message.includes('CORS') ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('NetworkError')
+    )) {
+      console.warn('🌐 Network/CORS error saving melody transcription - disabling Firestore for this session');
+      firestoreDisabled = true;
+    }
+    return false;
   }
 }
 

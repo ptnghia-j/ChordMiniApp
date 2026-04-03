@@ -29,6 +29,27 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.3',
+      date: 'April 2, 2026',
+      title: 'Experimental Melody Transcription with Sheet Sage',
+      description: 'Adds an experimental melody-transcription workflow powered by a standalone Sheet Sage service, plus playback, caching, export, and deployment updates.',
+      features: [
+        'NEW: Experimental melody transcription with Sheet Sage for piano-roll overlay and live melodic playback inside the Piano Visualizer.',
+        'NEW: Melody playback toggle with dedicated mixer controls, estimation toast, and Firebase caching for repeated YouTube analysis loads.',
+        'NEW: MIDI export now includes the visible melody line whenever melody notes are shown in the Piano Visualizer.',
+        'IMPROVED: Beat-Transformer is now marked as a local-development model for the online app, similar to the experimental BTC variants.'
+      ],
+      technical: [
+        'NEW: Added standalone Sheet Sage deployment target for Docker and Google Cloud Run with a trimmed runtime image and seeded melody assets.',
+        'IMPROVED: Added server-side melody cache retrieval/persistence paths and new tests covering Sheet Sage backend resolution, MIDI export, and retired sax playback behavior.',
+        'FIX: Tightened melodic playback ownership, scheduling, and mixer-state handling so the melody toggle more closely controls what is rendered and heard.'
+      ],
+      breaking: [
+        'Sheet Sage melody transcription remains experimental; timing and accuracy are approximate and may vary by song.'
+      ]
+    },
+
+    {
       version: 'v0.6.2.7',
       date: 'April 1, 2026',
       title: 'Beat synchronization enhancement, Refactoring, minor UI changes and fixes',

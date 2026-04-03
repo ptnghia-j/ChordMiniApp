@@ -14,6 +14,7 @@ import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soun
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
+import type { SheetSageResult } from '@/types/sheetSage';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import {
@@ -31,9 +32,9 @@ import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-
 import { DEFAULT_AUDIO_MIXER_SETTINGS, DEFAULT_PIANO_VOLUME } from '@/config/audioDefaults';
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
-import { isInstrumentalTime } from '@/utils/segmentationSections';
 import { findChordEventForPlayback as findPlayableChordEvent } from '@/utils/chordEventLookup';
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
+import { buildSheetSageExtraVisualNotes } from '@/utils/sheetSagePlayback';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,10 @@ interface PianoVisualizerTabProps {
   currentBeatIndex?: number;
   /** Resolved audio URL used for background signal analysis */
   audioUrl?: string | null;
+  /** Optional melodic transcription note events shown as a separate overlay */
+  sheetSageResult?: SheetSageResult | null;
+  /** Whether the melodic transcription overlay should be shown */
+  showMelodicOverlay?: boolean;
 }
 
 const PLAYBACK_EVENT_BOUNDARY_TOLERANCE = 0.08;
@@ -129,6 +134,7 @@ function areMixerSettingsEqual(a: AudioMixerSettings, b: AudioMixerSettings): bo
     a.pianoVolume === b.pianoVolume
     && a.guitarVolume === b.guitarVolume
     && a.violinVolume === b.violinVolume
+    && a.melodyVolume === b.melodyVolume
     && a.fluteVolume === b.fluteVolume
     && a.bassVolume === b.bassVolume
     && a.saxophoneVolume === b.saxophoneVolume
@@ -145,6 +151,7 @@ const INSTRUMENT_COLORS: Record<string, string> = {
   saxophone: '#facc15', // yellow-400
   bass: '#f87171',    // red-400
 };
+const MELODIC_TRANSCRIPTION_COLOR = '#22d3ee';
 
 // ─── Piano-Only Auto-Playback Hook ───────────────────────────────────────────
 
@@ -201,7 +208,7 @@ function usePianoOnlyPlayback(
       pianoOnlyActiveRef.current = true;
     } else if (pianoOnlyActiveRef.current) {
       // Deactivate: stop any piano-only notes
-      service.stopAll();
+      service.stopInstruments(['piano']);
       // Only disable the service if chord playback is NOT taking over.
       // When isChordPlaybackEnabled is true, useChordPlayback has already
       // called updateOptions({ enabled: true }), so disabling here would
@@ -231,7 +238,7 @@ function usePianoOnlyPlayback(
           return;
         }
 
-        serviceRef.current.stopAll();
+        serviceRef.current.stopInstruments(['piano']);
         lastPlayedChordRef.current = null;
         eventMissStartedAtRef.current = null;
       }
@@ -292,7 +299,7 @@ function usePianoOnlyPlayback(
     const service = serviceRef.current;
     return () => {
       if (pianoOnlyActiveRef.current) {
-        service.stopAll();
+        service.stopInstruments(['piano']);
         service.updateOptions({ enabled: false });
         pianoOnlyActiveRef.current = false;
       }
@@ -302,7 +309,7 @@ function usePianoOnlyPlayback(
   // Stop when playback stops
   useEffect(() => {
     if (!isPlaying && pianoOnlyActiveRef.current) {
-      serviceRef.current.stopAll();
+      serviceRef.current.stopInstruments(['piano']);
       lastPlayedChordRef.current = null;
       eventMissStartedAtRef.current = null;
     }
@@ -324,6 +331,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   isChordPlaybackEnabled = false,
   currentBeatIndex = -1,
   audioUrl,
+  sheetSageResult = null,
+  showMelodicOverlay = false,
 }) => {
   // Zustand store fallbacks
   const storeAnalysisResults = useAnalysisResults();
@@ -521,11 +530,6 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [containerWidth]);
 
   // Determine active instruments from audio mixer
-  const autoSaxophoneActive = useMemo(
-    () => !!segmentationData && isChordPlaybackEnabled && isInstrumentalTime(segmentationData, currentTime),
-    [currentTime, isChordPlaybackEnabled, segmentationData],
-  );
-
   const activeInstruments = useMemo<ActiveInstrument[]>(() => {
     if (!isChordPlaybackEnabled) return [];
 
@@ -534,12 +538,14 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     if (mixerSettings.guitarVolume > 0) instruments.push({ name: 'Guitar', color: INSTRUMENT_COLORS.guitar });
     if (mixerSettings.violinVolume > 0) instruments.push({ name: 'Violin', color: INSTRUMENT_COLORS.violin });
     if (mixerSettings.fluteVolume > 0) instruments.push({ name: 'Flute', color: INSTRUMENT_COLORS.flute });
-    if (mixerSettings.saxophoneVolume > 0 || autoSaxophoneActive) {
-      instruments.push({ name: 'Saxophone', color: INSTRUMENT_COLORS.saxophone });
-    }
     if (mixerSettings.bassVolume > 0) instruments.push({ name: 'Bass', color: INSTRUMENT_COLORS.bass });
     return instruments;
-  }, [autoSaxophoneActive, isChordPlaybackEnabled, mixerSettings]);
+  }, [isChordPlaybackEnabled, mixerSettings]);
+
+  const melodyOverlayNotes = useMemo(
+    () => showMelodicOverlay ? buildSheetSageExtraVisualNotes(sheetSageResult, MELODIC_TRANSCRIPTION_COLOR) : [],
+    [sheetSageResult, showMelodicOverlay],
+  );
 
   // Calculate keyboard width
   const keyboardWidth = useMemo(() => {
@@ -585,10 +591,26 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return [{ name: 'Piano', color: INSTRUMENT_COLORS.piano }];
   }, [isChordPlaybackEnabled, activeInstruments]);
 
+  const legendInstruments = useMemo(() => {
+    if (showMelodicOverlay && melodyOverlayNotes.length > 0) {
+      return [...effectiveActiveInstruments, { name: 'Melody', color: MELODIC_TRANSCRIPTION_COLOR }];
+    }
+
+    return effectiveActiveInstruments;
+  }, [effectiveActiveInstruments, melodyOverlayNotes.length, showMelodicOverlay]);
+
   const handleMidiDownload = useCallback(() => {
     if (chordEvents.length === 0) return;
     const instruments = activeInstruments.length > 0
       ? activeInstruments.map(i => ({ name: i.name, color: i.color }))
+      : undefined;
+    const additionalTracks = showMelodicOverlay && sheetSageResult?.noteEvents?.length
+      ? [
+          {
+            name: 'Melody Violin',
+            noteEvents: sheetSageResult.noteEvents,
+          },
+        ]
       : undefined;
     const midiData = exportChordEventsToMidi(chordEvents, {
       instruments,
@@ -596,11 +618,21 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       timeSignature, // Use detected time signature
       segmentationData,
       signalAnalysis,
+      additionalTracks,
     });
     if (midiData.length > 0) {
-      downloadMidiFile(midiData, 'chord-progression.mid');
+      downloadMidiFile(midiData, 'piano-visualizer.mid');
     }
-  }, [activeInstruments, chordEvents, detectedBpm, segmentationData, signalAnalysis, timeSignature]);
+  }, [
+    activeInstruments,
+    chordEvents,
+    detectedBpm,
+    segmentationData,
+    sheetSageResult,
+    showMelodicOverlay,
+    signalAnalysis,
+    timeSignature,
+  ]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -627,7 +659,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               <button
                 onClick={handleMidiDownload}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600"
-                title="Download chord progression as MIDI file"
+                title="Download the currently visible piano visualizer notes as MIDI"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -682,12 +714,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         className="piano-visualizer-section bg-gray-950 dark:bg-gray-950 rounded-lg overflow-hidden"
       >
         {/* Instrument legend (shown when instruments are visualized) */}
-        {effectiveActiveInstruments.length > 0 && (
+        {legendInstruments.length > 0 && (
           <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-900/60 border-b border-gray-800">
             <span className="text-xs uppercase tracking-[0.12em] text-gray-500 font-medium">
-              {isChordPlaybackEnabled ? 'Instruments:' : 'Piano Only:'}
+              {isChordPlaybackEnabled ? 'Instruments:' : 'Visualizer Voices:'}
             </span>
-            {effectiveActiveInstruments.map((inst) => (
+            {legendInstruments.map((inst) => (
               <div key={inst.name} className="flex items-center gap-1.5">
                 <div
                   className="w-2.5 h-2.5 rounded-sm"
@@ -725,6 +757,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
                 targetKey={targetKey}
                 signalDynamicsSource={dynamicsAnalyzer}
                 playbackTime={currentTime}
+                extraVisualNotes={melodyOverlayNotes}
                 onActiveNotesChange={handleActiveNotesChange}
               />
             </div>

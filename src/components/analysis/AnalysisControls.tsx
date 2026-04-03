@@ -5,10 +5,16 @@ import { Button, Chip, Card, CardBody, CardHeader, Divider } from '@heroui/react
 import { BeatDetectorType, ChordDetectorType } from '@/hooks/chord-analysis/useModelState';
 import HeroUIBeatModelSelector from '@/components/analysis/HeroUIBeatModelSelector';
 import HeroUIChordModelSelector from '@/components/analysis/HeroUIChordModelSelector';
+import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 
 const BEAT_MODEL_LABELS: Record<BeatDetectorType, string> = {
   madmom: 'Madmom',
   'beat-transformer': 'Beat Transformer',
+};
+
+const BEAT_MODEL_CHIP_COLORS: Record<BeatDetectorType, 'primary' | 'warning'> = {
+  madmom: 'primary',
+  'beat-transformer': 'warning',
 };
 
 const CHORD_MODEL_LABELS: Record<ChordDetectorType, string> = {
@@ -125,7 +131,13 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Chip color="primary" variant="flat" size="sm">
+            <Chip
+              color={beatDetector === 'beat-transformer' && isDevelopmentEnvironment()
+                ? BEAT_MODEL_CHIP_COLORS[beatDetector]
+                : 'primary'}
+              variant="flat"
+              size="sm"
+            >
               Beat: {BEAT_MODEL_LABELS[beatDetector]}
             </Chip>
             <Chip

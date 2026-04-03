@@ -1,19 +1,19 @@
 /**
  * Model Filtering Utility for ChordMiniApp
  * 
- * Provides environment-based filtering for experimental BTC models.
- * BTC models (btc-sl, btc-pl) are development-only features that require
+ * Provides environment-based filtering for experimental local-only models.
+ * BTC models (btc-sl, btc-pl) and Beat Transformer are development-only features that require
  * local repository cloning and are not available in production deployments.
  */
 
 export type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
-export type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
+export type BeatDetectorType = 'madmom' | 'beat-transformer';
 
 /**
  * Check if BTC models should be available based on environment
  * @returns true if BTC models should be shown (local development), false if hidden (production)
  */
-export function areBTCModelsAvailable(): boolean {
+export function areExperimentalModelsAvailable(): boolean {
   // Check if we're in a browser environment
   if (typeof window === 'undefined') {
     return false;
@@ -23,6 +23,14 @@ export function areBTCModelsAvailable(): boolean {
   const isLocalDevelopment = origin.includes('localhost') || origin.includes('127.0.0.1');
 
   return isLocalDevelopment;
+}
+
+export function areBTCModelsAvailable(): boolean {
+  return areExperimentalModelsAvailable();
+}
+
+export function areBeatTransformerAvailable(): boolean {
+  return areExperimentalModelsAvailable();
 }
 
 /**
@@ -49,6 +57,19 @@ export function getAvailableChordModels(): ChordDetectorType[] {
   return filterChordModels(allModels);
 }
 
+export function filterBeatModels(models: BeatDetectorType[]): BeatDetectorType[] {
+  if (areBeatTransformerAvailable()) {
+    return models;
+  }
+
+  return models.filter((model) => model !== 'beat-transformer');
+}
+
+export function getAvailableBeatModels(): BeatDetectorType[] {
+  const allModels: BeatDetectorType[] = ['madmom', 'beat-transformer'];
+  return filterBeatModels(allModels);
+}
+
 /**
  * Check if a specific chord model is available in the current environment
  * @param model The chord detector type to check
@@ -56,6 +77,11 @@ export function getAvailableChordModels(): ChordDetectorType[] {
  */
 export function isChordModelAvailable(model: ChordDetectorType): boolean {
   const availableModels = getAvailableChordModels();
+  return availableModels.includes(model);
+}
+
+export function isBeatModelAvailable(model: BeatDetectorType): boolean {
+  const availableModels = getAvailableBeatModels();
   return availableModels.includes(model);
 }
 
@@ -71,6 +97,14 @@ export function getSafeChordModel(requestedModel: ChordDetectorType): ChordDetec
 
   // Fallback to chord-cnn-lstm (always available)
   return 'chord-cnn-lstm';
+}
+
+export function getSafeBeatModel(requestedModel: BeatDetectorType): BeatDetectorType {
+  if (isBeatModelAvailable(requestedModel)) {
+    return requestedModel;
+  }
+
+  return 'madmom';
 }
 
 /**
@@ -98,7 +132,7 @@ export function getChordRecognitionEndpoint(model: ChordDetectorType): string {
  * @returns true if in development, false if in production
  */
 export function isDevelopmentEnvironment(): boolean {
-  return areBTCModelsAvailable();
+  return areExperimentalModelsAvailable();
 }
 
 /**
@@ -117,6 +151,21 @@ export function getModelDescription(model: ChordDetectorType): string {
   
   // Add development-only note for BTC models in development environment
   if (model.startsWith('btc-') && isDevelopmentEnvironment()) {
+    return `${description} (Development only - requires local repository)`;
+  }
+
+  return description;
+}
+
+export function getBeatModelDescription(model: BeatDetectorType): string {
+  const baseDescriptions = {
+    madmom: 'Neural network with high accuracy and speed, best for common time signatures',
+    'beat-transformer': 'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
+  };
+
+  const description = baseDescriptions[model];
+
+  if (model === 'beat-transformer' && isDevelopmentEnvironment()) {
     return `${description} (Development only - requires local repository)`;
   }
 

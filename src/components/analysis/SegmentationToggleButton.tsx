@@ -25,6 +25,12 @@ const SegmentationToggleButton: React.FC<SegmentationToggleButtonProps> = ({
   errorMessage,
   className = '',
 }) => {
+  const buttonClassName = `h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0 ${
+    isEnabled
+      ? 'bg-indigo-600 text-white'
+      : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+  } ${(disabled || isLoading) ? 'cursor-not-allowed opacity-60' : ''}`;
+
   const tooltipLabel = isLoading
     ? 'Analyzing song segments...'
     : hasSegmentationData
@@ -55,20 +61,16 @@ const SegmentationToggleButton: React.FC<SegmentationToggleButtonProps> = ({
             onClick();
           }}
           disabled={disabled || isLoading}
-          className={`p-2 rounded-full transition-colors ${
-            isEnabled
-              ? 'bg-indigo-600 text-white'
-              : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
-          } ${(disabled || isLoading) ? 'cursor-not-allowed opacity-60' : ''}`}
+          className={buttonClassName}
           aria-label={hasSegmentationData ? 'Toggle song segmentation overlay' : 'Enable song segmentation'}
           title={typeof tooltipLabel === 'string' ? tooltipLabel : 'Song segmentation'}
         >
           {isLoading ? (
-            <HiArrowPath className="h-5 w-5 animate-spin" />
+            <HiArrowPath className="h-4 w-4 animate-spin" />
           ) : isEnabled ? (
-            <HiSquares2X2 className="h-5 w-5" />
+            <HiSquares2X2 className="h-4 w-4" />
           ) : (
-            <HiOutlineSquares2X2 className="h-5 w-5" />
+            <HiOutlineSquares2X2 className="h-4 w-4" />
           )}
         </button>
       </Tooltip>

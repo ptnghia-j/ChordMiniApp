@@ -17,6 +17,11 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
   const [trackMode, setTrackMode] = useState<'metronome' | 'drum'>('metronome');
   const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const buttonClassName = `h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0 ${
+    isEnabled
+      ? 'bg-orange-600 text-white hover:bg-orange-700'
+      : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
+  } ${className}`;
 
   useEffect(() => {
     const initMetronome = async () => {
@@ -87,11 +92,7 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
           >
             <motion.button
               onClick={handleToggle}
-              className={`p-2 rounded-full shadow-md transition-colors duration-200 flex items-center justify-center ${
-                isEnabled
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 hover:bg-gray-300/70 dark:hover:bg-gray-500/70'
-              }`}
+              className={buttonClassName}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               aria-label={isEnabled ? 'Metronome options' : 'Enable metronome'}

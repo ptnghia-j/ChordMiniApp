@@ -18,6 +18,7 @@ import type { ChordEvent } from './chordToMidi';
 import { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { AudioDynamicsAnalysisResult } from '@/services/audio/audioDynamicsTypes';
+import type { SheetSageNoteEvent } from '@/types/sheetSage';
 import {
   beatDurationFromBpm,
   generateNotesForInstrument,
@@ -52,6 +53,12 @@ interface MidiNoteEvent {
   velocity: number;
   channel: number;
   isNoteOn: boolean;
+}
+
+interface AdditionalMidiTrackConfig {
+  name: string;
+  noteEvents: SheetSageNoteEvent[];
+  program?: number;
 }
 
 // ─── Variable Length Quantity ─────────────────────────────────────────────────
@@ -278,6 +285,26 @@ function generateInstrumentMidiNotes(
   return midiEvents;
 }
 
+function generateAdditionalTrackMidiNotes(
+  events: SheetSageNoteEvent[],
+  bpm: number,
+  channel: number,
+): MidiNoteEvent[] {
+  const midiEvents: MidiNoteEvent[] = [];
+
+  for (const event of events) {
+    const midi = Math.max(0, Math.min(127, Math.round(event.pitch)));
+    const velocity = Math.max(1, Math.min(127, Math.round(event.velocity)));
+    const startTick = secondsToTicks(Math.max(0, event.onset), bpm);
+    const endTick = secondsToTicks(Math.max(event.offset, event.onset), bpm);
+
+    midiEvents.push({ tick: startTick, midi, velocity, channel, isNoteOn: true });
+    midiEvents.push({ tick: endTick, midi, velocity: 0, channel, isNoteOn: false });
+  }
+
+  return midiEvents;
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export interface MidiExportOptions {
@@ -291,6 +318,8 @@ export interface MidiExportOptions {
   segmentationData?: SegmentationResult | null;
   /** Optional analyzed signal contours so export matches signal-driven playback patterns */
   signalAnalysis?: AudioDynamicsAnalysisResult | null;
+  /** Additional raw note tracks, used for melody overlays currently shown in the visualizer */
+  additionalTracks?: AdditionalMidiTrackConfig[];
 }
 
 /**
@@ -339,8 +368,11 @@ export function exportChordEventsToMidi(
     options?.instruments && options.instruments.length > 0
       ? options.instruments
       : [{ name: 'piano', color: '#60a5fa' }];
+  const additionalTracks = options?.additionalTracks?.filter((track) => track.noteEvents.length > 0) ?? [];
 
-  const numTracks = 1 + Math.min(instrumentList.length, 15);
+  const maxPlayableTracks = 15;
+  const totalRequestedTracks = instrumentList.length + additionalTracks.length;
+  const numTracks = 1 + Math.min(totalRequestedTracks, maxPlayableTracks);
 
   // Header chunk
   const header = new MidiBuffer();
@@ -358,10 +390,12 @@ export function exportChordEventsToMidi(
     console.info(`MIDI export: BPM=${bpm}, time signature=${timeSignature}/4, tracks=${numTracks}`);
   }
 
-  if (instrumentList.length > 15) {
-    console.warn(`MIDI export: ${instrumentList.length} instruments requested but only 15 channels available (channel 9 reserved for drums). Extra instruments will be ignored.`);
+  if (totalRequestedTracks > maxPlayableTracks) {
+    console.warn(`MIDI export: ${totalRequestedTracks} tracks requested but only 15 channels available (channel 9 reserved for drums). Extra tracks will be ignored.`);
   }
-  const instrumentTracks: Uint8Array[] = instrumentList.slice(0, 15).map((inst, idx) => {
+  const allTrackChunks: Uint8Array[] = [];
+
+  instrumentList.slice(0, maxPlayableTracks).forEach((inst, idx) => {
     const channel = idx >= 9 ? idx + 1 : idx; // skip channel 9 (GM drums)
     const program = GM_PROGRAMS[inst.name.toLowerCase()] ?? 0;
     const segmentationData = options?.segmentationData;
@@ -375,13 +409,28 @@ export function exportChordEventsToMidi(
       options?.signalAnalysis,
     );
     const displayName = inst.name.charAt(0).toUpperCase() + inst.name.slice(1);
-    return buildTrackChunk(midiNotes, channel, program, displayName);
+    allTrackChunks.push(buildTrackChunk(midiNotes, channel, program, displayName));
+  });
+
+  const remainingTrackSlots = maxPlayableTracks - allTrackChunks.length;
+  additionalTracks.slice(0, remainingTrackSlots).forEach((track, offset) => {
+    const trackIndex = instrumentList.length + offset;
+    const channel = trackIndex >= 9 ? trackIndex + 1 : trackIndex;
+    const midiNotes = generateAdditionalTrackMidiNotes(track.noteEvents, bpm, channel);
+    allTrackChunks.push(
+      buildTrackChunk(
+        midiNotes,
+        channel,
+        track.program ?? GM_PROGRAMS.violin,
+        track.name,
+      ),
+    );
   });
 
   // Combine all chunks
   const headerBytes = header.toUint8Array();
   const totalBytes = headerBytes.length + tempoTrack.length +
-    instrumentTracks.reduce((sum, t) => sum + t.length, 0);
+    allTrackChunks.reduce((sum, t) => sum + t.length, 0);
   const result = new Uint8Array(totalBytes);
   let offset = 0;
 
@@ -389,7 +438,7 @@ export function exportChordEventsToMidi(
   offset += headerBytes.length;
   result.set(tempoTrack, offset);
   offset += tempoTrack.length;
-  for (const track of instrumentTracks) {
+  for (const track of allTrackChunks) {
     result.set(track, offset);
     offset += track.length;
   }
