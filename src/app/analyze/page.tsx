@@ -435,16 +435,17 @@ export default function LocalAudioAnalyzePage() {
   const hasSheetSageNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const hasSheetSageAudioSource = Boolean(audioFile || audioProcessingState.audioUrl);
   const hasReadySheetSageBackend = isSheetSageBackendAvailable === true;
+  const needsSheetSageBackendForCompute = !hasSheetSageNotes;
   const melodicTranscriptionDisabledReason = isCheckingSheetSageBackend
-    ? 'Checking Sheet Sage backend...'
-    : !hasReadySheetSageBackend
+    ? (needsSheetSageBackendForCompute ? 'Checking Sheet Sage backend...' : undefined)
+    : needsSheetSageBackendForCompute && !hasReadySheetSageBackend
       ? (sheetSageBackendError || 'Sheet Sage backend unavailable.')
     : !hasSheetSageAudioSource
     ? 'Load audio before computing melodic transcription.'
     : undefined;
 
   const toggleMelodicTranscriptionPlayback = useCallback(async () => {
-    if (!hasSheetSageAudioSource || isComputingSheetSage || !hasReadySheetSageBackend) {
+    if (!hasSheetSageAudioSource || isComputingSheetSage) {
       return;
     }
 
@@ -456,6 +457,11 @@ export default function LocalAudioAnalyzePage() {
     }
 
     if (!hasSheetSageNotes) {
+      if (!hasReadySheetSageBackend) {
+        analysisActions.setSheetSageError(sheetSageBackendError || 'Sheet Sage backend unavailable.');
+        return;
+      }
+
       analysisActions.setIsComputingSheetSage(true);
       analysisActions.setSheetSageError(null);
 
@@ -484,6 +490,7 @@ export default function LocalAudioAnalyzePage() {
     isMelodicTranscriptionPlaybackEnabled,
     setActiveTab,
     setIsMelodicTranscriptionPlaybackEnabled,
+    sheetSageBackendError,
   ]);
 
   // Use pitch shift audio hook
@@ -1279,6 +1286,7 @@ const simplifiedChordGridData = useMemo(() => {
                       <PianoVisualizerTab
                         analysisResults={analysisResults}
                         chordGridData={simplifiedChordGridData}
+                        keySignature={keySignature}
                         showCorrectedChords={showCorrectedChords}
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
@@ -1309,8 +1317,8 @@ const simplifiedChordGridData = useMemo(() => {
                           melodicTranscriptionPlayback={showSheetSage ? {
                             isEnabled: isMelodicTranscriptionPlaybackEnabled,
                             hasTranscription: hasSheetSageNotes,
-                            isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
-                            disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                            isLoading: isComputingSheetSage || (isCheckingSheetSageBackend && !hasSheetSageNotes),
+                            disabled: !hasSheetSageAudioSource,
                             disabledReason: melodicTranscriptionDisabledReason,
                             errorMessage: sheetSageBackendError || sheetSageError,
                             canAdjustVolume: hasSheetSageNotes,

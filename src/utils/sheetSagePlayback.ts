@@ -12,6 +12,15 @@ export interface SheetSageVisualNote {
   labelText?: string;
 }
 
+interface PreparedSheetSageMelodyNote {
+  noteName: string;
+  midi: number;
+  onset: number;
+  offset: number;
+  velocityMultiplier: number;
+  isBass: boolean;
+}
+
 const MELODIC_PLAYBACK_BASE_ADVANCE_SECONDS = 0.16;
 const MELODIC_PLAYBACK_MAX_LATENCY_COMPENSATION_SECONDS = 0.05;
 const MELODIC_NOTE_GAP_SECONDS = 0.012;
@@ -21,6 +30,8 @@ const MELODIC_DYNAMIC_SMOOTHING_WIDE = 0.5;
 const MELODIC_MAX_DYNAMIC_STEP_QUICK = 0.06;
 const MELODIC_MAX_DYNAMIC_STEP_MEDIUM = 0.09;
 const MELODIC_MAX_DYNAMIC_STEP_WIDE = 0.12;
+const MELODIC_AUDIO_CONTOUR_WEIGHT = 0.82;
+const MELODIC_MODEL_VELOCITY_WEIGHT = 0.18;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -126,6 +137,32 @@ function stabilizeScheduledMelodyNotes(notes: ScheduledNote[]): ScheduledNote[] 
   return stabilized;
 }
 
+function stabilizePreparedMelodyNotes(notes: PreparedSheetSageMelodyNote[]): PreparedSheetSageMelodyNote[] {
+  if (notes.length <= 1) {
+    return notes;
+  }
+
+  const scheduledLike: ScheduledNote[] = notes.map((note) => ({
+    noteName: note.noteName,
+    midi: note.midi,
+    startOffset: note.onset,
+    duration: note.offset - note.onset,
+    velocityMultiplier: note.velocityMultiplier,
+    isBass: note.isBass,
+  }));
+
+  const stabilized = stabilizeScheduledMelodyNotes(scheduledLike);
+
+  return stabilized.map((note) => ({
+    noteName: note.noteName,
+    midi: note.midi,
+    onset: note.startOffset,
+    offset: note.startOffset + note.duration,
+    velocityMultiplier: note.velocityMultiplier,
+    isBass: note.isBass,
+  }));
+}
+
 export function convertSheetSageToChordEvents(result: SheetSageResult | null): ChordEvent[] {
   if (!result?.noteEvents?.length) {
     return [];
@@ -186,26 +223,20 @@ export function buildScheduledSheetSagePianoNotes(
     .filter((note): note is ScheduledNote => note !== null);
 }
 
-export function buildScheduledSheetSageMelodyNotes(
+export function buildPreparedSheetSageMelodyNotes(
   result: SheetSageResult | null,
-  currentTime: number,
   dynamicsAnalyzer?: DynamicsAnalyzer | null,
-): ScheduledNote[] {
+): PreparedSheetSageMelodyNote[] {
   if (!result?.noteEvents?.length) {
     return [];
   }
 
-  const schedulingTime = Math.max(0, currentTime);
-  const onsetAdvanceSeconds = getMelodicPlaybackAdvanceSeconds();
-
-  const scheduledNotes = result.noteEvents
+  const preparedNotes = result.noteEvents
     .slice()
     .sort((left, right) => left.onset - right.onset || left.pitch - right.pitch)
-    .filter((event) => event.offset > schedulingTime + 0.01)
     .map((event) => {
       const noteName = midiToNoteName(event.pitch);
-      const audibleStart = Math.max(event.onset, currentTime);
-      const duration = event.offset - audibleStart;
+      const duration = event.offset - event.onset;
 
       if (duration <= 0.01) {
         return null;
@@ -219,27 +250,76 @@ export function buildScheduledSheetSageMelodyNotes(
         duration,
         signalDynamics,
       ) ?? 0.76;
-      const signalReactiveGain = clamp(signalVelocity / 0.76, 0.9, 1.1);
       const baseVelocity = clamp(Math.pow(event.velocity / 96, 0.9), 0.32, 0.94);
-      const blendedVelocity = clamp(
-        baseVelocity * 0.78 + (baseVelocity * signalReactiveGain) * 0.22,
-        0.3,
-        1.0,
-      );
+      const audioContourVelocity = signalDynamics
+        ? clamp(
+            0.34
+              + signalDynamics.normalizedIntensity * 0.26
+              + signalDynamics.motion * 0.12
+              + signalDynamics.attack * 0.1
+              + signalDynamics.fullness * 0.08
+              + signalVelocity * 0.16
+              - signalDynamics.quietness * 0.06,
+            0.3,
+            1.02,
+          )
+        : clamp(signalVelocity, 0.42, 0.92);
+      const blendedVelocity = signalDynamics
+        ? clamp(
+            audioContourVelocity * MELODIC_AUDIO_CONTOUR_WEIGHT
+              + baseVelocity * MELODIC_MODEL_VELOCITY_WEIGHT,
+            0.3,
+            1.0,
+          )
+        : baseVelocity;
 
       return {
         noteName,
         midi: event.pitch,
-        startOffset: Math.max(0, event.onset - currentTime - onsetAdvanceSeconds),
-        duration,
+        onset: event.onset,
+        offset: event.offset,
         velocityMultiplier: blendedVelocity,
         isBass: false,
       };
     })
+    .filter((note): note is PreparedSheetSageMelodyNote => note !== null)
+    .sort((left, right) => left.onset - right.onset || left.midi - right.midi);
+
+  return stabilizePreparedMelodyNotes(preparedNotes);
+}
+
+export function buildScheduledSheetSageMelodyNotes(
+  preparedNotes: PreparedSheetSageMelodyNote[],
+  currentTime: number,
+): ScheduledNote[] {
+  if (!preparedNotes.length) {
+    return [];
+  }
+
+  const schedulingTime = Math.max(0, currentTime);
+  const onsetAdvanceSeconds = getMelodicPlaybackAdvanceSeconds();
+
+  return preparedNotes
+    .filter((event) => event.offset > schedulingTime + 0.01)
+    .map((event) => {
+      const audibleStart = Math.max(event.onset, currentTime);
+      const duration = event.offset - audibleStart;
+
+      if (duration <= 0.01) {
+        return null;
+      }
+
+      return {
+        noteName: event.noteName,
+        midi: event.midi,
+        startOffset: Math.max(0, event.onset - currentTime - onsetAdvanceSeconds),
+        duration,
+        velocityMultiplier: event.velocityMultiplier,
+        isBass: event.isBass,
+      } satisfies ScheduledNote;
+    })
     .filter((note): note is ScheduledNote => note !== null)
     .sort((left, right) => left.startOffset - right.startOffset || left.midi - right.midi);
-
-  return stabilizeScheduledMelodyNotes(scheduledNotes);
 }
 
 export function buildSheetSageExtraVisualNotes(

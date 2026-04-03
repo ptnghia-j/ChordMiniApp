@@ -26,7 +26,7 @@ function createNonPausingProgressBar(durationMs: number, id: string) {
         height: '100%',
         animation: `${animName} ${durationMs}ms linear forwards`,
       },
-      className: 'bg-cyan-400 dark:bg-cyan-500 opacity-60',
+      className: 'bg-primary-400 dark:bg-primary-500 opacity-60',
     }),
   );
 }
@@ -69,7 +69,7 @@ const MelodyTranscriptionStatusToast: React.FC<MelodyTranscriptionStatusToastPro
       const key = addToast({
         title: 'Transcribing Melody',
         description: `Estimated wait: about ${estimateSeconds}s for this song.`,
-        color: 'secondary',
+        color: 'primary',
         variant: 'flat',
         timeout: 0,
         hideCloseButton: true,

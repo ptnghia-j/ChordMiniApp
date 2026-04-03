@@ -82,3 +82,6 @@ SHEETSAGE_BACKEND_TIMEOUT_MS=600000
 - Docker is the supported runtime.
 - The current service uses the non-Jukebox handcrafted melody transformer path only.
 - Upstream Sheet Sage code is MIT, while upstream model/data assets remain subject to their original licensing terms.
+
+## Models and assets
+- Assets can be found at: https://mega.nz/file/j9YyWbAK#LjROFI9qxGq6Om9dx9HaORd5NaiYOcV8ULVUBKB0bcg

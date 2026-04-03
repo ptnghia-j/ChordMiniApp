@@ -27,10 +27,12 @@ Interactive guitar chord diagrams with **accurate fingering patterns** from the 
 ![Piano Visualizer](public/piano_visualizer.png)
 
 Real-time piano roll visualization with falling MIDI notes synchronized to chord playback. Features a scrolling chord strip, interactive keyboard highlighting, smoother playback-synced rendering, segmentation-aware dynamics shaping, and **MIDI file export** for importing chord progressions into any DAW.
+![Melody](public/melody.png)
+![Sheet Music](public/sheet.png)
 
 ### 🎻 Experimental Melody Transcription
 
-Sheet Sage can optionally add an estimated melodic line on top of the Piano Visualizer, with separate playback, caching, and MIDI export support. This feature is still experimental: inference is slower than the main beat/chord pipeline, and note timing or accuracy may vary depending on the song and vocal/instrument mix.
+Sheet Sage can optionally add an estimated melodic line on top of the Piano Visualizer, with separate playback, caching, and MIDI export support. This feature is still experimental: inference is slower than the main beat/chord pipeline, and note timing or accuracy may be limited.
 
 ###  🎤 Lead Sheet with AI Assistant
 ![Lead Sheet with AI](public/leadsheet.png)

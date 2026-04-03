@@ -819,7 +819,7 @@ export default function YouTubeVideoAnalyzePage() {
   }, []);
 
   const toggleMelodicTranscriptionPlayback = useCallback(async () => {
-    if (!hasSheetSageAudioSource || isComputingSheetSage || !hasReadySheetSageBackend) {
+    if (!hasSheetSageAudioSource || isComputingSheetSage) {
       return;
     }
 
@@ -831,6 +831,11 @@ export default function YouTubeVideoAnalyzePage() {
     }
 
     if (!hasSheetSageNotes) {
+      if (!hasReadySheetSageBackend) {
+        analysisActions.setSheetSageError(sheetSageBackendError || 'Sheet Sage backend unavailable.');
+        return;
+      }
+
       analysisActions.setIsComputingSheetSage(true);
       analysisActions.setSheetSageError(null);
 
@@ -860,6 +865,7 @@ export default function YouTubeVideoAnalyzePage() {
     isMelodicTranscriptionPlaybackEnabled,
     setActiveTab,
     setIsMelodicTranscriptionPlaybackEnabled,
+    sheetSageBackendError,
     videoId,
   ]);
 
@@ -1325,7 +1331,9 @@ export default function YouTubeVideoAnalyzePage() {
 
                       {activeTab === 'pianoVisualizer' && (
                         <PianoVisualizerTab
+                          analysisResults={analysisResults}
                           chordGridData={simplifiedChordGridData}
+                          keySignature={keySignature}
                           sequenceCorrections={simplifiedSequenceCorrections}
                           segmentationData={segmentationData}
                           currentTime={currentTime}
@@ -1478,8 +1486,8 @@ export default function YouTubeVideoAnalyzePage() {
               melodicTranscriptionPlayback={showSheetSage ? {
                 isEnabled: isMelodicTranscriptionPlaybackEnabled,
                 hasTranscription: hasSheetSageNotes,
-                isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
-                disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                isLoading: isComputingSheetSage || (isCheckingSheetSageBackend && !hasSheetSageNotes),
+                disabled: !hasSheetSageAudioSource,
                 disabledReason: melodicTranscriptionDisabledReason,
                 errorMessage: sheetSageBackendError || sheetSageError,
                 canAdjustVolume: hasSheetSageNotes,
@@ -1501,8 +1509,8 @@ export default function YouTubeVideoAnalyzePage() {
               melodicTranscriptionPlayback={showSheetSage ? {
                 isEnabled: isMelodicTranscriptionPlaybackEnabled,
                 hasTranscription: hasSheetSageNotes,
-                isLoading: isComputingSheetSage || isCheckingSheetSageBackend,
-                disabled: !hasSheetSageAudioSource || !hasReadySheetSageBackend,
+                isLoading: isComputingSheetSage || (isCheckingSheetSageBackend && !hasSheetSageNotes),
+                disabled: !hasSheetSageAudioSource,
                 disabledReason: melodicTranscriptionDisabledReason,
                 errorMessage: sheetSageBackendError || sheetSageError,
                 canAdjustVolume: hasSheetSageNotes,

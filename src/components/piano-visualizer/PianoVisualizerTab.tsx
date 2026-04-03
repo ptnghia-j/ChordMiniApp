@@ -11,14 +11,13 @@ import {
   type ChordEvent,
 } from '@/utils/chordToMidi';
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
-import { beatDurationFromBpm, generateNotesForInstrument, mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
+import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SheetSageResult } from '@/types/sheetSage';
-import { createScorePartDataFromSheetSage, type ScorePartData } from '@/utils/musicXmlExport';
-import { useMusicXmlRenderer } from '@/hooks/piano-visualizer/useMusicXmlRenderer';
+import { exportLeadSheetToMusicXml } from '@/utils/musicXmlExport';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import {
@@ -327,6 +326,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   analysisResults,
   chordGridData,
   className = '',
+  keySignature,
   showCorrectedChords,
   chordCorrections,
   sequenceCorrections = null,
@@ -347,6 +347,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const mergedShowCorrectedChords = showCorrectedChords ?? storeShowCorrectedChords;
   const mergedChordCorrections = chordCorrections ?? storeChordCorrections;
   const storeKeySignature = useKeySignature();
+  const mergedKeySignature = keySignature ?? storeKeySignature;
 
   // Pitch shift
   const targetKey = useTargetKey();
@@ -369,6 +370,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   // Container ref for responsive width
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   // Audio mixer settings for instrument detection
@@ -381,10 +383,25 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     };
   });
 
-  // Measure container width
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  const measureContainerWidth = useCallback((container: HTMLDivElement | null) => {
+    if (!container) {
+      return;
+    }
+
+    const width = container.getBoundingClientRect().width;
+    setContainerWidth((prev) => (Math.abs(prev - width) >= 1 ? width : prev));
+  }, []);
+
+  const setMeasuredContainerRef = useCallback((node: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    containerRef.current = node;
+
+    if (!node) {
+      return;
+    }
+
+    measureContainerWidth(node);
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -393,8 +410,13 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         ));
       }
     });
-    observer.observe(container);
-    return () => observer.disconnect();
+    observer.observe(node);
+    resizeObserverRef.current = observer;
+  }, [measureContainerWidth]);
+
+  useEffect(() => () => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
   }, []);
 
   // Subscribe to audio mixer for instrument volume changes
@@ -435,10 +457,10 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const accidentalPreference = useMemo(() => {
     return getDisplayAccidentalPreference({
       chords: displayedChords,
-      keySignature: storeKeySignature,
+      keySignature: mergedKeySignature,
       preserveExactSpelling: Boolean(sequenceCorrections),
     });
-  }, [storeKeySignature, displayedChords, sequenceCorrections]);
+  }, [displayedChords, mergedKeySignature, sequenceCorrections]);
 
   // ── Roman numeral support (shared with ChordGrid via stores) ──────────────
 
@@ -597,73 +619,21 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return [{ name: 'Piano', color: INSTRUMENT_COLORS.piano }];
   }, [isChordPlaybackEnabled, activeInstruments]);
 
-  const scoreParts = useMemo<ScorePartData[]>(() => {
-    const bpm = detectedBpm || 120;
-    const mergedEvents = mergeConsecutiveChordEvents(chordEvents);
-    const beatDuration = beatDurationFromBpm(bpm);
-    const accompanimentParts: ScorePartData[] = effectiveActiveInstruments.map((instrument) => {
-      const instrumentName = instrument.name.toLowerCase();
-      const noteEvents = mergedEvents.flatMap((event) => {
-        const duration = Math.max(0.01, event.endTime - event.startTime);
-        const eventBeatCount = Math.max(1, event.beatCount ?? 1);
-        const eventBeatDuration = duration > 0 ? duration / eventBeatCount : beatDuration;
-        const signalDynamics = dynamicsAnalyzer.getSignalDynamics(event.startTime, duration);
-        const scheduledNotes = generateNotesForInstrument(instrumentName as Parameters<typeof generateNotesForInstrument>[0], {
-          chordName: event.chordName,
-          chordNotes: event.notes,
-          duration,
-          beatDuration: eventBeatDuration,
-          startTime: event.startTime,
-          timeSignature,
-          segmentationData,
-          signalDynamics,
-          guitarVoicing,
-          targetKey,
-        });
-
-        return scheduledNotes.map((note) => ({
-          pitch: note.midi,
-          onset: event.startTime + note.startOffset,
-          offset: event.startTime + note.startOffset + note.duration,
-        }));
-      });
-
-      return {
-        id: instrumentName.replace(/\s+/g, '-'),
-        name: instrument.name,
-        instrumentName,
-        notes: noteEvents,
-      };
-    }).filter((part) => part.notes.length > 0);
-
-    const parts: ScorePartData[] = [];
-    if (showMelodicOverlay && sheetSageResult?.noteEvents?.length) {
-      parts.push(createScorePartDataFromSheetSage('melody', 'Melody', sheetSageResult.noteEvents));
-    }
-
-    parts.push(...accompanimentParts);
-
-    return parts;
-  }, [
-    chordEvents,
-    detectedBpm,
-    dynamicsAnalyzer,
-    effectiveActiveInstruments,
-    guitarVoicing,
-    segmentationData,
-    sheetSageResult,
-    showMelodicOverlay,
-    targetKey,
-    timeSignature,
-  ]);
+  const hasLeadSheetData = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const musicXmlOptions = useMemo(() => ({
     bpm: detectedBpm || undefined,
     timeSignature,
-    title: 'ChordMini Piano Visualizer',
-  }), [detectedBpm, timeSignature]);
-  const { musicXml: sheetMusicXml, isComputing: isComputingSheetMusic } = useMusicXmlRenderer(scoreParts, musicXmlOptions);
-  const hasSheetMusicData = scoreParts.length > 0;
-  const effectiveDisplayMode: VisualizerDisplayMode = hasSheetMusicData ? displayMode : 'piano-roll';
+    title: 'ChordMini Lead Sheet',
+    keySignature: mergedKeySignature,
+  }), [detectedBpm, mergedKeySignature, timeSignature]);
+  const sheetMusicXml = useMemo(() => {
+    if (!hasLeadSheetData || !sheetSageResult) {
+      return '';
+    }
+
+    return exportLeadSheetToMusicXml(sheetSageResult.noteEvents, mergedPlayableChordEvents, musicXmlOptions);
+  }, [hasLeadSheetData, mergedPlayableChordEvents, musicXmlOptions, sheetSageResult]);
+  const effectiveDisplayMode: VisualizerDisplayMode = hasLeadSheetData ? displayMode : 'piano-roll';
 
   const legendInstruments = useMemo(() => {
     if (showMelodicOverlay && melodyOverlayNotes.length > 0) {
@@ -742,24 +712,26 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               </button>
             )}
 
-            {hasSheetMusicData && (
-              <Tabs
-                aria-label="Piano visualizer display mode"
-                selectedKey={effectiveDisplayMode}
-                onSelectionChange={(key) => setDisplayMode(key as VisualizerDisplayMode)}
-                size="sm"
-                radius="full"
-                classNames={{
-                  tabList: 'bg-gray-100 dark:bg-gray-800 p-1',
-                  cursor: 'bg-white dark:bg-gray-700 shadow-sm',
-                  tab: 'h-7 px-3',
-                  tabContent: 'text-xs font-medium text-gray-700 group-data-[selected=true]:text-gray-900 dark:text-gray-300 dark:group-data-[selected=true]:text-white',
-                }}
-              >
-                <Tab key="piano-roll" title="Piano Roll" />
-                <Tab key="sheet-music" title="Sheet Music" />
-              </Tabs>
-            )}
+            <Tabs
+              aria-label="Piano visualizer display mode"
+              selectedKey={effectiveDisplayMode}
+              onSelectionChange={(key) => setDisplayMode(key as VisualizerDisplayMode)}
+              size="sm"
+              radius="full"
+              classNames={{
+                tabList: 'bg-gray-100 dark:bg-gray-800 p-1',
+                cursor: 'bg-white dark:bg-gray-700 shadow-sm',
+                tab: 'h-7 px-3',
+                tabContent: 'text-xs font-medium text-gray-700 group-data-[selected=true]:text-gray-900 dark:text-gray-300 dark:group-data-[selected=true]:text-white',
+              }}
+            >
+              <Tab key="piano-roll" title="Piano Roll" />
+              <Tab
+                key="sheet-music"
+                title="Sheet Music"
+                isDisabled={!hasLeadSheetData}
+              />
+            </Tabs>
 
             {/* Speed selector */}
             <div className={`flex items-center space-x-1.5 ${effectiveDisplayMode === 'sheet-music' ? 'opacity-50' : ''}`}>
@@ -809,11 +781,11 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           currentTime={currentTime}
           totalDuration={totalDuration}
           bpm={detectedBpm || 120}
-          isComputing={isComputingSheetMusic}
+          timeSignature={timeSignature}
         />
       ) : (
         <div
-          ref={containerRef}
+          ref={setMeasuredContainerRef}
           className="piano-visualizer-section rounded-lg overflow-hidden bg-gray-950 dark:bg-gray-950"
         >
           {/* Instrument legend (shown when instruments are visualized) */}

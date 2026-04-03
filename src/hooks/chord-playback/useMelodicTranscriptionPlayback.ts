@@ -6,7 +6,7 @@ import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { SheetSageResult } from '@/types/sheetSage';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { YouTubePlayer } from '@/types/youtube';
-import { buildScheduledSheetSageMelodyNotes } from '@/utils/sheetSagePlayback';
+import { buildPreparedSheetSageMelodyNotes, buildScheduledSheetSageMelodyNotes } from '@/utils/sheetSagePlayback';
 
 interface UseMelodicTranscriptionPlaybackProps {
   sheetSageResult: SheetSageResult | null;
@@ -62,6 +62,14 @@ export function useMelodicTranscriptionPlayback({
     [melodyTotalDuration, segmentationData, sheetSageResult?.beatsPerMeasure, sheetSageResult?.tempoBpm],
   );
   const dynamicsAnalyzer = useSharedAudioDynamics(audioUrl, dynamicsParams);
+  const signalAnalysis = dynamicsAnalyzer.getSignalAnalysis();
+  const preparedMelodyNotes = useMemo(
+    () => {
+      void signalAnalysis;
+      return buildPreparedSheetSageMelodyNotes(sheetSageResult, dynamicsAnalyzer);
+    },
+    [dynamicsAnalyzer, sheetSageResult, signalAnalysis],
+  );
 
   const resolvePreciseTransportTime = useCallback(() => {
     const youtubeTime = youtubePlayer?.getCurrentTime?.();
@@ -87,13 +95,12 @@ export function useMelodicTranscriptionPlayback({
   const scheduleMelodyFromTime = useCallback((time: number) => {
     const schedulingTime = resolvePreciseTransportTime();
     const scheduledNotes = buildScheduledSheetSageMelodyNotes(
-      sheetSageResult,
+      preparedMelodyNotes,
       Math.max(time, schedulingTime),
-      dynamicsAnalyzer,
     );
     void serviceRef.current.playScheduledInstrument('melodyViolin', scheduledNotes);
     lastScheduledStartRef.current = Math.max(time, schedulingTime);
-  }, [dynamicsAnalyzer, resolvePreciseTransportTime, sheetSageResult]);
+  }, [preparedMelodyNotes, resolvePreciseTransportTime]);
 
   useEffect(() => {
     const mixer = getAudioMixerService();
@@ -170,6 +177,14 @@ export function useMelodicTranscriptionPlayback({
 
     scheduleMelodyFromTime(preciseCurrentTime);
   }, [currentTime, resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate]);
+
+  useEffect(() => {
+    if (!shouldActivate || !signalAnalysis) {
+      return;
+    }
+
+    scheduleMelodyFromTime(resolvePreciseTransportTime());
+  }, [resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate, signalAnalysis]);
 
   useEffect(() => {
     if (typeof document === 'undefined') {

@@ -44,7 +44,7 @@ export default function ChangelogPage() {
         'NEW: Added standalone Sheet Sage deployment target for Docker and Google Cloud Run with a trimmed runtime image and seeded melody assets.',
         'IMPROVED: Added server-side melody cache retrieval/persistence paths and new tests covering Sheet Sage backend resolution, MIDI export, and retired sax playback behavior.',
         'FIX: Tightened melodic playback ownership, scheduling, and mixer-state handling so the melody toggle more closely controls what is rendered and heard.',
-        'NEW: Introduce OpenSheetMusicDisplay integration for rendering piano-roll-derived sheet music.'
+        'NEW: Introduced OpenSheetMusicDisplay integration for rendering piano-roll-derived sheet music.'
       ],
       breaking: [
         'Sheet music display using OpenSheetMusicDisplay is in early experimental mode',
