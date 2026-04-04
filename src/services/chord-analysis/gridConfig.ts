@@ -32,4 +32,7 @@ export const GRID_ALIGNMENT_CONFIG = {
     minWeight: 4,
     extraBeatPenalty: 0.25,
   },
+  longIntroCompaction: {
+    protectEarlyMusicMeasures: 2,
+  },
 } as const;

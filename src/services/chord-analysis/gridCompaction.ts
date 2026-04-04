@@ -578,8 +578,17 @@ export function runVisualCompactionPipeline(params: {
   timeSignature: number;
   beatDuration: number;
   enabled: boolean;
+  suppressLeadingSilenceExpansion?: boolean;
 }): ChordGridData {
-  const { chordGridData, chordIntervals, beatTimes, timeSignature, beatDuration, enabled } = params;
+  const {
+    chordGridData,
+    chordIntervals,
+    beatTimes,
+    timeSignature,
+    beatDuration,
+    enabled,
+    suppressLeadingSilenceExpansion = false,
+  } = params;
 
   const gapWindows = resolveWindowTargetModulos(
     chordGridData,
@@ -610,12 +619,14 @@ export function runVisualCompactionPipeline(params: {
     timeSignature
   );
   const followupFlags = [...silentRunWindows, ...tempoChangeWindows].sort((a, b) => a.startIndex - b.startIndex);
-  const leadingSilenceWindow = buildLeadingSilenceExpansionWindow(
-    compactedGapGridData,
-    followupFlags,
-    timeSignature,
-    chordGridData.paddingCount + chordGridData.shiftCount
-  );
+  const leadingSilenceWindow = suppressLeadingSilenceExpansion
+    ? null
+    : buildLeadingSilenceExpansionWindow(
+        compactedGapGridData,
+        followupFlags,
+        timeSignature,
+        chordGridData.paddingCount + chordGridData.shiftCount
+      );
 
   return compactVisualWindows(
     compactedGapGridData,

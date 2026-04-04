@@ -94,6 +94,29 @@ function buildOriginalAudioMapping(
   }));
 }
 
+function findFirstChangedAudioIndex(
+  baselineMapping: AudioMappingItem[] | undefined,
+  remapped: AudioMappingItem[] | undefined
+): number | null {
+  if (!Array.isArray(baselineMapping) || !Array.isArray(remapped) || baselineMapping.length === 0 || remapped.length === 0) {
+    return null;
+  }
+
+  const remappedVisualByAudioIndex = new Map<number, number>();
+  remapped.forEach((item) => {
+    remappedVisualByAudioIndex.set(item.audioIndex, item.visualIndex);
+  });
+
+  for (const baselineItem of baselineMapping) {
+    const remappedVisualIndex = remappedVisualByAudioIndex.get(baselineItem.audioIndex);
+    if (typeof remappedVisualIndex === 'number' && remappedVisualIndex !== baselineItem.visualIndex) {
+      return baselineItem.audioIndex;
+    }
+  }
+
+  return null;
+}
+
 function buildInitialGridData(params: {
   regularChords: string[];
   regularBeats: number[];
@@ -168,8 +191,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     leadingSilentRunLength > globalOffsetCount + timeSignature;
   const isLocalCompactionEnabled =
     GRID_ALIGNMENT_CONFIG.enableLocalCompaction &&
-    analysisResults.beatModel === GRID_ALIGNMENT_CONFIG.localCompactionBeatModel &&
-    !hasLongLeadingSilenceWithGlobalOffset;
+    analysisResults.beatModel === GRID_ALIGNMENT_CONFIG.localCompactionBeatModel;
 
   const initialGridData = buildInitialGridData({
     regularChords,
@@ -189,7 +211,26 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     timeSignature,
     beatDuration: bpm > 0 ? 60 / bpm : GRID_ALIGNMENT_CONFIG.padding.fallbackBeatDurationSeconds,
     enabled: isLocalCompactionEnabled,
+    suppressLeadingSilenceExpansion: hasLongLeadingSilenceWithGlobalOffset,
   });
+
+  if (hasLongLeadingSilenceWithGlobalOffset) {
+    const firstChangedAudioIndex = findFirstChangedAudioIndex(
+      initialGridData.originalAudioMapping,
+      compactedGridData.originalAudioMapping
+    );
+    const protectedEarlyBeatCount =
+      timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.protectEarlyMusicMeasures;
+    const firstProtectedMusicAudioIndex = leadingSilentRunLength;
+    const protectedAudioBoundary = firstProtectedMusicAudioIndex + protectedEarlyBeatCount;
+    const compactionStartsTooEarly =
+      firstChangedAudioIndex !== null &&
+      firstChangedAudioIndex < protectedAudioBoundary;
+
+    if (compactionStartsTooEarly) {
+      return initialGridData;
+    }
+  }
 
   return compactedGridData;
 }

@@ -163,7 +163,7 @@ export default function ChangelogPage() {
 
     {
       version: 'v0.5.4',
-      date: 'June 24, 2025',
+      date: 'February 28, 2026',
       title: 'Piano Visualizer & MIDI Export',
       description: 'New Piano Visualizer tab with falling notes, 88-key keyboard, scrolling chord timeline, multi-instrument support, and MIDI export. Unified chord rendering across all tabs.',
       features: [
