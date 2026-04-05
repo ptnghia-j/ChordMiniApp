@@ -29,8 +29,25 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.3.1',
+      date: 'April 5, 2026',
+      title: 'Minor Patch for Sheet Music Display',
+      description: 'Fixes a minor rendering issue',
+      features: [
+        'NEW: PDF export option for sheet music'
+      ],
+      technical: [
+        'FIX: Resolved a minor rendering issue in the sheet music display for certain note patterns',
+        'FIX: Added native jsPDF export for sheet music display',
+        'FIX: Added dedicated hidden OSMD export render pass',
+      ],
+      breaking: [
+      ]
+    },
+
+    {
       version: 'v0.6.3',
-      date: 'April 4, 2026',
+      date: 'April 3, 2026',
       title: 'Experimental Melody Transcription with Sheet Sage, First Full Sheet Music Display',
       description: 'Adds an experimental melody-transcription workflow powered by a standalone Sheet Sage service, plus playback, caching, export, and deployment updates.',
       features: [

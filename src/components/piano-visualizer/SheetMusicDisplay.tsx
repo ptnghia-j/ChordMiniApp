@@ -62,6 +62,149 @@ interface ScoreSyncData {
   measureStartAudioTimes: number[];
 }
 
+interface RasterizedScorePage {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+interface PdfWriter {
+  addPage: () => void;
+  addImage: (...args: unknown[]) => void;
+  internal: {
+    pageSize: {
+      getWidth: () => number;
+      getHeight: () => number;
+    };
+  };
+  save: (filename: string) => void;
+}
+
+function collectRenderableScoreCanvases(container: HTMLElement): HTMLCanvasElement[] {
+  const MIN_SCORE_WIDTH = 120;
+  const MIN_SCORE_HEIGHT = 80;
+
+  return Array.from(container.querySelectorAll('canvas'))
+    .filter((element): element is HTMLCanvasElement => element instanceof HTMLCanvasElement)
+    .filter((canvas) => canvas.width >= MIN_SCORE_WIDTH && canvas.height >= MIN_SCORE_HEIGHT);
+}
+
+function rasterizeScoreCanvasPages(container: HTMLElement): RasterizedScorePage[] {
+  const canvases = collectRenderableScoreCanvases(container);
+  const pages: RasterizedScorePage[] = [];
+
+  for (const canvas of canvases) {
+    try {
+      pages.push({
+        dataUrl: canvas.toDataURL('image/png'),
+        width: Math.max(1, canvas.width),
+        height: Math.max(1, canvas.height),
+      });
+    } catch {
+      // Ignore tainted or unreadable canvases and continue with other pages/fallbacks.
+      continue;
+    }
+  }
+
+  return pages;
+}
+
+async function rasterizeScoreWithDedicatedCanvasBackend(params: {
+  musicXml: string;
+  targetWidth: number;
+}): Promise<RasterizedScorePage[]> {
+  if (typeof document === 'undefined') {
+    return [];
+  }
+
+  const { musicXml, targetWidth } = params;
+  const OpenSheetMusicDisplay = await loadOsmdConstructor();
+  const host = document.createElement('div');
+  const exportContainer = document.createElement('div');
+
+  host.style.position = 'fixed';
+  host.style.left = '-100000px';
+  host.style.top = '0';
+  host.style.width = `${Math.max(640, Math.ceil(targetWidth))}px`;
+  host.style.background = '#ffffff';
+  host.style.opacity = '0';
+  host.style.pointerEvents = 'none';
+  host.style.zIndex = '-1';
+  host.setAttribute('aria-hidden', 'true');
+
+  exportContainer.style.width = '100%';
+  exportContainer.style.background = '#ffffff';
+  host.appendChild(exportContainer);
+  document.body.appendChild(host);
+
+  try {
+    const exportOsmd = new OpenSheetMusicDisplay(exportContainer, {
+      autoResize: false,
+      backend: 'canvas',
+      drawTitle: false,
+      drawComposer: false,
+      drawPartNames: true,
+      drawingParameters: 'compact',
+      renderSingleHorizontalStaffline: false,
+      followCursor: false,
+      cursorsOptions: [],
+    });
+
+    await exportOsmd.load(musicXml);
+    exportOsmd.Zoom = 0.82;
+    exportOsmd.render();
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    return rasterizeScoreCanvasPages(exportContainer);
+  } catch {
+    return [];
+  } finally {
+    host.remove();
+  }
+}
+
+function appendImageToPdfPages(params: {
+  pdf: PdfWriter;
+  imageData: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  addPageBefore: boolean;
+}): void {
+  const {
+    pdf,
+    imageData,
+    sourceWidth,
+    sourceHeight,
+    addPageBefore,
+  } = params;
+
+  if (addPageBefore) {
+    pdf.addPage();
+  }
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const renderedWidth = pageWidth;
+  const renderedHeight = (sourceHeight * renderedWidth) / Math.max(sourceWidth, 1);
+  let heightLeft = renderedHeight;
+  let positionY = 0;
+
+  pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
+  heightLeft -= pageHeight;
+
+  while (heightLeft > 0) {
+    positionY = heightLeft - renderedHeight;
+    pdf.addPage();
+    pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
+    heightLeft -= pageHeight;
+  }
+}
+
 function normalizeMeasureStartTimes(rawTimes: unknown): number[] {
   if (!Array.isArray(rawTimes)) {
     return [];
@@ -524,46 +667,54 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
     setIsExportingPdf(true);
 
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
+      const fontSet = (document as Document & {
+        fonts?: {
+          status?: string;
+          ready: Promise<unknown>;
+        };
+      }).fonts;
+      if (fontSet && fontSet.status !== 'loaded') {
+        try {
+          await fontSet.ready;
+        } catch {
+          // Continue export with currently available fonts.
+        }
+      }
 
-      const captureWidth = Math.max(1, Math.ceil(content.scrollWidth));
-      const captureHeight = Math.max(1, Math.ceil(content.scrollHeight));
-      const canvas = await html2canvas(content, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: captureWidth,
-        height: captureHeight,
-        windowWidth: captureWidth,
-        windowHeight: captureHeight,
+      const { jsPDF } = await import('jspdf');
+
+      const dedicatedCanvasPages = await rasterizeScoreWithDedicatedCanvasBackend({
+        musicXml,
+        targetWidth: content.clientWidth || content.scrollWidth,
       });
 
-      const imageData = canvas.toDataURL('image/png');
+      if (dedicatedCanvasPages.length === 0) {
+        throw new Error('No score pages were rendered for PDF export.');
+      }
+
+      const [firstPage, ...remainingPages] = dedicatedCanvasPages;
       const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        orientation: firstPage.width > firstPage.height ? 'landscape' : 'portrait',
         unit: 'pt',
         format: 'a4',
+      }) as unknown as PdfWriter;
+
+      appendImageToPdfPages({
+        pdf,
+        imageData: firstPage.dataUrl,
+        sourceWidth: firstPage.width,
+        sourceHeight: firstPage.height,
+        addPageBefore: false,
       });
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const renderedWidth = pageWidth;
-      const renderedHeight = (canvas.height * renderedWidth) / canvas.width;
-      let heightLeft = renderedHeight;
-      let positionY = 0;
-
-      pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        positionY = heightLeft - renderedHeight;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
-        heightLeft -= pageHeight;
+      for (const page of remainingPages) {
+        appendImageToPdfPages({
+          pdf,
+          imageData: page.dataUrl,
+          sourceWidth: page.width,
+          sourceHeight: page.height,
+          addPageBefore: true,
+        });
       }
 
       pdf.save('sheet-music.pdf');
