@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type OpenSheetMusicDisplayCtor = new (
   container: HTMLElement,
@@ -55,6 +55,107 @@ interface MeasureHighlightBox {
   left: number;
   width: number;
   height: number;
+}
+
+interface ScoreSyncData {
+  measureStartScoreTimes: number[];
+  measureStartAudioTimes: number[];
+}
+
+function normalizeMeasureStartTimes(rawTimes: unknown): number[] {
+  if (!Array.isArray(rawTimes)) {
+    return [];
+  }
+
+  return rawTimes
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Number(value));
+}
+
+function extractSyncDataFromMusicXml(musicXml: string): ScoreSyncData {
+  const syncMatch = musicXml.match(/chordmini-sync-data:([\s\S]*?)-->/i);
+  if (!syncMatch) {
+    return {
+      measureStartScoreTimes: [],
+      measureStartAudioTimes: [],
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(syncMatch[1].trim()) as {
+      measureStartScoreTimes?: unknown;
+      measureStartAudioTimes?: unknown;
+    };
+
+    return {
+      measureStartScoreTimes: normalizeMeasureStartTimes(parsed.measureStartScoreTimes),
+      measureStartAudioTimes: normalizeMeasureStartTimes(parsed.measureStartAudioTimes),
+    };
+  } catch {
+    return {
+      measureStartScoreTimes: [],
+      measureStartAudioTimes: [],
+    };
+  }
+}
+
+function isStrictlyIncreasing(values: number[]): boolean {
+  if (values.length < 2) {
+    return false;
+  }
+
+  for (let index = 1; index < values.length; index += 1) {
+    if (!Number.isFinite(values[index]) || values[index] <= values[index - 1] + 0.000001) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function resolveMeasureStartScoreTimes(
+  syncData: ScoreSyncData,
+  measureCount: number,
+  measureDurationSeconds: number,
+): number[] {
+  if (syncData.measureStartScoreTimes.length >= measureCount) {
+    return syncData.measureStartScoreTimes.slice(0, measureCount);
+  }
+
+  return Array.from({ length: measureCount }, (_, measureIndex) => (
+    Number((measureIndex * measureDurationSeconds).toFixed(6))
+  ));
+}
+
+function getActiveMeasureIndexFromAudioTime(
+  currentTime: number,
+  syncData: ScoreSyncData,
+  bpm: number,
+  timeSignature: number,
+): number {
+  const safeCurrentTime = Number.isFinite(currentTime) ? currentTime : 0;
+  const starts = syncData.measureStartAudioTimes;
+
+  if (isStrictlyIncreasing(starts)) {
+    let left = 0;
+    let right = starts.length - 1;
+    let answer = 0;
+
+    while (left <= right) {
+      const middle = Math.floor((left + right) / 2);
+      if (safeCurrentTime >= starts[middle]) {
+        answer = middle;
+        left = middle + 1;
+      } else {
+        right = middle - 1;
+      }
+    }
+
+    return Math.max(0, answer);
+  }
+
+  const measureDurationSeconds = (timeSignature * 60) / bpm;
+  return Math.max(0, Math.floor(safeCurrentTime / Math.max(measureDurationSeconds, 0.001)));
 }
 
 function resolveOsmdConstructor(): OpenSheetMusicDisplayCtor | null {
@@ -147,13 +248,21 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
     };
   } | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [measureBoxes, setMeasureBoxes] = useState<MeasureHighlightBox[]>([]);
+  const syncData = useMemo(() => extractSyncDataFromMusicXml(musicXml), [musicXml]);
 
   const getWholeNoteTime = useCallback((seconds: number) => (seconds * bpm) / 240, [bpm]);
   const measureDurationSeconds = (timeSignature * 60) / bpm;
-  const activeMeasureIndex = Math.max(0, Math.floor(currentTime / Math.max(measureDurationSeconds, 0.001)));
-  const measureCount = Math.max(1, musicXml.match(/<measure number="/g)?.length ?? 0);
+  const measureCount = Math.max(1, musicXml.match(/<measure\b/g)?.length ?? 0);
+  const measureStartScoreTimes = useMemo(
+    () => resolveMeasureStartScoreTimes(syncData, measureCount, measureDurationSeconds),
+    [measureCount, measureDurationSeconds, syncData],
+  );
+  const rawActiveMeasureIndex = getActiveMeasureIndexFromAudioTime(currentTime, syncData, bpm, timeSignature);
+  const maxRenderableMeasureIndex = Math.max(0, (measureBoxes.length > 0 ? measureBoxes.length : measureCount) - 1);
+  const activeMeasureIndex = Math.min(rawActiveMeasureIndex, maxRenderableMeasureIndex);
   const getIteratorTime = useCallback((
     iterator?: {
       currentTimeStamp?: { RealValue?: number };
@@ -191,7 +300,8 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
       cursor.show();
 
       for (let measureIndex = 0; measureIndex < measureCount; measureIndex += 1) {
-        const targetTime = getWholeNoteTime(measureIndex * measureDurationSeconds);
+        const targetScoreTime = measureStartScoreTimes[measureIndex] ?? (measureIndex * measureDurationSeconds);
+        const targetTime = getWholeNoteTime(targetScoreTime);
         let safetyCounter = 0;
 
         while (safetyCounter < 10000) {
@@ -230,12 +340,43 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
       }
 
       cursor.hide?.();
+
+      const extractedBoxes = boxes.filter((box): box is MeasureHighlightBox => Boolean(box));
+      if (extractedBoxes.length === 0) {
+        return [];
+      }
+
+      const normalizedBoxes: MeasureHighlightBox[] = [];
+      for (let measureIndex = 0; measureIndex < measureCount; measureIndex += 1) {
+        normalizedBoxes[measureIndex] = boxes[measureIndex] ?? normalizedBoxes[measureIndex - 1] ?? extractedBoxes[0];
+      }
+
+      const contentWidth = content.getBoundingClientRect().width;
+      const MIN_VISIBLE_WIDTH = 24;
+      const MIN_VISIBLE_HEIGHT = 44;
+
+      const visualBoxes = normalizedBoxes.map((box, index) => {
+        const next = normalizedBoxes[index + 1];
+        const estimatedWidth = next
+          ? Math.max(1, next.left - box.left)
+          : Math.max(1, contentWidth - box.left);
+        const width = box.width >= 8 ? box.width : Math.max(MIN_VISIBLE_WIDTH, estimatedWidth);
+        const height = box.height >= 8 ? box.height : Math.max(MIN_VISIBLE_HEIGHT, box.height);
+        const top = box.height >= 8 ? box.top : Math.max(0, box.top - ((height - box.height) / 2));
+
+        return {
+          top,
+          left: box.left,
+          width,
+          height,
+        };
+      });
+
+      return visualBoxes;
     } catch {
       return [];
     }
-
-    return boxes;
-  }, [getIteratorTime, getWholeNoteTime, measureCount, measureDurationSeconds, styleMeasureCursor]);
+  }, [getIteratorTime, getWholeNoteTime, measureCount, measureDurationSeconds, measureStartScoreTimes, styleMeasureCursor]);
 
   const activeMeasureBox = measureBoxes[activeMeasureIndex] ?? null;
 
@@ -370,6 +511,69 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [buildMeasureBoxMap]);
 
+  const handleDownloadPdf = useCallback(async () => {
+    if (isExportingPdf || isRendering || isComputing || !musicXml.trim()) {
+      return;
+    }
+
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      const captureWidth = Math.max(1, Math.ceil(content.scrollWidth));
+      const captureHeight = Math.max(1, Math.ceil(content.scrollHeight));
+      const canvas = await html2canvas(content, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: captureWidth,
+        height: captureHeight,
+        windowWidth: captureWidth,
+        windowHeight: captureHeight,
+      });
+
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const renderedWidth = pageWidth;
+      const renderedHeight = (canvas.height * renderedWidth) / canvas.width;
+      let heightLeft = renderedHeight;
+      let positionY = 0;
+
+      pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        positionY = heightLeft - renderedHeight;
+        pdf.addPage();
+        pdf.addImage(imageData, 'PNG', 0, positionY, renderedWidth, renderedHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save('sheet-music.pdf');
+    } catch {
+      setRenderError('Unable to export sheet music as PDF. Please try again.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [isComputing, isExportingPdf, isRendering, musicXml]);
+
   return (
     <div className={`bg-white text-gray-900 ${className}`}>
       {(isRendering || isComputing) && (
@@ -382,28 +586,46 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
           {renderError}
         </div>
       )}
-      <div ref={wrapperRef} className="h-[68vh] max-h-[760px] overflow-y-auto overflow-x-hidden bg-white">
-        <div
-          ref={contentRef}
-          className="relative mx-auto min-h-[320px] bg-white"
-        >
-          {activeMeasureBox && (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute rounded-lg bg-[rgba(37,99,235,0.22)]"
-              style={{
-                top: activeMeasureBox.top,
-                left: activeMeasureBox.left,
-                width: activeMeasureBox.width,
-                height: activeMeasureBox.height,
-                zIndex: 8,
-              }}
-            />
-          )}
+      <div className="relative">
+        {musicXml.trim() && (
+          <button
+            type="button"
+            onClick={() => {
+              void handleDownloadPdf();
+            }}
+            disabled={isRendering || isComputing || isExportingPdf}
+            className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-md border border-gray-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Download sheet music as PDF"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {isExportingPdf ? 'Exporting...' : 'PDF'}
+          </button>
+        )}
+        <div ref={wrapperRef} className="h-[68vh] max-h-[760px] overflow-y-auto overflow-x-hidden bg-white">
           <div
-            ref={containerRef}
-            className="min-h-[320px] bg-white [&_svg]:h-auto [&_svg]:max-w-none"
-          />
+            ref={contentRef}
+            className="relative mx-auto min-h-[320px] bg-white"
+          >
+            {activeMeasureBox && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute rounded-lg bg-[rgba(37,99,235,0.22)]"
+                style={{
+                  top: activeMeasureBox.top,
+                  left: activeMeasureBox.left,
+                  width: activeMeasureBox.width,
+                  height: activeMeasureBox.height,
+                  zIndex: 8,
+                }}
+              />
+            )}
+            <div
+              ref={containerRef}
+              className="min-h-[320px] bg-white [&_svg]:h-auto [&_svg]:max-w-none"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -411,12 +633,13 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
 };
 
 function getMeasureIndexForProps({
+  musicXml,
   currentTime = 0,
   bpm = 120,
   timeSignature = 4,
-}: Pick<SheetMusicDisplayProps, 'currentTime' | 'bpm' | 'timeSignature'>): number {
-  const measureDurationSeconds = (timeSignature * 60) / bpm;
-  return Math.max(0, Math.floor(currentTime / Math.max(measureDurationSeconds, 0.001)));
+}: Pick<SheetMusicDisplayProps, 'musicXml' | 'currentTime' | 'bpm' | 'timeSignature'>): number {
+  const syncData = extractSyncDataFromMusicXml(musicXml);
+  return getActiveMeasureIndexFromAudioTime(currentTime, syncData, bpm, timeSignature);
 }
 
 export const SheetMusicDisplay = memo(

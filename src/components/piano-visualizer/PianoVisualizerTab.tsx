@@ -11,7 +11,9 @@ import {
   type ChordEvent,
 } from '@/utils/chordToMidi';
 import { exportChordEventsToMidi, downloadMidiFile } from '@/utils/midiExport';
-import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
+import {
+  mergeConsecutiveChordEvents,
+} from '@/utils/instrumentNoteGeneration';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
@@ -23,7 +25,6 @@ import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKey
 import {
   useGuitarCapoFret,
   useGuitarSelectedPositions,
-  usePitchShiftSemitones,
   useTargetKey,
   useRomanNumerals,
 } from '@/stores/uiStore';
@@ -431,13 +432,12 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   const speed = SPEED_PRESETS[speedIndex];
 
-  const { resolvedChordGridData, displayedChords, isPitchShiftActive } = useResolvedChordDisplayData({
+  const { resolvedChordGridData, displayedChords } = useResolvedChordDisplayData({
     chordGridData,
     showCorrectedChords: mergedShowCorrectedChords,
     chordCorrections: mergedChordCorrections,
     sequenceCorrections,
   });
-  const pitchShiftSemitones = usePitchShiftSemitones();
 
   // Build chord event timeline for the piano roll
   const chordEvents = useMemo<ChordEvent[]>(() => {
@@ -572,16 +572,9 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     return instruments;
   }, [isChordPlaybackEnabled, mixerSettings]);
 
-  const melodyOverlayPitchShiftSemitones = isPitchShiftActive ? pitchShiftSemitones : 0;
   const melodyOverlayNotes = useMemo(
-    () => showMelodicOverlay
-      ? buildSheetSageExtraVisualNotes(
-        sheetSageResult,
-        MELODIC_TRANSCRIPTION_COLOR,
-        melodyOverlayPitchShiftSemitones,
-      )
-      : [],
-    [melodyOverlayPitchShiftSemitones, sheetSageResult, showMelodicOverlay],
+    () => showMelodicOverlay ? buildSheetSageExtraVisualNotes(sheetSageResult, MELODIC_TRANSCRIPTION_COLOR) : [],
+    [sheetSageResult, showMelodicOverlay],
   );
 
   // Calculate keyboard width
@@ -629,6 +622,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [isChordPlaybackEnabled, activeInstruments]);
 
   const hasLeadSheetData = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
+  const sheetMusicDisabledTooltip = 'Run melody transcription to enable Sheet Music.';
   const musicXmlOptions = useMemo(() => ({
     bpm: detectedBpm || undefined,
     timeSignature,
@@ -737,7 +731,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               <Tab key="piano-roll" title="Piano Roll" />
               <Tab
                 key="sheet-music"
-                title="Sheet Music"
+                title={<span title={!hasLeadSheetData ? sheetMusicDisabledTooltip : undefined}>Sheet Music</span>}
                 isDisabled={!hasLeadSheetData}
               />
             </Tabs>

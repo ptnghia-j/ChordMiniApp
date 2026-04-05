@@ -30,7 +30,7 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.6.3',
-      date: 'April 3, 2026',
+      date: 'April 4, 2026',
       title: 'Experimental Melody Transcription with Sheet Sage, First Full Sheet Music Display',
       description: 'Adds an experimental melody-transcription workflow powered by a standalone Sheet Sage service, plus playback, caching, export, and deployment updates.',
       features: [
