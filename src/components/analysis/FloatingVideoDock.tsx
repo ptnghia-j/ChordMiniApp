@@ -330,7 +330,6 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
               onClick={toggleVideoMinimization}
               className="group inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-white/20 bg-slate-950/10 px-2.5 text-white shadow-[0_10px_30px_-14px_rgba(15,23,42,0.95)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-950/78 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
               aria-label={isVideoMinimized ? 'Expand video player' : 'Shrink video player'}
-              title={isVideoMinimized ? 'Expand video player' : 'Shrink video player'}
             >
               <span className="flex items-center gap-2">
                 {isVideoMinimized ? (

@@ -22,6 +22,7 @@ import { ChordCell } from './ChordCell';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
 import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
+import AppTooltip from '@/components/common/AppTooltip';
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -788,20 +789,21 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       className="w-7 sm:w-8 flex-shrink-0 flex"
                       style={{ height: `${stripMetrics.heightPx}px` }}
                     >
-                      <div
-                        className={`w-full h-full rounded-sm border text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center ${
-                          isDarkMode ? 'text-gray-100 border-white/15' : 'text-gray-700 border-black/10'
-                        }`}
-                        style={{
-                          writingMode: 'vertical-rl',
-                          transform: 'rotate(180deg)',
-                          backgroundColor: section.accentColor,
-                          padding: '0.5rem 0.2rem',
-                        }}
-                        title={section.label}
-                      >
-                        {section.label}
-                      </div>
+                      <AppTooltip content={section.label} placement="right">
+                        <div
+                          className={`w-full h-full rounded-sm border text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center ${
+                            isDarkMode ? 'text-gray-100 border-white/15' : 'text-gray-700 border-black/10'
+                          }`}
+                          style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            backgroundColor: section.accentColor,
+                            padding: '0.5rem 0.2rem',
+                          }}
+                        >
+                          {section.label}
+                        </div>
+                      </AppTooltip>
                     </div>
 
                     <div className="flex-1 space-y-0.5 min-w-0">

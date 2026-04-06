@@ -4,6 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import Chord from '@tombatossals/react-chords/lib/Chord';
 import { formatChordWithMusicalSymbols } from '@/utils/chordFormatting';
+import AppTooltip from '@/components/common/AppTooltip';
 
 interface ChordPosition {
   frets: number[];
@@ -189,21 +190,22 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
 
         {/* Roman numeral display for No Chord */}
         {showRomanNumerals && romanNumeral && (
-          <div
-            className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
-              size === 'small' ? 'text-xs' :
-              size === 'medium' ? 'text-sm' :
-              'text-base'
-            }`}
-            title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
-          >
-            {React.isValidElement(romanNumeral)
-              ? romanNumeral
-              : typeof romanNumeral === 'string'
-              ? romanNumeral.replace(/\|/g, '/')
-              : romanNumeral
-            }
-          </div>
+          <AppTooltip content={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}>
+            <div
+              className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
+                size === 'small' ? 'text-xs' :
+                size === 'medium' ? 'text-sm' :
+                'text-base'
+              }`}
+            >
+              {React.isValidElement(romanNumeral)
+                ? romanNumeral
+                : typeof romanNumeral === 'string'
+                ? romanNumeral.replace(/\|/g, '/')
+                : romanNumeral
+              }
+            </div>
+          </AppTooltip>
         )}
       </div>
     );
@@ -285,19 +287,20 @@ const GuitarChordDiagramComponent: React.FC<GuitarChordDiagramProps> = ({
 
       {/* Roman numeral display */}
       {showRomanNumerals && romanNumeral && (
-        <div
-          className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
-            size === 'small' ? 'text-xs' :
-            size === 'medium' ? 'text-sm' :
-            'text-base'
-          } ${romanNumeralClassName || ''}`}
-          title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
-        >
-          {typeof romanNumeral === 'string'
-            ? romanNumeral.replace(/\|/g, '/')
-            : romanNumeral
-          }
-        </div>
+        <AppTooltip content={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}>
+          <div
+            className={`font-varela text-center font-semibold mt-0.5 text-blue-700 dark:text-blue-300 ${
+              size === 'small' ? 'text-xs' :
+              size === 'medium' ? 'text-sm' :
+              'text-base'
+            } ${romanNumeralClassName || ''}`}
+          >
+            {typeof romanNumeral === 'string'
+              ? romanNumeral.replace(/\|/g, '/')
+              : romanNumeral
+            }
+          </div>
+        </AppTooltip>
       )}
 
       {/* Position selector for multiple chord positions */}

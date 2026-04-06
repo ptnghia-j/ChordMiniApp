@@ -7,6 +7,7 @@ import { HiMusicalNote, HiInformationCircle, HiTrash, HiXMark } from 'react-icon
 import { getCurrentLyricsLine, parseVideoTitle, LRCTimestamp, LRCLibResponse } from '@/services/lyrics/lrclibService';
 import { searchLyricsWithFallback, type LyricsServiceResponse } from '@/services/lyrics/lyricsService';
 import { useEmbeddedPanelHeight } from '@/hooks/ui/useEmbeddedPanelHeight';
+import AppTooltip from '@/components/common/AppTooltip';
 
 interface LyricsPanelProps {
   isOpen: boolean;
@@ -34,12 +35,10 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchForSynced, setSearchForSynced] = useState(true);
-  const [showTooltip, setShowTooltip] = useState(false);
   const [displayMode, setDisplayMode] = useState<'sync' | 'static'>('sync');
 
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const embeddedHeight = useEmbeddedPanelHeight(embedded, panelRef);
 
@@ -51,16 +50,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
       }
     }
   }, [isOpen, videoTitle, searchQuery]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) setShowTooltip(false);
-    };
-    if (showTooltip) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showTooltip]);
 
   const fetchLyrics = async (query: string) => {
     if (!query.trim()) return;
@@ -247,28 +236,17 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                 <div className="flex items-center gap-2">
                   <HiMusicalNote className="h-5 w-5 text-green-500" />
                   <h3 className="font-semibold text-gray-800 dark:text-white text-base">Song Lyrics</h3>
-                  <div ref={tooltipRef} className="relative" onMouseLeave={() => setShowTooltip(false)}>
+                  <AppTooltip
+                    content="Sync timing may differ from the analyzed audio if using a different recording version."
+                    placement="bottom-start"
+                  >
                     <button
-                      onMouseEnter={() => setShowTooltip(true)}
-                      onFocus={() => setShowTooltip(true)}
-                      onBlur={() => setShowTooltip(false)}
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-white"
+                      aria-label="Lyrics sync timing info"
                     >
                       <HiInformationCircle className="h-4 w-4" />
                     </button>
-                    <AnimatePresence>
-                      {showTooltip && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          className="absolute z-10 mt-1 left-0 w-60 p-2.5 text-xs bg-gray-800 text-gray-100 rounded-lg shadow-lg"
-                        >
-                          Sync timing may differ from the analyzed audio if using a different recording version.
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                  </AppTooltip>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -284,9 +262,11 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                   >
                     Sync: {syncOn ? 'On' : 'Off'}
                   </button>
-                  <button onClick={clearLyrics} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors" title="Clear">
-                    <HiTrash className="h-4 w-4" />
-                  </button>
+                  <AppTooltip content="Clear lyrics">
+                    <button onClick={clearLyrics} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors" aria-label="Clear lyrics">
+                      <HiTrash className="h-4 w-4" />
+                    </button>
+                  </AppTooltip>
                   <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors" aria-label="Close">
                     <HiXMark className="h-4 w-4" />
                   </button>

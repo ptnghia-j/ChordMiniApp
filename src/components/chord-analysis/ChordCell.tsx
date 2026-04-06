@@ -4,6 +4,7 @@ import {
   getChordLabelStyles,
   getChordContainerStyles
 } from '@/utils/chordFormatting';
+import AppTooltip from '@/components/common/AppTooltip';
 
 export interface ChordCellProps {
   chord: string;
@@ -210,7 +211,11 @@ export const ChordCell = React.memo<ChordCellProps>(({
       ? '!bg-green-300/20 dark:!bg-green-900/30 !border-green-500/50 dark:!border-green-500/70'
       : segmentationClassName || '';
 
-  return (
+  const modulationTooltip = modulationInfo?.isModulation
+    ? `Key change: ${modulationInfo.fromKey} → ${modulationInfo.toKey}`
+    : null;
+
+  const chordCell = (
     <div
       ref={cellRef}
       id={`chord-${globalIndex}`}
@@ -227,11 +232,6 @@ export const ChordCell = React.memo<ChordCellProps>(({
         overflow: canOverflowLabel ? 'visible' : undefined,
         zIndex: canOverflowLabel ? 2 : undefined,
       }}
-      title={
-        modulationInfo?.isModulation
-          ? `Key change: ${modulationInfo.fromKey} → ${modulationInfo.toKey}`
-          : undefined
-      }
       onClick={handleClick}
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}
@@ -259,61 +259,63 @@ export const ChordCell = React.memo<ChordCellProps>(({
           ) : (
             <div className="flex flex-col items-center justify-center h-full" style={{ overflow: canOverflowLabel ? 'visible' : 'hidden', width: '100%' }}>
               {/* Chord label */}
-              <div
-                // ✅ APPLY FONT: Use font-varela Tailwind class
-                className={`font-varela ${
-                  showRomanNumerals
-                    ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
-                    : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
-                } leading-tight whitespace-nowrap ${
-                  wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
-                } ${canOverflowLabel ? 'overflow-visible' : 'overflow-hidden text-ellipsis max-w-full'} ${
-                  isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
-                }`}
-                style={{
-                  ...getChordLabelStyles(),
-                  fontSize: getGridLabelFontSize((editedChord || displayChord).length),
-                  width: labelOverflowWidth,
-                  maxWidth: labelOverflowWidth,
-                  minWidth: '100%',
-                  alignSelf: 'flex-start',
-                  overflow: canOverflowLabel ? 'visible' : 'hidden',
-                  textOverflow: canOverflowLabel ? 'clip' : 'ellipsis',
-                  position: 'relative',
-                  zIndex: canOverflowLabel ? 2 : 1,
-                }}
-                onClick={isEditMode ? handleClick : undefined}
-                title={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}
-                dangerouslySetInnerHTML={{
-                  __html: editedChord
-                    ? editedChord // Show raw edited value without formatting
-                    : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
-                }}
-              />
+              <AppTooltip content={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}>
+                <div
+                  // ✅ APPLY FONT: Use font-varela Tailwind class
+                  className={`font-varela ${
+                    showRomanNumerals
+                      ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
+                      : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
+                  } leading-tight whitespace-nowrap ${
+                    wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
+                  } ${canOverflowLabel ? 'overflow-visible' : 'overflow-hidden text-ellipsis max-w-full'} ${
+                    isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
+                  }`}
+                  style={{
+                    ...getChordLabelStyles(),
+                    fontSize: getGridLabelFontSize((editedChord || displayChord).length),
+                    width: labelOverflowWidth,
+                    maxWidth: labelOverflowWidth,
+                    minWidth: '100%',
+                    alignSelf: 'flex-start',
+                    overflow: canOverflowLabel ? 'visible' : 'hidden',
+                    textOverflow: canOverflowLabel ? 'clip' : 'ellipsis',
+                    position: 'relative',
+                    zIndex: canOverflowLabel ? 2 : 1,
+                  }}
+                  onClick={isEditMode ? handleClick : undefined}
+                  dangerouslySetInnerHTML={{
+                    __html: editedChord
+                      ? editedChord // Show raw edited value without formatting
+                      : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
+                  }}
+                />
+              </AppTooltip>
 
               {/* FIXED: Roman numeral display with stable layout */}
               {showRomanNumerals && romanNumeral && (
-                <div
-                  className={`font-varela font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
-                  style={{
-                    fontSize: `${Math.max(11, cellSize * 0.18)}px`,
-                    lineHeight: '1', // FIXED: Consistent line height to prevent layout shifts
-                    overflow: 'visible', // Allow superscripts to extend beyond container
-                    position: 'relative', // Ensure proper positioning context for absolute children
-                    minHeight: '1.4em', // FIXED: More space for superscripts to prevent jitter
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  title={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}
-                >
-                  {React.isValidElement(romanNumeral)
-                    ? romanNumeral
-                    : typeof romanNumeral === 'string'
-                    ? romanNumeral.replace(/\|/g, '/')
-                    : romanNumeral
-                  }
-                </div>
+                <AppTooltip content={`Roman numeral: ${typeof romanNumeral === 'string' ? romanNumeral : romanNumeral.toString()}`}>
+                  <div
+                    className={`font-varela font-semibold leading-tight text-blue-700 dark:text-blue-300 mt-1 max-w-full`}
+                    style={{
+                      fontSize: `${Math.max(11, cellSize * 0.18)}px`,
+                      lineHeight: '1', // FIXED: Consistent line height to prevent layout shifts
+                      overflow: 'visible', // Allow superscripts to extend beyond container
+                      position: 'relative', // Ensure proper positioning context for absolute children
+                      minHeight: '1.4em', // FIXED: More space for superscripts to prevent jitter
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {React.isValidElement(romanNumeral)
+                      ? romanNumeral
+                      : typeof romanNumeral === 'string'
+                      ? romanNumeral.replace(/\|/g, '/')
+                      : romanNumeral
+                    }
+                  </div>
+                </AppTooltip>
               )}
 
 
@@ -327,6 +329,16 @@ export const ChordCell = React.memo<ChordCellProps>(({
       </div>
     </div>
   );
+
+  if (modulationTooltip) {
+    return (
+      <AppTooltip content={modulationTooltip}>
+        {chordCell}
+      </AppTooltip>
+    );
+  }
+
+  return chordCell;
 }, areChordCellPropsEqual);
 
 ChordCell.displayName = 'ChordCell';

@@ -63,7 +63,6 @@ const SegmentationToggleButton: React.FC<SegmentationToggleButtonProps> = ({
           disabled={disabled || isLoading}
           className={buttonClassName}
           aria-label={hasSegmentationData ? 'Toggle song segmentation overlay' : 'Enable song segmentation'}
-          title={typeof tooltipLabel === 'string' ? tooltipLabel : 'Song segmentation'}
         >
           {isLoading ? (
             <HiArrowPath className="h-4 w-4 animate-spin" />

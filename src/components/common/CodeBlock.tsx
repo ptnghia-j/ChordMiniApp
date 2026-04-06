@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useTheme } from '@/contexts/ThemeContext';
+import AppTooltip from '@/components/common/AppTooltip';
 
 interface CodeBlockProps {
   code: string;
@@ -27,13 +28,14 @@ export const CodeBlock = ({ code, language }: CodeBlockProps) => {
 
   return (
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 font-mono text-sm relative">
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors z-10"
-        title="Copy code"
-      >
-        {copied ? '✓ Copied' : 'Copy'}
-      </button>
+      <AppTooltip content="Copy code">
+        <button
+          onClick={handleCopy}
+          className="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors z-10"
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </AppTooltip>
 
       <Highlight
         theme={theme === 'dark' ? themes.vsDark : themes.github}

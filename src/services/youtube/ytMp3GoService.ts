@@ -14,7 +14,7 @@
  * - Quality selection: low, medium, high
  * - Native Unicode filename support
  * - Two-step process for better reliability
- * - Reliable job status monitoring via SSE
+ * - Long-lived SSE job monitoring
  * - Better error handling
  */
 
@@ -65,8 +65,7 @@ export class YtMp3GoService {
   private readonly DEFAULT_QUALITY = this.QUALITY_OPTIONS.MEDIUM;
 
   // Optimized timing for Vercel constraints (300s max)
-  private readonly MAX_POLL_ATTEMPTS = 50; // 50 attempts = 250 seconds max (within 300s limit)
-  private readonly POLL_INTERVAL = 5000; // 5 seconds between polls
+  private readonly MAX_MONITOR_DURATION_MS = 250000; // Keep within Vercel route maxDuration window
   private readonly JOB_TIMEOUT = 15000; // 15 seconds for job creation
 
   // Simple job tracking by video ID
@@ -99,9 +98,6 @@ export class YtMp3GoService {
 
     // Check for existing job
     if (this.activeJobs.has(videoId)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔄 Reusing active yt-mp3-go job for ${videoId}`);
-      }
       return await this.activeJobs.get(videoId)!;
     }
 
@@ -120,9 +116,6 @@ export class YtMp3GoService {
    * Perform audio extraction using yt-mp3-go with new two-step API
    */
   private async performExtraction(videoId: string, title?: string, duration?: number, quality?: string): Promise<YtMp3GoResult> {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🎵 yt-mp3-go extraction: ${videoId}${title ? ` ("${title}")` : ''}${duration ? ` (${duration}s)` : ''} [quality: ${quality}]`);
-    }
 
     try {
       // Step 1: Get video info
@@ -131,7 +124,7 @@ export class YtMp3GoService {
       // Step 2: Create extraction job with quality
       const jobData = await this.createJob(videoInfo.id, quality || this.DEFAULT_QUALITY, videoInfo.title);
 
-      // Step 3: Monitor job status via polling (SSE alternative)
+      // Step 3: Monitor job status via long-lived SSE stream
       const result = await this.monitorJobStatus(jobData.jobID, videoId, title || videoInfo.title, duration);
 
       return result;
@@ -153,9 +146,6 @@ export class YtMp3GoService {
    * Get video information using the new /info endpoint
    */
   private async getVideoInfo(videoId: string): Promise<YtMp3GoInfoResponse> {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔍 Getting video info for: ${videoId}`);
-    }
 
     try {
       // Use FormData format (as required by the service)
@@ -163,9 +153,6 @@ export class YtMp3GoService {
       const formData = new FormData();
       formData.append('url', youtubeUrl);
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔍 Video info request using FormData with URL: ${youtubeUrl}`);
-      }
 
       const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/info`, {
         method: 'POST',
@@ -180,12 +167,6 @@ export class YtMp3GoService {
       if (!response.ok) {
         const errorText = await response.text();
 
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`❌ Video info request failed:`);
-          console.error(`🔍 Status: ${response.status} ${response.statusText}`);
-          console.error(`🔍 Response: ${errorText}`);
-          console.error(`🔍 Request URL: ${youtubeUrl}`);
-        }
 
         throw new Error(`yt-mp3-go info request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
@@ -196,9 +177,6 @@ export class YtMp3GoService {
         throw new Error('yt-mp3-go info request failed: No video ID returned');
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Video info retrieved: ${videoInfo.title}`);
-      }
 
       return videoInfo;
 
@@ -214,9 +192,6 @@ export class YtMp3GoService {
    * Create a new extraction job with quality selection
    */
   private async createJob(videoId: string, quality: string, title?: string): Promise<YtMp3GoJobResponse> {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔧 Creating yt-mp3-go job for: ${videoId} [quality: ${quality}]`);
-    }
 
     try {
       // Generate a safe filename from the video title or use video ID as fallback
@@ -228,10 +203,6 @@ export class YtMp3GoService {
         filename: safeFilename
       };
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔍 yt-mp3-go job request:`, JSON.stringify(requestBody, null, 2));
-        console.log(`🔍 Target URL: ${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/download`);
-      }
 
       const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/download`, {
         method: 'POST',
@@ -247,12 +218,6 @@ export class YtMp3GoService {
       if (!response.ok) {
         const errorText = await response.text();
 
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`❌ yt-mp3-go job creation failed:`);
-          console.error(`🔍 Status: ${response.status} ${response.statusText}`);
-          console.error(`🔍 Response: ${errorText}`);
-          console.error(`🔍 Request body:`, JSON.stringify(requestBody, null, 2));
-        }
 
         throw new Error(`yt-mp3-go job creation failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
@@ -263,9 +228,6 @@ export class YtMp3GoService {
         throw new Error('yt-mp3-go job creation failed: No job ID returned');
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ yt-mp3-go job created: ${jobData.jobID} [quality: ${quality}]`);
-      }
 
       return jobData;
 
@@ -278,144 +240,205 @@ export class YtMp3GoService {
   }
 
   /**
-   * Monitor job status using polling (alternative to SSE)
+   * Monitor job status with long-lived SSE stream.
    */
   private async monitorJobStatus(jobId: string, videoId: string, title?: string, duration?: number): Promise<YtMp3GoResult> {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🔄 Monitoring yt-mp3-go job status: ${jobId}`);
+    return await this.monitorJobStatusWithStreamingSse(jobId, videoId, title, duration);
+  }
+
+  /**
+   * Monitor job status using one long-lived SSE stream.
+   */
+  private async monitorJobStatusWithStreamingSse(
+    jobId: string,
+    videoId: string,
+    title?: string,
+    duration?: number
+  ): Promise<YtMp3GoResult> {
+
+    const statusResponse = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/events?id=${jobId}`, {
+      headers: {
+        'Accept': 'text/event-stream',
+        'User-Agent': 'ChordMiniApp/1.0'
+      },
+      signal: createSafeTimeoutSignal(this.MAX_MONITOR_DURATION_MS)
+    });
+
+    if (!statusResponse.ok) {
+      const errorText = await statusResponse.text();
+      throw new Error(`SSE stream request failed: ${statusResponse.status} ${statusResponse.statusText} - ${errorText}`);
     }
 
-    for (let attempt = 0; attempt < this.MAX_POLL_ATTEMPTS; attempt++) {
-      try {
-        // Wait between attempts
-        if (attempt > 0) {
-          await new Promise(resolve => setTimeout(resolve, this.POLL_INTERVAL));
+    if (!statusResponse.body) {
+      throw new Error('SSE stream response has no readable body');
+    }
+
+    const reader = statusResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let streamBuffer = '';
+    let sawAnyStatus = false;
+
+    while (true) {
+      const { value, done } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      streamBuffer += decoder.decode(value, { stream: true });
+
+      const { messages, remainder } = this.consumeSseBuffer(streamBuffer);
+      streamBuffer = remainder;
+
+      for (const message of messages) {
+        const jobStatus = this.parseJobStatusPayload(message);
+        if (!jobStatus) {
+          continue;
         }
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`📡 Status check ${attempt + 1}/${this.MAX_POLL_ATTEMPTS} for job ${jobId}`);
-        }
+        sawAnyStatus = true;
 
-        const statusResponse = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/events?id=${jobId}`, {
-          headers: {
-            'Accept': 'text/event-stream',
-            'User-Agent': 'ChordMiniApp/1.0'
-          },
-          signal: createSafeTimeoutSignal(10000) // 10 second timeout per request
-        });
 
-        if (statusResponse.ok) {
-          const text = await statusResponse.text();
-
-          // Parse the last SSE message (most recent status)
-          const lines = text.split('\n');
-          let latestJobData = null;
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                latestJobData = JSON.parse(line.substring(6));
-              } catch {
-                // Skip invalid JSON lines
-              }
-            }
-          }
-
-          if (latestJobData) {
-            const jobStatus: YtMp3GoJobStatus = latestJobData;
-
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`📊 Job status: ${jobStatus.status}`);
-              console.log(`🔍 Full response:`, JSON.stringify(jobStatus, null, 2));
-            }
-            
-            if (jobStatus.status === 'complete' && jobStatus.filePath) {
-              // Job completed successfully, construct download URL from filePath
-              // filePath is like: "downloads/jobID/filename.mp3"
-              // We need to construct: /yt-downloader/downloads/jobID/filename.mp3
-              const relativePath = jobStatus.filePath.replace('downloads/', '');
-              const downloadUrl = `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/downloads/${relativePath}`;
-
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`📁 File path: ${jobStatus.filePath}`);
-                console.log(`📥 Download URL: ${downloadUrl}`);
-                console.log(`📊 File size: ${jobStatus.fileSize ? (jobStatus.fileSize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown'}`);
-              }
-
-              // Validate the file is accessible and extract metadata
-              const validation = await this.validateFileContentWithMetadata(downloadUrl);
-              if (validation.isValid) {
-                const finalDuration = validation.realDuration || duration || 0;
-
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`✅ yt-mp3-go extraction successful: ${downloadUrl}`);
-                  console.log(`🎵 Duration source: ${validation.realDuration ? 'audio metadata' : 'search metadata'} = ${finalDuration}s`);
-                }
-
-                // Extract filename from filePath for compatibility
-                const filename = jobStatus.filePath.split('/').pop() || 'audio.mp3';
-
-                return {
-                  success: true,
-                  audioUrl: downloadUrl,
-                  videoId,
-                  title,
-                  duration: finalDuration,
-                  filename,
-                  jobId
-                };
-              } else {
-                if (process.env.NODE_ENV === 'development') {
-                  console.warn(`⚠️ File validation failed for ${downloadUrl}, continuing polling...`);
-                }
-              }
-            } else if (jobStatus.status === 'failed') {
-              // Job has permanently failed - get detailed error info and return failure immediately
-              const basicError = jobStatus.error || 'Unknown error';
-
-              if (process.env.NODE_ENV === 'development') {
-                console.error(`❌ yt-mp3-go job permanently failed: ${basicError}`);
-                console.error(`🔍 Job ID: ${jobId}`);
-                console.error(`🔍 Video ID: ${videoId}`);
-                console.error(`🔍 Full job status:`, JSON.stringify(jobStatus, null, 2));
-              }
-
-              // Try to get more detailed error information
-              const detailedError = await this.getJobErrorDetails(jobId);
-              const finalError = detailedError !== 'No additional error details available'
-                ? `${basicError} (Details: ${detailedError})`
-                : basicError;
-
-              if (process.env.NODE_ENV === 'development') {
-                console.error(`🔍 Enhanced error details: ${finalError}`);
-              }
-
-              return {
-                success: false,
-                error: `yt-mp3-go extraction failed: ${finalError}`,
-                videoId,
-                title,
-                duration: duration || 0,
-                jobId
-              };
-            }
-            // Continue polling if status is 'processing'
-          }
-        }
-
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(`⚠️ Status check ${attempt + 1} failed:`, error);
-        }
-        // Continue polling unless it's the last attempt
-        if (attempt === this.MAX_POLL_ATTEMPTS - 1) {
-          throw error;
+        const terminalResult = await this.handleJobTerminalStatus(jobStatus, jobId, videoId, title, duration);
+        if (terminalResult) {
+          await reader.cancel();
+          return terminalResult;
         }
       }
     }
 
-    // Polling timeout
-    throw new Error(`yt-mp3-go job monitoring timeout after ${this.MAX_POLL_ATTEMPTS} attempts`);
+    streamBuffer += decoder.decode();
+
+    const trailingMessage = this.extractSseDataFromEventBlock(streamBuffer);
+    if (trailingMessage) {
+      const trailingStatus = this.parseJobStatusPayload(trailingMessage);
+      if (trailingStatus) {
+        sawAnyStatus = true;
+        const terminalResult = await this.handleJobTerminalStatus(trailingStatus, jobId, videoId, title, duration);
+        if (terminalResult) {
+          return terminalResult;
+        }
+      }
+    }
+
+    if (!sawAnyStatus) {
+      throw new Error('SSE stream closed without any status updates');
+    }
+
+    throw new Error('SSE stream closed before job reached a terminal state');
+  }
+
+  private consumeSseBuffer(buffer: string): { messages: string[]; remainder: string } {
+    const eventBlocks = buffer.split(/\r?\n\r?\n/);
+    const remainder = eventBlocks.pop() || '';
+    const messages: string[] = [];
+
+    for (const block of eventBlocks) {
+      const message = this.extractSseDataFromEventBlock(block);
+      if (message) {
+        messages.push(message);
+      }
+    }
+
+    return { messages, remainder };
+  }
+
+  private extractSseDataFromEventBlock(eventBlock: string): string | null {
+    const dataLines: string[] = [];
+
+    for (const line of eventBlock.split(/\r?\n/)) {
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    if (dataLines.length === 0) {
+      return null;
+    }
+
+    return dataLines.join('\n');
+  }
+
+  private parseJobStatusPayload(payload: string): YtMp3GoJobStatus | null {
+    try {
+      const parsed = JSON.parse(payload) as Partial<YtMp3GoJobStatus>;
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+
+      if (parsed.status !== 'processing' && parsed.status !== 'complete' && parsed.status !== 'failed') {
+        return null;
+      }
+
+      return parsed as YtMp3GoJobStatus;
+    } catch {
+      return null;
+    }
+  }
+
+  private async handleJobTerminalStatus(
+    jobStatus: YtMp3GoJobStatus,
+    jobId: string,
+    videoId: string,
+    title?: string,
+    duration?: number
+  ): Promise<YtMp3GoResult | null> {
+    if (jobStatus.status === 'complete' && jobStatus.filePath) {
+      // Job completed successfully, construct download URL from filePath
+      // filePath is like: "downloads/jobID/filename.mp3"
+      // We need to construct: /yt-downloader/downloads/jobID/filename.mp3
+      const relativePath = jobStatus.filePath.replace('downloads/', '');
+      const downloadUrl = `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/downloads/${relativePath}`;
+
+
+      // Validate the file is accessible and extract metadata
+      const validation = await this.validateFileContentWithMetadata(downloadUrl);
+      if (validation.isValid) {
+        const finalDuration = validation.realDuration || duration || 0;
+
+
+        // Extract filename from filePath for compatibility
+        const filename = jobStatus.filePath.split('/').pop() || 'audio.mp3';
+
+        return {
+          success: true,
+          audioUrl: downloadUrl,
+          videoId,
+          title,
+          duration: finalDuration,
+          filename,
+          jobId
+        };
+      }
+
+
+      return null;
+    }
+
+    if (jobStatus.status === 'failed') {
+      // Job has permanently failed - get detailed error info and return failure immediately
+      const basicError = jobStatus.error || 'Unknown error';
+
+
+      // Try to get more detailed error information
+      const detailedError = await this.getJobErrorDetails(jobId);
+      const finalError = detailedError !== 'No additional error details available'
+        ? `${basicError} (Details: ${detailedError})`
+        : basicError;
+
+
+      return {
+        success: false,
+        error: `yt-mp3-go extraction failed: ${finalError}`,
+        videoId,
+        title,
+        duration: duration || 0,
+        jobId
+      };
+    }
+
+    // Non-terminal processing state.
+    return null;
   }
 
   /**
@@ -436,27 +459,27 @@ export class YtMp3GoService {
       if (response.ok) {
         const text = await response.text();
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🔍 Raw error response for job ${jobId}:`, text);
-        }
 
         // Parse all SSE messages to find error details
-        const lines = text.split('\n');
+        const { messages, remainder } = this.consumeSseBuffer(text);
+        const trailingMessage = this.extractSseDataFromEventBlock(remainder);
+        if (trailingMessage) {
+          messages.push(trailingMessage);
+        }
+
         const errorMessages: string[] = [];
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.substring(6));
-              if (data.error && data.error !== 'yt-dlp command finished with an error.') {
-                errorMessages.push(data.error);
-              }
-              if (data.details) {
-                errorMessages.push(data.details);
-              }
-            } catch {
-              // Skip invalid JSON lines
+        for (const message of messages) {
+          try {
+            const data = JSON.parse(message) as { error?: string; details?: string };
+            if (data.error && data.error !== 'yt-dlp command finished with an error.') {
+              errorMessages.push(data.error);
             }
+            if (data.details) {
+              errorMessages.push(data.details);
+            }
+          } catch {
+            // Skip invalid JSON lines
           }
         }
 
@@ -464,10 +487,7 @@ export class YtMp3GoService {
           return errorMessages.join('; ');
         }
       }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`⚠️ Could not get detailed error info for job ${jobId}:`, error);
-      }
+    } catch {
     }
 
     return 'No additional error details available';
@@ -488,22 +508,12 @@ export class YtMp3GoService {
         return { isValid: false };
       }
 
-      const contentType = headResponse.headers.get('content-type');
-      const contentLength = headResponse.headers.get('content-length');
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ File validation successful, content-type: ${contentType}, size: ${contentLength} bytes`);
-      }
-
       // Extract real audio metadata using partial download for efficiency (optional)
       try {
         const { audioMetadataService } = await import('@/services/audio/audioMetadataService');
         const metadata = await audioMetadataService.extractMetadataFromPartialDownload(url);
 
         if (metadata && metadata.duration > 0) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`🎵 Real audio duration extracted: ${metadata.duration}s (${audioMetadataService.formatDuration(metadata.duration)})`);
-          }
 
           // Validate that the duration seems reasonable
           if (audioMetadataService.isReasonableDuration(metadata.duration)) {
@@ -511,41 +521,16 @@ export class YtMp3GoService {
               isValid: true,
               realDuration: Math.round(metadata.duration)
             };
-          } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(`⚠️ Extracted duration seems unreasonable: ${metadata.duration}s`);
-            }
           }
         }
-      } catch (metadataError) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('⚠️ Audio metadata extraction failed, continuing without real duration:', metadataError);
-        }
+      } catch {
       }
 
       // File is accessible but no valid metadata extracted
       return { isValid: true };
 
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('⚠️ File validation failed:', error);
-      }
-      return { isValid: false };
-    }
-  }
-
-  /**
-   * Check if yt-mp3-go service is available
-   */
-  async isAvailable(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/`, {
-        method: 'HEAD',
-        signal: createSafeTimeoutSignal(5000)
-      });
-      return response.ok;
     } catch {
-      return false;
+      return { isValid: false };
     }
   }
 
@@ -564,126 +549,8 @@ export class YtMp3GoService {
       return normalizedQuality;
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(`⚠️ Invalid quality "${quality}", using default: ${this.DEFAULT_QUALITY}`);
-    }
 
     return this.DEFAULT_QUALITY;
-  }
-
-  /**
-   * Get available quality options
-   */
-  getQualityOptions(): typeof this.QUALITY_OPTIONS {
-    return this.QUALITY_OPTIONS;
-  }
-
-  /**
-   * Get default quality setting
-   */
-  getDefaultQuality(): string {
-    return this.DEFAULT_QUALITY;
-  }
-
-  /**
-   * Test yt-mp3-go service connectivity and debug specific video
-   */
-  async testVideoExtraction(videoId: string): Promise<{ success: boolean; details: Record<string, unknown>; error?: string }> {
-    try {
-      console.log(`🧪 Testing yt-mp3-go extraction for video: ${videoId}`);
-
-      // Step 1: Test service connectivity
-      const healthCheck = await fetch(`${this.YT_MP3_GO_BASE_URL}/health`, {
-        method: 'GET',
-        signal: createSafeTimeoutSignal(5000)
-      });
-
-      console.log(`🔍 Health check status: ${healthCheck.status}`);
-
-      // Step 2: Test video info retrieval
-      const videoInfo = await this.getVideoInfo(videoId);
-      console.log(`🔍 Video info:`, JSON.stringify(videoInfo, null, 2));
-
-      // Step 3: Test job creation (but don't wait for completion)
-      const jobData = await this.createJob(videoInfo.id, 'medium', videoInfo.title);
-      console.log(`🔍 Job created:`, JSON.stringify(jobData, null, 2));
-
-      // Step 4: Check initial job status
-      const statusResponse = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/events?id=${jobData.jobID}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/event-stream',
-          'User-Agent': 'ChordMiniApp/1.0'
-        },
-        signal: createSafeTimeoutSignal(10000)
-      });
-
-      const statusText = await statusResponse.text();
-      console.log(`🔍 Initial job status response:`, statusText);
-
-      return {
-        success: true,
-        details: {
-          healthCheck: healthCheck.status,
-          videoInfo,
-          jobData,
-          initialStatus: statusText
-        }
-      };
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`❌ Test failed:`, errorMessage);
-
-      return {
-        success: false,
-        error: errorMessage,
-        details: {}
-      };
-    }
-  }
-
-  /**
-   * Test all quality levels for a specific video
-   */
-  async testAllQualities(videoId: string): Promise<{ quality: string; success: boolean; error?: string }[]> {
-    const results = [];
-    const qualities = ['low', 'medium', 'high'];
-
-    console.log(`🧪 Testing all quality levels for video: ${videoId}`);
-
-    for (const quality of qualities) {
-      console.log(`🔍 Testing ${quality} quality...`);
-      try {
-        const result = await this.extractAudio(videoId, undefined, undefined, quality);
-        results.push({
-          quality,
-          success: result.success,
-          error: result.error
-        });
-        console.log(`   ${result.success ? '✅' : '❌'} ${quality}: ${result.success ? 'Success' : result.error}`);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        results.push({
-          quality,
-          success: false,
-          error: errorMessage
-        });
-        console.log(`   ❌ ${quality}: ${errorMessage}`);
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Clear active jobs (for cleanup)
-   */
-  clearActiveJobs(): void {
-    this.activeJobs.clear();
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🧹 Cleared active yt-mp3-go jobs');
-    }
   }
 
   /**

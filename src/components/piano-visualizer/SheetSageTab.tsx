@@ -14,6 +14,7 @@ import {
 } from '@/stores/analysisStore';
 import { requestSheetSageTranscription } from '@/services/sheetsage/sheetSageTranscriptionClient';
 import { convertSheetSageToChordEvents } from '@/utils/sheetSagePlayback';
+import AppTooltip from '@/components/common/AppTooltip';
 
 interface SheetSageTabProps {
   audioUrl?: string | null;
@@ -151,18 +152,18 @@ export const SheetSageTab: React.FC<SheetSageTabProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               {SPEED_PRESETS.map((preset, idx) => (
-                <button
-                  key={preset.label}
-                  onClick={() => setSpeedIndex(idx)}
-                  className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                    speedIndex === idx
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                  title={preset.description}
-                >
-                  {preset.label}
-                </button>
+                <AppTooltip key={preset.label} content={preset.description}>
+                  <button
+                    onClick={() => setSpeedIndex(idx)}
+                    className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                      speedIndex === idx
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                </AppTooltip>
               ))}
             </div>
 

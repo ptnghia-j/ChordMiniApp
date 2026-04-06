@@ -29,7 +29,6 @@ const eslintConfig = [
       "*.config.js",
       "*.config.mjs",
       "*.config.ts",
-      "src/tests/**/*",
       "**/*.test.ts",
       "**/*.test.tsx",
       "__tests__/**/*",

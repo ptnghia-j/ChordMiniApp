@@ -34,12 +34,15 @@ export default function ChangelogPage() {
       title: 'Minor Patch for Sheet Music Display',
       description: 'Fixes a minor rendering issue',
       features: [
-        'NEW: PDF export option for sheet music'
+        'NEW: PDF export option for sheet music',
+        'UI: Unified HeroUI for tooltips',
+        'FIX: Minor rendering issue in sheet music display for certain note patterns',
       ],
       technical: [
         'FIX: Resolved a minor rendering issue in the sheet music display for certain note patterns',
         'FIX: Added native jsPDF export for sheet music display',
         'FIX: Added dedicated hidden OSMD export render pass',
+        'IMPROVED: Used SSE for production audio extraction '
       ],
       breaking: [
       ]

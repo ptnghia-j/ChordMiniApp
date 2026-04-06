@@ -25,6 +25,7 @@ import { DEFAULT_MAX_CAPO_SUGGESTION_FRET, suggestCapoPosition } from '@/utils/g
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
+import AppTooltip from '@/components/common/AppTooltip';
 
 
 // Lazy load heavy guitar chord diagram component
@@ -497,20 +498,22 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">Label:</span>
                   <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                    <button
-                      onClick={() => setCapoLabelMode('shape')}
-                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'shape' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-                      title="Show chord shape name (what you play)"
-                    >
-                      Shape
-                    </button>
-                    <button
-                      onClick={() => setCapoLabelMode('sound')}
-                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'sound' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-                      title="Show sounding chord name (what you hear)"
-                    >
-                      Sound
-                    </button>
+                    <AppTooltip content="Show chord shape name (what you play)">
+                      <button
+                        onClick={() => setCapoLabelMode('shape')}
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'shape' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                      >
+                        Shape
+                      </button>
+                    </AppTooltip>
+                    <AppTooltip content="Show sounding chord name (what you hear)">
+                      <button
+                        onClick={() => setCapoLabelMode('sound')}
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${capoLabelMode === 'sound' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                      >
+                        Sound
+                      </button>
+                    </AppTooltip>
                   </div>
                 </div>
                 <div className="hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block" />

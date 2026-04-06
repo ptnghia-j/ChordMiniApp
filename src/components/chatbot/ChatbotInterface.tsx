@@ -8,6 +8,7 @@ import { ChatMessage, SongContext } from '@/types/chatbotTypes';
 import { createChatMessage, sendChatMessageWithLyricsRetrieval, truncateConversationHistory } from '@/services/api/chatbotService';
 import { useApiKeys } from '@/hooks/settings/useApiKeys';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
+import AppTooltip from '@/components/common/AppTooltip';
 import { useEmbeddedPanelHeight } from '@/hooks/ui/useEmbeddedPanelHeight';
 
 interface ChatbotInterfaceProps {
@@ -129,9 +130,11 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({
                 <h3 className="font-semibold text-neutral-800 dark:text-white text-sm sm:text-base">AI Music Assistant</h3>
               </div>
               <div className="flex items-center text-neutral-500 dark:text-white">
-                <button onClick={clearConversation} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="Clear conversation">
-                  <HiArrowPath className="h-5 w-5" />
-                </button>
+                <AppTooltip content="Clear conversation" placement="left">
+                  <button onClick={clearConversation} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Clear conversation">
+                    <HiArrowPath className="h-5 w-5" />
+                  </button>
+                </AppTooltip>
                 <button onClick={onClose} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Close chatbot">
                   <HiXMark className="h-5 w-5" />
                 </button>

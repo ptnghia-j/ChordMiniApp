@@ -433,7 +433,7 @@ npm run dev
 We sincerely thank the following APIs and services for their support and contribution to the project.
 - **Google Gemini API** - AI language model for roman numeral analysis, enharmonic corrections, and lyrics translation
 - **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api) - YouTube search and video information
-- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction (local)
+- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction (local)git
 - **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction (production)
 - **LRClib** - [github.com/tranxuanthang/lrclib](https://github.com/tranxuanthang/lrclib) - Lyrics synchronization
 - **Sheetsage** -[github.com/chrisdonahue/sheetsage](https://github.com/chrisdonahue/sheetsage)

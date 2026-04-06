@@ -28,7 +28,6 @@
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "__tests__/**/*",
-    "src/tests/**/*",
     "src/**/__tests__/**/*"
   ],
   "exclude": ["node_modules", ".next"]
