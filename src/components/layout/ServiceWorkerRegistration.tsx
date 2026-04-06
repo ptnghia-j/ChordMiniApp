@@ -7,7 +7,13 @@ import { useEffect } from 'react';
  * Handles registration of the service worker for caching and offline functionality
  */
 const ServiceWorkerRegistration: React.FC = () => {
+  const isServiceWorkerEnabled = process.env.NEXT_PUBLIC_ENABLE_SERVICE_WORKER === 'true';
+
   useEffect(() => {
+    if (!isServiceWorkerEnabled) {
+      return;
+    }
+
     // Only register service worker in production and in browser environment
     if (
       typeof window !== 'undefined' && 
@@ -66,10 +72,14 @@ const ServiceWorkerRegistration: React.FC = () => {
 
       return () => clearTimeout(timeoutId);
     }
-  }, []);
+  }, [isServiceWorkerEnabled]);
 
   // Handle service worker messages
   useEffect(() => {
+    if (!isServiceWorkerEnabled) {
+      return;
+    }
+
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       const handleMessage = (event: MessageEvent) => {
         if (event.data && event.data.type === 'CACHE_UPDATED') {
@@ -83,7 +93,7 @@ const ServiceWorkerRegistration: React.FC = () => {
         navigator.serviceWorker.removeEventListener('message', handleMessage);
       };
     }
-  }, []);
+  }, [isServiceWorkerEnabled]);
 
   return null; // This component doesn't render anything
 };

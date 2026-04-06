@@ -395,6 +395,7 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [measureBoxes, setMeasureBoxes] = useState<MeasureHighlightBox[]>([]);
+  const [wrapperViewportHeight, setWrapperViewportHeight] = useState(0);
   const syncData = useMemo(() => extractSyncDataFromMusicXml(musicXml), [musicXml]);
 
   const getWholeNoteTime = useCallback((seconds: number) => (seconds * bpm) / 240, [bpm]);
@@ -523,6 +524,32 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
   }, [getIteratorTime, getWholeNoteTime, measureCount, measureDurationSeconds, measureStartScoreTimes, styleMeasureCursor]);
 
   const activeMeasureBox = measureBoxes[activeMeasureIndex] ?? null;
+  const contentBottomScrollPadding = useMemo(
+    () => Math.min(420, Math.max(220, Math.round(wrapperViewportHeight * 0.55))),
+    [wrapperViewportHeight],
+  );
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) {
+      return;
+    }
+
+    const updateWrapperViewportHeight = () => {
+      setWrapperViewportHeight(wrapper.clientHeight);
+    };
+
+    updateWrapperViewportHeight();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const resizeObserver = new ResizeObserver(updateWrapperViewportHeight);
+      resizeObserver.observe(wrapper);
+      return () => resizeObserver.disconnect();
+    }
+
+    window.addEventListener('resize', updateWrapperViewportHeight);
+    return () => window.removeEventListener('resize', updateWrapperViewportHeight);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -620,10 +647,12 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
         0,
         topOffset - (wrapper.clientHeight - activeMeasureBox.height) * 0.42,
       );
+      const maxScrollTop = Math.max(0, wrapper.scrollHeight - wrapper.clientHeight);
+      const targetScrollTop = Math.min(maxScrollTop, desiredCenterTop);
 
       if (topOffset < visibleTopBoundary || bottomOffset > visibleBottomBoundary) {
         wrapper.scrollTo({
-          top: desiredCenterTop,
+          top: targetScrollTop,
           behavior: 'auto',
         });
       }
@@ -762,6 +791,7 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
           <div
             ref={contentRef}
             className="relative mx-auto min-h-[320px] bg-white"
+            style={{ paddingBottom: `${contentBottomScrollPadding}px` }}
           >
             {activeMeasureBox && (
               <div

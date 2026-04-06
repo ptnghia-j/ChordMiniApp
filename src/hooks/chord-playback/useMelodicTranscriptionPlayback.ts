@@ -101,14 +101,25 @@ export function useMelodicTranscriptionPlayback({
     lastScheduledStartRef.current = null;
   }, []);
 
-  const scheduleMelodyFromTime = useCallback((time: number) => {
+  const scheduleMelodyFromTime = useCallback((
+    time: number,
+    options?: {
+      interruptExisting?: boolean;
+    },
+  ) => {
     const schedulingTime = resolvePreciseTransportTime();
+    const scheduleAnchor = Math.max(time, schedulingTime);
     const scheduledNotes = buildScheduledSheetSageMelodyNotes(
       preparedMelodyNotes,
-      Math.max(time, schedulingTime),
+      scheduleAnchor,
     );
+
+    if (options?.interruptExisting) {
+      serviceRef.current.stopInstruments(['melodyViolin']);
+    }
+
     void serviceRef.current.playScheduledInstrument('melodyViolin', scheduledNotes);
-    lastScheduledStartRef.current = Math.max(time, schedulingTime);
+    lastScheduledStartRef.current = scheduleAnchor;
   }, [preparedMelodyNotes, resolvePreciseTransportTime]);
 
   useEffect(() => {
@@ -175,16 +186,22 @@ export function useMelodicTranscriptionPlayback({
       return;
     }
 
+    const jumpedBackward = preciseCurrentTime + 0.15 < previousTime;
+    const jumpedForward = preciseCurrentTime - previousTime > 1.5;
+    const timelineJumped = Math.abs(currentTime - previousTime) > 0.6;
+
     const shouldReschedule = lastScheduledStartRef.current === null
-      || preciseCurrentTime + 0.15 < previousTime
-      || preciseCurrentTime - previousTime > 1.5
+      || jumpedBackward
+      || jumpedForward
       || Math.abs(preciseCurrentTime - currentTime) > 0.08;
 
     if (!shouldReschedule) {
       return;
     }
 
-    scheduleMelodyFromTime(preciseCurrentTime);
+    scheduleMelodyFromTime(Math.max(preciseCurrentTime, currentTime), {
+      interruptExisting: lastScheduledStartRef.current !== null && (timelineJumped || jumpedBackward || jumpedForward),
+    });
   }, [currentTime, resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate]);
 
   useEffect(() => {

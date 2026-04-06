@@ -37,6 +37,7 @@ export default function ChangelogPage() {
         'NEW: PDF export option for sheet music',
         'UI: Unified HeroUI for tooltips',
         'FIX: Minor rendering issue in sheet music display for certain note patterns',
+        'FIX: Patched melody playback not updating correctly to match with audio playback'
       ],
       technical: [
         'FIX: Resolved a minor rendering issue in the sheet music display for certain note patterns',
