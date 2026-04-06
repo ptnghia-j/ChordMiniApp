@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { del } from '@vercel/blob';
 import { validateBlobUrl } from '@/utils/blobValidation';
 import { getPythonApiUrl } from '@/config/serverBackend';
+import { deleteOffloadUrl } from '@/services/storage/offloadCleanupService';
 
 /**
- * API route to recognize chords using Vercel Blob URL
- * This bypasses Vercel's 4.5MB limit by processing files already uploaded to Vercel Blob
+ * API route to recognize chords using offload storage URL
+ * This bypasses Vercel's 4.5MB limit by processing files already uploaded to offload storage
  */
 
 // Configure Vercel function timeout (max 300 seconds for Vercel Hobby/Pro plan)
@@ -25,23 +25,23 @@ export async function POST(request: NextRequest) {
     // Get the backend URL
     const backendUrl = getPythonApiUrl();
 
-    console.log(`🎵 Processing Vercel Blob chord recognition request`);
+    console.log(`🎵 Processing offload-storage chord recognition request`);
 
     // Get the form data from the request
     const formData = await request.formData();
     const shouldDeleteBlob = shouldDeleteBlobAfterProcessing(formData);
 
-    // Validate that we have a Blob URL
+    // Validate that we have an offload URL
     const blobUrlEntry = formData.get('blob_url');
     if (blobUrlEntry == null) {
       return NextResponse.json(
-        { error: 'No Vercel Blob URL provided' },
+        { error: 'No offload storage URL provided' },
         { status: 400 }
       );
     }
     if (typeof blobUrlEntry !== 'string') {
       return NextResponse.json(
-        { error: 'Invalid Vercel Blob URL: expected a string form field, but received a file upload' },
+        { error: 'Invalid offload storage URL: expected a string form field, but received a file upload' },
         { status: 400 }
       );
     }
@@ -58,13 +58,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`📁 Downloading audio from Vercel Blob: ${blobUrl.substring(0, 100)}...`);
+    console.log(`📁 Downloading audio from offload storage: ${blobUrl.substring(0, 100)}...`);
 
-    // Download the audio file from Vercel Blob
+    // Download the audio file from offload storage
     const blobResponse = await fetch(blobUrl);
     if (!blobResponse.ok) {
       return NextResponse.json(
-        { error: `Failed to download audio from Vercel Blob: ${blobResponse.status} ${blobResponse.statusText}` },
+        { error: `Failed to download audio from offload storage: ${blobResponse.status} ${blobResponse.statusText}` },
         { status: 400 }
       );
     }
@@ -77,13 +77,13 @@ export async function POST(request: NextRequest) {
     // external cleanup.
     if (shouldDeleteBlob) {
       try {
-        await del(blobUrl);
-        console.log(`🗑️ Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+        const deletion = await deleteOffloadUrl(blobUrl);
+        console.log(`🗑️ Offload file deleted after download (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${blobUrl.substring(0, 80)}...`);
       } catch (err) {
-        console.warn(`⚠️ Non-critical: failed to delete blob after download:`, err);
+        console.warn(`⚠️ Non-critical: failed to delete offload file after download:`, err);
       }
     } else {
-      console.log('ℹ️ Skipping blob deletion after download (delete_blob=0)');
+      console.log('ℹ️ Skipping offload file deletion after download (delete_blob=0)');
     }
 
     // Extract filename from blob URL or use default
@@ -136,12 +136,12 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await response.json();
-    console.log(`✅ Vercel Blob chord recognition completed successfully`);
+    console.log(`✅ Offload-storage chord recognition completed successfully`);
 
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error('❌ Vercel Blob chord recognition API error:', error);
+    console.error('❌ Offload-storage chord recognition API error:', error);
 
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Unknown error occurred during Vercel Blob chord recognition' },
+      { error: 'Unknown error occurred during offload-storage chord recognition' },
       { status: 500 }
     );
   }

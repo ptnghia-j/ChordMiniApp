@@ -43,7 +43,6 @@ services:
       - MUSIC_AI_API_KEY=${MUSIC_AI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GENIUS_API_KEY=${GENIUS_API_KEY}
-      - BLOB_READ_WRITE_TOKEN=${BLOB_READ_WRITE_TOKEN}
 
       # Development Flags (Server-only)
       - USE_MOCK_MUSIC_AI=${USE_MOCK_MUSIC_AI:-false}

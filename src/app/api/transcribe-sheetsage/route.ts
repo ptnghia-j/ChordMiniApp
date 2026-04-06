@@ -3,8 +3,8 @@ import { getSheetSageApiUrl } from '@/config/serverBackend';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import type { SheetSageResult } from '@/types/sheetSage';
 import { setDocumentWithAdminAccess } from '@/services/firebase/firestoreAdminService';
-import { del } from '@vercel/blob';
 import { validateBlobUrl } from '@/utils/blobValidation';
+import { deleteOffloadUrl } from '@/services/storage/offloadCleanupService';
 
 export const maxDuration = 300;
 
@@ -56,7 +56,7 @@ async function resolveAudioFileFromRequest(formData: FormData): Promise<File> {
 
   const blobResponse = await fetch(blobUrl);
   if (!blobResponse.ok) {
-    throw new Error(`Failed to download audio from Vercel Blob: ${blobResponse.status} ${blobResponse.statusText}`);
+    throw new Error(`Failed to download audio from offload storage: ${blobResponse.status} ${blobResponse.statusText}`);
   }
 
   const audioBuffer = await blobResponse.arrayBuffer();
@@ -68,13 +68,13 @@ async function resolveAudioFileFromRequest(formData: FormData): Promise<File> {
 
   if (shouldDeleteBlob) {
     try {
-      await del(blobUrl);
-      console.log(`🗑️ [SheetSage] Blob deleted after download: ${blobUrl.substring(0, 80)}...`);
+      const deletion = await deleteOffloadUrl(blobUrl);
+      console.log(`🗑️ [SheetSage] Offload file deleted after download (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${blobUrl.substring(0, 80)}...`);
     } catch (error) {
-      console.warn('⚠️ [SheetSage] Non-critical: failed to delete blob after download:', error);
+      console.warn('⚠️ [SheetSage] Non-critical: failed to delete offload file after download:', error);
     }
   } else {
-    console.log('ℹ️ [SheetSage] Skipping blob deletion after download (delete_blob=0)');
+    console.log('ℹ️ [SheetSage] Skipping offload file deletion after download (delete_blob=0)');
   }
 
   return new File([audioBlob], fileName, { type: contentType });

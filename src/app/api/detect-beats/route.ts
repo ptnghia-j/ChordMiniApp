@@ -41,29 +41,29 @@ export async function POST(request: NextRequest) {
     const fileSizeMB = file.size / 1024 / 1024;
     console.log(`📁 Processing audio file: ${file.name} (${fileSizeMB.toFixed(2)}MB)`);
 
-    // Import Vercel Blob service to use environment-aware logic
-    const { vercelBlobUploadService } = await import('@/services/storage/vercelBlobUploadService');
+    // Import offload upload service to use environment-aware logic
+    const { offloadUploadService } = await import('@/services/storage/offloadUploadService');
 
     // Use environment-aware blob upload decision (same as chord recognition)
-    if (vercelBlobUploadService.shouldUseBlobUpload(file.size)) {
-      console.log(`🔄 Environment-aware decision: Using Vercel Blob upload for ${fileSizeMB.toFixed(2)}MB file`);
+    if (offloadUploadService.shouldUseBlobUpload(file.size)) {
+      console.log(`🔄 Environment-aware decision: Using Firebase offload upload for ${fileSizeMB.toFixed(2)}MB file`);
 
       try {
         const detector = formData.get('detector') as string || 'beat-transformer';
 
-        // Use Vercel Blob upload for large files
-        const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(file, detector as 'auto' | 'madmom' | 'beat-transformer');
+        // Use Firebase offload upload for large files
+        const blobResult = await offloadUploadService.detectBeatsBlobUpload(file, detector as 'auto' | 'madmom' | 'beat-transformer');
 
         if (blobResult.success) {
-          console.log(`✅ Vercel Blob beat detection completed successfully`);
+          console.log(`✅ Firebase offload beat detection completed successfully`);
           // The blob result data is already the Python backend response, so we can return it directly
           return NextResponse.json(blobResult.data);
         } else {
-          console.warn(`⚠️ Vercel Blob upload failed: ${blobResult.error}`);
+          console.warn(`⚠️ Firebase offload upload failed: ${blobResult.error}`);
           // Continue with direct processing and let it fail with proper error message
         }
       } catch (blobError) {
-        console.warn(`⚠️ Vercel Blob upload error: ${blobError}`);
+        console.warn(`⚠️ Firebase offload upload error: ${blobError}`);
         // Continue with direct processing and let it fail with proper error message
       }
     } else {
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: `File too large for processing`,
-            details: `The audio file (${fileSizeMB.toFixed(2)}MB) exceeds the maximum size limit. Please try with a smaller file or ensure Vercel Blob is properly configured.`,
+            details: `The audio file (${fileSizeMB.toFixed(2)}MB) exceeds the maximum size limit. Please try with a smaller file or ensure Firebase offload is properly configured.`,
             status: 413,
             suggestion: 'Try using a shorter audio clip or compress the audio file.'
           },

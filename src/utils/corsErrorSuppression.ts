@@ -62,8 +62,8 @@ const HARMLESS_ERROR_MESSAGES = [
   'WebKitBlobResource error',
   'Failed to load resource: The operation couldn\'t be completed. (WebKitBlobResource error',
   'blob:', // Generic blob URL errors
-  'vercel-storage.com', // Vercel Blob storage errors
-  'blob.vercel-storage.com' // Vercel Blob storage errors
+  'firebasestorage.googleapis.com', // Firebase Storage URL errors
+  'storage.googleapis.com' // Google Cloud Storage URL errors
 ];
 
 /**

@@ -77,7 +77,7 @@ const AboutPage: React.FC = () => {
                   <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                     <li>• Python Flask (Google Cloud Run)</li>
                     <li>• Firebase Firestore</li>
-                    <li>• Vercel Blob Storage</li>
+                    <li>• Firebase Cloud Storage</li>
                     <li>• Custom ML Models</li>
                   </ul>
                 </div>

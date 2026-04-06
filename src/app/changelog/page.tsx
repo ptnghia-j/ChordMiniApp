@@ -37,15 +37,17 @@ export default function ChangelogPage() {
         'NEW: PDF export option for sheet music',
         'UI: Unified HeroUI for tooltips',
         'FIX: Minor rendering issue in sheet music display for certain note patterns',
-        'FIX: Patched melody playback not updating correctly to match with audio playback'
+        'FIX: Patched melody playback not updating correctly to match with audio playback',
+        'ARCHITECTURE: Moved blob service from Vercel to Firebase Storage for more cost-effective'
       ],
       technical: [
         'FIX: Resolved a minor rendering issue in the sheet music display for certain note patterns',
         'FIX: Added native jsPDF export for sheet music display',
         'FIX: Added dedicated hidden OSMD export render pass',
-        'IMPROVED: Used SSE for production audio extraction '
+        'IMPROVED: Used SSE for production audio extraction'
       ],
       breaking: [
+        'Migrated blob storage from Vercel to Firebase Storage for cost reduction; expect changes to blob handling and cleanup behavior'
       ]
     },
 
@@ -412,7 +414,7 @@ export default function ChangelogPage() {
         'NEW: Audio Mixer - Play back chord audio alongside video with beat-aligned, synchronized chord sounds',
       ],
       technical: [
-        'ARCHITECTURE: Centralized audio analysis orchestrator (audioAnalysisService.ts) coordinating beat detection, chord recognition, and synchronization with Vercel Blob support',
+        'ARCHITECTURE: Centralized audio analysis orchestrator (audioAnalysisService.ts) coordinating beat detection, chord recognition, and synchronization with Firebase offload support',
         'REFACTOR: Backward-compatible facade (chordRecognitionService.ts) delegates to the orchestrator to reduce duplication and simplify imports',
       ],
       breaking: [

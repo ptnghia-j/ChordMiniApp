@@ -2,13 +2,13 @@
  * Audio Analysis Orchestrator Service
  *
  * Coordinates chord recognition and beat detection, including large-file
- * handling with Vercel Blob uploads. Maintains existing signatures.
+ * handling with Firebase offload uploads. Maintains existing signatures.
  */
 
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
-import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
+import { offloadUploadService } from '@/services/storage/offloadUploadService';
 import { detectBeatsFromFile, detectBeatsWithRateLimit, detectBeatsFromFirebaseUrl } from '@/services/audio/beatDetectionService';
 import { synchronizeChords } from '@/utils/chordSynchronization';
 import { recognizeChordsWithRateLimit } from '@/services/chord-analysis/chordService';
@@ -144,15 +144,15 @@ async function handleBlobPath(
 
   try {
     // Upload once, then reuse for both chord and beat processing.
-    blobUrl = await vercelBlobUploadService.uploadToBlob(audioFile);
+    blobUrl = await offloadUploadService.uploadToBlob(audioFile);
 
     // Chords
-    const chordBlob = await vercelBlobUploadService.recognizeChordsFromBlobUrl(blobUrl, chordDetector, {
+    const chordBlob = await offloadUploadService.recognizeChordsFromBlobUrl(blobUrl, chordDetector, {
       deleteAfterProcessing: false,
     });
     if (!chordBlob.success) {
       const err = chordBlob.error || 'Unknown blob upload error';
-      throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${err}. Please try a smaller file or check your internet connection.`);
+      throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${err}. Please try a smaller file or check your internet connection.`);
     }
 
     const chordResp = chordBlob.data as { success: boolean; chords?: ChordDetectionResult[] };
@@ -164,11 +164,11 @@ async function handleBlobPath(
     // Beats
     let beatResults: BeatDetectionBackendResponse;
     try {
-      const beatBlob = await vercelBlobUploadService.detectBeatsFromBlobUrl(blobUrl, beatDetector, {
+      const beatBlob = await offloadUploadService.detectBeatsFromBlobUrl(blobUrl, beatDetector, {
         deleteAfterProcessing: false,
       });
       if (!beatBlob.success) {
-        console.warn(`⚠️ Vercel Blob beat detection failed: ${beatBlob.error}, using empty beats array`);
+        console.warn(`⚠️ Firebase offload beat detection failed: ${beatBlob.error}, using empty beats array`);
         beatResults = { beats: [], bpm: undefined, time_signature: undefined, success: true } as BeatDetectionBackendResponse;
       } else {
         beatResults = beatBlob.data as BeatDetectionBackendResponse;
@@ -269,7 +269,7 @@ async function handleBlobPath(
     };
   } finally {
     if (blobUrl) {
-      await vercelBlobUploadService.deleteBlob(blobUrl);
+      await offloadUploadService.deleteBlob(blobUrl);
     }
   }
 }
@@ -291,13 +291,13 @@ export async function analyzeAudioWithRateLimit(
     if (audioInput.size > 100 * 1024 * 1024) throw new Error('Audio file is too large (>100MB). Please use a smaller file.');
     audioFile = audioInput;
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
-    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
       return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration, videoId);
     }
   } else if (typeof audioInput === 'string') {
     audioFile = await fetchFileFromUrl(audioInput, videoId);
     try { audioDuration = await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
-    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
       return handleBlobPath(audioFile, beatDetector, chordDetector, audioDuration, videoId);
     }
   } else if (audioInput instanceof AudioBuffer) {

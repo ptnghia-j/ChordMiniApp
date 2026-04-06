@@ -26,8 +26,6 @@ const connectSrcValues = Array.from(new Set([
   'https://api.genius.com',
   'https://vercel.com',
   'https://*.vercel.com',
-  'https://blob.vercel-storage.com',
-  'https://*.blob.vercel-storage.com',
   'https://api.vercel.com',
   'https://gleitz.github.io',
   'https://*.vocalremover.org',

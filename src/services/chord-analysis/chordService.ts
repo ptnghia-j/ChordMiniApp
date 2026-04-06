@@ -1,12 +1,12 @@
 /**
  * Chord Service - focused solely on chord recognition
  * - Handles both direct File input and URL input (via proxy -> File)
- * - Preserves Vercel Blob upload path for >4MB files
+ * - Preserves Firebase offload upload path for >4MB files
  * - Preserves timeout, validation, and error handling semantics
  */
 
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { vercelBlobUploadService } from '@/services/storage/vercelBlobUploadService';
+import { offloadUploadService } from '@/services/storage/offloadUploadService';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import type { ChordDetectorType, ChordDetectionResult, ChordRecognitionBackendResponse } from '@/types/audioAnalysis';
 
@@ -24,13 +24,13 @@ export async function recognizeChordsWithRateLimit(
     }
 
     // Blob path for > 4.5MB files
-    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 File size ${vercelBlobUploadService.getFileSizeString(audioFile.size)} > 4.5MB, using Vercel Blob upload`);
+    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
+      console.log(`🔄 File size ${offloadUploadService.getFileSizeString(audioFile.size)} > 4.5MB, using Firebase offload upload`);
 
       try {
-        const blobResult = await vercelBlobUploadService.recognizeChordsBlobUpload(audioFile, model);
+        const blobResult = await offloadUploadService.recognizeChordsBlobUpload(audioFile, model);
         if (blobResult.success) {
-          console.log(`✅ Vercel Blob chord recognition completed successfully`);
+          console.log(`✅ Firebase offload chord recognition completed successfully`);
           const backendResponse = blobResult.data as ChordRecognitionBackendResponse;
           console.log(`🔍 Backend response structure:`, {
             hasSuccess: 'success' in backendResponse,
@@ -46,13 +46,13 @@ export async function recognizeChordsWithRateLimit(
           return backendResponse.chords as ChordDetectionResult[];
         } else {
           const errorMsg = blobResult.error || 'Unknown blob upload error';
-          console.error(`❌ Vercel Blob upload failed for large file: ${errorMsg}`);
-          throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
+          console.error(`❌ Firebase offload upload failed for large file: ${errorMsg}`);
+          throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
         }
       } catch (blobError) {
         const errorMsg = blobError instanceof Error ? blobError.message : String(blobError) || 'Unknown error';
-        console.error(`❌ Vercel Blob upload error for large file: ${errorMsg}`);
-        throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
+        console.error(`❌ Firebase offload upload error for large file: ${errorMsg}`);
+        throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
       }
     }
 

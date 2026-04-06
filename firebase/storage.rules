@@ -20,7 +20,12 @@ service firebase.storage {
     
     function isValidFileSize() {
       // Limit file size to 50MB (typical for 5-minute songs)
-      return request.resource.size <= 50 * 1024 * 1024;
+      return request.resource != null && request.resource.size <= 50 * 1024 * 1024;
+    }
+
+    function isValidTempFileSize() {
+      // Temp offload path supports larger files used by analysis routes.
+      return request.resource != null && request.resource.size <= 100 * 1024 * 1024;
     }
     
     function isValidFileName() {
@@ -60,8 +65,11 @@ service firebase.storage {
     
     // Temporary files (for processing)
     match /temp/{fileName} {
-      // Allow read/write for temporary processing
-      allow read, write: if isValidFileSize();
+      // Reads are required so the client SDK can resolve a download URL after upload.
+      allow read: if true;
+
+      // Allow temporary uploads up to 100MB for analysis handoff.
+      allow create, update: if isValidTempFileSize();
       
       // Allow deletion for cleanup
       allow delete: if true;

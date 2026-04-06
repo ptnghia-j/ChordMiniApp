@@ -1,7 +1,7 @@
 // Beat detection service to communicate with the Next.js API proxy
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
-import { vercelBlobUploadService } from '../storage/vercelBlobUploadService';
+import { offloadUploadService } from '../storage/offloadUploadService';
 
 // Interface for Python backend beat detection response
 export interface BeatDetectionBackendResponse {
@@ -298,13 +298,13 @@ export async function detectBeatsFromFile(
       throw new Error('Invalid audio file for beat detection');
     }
 
-    // Check if file should use Vercel Blob upload (> 4.5MB)
-    if (vercelBlobUploadService.shouldUseBlobUpload(audioFile.size)) {
+    // Check if file should use Firebase offload upload (> 4.5MB)
+    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
 
 
       try {
-        // Use Vercel Blob upload for large files
-        const blobResult = await vercelBlobUploadService.detectBeatsBlobUpload(audioFile, detector, onProgress);
+        // Use Firebase offload upload for large files
+        const blobResult = await offloadUploadService.detectBeatsBlobUpload(audioFile, detector, onProgress);
 
         if (blobResult.success) {
 
@@ -335,14 +335,14 @@ export async function detectBeatsFromFile(
         } else {
           // For large files, don't fall back to direct processing - throw error instead
           const errorMsg = blobResult.error || 'Unknown blob upload error';
-          console.error(`❌ Vercel Blob upload failed for large file: ${errorMsg}`);
-          throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
+          console.error(`❌ Firebase offload upload failed for large file: ${errorMsg}`);
+          throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
         }
       } catch (blobError) {
         // For large files, don't fall back to direct processing - throw error instead
         const errorMsg = blobError instanceof Error ? blobError.message : String(blobError) || 'Unknown error';
-        console.error(`❌ Vercel Blob upload error for large file: ${errorMsg}`);
-        throw new Error(`File too large for direct processing (${vercelBlobUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
+        console.error(`❌ Firebase offload upload error for large file: ${errorMsg}`);
+        throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
       }
     }
 
@@ -708,8 +708,8 @@ export async function detectBeatsFromFirebaseUrl(
     // Step 3: Use our existing beat detection service with the downloaded file
 
 
-    // Use the vercel blob upload service which has our environment-aware logic
-    const blobResult = await vercelBlobUploadService.processAudioFile(audioFile, 'detect-beats', {
+    // Use the offload upload service which has our environment-aware logic
+    const blobResult = await offloadUploadService.processAudioFile(audioFile, 'detect-beats', {
       detector: detector
     });
 
