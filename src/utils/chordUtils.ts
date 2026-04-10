@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, prefer-const */
 // Chord utilities extracted from analyze page component
 
+import { canonicalizeKeySignature } from '@/utils/keySignatureUtils';
+
 /**
  * Chord notation parsing and validation
  */
@@ -454,7 +456,10 @@ export function getAccidentalPreferenceFromKey(
   if (!keySignature) return null;
 
   // Normalise unicode accidentals to ASCII
-  const normalised = keySignature
+  const normalised = (
+    canonicalizeKeySignature(keySignature)
+    ?? keySignature
+  )
     .replace(/♯/g, '#')
     .replace(/♭/g, 'b')
     .trim();

@@ -328,6 +328,24 @@ export function buildScheduledSheetSageMelodyNotes(
     .sort((left, right) => left.startOffset - right.startOffset || left.midi - right.midi);
 }
 
+export function transposeSheetSageNoteEvents(
+  noteEvents: SheetSageResult['noteEvents'] | null | undefined,
+  pitchShiftSemitones: number = 0,
+): SheetSageResult['noteEvents'] {
+  if (!noteEvents?.length) {
+    return [];
+  }
+
+  if (pitchShiftSemitones === 0) {
+    return noteEvents;
+  }
+
+  return noteEvents.map((event) => ({
+    ...event,
+    pitch: clampMidiPitch(event.pitch + pitchShiftSemitones),
+  }));
+}
+
 export function buildSheetSageExtraVisualNotes(
   result: SheetSageResult | null,
   color: string,

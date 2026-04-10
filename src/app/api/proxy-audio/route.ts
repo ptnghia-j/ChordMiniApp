@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { isFirebaseStorageUrl, parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
+import { safeFetchAudioSource } from '@/utils/safeServerAudioFetch';
 
 /**
  * Fetch audio with Firebase Storage-aware retry logic
@@ -9,7 +10,6 @@ async function fetchAudioWithRetry(
   fetchUrl: string,
   maxRetries: number = 3
 ): Promise<Response> {
-  parseAndValidateAudioSourceUrl(fetchUrl, { allowDevelopmentLocalhost: true });
   const isFirebaseUrl = isFirebaseStorageUrl(fetchUrl);
   const retries = isFirebaseUrl ? Math.max(maxRetries, 5) : maxRetries; // More retries for Firebase
   const baseTimeout = isFirebaseUrl ? 30000 : 120000; // Shorter timeout for Firebase retries
@@ -23,7 +23,7 @@ async function fetchAudioWithRetry(
 
       console.log(`📡 Attempt ${attempt}/${retries} (timeout: ${timeout}ms): ${fetchUrl}`);
 
-      const response = await fetch(fetchUrl, {
+      const response = await safeFetchAudioSource(fetchUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -62,7 +62,7 @@ async function fetchAudioWithRetry(
       if (attempt === retries) {
         console.log(`🔄 Final attempt with minimal headers...`);
         try {
-          const fallbackResponse = await fetch(fetchUrl, {
+          const fallbackResponse = await safeFetchAudioSource(fetchUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; ChordMini/1.0)',
             },
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     // Validate URL to prevent SSRF attacks
     try {
-      parseAndValidateAudioSourceUrl(audioUrl, { allowDevelopmentLocalhost: true });
+      parseAndValidateAudioSourceUrl(audioUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL format';
       return NextResponse.json(
@@ -420,14 +420,18 @@ export async function HEAD(request: NextRequest) {
     // If not cached or not Firebase URL, validate domain and proxy HEAD
     const fetchUrl = audioUrl;
     try {
-      parseAndValidateAudioSourceUrl(audioUrl, { allowDevelopmentLocalhost: true });
+      parseAndValidateAudioSourceUrl(audioUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL format';
       return new NextResponse(null, { status: message === 'Invalid URL format' ? 400 : 403 });
     }
 
     try {
-      const headResp = await fetch(fetchUrl, { method: 'HEAD', headers: { 'User-Agent': 'ChordMini/1.0' }, signal: AbortSignal.timeout(15000) });
+      const headResp = await safeFetchAudioSource(fetchUrl, {
+        method: 'HEAD',
+        headers: { 'User-Agent': 'ChordMini/1.0' },
+        signal: createSafeTimeoutSignal(15000),
+      });
       const len = headResp.headers.get('content-length') || '0';
       return new NextResponse(null, {
         status: headResp.status,

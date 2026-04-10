@@ -37,6 +37,8 @@ export function useMelodicTranscriptionPlayback({
   const latestCurrentTimeRef = useRef(currentTime);
   const activationGenerationRef = useRef(0);
   const isBackgroundRef = useRef(false);
+  const preparedMelodyVersionRef = useRef(0);
+  const lastScheduledPreparedVersionRef = useRef<number | null>(null);
   const [melodyVolume, setMelodyVolume] = useState(() => {
     if (typeof window === 'undefined') {
       return DEFAULT_MELODY_VOLUME;
@@ -122,6 +124,34 @@ export function useMelodicTranscriptionPlayback({
     lastScheduledStartRef.current = scheduleAnchor;
   }, [preparedMelodyNotes, resolvePreciseTransportTime]);
 
+  const prepareAndScheduleMelodyFromCurrentTime = useCallback((
+    options?: {
+      interruptExisting?: boolean;
+    },
+  ) => {
+    const service = serviceRef.current;
+    const activationGeneration = activationGenerationRef.current + 1;
+    activationGenerationRef.current = activationGeneration;
+
+    if (options?.interruptExisting) {
+      service.stopInstruments(['melodyViolin']);
+      lastScheduledStartRef.current = null;
+    }
+
+    void (async () => {
+      const prepared = await service.prepareInstrumentForPlayback('melodyViolin');
+      if (
+        !prepared
+        || activationGenerationRef.current !== activationGeneration
+        || !playbackActiveRef.current
+      ) {
+        return;
+      }
+
+      scheduleMelodyFromTime(resolvePreciseTransportTime());
+    })();
+  }, [resolvePreciseTransportTime, scheduleMelodyFromTime]);
+
   useEffect(() => {
     const mixer = getAudioMixerService();
     const syncVolume = () => {
@@ -141,40 +171,38 @@ export function useMelodicTranscriptionPlayback({
   }, [currentTime, resolvePreciseTransportTime]);
 
   useEffect(() => {
+    preparedMelodyVersionRef.current += 1;
+  }, [preparedMelodyNotes]);
+
+  useEffect(() => {
     const service = serviceRef.current;
+    service.updateOptions({
+      enabled: shouldActivate,
+      melodyVolume: Math.max(0, melodyVolume),
+    });
 
     if (shouldActivate) {
-      const activationGeneration = activationGenerationRef.current + 1;
-      activationGenerationRef.current = activationGeneration;
-      service.updateOptions({
-        enabled: true,
-        melodyVolume: Math.max(0, melodyVolume),
-      });
+      const preparedMelodyVersion = preparedMelodyVersionRef.current;
+      const isNewActivation = !playbackActiveRef.current;
+      const sourceChangedWhileActive = lastScheduledPreparedVersionRef.current !== preparedMelodyVersion;
       playbackActiveRef.current = true;
-
-      void (async () => {
-        const prepared = await service.prepareInstrumentForPlayback('melodyViolin');
-        if (
-          !prepared
-          || activationGenerationRef.current != activationGeneration
-          || !playbackActiveRef.current
-        ) {
-          return;
-        }
-
-        scheduleMelodyFromTime(resolvePreciseTransportTime());
-      })();
+      if (isNewActivation || sourceChangedWhileActive) {
+        lastScheduledPreparedVersionRef.current = preparedMelodyVersion;
+        prepareAndScheduleMelodyFromCurrentTime({
+          interruptExisting: !isNewActivation && sourceChangedWhileActive,
+        });
+      }
 
       return;
     }
 
     if (playbackActiveRef.current) {
-      service.updateOptions({ melodyVolume: Math.max(0, melodyVolume) });
       stopMelodyPlayback();
     }
 
     lastScheduledStartRef.current = null;
-  }, [melodyVolume, resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate, stopMelodyPlayback]);
+    lastScheduledPreparedVersionRef.current = null;
+  }, [melodyVolume, prepareAndScheduleMelodyFromCurrentTime, shouldActivate, stopMelodyPlayback]);
 
   useEffect(() => {
     const preciseCurrentTime = resolvePreciseTransportTime();
@@ -205,14 +233,6 @@ export function useMelodicTranscriptionPlayback({
   }, [currentTime, resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate]);
 
   useEffect(() => {
-    if (!shouldActivate || !signalAnalysis) {
-      return;
-    }
-
-    scheduleMelodyFromTime(resolvePreciseTransportTime());
-  }, [resolvePreciseTransportTime, scheduleMelodyFromTime, shouldActivate, signalAnalysis]);
-
-  useEffect(() => {
     if (typeof document === 'undefined') {
       return undefined;
     }
@@ -222,7 +242,9 @@ export function useMelodicTranscriptionPlayback({
       isBackgroundRef.current = hidden;
 
       if (!hidden && shouldActivate) {
-        scheduleMelodyFromTime(resolvePreciseTransportTime());
+        scheduleMelodyFromTime(resolvePreciseTransportTime(), {
+          interruptExisting: true,
+        });
       }
     };
 

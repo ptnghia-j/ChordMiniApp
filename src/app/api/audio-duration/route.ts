@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { audioMetadataService } from '@/services/audio/audioMetadataService';
 import { isFirebaseStorageUrl, parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
+import { safeFetchAudioSource } from '@/utils/safeServerAudioFetch';
 
 /**
  * Audio Duration Detection API Route
@@ -163,7 +164,7 @@ async function getDurationFromHeaders(audioUrl: string): Promise<number> {
 
       console.log(`🔍 Getting duration from headers (attempt ${attempt}/${maxRetries}): ${audioUrl.substring(0, 100)}...`);
 
-      const response = await fetch(audioUrl, {
+      const response = await safeFetchAudioSource(audioUrl, {
         method: 'HEAD',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -229,7 +230,7 @@ async function estimateDurationFromFileSize(audioUrl: string): Promise<number> {
 
       console.log(`📏 Estimating duration from file size (attempt ${attempt}/${maxRetries}): ${audioUrl.substring(0, 100)}...`);
 
-      const response = await fetch(audioUrl, {
+      const response = await safeFetchAudioSource(audioUrl, {
         method: 'HEAD',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

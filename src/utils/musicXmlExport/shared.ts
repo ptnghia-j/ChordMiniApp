@@ -5,6 +5,7 @@ import {
   NOTE_INDEX_MAP,
 } from '@/utils/chordToMidi';
 import { getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
+import { canonicalizeKeySignature } from '@/utils/keySignatureUtils';
 import {
   DIVISIONS_PER_QUARTER,
   MIN_DIVISION,
@@ -199,7 +200,9 @@ export function formatLeadSheetChordLabel(chordName: string, keySignature?: stri
 }
 
 export function normalizeKeySignature(value?: string | null): string {
-  return value
+  const normalizedValue = canonicalizeKeySignature(value) ?? value;
+
+  return normalizedValue
     ?.trim()
     .replace(/♭/g, 'b')
     .replace(/♯/g, '#')

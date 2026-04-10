@@ -503,7 +503,7 @@ npm run dev
 - **AI Integration**: Gemini AI for key detection and enharmonic corrections -->
 ---
 
-### External APIs & Services
+### External APIs & Services, Packages
 We sincerely thank the following APIs and services for their support and contribution to the project.
 - **Madmom** - [github.com/CPJKU/madmom](https://github.com/CPJKU/madmom) - Beat detection and audio processing
 - **ISMIR2019-Large-Vocabulary-Chord-Recognition** - [github.com/music-x-lab/ISMIR2019-Large-Vocabulary-Chord-Recognition](https://github.com/music-x-lab/ISMIR2019-Large-Vocabulary-Chord-Recognition) - Chord-CNN-LSTM model for chord recognition
@@ -515,6 +515,7 @@ We sincerely thank the following APIs and services for their support and contrib
 - **Sheetsage** -[github.com/chrisdonahue/sheetsage](https://github.com/chrisdonahue/sheetsage) - Experimental melody transcription model
 - **OpenSheetMusicDisplay** -[github.com/opensheetmusicdisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) - Sheet music rendering
 - **Music.ai SDK** - AI-powered music transcription 
+
 
 <!-- 
 ## 🚀 Deployment Options

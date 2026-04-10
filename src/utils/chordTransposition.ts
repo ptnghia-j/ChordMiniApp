@@ -13,6 +13,7 @@
  */
 
 import { parseChordNotation } from './chordUtils';
+import { canonicalizeKeyRoot, parseKeySignature } from './keySignatureUtils';
 
 /**
  * Pitch shift range constants
@@ -128,7 +129,8 @@ export function calculateTargetKey(
   
   // If the transposed key naturally uses the same accidental type, use it
   if (originalUsesFlats === transposedUsesFlats) {
-    return hasMinorSuffix ? `${transposedKey}m` : transposedKey;
+    const canonicalRoot = canonicalizeKeyRoot(transposedKey, hasMinorSuffix ? 'minor' : null) ?? transposedKey;
+    return hasMinorSuffix ? `${canonicalRoot}m` : canonicalRoot;
   }
   
   // Otherwise, use the chromatic scale that matches the original preference
@@ -138,10 +140,50 @@ export function calculateTargetKey(
   if (originalIndex !== -1) {
     const newIndex = (originalIndex + semitones + 12) % 12;
     const nextKey = chromaticScale[newIndex];
-    return hasMinorSuffix ? `${nextKey}m` : nextKey;
+    const canonicalRoot = canonicalizeKeyRoot(nextKey, hasMinorSuffix ? 'minor' : null) ?? nextKey;
+    return hasMinorSuffix ? `${canonicalRoot}m` : canonicalRoot;
   }
-  
-  return hasMinorSuffix ? `${transposedKey}m` : transposedKey;
+
+  const canonicalRoot = canonicalizeKeyRoot(transposedKey, hasMinorSuffix ? 'minor' : null) ?? transposedKey;
+  return hasMinorSuffix ? `${canonicalRoot}m` : canonicalRoot;
+}
+
+export function transposeKeySignature(
+  keySignature: string | null | undefined,
+  semitones: number,
+): string | null {
+  if (typeof keySignature !== 'string') {
+    return null;
+  }
+
+  const trimmedKeySignature = keySignature.trim();
+  if (!trimmedKeySignature) {
+    return null;
+  }
+
+  const parsed = parseKeySignature(trimmedKeySignature);
+  if (!parsed) {
+    return trimmedKeySignature;
+  }
+
+  const shorthandKey = parsed.quality === 'minor' ? `${parsed.root}m` : parsed.root;
+  const transposedKey = semitones === 0
+    ? shorthandKey
+    : calculateTargetKey(shorthandKey, semitones);
+  const canonicalRoot = canonicalizeKeyRoot(
+    transposedKey.endsWith('m') ? transposedKey.slice(0, -1) : transposedKey,
+    parsed.quality,
+  ) ?? (transposedKey.endsWith('m') ? transposedKey.slice(0, -1) : transposedKey);
+
+  if (parsed.quality === 'minor') {
+    return `${canonicalRoot} minor`;
+  }
+
+  if (parsed.quality === 'major') {
+    return `${canonicalRoot} major`;
+  }
+
+  return canonicalRoot;
 }
 
 /**
