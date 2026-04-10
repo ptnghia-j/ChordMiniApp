@@ -186,7 +186,7 @@ const withRomanNumerals = (
   corrections
     ? {
         ...corrections,
-        romanNumerals: corrections.romanNumerals ?? romanNumerals ?? null,
+        romanNumerals: romanNumerals ?? corrections.romanNumerals ?? null,
       }
     : null
 );
@@ -204,12 +204,12 @@ const mergeSequenceCorrections = (
   }
 
   return {
-    originalSequence: authoritativeCorrections.originalSequence.length
-      ? authoritativeCorrections.originalSequence
-      : incomingCorrections.originalSequence,
-    correctedSequence: authoritativeCorrections.correctedSequence.length
-      ? authoritativeCorrections.correctedSequence
-      : incomingCorrections.correctedSequence,
+    originalSequence: incomingCorrections.originalSequence.length
+      ? incomingCorrections.originalSequence
+      : authoritativeCorrections.originalSequence,
+    correctedSequence: incomingCorrections.correctedSequence.length
+      ? incomingCorrections.correctedSequence
+      : authoritativeCorrections.correctedSequence,
     keyAnalysis: incomingCorrections.keyAnalysis ?? authoritativeCorrections.keyAnalysis,
     romanNumerals: incomingCorrections.romanNumerals ?? authoritativeCorrections.romanNumerals ?? null,
   };
@@ -859,19 +859,11 @@ export function useAnalyzePageOrchestrator({
           return;
         }
 
-        const hasExistingSequenceCorrections = (sequenceCorrections?.correctedSequence?.length ?? 0) > 0;
-        const shouldPreserveAuthoritativeCorrections = needsRomanNumeralsAfterCache && hasExistingSequenceCorrections;
-        const effectiveSequenceSource = shouldPreserveAuthoritativeCorrections
-          ? sequenceCorrections
-          : (nextCachedSequenceCorrections ?? sequenceCorrections);
         const includeRomanNumeralsInDetection = showRomanNumerals && needsRomanNumeralsAfterCache;
-        const romanNumeralChordData =
-          effectiveSequenceSource?.correctedSequence?.length === chordData.length
-            ? chordData.map((chord, index) => ({
-                ...chord,
-                chord: effectiveSequenceSource.correctedSequence[index] ?? chord.chord,
-              }))
-            : chordData;
+        // Always re-run Gemini against the original chord timeline so a later
+        // Roman numeral enrichment pass can improve enharmonic corrections
+        // instead of being locked to the first corrected sequence.
+        const romanNumeralChordData = chordData;
 
         const { detectKey } = await import('@/services/audio/keyDetectionService');
         const result = await detectKey(romanNumeralChordData, true, false, includeRomanNumeralsInDetection);
@@ -879,12 +871,15 @@ export function useAnalyzePageOrchestrator({
         syncKeySignature(result.primaryKey);
 
         const nextResultSequenceCorrections = withRomanNumerals(result.sequenceCorrections ?? null, result.romanNumerals || null);
-        const effectiveSequenceCorrections = shouldPreserveAuthoritativeCorrections
-          ? mergeSequenceCorrections(effectiveSequenceSource, nextResultSequenceCorrections)
-          : nextResultSequenceCorrections;
-        const effectiveChordCorrections = shouldPreserveAuthoritativeCorrections
-          ? (cachedTranscription?.chordCorrections ?? chordCorrections ?? null)
-          : (result.corrections || null);
+        const incomingChordCorrections = result.corrections || null;
+        const incomingHasSequenceCorrections = (nextResultSequenceCorrections?.correctedSequence?.length ?? 0) > 0;
+        const incomingHasChordCorrections = Object.keys(incomingChordCorrections ?? {}).length > 0;
+        const effectiveSequenceCorrections = incomingHasSequenceCorrections
+          ? nextResultSequenceCorrections
+          : (nextCachedSequenceCorrections ?? sequenceCorrections);
+        const effectiveChordCorrections = incomingHasChordCorrections
+          ? incomingChordCorrections
+          : (cachedTranscription?.chordCorrections ?? chordCorrections ?? null);
 
         if (effectiveSequenceCorrections?.correctedSequence) {
           syncSequenceCorrections(effectiveSequenceCorrections);

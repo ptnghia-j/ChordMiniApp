@@ -311,6 +311,12 @@ CHORD SEQUENCE (in order): [${chordSequence.join(', ')}]
 
 TIMING INFORMATION: ${chordProgression}
 
+INPUT NOTATION:
+- Chords use Harte-style symbols such as "F#:maj", "Bb:min7", "C#:7", "F#:maj/3", and "C#:7/b7".
+- If the input uses slash-degree inversion notation (for example /3, /5, /b7, /2), preserve that suffix exactly in chord-symbol outputs.
+- Example: "F#:maj/3" may become "Gb:maj/3" in a flat context, but not "Gb:maj/Bb" and not figure-bass notation.
+- If the input uses a slash-note chord symbol (for example "D/F#"), keep it as a slash-note chord symbol.
+
 Please respond with ONLY a JSON object in this exact format:
 {
   "primaryKey": "[Key Name]",
@@ -354,102 +360,72 @@ Please respond with ONLY a JSON object in this exact format:
 
 	OUTPUT REPRESENTATION RULES:
 	- The fields "sequenceCorrections.correctedSequence", "sequenceCorrections.keyAnalysis.sections[].chords", and "corrections" must contain CHORD SYMBOLS, not Roman numerals.
-	- Preserve inversion slash notation in chord symbols. If the input chord is "D/F#", the corrected chord symbol must stay slash-based, such as "D/F#" (or an enharmonic respelling of the same pitches if absolutely needed).
+	- Preserve inversion slash notation in chord symbols. Slash-degree inputs must stay slash-degree; slash-note inputs must stay slash-note.
+	- If the input chord is "F#:maj/3", the corrected chord symbol in a flat context should be "Gb:maj/3".
+	- If the input chord is "D/F#", the corrected chord symbol must stay slash-based, such as "D/F#" (or an enharmonic respelling of the same pitches if absolutely needed).
 	- NEVER convert a chord symbol into figure-bass shorthand. For chord-symbol outputs, do NOT rewrite "D/F#" as "D6", "D64", "D65", "IV6", or any other Roman numeral / figured-bass label.
 	- Roman numeral inversion notation belongs ONLY inside "romanNumerals.analysis" and "romanNumerals.temporalShifts[*].romanNumeral".
-	- Example: chord symbol output = "D/F#"; Roman numeral output may be "I6" or "IV6" depending on the local key context. Keep these as separate representations.
+	- Example: chord symbol output = "F#:maj/3" -> "Gb:maj/3"; Roman numeral output may be "I6" or "IV6" depending on the local key context. Keep these as separate representations.
 
 ${includeRomanNumerals ? `
 ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
-1. **STANDARD NOTATION**: Use standard music theory Roman numerals (I, ii, iii, IV, V, vi, vii°)
-   - Major chords: I, IV, V (uppercase)
-   - Minor chords: ii, iii, vi (lowercase)
-   - Diminished chords: vii° (lowercase with degree symbol)
-   - Seventh chords: V7, ii7, etc.
+1. **STANDARD NOTATION**: Use standard Roman numerals (I, ii, iii, IV, V, vi, vii°). Use uppercase for major-quality chords, lowercase for minor-quality chords, and include chord figures such as V7 when needed.
 
-	2. **INVERSIONS**: Use proper figure bass notation for ALL inversions in the Roman numeral fields only
-   **TRIADS:**
-   - Root position: I, ii, iii, IV, V, vi, vii° (no figures)
-   - First inversion: I6, ii6, iii6, IV6, V6, vi6, vii°6 (NOT I/3 or I/E)
-   - Second inversion: I64, ii64, iii64, IV64, V64, vi64, vii°64 (NOT I/5 or I/G)
+	2. **INVERSIONS**: Use proper figure-bass notation in Roman numeral fields only.
+   - Triads: root position = no figures, first inversion = 6, second inversion = 64.
+   - Seventh chords: root position = 7, first inversion = 65, second inversion = 43, third inversion = 42.
+	   - NEVER use slash notation (I/D, V/B) inside Roman numeral fields; use figure bass instead.
+	   - This applies ONLY to Roman numeral analysis. It does NOT permit changing chord-symbol outputs like "F#:maj/3" into "I6" or "D/F#" into "D6".
 
-   **SEVENTH CHORDS:**
-   - Root position: I7, ii7, iii7, IV7, V7, vi7, vii°7 (figure 7)
-   - First inversion: I65, ii65, iii65, IV65, V65, vi65, vii°65 (NOT I7/3)
-   - Second inversion: I43, ii43, iii43, IV43, V43, vi43, vii°43 (NOT I7/5)
-   - Third inversion: I42, ii42, iii42, IV42, V42, vi42, vii°42 (NOT I7/7)
+3. **TEMPORARY TONAL SHIFTS**: Use bar notation for tonicization, such as "V7|vi". The frontend will display this as "V7/vi".
 
-	   **CRITICAL**: NEVER use slash notation (I/D, V/B) inside the Roman numeral fields - ALWAYS use figure bass (I42, V6)
-	   **IMPORTANT SEPARATION**: This rule applies ONLY to Roman numeral analysis. It does NOT permit changing chord-symbol outputs like "D/F#" into "D6".
+4. **KEY CONTEXT**: Use Roman numerals relative to the active tonal center, marking primary key and temporary modulations when needed.
 
-3. **TEMPORARY TONAL SHIFTS**: Use bar notation for analysis, but note frontend conversion
-   - Analysis format: V7|vi (V7 going to vi as temporary tonic)
-   - Frontend will display as: V7/vi (fraction notation)
-   - Example: In C major, E7 going to Am = V7|vi
-
-4. **KEY CONTEXT**: Focus on the local key and temporary modulations
-   - Identify the primary key context
-   - Mark temporary shifts to related keys (relative minor/major, dominant, subdominant)
-   - Use Roman numerals relative to the current tonal center
-
-5. **CHORD MAPPING**: Provide Roman numeral for each chord in sequence
-   - Array length must match the chord sequence length
-   - Use "N.C." for no-chord sections
-   - Mark unclear analysis with "?" (e.g., "V7?")
+5. **CHORD MAPPING**: Provide one Roman numeral per chord in sequence.
+   - Array length must match the chord sequence length.
+   - Use "N.C." for no-chord sections.
+   - Mark unclear analysis with "?" (for example "V7?").
 
 ` : ''}${includeEnharmonicCorrection ? `
-CRITICAL INSTRUCTIONS - ENHARMONIC CORRECTIONS ONLY:` : ''}
-1. **SAME PITCH REQUIREMENT**: Only change note spelling, never the actual pitch
-   - ENHARMONIC EQUIVALENTS (same pitch): C#↔Db, D#↔Eb, F#↔Gb, G#↔Ab, A#↔Bb
-   - DIFFERENT PITCHES (never change): C≠C#, D≠D#, E≠F, F≠F#, G≠G#, A≠A#, B≠C
-	   - Example: G#dim can become Abdim (G# and Ab are the same pitch) but NEVER A#dim (G# and A# are different pitches!)
+ENHARMONIC CORRECTION INSTRUCTIONS:` : ''}
+1. **SAME PITCH REQUIREMENT**: Only change note spelling, never pitch, chord quality, inversion function, or harmonic function.
+   - Valid same-pitch respellings include C#↔Db, D#↔Eb, F#↔Gb, G#↔Ab, A#↔Bb.
+   - Never change to a different pitch class. Example: "G#dim" may become "Abdim", but never "A#dim".
 
-2. **HARMONIC FUNCTION PRESERVATION**: The bass line progression must remain identical
-	   - Original progression: E→F#→G#dim→G#m
-	   - Valid correction: E→F#→Abdim→Abm (same sounding bass progression, respelled consistently for a flat context)
-	   - INVALID correction: E→F#→A#dim→G#m (G# and A# are different pitches - changes harmonic function!)
-	   - Be aware of walking bass lines and preserve the same sounding bass motion even when a double accidental or respelling is needed.
-	   - For slash chords, preserve the same inversion / bass note function in chord-symbol output. Example: "D/F#" must remain a slash chord symbol, not "D6".
+2. **PRESERVE BASS MOTION AND SLASH FUNCTION**: The sounding bass motion must remain identical.
+   - Preserve slash-note chords as slash-note chords and slash-degree chords as slash-degree chords.
+   - Keep the same inversion meaning. Example: "D/F#" must stay slash-based; "F#:maj/3" may become "Gb:maj/3", not "Gb:maj/Bb" and not "D6".
 
-3. **CHORD QUALITY PRESERVATION**: Keep ALL chord qualities exactly unchanged
-	   - "G#dim" stays "dim" quality, can become "Abdim" but never "A#dim" or "Gmaj"
-   - "F#7" stays "7" quality, can become "Gb7" but never "F7" or "F#maj7"
-   - "C#m" stays "m" quality, can become "Dbm" but never "C#" or "Dm"
-	   - "D/F#" stays a slash-chord inversion symbol, can become something enharmonically equivalent like "D/Gb" only if the same sounding bass must be respelled, but never "D6"
-		   - NEVER change a slash bass to a different pitch-class. Example: "A/B" may stay "A/B" or become an enharmonic equivalent like "A/Cb", but never "A/C#".
+3. **KEEP CHORD QUALITY AND SUFFIXES EXACTLY**:
+   - "F#7" may become "Gb7", but never "F7" or "F#maj7".
+   - "C#m" may become "Dbm", but never "C#" or "Dm".
+   - Keep Harte notation shape when present. Example: "C#:maj" → "Db:maj", "F#:maj/3" → "Gb:maj/3", "C#:7/b7" → "Db:7/b7".
 
-4. **KEY SIGNATURE OPTIMIZATION**: Choose spellings with less accidentals
-   - Prefer Db major (5 flats) over C# major (7 sharps)
-   - Prefer B major (5 sharps) over Cb major (7 flats)
-	   - If a section could be labeled either with sharps or flats, choose the representation that minimizes accidentals AND keeps chord spellings internally consistent.
+4. **KEY SIGNATURE OPTIMIZATION**: Prefer the enharmonic spelling with fewer accidentals while keeping the section internally consistent.
+   - Prefer Db major over C# major.
+   - Prefer B major over Cb major.
 
-	5. **LOCAL KEY / CHORD SPELLING CONSISTENCY**: Keep the chosen local key name and corrected chord spellings in the SAME enharmonic system
-	   - If you label a local section as a sharp key (for example G#, C#, D#), corrected chords in that section must also use sharp-based spellings when applicable.
-	   - If you label a local section as a flat key (for example Ab, Db, Eb), corrected chords in that section must also use flat-based spellings when applicable.
-	   - NEVER mix a sharp key label with flat-only corrected chords, or a flat key label with sharp-only corrected chords, if an equivalent same-pitch respelling exists.
-	   - Example: if the local key is G#, use "E#m" instead of "Fm". If you want to keep "Fm", then the local key should be spelled as Ab-based instead.
-	   - Apply the same consistency rule to modulation labels, section keys, corrected chord symbols, and Roman numeral key contexts.
+	5. **LOCAL KEY / CHORD SPELLING CONSISTENCY**: Keep local key names and corrected chord spellings in the same enharmonic system.
+	   - If a section is flat-based (for example Ab, Db, Eb, Gb), corrected chords in that section should also be flat-based when an equivalent respelling exists.
+	   - If a section is sharp-based (for example G#, C#, D#), corrected chords in that section should also be sharp-based when an equivalent respelling exists.
+	   - Do not mix sharp and flat spellings within the same local section when the same-pitch respelling can be made consistent.
 
-	6. **CONSERVATIVE APPROACH**: When uncertain, preserve original spelling ONLY if it does not conflict with the chosen local key spelling or create mixed enharmonic notation within the same section.
+	6. **CONSERVATIVE APPROACH**: When uncertain, preserve the original spelling unless it conflicts with the chosen local key spelling or creates mixed enharmonic notation within the same section.
 
-VALID CORRECTION EXAMPLES (same pitch, different spelling):
-- "C#m" → "Dbm" (C# and Db are the same pitch)
-- "F#7" → "Gb7" (F# and Gb are the same pitch)
-- "G#dim" → "Abdim" (G# and Ab are the same pitch)
-- "A#" → "Bb" (A# and Bb are the same pitch)
+VALID CORRECTION EXAMPLES:
+- "C#m" → "Dbm"
+- "F#7" → "Gb7"
+- "F#:maj/3" → "Gb:maj/3"
 
-INVALID CORRECTION EXAMPLES (NEVER DO - different pitches or qualities):
-- "G#dim" → "A#dim" (G# and A# are DIFFERENT PITCHES!)
-- "F" → "F#" (F and F# are DIFFERENT PITCHES!)
-- "C" → "Cm" (changes chord quality)
-- "F#7" → "F7" (F# and F are DIFFERENT PITCHES!)
-- "Am" → "A" (removes chord quality)
+INVALID CORRECTION EXAMPLES:
+- "G#dim" → "A#dim"
+- "F#:maj/3" → "Gb:maj/Bb"
+- "C" → "Cm"
 
-Note: Based on the chords, a key may be classified as either major or natural minor.
-- To classify a key as minor, you need clear evidence, such as accidentals raising the leading tone.
-- For example, when deciding between B♭ major and G minor, unless there are chords containing the F# tone (such as D major) within the song, it is more likely B♭ major.
-- Consider both the opening chord and the final chord for justification.
-- Do not overlook the decision between major and minor; choose the one that best fits the musical context.
+Note: Decide carefully between major and minor.
+- Choose minor only with clear evidence such as raised leading-tone behavior.
+- Consider both the opening chord and the ending chord.
+- Prefer the key interpretation that best fits the full progression.
 
 Respond with ONLY the JSON object, no explanations.`;
     } else {
