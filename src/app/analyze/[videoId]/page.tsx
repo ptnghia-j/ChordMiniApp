@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { addToast } from '@heroui/react';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '@/components/common/Navigation';
@@ -116,6 +117,7 @@ import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEF
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 import { buildAnalyzePageUrl, readAnalyzeRouteParams } from '@/utils/analyzeRouteUtils';
 import { consumeAnalyzeSessionHandoff } from '@/utils/analyzeSessionHandoff';
+import { MAX_ANALYSIS_DURATION_MINUTES, getAnalysisDurationLimitReason, parseAnalysisDurationSeconds } from '@/utils/analysisDurationLimit';
 import { requestSheetSageTranscription } from '@/services/sheetsage/sheetSageTranscriptionClient';
 import { getCachedSheetSageMelody } from '@/services/sheetsage/sheetSageCacheClient';
 import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
@@ -148,6 +150,7 @@ export default function YouTubeVideoAnalyzePage() {
   const routeParams = readAnalyzeRouteParams(searchParams);
   const titleFromSearch = routeParams.title;
   const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const durationLimitToastShownRef = useRef(false);
   const durationFromSearch = routeParams.duration;
   const channelFromSearch = routeParams.channel;
   const thumbnailFromSearch = routeParams.thumbnail;
@@ -237,6 +240,7 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Extract state from audio player hook
   const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
+  const effectiveAnalysisDuration = duration > 0 ? duration : parseAnalysisDurationSeconds(durationFromSearch);
 
   // Create setters for individual state properties
   const setIsPlaying = useCallback((playing: boolean) => {
@@ -341,6 +345,43 @@ export default function YouTubeVideoAnalyzePage() {
     onUsageCountIncrement: incrementActiveTranscriptionUsageCount,
   });
 
+  const analysisDurationLimitReason = useMemo(
+    () => getAnalysisDurationLimitReason(effectiveAnalysisDuration),
+    [effectiveAnalysisDuration],
+  );
+  const analysisActionDisabledReason = !cacheAvailable ? analysisDurationLimitReason : null;
+
+  useEffect(() => {
+    if (analysisActionDisabledReason && !durationLimitToastShownRef.current) {
+      durationLimitToastShownRef.current = true;
+      addToast({
+        title: 'Audio is too long for analysis',
+        description: `Audio duration should be less than ${MAX_ANALYSIS_DURATION_MINUTES} minutes.`,
+        color: 'warning',
+        variant: 'flat',
+        timeout: 5000,
+        shouldShowTimeoutProgress: true,
+      });
+      return;
+    }
+
+    if (!analysisActionDisabledReason) {
+      durationLimitToastShownRef.current = false;
+    }
+  }, [analysisActionDisabledReason]);
+
+  const handleStartAnalysis = useCallback(() => {
+    if (analysisActionDisabledReason) {
+      setAudioProcessingState(prev => ({
+        ...prev,
+        error: analysisActionDisabledReason,
+      }));
+      return;
+    }
+
+    void handleAudioAnalysis();
+  }, [analysisActionDisabledReason, handleAudioAnalysis, setAudioProcessingState]);
+
   useEffect(() => {
     if (initialAnalyzeHandoff?.duration) {
       setDuration(initialAnalyzeHandoff.duration);
@@ -423,13 +464,14 @@ export default function YouTubeVideoAnalyzePage() {
       !audioProcessingState.audioUrl ||
       audioProcessingState.isAnalyzing ||
       audioProcessingState.isAnalyzed ||
-      !!audioProcessingState.error
+      !!audioProcessingState.error ||
+      !!analysisActionDisabledReason
     ) {
       return;
     }
 
     autoStartAttemptedRef.current = true;
-    void handleAudioAnalysis();
+    handleStartAnalysis();
   }, [
     autoStartRequested,
     audioProcessingState.audioUrl,
@@ -437,11 +479,13 @@ export default function YouTubeVideoAnalyzePage() {
     audioProcessingState.isAnalyzed,
     audioProcessingState.isAnalyzing,
     audioProcessingState.isExtracted,
-    handleAudioAnalysis,
+    analysisActionDisabledReason,
+    handleStartAnalysis,
     modelsInitialized,
   ]);
 
   const hideInitialAnalysisControls = autoStartRequested
+    && !analysisActionDisabledReason
     && !audioProcessingState.error
     && !audioProcessingState.isAnalyzed;
 
@@ -1294,9 +1338,10 @@ export default function YouTubeVideoAnalyzePage() {
             chordDetector={chordDetector}
             onBeatDetectorChange={setBeatDetector}
             onChordDetectorChange={setChordDetector}
-            onStartAnalysis={handleAudioAnalysis}
+            onStartAnalysis={handleStartAnalysis}
             cacheAvailable={cacheAvailable}
             cacheCheckCompleted={cacheCheckCompleted}
+            actionDisabledReason={analysisActionDisabledReason}
             hidden={hideInitialAnalysisControls}
           />
         </div>

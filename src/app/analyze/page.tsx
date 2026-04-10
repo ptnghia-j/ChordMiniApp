@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@heroui/react';
+import { addToast } from '@heroui/react';
 import Navigation from '@/components/common/Navigation';
 import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { ProcessingStatusSkeleton } from '@/components/common/SkeletonLoaders';
@@ -94,6 +95,7 @@ import type { LyricsData } from '@/types/musicAiTypes';
 import { requestSheetSageTranscription } from '@/services/sheetsage/sheetSageTranscriptionClient';
 import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
 import { getSafeBeatModel, getSafeChordModel } from '@/utils/modelFiltering';
+import { MAX_ANALYSIS_DURATION_MINUTES, getAnalysisDurationLimitReason } from '@/utils/analysisDurationLimit';
 import MelodyTranscriptionStatusToast from '@/components/analysis/MelodyTranscriptionStatusToast';
 
 export default function LocalAudioAnalyzePage() {
@@ -108,8 +110,32 @@ export default function LocalAudioAnalyzePage() {
   const [lyricSearchArtist, setLyricSearchArtist] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const durationLimitToastShownRef = useRef(false);
 
   const { lyrics, completeLyricsTranscription } = useLyricsState();
+  const analysisDurationLimitReason = useMemo(
+    () => getAnalysisDurationLimitReason(duration),
+    [duration],
+  );
+
+  useEffect(() => {
+    if (analysisDurationLimitReason && !durationLimitToastShownRef.current) {
+      durationLimitToastShownRef.current = true;
+      addToast({
+        title: 'Audio is too long for analysis',
+        description: `Audio duration should be less than ${MAX_ANALYSIS_DURATION_MINUTES} minutes.`,
+        color: 'warning',
+        variant: 'flat',
+        timeout: 5000,
+        shouldShowTimeoutProgress: true,
+      });
+      return;
+    }
+
+    if (!analysisDurationLimitReason) {
+      durationLimitToastShownRef.current = false;
+    }
+  }, [analysisDurationLimitReason]);
   const {
     segmentationData,
     showSegmentation,
@@ -578,6 +604,15 @@ export default function LocalAudioAnalyzePage() {
   // Process and analyze the audio file
   const processAudioFile = async () => {
     if (!audioFile) return;
+    if (analysisDurationLimitReason) {
+      setAudioProcessingState(prev => ({
+        ...prev,
+        error: analysisDurationLimitReason,
+        isExtracting: false,
+        isAnalyzing: false,
+      }));
+      return;
+    }
 
     stageTimeoutRef.current = null;
 
@@ -1123,7 +1158,7 @@ const simplifiedChordGridData = useMemo(() => {
 
                   <Button
                     onClick={processAudioFile}
-                    disabled={!audioFile || audioProcessingState.isExtracting || audioProcessingState.isAnalyzing}
+                    disabled={!audioFile || audioProcessingState.isExtracting || audioProcessingState.isAnalyzing || !!analysisDurationLimitReason}
                     color="primary"
                     variant="solid"
                     size="md"
@@ -1133,6 +1168,12 @@ const simplifiedChordGridData = useMemo(() => {
                   </Button>
                 </div>
               </div>
+
+              {analysisDurationLimitReason && (
+                <div className="mb-4 rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-800">
+                  {analysisDurationLimitReason}
+                </div>
+              )}
 
               {/* Model Selectors - Hide when analysis is complete */}
               {!analysisResults && (

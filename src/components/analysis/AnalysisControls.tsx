@@ -42,6 +42,7 @@ interface AnalysisControlsProps {
   onStartAnalysis: () => void;
   cacheAvailable?: boolean;
   cacheCheckCompleted?: boolean;
+  actionDisabledReason?: string | null;
   hidden?: boolean;
 }
 
@@ -58,6 +59,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
   onStartAnalysis,
   cacheAvailable = false,
   cacheCheckCompleted = false,
+  actionDisabledReason = null,
   hidden = false,
 }) => {
   // PERFORMANCE FIX: Always show model selection UI, regardless of extraction state
@@ -71,12 +73,16 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
     ? 'Preparing audio'
     : isAnalyzing
       ? 'Analyzing...'
+      : actionDisabledReason
+        ? 'Analysis unavailable'
       : cacheCheckCompleted && cacheAvailable
         ? 'Open cached results'
         : 'Run analysis';
 
   const statusTone = !isExtracted
     ? 'primary'
+    : actionDisabledReason
+      ? 'warning'
     : !cacheCheckCompleted
       ? 'default'
       : cacheAvailable
@@ -101,6 +107,8 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
 
   const statusTitle = !isExtracted
     ? 'Preparing analysis session'
+    : actionDisabledReason
+      ? 'Analysis unavailable for this track'
     : !cacheCheckCompleted
       ? 'Checking cache availability'
       : cacheAvailable
@@ -109,6 +117,8 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
 
   const statusDescription = !isExtracted
     ? 'Audio is still being prepared. You can choose models now and continue as soon as extraction finishes.'
+    : actionDisabledReason
+      ? actionDisabledReason
     : !cacheCheckCompleted
       ? 'Looking for previously processed results for the selected model combination.'
       : cacheAvailable
@@ -189,7 +199,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
             size="lg"
             className="w-full md:w-auto md:min-w-[220px] font-medium"
             variant="solid"
-            isDisabled={!isExtracted || isAnalyzing || hasError}
+            isDisabled={!isExtracted || isAnalyzing || hasError || !!actionDisabledReason}
             isLoading={isAnalyzing}
             spinner={
               <svg className="animate-spin h-5 w-5 text-current" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -44,6 +44,8 @@ export default function ChangelogPage() {
         'IMPROVED: Expanded MusicXML pipeline separation for absolute events, quantization, score layout, rendering, voice assignment, and piano export.',
         'IMPROVED: Updated tests and TypeScript/Jest configuration to match the modular export structure and new sheet-music regression coverage.',
         'IMPROVED: Refreshed Firebase storage and setup docs/rules in support of current upload and cache handling flows.',
+        'REFACTOR: Restructured the sheet music export, audio generation, chord formatting pipeline for better maintainability and performance.',
+        'IMPROVED: Added safe guards against unintendedly long analysis, capped at MAX_ANALYSIS_DURATION_MINUTES (currently 12 minutes).'
       ],
       breaking: [
         'INTERNAL: Utility module paths were reorganized from single-file entry points to folder-based module exports.',

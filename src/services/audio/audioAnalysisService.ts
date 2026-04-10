@@ -6,6 +6,7 @@
  */
 
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { getAnalysisDurationLimitReason } from '@/utils/analysisDurationLimit';
 import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 import { offloadUploadService } from '@/services/storage/offloadUploadService';
@@ -311,6 +312,11 @@ export async function analyzeAudioWithRateLimit(
     audioDuration = audioInput.duration;
   } else {
     throw new Error('Invalid audio input: must be either File object, AudioBuffer, or URL string');
+  }
+
+  const analysisDurationLimitReason = getAnalysisDurationLimitReason(audioDuration);
+  if (analysisDurationLimitReason) {
+    throw new Error(analysisDurationLimitReason);
   }
 
   // PERFORMANCE OPTIMIZATION: Parallelize beat detection and chord recognition
