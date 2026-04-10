@@ -565,6 +565,3 @@ export class ChordMappingService {
 
 // Export singleton instance
 export const chordMappingService = ChordMappingService.getInstance();
-
-// Export the loadChordDatabase function for testing and verification
-export { loadChordDatabase };

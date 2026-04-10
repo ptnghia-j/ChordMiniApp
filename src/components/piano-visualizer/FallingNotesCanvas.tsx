@@ -96,7 +96,7 @@ function getNoteColor(_noteIndex: number, _isBass: boolean): string {
   return DEFAULT_NOTE_COLOR;
 }
 
-// Note: Instrument voicing logic is now in @/utils/instrumentNoteGeneration.ts
+// Note: Instrument voicing logic is now in @/utils/instrumentNoteGeneration
 // (single source of truth for both visualization and audio playback)
 
 // ─── Component ───────────────────────────────────────────────────────────────

@@ -57,7 +57,6 @@ export class SoundfontChordPlaybackService {
   private audioContext: AudioContext | null = null;
   private isInitialized = false;
   private isInitializing = false;
-  private initializationError: Error | null = null;
   private activeNotes = new Map<InstrumentName, ActiveScheduledNote[]>();
   private scheduledTimeouts = new Map<InstrumentName, NodeJS.Timeout>();
   private instrumentGeneration = new Map<InstrumentName, number>();
@@ -167,7 +166,6 @@ export class SoundfontChordPlaybackService {
     }
 
     this.isInitializing = true;
-    this.initializationError = null;
 
     try {
       await this.syncAudioContext();
@@ -176,7 +174,6 @@ export class SoundfontChordPlaybackService {
       }
       this.isInitialized = true;
     } catch (error) {
-      this.initializationError = error as Error;
       console.error('❌ Failed to initialize AudioContext:', error);
       throw error;
     } finally {

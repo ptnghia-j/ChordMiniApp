@@ -9,6 +9,14 @@
 export type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
 export type BeatDetectorType = 'madmom' | 'beat-transformer';
 
+function isLocalDevelopmentOrigin(): boolean {
+  const baseUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : (process.env.NEXT_PUBLIC_BASE_URL || '');
+
+  return baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+}
+
 /**
  * Check if BTC models should be available based on environment
  * @returns true if BTC models should be shown (local development), false if hidden (production)
@@ -19,7 +27,7 @@ export function areExperimentalModelsAvailable(): boolean {
     return true;
   }
 
-  return process.env.NODE_ENV === 'development';
+  return isLocalDevelopmentOrigin() || process.env.NODE_ENV === 'development';
 }
 
 export function areBTCModelsAvailable(): boolean {

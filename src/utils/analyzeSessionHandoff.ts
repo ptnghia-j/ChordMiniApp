@@ -16,10 +16,6 @@ export interface AnalyzeSessionHandoffPayload {
   createdAt: number;
 }
 
-export function writeAnalyzeSessionHandoff(payload: AnalyzeSessionHandoffPayload) {
-  safeSessionStorage().setItem(ANALYZE_HANDOFF_STORAGE_KEY, JSON.stringify(payload));
-}
-
 export function consumeAnalyzeSessionHandoff(
   videoId: string,
   beatDetector: string | null | undefined,

@@ -13,8 +13,8 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: [
-    '<rootDir>/tests/unit/**/*.test.{ts,tsx}',
-    '<rootDir>/tests/integration/**/*.test.{ts,tsx}',
+    '<rootDir>/__tests__/unit/**/*.test.{ts,tsx}',
+    '<rootDir>/__tests__/integration/**/*.test.{ts,tsx}',
     '<rootDir>/**/__tests__/**/*.{js,jsx,ts,tsx}',
     '<rootDir>/**/*.{test,spec}.{js,jsx,ts,tsx}'
   ],
@@ -35,8 +35,6 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '<rootDir>/.next/',
     '<rootDir>/node_modules/',
-    '<rootDir>/tests/e2e/',
-    '<rootDir>/tests/manual/',
     '<rootDir>/__tests__/e2e/',
     '<rootDir>/__tests__/manual/',
     '<rootDir>/__tests__/playwright\\.config\\.ts'

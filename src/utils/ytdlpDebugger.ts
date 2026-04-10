@@ -6,8 +6,8 @@
  */
 
 import path from 'path';
-import { tmpdir } from 'os';
 import { promises as fs } from 'fs';
+import { getLocalAudioSearchDirs } from '@/services/storage/localAudioStorageService';
 
 export interface DebugInfo {
   tempDir: string;
@@ -27,7 +27,8 @@ export async function debugYtdlpDownload(
   expectedFilename?: string,
   ytdlpOutput?: string
 ): Promise<DebugInfo> {
-  const tempDir = path.join(tmpdir(), 'chordmini-ytdlp');
+  const candidateDirs = getLocalAudioSearchDirs();
+  const tempDir = candidateDirs[0];
   const debugInfo: DebugInfo = {
     tempDir,
     filesInTempDir: [],
@@ -38,57 +39,64 @@ export async function debugYtdlpDownload(
   };
 
   try {
-    // Check if temp directory exists
-    try {
-      await fs.access(tempDir);
-      console.log(`✅ Temp directory exists: ${tempDir}`);
-    } catch {
-      debugInfo.errors.push(`Temp directory does not exist: ${tempDir}`);
+    let foundDirectory = false;
+
+    for (const directory of candidateDirs) {
+      try {
+        await fs.access(directory);
+        if (!foundDirectory) {
+          debugInfo.tempDir = directory;
+          foundDirectory = true;
+        }
+        console.log(`✅ Temp directory exists: ${directory}`);
+      } catch {
+        debugInfo.errors.push(`Temp directory does not exist: ${directory}`);
+        continue;
+      }
+
+      try {
+        const files = await fs.readdir(directory);
+        debugInfo.filesInTempDir.push(...files);
+        console.log(`📁 Files in temp directory (${files.length}) at ${directory}:`, files);
+
+        for (const file of files) {
+          try {
+            const filePath = path.join(directory, file);
+            const stats = await fs.stat(filePath);
+            debugInfo.fileSizes[file] = stats.size;
+            console.log(`   📄 ${file}: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+          } catch (error) {
+            debugInfo.errors.push(`Failed to get stats for ${file}: ${error}`);
+          }
+        }
+      } catch (error) {
+        debugInfo.errors.push(`Failed to read temp directory ${directory}: ${error}`);
+      }
+    }
+
+    if (!foundDirectory) {
       return debugInfo;
     }
 
-    // List all files in temp directory
-    try {
-      const files = await fs.readdir(tempDir);
-      debugInfo.filesInTempDir = files;
-      console.log(`📁 Files in temp directory (${files.length}):`, files);
+    const audioFiles = debugInfo.filesInTempDir.filter(file => 
+      file.endsWith('.mp3') || 
+      file.endsWith('.wav') || 
+      file.endsWith('.m4a') ||
+      file.endsWith('.opus') ||
+      file.endsWith('.webm')
+    );
 
-      // Get file sizes
-      for (const file of files) {
-        try {
-          const filePath = path.join(tempDir, file);
-          const stats = await fs.stat(filePath);
-          debugInfo.fileSizes[file] = stats.size;
-          console.log(`   📄 ${file}: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
-        } catch (error) {
-          debugInfo.errors.push(`Failed to get stats for ${file}: ${error}`);
-        }
+    if (audioFiles.length > 0) {
+      debugInfo.actualFilename = audioFiles[0];
+      console.log(`🎵 Found audio files: ${audioFiles.join(', ')}`);
+      
+      if (expectedFilename && !audioFiles.includes(expectedFilename)) {
+        debugInfo.errors.push(
+          `Expected filename "${expectedFilename}" not found. Available: ${audioFiles.join(', ')}`
+        );
       }
-
-      // Find audio files
-      const audioFiles = files.filter(file => 
-        file.endsWith('.mp3') || 
-        file.endsWith('.wav') || 
-        file.endsWith('.m4a') ||
-        file.endsWith('.opus') ||
-        file.endsWith('.webm')
-      );
-
-      if (audioFiles.length > 0) {
-        debugInfo.actualFilename = audioFiles[0];
-        console.log(`🎵 Found audio files: ${audioFiles.join(', ')}`);
-        
-        if (expectedFilename && !audioFiles.includes(expectedFilename)) {
-          debugInfo.errors.push(
-            `Expected filename "${expectedFilename}" not found. Available: ${audioFiles.join(', ')}`
-          );
-        }
-      } else {
-        debugInfo.errors.push('No audio files found in temp directory');
-      }
-
-    } catch (error) {
-      debugInfo.errors.push(`Failed to read temp directory: ${error}`);
+    } else {
+      debugInfo.errors.push('No audio files found in temp directory');
     }
 
     // Analyze yt-dlp output for clues

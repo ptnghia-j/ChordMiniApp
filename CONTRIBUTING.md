@@ -4,6 +4,10 @@ Thank you for your interest in contributing to ChordMini! This guide will help y
 
 Note: We especially welcome contribution from the research and ML community to help improve our core music analysis algorithms and models.
 
+> [!IMPORTANT]
+> The full test suites and documentations will be released in upcoming updates. 
+
+
 ## 📝 Code Style Guidelines
 
 ### TypeScript Standards
@@ -55,6 +59,9 @@ Current test suites primarily live under:
 - `__tests__/unit`
 - `__tests__/integration`
 - `__tests__/e2e`
+
+> [!NOTE]
+> To be updated
 
 ### Test Requirements
 - **Relevant Coverage**: Add or update tests for behavior changes when practical, especially for regressions and critical flows

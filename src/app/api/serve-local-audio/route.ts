@@ -8,14 +8,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile, stat } from 'fs/promises';
-import { join, resolve, basename } from 'path';
-import { tmpdir } from 'os';
+import { basename } from 'path';
+import { findLocalAudioFileByFilename } from '@/services/storage/localAudioStorageService';
 
 // Only allow in development environment
 const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Define the allowed directory for audio files
-const YTDLP_TEMP_DIR = join(tmpdir(), 'chordmini-ytdlp');
 
 export async function GET(request: NextRequest) {
   // Block in production
@@ -52,18 +49,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Construct the full file path
-    const filePath = resolve(join(YTDLP_TEMP_DIR, safeFilename));
-    
-    // Security: Ensure the resolved path is within the allowed directory
-    if (!filePath.startsWith(resolve(YTDLP_TEMP_DIR))) {
-      return NextResponse.json(
-        { error: 'File path not allowed' },
-        { status: 403 }
-      );
-    }
-
     try {
+      const localAudio = await findLocalAudioFileByFilename(safeFilename);
+      if (!localAudio) {
+        return NextResponse.json(
+          { error: 'File not found' },
+          { status: 404 }
+        );
+      }
+
+      const filePath = localAudio.filePath;
+
       // Check if file exists and get stats
       const fileStats = await stat(filePath);
       

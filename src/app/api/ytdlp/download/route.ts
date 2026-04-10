@@ -8,8 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
-import { tmpdir } from 'os';
 import { promises as fs } from 'fs';
+import {
+  buildLocalAudioServeUrl,
+  ensureLocalAudioWriteDir,
+  findExistingLocalAudioFile,
+  matchesLocalAudioVideoId,
+} from '@/services/storage/localAudioStorageService';
 
 export const maxDuration = 300;
 
@@ -30,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { url, filename, format = 'mp3' } = await request.json();
+    const { url, filename, videoId, format = 'mp3' } = await request.json();
 
     if (!url) {
       return NextResponse.json(
@@ -43,7 +48,7 @@ export async function POST(request: NextRequest) {
     console.log(`📁 Target filename: ${filename}`);
 
     // Download audio using yt-dlp
-    const downloadResult = await downloadAudio(url, filename, format);
+    const downloadResult = await downloadAudio(url, filename, videoId, format);
 
     if (downloadResult.success) {
       console.log(`✅ Audio downloaded: ${downloadResult.filename}`);
@@ -76,12 +81,32 @@ interface DownloadResult {
   error?: string;
 }
 
-async function downloadAudio(url: string, targetFilename?: string, format: string = 'mp3'): Promise<DownloadResult> {
+async function downloadAudio(
+  url: string,
+  targetFilename?: string,
+  requestedVideoId?: string,
+  format: string = 'mp3'
+): Promise<DownloadResult> {
   return new Promise(async (resolve) => {
     try {
-      // Create temporary directory for downloads
-      const tempDir = path.join(tmpdir(), 'chordmini-ytdlp');
-      await fs.mkdir(tempDir, { recursive: true });
+      // Reuse an existing local file before invoking yt-dlp again.
+      if (requestedVideoId) {
+        const existingFile = await findExistingLocalAudioFile(requestedVideoId);
+        if (existingFile) {
+          console.log(`♻️ Reusing existing local audio file for ${requestedVideoId}: ${existingFile.filename}`);
+          resolve({
+            success: true,
+            filename: existingFile.filename,
+            audioUrl: existingFile.audioUrl,
+            fileSize: existingFile.fileSize,
+            localPath: existingFile.filePath,
+          });
+          return;
+        }
+      }
+
+      // Create local temp directory for downloads
+      const tempDir = await ensureLocalAudioWriteDir();
 
       // Use a simpler, more predictable output template
       // This ensures we can find the file after download
@@ -139,13 +164,24 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
               const files = await fs.readdir(tempDir);
               console.log(`📁 Files in temp directory: ${files.join(', ')}`);
 
-              audioFile = files.find(file =>
-                file.endsWith('.mp3') ||
-                file.endsWith('.wav') ||
-                file.endsWith('.m4a') ||
-                file.endsWith('.opus') ||
-                file.endsWith('.webm')
-              ) || '';
+              audioFile = files.find((file) => {
+                const hasSupportedExtension =
+                  file.endsWith('.mp3') ||
+                  file.endsWith('.wav') ||
+                  file.endsWith('.m4a') ||
+                  file.endsWith('.opus') ||
+                  file.endsWith('.webm');
+
+                if (!hasSupportedExtension) {
+                  return false;
+                }
+
+                if (requestedVideoId) {
+                  return matchesLocalAudioVideoId(file, requestedVideoId);
+                }
+
+                return true;
+              }) || '';
 
               if (audioFile) {
                 filePath = path.join(tempDir, audioFile);
@@ -157,8 +193,7 @@ async function downloadAudio(url: string, targetFilename?: string, format: strin
               const stats = await fs.stat(filePath);
 
               // Generate URL for local file server endpoint
-              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-              const audioUrl = `${baseUrl}/api/serve-local-audio?filename=${encodeURIComponent(audioFile)}`;
+              const audioUrl = buildLocalAudioServeUrl(audioFile);
 
               console.log(`✅ Audio downloaded successfully:`);
               console.log(`   📁 File: ${audioFile}`);

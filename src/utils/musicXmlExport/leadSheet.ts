@@ -1,11 +1,37 @@
 import type { SheetSageNoteEvent } from '@/types/sheetSage';
-import { formatChordWithMusicalSymbols } from '@/utils/chordFormatting';
-import { getAccidentalPreferenceFromKey } from '@/utils/chordUtils';
-
-const DIVISIONS_PER_QUARTER = 24;
-const DEFAULT_BPM = 120;
-const MIN_DIVISION = 6;
-const EIGHTH_NOTE_DIVISIONS = DIVISIONS_PER_QUARTER / 2;
+import {
+  DEFAULT_BPM,
+  DIVISIONS_PER_QUARTER,
+  EIGHTH_NOTE_DIVISIONS,
+  MIN_DIVISION,
+} from './constants';
+import {
+  buildMeasureLayout,
+  divisionsToSeconds,
+  escapeXml,
+  fitsWithinGroup,
+  formatLeadSheetChordLabel,
+  getBeatGroupSize,
+  getKeyAccidentalPreference,
+  getKeyFifths,
+  getMeasureIndexForDivision,
+  getMeasureLengthDivisions,
+  getMeasureStartDivision,
+  isCompoundTime,
+  pitchToMusicXml,
+  quantizeDivision,
+  secondsToDivisions,
+} from './shared';
+import type {
+  AnacrusisSelectionResult,
+  LeadSheetChordEvent,
+  LeadSheetMeasureChord,
+  MeasureEvent,
+  MeasureLayoutConfig,
+  MeasureNoteSegment,
+  MusicXmlExportOptions,
+  QuantizedNoteEvent,
+} from './types';
 
 type DurationMapping = {
   value: number;
@@ -23,211 +49,6 @@ const DURATION_MAPPINGS: DurationMapping[] = [
   { value: 12, type: 'eighth' as const },
   { value: 6, type: '16th' as const },
 ] as const;
-
-export interface LeadSheetChordEvent {
-  chordName: string;
-  startTime: number;
-  endTime: number;
-}
-
-export interface LeadSheetMeasureChord {
-  measureIndex: number;
-  labels: string[];
-}
-
-export interface MusicXmlExportOptions {
-  bpm?: number;
-  timeSignature?: number;
-  title?: string;
-  keySignature?: string | null;
-  enableLeadingSilenceAnacrusisSearch?: boolean;
-}
-
-interface QuantizedNoteEvent {
-  pitch: number;
-  startDivision: number;
-  endDivision: number;
-}
-
-interface MeasureLayoutConfig {
-  divisionsPerMeasure: number;
-  firstMeasureDivisions: number;
-}
-
-interface AnacrusisSelectionResult {
-  anacrusisDivisions: number;
-  layout: MeasureLayoutConfig;
-  quantizedNotes: QuantizedNoteEvent[];
-}
-
-interface MeasureNoteSegment {
-  measureIndex: number;
-  startInMeasure: number;
-  duration: number;
-  pitch: number;
-  tieStart: boolean;
-  tieStop: boolean;
-  beatCarryDuration: number;
-}
-
-type MeasureEvent =
-  | { kind: 'rest'; duration: number; startInMeasure: number }
-  | {
-      kind: 'note';
-      pitch: number;
-      duration: number;
-      startInMeasure: number;
-      tieStart: boolean;
-      tieStop: boolean;
-    };
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function stripHtmlTags(value: string): string {
-  return value
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function formatLeadSheetChordLabel(chordName: string, keySignature?: string | null): string {
-  if (!chordName || chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.') {
-    return '';
-  }
-
-  const accidentalPreference = getAccidentalPreferenceFromKey(keySignature) ?? undefined;
-  const formatted = formatChordWithMusicalSymbols(chordName, false, accidentalPreference);
-  return stripHtmlTags(formatted);
-}
-
-function normalizeKeySignature(value?: string | null): string {
-  return value
-    ?.trim()
-    .replace(/♭/g, 'b')
-    .replace(/♯/g, '#')
-    .replace(/\s+/g, ' ')
-    .toLowerCase() ?? '';
-}
-
-function getKeyFifths(keySignature?: string | null): number {
-  const normalized = normalizeKeySignature(keySignature);
-  if (!normalized) {
-    return 0;
-  }
-
-  const majorMap: Record<string, number> = {
-    'cb': -7,
-    'gb': -6,
-    'db': -5,
-    'ab': -4,
-    'eb': -3,
-    'bb': -2,
-    'f': -1,
-    'c': 0,
-    'g': 1,
-    'd': 2,
-    'a': 3,
-    'e': 4,
-    'b': 5,
-    'f#': 6,
-    'c#': 7,
-  };
-
-  const minorMap: Record<string, number> = {
-    'ab': -7,
-    'eb': -6,
-    'bb': -5,
-    'f': -4,
-    'c': -3,
-    'g': -2,
-    'd': -1,
-    'a': 0,
-    'e': 1,
-    'b': 2,
-    'f#': 3,
-    'c#': 4,
-    'g#': 5,
-    'd#': 6,
-    'a#': 7,
-  };
-
-  const match = normalized.match(/^([a-g](?:#|b)?)(?:\s+(major|minor))?$/);
-  if (!match) {
-    return 0;
-  }
-
-  const [, root, quality] = match;
-  if (quality === 'minor') {
-    return minorMap[root] ?? 0;
-  }
-
-  return majorMap[root] ?? 0;
-}
-
-function pitchToMusicXml(
-  pitch: number,
-  accidentalPreference: 'sharp' | 'flat' | null | undefined,
-): { step: string; alter?: number; octave: number } {
-  const normalized = Math.max(0, Math.min(127, Math.round(pitch)));
-  const octave = Math.floor(normalized / 12) - 1;
-  const pitchClass = normalized % 12;
-
-  if (accidentalPreference === 'flat') {
-    switch (pitchClass) {
-      case 0: return { step: 'C', octave };
-      case 1: return { step: 'D', alter: -1, octave };
-      case 2: return { step: 'D', octave };
-      case 3: return { step: 'E', alter: -1, octave };
-      case 4: return { step: 'E', octave };
-      case 5: return { step: 'F', octave };
-      case 6: return { step: 'G', alter: -1, octave };
-      case 7: return { step: 'G', octave };
-      case 8: return { step: 'A', alter: -1, octave };
-      case 9: return { step: 'A', octave };
-      case 10: return { step: 'B', alter: -1, octave };
-      default: return { step: 'B', octave };
-    }
-  }
-
-  switch (pitchClass) {
-    case 0: return { step: 'C', octave };
-    case 1: return { step: 'C', alter: 1, octave };
-    case 2: return { step: 'D', octave };
-    case 3: return { step: 'D', alter: 1, octave };
-    case 4: return { step: 'E', octave };
-    case 5: return { step: 'F', octave };
-    case 6: return { step: 'F', alter: 1, octave };
-    case 7: return { step: 'G', octave };
-    case 8: return { step: 'G', alter: 1, octave };
-    case 9: return { step: 'A', octave };
-    case 10: return { step: 'A', alter: 1, octave };
-    default: return { step: 'B', octave };
-  }
-}
-
-function secondsToDivisions(seconds: number, bpm: number): number {
-  return Math.round(seconds * (bpm / 60) * DIVISIONS_PER_QUARTER);
-}
-
-function divisionsToSeconds(divisions: number, bpm: number): number {
-  if (bpm <= 0) {
-    return 0;
-  }
-
-  return divisions * (60 / (bpm * DIVISIONS_PER_QUARTER));
-}
-
-function quantizeDivision(value: number): number {
-  return Math.max(0, Math.round(value / MIN_DIVISION) * MIN_DIVISION);
-}
 
 function quantizeNotes(notes: SheetSageNoteEvent[], bpm: number): QuantizedNoteEvent[] {
   return notes
@@ -250,43 +71,10 @@ function quantizeNotes(notes: SheetSageNoteEvent[], bpm: number): QuantizedNoteE
     ));
 }
 
-function buildMeasureLayout(transferDivisions: number, divisionsPerMeasure: number): MeasureLayoutConfig {
-  const normalizedTransfer = Math.max(0, Math.round(transferDivisions));
-  const pickupDivisions = divisionsPerMeasure > 0
-    ? normalizedTransfer % divisionsPerMeasure
-    : 0;
-
-  return {
-    divisionsPerMeasure,
-    firstMeasureDivisions: pickupDivisions > 0 ? pickupDivisions : divisionsPerMeasure,
-  };
-}
-
-function getMeasureStartDivision(measureIndex: number, layout: MeasureLayoutConfig): number {
-  if (measureIndex <= 0) {
-    return 0;
-  }
-
-  return layout.firstMeasureDivisions + ((measureIndex - 1) * layout.divisionsPerMeasure);
-}
-
-function getMeasureLengthDivisions(measureIndex: number, layout: MeasureLayoutConfig): number {
-  return measureIndex === 0 ? layout.firstMeasureDivisions : layout.divisionsPerMeasure;
-}
-
-function getMeasureIndexForDivision(division: number, layout: MeasureLayoutConfig): number {
-  if (division < layout.firstMeasureDivisions) {
-    return 0;
-  }
-
-  if (layout.divisionsPerMeasure <= 0) {
-    return 0;
-  }
-
-  return 1 + Math.floor((division - layout.firstMeasureDivisions) / layout.divisionsPerMeasure);
-}
-
-function splitNoteAcrossMeasureLayout(note: QuantizedNoteEvent, layout: MeasureLayoutConfig): MeasureNoteSegment[] {
+function splitNoteAcrossMeasureLayout(
+  note: QuantizedNoteEvent,
+  layout: MeasureLayoutConfig,
+): MeasureNoteSegment[] {
   const segments: MeasureNoteSegment[] = [];
   let cursor = note.startDivision;
 
@@ -366,7 +154,7 @@ function countTieStartsForLayout(
   return tieStartCount;
 }
 
-function resolveAnacrusisSelection(params: {
+export function resolveAnacrusisSelection(params: {
   quantizedNotes: QuantizedNoteEvent[];
   timeSignature: number;
   enableSearch: boolean;
@@ -494,7 +282,10 @@ function resolveAnacrusisSelection(params: {
       bestCandidate = scoredCandidate;
     }
 
-    if (scoredCandidate.anacrusisDivisions > 0 && isBetterAnacrusisCandidate(scoredCandidate, bestAnacrusisCandidate)) {
+    if (
+      scoredCandidate.anacrusisDivisions > 0
+      && isBetterAnacrusisCandidate(scoredCandidate, bestAnacrusisCandidate)
+    ) {
       bestAnacrusisCandidate = scoredCandidate;
     }
   }
@@ -530,27 +321,6 @@ function resolveAnacrusisSelection(params: {
     layout: selectedCandidate.layout,
     quantizedNotes,
   };
-}
-
-function getBeatGroupSize(timeSignature: number): number {
-  if (timeSignature >= 6 && timeSignature % 3 === 0) {
-    return DIVISIONS_PER_QUARTER * 3;
-  }
-
-  return DIVISIONS_PER_QUARTER;
-}
-
-function isCompoundTime(timeSignature: number): boolean {
-  return timeSignature >= 6 && timeSignature % 3 === 0;
-}
-
-function fitsWithinGroup(start: number, duration: number, groupSize: number): boolean {
-  if (groupSize <= 0) {
-    return false;
-  }
-
-  const groupStart = Math.floor(start / groupSize) * groupSize;
-  return start + duration <= groupStart + groupSize;
 }
 
 function isDurationAllowedAtPosition(
@@ -614,8 +384,7 @@ function splitDurationIntoNotationValues(
   while (remaining > 0) {
     const nextValue = orderedValues.find((value) => (
       !(value === 48 && !isCompoundTime(timeSignature) && originStart % DIVISIONS_PER_QUARTER !== 0)
-      &&
-      value <= remaining
+      && value <= remaining
       && isDurationAllowedAtPosition(cursor, value, divisionsPerMeasure, timeSignature)
     )) ?? MIN_DIVISION;
     values.push(nextValue);
@@ -693,7 +462,7 @@ function expandSegmentForMetricStructure(
     );
   let cursor = segment.startInMeasure;
 
-  const notePieces = notationValues.map((value, index) => {
+  return notationValues.map((value, index) => {
     const isFirstFragment = index === 0;
     const isLastFragment = index === notationValues.length - 1;
 
@@ -709,8 +478,6 @@ function expandSegmentForMetricStructure(
     cursor += value;
     return event;
   });
-
-  return notePieces;
 }
 
 function buildMeasureEventsWithMeter(
@@ -1038,7 +805,7 @@ export function exportLeadSheetToMusicXml(
   const timeSignature = options?.timeSignature ?? 4;
   const title = options?.title?.trim();
   const keyFifths = getKeyFifths(options?.keySignature);
-  const accidentalPreference = getAccidentalPreferenceFromKey(options?.keySignature);
+  const accidentalPreference = getKeyAccidentalPreference(options?.keySignature);
   const enableLeadingSilenceAnacrusisSearch = options?.enableLeadingSilenceAnacrusisSearch ?? true;
   const divisionsPerMeasure = timeSignature * DIVISIONS_PER_QUARTER;
   const baseQuantizedNotes = quantizeNotes(noteEvents, bpm);

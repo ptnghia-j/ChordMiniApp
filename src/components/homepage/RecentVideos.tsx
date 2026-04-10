@@ -104,7 +104,6 @@ export default function RecentVideos() {
         const cachedData = recentVideosCache.peek(cacheKey);
 
         if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
-          console.log('✅ Using cached recent videos data (SWR)');
           setVideos(cachedData as unknown as TranscribedVideo[]);
           setLoading(false);
           setHasMore(cachedData.length >= PAGE_SIZE);
@@ -126,7 +125,6 @@ export default function RecentVideos() {
         const { ensureFirebaseInitialized } = await import('@/config/firebase');
         const { db: initializedDb } = await ensureFirebaseInitialized();
         firestoreDb = initializedDb;
-        console.log('✅ Firebase initialized for RecentVideos');
       } catch (error) {
         console.error('❌ Firebase initialization failed:', error);
         setError('Firebase not initialized');

@@ -216,7 +216,7 @@ function normalizeMeasureStartTimes(rawTimes: unknown): number[] {
     .map((value) => Number(value));
 }
 
-function extractSyncDataFromMusicXml(musicXml: string): ScoreSyncData {
+export function extractSyncDataFromMusicXml(musicXml: string): ScoreSyncData {
   const syncMatch = musicXml.match(/chordmini-sync-data:([\s\S]*?)-->/i);
   if (!syncMatch) {
     return {
@@ -241,6 +241,19 @@ function extractSyncDataFromMusicXml(musicXml: string): ScoreSyncData {
       measureStartAudioTimes: [],
     };
   }
+}
+
+export function countScoreMeasuresInMusicXml(musicXml: string, syncData?: ScoreSyncData): number {
+  const syncedMeasureCount = Math.max(
+    syncData?.measureStartAudioTimes.length ?? 0,
+    syncData?.measureStartScoreTimes.length ?? 0,
+  );
+  if (syncedMeasureCount > 0) {
+    return syncedMeasureCount;
+  }
+
+  const firstPartXml = musicXml.match(/<part\b[^>]*>([\s\S]*?)<\/part>/i)?.[1] ?? musicXml;
+  return Math.max(1, firstPartXml.match(/<measure\b/g)?.length ?? 0);
 }
 
 function isStrictlyIncreasing(values: number[]): boolean {
@@ -300,6 +313,144 @@ function getActiveMeasureIndexFromAudioTime(
 
   const measureDurationSeconds = (timeSignature * 60) / bpm;
   return Math.max(0, Math.floor(safeCurrentTime / Math.max(measureDurationSeconds, 0.001)));
+}
+
+export function stabilizeMeasureBoxAnchors(
+  rawBoxes: Array<MeasureHighlightBox | undefined>,
+  measureCount: number,
+): MeasureHighlightBox[] {
+  const anchors: Array<MeasureHighlightBox | null> = Array.from(
+    { length: measureCount },
+    (_, index) => rawBoxes[index] ?? null,
+  );
+  const firstKnownBox = anchors.find((box): box is MeasureHighlightBox => Boolean(box));
+
+  if (!firstKnownBox) {
+    return [];
+  }
+
+  for (let measureIndex = 1; measureIndex < anchors.length; measureIndex += 1) {
+    const previous = anchors[measureIndex - 1];
+    const current = anchors[measureIndex];
+    if (!previous || !current) {
+      continue;
+    }
+
+    const sameSystem = Math.abs(current.top - previous.top) < 8;
+    if (sameSystem && current.left <= previous.left + 1) {
+      anchors[measureIndex] = null;
+    }
+  }
+
+  const findPreviousKnownIndex = (fromIndex: number): number | null => {
+    for (let index = fromIndex - 1; index >= 0; index -= 1) {
+      if (anchors[index]) {
+        return index;
+      }
+    }
+    return null;
+  };
+
+  const findNextKnownIndex = (fromIndex: number): number | null => {
+    for (let index = fromIndex + 1; index < anchors.length; index += 1) {
+      if (anchors[index]) {
+        return index;
+      }
+    }
+    return null;
+  };
+
+  for (let measureIndex = 0; measureIndex < anchors.length; measureIndex += 1) {
+    if (anchors[measureIndex]) {
+      continue;
+    }
+
+    const previousKnownIndex = findPreviousKnownIndex(measureIndex);
+    const nextKnownIndex = findNextKnownIndex(measureIndex);
+    const previous = previousKnownIndex !== null ? anchors[previousKnownIndex] : null;
+    const next = nextKnownIndex !== null ? anchors[nextKnownIndex] : null;
+
+    if (
+      previous
+      && next
+      && previousKnownIndex !== null
+      && nextKnownIndex !== null
+      && Math.abs(next.top - previous.top) < 8
+    ) {
+      const span = nextKnownIndex - previousKnownIndex;
+      const progress = span > 0 ? (measureIndex - previousKnownIndex) / span : 0;
+      anchors[measureIndex] = {
+        top: previous.top + ((next.top - previous.top) * progress),
+        left: previous.left + ((next.left - previous.left) * progress),
+        width: Math.max(1, previous.width + ((next.width - previous.width) * progress)),
+        height: Math.max(1, previous.height + ((next.height - previous.height) * progress)),
+      };
+      continue;
+    }
+
+    anchors[measureIndex] = previous ?? next ?? firstKnownBox;
+  }
+
+  return anchors.map((box) => box ?? firstKnownBox);
+}
+
+export function resolveMeasureScrollTop(params: {
+  activeMeasureBox: MeasureHighlightBox;
+  currentScrollTop: number;
+  viewportHeight: number;
+  scrollHeight: number;
+}): number | null {
+  const {
+    activeMeasureBox,
+    currentScrollTop,
+    viewportHeight,
+    scrollHeight,
+  } = params;
+
+  if (
+    !Number.isFinite(activeMeasureBox.top)
+    || !Number.isFinite(activeMeasureBox.height)
+    || !Number.isFinite(currentScrollTop)
+    || !Number.isFinite(viewportHeight)
+    || !Number.isFinite(scrollHeight)
+    || viewportHeight <= 0
+  ) {
+    return null;
+  }
+
+  const maxScrollTop = Math.max(0, scrollHeight - viewportHeight);
+  const measureTop = activeMeasureBox.top;
+  const measureHeight = Math.max(1, activeMeasureBox.height);
+  const measureBottom = measureTop + measureHeight;
+  const preferredTopPadding = Math.max(18, Math.min(52, viewportHeight * 0.08));
+  const preferredBottomPadding = Math.max(28, Math.min(72, viewportHeight * 0.12));
+  const minimumVisibleGap = 12;
+  const preferredPaddingTotal = preferredTopPadding + preferredBottomPadding;
+  const maxPaddingTotal = Math.max(0, viewportHeight - measureHeight - minimumVisibleGap);
+  const paddingScale = preferredPaddingTotal > 0
+    ? Math.min(1, maxPaddingTotal / preferredPaddingTotal)
+    : 1;
+  const topPadding = preferredTopPadding * paddingScale;
+  const bottomPadding = preferredBottomPadding * paddingScale;
+  const minVisibleScrollTop = measureBottom - viewportHeight + bottomPadding;
+  const maxVisibleScrollTop = measureTop - topPadding;
+
+  let targetScrollTop: number | null = null;
+
+  if (minVisibleScrollTop > maxVisibleScrollTop) {
+    targetScrollTop = minVisibleScrollTop;
+  } else if (currentScrollTop < minVisibleScrollTop - 0.5) {
+    targetScrollTop = maxVisibleScrollTop;
+  } else if (currentScrollTop > maxVisibleScrollTop + 0.5) {
+    targetScrollTop = maxVisibleScrollTop;
+  }
+
+  if (targetScrollTop === null) {
+    return null;
+  }
+
+  const clampedTarget = Math.min(maxScrollTop, Math.max(0, targetScrollTop));
+  return Math.abs(clampedTarget - currentScrollTop) > 0.5 ? clampedTarget : null;
 }
 
 function resolveOsmdConstructor(): OpenSheetMusicDisplayCtor | null {
@@ -400,7 +551,10 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
 
   const getWholeNoteTime = useCallback((seconds: number) => (seconds * bpm) / 240, [bpm]);
   const measureDurationSeconds = (timeSignature * 60) / bpm;
-  const measureCount = Math.max(1, musicXml.match(/<measure\b/g)?.length ?? 0);
+  const measureCount = useMemo(
+    () => countScoreMeasuresInMusicXml(musicXml, syncData),
+    [musicXml, syncData],
+  );
   const measureStartScoreTimes = useMemo(
     () => resolveMeasureStartScoreTimes(syncData, measureCount, measureDurationSeconds),
     [measureCount, measureDurationSeconds, syncData],
@@ -452,19 +606,31 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
         while (safetyCounter < 10000) {
           safetyCounter += 1;
           const iterator = cursor.Iterator;
-          const clone = iterator?.clone?.();
+          if (!iterator || iterator.EndReached) {
+            break;
+          }
+
+          const currentIteratorTime = getIteratorTime(iterator);
+          if (currentIteratorTime >= targetTime - 0.0001) {
+            break;
+          }
+
+          const clone = iterator.clone?.();
           if (!clone || clone.EndReached) {
             break;
           }
 
           clone.moveToNextVisibleVoiceEntry?.(false);
-          const nextTime = getIteratorTime(clone);
-          if (nextTime <= targetTime + 0.0001) {
-            cursor.next();
-            continue;
+          if (clone.EndReached) {
+            break;
           }
 
-          break;
+          const nextTime = getIteratorTime(clone);
+          if (nextTime <= currentIteratorTime + 0.0001) {
+            break;
+          }
+
+          cursor.next();
         }
 
         const cursorElement = cursor.cursorElement;
@@ -486,22 +652,17 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
 
       cursor.hide?.();
 
-      const extractedBoxes = boxes.filter((box): box is MeasureHighlightBox => Boolean(box));
-      if (extractedBoxes.length === 0) {
+      const stabilizedBoxes = stabilizeMeasureBoxAnchors(boxes, measureCount);
+      if (stabilizedBoxes.length === 0) {
         return [];
-      }
-
-      const normalizedBoxes: MeasureHighlightBox[] = [];
-      for (let measureIndex = 0; measureIndex < measureCount; measureIndex += 1) {
-        normalizedBoxes[measureIndex] = boxes[measureIndex] ?? normalizedBoxes[measureIndex - 1] ?? extractedBoxes[0];
       }
 
       const contentWidth = content.getBoundingClientRect().width;
       const MIN_VISIBLE_WIDTH = 24;
       const MIN_VISIBLE_HEIGHT = 44;
 
-      const visualBoxes = normalizedBoxes.map((box, index) => {
-        const next = normalizedBoxes[index + 1];
+      const visualBoxes = stabilizedBoxes.map((box, index) => {
+        const next = stabilizedBoxes[index + 1];
         const estimatedWidth = next
           ? Math.max(1, next.left - box.left)
           : Math.max(1, contentWidth - box.left);
@@ -635,22 +796,14 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
     }
 
     try {
-      const topOffset = activeMeasureBox.top;
-      const bottomOffset = activeMeasureBox.top + activeMeasureBox.height;
-      const currentTop = wrapper.scrollTop;
-      const currentBottom = currentTop + wrapper.clientHeight;
-      const topSafeZone = wrapper.clientHeight * 0.22;
-      const bottomSafeZone = wrapper.clientHeight * 0.4;
-      const visibleTopBoundary = currentTop + topSafeZone;
-      const visibleBottomBoundary = currentBottom - bottomSafeZone;
-      const desiredCenterTop = Math.max(
-        0,
-        topOffset - (wrapper.clientHeight - activeMeasureBox.height) * 0.42,
-      );
-      const maxScrollTop = Math.max(0, wrapper.scrollHeight - wrapper.clientHeight);
-      const targetScrollTop = Math.min(maxScrollTop, desiredCenterTop);
+      const targetScrollTop = resolveMeasureScrollTop({
+        activeMeasureBox,
+        currentScrollTop: wrapper.scrollTop,
+        viewportHeight: wrapper.clientHeight,
+        scrollHeight: wrapper.scrollHeight,
+      });
 
-      if (topOffset < visibleTopBoundary || bottomOffset > visibleBottomBoundary) {
+      if (targetScrollTop !== null) {
         wrapper.scrollTo({
           top: targetScrollTop,
           behavior: 'auto',

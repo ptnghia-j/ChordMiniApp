@@ -29,6 +29,28 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.3.5',
+      date: 'April 10, 2026',
+      title: 'Sheet Music Sync Stabilization & Export Refactor',
+      description: 'Refines combined melody+piano sheet generation with stronger beat alignment, pickup handling fixes, ghost-notation cleanup, and modularized export utilities.',
+      features: [
+        'NEW: Combined sheet output now consistently renders melody with piano accompaniment from Piano Visualizer events.',
+        'FIX: Beat anchoring now avoids duplicate-beat pull-back so chord bar placement stays aligned with the beat grid.',
+        'FIX: Pickup detection no longer forces a one-beat implicit measure when the first playable chord is already on a bar boundary.',
+        'FIX: Reduced ghost notation artifacts by pruning orphan ties and smoothing short same-pitch melody retriggers.',
+      ],
+      technical: [
+        'IMPROVED: Modularized utility internals by splitting chord formatting, instrument note generation, and MusicXML export into folder-based modules.',
+        'IMPROVED: Expanded MusicXML pipeline separation for absolute events, quantization, score layout, rendering, voice assignment, and piano export.',
+        'IMPROVED: Updated tests and TypeScript/Jest configuration to match the modular export structure and new sheet-music regression coverage.',
+        'IMPROVED: Refreshed Firebase storage and setup docs/rules in support of current upload and cache handling flows.',
+      ],
+      breaking: [
+        'INTERNAL: Utility module paths were reorganized from single-file entry points to folder-based module exports.',
+      ]
+    },
+
+    {
       version: 'v0.6.3.1',
       date: 'April 5, 2026',
       title: 'Minor Patch for Sheet Music Display',

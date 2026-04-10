@@ -72,7 +72,3 @@ function buildAnalyzeUrl(pathname: string, params?: AnalyzeRouteParams): string 
 export function buildAnalyzePageUrl(videoId: string, params?: AnalyzeRouteParams): string {
   return buildAnalyzeUrl(`/analyze/${videoId}`, params);
 }
-
-export function buildAnalyzeModelSetupUrl(videoId: string, params?: AnalyzeRouteParams): string {
-  return buildAnalyzeUrl(`/analyze/${videoId}/models`, params);
-}

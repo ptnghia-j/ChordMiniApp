@@ -63,11 +63,11 @@ const ResultsTabs: React.FC<ResultsTabsProps> = ({
         />
         <Tab
           key="guitarChords"
-          title={<BetaTitle>Guitar Chords</BetaTitle>}
+          title={<BetaTitle>Guitar</BetaTitle>}
         />
         <Tab
           key="pianoVisualizer"
-          title={<BetaTitle>Piano Visualizer</BetaTitle>}
+          title={<BetaTitle>Piano</BetaTitle>}
         />
         <Tab
           key="lyricsChords"

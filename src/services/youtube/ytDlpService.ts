@@ -114,6 +114,7 @@ class YtDlpService {
         body: JSON.stringify({ 
           url: videoUrl,
           filename: expectedFilename,
+          videoId: extractedVideoId,
           format: 'mp3'
         }),
       });

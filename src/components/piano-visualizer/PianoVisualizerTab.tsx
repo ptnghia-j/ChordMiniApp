@@ -19,12 +19,17 @@ import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SheetSageResult } from '@/types/sheetSage';
-import { exportLeadSheetToMusicXml } from '@/utils/musicXmlExport';
+import {
+  exportLeadSheetToMusicXml,
+  exportPianoVisualizerScoreToMusicXml,
+  type MusicXmlKeySection,
+} from '@/utils/musicXmlExport';
 
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections, useKeySignature } from '@/stores/analysisStore';
 import {
   useGuitarCapoFret,
   useGuitarSelectedPositions,
+  usePitchShiftSemitones,
   useTargetKey,
   useRomanNumerals,
 } from '@/stores/uiStore';
@@ -41,6 +46,7 @@ import { findChordEventForPlayback as findPlayableChordEvent } from '@/utils/cho
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import { buildSheetSageExtraVisualNotes } from '@/utils/sheetSagePlayback';
 import AppTooltip from '@/components/common/AppTooltip';
+import { isSilentChord } from '@/services/chord-analysis/gridShared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +125,72 @@ function findChordEventForPlayback(
   toleranceSeconds = PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
 ): ChordEvent | null {
   return findPlayableChordEvent(events, currentTime, currentBeatIndex, toleranceSeconds);
+}
+
+function findClosestTimedBeatIndex(
+  beatTimes: Array<number | null> | undefined,
+  targetTime: number,
+  startIndex = 0,
+): number | null {
+  if (!beatTimes?.length || !Number.isFinite(targetTime)) {
+    return null;
+  }
+
+  let closestIndex: number | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = Math.max(0, startIndex); index < beatTimes.length; index += 1) {
+    const beatTime = beatTimes[index];
+    if (typeof beatTime !== 'number' || !Number.isFinite(beatTime)) {
+      continue;
+    }
+
+    const distance = Math.abs(beatTime - targetTime);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+
+    if (closestIndex !== null && beatTime > targetTime && distance > closestDistance) {
+      break;
+    }
+  }
+
+  return closestIndex;
+}
+
+function countLeadingShiftChordSlots(chords: string[] | undefined): number {
+  if (!chords?.length) {
+    return 0;
+  }
+
+  let count = 0;
+  while (count < chords.length) {
+    const chord = (chords[count] ?? '').trim();
+    if (chord.length > 0) {
+      break;
+    }
+    count += 1;
+  }
+
+  return count;
+}
+
+function countLeadingNullBeatSlots(beatTimes: Array<number | null> | undefined): number {
+  if (!beatTimes?.length) {
+    return 0;
+  }
+
+  let count = 0;
+  while (count < beatTimes.length) {
+    const beatTime = beatTimes[count];
+    if (typeof beatTime === 'number' && Number.isFinite(beatTime)) {
+      break;
+    }
+    count += 1;
+  }
+
+  return count;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -440,8 +512,18 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     sequenceCorrections,
   });
 
-  // Build chord event timeline for the piano roll
-  const chordEvents = useMemo<ChordEvent[]>(() => {
+  // Build the exact playback-aligned chord event timeline from the same
+  // chord source that the chord playback manager uses.
+  const playbackChordEvents = useMemo<ChordEvent[]>(() => {
+    if (!resolvedChordGridData) return [];
+    return buildChordTimeline(
+      resolvedChordGridData.chords,
+      resolvedChordGridData.beats,
+      resolvedChordGridData.paddingCount,
+      resolvedChordGridData.shiftCount,
+    );
+  }, [resolvedChordGridData]);
+  const stripChordEvents = useMemo<ChordEvent[]>(() => {
     if (!resolvedChordGridData) return [];
     return buildChordTimeline(
       displayedChords,
@@ -451,8 +533,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     );
   }, [displayedChords, resolvedChordGridData]);
   const mergedPlayableChordEvents = useMemo(
-    () => mergeConsecutiveChordEvents(chordEvents.filter(hasPlayableNotes)),
-    [chordEvents],
+    () => mergeConsecutiveChordEvents(playbackChordEvents.filter(hasPlayableNotes)),
+    [playbackChordEvents],
   );
 
   // Compute accidental preference for consistent sharp/flat rendering.
@@ -468,6 +550,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   // ── Roman numeral support (shared with ChordGrid via stores) ──────────────
 
   const { showRomanNumerals, romanNumeralData } = useRomanNumerals();
+  const pitchShiftSemitones = usePitchShiftSemitones();
 
   const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
   const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
@@ -500,6 +583,10 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     );
   }, [chordGridData, timeSignature]);
 
+  const notationBeatOffset = useMemo(() => (
+    countLeadingShiftChordSlots(resolvedChordGridData?.chords)
+  ), [resolvedChordGridData?.chords]);
+
   // Map beat indices → chord-sequence indices (for romanNumeralData.analysis[])
   const beatToChordSequenceMap = useMemo(() => {
     if (!chordGridData?.chords?.length) return {};
@@ -517,7 +604,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     const map = new Map<number, React.ReactElement | string>();
     const formatCache = new Map<string, React.ReactElement | string>();
 
-    for (const event of chordEvents) {
+    for (const event of stripChordEvents) {
       const seqIdx = beatToChordSequenceMap[event.beatIndex];
       if (seqIdx !== undefined && romanNumeralData.analysis[seqIdx]) {
         const raw = romanNumeralData.analysis[seqIdx];
@@ -528,7 +615,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
       }
     }
     return map;
-  }, [chordEvents, beatToChordSequenceMap, romanNumeralData, showRomanNumerals]);
+  }, [stripChordEvents, beatToChordSequenceMap, romanNumeralData, showRomanNumerals]);
 
   const beatModulations = useMemo(() => {
     const modulations = sequenceCorrections?.keyAnalysis?.modulations;
@@ -536,7 +623,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
     const map = new Map<number, { isModulation: true; fromKey: string; toKey: string }>();
 
-    for (const event of chordEvents) {
+    for (const event of stripChordEvents) {
       const seqIdx = beatToChordSequenceMap[event.beatIndex];
       if (seqIdx === undefined) continue;
 
@@ -551,7 +638,87 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     }
 
     return map;
-  }, [beatToChordSequenceMap, chordEvents, sequenceCorrections?.keyAnalysis?.modulations]);
+  }, [beatToChordSequenceMap, sequenceCorrections?.keyAnalysis?.modulations, stripChordEvents]);
+
+  const sheetMusicKeySections = useMemo<MusicXmlKeySection[] | undefined>(() => {
+    const sections = sequenceCorrections?.keyAnalysis?.sections;
+    const modulations = sequenceCorrections?.keyAnalysis?.modulations;
+    const rawKeyEntries = sections?.length
+      ? sections.map((section) => ({
+          startIndex: section.startIndex,
+          keySignature: section.key,
+        }))
+      : [
+          ...(mergedKeySignature?.trim()
+            ? [{ startIndex: 0, keySignature: mergedKeySignature.trim() }]
+            : []),
+          ...((modulations ?? []).map((modulation) => ({
+            startIndex: modulation.atIndex,
+            keySignature: modulation.toKey,
+          }))),
+        ];
+
+    if (!rawKeyEntries.length) {
+      return undefined;
+    }
+
+    const seqIndexToFirstBeatIndex = new Map<number, number>();
+    for (let beatIndex = 0; beatIndex < shiftedOriginalChords.length; beatIndex += 1) {
+      const sequenceIndex = beatToChordSequenceMap[beatIndex];
+      if (sequenceIndex === undefined || seqIndexToFirstBeatIndex.has(sequenceIndex)) {
+        continue;
+      }
+
+      seqIndexToFirstBeatIndex.set(sequenceIndex, beatIndex);
+    }
+
+    if (seqIndexToFirstBeatIndex.size === 0) {
+      return undefined;
+    }
+
+    const mappedSections = rawKeyEntries
+      .filter((entry) => Number.isInteger(entry.startIndex))
+      .sort((left, right) => left.startIndex - right.startIndex)
+      .reduce<MusicXmlKeySection[]>((accumulator, entry) => {
+        if (typeof entry.keySignature !== 'string' || entry.keySignature.trim().length === 0) {
+          return accumulator;
+        }
+
+        const rawBeatIndex = seqIndexToFirstBeatIndex.get(entry.startIndex);
+        if (rawBeatIndex === undefined && entry.startIndex > 0) {
+          return accumulator;
+        }
+
+        const nextSection: MusicXmlKeySection = {
+          startBeatIndex: rawBeatIndex !== undefined
+            ? Math.max(0, rawBeatIndex - notationBeatOffset)
+            : 0,
+          keySignature: entry.keySignature.trim(),
+        };
+        const previousSection = accumulator[accumulator.length - 1];
+
+        if (previousSection?.startBeatIndex === nextSection.startBeatIndex) {
+          accumulator[accumulator.length - 1] = nextSection;
+          return accumulator;
+        }
+
+        if (previousSection?.keySignature === nextSection.keySignature) {
+          return accumulator;
+        }
+
+        accumulator.push(nextSection);
+        return accumulator;
+      }, []);
+
+    return mappedSections.length > 0 ? mappedSections : undefined;
+  }, [
+    beatToChordSequenceMap,
+    mergedKeySignature,
+    notationBeatOffset,
+    sequenceCorrections?.keyAnalysis?.modulations,
+    sequenceCorrections?.keyAnalysis?.sections,
+    shiftedOriginalChords.length,
+  ]);
 
   // Compute dynamic white key width to fit the full 88-key range
   const whiteKeyWidth = useMemo(() => {
@@ -574,8 +741,10 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [isChordPlaybackEnabled, mixerSettings]);
 
   const melodyOverlayNotes = useMemo(
-    () => showMelodicOverlay ? buildSheetSageExtraVisualNotes(sheetSageResult, MELODIC_TRANSCRIPTION_COLOR) : [],
-    [sheetSageResult, showMelodicOverlay],
+    () => showMelodicOverlay
+      ? buildSheetSageExtraVisualNotes(sheetSageResult, MELODIC_TRANSCRIPTION_COLOR, pitchShiftSemitones)
+      : [],
+    [pitchShiftSemitones, sheetSageResult, showMelodicOverlay],
   );
 
   // Calculate keyboard width
@@ -601,7 +770,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
   // Piano-only auto-playback: plays piano when visualizer tab is active but chord playback is off
   usePianoOnlyPlayback(
-    chordEvents,
+    playbackChordEvents,
     currentTime,
     currentBeatIndex,
     isPlaying,
@@ -623,22 +792,204 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [isChordPlaybackEnabled, activeInstruments]);
 
   const hasLeadSheetData = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
-  const sheetMusicDisabledTooltip = 'Run melody transcription to enable Sheet Music.';
+  const hasPianoSheetData = mergedPlayableChordEvents.length > 0;
+  const hasSheetMusicData = hasPianoSheetData || hasLeadSheetData;
+  const sheetMusicDisabledTooltip = 'Sheet music requires playable piano chords or melody transcription.';
   const musicXmlOptions = useMemo(() => ({
     bpm: detectedBpm || undefined,
     timeSignature,
     title: 'ChordMini Lead Sheet',
     keySignature: mergedKeySignature,
   }), [detectedBpm, mergedKeySignature, timeSignature]);
+  const sheetMusicBeatTimes = useMemo<Array<number | null> | undefined>(() => {
+    const beatTimes = resolvedChordGridData?.beats;
+    if (!beatTimes?.length) {
+      return sheetSageResult?.beatTimes;
+    }
+
+    return notationBeatOffset > 0 ? beatTimes.slice(notationBeatOffset) : beatTimes;
+  }, [notationBeatOffset, resolvedChordGridData?.beats, sheetSageResult?.beatTimes]);
+  const sheetMusicChordEvents = useMemo(() => {
+    const rawBeatTimes = resolvedChordGridData?.beats;
+
+    return mergedPlayableChordEvents.map((event) => {
+      const sourceBeatIndex = typeof event.beatIndex === 'number' && Number.isFinite(event.beatIndex)
+        ? Math.max(0, Math.round(event.beatIndex))
+        : null;
+      const sourceBeatTime = sourceBeatIndex !== null
+        ? rawBeatTimes?.[sourceBeatIndex]
+        : null;
+      const sourceBeatMatchesStart = typeof sourceBeatTime === 'number'
+        && Number.isFinite(sourceBeatTime)
+        && Number.isFinite(event.startTime)
+        && Math.abs(sourceBeatTime - event.startTime) <= 0.001;
+      const matchedBeatIndex = findClosestTimedBeatIndex(rawBeatTimes, event.startTime, notationBeatOffset);
+      const anchoredBeatIndex = sourceBeatMatchesStart
+        ? sourceBeatIndex
+        : (matchedBeatIndex ?? sourceBeatIndex);
+      const normalizedBeatIndex = anchoredBeatIndex !== null
+        ? Math.max(0, anchoredBeatIndex - notationBeatOffset)
+        : event.beatIndex;
+
+      return {
+        ...event,
+        beatIndex: normalizedBeatIndex,
+      };
+    });
+  }, [mergedPlayableChordEvents, notationBeatOffset, resolvedChordGridData?.beats]);
+  const sheetPickupResolution = useMemo(() => {
+    const normalizePickupCount = (value: number): number => {
+      const normalizedValue = Math.max(0, Math.round(value));
+      if (timeSignature <= 0) {
+        return normalizedValue;
+      }
+
+      const pickup = normalizedValue % timeSignature;
+      return pickup < 0 ? pickup + timeSignature : pickup;
+    };
+
+    const firstNonSilentVisibleGridIndex = (() => {
+      const chords = resolvedChordGridData?.chords;
+      if (!chords?.length) {
+        return null;
+      }
+
+      for (let rawIndex = notationBeatOffset; rawIndex < chords.length; rawIndex += 1) {
+        if (!isSilentChord(chords[rawIndex])) {
+          return rawIndex - notationBeatOffset;
+        }
+      }
+
+      return null;
+    })();
+
+    const normalizedPaddingPickup = typeof resolvedChordGridData?.paddingCount === 'number'
+      && Number.isFinite(resolvedChordGridData.paddingCount)
+      ? normalizePickupCount(Math.max(0, Math.round(resolvedChordGridData.paddingCount)))
+      : null;
+    const firstPlayableBeatIndex = sheetMusicChordEvents.reduce<number>((earliest, event) => {
+      if (typeof event.beatIndex !== 'number' || !Number.isFinite(event.beatIndex)) {
+        return earliest;
+      }
+
+      return Math.min(earliest, Math.round(event.beatIndex));
+    }, Number.POSITIVE_INFINITY);
+
+    const normalizedFirstPlayablePickup = Number.isFinite(firstPlayableBeatIndex)
+      ? normalizePickupCount(firstPlayableBeatIndex)
+      : null;
+
+    const leadingSilentCells = countLeadingNullBeatSlots(sheetMusicBeatTimes);
+    const normalizedLeadingSilentPickup = leadingSilentCells > 0
+      ? normalizePickupCount(leadingSilentCells)
+      : null;
+
+    let resolvedPickupBeatCount = 0;
+    let resolvedPickupReason = 'fallback_zero';
+
+    if (typeof resolvedChordGridData?.paddingCount === 'number' && Number.isFinite(resolvedChordGridData.paddingCount)) {
+      const normalizedPaddingCount = Math.max(0, Math.round(resolvedChordGridData.paddingCount));
+      resolvedPickupBeatCount = normalizePickupCount(normalizedPaddingCount);
+      resolvedPickupReason = 'padding_count_fallback';
+    } else if (normalizedLeadingSilentPickup !== null) {
+      resolvedPickupBeatCount = normalizedLeadingSilentPickup;
+      resolvedPickupReason = 'leading_null_beat_fallback';
+    } else if (normalizedFirstPlayablePickup !== null) {
+      resolvedPickupBeatCount = normalizedFirstPlayablePickup;
+      resolvedPickupReason = 'first_playable_event_fallback';
+    } else if (!sheetMusicBeatTimes?.length) {
+      resolvedPickupBeatCount = 0;
+      resolvedPickupReason = 'no_beat_times';
+    }
+
+    const normalizedFirstNonSilentVisibleGridPickup = firstNonSilentVisibleGridIndex !== null
+      ? normalizePickupCount(firstNonSilentVisibleGridIndex)
+      : null;
+    if (normalizedFirstNonSilentVisibleGridPickup !== null) {
+      resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
+      resolvedPickupReason = 'first_non_silent_visible_grid';
+    }
+
+    const hasMelodyNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
+    const preferInferredExportPickup = hasMelodyNotes
+      && normalizedFirstNonSilentVisibleGridPickup !== null
+      && normalizedPaddingPickup !== null
+      && normalizedFirstNonSilentVisibleGridPickup > normalizedPaddingPickup;
+
+    return {
+      resolvedPickupBeatCount,
+      resolvedPickupReason,
+      normalizedPaddingPickup,
+      preferInferredExportPickup,
+      timeSignature,
+      notationBeatOffset,
+      paddingCount: resolvedChordGridData?.paddingCount ?? null,
+      shiftCount: resolvedChordGridData?.shiftCount ?? null,
+      totalPaddingCount: resolvedChordGridData?.totalPaddingCount ?? null,
+      firstNonSilentVisibleGridIndex,
+      normalizedFirstNonSilentVisibleGridPickup,
+      firstPlayableBeatIndex: Number.isFinite(firstPlayableBeatIndex) ? firstPlayableBeatIndex : null,
+      normalizedFirstPlayablePickup,
+      leadingSilentCells,
+      normalizedLeadingSilentPickup,
+      previewGridChords: resolvedChordGridData?.chords?.slice(notationBeatOffset, notationBeatOffset + 20) ?? [],
+      previewGridBeats: resolvedChordGridData?.beats?.slice(notationBeatOffset, notationBeatOffset + 20) ?? [],
+      previewSheetChordEvents: sheetMusicChordEvents.slice(0, 8).map((event) => ({
+        chordName: event.chordName,
+        beatIndex: event.beatIndex,
+        startTime: Number.isFinite(event.startTime)
+          ? Number(event.startTime.toFixed(4))
+          : event.startTime,
+      })),
+      previewSheetMelodyBeatTimes: sheetMusicBeatTimes?.slice(0, 20) ?? [],
+    };
+  }, [notationBeatOffset, resolvedChordGridData, sheetMusicBeatTimes, sheetMusicChordEvents, sheetSageResult?.noteEvents?.length, timeSignature]);
+
+  const sheetMusicPickupBeatCount = sheetPickupResolution.resolvedPickupBeatCount;
+  const exportedSheetMusicPickupBeatCount = sheetPickupResolution.preferInferredExportPickup
+    ? undefined
+    : sheetMusicPickupBeatCount;
+
   const sheetMusicXml = useMemo(() => {
+    if (hasPianoSheetData) {
+      return exportPianoVisualizerScoreToMusicXml({
+        chordEvents: sheetMusicChordEvents,
+        melodyNoteEvents: sheetSageResult?.noteEvents,
+        melodyBeatTimes: sheetMusicBeatTimes,
+        pickupBeatCount: exportedSheetMusicPickupBeatCount,
+        bpm: detectedBpm || undefined,
+        timeSignature,
+        title: 'ChordMini Piano Visualizer Score',
+        keySignature: mergedKeySignature,
+        keySections: sheetMusicKeySections,
+        segmentationData,
+        signalAnalysis,
+      });
+    }
+
     if (!hasLeadSheetData || !sheetSageResult) {
       return '';
     }
 
     return exportLeadSheetToMusicXml(sheetSageResult.noteEvents, mergedPlayableChordEvents, musicXmlOptions);
-  }, [hasLeadSheetData, mergedPlayableChordEvents, musicXmlOptions, sheetSageResult]);
-  const effectiveDisplayMode: VisualizerDisplayMode = hasLeadSheetData ? displayMode : 'piano-roll';
+  }, [
+    detectedBpm,
+    hasLeadSheetData,
+    hasPianoSheetData,
+    mergedKeySignature,
+    mergedPlayableChordEvents,
+    musicXmlOptions,
+    sheetMusicChordEvents,
+    sheetMusicBeatTimes,
+    exportedSheetMusicPickupBeatCount,
+    sheetMusicKeySections,
+    segmentationData,
+    sheetSageResult,
+    signalAnalysis,
+    timeSignature,
+  ]);
 
+  const effectiveDisplayMode: VisualizerDisplayMode = hasSheetMusicData ? displayMode : 'piano-roll';
   const legendInstruments = useMemo(() => {
     if (showMelodicOverlay && melodyOverlayNotes.length > 0) {
       return [...effectiveActiveInstruments, { name: 'Melody', color: MELODIC_TRANSCRIPTION_COLOR }];
@@ -648,7 +999,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   }, [effectiveActiveInstruments, melodyOverlayNotes.length, showMelodicOverlay]);
 
   const handleMidiDownload = useCallback(() => {
-    if (chordEvents.length === 0) return;
+    if (playbackChordEvents.length === 0) return;
     const instruments = activeInstruments.length > 0
       ? activeInstruments.map(i => ({ name: i.name, color: i.color }))
       : undefined;
@@ -660,7 +1011,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           },
         ]
       : undefined;
-    const midiData = exportChordEventsToMidi(chordEvents, {
+    const midiData = exportChordEventsToMidi(playbackChordEvents, {
       instruments,
       bpm: detectedBpm || undefined,
       timeSignature, // Use detected time signature
@@ -673,8 +1024,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     }
   }, [
     activeInstruments,
-    chordEvents,
     detectedBpm,
+    playbackChordEvents,
     segmentationData,
     sheetSageResult,
     showMelodicOverlay,
@@ -703,7 +1054,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
 
           <div className="flex items-center space-x-3 flex-wrap justify-end">
             {/* MIDI download button */}
-            {chordEvents.length > 0 && (
+            {playbackChordEvents.length > 0 && (
               <AppTooltip content="Download the currently visible piano visualizer notes as MIDI">
                 <button
                   onClick={handleMidiDownload}
@@ -734,11 +1085,11 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               <Tab
                 key="sheet-music"
                 title={
-                  <AppTooltip content={sheetMusicDisabledTooltip} isDisabled={hasLeadSheetData}>
+                  <AppTooltip content={sheetMusicDisabledTooltip} isDisabled={hasSheetMusicData}>
                     <span title={process.env.NODE_ENV === 'test' ? sheetMusicDisabledTooltip : undefined}>Sheet Music</span>
                   </AppTooltip>
                 }
-                isDisabled={!hasLeadSheetData}
+                isDisabled={!hasSheetMusicData}
               />
             </Tabs>
 
@@ -771,7 +1122,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         </div>
 
         <ScrollingChordStrip
-          chordEvents={chordEvents}
+          chordEvents={stripChordEvents}
           currentTime={currentTime}
           isPlaying={isPlaying}
           height={48}
@@ -825,7 +1176,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
               {/* Falling notes canvas */}
               <div className="w-full flex justify-center">
                 <FallingNotesCanvas
-                  chordEvents={chordEvents}
+                  chordEvents={playbackChordEvents}
                   currentTime={currentTime}
                   isPlaying={isPlaying}
                   startMidi={PIANO_START_MIDI}

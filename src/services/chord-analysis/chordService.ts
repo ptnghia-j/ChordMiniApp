@@ -7,7 +7,6 @@
 
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { offloadUploadService } from '@/services/storage/offloadUploadService';
-import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import type { ChordDetectorType, ChordDetectionResult, ChordRecognitionBackendResponse } from '@/types/audioAnalysis';
 
 /**
@@ -137,44 +136,5 @@ export async function recognizeChordsWithRateLimit(
     console.error('Error in chord recognition with rate limiting:', error);
     throw error;
   }
-}
-
-/**
- * Helper to recognize chords from File or URL input (URL fetched via proxy → File)
- */
-export async function recognizeChordsFromInput(
-  audioInput: File | string,
-  model: ChordDetectorType = 'chord-cnn-lstm',
-  videoId?: string
-): Promise<ChordDetectionResult[]> {
-  if (audioInput instanceof File) {
-    return recognizeChordsWithRateLimit(audioInput, model);
-  }
-
-  // URL path: fetch via proxy; preserve QuickTube brackets
-  console.log('Processing chord recognition from URL:', audioInput);
-  const encodedUrl = audioInput.includes('quicktube.app/dl/')
-    ? encodeURIComponent(audioInput).replace(/%5B/g, '[').replace(/%5D/g, ']')
-    : encodeURIComponent(audioInput);
-  const proxyUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
-
-  const response = await fetch(proxyUrl);
-  if (!response.ok) {
-    if (response.status >= 500) {
-      throw new Error(`Backend service temporarily unavailable (${response.status}). Please try again in a few minutes or use the file upload option.`);
-    } else if (response.status === 413) {
-      throw new Error(`Audio file too large for processing (${response.status}). Please try a shorter audio clip or use a different video.`);
-    } else if (response.status === 408 || response.status === 504) {
-      throw new Error(`Request timed out (${response.status}). The backend service may be experiencing high load. Please try again in a few minutes.`);
-    }
-    throw new Error(`Failed to fetch audio from URL: ${response.status} ${response.statusText}`);
-  }
-  const audioBlob = await response.blob();
-  if (audioBlob.size === 0) throw new Error('Audio file is empty or corrupted');
-  if (audioBlob.size > 100 * 1024 * 1024) throw new Error('Audio file is too large (>100MB). Please use a smaller file.');
-
-  const audioFile = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
-  try { await getAudioDurationFromFile(audioFile); } catch (e) { console.warn(`⚠️ Could not detect audio duration: ${e}`); }
-  return recognizeChordsWithRateLimit(audioFile, model);
 }
 

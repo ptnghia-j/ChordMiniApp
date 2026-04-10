@@ -9,6 +9,11 @@
 import { audioMetadataCache } from '@/services/cache/smartFirebaseCache';
 import { storageMonitoringService } from '@/services/storage/storageMonitoringService';
 import { findExistingAudioFile, findExistingAudioFiles } from '@/services/firebase/firebaseStorageService';
+import {
+  findExistingLocalAudioFile,
+  findExistingLocalAudioFiles,
+  saveLocalAudioMetadata,
+} from '@/services/storage/localAudioStorageService';
 import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 
 export interface SimplifiedAudioData extends Record<string, unknown> {
@@ -87,6 +92,30 @@ function fromStorageResult(videoId: string, result: { audioUrl: string; fileSize
   };
 }
 
+function fromLocalStorageResult(
+  videoId: string,
+  result: {
+    audioUrl: string;
+    fileSize?: number;
+    title?: string;
+    duration?: number;
+    createdAt?: string;
+  }
+): SimplifiedAudioData {
+  return {
+    videoId,
+    audioUrl: result.audioUrl,
+    title: result.title || `YouTube Video ${videoId}`,
+    thumbnail: normalizeThumbnailUrl(videoId, null, 'mqdefault'),
+    duration: result.duration || 0,
+    fileSize: result.fileSize || 0,
+    isStreamUrl: false,
+    extractionService: 'local-temp-cache',
+    extractionTimestamp: Date.now(),
+    createdAt: result.createdAt || Date.now(),
+  };
+}
+
 export class FirebaseStorageSimplified {
   private static instance: FirebaseStorageSimplified;
 
@@ -99,6 +128,26 @@ export class FirebaseStorageSimplified {
 
   async saveAudioMetadata(data: SaveAudioMetadataInput): Promise<boolean> {
     audioMetadataCache.set(`audio_${data.videoId}`, toSimplifiedAudioData(data), true);
+
+    if (data.audioUrl.includes('/api/serve-local-audio')) {
+      try {
+        const localAudio = await findExistingLocalAudioFile(data.videoId);
+        if (localAudio) {
+          await saveLocalAudioMetadata({
+            videoId: data.videoId,
+            title: data.title,
+            duration: data.duration,
+            fileSize: data.fileSize || localAudio.fileSize,
+            audioUrl: localAudio.audioUrl,
+            filePath: localAudio.filePath,
+            filename: localAudio.filename,
+          });
+        }
+      } catch (error) {
+        console.warn(`Failed to persist local audio metadata for ${data.videoId}:`, error);
+      }
+    }
+
     return true;
   }
 
@@ -113,11 +162,16 @@ export class FirebaseStorageSimplified {
       `audio_${videoId}`,
       async () => {
         const existingFile = await findExistingAudioFile(videoId);
-        if (!existingFile) {
-          return null;
+        if (existingFile) {
+          return fromStorageResult(videoId, existingFile);
         }
 
-        return fromStorageResult(videoId, existingFile);
+        const localFile = await findExistingLocalAudioFile(videoId);
+        if (localFile) {
+          return fromLocalStorageResult(videoId, localFile);
+        }
+
+        return null;
       },
       (data: Record<string, unknown>) => Boolean(data.audioUrl && data.title)
     );
@@ -166,6 +220,16 @@ export class FirebaseStorageSimplified {
       const normalized = fromStorageResult(videoId, value);
       audioMetadataCache.set(`audio_${videoId}`, normalized, true);
       results.set(videoId, normalized);
+    }
+
+    const remainingIds = uncachedIds.filter((videoId) => !results.has(videoId));
+    if (remainingIds.length > 0) {
+      const localResults = await findExistingLocalAudioFiles(remainingIds);
+      for (const [videoId, value] of localResults.entries()) {
+        const normalized = fromLocalStorageResult(videoId, value);
+        audioMetadataCache.set(`audio_${videoId}`, normalized, true);
+        results.set(videoId, normalized);
+      }
     }
 
     return results;

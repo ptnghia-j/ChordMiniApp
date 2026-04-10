@@ -820,13 +820,3 @@ export class DynamicsAnalyzer {
     this.lastVelocityTime = null;
   }
 }
-
-// Singleton instance
-let instance: DynamicsAnalyzer | null = null;
-
-export function getDynamicsAnalyzer(): DynamicsAnalyzer {
-  if (!instance) {
-    instance = new DynamicsAnalyzer();
-  }
-  return instance;
-}
