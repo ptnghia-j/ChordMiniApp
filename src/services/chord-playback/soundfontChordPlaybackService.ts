@@ -34,9 +34,11 @@ import {
   DENSITY_REFERENCE_VOICES,
   MAX_BPM,
   MIN_DENSITY_COMPENSATION,
+  PIANO_BASS_SUSTAIN_PEDAL_TAIL_SECONDS,
   NATIVE_LOOP_INSTRUMENTS,
   PIANO_BLOCK_CHORD_VELOCITY_BOOST,
   PIANO_LATE_ONSET_GRACE_SECONDS,
+  PIANO_SUSTAIN_PEDAL_TAIL_SECONDS,
   RENDER_CONFIG_BY_INSTRUMENT,
   SAMPLE_DURATION,
   SUSTAIN_RETRIGGER_INSTRUMENTS,
@@ -321,8 +323,12 @@ export class SoundfontChordPlaybackService {
       return;
     }
 
+    const renderConfig = this.getInstrumentRenderConfig(instrumentName);
+    const outputGainCompensation = Math.max(0.5, renderConfig.outputGainCompensation ?? 1.0);
+    const compensatedVolume = Math.max(0, Math.min(100, volume * outputGainCompensation));
+
     if (typeof instrument.output?.setVolume === 'function') {
-      instrument.output.setVolume(Math.round((Math.max(0, Math.min(100, volume)) / 100) * 127));
+      instrument.output.setVolume(Math.round((compensatedVolume / 100) * 127));
     }
 
     const existingTimeout = this.scheduledTimeouts.get(instrumentName);
@@ -337,8 +343,8 @@ export class SoundfontChordPlaybackService {
     this.cancelPendingInstrumentNotesForChordSwitch(instrumentName);
 
     const baseVelocity = typeof instrument.output?.setVolume === 'function'
-      ? this.getInstrumentRenderConfig(instrumentName).performanceVelocity
-      : (volume / 100) * 127;
+      ? renderConfig.performanceVelocity
+      : (compensatedVolume / 100) * 127;
     const dynamicMultiplier = dynamicVelocity ?? 1.0;
     const envelope = this.getInstrumentEnvelope(instrumentName);
     const baseTime = this.audioContext?.currentTime ?? 0;
@@ -396,7 +402,10 @@ export class SoundfontChordPlaybackService {
         127,
       );
       const noteStartTime = baseTime + note.startOffset;
-      const smplrDuration = note.duration + envelope.sustainTailSeconds;
+      const pianoPedalTailSeconds = instrumentName === 'piano'
+        ? (note.isBass ? PIANO_BASS_SUSTAIN_PEDAL_TAIL_SECONDS : PIANO_SUSTAIN_PEDAL_TAIL_SECONDS)
+        : 0;
+      const smplrDuration = note.duration + envelope.sustainTailSeconds + pianoPedalTailSeconds;
       const supportsLooping = typeof instrument.hasLoops === 'boolean' ? instrument.hasLoops : true;
       const shouldUseRetriggerSustain = SUSTAIN_RETRIGGER_INSTRUMENTS.has(instrumentName)
         && note.duration > SAMPLE_DURATION;
@@ -429,7 +438,15 @@ export class SoundfontChordPlaybackService {
     this.activeNotes.set(instrumentName, activeNotesForInstrument);
 
     const remainingDuration = playbackNotes.reduce(
-      (maxEnd, note) => Math.max(maxEnd, note.startOffset + note.duration + envelope.sustainTailSeconds + envelope.decayTime),
+      (maxEnd, note) => {
+        const pianoPedalTailSeconds = instrumentName === 'piano'
+          ? (note.isBass ? PIANO_BASS_SUSTAIN_PEDAL_TAIL_SECONDS : PIANO_SUSTAIN_PEDAL_TAIL_SECONDS)
+          : 0;
+        return Math.max(
+          maxEnd,
+          note.startOffset + note.duration + envelope.sustainTailSeconds + pianoPedalTailSeconds + envelope.decayTime,
+        );
+      },
       0,
     );
     if (remainingDuration > 0) {

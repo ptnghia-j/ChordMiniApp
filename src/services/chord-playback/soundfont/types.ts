@@ -26,6 +26,7 @@ export interface InstrumentRenderConfig {
   soundfontInstrument: string;
   soundfontKit?: string;
   performanceVelocity: number;
+  outputGainCompensation?: number;
 }
 
 export interface ActiveScheduledNote {

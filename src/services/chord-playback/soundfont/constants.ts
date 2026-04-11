@@ -11,6 +11,8 @@ export const DENSITY_REFERENCE_VOICES = 3;
 export const MIN_DENSITY_COMPENSATION = 0.72;
 export const PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.22;
 export const PIANO_LATE_ONSET_GRACE_SECONDS = 0.18;
+export const PIANO_SUSTAIN_PEDAL_TAIL_SECONDS = 0.39;
+export const PIANO_BASS_SUSTAIN_PEDAL_TAIL_SECONDS = 0.27;
 export const UNLOAD_DELAY_MS = 30000;
 export const SUSTAIN_RETRIGGER_INSTRUMENTS = new Set<InstrumentName>(['violin', 'melodyViolin', 'flute']);
 export const NATIVE_LOOP_INSTRUMENTS = new Set<InstrumentName>(['violin', 'melodyViolin', 'flute', 'saxophone']);
@@ -19,6 +21,7 @@ export const RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRende
   piano: {
     soundfontInstrument: 'acoustic_grand_piano',
     performanceVelocity: 88,
+    outputGainCompensation: 1.55,
   },
   guitar: {
     soundfontInstrument: 'acoustic_guitar_steel',
