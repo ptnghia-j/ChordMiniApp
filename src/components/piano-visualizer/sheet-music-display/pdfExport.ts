@@ -1,3 +1,4 @@
+import { configureOsmdChordSymbolRules } from './chordSymbolLayout';
 import { loadOsmdConstructor } from './osmdLoader';
 import type { PdfWriter, RasterizedScorePage } from './types';
 
@@ -64,12 +65,13 @@ export async function rasterizeScoreWithDedicatedCanvasBackend(params: {
       drawTitle: false,
       drawComposer: false,
       drawPartNames: true,
-      drawingParameters: 'compact',
+      drawingParameters: 'default',
       renderSingleHorizontalStaffline: false,
       followCursor: false,
       cursorsOptions: [],
     });
 
+    configureOsmdChordSymbolRules(exportOsmd);
     await exportOsmd.load(musicXml);
     exportOsmd.Zoom = 0.82;
     exportOsmd.render();

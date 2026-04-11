@@ -49,6 +49,11 @@ const NOISY_DEV_LOG_PATTERNS = [
   /Found existing audio file in Firebase Storage/,
 ];
 
+const NOISY_DEV_WARNING_PATTERNS = [
+  /Unexpected import of module .*metronomeService\.ts.*deleted by an HMR update/i,
+  /SkyBottomLineBatchCalculatorBackend: width not > 0 in measure/i,
+];
+
 /**
  * Error messages that are safe to suppress
  */
@@ -93,6 +98,10 @@ function isNoisyDevLog(message: string): boolean {
   return NOISY_DEV_LOG_PATTERNS.some((pattern) => pattern.test(message));
 }
 
+function isNoisyDevWarning(message: string): boolean {
+  return NOISY_DEV_WARNING_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 /**
  * Enhanced console error handler that filters out harmless CORS warnings
  */
@@ -106,7 +115,7 @@ export function setupCorsErrorSuppression(): void {
   console.error = (...args: unknown[]) => {
     const errorMessage = args.join(' ');
     
-    if (!isHarmlessCorsError(errorMessage)) {
+    if (!isHarmlessCorsError(errorMessage) && !isNoisyDevWarning(errorMessage)) {
       originalError.apply(console, args);
     }
   };
@@ -115,7 +124,7 @@ export function setupCorsErrorSuppression(): void {
   console.warn = (...args: unknown[]) => {
     const warnMessage = args.join(' ');
     
-    if (!isHarmlessCorsError(warnMessage)) {
+    if (!isHarmlessCorsError(warnMessage) && !isNoisyDevWarning(warnMessage)) {
       originalWarn.apply(console, args);
     }
   };

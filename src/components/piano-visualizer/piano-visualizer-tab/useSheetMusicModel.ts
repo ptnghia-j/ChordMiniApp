@@ -220,6 +220,21 @@ export function useSheetMusicModel({
       const pickup = normalizedValue % timeSignature;
       return pickup < 0 ? pickup + timeSignature : pickup;
     };
+    const isWithinFirstMeasure = (value: number | null): value is number => (
+      value !== null
+      && value > 0
+      && (timeSignature <= 0 || value < timeSignature)
+    );
+    const rawPaddingCount = typeof resolvedChordGridData?.paddingCount === 'number'
+      && Number.isFinite(resolvedChordGridData.paddingCount)
+      ? Math.max(0, Math.round(resolvedChordGridData.paddingCount))
+      : 0;
+    const rawStructuralPickupCount = notationBeatOffset > 0
+      ? notationBeatOffset + rawPaddingCount
+      : 0;
+    const normalizedStructuralPickup = rawStructuralPickupCount > 0
+      ? normalizePickupCount(rawStructuralPickupCount)
+      : null;
 
     const firstNonSilentVisibleGridIndex = (() => {
       const chords = resolvedChordGridData?.chords;
@@ -235,11 +250,10 @@ export function useSheetMusicModel({
 
       return null;
     })();
-
-    const normalizedPaddingPickup = typeof resolvedChordGridData?.paddingCount === 'number'
-      && Number.isFinite(resolvedChordGridData.paddingCount)
-      ? normalizePickupCount(Math.max(0, Math.round(resolvedChordGridData.paddingCount)))
+    const normalizedPaddingPickup = rawPaddingCount > 0
+      ? normalizePickupCount(rawPaddingCount)
       : null;
+
     const firstPlayableBeatIndex = sheetMusicChordEvents.reduce<number>((earliest, event) => {
       if (typeof event.beatIndex !== 'number' || !Number.isFinite(event.beatIndex)) {
         return earliest;
@@ -259,12 +273,11 @@ export function useSheetMusicModel({
 
     let resolvedPickupBeatCount = 0;
 
-    if (typeof resolvedChordGridData?.paddingCount === 'number' && Number.isFinite(resolvedChordGridData.paddingCount)) {
-      const normalizedPaddingCount = Math.max(0, Math.round(resolvedChordGridData.paddingCount));
-      resolvedPickupBeatCount = normalizePickupCount(normalizedPaddingCount);
-    } else if (normalizedLeadingSilentPickup !== null) {
+    if (normalizedStructuralPickup !== null) {
+      resolvedPickupBeatCount = normalizedStructuralPickup;
+    } else if (isWithinFirstMeasure(leadingSilentCells) && normalizedLeadingSilentPickup !== null) {
       resolvedPickupBeatCount = normalizedLeadingSilentPickup;
-    } else if (normalizedFirstPlayablePickup !== null) {
+    } else if (isWithinFirstMeasure(firstPlayableBeatIndex) && normalizedFirstPlayablePickup !== null) {
       resolvedPickupBeatCount = normalizedFirstPlayablePickup;
     } else if (!sheetMusicBeatTimes?.length) {
       resolvedPickupBeatCount = 0;
@@ -273,8 +286,17 @@ export function useSheetMusicModel({
     const normalizedFirstNonSilentVisibleGridPickup = firstNonSilentVisibleGridIndex !== null
       ? normalizePickupCount(firstNonSilentVisibleGridIndex)
       : null;
-    if (normalizedFirstNonSilentVisibleGridPickup !== null) {
+    if (isWithinFirstMeasure(firstNonSilentVisibleGridIndex) && normalizedFirstNonSilentVisibleGridPickup !== null) {
       resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
+    } else if (
+      firstNonSilentVisibleGridIndex !== null
+      && firstNonSilentVisibleGridIndex >= timeSignature
+      && notationBeatOffset === 0
+      && leadingSilentCells === 0
+    ) {
+      // Once the visible grid already contains one or more full silent measures,
+      // folding the remainder into a pickup rest misaligns the score.
+      resolvedPickupBeatCount = 0;
     }
 
     const hasMelodyNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;

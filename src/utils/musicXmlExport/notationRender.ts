@@ -8,6 +8,7 @@ import {
   escapeXml,
   getGenericBeatGroupSize,
   pitchToMusicXml,
+  renderMusicXmlHarmony,
 } from './shared';
 import type {
   GenericMeasureEvent,
@@ -15,6 +16,112 @@ import type {
   NotationScore,
   NotationStaff,
 } from './types';
+
+function getChordLabelVisualWidth(label: string): number {
+  const compactLabel = label.replace(/\s+/g, '');
+  if (!compactLabel) {
+    return 0;
+  }
+
+  const slashCount = (compactLabel.match(/\//g) ?? []).length;
+  const accidentalCount = (compactLabel.match(/[♭♯]/g) ?? []).length;
+  const parenCount = (compactLabel.match(/[()]/g) ?? []).length;
+
+  return compactLabel.length + slashCount + accidentalCount + Math.ceil(parenCount / 2);
+}
+
+function getMeasureChordLabelLoad(measure: NotationMeasure): { chordCount: number; textUnits: number } {
+  const chordCount = measure.chordDirections.length;
+  const textUnits = measure.chordDirections.reduce(
+    (sum, direction) => sum + Math.max(1, Math.ceil(getChordLabelVisualWidth(direction.label) / 3.5)),
+    0,
+  );
+
+  return { chordCount, textUnits };
+}
+
+function getBoundaryChordCollisionRisk(
+  previousMeasure: NotationMeasure | null | undefined,
+  nextMeasure: NotationMeasure | null | undefined,
+): number {
+  const previousDirection = previousMeasure?.chordDirections.at(-1);
+  const nextDirection = nextMeasure?.chordDirections[0];
+
+  if (!previousMeasure || !nextMeasure || !previousDirection || !nextDirection) {
+    return 0;
+  }
+
+  const previousStartRatio = previousDirection.startDivision / Math.max(1, previousMeasure.lengthDivisions);
+  const nextStartRatio = nextDirection.startDivision / Math.max(1, nextMeasure.lengthDivisions);
+  if (previousStartRatio < 0.45 || nextStartRatio > 0.15) {
+    return 0;
+  }
+
+  let risk = getChordLabelVisualWidth(previousDirection.label) + getChordLabelVisualWidth(nextDirection.label);
+
+  if (previousStartRatio >= 0.75) {
+    risk += 2;
+  } else if (previousStartRatio >= 0.5) {
+    risk += 1;
+  }
+
+  if (nextStartRatio <= 0.01) {
+    risk += 2;
+  } else if (nextStartRatio <= 0.1) {
+    risk += 1;
+  }
+
+  return risk;
+}
+
+function buildChordAwareSystemBreakIndexes(
+  measures: NotationMeasure[],
+  includeChordDirections: boolean,
+): Set<number> {
+  const breaks = new Set<number>();
+  if (!includeChordDirections || measures.length <= 1) {
+    return breaks;
+  }
+
+  let measuresInSystem = 0;
+  let systemChordCount = 0;
+  let systemTextUnits = 0;
+
+  measures.forEach((measure, measureIndex) => {
+    const { chordCount, textUnits } = getMeasureChordLabelLoad(measure);
+    const boundaryCollisionRisk = getBoundaryChordCollisionRisk(
+      measureIndex > 0 ? measures[measureIndex - 1] : null,
+      measure,
+    );
+    const shouldBreakBeforeMeasure = measureIndex > 0 && (
+      measuresInSystem >= 4
+      || (
+        measuresInSystem >= 3
+        && (systemChordCount + chordCount > 6 || systemTextUnits + textUnits > 18)
+      )
+      || (
+        measuresInSystem >= 2
+        && (systemChordCount + chordCount > 7 || systemTextUnits + textUnits > 24)
+      )
+      || (
+        boundaryCollisionRisk >= 7
+      )
+    );
+
+    if (shouldBreakBeforeMeasure) {
+      breaks.add(measureIndex);
+      measuresInSystem = 0;
+      systemChordCount = 0;
+      systemTextUnits = 0;
+    }
+
+    measuresInSystem += 1;
+    systemChordCount += chordCount;
+    systemTextUnits += textUnits;
+  });
+
+  return breaks;
+}
 
 function getGenericBeamTag(
   events: GenericMeasureEvent[],
@@ -301,6 +408,7 @@ function buildPartMeasureXmlGeneric(params: {
     includeTempoDirection,
     includeChordDirections,
   } = params;
+  const systemBreakIndexes = buildChordAwareSystemBreakIndexes(score.measures, includeChordDirections);
 
   return score.measures.map((measure) => {
     const isPickup = measure.measureIndex === 0
@@ -315,11 +423,13 @@ function buildPartMeasureXmlGeneric(params: {
     const chordDirectionXml = includeChordDirections && measure.chordDirections.length > 0
       ? (
         measure.chordDirections.map((direction) => (
-          `<direction placement="above">`
-          + `<direction-type><words default-y="50" font-weight="bold" font-family="Varela Round, Nunito Sans, sans-serif">${escapeXml(direction.label)}</words></direction-type>`
-          + (direction.startDivision > 0 ? `<offset sound="no">${direction.startDivision}</offset>` : '')
-          + `<staff>1</staff>`
-          + `</direction>`
+          `${renderMusicXmlHarmony({
+            chordName: direction.chordName,
+            keySignature: measure.keyContext.keySignature,
+            defaultY: 50,
+            startDivision: direction.startDivision,
+            staff: 1,
+          })}`
         )).join('')
       )
       : '';
@@ -346,9 +456,13 @@ function buildPartMeasureXmlGeneric(params: {
       : (shouldRenderKeySignature && previousMeasure
         ? `<attributes><key><fifths>${measure.keyContext.keyFifths}</fifths></key></attributes>`
         : '');
+    const printXml = systemBreakIndexes.has(measure.measureIndex)
+      ? '<print new-system="yes"/>'
+      : '';
 
     return (
       `<measure number="${measure.measureIndex + 1}"${isPickup ? ' implicit="yes"' : ''}>`
+      + `${printXml}`
       + `${attributesXml}`
       + `${chordDirectionXml}`
       + `${renderMeasureStreams(staves, measure, partId, score.timeSignature, measure.keyContext.accidentalPreference, score.divisionsPerQuarter)}`

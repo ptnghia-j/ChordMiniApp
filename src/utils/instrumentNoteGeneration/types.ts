@@ -48,6 +48,8 @@ export interface NoteGenerationParams {
   beatDuration: number;
   /** Absolute start time of this chord/event in the song timeline */
   startTime?: number;
+  /** Absolute song duration used for end-of-song pattern shaping */
+  totalDuration?: number;
   /** Time signature (beats per measure, e.g. 3 for 3/4, default 4) */
   timeSignature?: number;
   /** Optional song segmentation for section-aware pattern shaping */

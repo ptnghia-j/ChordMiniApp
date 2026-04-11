@@ -14,7 +14,7 @@ import ChordSimplificationToggle from '@/components/analysis/ChordSimplification
 import PitchShiftPopover from '@/components/chord-playback/PitchShiftPopover';
 import LoopPlaybackToggle from '@/components/analysis/LoopPlaybackToggle';
 import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useToggleSimplifyChords } from '@/stores/uiStore';
-import type { MetronomeService } from '@/services/chord-playback/metronomeService';
+import { metronomeService } from '@/services/chord-playback/metronomeService';
 
 interface UtilityBarProps {
   // States
@@ -98,27 +98,20 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
   const utilityCircleButtonClass = 'h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0';
   const [isEnabled, setIsEnabled] = useState(false);
   const [trackMode, setTrackMode] = useState<'metronome' | 'drum'>('metronome');
-  const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   useEffect(() => {
-    const initMetronome = async () => {
-      if (typeof window === 'undefined') return;
-      const { metronomeService: service } = await import('@/services/chord-playback/metronomeService');
-      setMetronomeService(service);
-      setIsEnabled(service.isMetronomeEnabled());
-      setTrackMode(service.getTrackMode());
-    };
+    if (typeof window === 'undefined') return;
 
-    void initMetronome();
+    const frameId = requestAnimationFrame(() => {
+      setIsEnabled(metronomeService.isMetronomeEnabled());
+      setTrackMode(metronomeService.getTrackMode());
+    });
+
+    return () => cancelAnimationFrame(frameId);
   }, []);
 
   const handleToggle = useCallback(async () => {
-    if (!metronomeService) {
-      console.error('UtilityBarMetronomeControl: No metronome service available');
-      return;
-    }
-
     const newEnabled = onToggleWithSync
       ? await onToggleWithSync()
       : !isEnabled;
@@ -135,11 +128,9 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
         void metronomeService.testClick(false);
       }, 100);
     }
-  }, [isEnabled, metronomeService, onToggleWithSync]);
+  }, [isEnabled, onToggleWithSync]);
 
   const handleTrackModeChange = useCallback(async (newMode: 'metronome' | 'drum') => {
-    if (!metronomeService) return;
-
     setTrackMode(newMode);
     await metronomeService.setTrackMode(newMode);
 
@@ -148,7 +139,7 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
     }
 
     setIsPopoverOpen(false);
-  }, [isEnabled, metronomeService]);
+  }, [isEnabled]);
 
   return (
     <Popover

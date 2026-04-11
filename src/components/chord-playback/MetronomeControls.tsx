@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { MetronomeService } from '@/services/chord-playback/metronomeService';
+import { metronomeService } from '@/services/chord-playback/metronomeService';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
@@ -15,7 +15,6 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [trackMode, setTrackMode] = useState<'metronome' | 'drum'>('metronome');
-  const [metronomeService, setMetronomeService] = useState<MetronomeService | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const buttonClassName = `h-9 w-9 min-w-9 rounded-full shadow-md transition-colors duration-200 inline-flex items-center justify-center p-0 ${
     isEnabled
@@ -24,22 +23,17 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
   } ${className}`;
 
   useEffect(() => {
-    const initMetronome = async () => {
-      if (typeof window === 'undefined') return;
-      const { metronomeService: service } = await import('@/services/chord-playback/metronomeService');
-      setMetronomeService(service);
-      setIsEnabled(service.isMetronomeEnabled());
-      setTrackMode(service.getTrackMode());
-    };
-    initMetronome();
+    if (typeof window === 'undefined') return;
+
+    const frameId = requestAnimationFrame(() => {
+      setIsEnabled(metronomeService.isMetronomeEnabled());
+      setTrackMode(metronomeService.getTrackMode());
+    });
+
+    return () => cancelAnimationFrame(frameId);
   }, []);
 
   const handleToggle = useCallback(async () => {
-    if (!metronomeService) {
-      console.error('MetronomeControls: No metronome service available');
-      return;
-    }
-
     const newEnabled = onToggleWithSync
       ? await onToggleWithSync()
       : !isEnabled;
@@ -56,17 +50,16 @@ const MetronomeControls = React.memo<MetronomeControlsProps>(({
         metronomeService.testClick(false);
       }, 100);
     }
-  }, [isEnabled, metronomeService, onToggleWithSync]);
+  }, [isEnabled, onToggleWithSync]);
 
   const handleTrackModeChange = useCallback(async (newMode: 'metronome' | 'drum') => {
-    if (!metronomeService) return;
     setTrackMode(newMode);
     await metronomeService.setTrackMode(newMode);
     if (isEnabled) {
       void metronomeService.testClick(false);
     }
     setIsPopoverOpen(false);
-  }, [isEnabled, metronomeService]);
+  }, [isEnabled]);
 
   return (
     <Popover

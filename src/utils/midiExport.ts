@@ -262,6 +262,7 @@ function generateInstrumentMidiNotes(
       duration,
       beatDuration: eventBeatDuration,
       startTime,
+      totalDuration: totalSongDuration,
       timeSignature,
       segmentationData,
       signalDynamics,

@@ -788,8 +788,8 @@ function buildGenericChordMeasureMapForLayout(
   layout: MeasureLayoutConfig,
   keySections: ResolvedScoreKeySection[],
   divisionsPerQuarter: number,
-): Map<number, Array<{ label: string; startDivision: number }>> {
-  const measureMap = new Map<number, Array<{ label: string; startDivision: number }>>();
+): Map<number, Array<{ label: string; chordName: string; startDivision: number }>> {
+  const measureMap = new Map<number, Array<{ label: string; chordName: string; startDivision: number }>>();
 
   for (const chordEvent of chordEvents) {
     const startDivision = resolveChordEventStartDivision(chordEvent, bpm, divisionsPerQuarter);
@@ -808,6 +808,7 @@ function buildGenericChordMeasureMapForLayout(
     if (!previous || previous.label !== displayLabel || previous.startDivision !== startInMeasure) {
       existing.push({
         label: displayLabel,
+        chordName: chordEvent.chordName,
         startDivision: startInMeasure,
       });
     }

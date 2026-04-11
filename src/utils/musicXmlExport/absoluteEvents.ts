@@ -345,6 +345,7 @@ export function buildPianoNotationNoteEvents(
       duration,
       beatDuration: eventBeatDuration,
       startTime: event.startTime,
+      totalDuration,
       timeSignature,
       segmentationData: options?.segmentationData ?? null,
       signalDynamics,

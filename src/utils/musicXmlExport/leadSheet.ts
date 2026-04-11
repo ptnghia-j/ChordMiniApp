@@ -20,6 +20,7 @@ import {
   isCompoundTime,
   pitchToMusicXml,
   quantizeDivision,
+  renderMusicXmlChordWords,
   secondsToDivisions,
 } from './shared';
 import type {
@@ -761,7 +762,7 @@ function buildPartMeasureXml(params: {
     const chordDirectionXml = chordLabels.length > 0
       ? (
         `<direction placement="below">`
-        + `<direction-type><words default-y="-70" font-weight="bold" font-family="Varela Round, Nunito Sans, sans-serif">${escapeXml(chordLabels.join('  |  '))}</words></direction-type>`
+        + `${renderMusicXmlChordWords(chordLabels.join('  |  '), -70)}`
         + `</direction>`
       )
       : '';

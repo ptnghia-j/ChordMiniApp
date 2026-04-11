@@ -143,6 +143,7 @@ export interface NotationMeasure {
   };
   chordDirections: Array<{
     label: string;
+    chordName: string;
     startDivision: number;
   }>;
   melodyStaff: NotationStaff | null;

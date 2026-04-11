@@ -32,6 +32,7 @@ export function generateAllInstrumentVisualNotes(
 
   // Merge consecutive beats with same chord — audio only triggers on chord changes
   const merged = mergeConsecutiveChordEvents(events);
+  const totalDuration = merged.length > 0 ? merged[merged.length - 1].endTime : undefined;
   // Use BPM-based beat duration when available (matches audio path exactly).
   // Fall back to estimated beat duration from raw events when beat counts are unavailable.
   const bd = bpm ? beatDurationFromBpm(bpm) : estimateBeatDuration(events);
@@ -53,6 +54,7 @@ export function generateAllInstrumentVisualNotes(
         duration,
         beatDuration: eventBeatDuration,
         startTime,
+        totalDuration,
         timeSignature,
         segmentationData,
         signalDynamics,

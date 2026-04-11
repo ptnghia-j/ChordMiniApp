@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { configureOsmdChordSymbolRules } from './chordSymbolLayout';
 import { loadOsmdConstructor } from './osmdLoader';
 import { appendImageToPdfPages, rasterizeScoreWithDedicatedCanvasBackend } from './pdfExport';
 import {
@@ -151,12 +152,89 @@ export function useSheetMusicRenderer({
         return [];
       }
 
-      const contentWidth = content.getBoundingClientRect().width;
+      const contentRect = content.getBoundingClientRect();
+      const contentWidth = contentRect.width;
+      const contentHeight = contentRect.height;
       const MIN_VISIBLE_WIDTH = 24;
       const MIN_VISIBLE_HEIGHT = 44;
+      const SYSTEM_HEIGHT_RATIO = 0.70;
+      const SYSTEM_GAP_PADDING = 12;
 
-      const visualBoxes = stabilizedBoxes.map((box, index) => {
-        const next = stabilizedBoxes[index + 1];
+      const systemGroups: Array<{
+        startIndex: number;
+        endIndex: number;
+        top: number;
+        bottom: number;
+      }> = [];
+
+      stabilizedBoxes.forEach((box, index) => {
+        const currentGroup = systemGroups[systemGroups.length - 1];
+        if (!currentGroup || Math.abs(box.top - currentGroup.top) > 8) {
+          systemGroups.push({
+            startIndex: index,
+            endIndex: index,
+            top: box.top,
+            bottom: box.top + box.height,
+          });
+          return;
+        }
+
+        currentGroup.endIndex = index;
+        currentGroup.top = Math.min(currentGroup.top, box.top);
+        currentGroup.bottom = Math.max(currentGroup.bottom, box.top + box.height);
+      });
+
+      const inferredSpans = systemGroups
+        .slice(0, -1)
+        .map((group, groupIndex) => {
+          const nextGroup = systemGroups[groupIndex + 1];
+          if (!nextGroup) {
+            return 0;
+          }
+
+          const naturalHeight = Math.max(MIN_VISIBLE_HEIGHT, group.bottom - group.top);
+          const projectedHeight = Math.max(0, (nextGroup.top - group.top) * SYSTEM_HEIGHT_RATIO);
+          return Math.max(naturalHeight, projectedHeight);
+        })
+        .filter((span) => span > 0)
+        .sort((left, right) => left - right);
+      const fallbackSystemSpan = inferredSpans.length > 0
+        ? inferredSpans[Math.floor(inferredSpans.length / 2)]
+        : Math.max(
+          MIN_VISIBLE_HEIGHT,
+          (systemGroups[0]?.bottom ?? MIN_VISIBLE_HEIGHT) - (systemGroups[0]?.top ?? 0),
+        );
+
+      const systemAlignedBoxes = stabilizedBoxes.map((box, index) => {
+        const groupIndex = systemGroups.findIndex((group) => (
+          index >= group.startIndex && index <= group.endIndex
+        ));
+        const group = groupIndex >= 0 ? systemGroups[groupIndex] : null;
+        if (!group) {
+          return box;
+        }
+
+        const nextGroupTop = systemGroups[groupIndex + 1]?.top;
+        const naturalHeight = Math.max(MIN_VISIBLE_HEIGHT, group.bottom - group.top);
+        const projectedHeight = nextGroupTop !== undefined
+          ? Math.max(0, (nextGroupTop - group.top) * SYSTEM_HEIGHT_RATIO)
+          : fallbackSystemSpan;
+        const targetHeight = Math.max(naturalHeight, projectedHeight);
+        const rawBottom = group.top + targetHeight;
+        const boundedBottom = nextGroupTop !== undefined
+          ? Math.max(group.top + MIN_VISIBLE_HEIGHT, Math.min(rawBottom, nextGroupTop - SYSTEM_GAP_PADDING))
+          : rawBottom;
+        const clampedSystemBottom = Math.min(contentHeight, boundedBottom);
+
+        return {
+          ...box,
+          top: group.top,
+          height: Math.max(MIN_VISIBLE_HEIGHT, clampedSystemBottom - group.top),
+        };
+      });
+
+      const visualBoxes = systemAlignedBoxes.map((box, index) => {
+        const next = systemAlignedBoxes[index + 1];
         const estimatedWidth = next
           ? Math.max(1, next.left - box.left)
           : Math.max(1, contentWidth - box.left);
@@ -245,7 +323,7 @@ export function useSheetMusicRenderer({
           drawTitle: false,
           drawComposer: false,
           drawPartNames: true,
-          drawingParameters: 'compact',
+          drawingParameters: 'default',
           renderSingleHorizontalStaffline: false,
           followCursor: false,
           cursorsOptions: [{
@@ -256,6 +334,9 @@ export function useSheetMusicRenderer({
           }],
         });
 
+        // OSMD resolves harmony/chord text during load(), so accidental and font overrides
+        // have to be in place before loading the MusicXML.
+        configureOsmdChordSymbolRules(osmd);
         await osmd.load(musicXml);
         if (cancelled) {
           return;
@@ -268,12 +349,12 @@ export function useSheetMusicRenderer({
         osmd.cursor?.show();
         osmdRef.current = osmd;
         styleMeasureCursor();
-        setMeasureBoxes(buildMeasureBoxMap());
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => resolve());
           });
         });
+        setMeasureBoxes(buildMeasureBoxMap());
         if (!cancelled) {
           setIsPresentationReady(true);
         }

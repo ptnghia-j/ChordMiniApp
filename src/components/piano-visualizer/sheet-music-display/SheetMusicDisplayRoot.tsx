@@ -83,7 +83,7 @@ const SheetMusicDisplayComponent: React.FC<SheetMusicDisplayProps> = ({
           )}
           <div
             ref={contentRef}
-            className={`relative mx-auto min-h-[320px] bg-white transition-opacity duration-200 ${
+            className={`relative mx-auto min-h-[320px] bg-white transition-opacity duration-150 ${
               isDisplayBusy ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
             style={{ paddingBottom: `${contentBottomScrollPadding}px` }}

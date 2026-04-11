@@ -10,6 +10,61 @@ import { TIMING_EPSILON } from '../constants';
 import { clamp01, easeInOutSineCurve, mix, resolveFullness, resolveMotion, resolveQuietness } from '../signalDynamics';
 import type { ScheduledNote } from '../types';
 
+function buildAlternatingFingerpickTrebleSequence(
+  sourceNotes: MidiNote[],
+  chordTones: MidiNote[],
+): MidiNote[] {
+  const upperPool = sourceNotes.length > 1 ? sourceNotes.slice(1) : sourceNotes;
+  if (upperPool.length <= 1) {
+    return upperPool;
+  }
+
+  const chordToneNames = Array.from(new Set(
+    (chordTones.length > 0 ? chordTones : upperPool).map((note) => note.noteName),
+  ));
+  const degreePattern = chordToneNames.length >= 3
+    ? [1, 0, 2, 0]
+    : chordToneNames.length === 2
+      ? [1, 0, 1, 0]
+      : [0];
+  const trebleWindow = upperPool.slice(Math.max(0, upperPool.length - Math.min(3, upperPool.length)));
+  const fallbackPattern = trebleWindow.length >= 3
+    ? [0, 2, 1, 2]
+    : trebleWindow.length === 2
+      ? [0, 1, 0, 1]
+      : [0];
+
+  let previousMidi: number | null = null;
+
+  return degreePattern.map((degreeIndex, patternIndex) => {
+    const targetNoteName = chordToneNames[degreeIndex] ?? chordToneNames[0];
+    const matchingCandidates = upperPool.filter((note) => note.noteName === targetNoteName);
+
+    if (matchingCandidates.length > 0) {
+      const preferredCandidate = matchingCandidates.reduce((best, candidate) => {
+        if (previousMidi === null) {
+          return candidate.midi > best.midi ? candidate : best;
+        }
+
+        const bestDistance = Math.abs(best.midi - previousMidi);
+        const candidateDistance = Math.abs(candidate.midi - previousMidi);
+        if (candidateDistance !== bestDistance) {
+          return candidateDistance < bestDistance ? candidate : best;
+        }
+
+        return candidate.midi > best.midi ? candidate : best;
+      });
+
+      previousMidi = preferredCandidate.midi;
+      return preferredCandidate;
+    }
+
+    const fallbackCandidate = trebleWindow[fallbackPattern[patternIndex % fallbackPattern.length] ?? 0] ?? upperPool[upperPool.length - 1];
+    previousMidi = fallbackCandidate.midi;
+    return fallbackCandidate;
+  });
+}
+
 export function generateGuitarNotes(
   chordName: string,
   chordTones: MidiNote[],
@@ -35,6 +90,7 @@ export function generateGuitarNotes(
   if (fingerpickBlend > 0.84) {
     const notes: ScheduledNote[] = [];
     const upperPool = sourceNotes.length > 1 ? sourceNotes.slice(1) : sourceNotes;
+    const alternatingTrebleSequence = buildAlternatingFingerpickTrebleSequence(sourceNotes, chordTones);
     const stepOffsets = timeSignature === 3
       ? [0, beatDuration, beatDuration * 2]
       : timeSignature === 6
@@ -49,7 +105,8 @@ export function generateGuitarNotes(
 
         const targetNote = stepIndex === 0
           ? sourceNotes[0]
-          : upperPool[(stepIndex - 1) % upperPool.length];
+          : alternatingTrebleSequence[(stepIndex - 1) % alternatingTrebleSequence.length]
+            ?? upperPool[(stepIndex - 1) % upperPool.length];
         if (!targetNote) continue;
 
         const nextStart = stepIndex + 1 < stepOffsets.length

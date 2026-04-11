@@ -31,6 +31,7 @@ import { SongContext } from '@/types/chatbotTypes';
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useMelodicTranscriptionPlayback } from '@/hooks/chord-playback/useMelodicTranscriptionPlayback';
+import { metronomeService } from '@/services/chord-playback/metronomeService';
 import { useAudioProcessing } from '@/hooks/audio/useAudioProcessing';
 import { useAudioPlayer } from '@/hooks/chord-playback/useAudioPlayer';
 import { useModelState } from '@/hooks/chord-analysis/useModelState';
@@ -1017,13 +1018,7 @@ export default function YouTubeVideoAnalyzePage() {
       return;
     }
 
-    void import('@/services/chord-playback/metronomeService')
-      .then(({ metronomeService }) => {
-        void metronomeService.setEnabled(false, 0);
-      })
-      .catch(() => {
-        // Best-effort cleanup during navigation.
-      });
+    void metronomeService.setEnabled(false, 0);
   }, []);
 
   const resetUtilityBarForVideoSwitch = useCallback(() => {
@@ -1125,13 +1120,9 @@ export default function YouTubeVideoAnalyzePage() {
 
   // Sync metronome state with metronome service
   useEffect(() => {
-    const syncMetronomeState = async () => {
-      if (typeof window !== 'undefined') {
-        const { metronomeService } = await import('@/services/chord-playback/metronomeService');
-        setIsMetronomeEnabled(metronomeService.isMetronomeEnabled());
-      }
-    };
-    syncMetronomeState();
+    if (typeof window !== 'undefined') {
+      setIsMetronomeEnabled(metronomeService.isMetronomeEnabled());
+    }
   }, []);
 
   // Wrapper function to handle metronome toggle and state update

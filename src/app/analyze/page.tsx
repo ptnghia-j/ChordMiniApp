@@ -76,6 +76,7 @@ import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useMelodicTranscriptionPlayback } from '@/hooks/chord-playback/useMelodicTranscriptionPlayback';
+import { metronomeService } from '@/services/chord-playback/metronomeService';
 import { resolveLoopRange } from '@/hooks/chord-playback/useLoopPlayback';
 import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useSegmentationState } from '@/hooks/lyrics/useSegmentationState';
@@ -406,13 +407,7 @@ export default function LocalAudioAnalyzePage() {
       return;
     }
 
-    void import('@/services/chord-playback/metronomeService')
-      .then(({ metronomeService }) => {
-        void metronomeService.setEnabled(false, 0);
-      })
-      .catch(() => {
-        // Best-effort cleanup during navigation.
-      });
+    void metronomeService.setEnabled(false, 0);
   }, []);
 
   const toggleFollowMode = () => setIsFollowModeEnabled(prev => !prev);

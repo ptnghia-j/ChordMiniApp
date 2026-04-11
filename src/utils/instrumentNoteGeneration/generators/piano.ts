@@ -18,11 +18,41 @@ import type { ScheduledNote } from '../types';
 export function separateRepeatedUpperPianoNotes(
   notes: ScheduledNote[],
   stepDuration: number,
+  options: {
+    trimToAnyNextUpperOnset?: boolean;
+  } = {},
 ): ScheduledNote[] {
   const repeatedGap = Math.max(0.02, Math.min(0.045, stepDuration * 0.12));
   const minimumVisibleDuration = Math.max(0.04, Math.min(0.09, stepDuration * 0.32));
+  const onsetGroupingTolerance = Math.max(TIMING_EPSILON * 10, Math.min(0.03, stepDuration * 0.08));
+  const nextUpperStartByIndex = new Map<number, number>();
   const nextStartByIndex = new Map<number, number>();
   const noteIndexesByMidi = new Map<number, number[]>();
+  const orderedUpperEntries = notes
+    .map((note, index) => (note.isBass ? null : { index, startOffset: note.startOffset }))
+    .filter((entry): entry is { index: number; startOffset: number } => entry !== null)
+    .sort((left, right) => left.startOffset - right.startOffset || left.index - right.index);
+
+  for (let index = 0; index < orderedUpperEntries.length;) {
+    const groupStart = orderedUpperEntries[index].startOffset;
+    let nextIndex = index + 1;
+
+    while (
+      nextIndex < orderedUpperEntries.length
+      && Math.abs(orderedUpperEntries[nextIndex].startOffset - groupStart) <= onsetGroupingTolerance
+    ) {
+      nextIndex += 1;
+    }
+
+    const nextStart = orderedUpperEntries[nextIndex]?.startOffset;
+    if (nextStart !== undefined) {
+      for (let groupIndex = index; groupIndex < nextIndex; groupIndex += 1) {
+        nextUpperStartByIndex.set(orderedUpperEntries[groupIndex].index, nextStart);
+      }
+    }
+
+    index = nextIndex;
+  }
 
   notes.forEach((note, index) => {
     if (note.isBass) return;
@@ -42,7 +72,11 @@ export function separateRepeatedUpperPianoNotes(
   });
 
   return notes.map((note, index) => {
-    const nextStart = nextStartByIndex.get(index);
+    const nextStarts = [
+      nextStartByIndex.get(index),
+      options.trimToAnyNextUpperOnset ? nextUpperStartByIndex.get(index) : undefined,
+    ].filter((value): value is number => value !== undefined);
+    const nextStart = nextStarts.length > 0 ? Math.min(...nextStarts) : undefined;
     if (nextStart === undefined) {
       return note;
     }
@@ -73,6 +107,7 @@ export function generatePianoNotes(
   durationInBeats: number,
   isLongChord: boolean,
   startTime?: number,
+  totalDuration?: number,
   timeSignature: number = 4,
   segmentationData?: SegmentationResult | null,
   signalDynamics?: ChordSignalDynamics | null,
@@ -84,6 +119,15 @@ export function generatePianoNotes(
   const isCompoundTime = timeSignature === 6;
   const patternBeats = isCompoundTime ? 3 : timeSignature;
   const chordStartTime = startTime ?? 0;
+  const songEndTime = totalDuration ?? null;
+  const remainingSongTime = songEndTime !== null ? Math.max(0, songEndTime - chordStartTime) : null;
+  const endgameWindowDuration = fullBeatDelay * Math.max(timeSignature * 4, 8);
+  const isNearSongEnding = remainingSongTime !== null && remainingSongTime <= endgameWindowDuration + TIMING_EPSILON;
+  const isFinalEndingChord = (
+    remainingSongTime !== null
+    && remainingSongTime <= duration + fullBeatDelay + TIMING_EPSILON
+    && durationInBeats >= patternBeats + 2
+  );
 
   // Bass note MIDI (raised to octave 3)
   const bassNoteName = `${bassEntry ? bassName : rootName}3`;
@@ -222,15 +266,72 @@ export function generatePianoNotes(
     return notes;
   }
 
+  if (isFinalEndingChord) {
+    pushSingleChord(
+      0,
+      duration,
+      mix(0.9, 1.0, easeInOutSineCurve(fullness * 0.5 + (1 - quietness) * 0.15)),
+      {
+        skipFifth: quietness > 0.84 && fullness < 0.32,
+        dropUpperExtensions: quietness > 0.58 && fullness < 0.46,
+        fifthVelocityScale: mix(0.52, 0.94, fullness * 0.5),
+        upperVelocityScale: mix(0.62, 1.0, fullness * 0.45 + motion * 0.1),
+        addBassOctaveBelow: shouldAddBassOctave && !isNearSongEnding,
+      },
+    );
+    return notes;
+  }
+
   const isWaltz = timeSignature === 3 || isCompoundTime;
   const activeSegment = getActiveSegmentationSegmentForTime(segmentationData, chordStartTime);
   const segmentSparseLift = isSparsePianoSegment(activeSegment) ? 0.56 : 0;
-  const sparseBlend = clamp01(Math.max(segmentSparseLift, quietness * 0.9 - fullness * 0.2));
+  const sparseBlend = clamp01(Math.max(
+    segmentSparseLift,
+    quietness * 0.9 - fullness * 0.2,
+    isNearSongEnding ? 0.88 : 0,
+  ));
   const fullAttackBlend = clamp01(fullness * 0.7 + attack * 0.3);
   const shouldUseSparsePattern = sparseBlend > 0.76;
+  const activityBlend = clamp01(fullness * 0.46 + motion * 0.36 + attack * 0.18);
+  const useFilledSubdivisionPattern = (
+    timeSignature === 4
+    && durationInBeats >= 4
+    && !shouldUseSparsePattern
+    && quietness < 0.62
+    && activityBlend > 0.38
+  );
+  const shouldUseQuietHalfNotePattern = (
+    timeSignature === 4
+    && durationInBeats >= 4
+    && (
+      (
+        sparseBlend > 0.58
+        && quietness > 0.62
+        && fullness < 0.42
+        && motion < 0.54
+        && attack < 0.5
+        && activityBlend < 0.48
+      )
+      || (
+        isSparsePianoSegment(activeSegment)
+        && sparseBlend > 0.5
+        && fullness < 0.5
+        && activityBlend < 0.52
+      )
+      || (
+        Boolean(signalDynamics)
+        && isNearSongEnding
+        && sparseBlend > 0.68
+        && fullness < 0.46
+        && motion < 0.6
+        && attack < 0.48
+        && activityBlend < 0.5
+      )
+    )
+  );
   const upperVoicing = chordTones.map((tone, index) => ({
-    noteName: `${tone.noteName}${index >= 3 ? 5 : 4}`,
-    midi: noteNameToMidi(`${tone.noteName}${index >= 3 ? 5 : 4}`),
+    noteName: `${tone.noteName}${useFilledSubdivisionPattern && index < 4 ? 4 : index >= 3 ? 5 : 4}`,
+    midi: noteNameToMidi(`${tone.noteName}${useFilledSubdivisionPattern && index < 4 ? 4 : index >= 3 ? 5 : 4}`),
     velocity: (0.82 + index * 0.05) * mix(0.76, 1.06, fullness * 0.72 + motion * 0.28),
   }));
 
@@ -247,12 +348,35 @@ export function generatePianoNotes(
     midi: noteNameToMidi(`${bridgeTone.noteName}3`),
     velocity: 0.9,
   } : null;
+  const bassFillBlend = clamp01(fullness * 0.55 + motion * 0.45);
+  const bassFillVoicing = bridgeVoicing ? [
+    {
+      noteName: bridgeVoicing.noteName,
+      midi: bridgeVoicing.midi,
+      velocity: mix(0.74, 0.96, bassFillBlend),
+    },
+    {
+      noteName: bassNoteName,
+      midi: bassMidi,
+      velocity: (bassEntry ? BASS_VELOCITY_BOOST : 1.0) * mix(0.66, 0.9, bassFillBlend),
+    },
+  ] : [];
+  const shouldUseBassArpeggioFill = useFilledSubdivisionPattern && bassFillVoicing.length > 0 && bassFillBlend > 0.44;
 
   const patternLibrary = shouldUseSparsePattern
     ? PIANO_ARPEGGIO_PATTERNS_SPARSE
     : (isWaltz ? PIANO_ARPEGGIO_PATTERNS_WALTZ : PIANO_ARPEGGIO_PATTERNS_COMMON);
   const selectedPattern = patternLibrary[patternSeed % patternLibrary.length];
-  const stepDuration = Math.max(fullBeatDelay, 0.18);
+  const stepDuration = shouldUseQuietHalfNotePattern
+    ? Math.max(fullBeatDelay * 2, 0.36)
+    : useFilledSubdivisionPattern
+    ? Math.max(fullBeatDelay * 0.5, 0.16)
+    : Math.max(fullBeatDelay, 0.18);
+  const openingUpperAttackDuration = shouldUseQuietHalfNotePattern
+    ? Math.min(duration, Math.max(stepDuration * 0.98, fullBeatDelay * 1.9))
+    : shouldUseSparsePattern
+    ? Math.min(duration, Math.max(stepDuration * 2.05, fullBeatDelay * 1.85))
+    : Math.min(duration, Math.max(stepDuration * 1.15, fullBeatDelay * 0.9));
 
   const pushArpeggiatedNote = (
     noteName: string,
@@ -296,7 +420,7 @@ export function generatePianoNotes(
   if (fullAttackBlend > 0.14) {
     pushUpperChordAttack(
       0,
-      Math.min(duration, Math.max(stepDuration * 1.15, fullBeatDelay * 0.9)),
+      openingUpperAttackDuration,
       mix(0.3, 0.98, easeInOutSineCurve(fullAttackBlend)),
       {
         skipFifth: quietness > 0.86 && fullAttackBlend < 0.48,
@@ -309,6 +433,7 @@ export function generatePianoNotes(
 
   const bridgeStartOffset = stepDuration;
   const shouldScheduleBridge = fullAttackBlend < 0.74
+    && !shouldUseQuietHalfNotePattern
     && useInitialFifthBridge
     && bridgeVoicing
     && bridgeStartOffset < duration - TIMING_EPSILON;
@@ -323,22 +448,45 @@ export function generatePianoNotes(
     );
   }
 
-  const upperStartStep = shouldScheduleBridge ? 2 : 1;
-  const skipModulo = sparseBlend > 0.82 ? 2 : sparseBlend > 0.56 ? 3 : 0;
+  const upperStartStep = useFilledSubdivisionPattern
+    ? 2
+    : shouldUseQuietHalfNotePattern
+      ? 1
+    : (shouldScheduleBridge ? 2 : 1);
+  const skipModulo = shouldUseQuietHalfNotePattern
+    ? 0
+    : useFilledSubdivisionPattern
+    ? 0
+    : sparseBlend > 0.82
+      ? 2
+      : sparseBlend > 0.56
+        ? 3
+        : 0;
 
   for (let stepIndex = upperStartStep; stepIndex * stepDuration < duration - TIMING_EPSILON; stepIndex += 1) {
     if (upperVoicing.length === 0) {
       break;
     }
 
+    const sequenceIndex = stepIndex - upperStartStep;
     if (skipModulo > 0) {
-      const sequenceIndex = stepIndex - upperStartStep;
       if (sequenceIndex > 0 && sequenceIndex % skipModulo === skipModulo - 1) {
         continue;
       }
     }
 
     const startOffset = stepIndex * stepDuration;
+    if (shouldUseBassArpeggioFill && sequenceIndex >= 2 && sequenceIndex % 3 === 2) {
+      const bassFill = bassFillVoicing[Math.floor((sequenceIndex - 2) / 3) % bassFillVoicing.length];
+      pushArpeggiatedNote(
+        bassFill.noteName,
+        bassFill.midi,
+        startOffset,
+        bassFill.velocity,
+        true,
+      );
+    }
+
     const patternIndex = (stepIndex - upperStartStep) % selectedPattern.length;
     const sourceIndex = selectedPattern[patternIndex] ?? 0;
     const resolvedIndex = sourceIndex % upperVoicing.length;
@@ -353,5 +501,7 @@ export function generatePianoNotes(
     );
   }
 
-  return separateRepeatedUpperPianoNotes(notes, stepDuration);
+  return separateRepeatedUpperPianoNotes(notes, stepDuration, {
+    trimToAnyNextUpperOnset: useFilledSubdivisionPattern || shouldUseQuietHalfNotePattern,
+  });
 }
