@@ -221,6 +221,11 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     quality = quality.replace(/Δ/g, `<span style="${MAJOR_TRIANGLE_STYLE}">Δ</span>`);
   }
 
+  const normalizedQuality = quality
+    .toLowerCase()
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b');
+
   // Apply professional chord quality notation with uniform font weight
   // All parts of chord labels use regular font weight for cleaner appearance
   const formattedRoot = `<span style="font-weight: inherit;">${root}</span>`;
@@ -243,7 +248,17 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
       // Handle simple sus chords: "sus4" -> "sus⁴"
       quality = quality.replace(/sus(\d+)/g, `<span style="font-weight: inherit;">sus</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
     }
-  } else if (quality === 'm7b5' || quality === 'min7b5' || quality.includes('half-dim') || quality.includes('halfdim')) {
+  } else if (
+    normalizedQuality === 'm7b5'
+    || normalizedQuality === 'min7b5'
+    || normalizedQuality === 'm7(b5)'
+    || normalizedQuality === 'min7(b5)'
+    || normalizedQuality === 'ø'
+    || normalizedQuality === 'ø7'
+    || normalizedQuality.includes('half-dim')
+    || normalizedQuality.includes('halfdim')
+    || normalizedQuality.includes('hdim')
+  ) {
     // FIXED: Half-diminished 7th chords with consistent superscript sizing
     quality = `<span style="font-weight: inherit; position:relative;top:-1px">ø</span><sup style="${SUPERSCRIPT_STYLE}">7</sup>`;
   } else if (quality.includes('dim') && !quality.includes('°')) {

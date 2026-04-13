@@ -376,8 +376,10 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     [],
   );
 
-  /** ChordCell's getDynamicFontSize — fixed text-sm for compact strip cells. */
-  const stripGetDynamicFontSize = useCallback(() => 'text-sm', []);
+  /** ChordCell's getDynamicFontSize — compact strip relies on shared inline size clamp. */
+  const stripGetDynamicFontSize = useCallback(() => {
+    return 'font-semibold';
+  }, []);
 
   /** No-op beat click handler (strip is non-interactive). */
   const noopBeatClick = useCallback(() => {}, []);
@@ -426,6 +428,10 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
           const isActive = currentTime >= box.startTime && currentTime < box.endTime;
           const isPast = currentTime >= box.endTime;
           const isEmpty = !box.chordName;
+          const compactLabelOverflowCells = box.showLabel
+            ? (box.chordName.length >= 9 ? 2 : box.chordName.length >= 5 ? 1 : 0)
+            : 0;
+          const shouldAllowLabelOverflow = compactLabelOverflowCells > 0;
 
           // Roman numeral — only set on chord-change beats
           const romanNumeral =
@@ -464,7 +470,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
           return (
             <div
               key={box.index}
-              className={`absolute top-[1px] bottom-[1px] rounded-sm border overflow-hidden ${containerClass}`}
+              className={`absolute top-[1px] bottom-[1px] rounded-sm border ${shouldAllowLabelOverflow ? 'overflow-visible' : 'overflow-hidden'} ${containerClass}`}
               style={containerStyle}
             >
               {hasSegmentationOverlay && (
@@ -498,6 +504,8 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                   modulationInfo={modulationInfo}
                   accidentalPreference={accidentalPreference ?? undefined}
                   segmentationClassName={undefined}
+                  labelOverflowCells={compactLabelOverflowCells}
+                  labelOverflowGapPx={compactLabelOverflowCells * CELL_GAP}
                 />
               </div>
             </div>

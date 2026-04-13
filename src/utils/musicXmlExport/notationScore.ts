@@ -548,6 +548,40 @@ function buildRestEvents(
   });
 }
 
+function normalizeSegmentWithinMeasure(
+  segment: GenericMeasureChordSegment,
+  cursor: number,
+  divisionsPerMeasure: number,
+): GenericMeasureChordSegment | null {
+  const segmentStart = Math.max(0, Math.min(divisionsPerMeasure, segment.startInMeasure));
+  const segmentEnd = Math.max(
+    segmentStart,
+    Math.min(divisionsPerMeasure, segment.startInMeasure + segment.duration),
+  );
+
+  if (segmentEnd <= cursor) {
+    return null;
+  }
+
+  const effectiveStart = Math.max(segmentStart, cursor);
+  const effectiveEnd = segmentEnd;
+
+  if (effectiveEnd <= effectiveStart) {
+    return null;
+  }
+
+  const trimmedLeading = effectiveStart > segment.startInMeasure;
+  const trimmedTrailing = effectiveEnd < (segment.startInMeasure + segment.duration);
+
+  return {
+    ...segment,
+    startInMeasure: effectiveStart,
+    duration: effectiveEnd - effectiveStart,
+    tieStop: segment.tieStop || trimmedLeading,
+    tieStart: segment.tieStart || trimmedTrailing,
+  };
+}
+
 export function buildMeasureEventsWithMeterGeneric(
   segments: GenericMeasureChordSegment[],
   divisionsPerMeasure: number,
@@ -560,8 +594,18 @@ export function buildMeasureEventsWithMeterGeneric(
 
   const events: GenericMeasureEvent[] = [];
   let cursor = 0;
+  const orderedSegments = [...segments].sort((left, right) => (
+    left.startInMeasure - right.startInMeasure
+    || left.duration - right.duration
+    || left.pitches[0] - right.pitches[0]
+  ));
 
-  for (const segment of segments) {
+  for (const sourceSegment of orderedSegments) {
+    const segment = normalizeSegmentWithinMeasure(sourceSegment, cursor, divisionsPerMeasure);
+    if (!segment) {
+      continue;
+    }
+
     if (segment.startInMeasure > cursor) {
       events.push(...buildRestEvents(
         cursor,
@@ -578,7 +622,7 @@ export function buildMeasureEventsWithMeterGeneric(
       timeSignature,
       divisionsPerQuarter,
     ));
-    cursor = Math.max(cursor, segment.startInMeasure + segment.duration);
+    cursor = segment.startInMeasure + segment.duration;
   }
 
   if (cursor < divisionsPerMeasure) {
@@ -798,7 +842,10 @@ function buildGenericChordMeasureMapForLayout(
     const startInMeasure = Math.max(0, startDivision - measureStartDivision);
     const existing = measureMap.get(measureIndex) ?? [];
     const keySignature = resolveScoreKeySectionForDivision(startDivision, keySections).keySignature;
-    const displayLabel = formatLeadSheetChordLabel(chordEvent.chordName, keySignature);
+    const explicitDisplayChordName = chordEvent.displayChordName?.trim();
+    const displayLabel = explicitDisplayChordName
+      ? formatLeadSheetChordLabel(explicitDisplayChordName, null)
+      : formatLeadSheetChordLabel(chordEvent.chordName, keySignature);
 
     if (!displayLabel) {
       continue;

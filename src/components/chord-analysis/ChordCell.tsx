@@ -187,7 +187,17 @@ export const ChordCell = React.memo<ChordCellProps>(({
   }, [isEditing, handleEditSave, editedChord, displayChord, isClickable, handleClick]);
 
   const getGridLabelFontSize = useCallback((labelLength: number) => {
-    if (compact) return undefined;
+    if (compact) {
+      const minFontSize = showRomanNumerals ? 11 : 12;
+      const maxFontSize = showRomanNumerals ? 13 : 14;
+      const scale = showRomanNumerals ? 0.32 : 0.38;
+      const penalty = labelLength > 8 ? 2 : labelLength > 4 ? 1 : 0;
+
+      return `${Math.max(
+        minFontSize,
+        Math.min(maxFontSize, Math.round(cellSize * scale) - penalty)
+      )}px`;
+    }
 
     const minFontSize = showRomanNumerals ? 14 : 15;
     const maxFontSize = showRomanNumerals ? 17 : 19;
@@ -200,7 +210,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
     )}px`;
   }, [compact, showRomanNumerals, cellSize]);
 
-  const canOverflowLabel = !compact && showChordLabel && !isEmpty && labelOverflowCells > 0;
+  const canOverflowLabel = showChordLabel && !isEmpty && labelOverflowCells > 0;
   const labelOverflowWidth = canOverflowLabel
     ? `calc(${labelOverflowCells + 1} * 100% + ${labelOverflowGapPx}px)`
     : '100%';

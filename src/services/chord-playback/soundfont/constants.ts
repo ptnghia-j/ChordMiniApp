@@ -21,7 +21,7 @@ export const RENDER_CONFIG_BY_INSTRUMENT: Record<InstrumentName, InstrumentRende
   piano: {
     soundfontInstrument: 'acoustic_grand_piano',
     performanceVelocity: 88,
-    outputGainCompensation: 1.55,
+    outputGainCompensation: 1.45,
   },
   guitar: {
     soundfontInstrument: 'acoustic_guitar_steel',

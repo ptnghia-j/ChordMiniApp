@@ -137,6 +137,14 @@ export function generatePianoNotes(
 
   const useRepeatingPattern = isLongChord && durationInBeats >= patternBeats;
   const patternSeed = hashPatternSeed(`${chordName}:${chordStartTime.toFixed(3)}:${timeSignature}:${duration.toFixed(3)}`);
+  const normalizedChordToken = chordName
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .toLowerCase();
+  const preserveAlteredFifthTone = /(?:m7b5|ø|hdim|half-?dim|dim|aug|\+|[#b]5)/.test(normalizedChordToken);
+  const preserveUpperColorTones = preserveAlteredFifthTone
+    || chordTones.length >= 4
+    || /(?:add|sus|[0-9])/.test(normalizedChordToken);
 
   const clampDuration = (startOffset: number, requestedDuration: number) => {
     const remaining = duration - startOffset;
@@ -173,7 +181,9 @@ export function generatePianoNotes(
       startOffset,
       duration: noteDuration,
       velocityMultiplier: (bassEntry ? BASS_VELOCITY_BOOST : 1.0) * volumeReduction,
-      isBass: !!bassEntry,
+      // Always mark the bass foundation as left-hand so staff assignment
+      // remains stable even for root-position chords.
+      isBass: true,
     });
   };
 
@@ -256,8 +266,8 @@ export function generatePianoNotes(
       duration,
       mix(PIANO_SHORT_BLOCK_CHORD_VOLUME_REDUCTION, shortChordVolume, 0.72),
       {
-        skipFifth: quietness > 0.84 && fullness < 0.32,
-        dropUpperExtensions: quietness > 0.58 && fullness < 0.46,
+        skipFifth: !preserveAlteredFifthTone && quietness > 0.84 && fullness < 0.32,
+        dropUpperExtensions: !preserveUpperColorTones && quietness > 0.58 && fullness < 0.46,
         fifthVelocityScale: mix(0.46, 1.0, easeInOutSineCurve(fullness + (1 - quietness) * 0.35)),
         upperVelocityScale: mix(0.58, 1.06, easeInOutSineCurve(fullness * 0.75 + motion * 0.25)),
         addBassOctaveBelow: shouldAddBassOctave,
@@ -272,8 +282,8 @@ export function generatePianoNotes(
       duration,
       mix(0.9, 1.0, easeInOutSineCurve(fullness * 0.5 + (1 - quietness) * 0.15)),
       {
-        skipFifth: quietness > 0.84 && fullness < 0.32,
-        dropUpperExtensions: quietness > 0.58 && fullness < 0.46,
+        skipFifth: !preserveAlteredFifthTone && quietness > 0.84 && fullness < 0.32,
+        dropUpperExtensions: !preserveUpperColorTones && quietness > 0.58 && fullness < 0.46,
         fifthVelocityScale: mix(0.52, 0.94, fullness * 0.5),
         upperVelocityScale: mix(0.62, 1.0, fullness * 0.45 + motion * 0.1),
         addBassOctaveBelow: shouldAddBassOctave && !isNearSongEnding,
@@ -405,7 +415,7 @@ export function generatePianoNotes(
     bassMidi,
     0,
     (bassEntry ? BASS_VELOCITY_BOOST : 1.0) * mix(0.9, 1.02, easeInOutSineCurve(1 - quietness * 0.45 + fullness * 0.18)),
-    !!bassEntry,
+    true,
   );
   if (shouldAddBassOctave) {
     pushArpeggiatedNote(
@@ -417,14 +427,14 @@ export function generatePianoNotes(
     );
   }
 
-  if (fullAttackBlend > 0.14) {
+  if (fullAttackBlend > 0.14 || shouldUseQuietHalfNotePattern || preserveUpperColorTones) {
     pushUpperChordAttack(
       0,
       openingUpperAttackDuration,
       mix(0.3, 0.98, easeInOutSineCurve(fullAttackBlend)),
       {
-        skipFifth: quietness > 0.86 && fullAttackBlend < 0.48,
-        dropUpperExtensions: sparseBlend > 0.7 && fullAttackBlend < 0.62,
+        skipFifth: !preserveAlteredFifthTone && quietness > 0.86 && fullAttackBlend < 0.48,
+        dropUpperExtensions: !preserveUpperColorTones && sparseBlend > 0.7 && fullAttackBlend < 0.62,
         fifthVelocityScale: mix(0.52, 1.0, fullAttackBlend),
         upperVelocityScale: mix(0.64, 1.08, fullAttackBlend),
       },
@@ -501,7 +511,9 @@ export function generatePianoNotes(
     );
   }
 
-  return separateRepeatedUpperPianoNotes(notes, stepDuration, {
+  const scheduledNotes = separateRepeatedUpperPianoNotes(notes, stepDuration, {
     trimToAnyNextUpperOnset: useFilledSubdivisionPattern || shouldUseQuietHalfNotePattern,
   });
+
+  return scheduledNotes;
 }

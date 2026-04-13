@@ -164,7 +164,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     isPitchShiftActive,
     pitchShiftSemitones,
     resolvedChordGridData,
-    mergedPlayableChordEvents: timelineModel.mergedPlayableChordEvents,
+    mergedPlayableChordEvents: timelineModel.mergedNotationChordEvents,
+    stripChordEvents: timelineModel.stripChordEvents,
     notationBeatOffset: timelineModel.notationBeatOffset,
     beatToChordSequenceMap: timelineModel.beatToChordSequenceMap,
     shiftedOriginalChords: timelineModel.shiftedOriginalChords,
@@ -277,8 +278,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         chordEvents={timelineModel.stripChordEvents}
         currentTime={currentTime}
         isPlaying={isPlaying}
-        height={48}
-        pixelsPerSecond={100}
+        height={56}
+        pixelsPerSecond={118}
         timeSignature={timelineModel.timeSignature}
         accidentalPreference={timelineModel.accidentalPreference}
         beatRomanNumerals={timelineModel.beatRomanNumerals}

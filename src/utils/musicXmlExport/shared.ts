@@ -207,6 +207,27 @@ function formatMusicXmlChordTokenDisplay(token: string): string {
   return token.replace(/#/g, '♯').replace(/b/g, '♭');
 }
 
+function normalizeHarmonyKindText(text: string): string {
+  return text
+    .replace(/\(b\)\s*(?=\d)/gi, '♭')
+    .replace(/\(#\)\s*(?=\d)/gi, '♯')
+    .replace(/b(?=\d)/g, '♭')
+    .replace(/#(?=\d)/g, '♯')
+    .trim();
+}
+
+function normalizeChordLabelAccidentals(text: string): string {
+  return text
+    .replace(/##/g, '𝄪')
+    .replace(/bb/g, '𝄫')
+    .replace(/([A-G])#/g, '$1♯')
+    .replace(/([A-G])b/g, '$1♭')
+    .replace(/\(b\)\s*(?=\d)/gi, '♭')
+    .replace(/\(#\)\s*(?=\d)/gi, '♯')
+    .replace(/b(?=\d)/g, '♭')
+    .replace(/#(?=\d)/g, '♯');
+}
+
 function resolveMusicXmlPitchComponent(
   token: string,
   accidentalPreference: 'sharp' | 'flat' | null | undefined,
@@ -323,18 +344,50 @@ export function escapeXml(value: string): string {
 }
 
 export function renderMusicXmlChordWords(text: string, defaultY: number): string {
+  const normalizedText = normalizeChordLabelAccidentals(text);
+
   return (
     `<direction-type><words`
     + ` default-y="${defaultY}"`
     + ` font-size="${MUSIC_XML_CHORD_LABEL_FONT_SIZE}"`
     + ` font-weight="${MUSIC_XML_CHORD_LABEL_FONT_WEIGHT}"`
     + ` font-family="${MUSIC_XML_CHORD_LABEL_FONT_FAMILY}"`
-    + `>${escapeXml(text)}</words></direction-type>`
+    + `>${escapeXml(normalizedText)}</words></direction-type>`
+  );
+}
+
+function renderMusicXmlChordWordsDirection(params: {
+  text: string;
+  defaultY: number;
+  startDivision: number;
+  staff: number;
+  relativeX?: number;
+}): string {
+  const {
+    text,
+    defaultY,
+    startDivision,
+    staff,
+    relativeX,
+  } = params;
+  const offsetXml = startDivision > 0 ? `<offset sound="no">${startDivision}</offset>` : '';
+  const relativeXAttribute = typeof relativeX === 'number' && Number.isFinite(relativeX) && relativeX !== 0
+    ? ` relative-x="${Math.round(relativeX)}"`
+    : '';
+
+  return (
+    `<direction placement="above"${relativeXAttribute}>`
+    + `${renderMusicXmlChordWords(text, defaultY)}`
+    + `${offsetXml}`
+    + `<staff>${staff}</staff>`
+    + `</direction>`
   );
 }
 
 export function renderMusicXmlHarmony(params: {
   chordName: string;
+  displayLabel?: string;
+  preserveExactSpelling?: boolean;
   keySignature?: string | null;
   defaultY: number;
   startDivision?: number;
@@ -343,62 +396,124 @@ export function renderMusicXmlHarmony(params: {
 }): string {
   const {
     chordName,
+    displayLabel,
+    preserveExactSpelling = false,
     keySignature,
     defaultY,
     startDivision = 0,
     staff = 1,
     relativeX,
   } = params;
+  const trimmedDisplayLabel = displayLabel?.trim();
+  const resolvedDisplayLabel = trimmedDisplayLabel && trimmedDisplayLabel.length > 0
+    ? trimmedDisplayLabel
+    : formatLeadSheetChordLabel(chordName, preserveExactSpelling ? null : keySignature);
+  const normalizedDisplayChordName = resolvedDisplayLabel
+    ?.replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .trim();
   const normalizedChordName = chordName
     ?.replace(/♯/g, '#')
     .replace(/♭/g, 'b')
     .trim();
 
-  if (!normalizedChordName || NO_CHORD_TOKENS.has(normalizedChordName.toUpperCase())) {
+  if (!normalizedDisplayChordName || NO_CHORD_TOKENS.has(normalizedDisplayChordName.toUpperCase())) {
     return '';
   }
 
-  const accidentalPreference = getKeyAccidentalPreference(keySignature) ?? undefined;
-  const [baseChord, bassSpecifier] = normalizedChordName.split('/');
+  const accidentalPreference = preserveExactSpelling
+    ? undefined
+    : getKeyAccidentalPreference(keySignature) ?? undefined;
+  const [baseChord, bassSpecifier] = normalizedDisplayChordName.split('/');
   const match = baseChord?.match(/^([A-Ga-g])([#b]?)(.*)$/);
   if (!match) {
-    return renderMusicXmlChordWords(formatLeadSheetChordLabel(chordName, keySignature), defaultY);
+    return renderMusicXmlChordWordsDirection({
+      text: resolvedDisplayLabel,
+      defaultY,
+      startDivision,
+      staff,
+      relativeX,
+    });
   }
 
   const [, rootLetter, rootAccidental, rawChordType] = match;
-  const rootToken = applyRootAccidentalPreference(
-    `${rootLetter.toUpperCase()}${rootAccidental ?? ''}`,
-    accidentalPreference,
-  );
+  const rootToken = preserveExactSpelling
+    ? `${rootLetter.toUpperCase()}${rootAccidental ?? ''}`
+    : applyRootAccidentalPreference(
+      `${rootLetter.toUpperCase()}${rootAccidental ?? ''}`,
+      accidentalPreference,
+    );
   const rootComponent = resolveMusicXmlPitchComponent(rootToken, accidentalPreference);
   if (!rootComponent) {
-    return renderMusicXmlChordWords(formatLeadSheetChordLabel(chordName, keySignature), defaultY);
+    return renderMusicXmlChordWordsDirection({
+      text: resolvedDisplayLabel,
+      defaultY,
+      startDivision,
+      staff,
+      relativeX,
+    });
   }
 
   const bassComponent = resolveMusicXmlBassComponent(rootToken, bassSpecifier, accidentalPreference);
-  const displayLabel = formatLeadSheetChordLabel(chordName, keySignature);
   const bassDisplaySuffix = bassComponent ? `/${bassComponent.display}` : '';
   const rootDisplay = rootComponent.display;
-  const canDeriveKindText = displayLabel.startsWith(rootDisplay)
-    && (!bassDisplaySuffix || displayLabel.endsWith(bassDisplaySuffix));
+  const canDeriveKindText = resolvedDisplayLabel.startsWith(rootDisplay)
+    && (!bassDisplaySuffix || resolvedDisplayLabel.endsWith(bassDisplaySuffix));
   if (!canDeriveKindText) {
-    return renderMusicXmlChordWords(displayLabel, defaultY);
+    return renderMusicXmlChordWordsDirection({
+      text: resolvedDisplayLabel,
+      defaultY,
+      startDivision,
+      staff,
+      relativeX,
+    });
   }
 
-  let kindText = displayLabel.slice(rootDisplay.length);
+  let kindText = resolvedDisplayLabel.slice(rootDisplay.length);
   if (bassDisplaySuffix) {
     kindText = kindText.slice(0, -bassDisplaySuffix.length);
   }
-  kindText = kindText.trim();
+  kindText = normalizeHarmonyKindText(kindText);
 
-  const cleanedType = (rawChordType ?? '')
+  const semanticBaseChord = normalizedChordName?.split('/')[0] ?? baseChord;
+  const semanticMatch = semanticBaseChord.match(/^([A-Ga-g])([#b]?)(.*)$/);
+  const displayCleanedType = (rawChordType ?? '')
     .replace(/^[^A-Za-z0-9#b°ø+]+/, '')
     .replace(/\s+/g, '');
-  const normalizedChordType = CHORD_TYPE_ALIASES[cleanedType]
+  const displayNormalizedChordType = CHORD_TYPE_ALIASES[displayCleanedType]
+    ?? CHORD_TYPE_ALIASES[displayCleanedType.toLowerCase()];
+  let cleanedType = (semanticMatch?.[3] ?? rawChordType ?? '')
+    .replace(/^[^A-Za-z0-9#b°ø+]+/, '')
+    .replace(/\s+/g, '');
+  let normalizedChordType = CHORD_TYPE_ALIASES[cleanedType]
     ?? CHORD_TYPE_ALIASES[cleanedType.toLowerCase()]
     ?? 'major';
+
+  const displaySuggestsComplexQuality = displayCleanedType.length > 0 && (
+    (displayNormalizedChordType !== undefined && displayNormalizedChordType !== 'major')
+    || (
+      displayNormalizedChordType === undefined
+      && /(?:[0-9]|m|maj|min|dim|aug|sus|add|ø|°|Δ|\+|#|b)/i.test(displayCleanedType)
+    )
+  );
+
+  if (
+    trimmedDisplayLabel
+    && displaySuggestsComplexQuality
+    && normalizedChordType === 'major'
+  ) {
+    cleanedType = displayCleanedType;
+    normalizedChordType = displayNormalizedChordType
+      ?? CHORD_TYPE_ALIASES[displayCleanedType.toLowerCase()]
+      ?? 'major';
+  }
+
+  const isHalfDiminished = normalizedChordType === 'hdim7';
   const kindValue = mapChordAliasToMusicXmlKind(normalizedChordType);
-  const kindTextAttribute = kindText ? ` text="${escapeXml(kindText)}"` : '';
+  const resolvedKindText = isHalfDiminished
+    ? 'm7♭5'
+    : kindText;
+  const kindTextAttribute = resolvedKindText ? ` text="${escapeXml(resolvedKindText)}"` : '';
   const rootStepTextAttribute = rootComponent.display !== rootComponent.step
     ? ` text="${escapeXml(rootComponent.display)}"`
     : '';
@@ -450,7 +565,7 @@ export function formatLeadSheetChordLabel(chordName: string, keySignature?: stri
 
   const accidentalPreference = getKeyAccidentalPreference(keySignature) ?? undefined;
   const formatted = formatChordWithMusicalSymbols(chordName, false, accidentalPreference);
-  return stripHtmlTags(formatted);
+  return normalizeChordLabelAccidentals(stripHtmlTags(formatted));
 }
 
 export function normalizeKeySignature(value?: string | null): string {

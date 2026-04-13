@@ -21,6 +21,7 @@ interface UseSheetMusicModelParams {
   pitchShiftSemitones: number;
   resolvedChordGridData: ChordGridData | null | undefined;
   mergedPlayableChordEvents: ChordEvent[];
+  stripChordEvents: ChordEvent[];
   notationBeatOffset: number;
   beatToChordSequenceMap: Record<number, number>;
   shiftedOriginalChords: string[];
@@ -40,6 +41,7 @@ export function useSheetMusicModel({
   pitchShiftSemitones,
   resolvedChordGridData,
   mergedPlayableChordEvents,
+  stripChordEvents,
   notationBeatOffset,
   beatToChordSequenceMap,
   shiftedOriginalChords,
@@ -181,6 +183,36 @@ export function useSheetMusicModel({
     return notationBeatOffset > 0 ? beatTimes.slice(notationBeatOffset) : beatTimes;
   }, [notationBeatOffset, resolvedChordGridData?.beats, sheetSageResult?.beatTimes]);
 
+  const stripChordNameByBeatIndex = useMemo(() => {
+    const byBeatIndex = new Map<number, string>();
+
+    stripChordEvents.forEach((event) => {
+      const eventBeatIndex = typeof event.beatIndex === 'number' && Number.isFinite(event.beatIndex)
+        ? Math.max(0, Math.round(event.beatIndex))
+        : null;
+      if (eventBeatIndex === null) {
+        return;
+      }
+
+      const displayChordName = typeof event.chordName === 'string'
+        ? event.chordName.trim()
+        : '';
+      if (!displayChordName) {
+        return;
+      }
+
+      const beatSpan = Math.max(1, Math.round(event.beatCount ?? 1));
+      for (let beatOffset = 0; beatOffset < beatSpan; beatOffset += 1) {
+        const beatIndex = eventBeatIndex + beatOffset;
+        if (!byBeatIndex.has(beatIndex)) {
+          byBeatIndex.set(beatIndex, displayChordName);
+        }
+      }
+    });
+
+    return byBeatIndex;
+  }, [stripChordEvents]);
+
   const sheetMusicChordEvents = useMemo(() => {
     const rawBeatTimes = resolvedChordGridData?.beats;
 
@@ -202,13 +234,20 @@ export function useSheetMusicModel({
       const normalizedBeatIndex = anchoredBeatIndex !== null
         ? Math.max(0, anchoredBeatIndex - notationBeatOffset)
         : event.beatIndex;
+      const displayChordName = [
+        anchoredBeatIndex,
+        sourceBeatIndex,
+      ]
+        .map((beatIndex) => (beatIndex !== null ? stripChordNameByBeatIndex.get(beatIndex) : undefined))
+        .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
       return {
         ...event,
+        displayChordName,
         beatIndex: normalizedBeatIndex,
       };
     });
-  }, [mergedPlayableChordEvents, notationBeatOffset, resolvedChordGridData?.beats]);
+  }, [mergedPlayableChordEvents, notationBeatOffset, resolvedChordGridData?.beats, stripChordNameByBeatIndex]);
 
   const sheetPickupResolution = useMemo(() => {
     const normalizePickupCount = (value: number): number => {
@@ -231,7 +270,7 @@ export function useSheetMusicModel({
       : 0;
     const rawStructuralPickupCount = notationBeatOffset > 0
       ? notationBeatOffset + rawPaddingCount
-      : 0;
+      : rawPaddingCount;
     const normalizedStructuralPickup = rawStructuralPickupCount > 0
       ? normalizePickupCount(rawStructuralPickupCount)
       : null;
@@ -286,16 +325,29 @@ export function useSheetMusicModel({
     const normalizedFirstNonSilentVisibleGridPickup = firstNonSilentVisibleGridIndex !== null
       ? normalizePickupCount(firstNonSilentVisibleGridIndex)
       : null;
-    if (isWithinFirstMeasure(firstNonSilentVisibleGridIndex) && normalizedFirstNonSilentVisibleGridPickup !== null) {
-      resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
-    } else if (
-      firstNonSilentVisibleGridIndex !== null
+    const shouldForceZeroPickupForLongLeadingSilence = (
+      timeSignature > 0
+      && firstNonSilentVisibleGridIndex !== null
       && firstNonSilentVisibleGridIndex >= timeSignature
       && notationBeatOffset === 0
       && leadingSilentCells === 0
+      && (
+        normalizedFirstNonSilentVisibleGridPickup === 0
+        || firstNonSilentVisibleGridIndex >= timeSignature * 3
+      )
+    );
+
+    if (
+      firstNonSilentVisibleGridIndex !== null
+      && firstNonSilentVisibleGridIndex > 0
+      && normalizedFirstNonSilentVisibleGridPickup !== null
     ) {
-      // Once the visible grid already contains one or more full silent measures,
-      // folding the remainder into a pickup rest misaligns the score.
+      resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
+    }
+
+    if (shouldForceZeroPickupForLongLeadingSilence) {
+      // For boundary-aligned starts or very long lead-ins, keeping full-measure rests
+      // is easier to read than introducing an explicit pickup bar.
       resolvedPickupBeatCount = 0;
     }
 

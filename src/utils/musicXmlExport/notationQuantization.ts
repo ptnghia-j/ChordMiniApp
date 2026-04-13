@@ -600,6 +600,51 @@ function quantizeOffsets(
   return events.filter((event) => event.endDivision > event.startDivision);
 }
 
+function snapNearGridOnsets(
+  events: QuantizedNotationNoteEvent[],
+  divisionsPerQuarter: number,
+): QuantizedNotationNoteEvent[] {
+  const halfBeatDivision = Math.max(1, Math.round(divisionsPerQuarter / 2));
+  const snapTolerance = Math.max(1, Math.round(halfBeatDivision * 0.08));
+  const startDivisionMap = new Map<number, number>();
+
+  events.forEach((event) => {
+    if (event.tuplet) {
+      return;
+    }
+
+    if (startDivisionMap.has(event.startDivision)) {
+      return;
+    }
+
+    const snappedStart = Math.round(event.startDivision / halfBeatDivision) * halfBeatDivision;
+    if (Math.abs(event.startDivision - snappedStart) <= snapTolerance) {
+      startDivisionMap.set(event.startDivision, Math.max(0, snappedStart));
+    }
+  });
+
+  if (startDivisionMap.size === 0) {
+    return events;
+  }
+
+  events.forEach((event) => {
+    if (event.tuplet) {
+      return;
+    }
+
+    const snappedStart = startDivisionMap.get(event.startDivision);
+    if (snappedStart === undefined || snappedStart === event.startDivision) {
+      return;
+    }
+
+    const delta = snappedStart - event.startDivision;
+    event.startDivision = snappedStart;
+    event.endDivision = Math.max(event.startDivision + 1, event.endDivision + delta);
+  });
+
+  return events;
+}
+
 export function quantizeAbsoluteNoteEvents(
   noteEvents: Array<QuantizedNotationNoteEvent | Omit<QuantizedNotationNoteEvent, 'partId' | 'rawStartDivision' | 'rawEndDivision' | 'rawChordStartDivision' | 'rawChordEndDivision' | 'startDivision' | 'endDivision' | 'staff' | 'voice' | 'tuplet'>>,
   partId: QuantizedNotationNoteEvent['partId'],
@@ -664,5 +709,7 @@ export function quantizeAbsoluteNoteEvents(
     });
   });
 
-  return quantizeOffsets(seededEvents, options.timeSignature, divisionsPerQuarter);
+  const offsetQuantizedEvents = quantizeOffsets(seededEvents, options.timeSignature, divisionsPerQuarter);
+  const snappedOnsetEvents = snapNearGridOnsets(offsetQuantizedEvents, divisionsPerQuarter);
+  return quantizeOffsets(snappedOnsetEvents, options.timeSignature, divisionsPerQuarter);
 }

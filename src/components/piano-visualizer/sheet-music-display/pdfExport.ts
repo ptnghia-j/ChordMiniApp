@@ -73,6 +73,7 @@ export async function rasterizeScoreWithDedicatedCanvasBackend(params: {
 
     configureOsmdChordSymbolRules(exportOsmd);
     await exportOsmd.load(musicXml);
+    configureOsmdChordSymbolRules(exportOsmd);
     exportOsmd.Zoom = 0.82;
     exportOsmd.render();
 

@@ -5,6 +5,9 @@ import {
 import { getGenericBeatGroupSize } from './shared';
 import type { QuantizedNotationNoteEvent } from './types';
 
+const VOICE_SEQUENTIAL_TOLERANCE_DIVISIONS = 1;
+const VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS = 1;
+
 export function assignPianoHands(
   events: QuantizedNotationNoteEvent[],
   timeSignature: number,
@@ -204,11 +207,11 @@ export function assignPianoHands(
   orderedGroups.forEach((group, groupIndex) => {
     const splitIndex = selectedSplits[groupIndex];
     const activeLeftHintAnchor = hasActiveLeftHintAnchor[groupIndex] ?? false;
-    const leftPreview = group.slice(0, splitIndex);
-    const rightPreview = group.slice(splitIndex);
     const anchoredLeftHandEvents = group.filter((event) => isExplicitLeftHandAnchor(event));
     const floatingEvents = group.filter((event) => !isExplicitLeftHandAnchor(event));
-    const desiredLeftHandCount = Math.max(anchoredLeftHandEvents.length, splitIndex);
+    const desiredLeftHandCount = activeLeftHintAnchor
+      ? anchoredLeftHandEvents.length
+      : Math.max(anchoredLeftHandEvents.length, splitIndex);
     const leftHandEvents = new Set<QuantizedNotationNoteEvent>(anchoredLeftHandEvents);
 
     for (const event of floatingEvents) {
@@ -217,6 +220,9 @@ export function assignPianoHands(
       }
       leftHandEvents.add(event);
     }
+
+    const leftPreview = group.filter((event) => leftHandEvents.has(event));
+    const rightPreview = group.filter((event) => !leftHandEvents.has(event));
 
     if (
       typeof window !== 'undefined'
@@ -230,6 +236,14 @@ export function assignPianoHands(
         pitches: group.map((event) => event.pitch),
         left: leftPreview.map((event) => ({ pitch: event.pitch, handHint: event.handHint ?? null })),
         right: rightPreview.map((event) => ({ pitch: event.pitch, handHint: event.handHint ?? null })),
+        groupSummary: group.map((event) => ({
+          pitch: event.pitch,
+          startDivision: event.startDivision,
+          endDivision: event.endDivision,
+          handHint: event.handHint ?? null,
+          staffHint: event.staffHint ?? null,
+          chordName: event.chordName ?? null,
+        })),
       });
     }
 
@@ -312,8 +326,8 @@ export function assignVoicesForStaff(
 
   [...groups.entries()].sort((left, right) => left[0] - right[0]).forEach(([startDivision, group]) => {
     const { voice1, voice2 } = splitVoiceBundle(group);
-    const canUseVoice1 = startDivision >= voiceEnds[0];
-    const canUseVoice2 = startDivision >= voiceEnds[1];
+    const canUseVoice1 = startDivision >= (voiceEnds[0] - VOICE_SEQUENTIAL_TOLERANCE_DIVISIONS);
+    const canUseVoice2 = startDivision >= (voiceEnds[1] - VOICE_SEQUENTIAL_TOLERANCE_DIVISIONS);
 
     if (voice2.length > 0) {
       voice1.forEach((event) => {
@@ -340,6 +354,53 @@ export function assignVoicesForStaff(
       voices[targetVoice - 1].add(event);
     });
   });
+
+  const voice1Events = staffEvents
+    .filter((event) => event.voice === 1)
+    .sort((left, right) => left.startDivision - right.startDivision || left.endDivision - right.endDivision);
+  const voice2Events = staffEvents
+    .filter((event) => event.voice === 2)
+    .sort((left, right) => left.startDivision - right.startDivision || left.endDivision - right.endDivision);
+
+  const overlapsWithVoice1 = (event2: QuantizedNotationNoteEvent): boolean => {
+    for (const event1 of voice1Events) {
+      if (event1.endDivision <= event2.startDivision + VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS) {
+        continue;
+      }
+      if (event1.startDivision >= event2.endDivision - VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS) {
+        break;
+      }
+
+      if (
+        event1.startDivision < event2.endDivision - VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS
+        && event2.startDivision < event1.endDivision - VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const isCoextensiveWithVoice1 = (event2: QuantizedNotationNoteEvent): boolean => (
+    voice1Events.some((event1) => (
+      Math.abs(event1.startDivision - event2.startDivision) <= VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS
+      && Math.abs(event1.endDivision - event2.endDivision) <= VOICE_COLLAPSE_OVERLAP_TOLERANCE_DIVISIONS
+    ))
+  );
+
+  const collapsibleVoice2Events = voice2Events.filter((event) => (
+    !overlapsWithVoice1(event)
+    || isCoextensiveWithVoice1(event)
+  ));
+
+  if (collapsibleVoice2Events.length > 0) {
+    collapsibleVoice2Events.forEach((event) => {
+      event.voice = 1;
+      voices[0].add(event);
+      voices[1].delete(event);
+    });
+  }
 
   const averagePitch = (voiceIndex: number): number => {
     const noteList = [...voices[voiceIndex]];

@@ -23,6 +23,66 @@ interface UseSheetMusicRendererParams {
   isComputing: boolean;
 }
 
+const CHORD_SYMBOL_SCOPE_SELECTOR = 'g.vf-stavetext, g[class*="stavetext"], g[class*="chord"], g[id*="chord"]';
+
+function normalizeChordAccidentalText(value: string): string {
+  return value
+    .replace(/min\s*7\s*\(\s*b\s*5\s*\)/gi, 'min7♭5')
+    .replace(/min\s*7\s*b\s*5/gi, 'min7♭5')
+    .replace(/m\s*7\s*\(\s*b\s*5\s*\)/gi, 'm7♭5')
+    .replace(/m\s*7\s*b\s*5/gi, 'm7♭5')
+    .replace(/\(b\)\s*(?=\d)/gi, '♭')
+    .replace(/\(#\)\s*(?=\d)/gi, '♯')
+    .replace(/(^|[^A-Za-z])b(?=\d)/g, '$1♭')
+    .replace(/(^|[^A-Za-z])#(?=\d)/g, '$1♯');
+}
+
+function normalizeRenderedChordTextAccidentals(container: HTMLElement): void {
+  const chordScopes = Array.from(container.querySelectorAll<SVGGElement>(CHORD_SYMBOL_SCOPE_SELECTOR));
+  const scopes: Element[] = chordScopes.length > 0 ? chordScopes : [container];
+
+  scopes.forEach((scope) => {
+    const textLikeNodes = Array.from(scope.querySelectorAll<SVGTextElement | SVGTSpanElement>('text, tspan'))
+      .filter((node) => node.querySelector('tspan') === null);
+
+    textLikeNodes.forEach((node) => {
+      const original = node.textContent;
+      if (!original) {
+        return;
+      }
+
+      const normalized = normalizeChordAccidentalText(original);
+      if (normalized !== original) {
+        node.textContent = normalized;
+      }
+    });
+
+    for (let index = 0; index < textLikeNodes.length; index += 1) {
+      const currentNode = textLikeNodes[index];
+      const nextNode = textLikeNodes[index + 1];
+      if (!currentNode || !nextNode) {
+        continue;
+      }
+
+      const currentToken = (currentNode.textContent ?? '').trim().toLowerCase();
+      const nextToken = (nextNode.textContent ?? '').trim();
+      if (!/^\d+$/.test(nextToken)) {
+        continue;
+      }
+
+      if (currentToken === 'b') {
+        currentNode.textContent = '♭';
+      } else if (currentToken === 'bb') {
+        currentNode.textContent = '𝄫';
+      } else if (currentToken === '#') {
+        currentNode.textContent = '♯';
+      } else if (currentToken === '##' || currentToken === 'x') {
+        currentNode.textContent = '𝄪';
+      }
+    }
+  });
+}
+
 export function useSheetMusicRenderer({
   musicXml,
   currentTime,
@@ -342,8 +402,12 @@ export function useSheetMusicRenderer({
           return;
         }
 
+        // Re-apply after load in case OSMD reinitializes engraving rules.
+        configureOsmdChordSymbolRules(osmd);
+
         osmd.Zoom = 0.82;
         osmd.render();
+        normalizeRenderedChordTextAccidentals(container);
         osmd.enableOrDisableCursors?.(true);
         osmd.cursor?.reset();
         osmd.cursor?.show();
@@ -422,6 +486,10 @@ export function useSheetMusicRenderer({
     function handleResize() {
       try {
         osmdRef.current?.render();
+        const container = containerRef.current;
+        if (container) {
+          normalizeRenderedChordTextAccidentals(container);
+        }
         setMeasureBoxes(buildMeasureBoxMap());
       } catch {
         // Ignore re-render issues on resize; the next prop change will refresh.

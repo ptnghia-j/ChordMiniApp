@@ -88,6 +88,11 @@ export function usePianoVisualizerTimelineModel({
     [playbackChordEvents],
   );
 
+  const mergedNotationChordEvents = useMemo(
+    () => mergeConsecutiveChordEvents(stripChordEvents.filter(hasPlayableNotes)),
+    [stripChordEvents],
+  );
+
   const accidentalPreference = useMemo(() => {
     return getDisplayAccidentalPreference({
       chords: displayedChords,
@@ -221,6 +226,7 @@ export function usePianoVisualizerTimelineModel({
     playbackChordEvents,
     stripChordEvents,
     mergedPlayableChordEvents,
+    mergedNotationChordEvents,
     accidentalPreference,
     timeSignature,
     detectedBpm,

@@ -44,22 +44,42 @@ export const CHORD_STRUCTURES: Record<string, number[]> = {
 
 export const CHORD_TYPE_ALIASES: Record<string, string> = {
   '': 'major', 'maj': 'major', 'major': 'major',
+  'Δ': 'major',
   'm': 'minor', 'min': 'minor', 'minor': 'minor',
   '7': 'dom7', 'dom7': 'dom7',
   'M7': 'maj7', 'maj7': 'maj7', 'Maj7': 'maj7',
+  'Δ7': 'maj7',
   'm7': 'min7', 'min7': 'min7',
   'sus2': 'sus2',
   'sus4': 'sus4',
   '°': 'dim', 'dim': 'dim',
   '+': 'aug', 'aug': 'aug',
   '°7': 'dim7', 'dim7': 'dim7',
-  'ø7': 'hdim7', 'hdim7': 'hdim7', 'm7b5': 'hdim7',
+  'ø': 'hdim7',
+  'ø7': 'hdim7',
+  'hdim': 'hdim7',
+  'hdim7': 'hdim7',
+  'm7b5': 'hdim7',
+  'm7(b5)': 'hdim7',
+  'min7b5': 'hdim7',
+  'min7(b5)': 'hdim7',
+  'half-dim': 'hdim7',
+  'half-dim7': 'hdim7',
+  'half-diminished': 'hdim7',
+  'half-diminished7': 'hdim7',
+  'halfdim': 'hdim7',
+  'halfdim7': 'hdim7',
+  'halfdiminished': 'hdim7',
+  'halfdiminished7': 'hdim7',
   'add9': 'add9',
   '9': 'dom9', 'dom9': 'dom9',
   'M9': 'maj9', 'maj9': 'maj9', 'Maj9': 'maj9',
+  'Δ9': 'maj9',
   'm9': 'min9', 'min9': 'min9',
   '11': 'dom11', 'dom11': 'dom11',
+  'Δ11': 'maj11',
   '13': 'dom13', 'dom13': 'dom13',
+  'Δ13': 'maj13',
   '6': 'six',
   'm6': 'min6', 'min6': 'min6',
   'mmaj7': 'minmaj7', 'mMaj7': 'minmaj7', 'minmaj7': 'minmaj7',
@@ -71,6 +91,35 @@ export const CHORD_TYPE_ALIASES: Record<string, string> = {
 };
 
 export const NO_CHORD_VALUES = new Set(['N.C.', 'N', 'N/C', 'NC', '']);
+
+function normalizeAccidentals(value: string): string {
+  return value
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/𝄪/g, '##')
+    .replace(/𝄫/g, 'bb');
+}
+
+function normalizeChordTypeToken(value: string): string {
+  const normalized = normalizeAccidentals(value)
+    .replace(/^[^A-Za-z0-9#b°ø+]+/, '')
+    .replace(/\s+/g, '');
+
+  return normalized
+    .replace(/\(([#b]?\d+)\)/gi, '$1')
+    .replace(/\((add\d+)\)/gi, '$1');
+}
+
+function resolveNormalizedChordType(chordType: string): string {
+  const cleanedType = normalizeChordTypeToken(chordType);
+  const lowerCleanedType = cleanedType.toLowerCase();
+  const compactLowerCleanedType = lowerCleanedType.replace(/[-_]/g, '');
+
+  return CHORD_TYPE_ALIASES[cleanedType]
+    ?? CHORD_TYPE_ALIASES[lowerCleanedType]
+    ?? CHORD_TYPE_ALIASES[compactLowerCleanedType]
+    ?? 'major';
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +139,8 @@ export interface MidiNote {
 export interface ChordEvent {
   /** Chord name as it appears in the grid */
   chordName: string;
+  /** Optional display label for notation (preserves user-facing spelling) */
+  displayChordName?: string;
   /** Parsed MIDI notes for this chord */
   notes: MidiNote[];
   /** Start time in seconds */
@@ -105,7 +156,12 @@ export interface ChordEvent {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function isNoChordChordName(chordName: string | undefined | null): boolean {
-  return !chordName || NO_CHORD_VALUES.has(chordName);
+  if (!chordName) {
+    return true;
+  }
+
+  const normalizedChord = normalizeAccidentals(chordName).trim();
+  return NO_CHORD_VALUES.has(normalizedChord);
 }
 
 /**
@@ -173,13 +229,15 @@ export function parseChordToMidiNotes(chordName: string): MidiNote[] {
     return [];
   }
 
+  const normalizedChordName = normalizeAccidentals(chordName.trim());
+
   // Handle slash chords
-  const parts = chordName.split('/');
+  const parts = normalizedChordName.split('/');
   const baseChord = parts[0];
   const bassSpecifier = parts[1];
 
   // Extract root note and chord type
-  const match = baseChord.match(/^([A-G][#b]?)(.*)$/);
+  const match = baseChord.match(/^([A-G](?:##|bb|#|b)?)(.*)$/);
   if (!match) return [];
 
   const [, root, chordType] = match;
@@ -187,15 +245,14 @@ export function parseChordToMidiNotes(chordName: string): MidiNote[] {
   if (rootIndex === undefined) return [];
 
   // Normalize chord type
-  const cleanedType = chordType.replace(/^[^A-Za-z0-9#b°ø+]+/, '').replace(/\s+/g, '');
-  const normalizedChordType = CHORD_TYPE_ALIASES[cleanedType] ?? CHORD_TYPE_ALIASES[cleanedType.toLowerCase()] ?? 'major';
+  const normalizedChordType = resolveNormalizedChordType(chordType);
   const intervals = CHORD_STRUCTURES[normalizedChordType];
   if (!intervals) return [];
 
   // Resolve bass specifier
   let bassNoteName: string | undefined;
   if (bassSpecifier) {
-    const isNoteName = /^[A-G][#b]?$/.test(bassSpecifier);
+    const isNoteName = /^[A-G](?:##|bb|#|b)?$/.test(bassSpecifier);
     const isInterval = /^[#b]?\d+$/.test(bassSpecifier);
     if (isNoteName) {
       bassNoteName = bassSpecifier;

@@ -379,7 +379,7 @@ function renderMeasureStreams(
           {
             voice: voice.voice,
             staff: staff.staff,
-            hideRests: voice.voice > 1,
+            hideRests: false,
             stemOverrideMap,
             forceStemDirection: multiVoiceStaffs.has(staff.staff)
               ? (voice.voice === 1 ? 'up' : 'down')
@@ -425,6 +425,8 @@ function buildPartMeasureXmlGeneric(params: {
         measure.chordDirections.map((direction) => (
           `${renderMusicXmlHarmony({
             chordName: direction.chordName,
+            displayLabel: direction.label,
+            preserveExactSpelling: true,
             keySignature: measure.keyContext.keySignature,
             defaultY: 50,
             startDivision: direction.startDivision,

@@ -6,6 +6,7 @@ import type { HandHint, NotationPartId, RenderNoteType } from './constants';
 
 export interface LeadSheetChordEvent {
   chordName: string;
+  displayChordName?: string;
   startTime: number;
   endTime: number;
   beatIndex?: number;

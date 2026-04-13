@@ -80,6 +80,7 @@ function NewHomePageContentInner() {
     handleVideoSelect,
     setSearchError
   } = useSharedSearchState();
+  const shouldHideHeroMarquee = isSearching || searchResults.length > 0;
 
   // Search box visibility detection for sticky search bar
   const { elementRef: searchBoxRef, shouldShowStickySearch } = useSearchBoxVisibility();
@@ -188,15 +189,17 @@ function NewHomePageContentInner() {
               containerRef={searchBoxRef}
             />
 
-            {/* Enhanced Scrolling Guitar Chord Animation - Below search box */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.05, duration: 0.6 }}
-              className="flex justify-center"
-            >
-              <HeroScrollingChordAnimation className="w-full max-w-6xl" />
-            </motion.div>
+            {/* Hide the marquee while the search panel is active to prevent hero layout shift. */}
+            {!shouldHideHeroMarquee && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.05, duration: 0.6 }}
+                className="flex justify-center"
+              >
+                <HeroScrollingChordAnimation className="w-full max-w-6xl" />
+              </motion.div>
+            )}
           </div>
 
           {/* Right Side: Demo Images (40%) */}
