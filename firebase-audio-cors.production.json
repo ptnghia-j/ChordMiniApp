@@ -1,0 +1,19 @@
+[
+  {
+    "origin": [
+      "https://chordmini.me",
+      "https://www.chordmini.me"
+    ],
+    "method": [
+      "GET",
+      "HEAD"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Accept-Ranges",
+      "Content-Range"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

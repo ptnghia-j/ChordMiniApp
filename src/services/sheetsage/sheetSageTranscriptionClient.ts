@@ -1,5 +1,6 @@
 import type { SheetSageResult } from '@/types/sheetSage';
 import { offloadUploadService } from '@/services/storage/offloadUploadService';
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 
 function buildSourceFilename(sourceName: string | undefined | null): string {
   const baseName = (sourceName || 'sheetsage-input').replace(/[^\w.-]+/g, '_');
@@ -23,7 +24,7 @@ export async function resolveSheetSageAudioFile(
 
   const fetchUrl = audioUrl.startsWith('blob:')
     ? audioUrl
-    : `/api/proxy-audio?url=${encodeURIComponent(audioUrl)}${videoId ? `&videoId=${encodeURIComponent(videoId)}` : ''}`;
+    : buildAudioProxyUrl(audioUrl, { videoId });
 
   const response = await fetch(fetchUrl);
   if (!response.ok) {

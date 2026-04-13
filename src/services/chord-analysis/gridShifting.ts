@@ -1,17 +1,50 @@
 import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
 import { isSilentChord } from './gridShared';
 
-function getOptimalShiftResults(
-  chords: string[],
-  timeSignature: number,
-  paddingCount: number = 0
-): Array<{
+type ShiftEvaluationResult = {
   shift: number;
   chordChanges: number;
   downbeatPositions: number[];
   chordLabels: string[];
   firstMusicalChordOnDownbeat: boolean;
-}> {
+};
+
+function selectBestShiftResult(results: ShiftEvaluationResult[]): ShiftEvaluationResult {
+  return results.reduce((best, current) => {
+    if (current.chordChanges > best.chordChanges) {
+      return current;
+    }
+    if (current.chordChanges === best.chordChanges && current.shift < best.shift) {
+      return current;
+    }
+    return best;
+  });
+}
+
+function shouldKeepShortIntroAlignment(params: {
+  bestOverall: ShiftEvaluationResult;
+  bestIntroAligned: ShiftEvaluationResult;
+}): boolean {
+  const { bestOverall, bestIntroAligned } = params;
+
+  if (bestOverall.chordChanges <= 0) {
+    return true;
+  }
+
+  const chordChangePenalty = bestOverall.chordChanges - bestIntroAligned.chordChanges;
+  const retainedScoreRatio = bestIntroAligned.chordChanges / bestOverall.chordChanges;
+
+  return (
+    chordChangePenalty <= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.maxChordChangePenalty ||
+    retainedScoreRatio >= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.minCompetitiveRatio
+  );
+}
+
+function getOptimalShiftResults(
+  chords: string[],
+  timeSignature: number,
+  paddingCount: number = 0
+): ShiftEvaluationResult[] {
   if (chords.length === 0) {
     return [{
       shift: 0,
@@ -33,13 +66,7 @@ function getOptimalShiftResults(
     leadingSilentRunLength < chords.length &&
     ((paddingCount + leadingSilentRunLength) % timeSignature) === 0;
 
-  const shiftResults: Array<{
-    shift: number;
-    chordChanges: number;
-    downbeatPositions: number[];
-    chordLabels: string[];
-    firstMusicalChordOnDownbeat: boolean;
-  }> = [];
+  const shiftResults: ShiftEvaluationResult[] = [];
 
   for (let shift = 0; shift < timeSignature; shift += 1) {
     let chordChangeCount = 0;
@@ -92,11 +119,35 @@ function getOptimalShiftResults(
     });
   }
 
-  const candidateResults = shouldPreserveShortIntroAlignment
-    ? shiftResults.filter((result) => result.firstMusicalChordOnDownbeat)
-    : shiftResults;
+  if (!shouldPreserveShortIntroAlignment) {
+    return shiftResults;
+  }
 
-  return candidateResults.length > 0 ? candidateResults : shiftResults;
+  const introAlignedResults = shiftResults.filter((result) => result.firstMusicalChordOnDownbeat);
+  if (introAlignedResults.length === 0) {
+    return shiftResults;
+  }
+
+  const bestOverall = selectBestShiftResult(shiftResults);
+  const bestIntroAligned = selectBestShiftResult(introAlignedResults);
+  const keepShortIntroAlignment = shouldKeepShortIntroAlignment({ bestOverall, bestIntroAligned });
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(
+      `[GridAlignment] Short intro shift evaluation ${JSON.stringify({
+        paddingCount,
+        leadingSilentRunLength,
+        timeSignature,
+        bestOverallShift: bestOverall.shift,
+        bestOverallChordChanges: bestOverall.chordChanges,
+        bestIntroAlignedShift: bestIntroAligned.shift,
+        bestIntroAlignedChordChanges: bestIntroAligned.chordChanges,
+        keepShortIntroAlignment,
+      })}`
+    );
+  }
+
+  return keepShortIntroAlignment ? introAlignedResults : shiftResults;
 }
 
 export function calculateOptimalShift(
@@ -105,16 +156,7 @@ export function calculateOptimalShift(
   paddingCount: number = 0
 ): number {
   const evaluatedResults = getOptimalShiftResults(chords, timeSignature, paddingCount);
-
-  const bestResult = evaluatedResults.reduce((best, current) => {
-    if (current.chordChanges > best.chordChanges) {
-      return current;
-    }
-    if (current.chordChanges === best.chordChanges && current.shift < best.shift) {
-      return current;
-    }
-    return best;
-  });
+  const bestResult = selectBestShiftResult(evaluatedResults);
 
   return bestResult.shift;
 }

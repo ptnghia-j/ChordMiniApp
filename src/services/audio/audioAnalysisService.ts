@@ -7,6 +7,7 @@
 
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import { getAnalysisDurationLimitReason } from '@/utils/analysisDurationLimit';
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 import { offloadUploadService } from '@/services/storage/offloadUploadService';
@@ -112,14 +113,7 @@ async function fetchFileFromUrl(url: string, videoId?: string): Promise<File> {
   }
 
   // Fallback to URL-based fetching
-  const encoded = url.includes('quicktube.app/dl/')
-    ? encodeURIComponent(url).replace(/%5B/g, '[').replace(/%5D/g, ']')
-    : encodeURIComponent(url);
-
-  // Add videoId parameter if available for cache lookup
-  const proxyUrl = videoId
-    ? `/api/proxy-audio?url=${encoded}&videoId=${videoId}`
-    : `/api/proxy-audio?url=${encoded}`;
+  const proxyUrl = buildAudioProxyUrl(url, { videoId });
 
   const response = await fetch(proxyUrl);
   if (!response.ok) {

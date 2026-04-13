@@ -1,6 +1,7 @@
 import { audioContextManager } from './audioContextManager';
 import type { AudioDynamicsAnalysisResult } from './audioDynamicsTypes';
 import { analyzeMonoPcm } from './audioDynamicsCore';
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 import { analyzeMonoPcmInWorker } from '@/workers/audioDynamicsClient';
 
 const TARGET_ANALYSIS_SAMPLE_RATE = 11025;
@@ -9,7 +10,7 @@ function resolveAnalysisFetchUrl(audioUrl: string): string {
   if (audioUrl.startsWith('blob:')) {
     return audioUrl;
   }
-  return `/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+  return buildAudioProxyUrl(audioUrl);
 }
 
 function downmixAndDownsampleBuffer(

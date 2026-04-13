@@ -5,6 +5,8 @@
  * including handling CORS restrictions for external URLs like QuickTube.
  */
 
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
+
 /**
  * Get audio duration from a URL using a proxy to avoid CORS issues
  * @param audioUrl The URL of the audio file
@@ -109,18 +111,7 @@ export async function getAudioDurationFromFile(audioFile: File): Promise<number>
  */
 async function estimateDurationFromFileSize(audioUrl: string, videoId?: string): Promise<number> {
   try {
-    // Use HEAD request to get file size without downloading the entire file
-    // CRITICAL FIX: For QuickTube URLs, preserve square brackets during URL encoding
-    let encodedUrl;
-    if (audioUrl.includes('quicktube.app/dl/')) {
-      // For QuickTube URLs, encode everything except square brackets
-      encodedUrl = encodeURIComponent(audioUrl).replace(/%5B/g, '[').replace(/%5D/g, ']');
-    } else {
-      // For other URLs, use standard encoding
-      encodedUrl = encodeURIComponent(audioUrl);
-    }
-    // Include videoId so proxy-audio can use cached file when applicable
-    const headUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
+    const headUrl = buildAudioProxyUrl(audioUrl, { videoId });
     const response = await fetch(headUrl, { method: 'HEAD' });
 
     if (!response.ok) {

@@ -123,6 +123,10 @@ ls -la python_backend/models/ChordMini/
    GEMINI_API_KEY=your_gemini_api_key
    GENIUS_API_KEY=your_genius_api_key
    ```
+   After bucket CORS is configured for your production domain, you can also enable direct Firebase/GCS audio redirects with:
+   ```bash
+   AUDIO_PROXY_FIREBASE_REDIRECT_ENABLED=true
+   ```
    `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` is optional and only needed if you want Firebase Analytics.
 
 > [!IMPORTANT]

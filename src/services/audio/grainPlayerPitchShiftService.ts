@@ -15,6 +15,7 @@
  */
 
 import { DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME } from '@/config/audioDefaults';
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 
 import { audioContextManager } from './audioContextManager';
 
@@ -119,7 +120,7 @@ export class GrainPlayerPitchShiftService {
 
       // Use proxy to avoid CORS issues (but not for blob URLs which are local)
       const isBlobUrl = audioUrl.startsWith('blob:');
-      const finalUrl = isBlobUrl ? audioUrl : `/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+      const finalUrl = isBlobUrl ? audioUrl : buildAudioProxyUrl(audioUrl);
 
       // Ensure Tone.js context is started
       if (Tone.getContext().state !== 'running') {

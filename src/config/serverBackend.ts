@@ -3,6 +3,10 @@ const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
 const DEFAULT_LOCAL_SONGFORMER_API_URL = 'http://localhost:8080';
 const DEFAULT_LOCAL_SHEETSAGE_API_URL = 'http://localhost:8082';
 
+function isProductionLikeEnvironment(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 function isLocalUrl(candidateUrl: string | undefined): boolean {
   if (!candidateUrl) {
     return false;
@@ -21,7 +25,7 @@ export function getPythonApiUrl(): string {
 }
 
 export function getSongformerApiUrl(): string {
-  if (process.env.VERCEL_ENV === 'production') {
+  if (isProductionLikeEnvironment()) {
     return process.env.SONGFORMER_API_URL || getPythonApiUrl();
   }
 
@@ -32,7 +36,7 @@ export function getSongformerApiUrl(): string {
 }
 
 export function getSheetSageApiUrl(): string {
-  if (process.env.VERCEL_ENV === 'production') {
+  if (isProductionLikeEnvironment()) {
     return process.env.SHEETSAGE_API_URL || getPythonApiUrl();
   }
 

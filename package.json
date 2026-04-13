@@ -21,6 +21,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "verify:firebase-cors": "node scripts/verify-firebase-audio-cors.mjs",
     "export-cookies": "node scripts/export-cookies.js",
     "backfill:transcriptions:homepage": "node scripts/backfill-transcription-homepage-metadata.js",
     "backfill:transcriptions:usage": "node scripts/backfill-transcription-usage-count.js",

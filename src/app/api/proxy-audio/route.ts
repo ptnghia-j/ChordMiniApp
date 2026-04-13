@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  AUDIO_PROXY_FORCE_QUERY_PARAM,
+  isFirebaseProxyRedirectEnabled,
+  resolveAudioProxyGetMode,
+} from '@/utils/audioProxyUrl';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { retryAudioDownload } from '@/utils/retryUtils';
 import { isFirebaseStorageUrl, parseAndValidateAudioSourceUrl } from '@/utils/urlValidationUtils';
 import { safeFetchAudioSource } from '@/utils/safeServerAudioFetch';
 
@@ -101,7 +107,6 @@ async function fetchAudioWithRetry(
 
   throw new Error(`All ${retries} fetch attempts failed`);
 }
-import { retryAudioDownload } from '@/utils/retryUtils';
 
 /**
  * Audio Proxy API Route
@@ -118,6 +123,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const audioUrl = searchParams.get('url');
     const videoId = searchParams.get('videoId'); // Optional videoId for cache lookup
+    const forceProxyParam = searchParams.get(AUDIO_PROXY_FORCE_QUERY_PARAM);
 
     if (!audioUrl) {
       return NextResponse.json(
@@ -165,8 +171,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate URL to prevent SSRF attacks
+    let validatedAudioUrl: URL;
     try {
-      parseAndValidateAudioSourceUrl(audioUrl);
+      validatedAudioUrl = parseAndValidateAudioSourceUrl(audioUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL format';
       return NextResponse.json(
@@ -175,11 +182,37 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const redirectEnabled = isFirebaseProxyRedirectEnabled();
+    const proxyMode = resolveAudioProxyGetMode({
+      isFirebaseUrl,
+      forceProxyParam,
+      redirectEnabled,
+    });
+
+    if (proxyMode === 'redirect') {
+      const redirectTarget = validatedAudioUrl.toString();
+      console.log(`↪️ Redirecting Firebase audio request directly to storage: ${redirectTarget}`);
+
+      const redirectResponse = NextResponse.redirect(redirectTarget, 307);
+      redirectResponse.headers.set('Cache-Control', 'private, no-store');
+      redirectResponse.headers.set('Access-Control-Allow-Origin', '*');
+      redirectResponse.headers.set('X-Proxy-Mode', 'redirect');
+      return redirectResponse;
+    }
+
+    if (isFirebaseUrl) {
+      if (!redirectEnabled) {
+        console.log('↩️ Firebase redirect disabled via AUDIO_PROXY_FIREBASE_REDIRECT_ENABLED, using legacy proxy');
+      } else if (forceProxyParam !== null) {
+        console.log('↩️ Firebase redirect bypassed via forceProxy query param, using legacy proxy');
+      }
+    }
+
     console.log(`🔄 Proxying audio request: ${audioUrl}`);
 
     // CRITICAL FIX: QuickTube URLs require unencoded square brackets
     // Do NOT encode square brackets for QuickTube URLs as they expect [videoId] format
-    let fetchUrl = audioUrl;
+    let fetchUrl = validatedAudioUrl.toString();
     try {
       const isQuickTubeUrl = audioUrl.includes('quicktube.app/dl/');
 
@@ -357,7 +390,7 @@ export async function GET(request: NextRequest) {
         'Content-Length': audioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Methods': 'GET, HEAD',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
@@ -455,7 +488,7 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     },
   });

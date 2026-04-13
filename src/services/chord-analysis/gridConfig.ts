@@ -2,6 +2,10 @@ export const GRID_ALIGNMENT_CONFIG = {
   enableLocalCompaction: true,
   localCompactionBeatModel: 'madmom',
   silentChordValues: ['', 'N', 'N/C', 'N.C.', 'NC'],
+  shortIntroAlignment: {
+    maxChordChangePenalty: 2,
+    minCompetitiveRatio: 0.65,
+  },
   padding: {
     meaningfulPreBeatSeconds: 0.05,
     minGapRatioForSinglePadding: 0.2,

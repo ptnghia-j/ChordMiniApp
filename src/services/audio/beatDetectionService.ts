@@ -1,6 +1,7 @@
 // Beat detection service to communicate with the Next.js API proxy
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
+import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 import { offloadUploadService } from '../storage/offloadUploadService';
 
 // Interface for Python backend beat detection response
@@ -682,8 +683,7 @@ export async function detectBeatsFromFirebaseUrl(
 
 
     // Step 1: Download the Firebase Storage file using our proxy service
-    const encodedUrl = encodeURIComponent(firebaseUrl);
-    const proxyUrl = videoId ? `/api/proxy-audio?url=${encodedUrl}&videoId=${videoId}` : `/api/proxy-audio?url=${encodedUrl}`;
+    const proxyUrl = buildAudioProxyUrl(firebaseUrl, { videoId });
 
     console.log(`[36m[detectBeatsFromFirebaseUrl][0m videoId=${videoId || 'none'} -> proxyUrl=${proxyUrl.substring(0, 140)}...`);
 
