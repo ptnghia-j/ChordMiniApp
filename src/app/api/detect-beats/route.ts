@@ -179,12 +179,7 @@ export async function POST(request: NextRequest) {
             {
               error: 'Port conflict with Apple AirTunes',
               details: 'Port 5000 is being used by Apple AirPlay/AirTunes service instead of our Python backend',
-              solution: 'Change Python backend to use a different port (e.g., 5001, 8000) and update PYTHON_API_URL',
-              debugInfo: {
-                serverHeader,
-                targetUrl: `${backendUrl}/api/detect-beats`,
-                suggestion: 'Run Python backend on port 5001: python app.py --port 5001'
-              }
+              solution: 'Change the backend service to use a different port (e.g., 5001 or 8000).',
             },
             { status: 503 }
           );
@@ -196,11 +191,6 @@ export async function POST(request: NextRequest) {
             error: 'Beat detection failed',
             details: `Backend returned 403 Forbidden. This may indicate the Python backend is not running or accessible.`,
             suggestion: 'Ensure Python backend is running on the correct port and accessible',
-            debugInfo: {
-              backendUrl: `${backendUrl}/api/detect-beats`,
-              errorResponse: errorText,
-              responseHeaders: Object.fromEntries(response.headers.entries())
-            }
           },
           { status: 403 }
         );

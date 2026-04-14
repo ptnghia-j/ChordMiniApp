@@ -85,6 +85,7 @@ import UtilityBar from '@/components/analysis/UtilityBar';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import AudioPlaybackDock from '@/components/analysis/AudioPlaybackDock';
 import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
+import { estimateKeySignatureFromChords } from '@/utils/chordUtils';
 import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEFAULT_FLUTE_VOLUME } from '@/config/audioDefaults';
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 import { usePlaybackStore } from '@/stores/playbackStore';
@@ -833,6 +834,9 @@ export default function LocalAudioAnalyzePage() {
         if (index === 0) return true; // Always include first chord
         return chord.chord !== rawChordData[index - 1].chord; // Include only if different from previous
       });
+      const heuristicKeySignature = estimateKeySignatureFromChords(chordData.map((entry) => entry.chord)).keySignature;
+
+      setKeySignature(heuristicKeySignature);
 
 
 
@@ -841,7 +845,11 @@ export default function LocalAudioAnalyzePage() {
         // Use cache for sequence corrections (no bypass); request Roman numerals
         detectKey(chordData, true, false, true)
           .then(result => {
-            setKeySignature(result.primaryKey);
+            setKeySignature(
+              result.primaryKey && result.primaryKey !== 'Unknown'
+                ? result.primaryKey
+                : heuristicKeySignature
+            );
             // Update Roman numeral data in UI store for display
             try {
               useUIStore.getState().updateRomanNumeralData(result.romanNumerals ?? null);
@@ -849,7 +857,6 @@ export default function LocalAudioAnalyzePage() {
           })
           .catch(error => {
             console.error('Failed to detect key:', error);
-            setKeySignature(null);
             try { useUIStore.getState().updateRomanNumeralData(null); } catch {}
           })
           .finally(() => {

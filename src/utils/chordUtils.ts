@@ -166,42 +166,406 @@ export const detectKeyFromChords = (chords: string[]): {
   confidence: number;
   mode: 'major' | 'minor';
 } => {
+  type KeyHeuristicChordQuality =
+    | 'major'
+    | 'minor'
+    | 'dominant'
+    | 'diminished'
+    | 'augmented'
+    | 'suspended'
+    | 'other';
+
+  type KeyHeuristicChord = {
+    root: string;
+    rootPitchClass: number;
+    quality: KeyHeuristicChordQuality;
+    pitchClasses: number[];
+  };
+
+  type KeyCandidate = {
+    root: string;
+    rootPitchClass: number;
+    mode: 'major' | 'minor';
+    primaryScalePitchClasses: Set<number>;
+    notePitchClasses: Set<number>;
+  };
+
+  const NOTE_TO_PITCH_CLASS: Record<string, number> = {
+    C: 0,
+    'B#': 0,
+    'C#': 1,
+    Db: 1,
+    D: 2,
+    'D#': 3,
+    Eb: 3,
+    E: 4,
+    Fb: 4,
+    F: 5,
+    'E#': 5,
+    'F#': 6,
+    Gb: 6,
+    G: 7,
+    'G#': 8,
+    Ab: 8,
+    A: 9,
+    'A#': 10,
+    Bb: 10,
+    B: 11,
+    Cb: 11,
+  };
+
+  const KEY_CANDIDATE_ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+  const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11] as const;
+  const NATURAL_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10] as const;
+  const HARMONIC_MINOR_EXTRA_INTERVALS = [11] as const;
+
+  const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+  const getPitchClass = (note: string): number | null => {
+    const normalized = note
+      .replace(/♯/g, '#')
+      .replace(/♭/g, 'b')
+      .trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const formatted = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    return NOTE_TO_PITCH_CLASS[formatted] ?? null;
+  };
+
+  const buildPitchClasses = (rootPitchClass: number, intervals: number[]): number[] => (
+    Array.from(new Set(intervals.map((interval) => (rootPitchClass + interval) % 12)))
+  );
+
+  const buildScalePitchClasses = (rootPitchClass: number, intervals: readonly number[]): Set<number> => (
+    new Set(intervals.map((interval) => (rootPitchClass + interval) % 12))
+  );
+
+  const buildCandidate = (root: string, mode: 'major' | 'minor'): KeyCandidate => {
+    const rootPitchClass = getPitchClass(root) ?? 0;
+    const primaryScalePitchClasses = buildScalePitchClasses(
+      rootPitchClass,
+      mode === 'major' ? MAJOR_SCALE_INTERVALS : NATURAL_MINOR_INTERVALS
+    );
+    const notePitchClasses = new Set(primaryScalePitchClasses);
+
+    if (mode === 'minor') {
+      for (const interval of HARMONIC_MINOR_EXTRA_INTERVALS) {
+        notePitchClasses.add((rootPitchClass + interval) % 12);
+      }
+    }
+
+    return {
+      root,
+      rootPitchClass,
+      mode,
+      primaryScalePitchClasses,
+      notePitchClasses,
+    };
+  };
+
+  const CANDIDATE_KEYS: KeyCandidate[] = KEY_CANDIDATE_ROOTS.flatMap((root) => ([
+    buildCandidate(root, 'major'),
+    buildCandidate(root, 'minor'),
+  ]));
+
+  const parseChordForKeyHeuristic = (chord: string): KeyHeuristicChord | null => {
+    if (!chord || chord === 'N.C.' || chord === 'N/C' || chord === 'N') {
+      return null;
+    }
+
+    const normalized = chord
+      .replace(/♯/g, '#')
+      .replace(/♭/g, 'b')
+      .trim();
+    const match = normalized.match(/^([A-G][#b]?)(?:(?::)?([^/]+))?(?:\/([A-G][#b]?|[#b]?\d+))?$/);
+    if (!match) {
+      return null;
+    }
+
+    const [, root, rawDescriptor = ''] = match;
+    const rootPitchClass = getPitchClass(root);
+    if (rootPitchClass === null) {
+      return null;
+    }
+
+    const descriptor = rawDescriptor.trim().toLowerCase();
+    let quality: KeyHeuristicChordQuality = 'major';
+    let intervals = [0, 4, 7];
+
+    if (!descriptor) {
+      return {
+        root,
+        rootPitchClass,
+        quality,
+        pitchClasses: buildPitchClasses(rootPitchClass, intervals),
+      };
+    }
+
+    const isMinorDescriptor = descriptor.startsWith('min') || /^m(?!aj)/.test(descriptor);
+    const isMinorMajorSeventh = descriptor.startsWith('minmaj') || /^mmaj/.test(descriptor);
+    const isMajorSeventhDescriptor = descriptor.startsWith('maj7') || descriptor.startsWith('maj9') || descriptor.startsWith('maj13');
+    const isDominantDescriptor = (
+      descriptor.startsWith('dom')
+      || /^(7|9|11|13)/.test(descriptor)
+      || (
+        (descriptor.includes('7') || descriptor.includes('9') || descriptor.includes('11') || descriptor.includes('13'))
+        && !descriptor.startsWith('add')
+        && !descriptor.includes('maj')
+        && !isMinorDescriptor
+      )
+    );
+
+    if (descriptor.includes('hdim')) {
+      quality = 'diminished';
+      intervals = descriptor.includes('7') ? [0, 3, 6, 10] : [0, 3, 6];
+    } else if (descriptor.includes('dim') || descriptor.includes('°')) {
+      quality = 'diminished';
+      intervals = descriptor.includes('7') ? [0, 3, 6, 9] : [0, 3, 6];
+    } else if (descriptor.includes('aug') || descriptor.includes('+')) {
+      quality = 'augmented';
+      intervals = [0, 4, 8];
+    } else if (descriptor.includes('sus')) {
+      quality = 'suspended';
+      intervals = descriptor.includes('2') && !descriptor.includes('4') ? [0, 2, 7] : [0, 5, 7];
+      if (descriptor.includes('7') || descriptor.includes('9') || descriptor.includes('11') || descriptor.includes('13')) {
+        intervals = [...intervals, 10];
+      }
+    } else if (isMinorMajorSeventh) {
+      quality = 'minor';
+      intervals = [0, 3, 7, 11];
+    } else if (isMinorDescriptor) {
+      quality = 'minor';
+      intervals = descriptor.includes('7') || descriptor.includes('9') || descriptor.includes('11') || descriptor.includes('13')
+        ? [0, 3, 7, 10]
+        : [0, 3, 7];
+    } else if (isDominantDescriptor) {
+      quality = 'dominant';
+      intervals = [0, 4, 7, 10];
+    } else if (isMajorSeventhDescriptor) {
+      quality = 'major';
+      intervals = [0, 4, 7, 11];
+    } else if (descriptor.startsWith('add')) {
+      quality = 'major';
+      intervals = [0, 4, 7];
+    }
+
+    return {
+      root,
+      rootPitchClass,
+      quality,
+      pitchClasses: buildPitchClasses(rootPitchClass, intervals),
+    };
+  };
+
+  const getScaleDegree = (chordPitchClass: number, keyRootPitchClass: number): number => (
+    (chordPitchClass - keyRootPitchClass + 12) % 12
+  );
+
+  const getFunctionalChordWeight = (chord: KeyHeuristicChord, candidate: KeyCandidate): number => {
+    const degree = getScaleDegree(chord.rootPitchClass, candidate.rootPitchClass);
+
+    if (candidate.mode === 'major') {
+      switch (degree) {
+        case 0:
+          return chord.quality === 'major' ? 1.9 : 0.2;
+        case 2:
+          return chord.quality === 'minor' ? 1.4 : 0.1;
+        case 4:
+          return chord.quality === 'minor' ? 1.25 : 0.1;
+        case 5:
+          return chord.quality === 'major' || chord.quality === 'suspended' ? 1.45 : 0.1;
+        case 7:
+          if (chord.quality === 'dominant') return 1.8;
+          if (chord.quality === 'major' || chord.quality === 'suspended') return 1.45;
+          return 0.1;
+        case 9:
+          return chord.quality === 'minor' ? 1.35 : 0.1;
+        case 11:
+          return chord.quality === 'diminished' || chord.quality === 'other' ? 1.15 : 0.1;
+        default:
+          return candidate.primaryScalePitchClasses.has(chord.rootPitchClass) ? 0.25 : 0;
+      }
+    }
+
+    switch (degree) {
+      case 0:
+        return chord.quality === 'minor' ? 1.9 : 0.2;
+      case 2:
+        return chord.quality === 'diminished' || chord.quality === 'other' ? 1.05 : 0.1;
+      case 3:
+        return chord.quality === 'major' ? 1.45 : 0.1;
+      case 5:
+        return chord.quality === 'minor' ? 1.35 : 0.1;
+      case 7:
+        if (chord.quality === 'dominant') return 1.85;
+        if (chord.quality === 'major') return 1.55;
+        if (chord.quality === 'minor') return 0.9;
+        return 0.1;
+      case 8:
+        return chord.quality === 'major' ? 1.35 : 0.1;
+      case 10:
+        return chord.quality === 'major' || chord.quality === 'dominant' ? 1.1 : 0.1;
+      default:
+        return candidate.primaryScalePitchClasses.has(chord.rootPitchClass) ? 0.25 : 0;
+    }
+  };
+
+  const isTonicChord = (chord: KeyHeuristicChord, candidate: KeyCandidate): boolean => {
+    if (chord.rootPitchClass !== candidate.rootPitchClass) {
+      return false;
+    }
+
+    return candidate.mode === 'major'
+      ? chord.quality === 'major'
+      : chord.quality === 'minor';
+  };
+
+  const isDominantResolution = (
+    chord: KeyHeuristicChord,
+    nextChord: KeyHeuristicChord | null,
+    candidate: KeyCandidate
+  ): boolean => {
+    if (!nextChord) {
+      return false;
+    }
+
+    const targetPitchClass = (chord.rootPitchClass + 5) % 12;
+    return (
+      nextChord.rootPitchClass === targetPitchClass
+      && targetPitchClass === candidate.rootPitchClass
+      && (chord.quality === 'dominant' || chord.quality === 'major' || chord.quality === 'suspended')
+    );
+  };
+
+  const getSecondaryDominantWeight = (
+    chord: KeyHeuristicChord,
+    nextChord: KeyHeuristicChord | null,
+    candidate: KeyCandidate
+  ): number => {
+    if (!nextChord) {
+      return 0;
+    }
+
+    if (chord.quality !== 'dominant' && chord.quality !== 'major') {
+      return 0;
+    }
+
+    const targetPitchClass = (chord.rootPitchClass + 5) % 12;
+    const targetIsDiatonic = candidate.primaryScalePitchClasses.has(targetPitchClass);
+    const chordRootIsDiatonic = candidate.primaryScalePitchClasses.has(chord.rootPitchClass);
+
+    if (!targetIsDiatonic || chordRootIsDiatonic || nextChord.rootPitchClass !== targetPitchClass) {
+      return 0;
+    }
+
+    return chord.quality === 'dominant' ? 1.35 : 0.95;
+  };
+
   if (chords.length === 0) {
     return { key: 'C', confidence: 0, mode: 'major' };
   }
 
-  // Count chord roots
-  const rootCounts: Record<string, number> = {};
-  const qualityCounts: Record<string, number> = {};
+  const parsedChords = chords
+    .map((chord) => parseChordForKeyHeuristic(chord))
+    .filter((chord): chord is KeyHeuristicChord => chord !== null);
 
-  chords.forEach(chord => {
-    const parsed = parseChordNotation(chord);
-    if (parsed.isValid && parsed.root) {
-      rootCounts[parsed.root] = (rootCounts[parsed.root] || 0) + 1;
-      qualityCounts[parsed.quality] = (qualityCounts[parsed.quality] || 0) + 1;
-    }
-  });
+  if (parsedChords.length === 0) {
+    return { key: 'C', confidence: 0, mode: 'major' };
+  }
 
-  // Find most common root
-  const mostCommonRoot = Object.entries(rootCounts)
-    .sort(([,a], [,b]) => b - a)[0]?.[0] || 'C';
+  const scoredCandidates = CANDIDATE_KEYS.map((candidate) => {
+    let score = 0;
+    let matchedChordCount = 0;
 
-  // Determine mode based on chord qualities
-  const majorCount = qualityCounts['major'] || 0;
-  const minorCount = qualityCounts['minor'] || 0;
-  const mode = minorCount > majorCount ? 'minor' : 'major';
+    parsedChords.forEach((chord, index) => {
+      const nextChord = parsedChords[index + 1] ?? null;
+      const functionalWeight = getFunctionalChordWeight(chord, candidate);
+      const inKeyNoteCount = chord.pitchClasses.filter((pitchClass) => candidate.notePitchClasses.has(pitchClass)).length;
+      const noteFit = inKeyNoteCount / Math.max(chord.pitchClasses.length, 1);
+      const secondaryDominantWeight = getSecondaryDominantWeight(chord, nextChord, candidate);
+      const isRootInKey = candidate.primaryScalePitchClasses.has(chord.rootPitchClass);
+      const chordMatchesKey = functionalWeight >= 1 || noteFit >= 0.75 || secondaryDominantWeight > 0;
 
-  // Calculate confidence based on how dominant the key is
-  const totalChords = chords.length;
-  const keyChordCount = rootCounts[mostCommonRoot] || 0;
-  const confidence = keyChordCount / totalChords;
+      if (chordMatchesKey) {
+        matchedChordCount += 1;
+      }
+
+      score += functionalWeight;
+      score += noteFit * 1.35;
+
+      if (isRootInKey) {
+        score += 0.2;
+      } else if (secondaryDominantWeight === 0) {
+        score -= 0.85;
+      }
+
+      if (noteFit < 0.5 && secondaryDominantWeight === 0) {
+        score -= 0.45;
+      }
+
+      score += secondaryDominantWeight;
+
+      if (isTonicChord(chord, candidate)) {
+        if (index === 0) {
+          score += 0.85;
+        }
+        if (index === parsedChords.length - 1) {
+          score += 1.25;
+        }
+      }
+
+      if (isDominantResolution(chord, nextChord, candidate)) {
+        score += 0.75;
+      }
+    });
+
+    score += (matchedChordCount / parsedChords.length) * 1.5;
+
+    return {
+      ...candidate,
+      score,
+      matchedChordCount,
+    };
+  }).sort((left, right) => right.score - left.score || right.matchedChordCount - left.matchedChordCount);
+
+  const bestCandidate = scoredCandidates[0] ?? buildCandidate('C', 'major');
+  const runnerUpScore = scoredCandidates[1]?.score ?? 0;
+  const scoreMargin = bestCandidate.score - runnerUpScore;
+  const confidence = clamp(
+    0.35
+      + (bestCandidate.matchedChordCount / parsedChords.length) * 0.35
+      + clamp(scoreMargin / Math.max(parsedChords.length * 1.5, 1), 0, 0.3),
+    0,
+    1
+  );
 
   return {
-    key: mostCommonRoot,
+    key: bestCandidate.root,
     confidence,
-    mode
+    mode: bestCandidate.mode
   };
 };
+
+export function estimateKeySignatureFromChords(chords: string[]): {
+  keySignature: string;
+  confidence: number;
+  mode: 'major' | 'minor';
+} {
+  const { key, confidence, mode } = detectKeyFromChords(chords);
+  const accidentalPreference = computeAccidentalPreference(chords);
+  const preferredKeyRoot = accidentalPreference
+    ? getEnharmonicEquivalent(key, accidentalPreference === 'sharp')
+    : key;
+  const keySignature = canonicalizeKeySignature(`${preferredKeyRoot} ${mode}`) ?? `${preferredKeyRoot} ${mode}`;
+
+  return {
+    keySignature,
+    confidence,
+    mode,
+  };
+}
 
 /**
  * Chord progression analysis and change detection

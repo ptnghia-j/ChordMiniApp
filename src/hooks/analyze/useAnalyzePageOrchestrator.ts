@@ -6,6 +6,7 @@ import {
   extractAudioFromYouTube as extractAudioFromYouTubeService,
   handleAudioAnalysis as handleAudioAnalysisService,
 } from '@/services/audio/audioProcessingExtracted';
+import { estimateKeySignatureFromChords } from '@/utils/chordUtils';
 import {
   getTranscription,
   TranscriptionData,
@@ -850,6 +851,10 @@ export function useAnalyzePageOrchestrator({
           syncRomanNumeralData(cachedRomanNumerals);
         }
 
+        const heuristicKeySignature = !hasCachedKeySignature
+          ? estimateKeySignatureFromChords(chordData.map((entry) => entry.chord)).keySignature
+          : null;
+
         const canReuseCachedDetection =
           (!!cachedTranscription) &&
           !needsInitialDetectionAfterCache &&
@@ -857,6 +862,10 @@ export function useAnalyzePageOrchestrator({
 
         if (canReuseCachedDetection) {
           return;
+        }
+
+        if (needsInitialDetectionAfterCache && heuristicKeySignature) {
+          syncKeySignature(heuristicKeySignature);
         }
 
         const includeRomanNumeralsInDetection = showRomanNumerals && needsRomanNumeralsAfterCache;
@@ -868,7 +877,11 @@ export function useAnalyzePageOrchestrator({
         const { detectKey } = await import('@/services/audio/keyDetectionService');
         const result = await detectKey(romanNumeralChordData, true, false, includeRomanNumeralsInDetection);
 
-        syncKeySignature(result.primaryKey);
+        syncKeySignature(
+          result.primaryKey && result.primaryKey !== 'Unknown'
+            ? result.primaryKey
+            : heuristicKeySignature
+        );
 
         const nextResultSequenceCorrections = withRomanNumerals(result.sequenceCorrections ?? null, result.romanNumerals || null);
         const incomingChordCorrections = result.corrections || null;
@@ -892,7 +905,7 @@ export function useAnalyzePageOrchestrator({
 
         syncRomanNumeralData(result.romanNumerals || null);
 
-        if (result.primaryKey && result.primaryKey !== 'Unknown') {
+        if (result.primaryKey && result.primaryKey !== 'Unknown' && !result.fromHeuristicFallback) {
           const cachedTranscription = await loadTranscriptionSnapshot(beatDetector, chordDetector);
           if (cachedTranscription) {
             const updateSucceeded = await updateTranscriptionEnrichment(
@@ -926,7 +939,6 @@ export function useAnalyzePageOrchestrator({
         }
       } catch (error) {
         console.error('Failed to detect key:', error);
-        setKeySignature(null);
       } finally {
         setIsDetectingKey(false);
       }

@@ -161,6 +161,7 @@ export default function YouTubeVideoAnalyzePage() {
     routeParams.beatModel,
     routeParams.chordModel
   ));
+  const shouldSkipInitialCacheBootstrap = Boolean(initialAnalyzeHandoff?.audioProcessingState?.audioUrl);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -332,7 +333,7 @@ export default function YouTubeVideoAnalyzePage() {
     failProcessing,
     updateRomanNumeralData,
     analyzeAudioFromService,
-    skipInitialCacheBootstrap: Boolean(initialAnalyzeHandoff),
+    skipInitialCacheBootstrap: shouldSkipInitialCacheBootstrap,
   });
 
   useAnalysisUsageTracker({

@@ -41,7 +41,7 @@ export async function GET() {
       title: "ChordMini Audio Analysis API",
       version: "1.0.0",
       description: "API for audio analysis including beat detection, chord recognition, and lyrics fetching",
-      base_url: backendUrl,
+      base_url: "/api",
       endpoints: [
         {
           path: "/",

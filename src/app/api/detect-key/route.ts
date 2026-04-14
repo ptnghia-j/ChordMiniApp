@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import crypto from 'crypto';
 import { createGeminiClient, GEMINI_MODEL_NAME } from '@/config/gemini';
 import { sanitizeLegacyCorrections, sanitizeSequenceCorrections } from '@/utils/keyDetectionCorrections';
+import { estimateKeySignatureFromChords } from '@/utils/chordUtils';
 
 export const maxDuration = 240; // 4 minutes for key detection processing
 
@@ -69,6 +70,8 @@ interface KeyDetectionResult {
     }>;
   } | null;
   rawResponse?: string;
+  fromCache?: boolean;
+  fromHeuristicFallback?: boolean;
 }
 
 interface KeyDetectionCacheEntry {
@@ -108,6 +111,27 @@ function buildCorrectedChordSequence(
   }
 
   return chordNames.map((chord) => corrections[chord] || chord);
+}
+
+function buildHeuristicKeyDetectionResult(params: {
+  chordNames: string[];
+  includeEnharmonicCorrection: boolean;
+  rawResponse?: string;
+}): KeyDetectionResult {
+  const { chordNames, includeEnharmonicCorrection, rawResponse } = params;
+  const estimatedKey = estimateKeySignatureFromChords(chordNames);
+
+  return {
+    primaryKey: estimatedKey.keySignature,
+    modulation: null,
+    originalChords: includeEnharmonicCorrection ? chordNames : undefined,
+    correctedChords: includeEnharmonicCorrection ? chordNames : undefined,
+    corrections: includeEnharmonicCorrection ? {} : undefined,
+    sequenceCorrections: null,
+    romanNumerals: null,
+    rawResponse,
+    fromHeuristicFallback: true,
+  };
 }
 
 // Helper function to check cache for key detection
@@ -221,6 +245,12 @@ export async function POST(request: NextRequest) {
 
     // Generate cache key (include enharmonic and Roman numeral flags in cache key)
     const cacheKey = generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection, includeRomanNumerals);
+    const chordNames = chords.map((chord: ChordData) => {
+      if (typeof chord === 'string') {
+        return chord;
+      }
+      return chord.chord || String(chord);
+    });
 
     // Check cache first (unless bypassed for testing)
     console.log('🔍 [CACHE] Checking cache for key:', cacheKey.substring(0, 20) + '...');
@@ -228,13 +258,6 @@ export async function POST(request: NextRequest) {
     if (cachedResult && !bypassCache) {
       console.log('✅ [CACHE] Cache hit - returning cached result');
       // Extract chord names for fallback if enharmonic correction data is missing
-      const chordNames = chords.map((chord: ChordData) => {
-        if (typeof chord === 'string') {
-          return chord;
-        }
-        return chord.chord || String(chord);
-      });
-
       const sanitizedSequenceCorrections = cachedResult.sequenceCorrections
         ? sanitizeSequenceCorrections(chordNames, cachedResult.sequenceCorrections)
         : null;
@@ -257,7 +280,7 @@ export async function POST(request: NextRequest) {
         sequenceCorrections: sanitizedSequenceCorrections,
         // Include Roman numeral analysis from cache
         romanNumerals: cachedResult.romanNumerals || null,
-        fromCache: true
+        fromCache: true,
       });
     } else {
       console.log('❌ [CACHE] Cache miss - proceeding to Gemini API');
@@ -271,10 +294,10 @@ export async function POST(request: NextRequest) {
     });
     if (!geminiAI) {
       console.error('Gemini API key is missing');
-      return NextResponse.json(
-        { error: 'Key detection service is not configured properly. Please provide a Gemini API key.' },
-        { status: 500 }
-      );
+      return NextResponse.json(buildHeuristicKeyDetectionResult({
+        chordNames,
+        includeEnharmonicCorrection,
+      }));
     }
 
     // Format chord progression for AI analysis
@@ -284,14 +307,6 @@ export async function POST(request: NextRequest) {
         return `${timestamp}: ${chord.chord || chord}`;
       })
       .join(', ');
-
-    // Extract just the chord names for enharmonic correction
-    const chordNames = chords.map((chord: ChordData) => {
-      if (typeof chord === 'string') {
-        return chord;
-      }
-      return chord.chord || String(chord);
-    });
 
     let prompt: string;
 
@@ -449,113 +464,112 @@ Important: Do not include any explanations, analysis, or additional text. Just g
 
     // Generate content using the Gemini model
     console.log('🚀 [GEMINI] Sending key detection request to Gemini API');
-    const response = await geminiAI.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-      config: {
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.HIGH
+    try {
+      const response = await geminiAI.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.HIGH
+          }
         }
-      }
-    });
-    console.log('✅ [GEMINI] Received response from Gemini API');
+      });
+      console.log('✅ [GEMINI] Received response from Gemini API');
 
-    // Extract and clean the response text
-    const text = response.text?.trim() || '';
+      // Extract and clean the response text
+      const text = response.text?.trim() || '';
 
-    let result: KeyDetectionResult;
+      let result: KeyDetectionResult;
 
-    if (includeEnharmonicCorrection || includeRomanNumerals) {
-      // Parse JSON response for enhanced mode
-      try {
-        // Clean the response text to remove markdown code blocks if present
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-          cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        } else if (cleanedText.startsWith('```')) {
-          cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-        }
+      if (includeEnharmonicCorrection || includeRomanNumerals) {
+        // Parse JSON response for enhanced mode
+        try {
+          // Clean the response text to remove markdown code blocks if present
+          let cleanedText = text.trim();
+          if (cleanedText.startsWith('```json')) {
+            cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanedText.startsWith('```')) {
+            cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
 
-        const jsonResponse = JSON.parse(cleanedText);
-        // console.log('🔍 PARSED JSON RESPONSE:', {
-        //   hasSequenceCorrections: !!jsonResponse.sequenceCorrections,
-        //   hasCorrections: !!jsonResponse.corrections,
-        //   primaryKey: jsonResponse.primaryKey,
-        //   sequenceCorrectionsLength: jsonResponse.sequenceCorrections?.correctedSequence?.length || 0
-        // });
+          const jsonResponse = JSON.parse(cleanedText);
 
-        // Handle both new sequence-based format and legacy format
-        if (jsonResponse.sequenceCorrections) {
-          // NEW: Enhanced sequence-based corrections
-          const sequenceCorrections = sanitizeSequenceCorrections(chordNames, jsonResponse.sequenceCorrections);
-          const legacyCorrections = {
-            ...buildLegacyCorrections(sequenceCorrections),
-            ...sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {})
-          };
-          const correctedSequence = buildCorrectedChordSequence(chordNames, legacyCorrections, sequenceCorrections);
+          // Handle both new sequence-based format and legacy format
+          if (jsonResponse.sequenceCorrections) {
+            const sequenceCorrections = sanitizeSequenceCorrections(chordNames, jsonResponse.sequenceCorrections);
+            const legacyCorrections = {
+              ...buildLegacyCorrections(sequenceCorrections),
+              ...sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {})
+            };
+            const correctedSequence = buildCorrectedChordSequence(chordNames, legacyCorrections, sequenceCorrections);
+
+            result = {
+              primaryKey: jsonResponse.primaryKey || 'Unknown',
+              modulation: jsonResponse.modulation || null,
+              originalChords: chordNames,
+              correctedChords: correctedSequence,
+              corrections: legacyCorrections,
+              sequenceCorrections: sequenceCorrections,
+              romanNumerals: jsonResponse.romanNumerals || null,
+              rawResponse: text
+            };
+          } else {
+            const corrections = sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {});
+            const correctedChords = chordNames.map(chord => corrections[chord] || chord);
+
+            result = {
+              primaryKey: jsonResponse.primaryKey || 'Unknown',
+              modulation: jsonResponse.modulation || null,
+              originalChords: chordNames,
+              correctedChords: correctedChords,
+              corrections: corrections,
+              romanNumerals: jsonResponse.romanNumerals || null,
+              rawResponse: text
+            };
+          }
+        } catch (parseError) {
+          console.error('Failed to parse JSON response:', parseError);
+          const primaryKeyMatch = text.match(/Primary Key:\s*\*\*([^*]+)\*\*/);
+          const modulationMatch = text.match(/Possible Tonal Modulation:\s*\*\*([^*]+)\*\*/);
 
           result = {
-            primaryKey: jsonResponse.primaryKey || 'Unknown',
-            modulation: jsonResponse.modulation || null,
+            primaryKey: primaryKeyMatch ? primaryKeyMatch[1].trim() : 'Unknown',
+            modulation: modulationMatch ? modulationMatch[1].trim() === 'None' ? null : modulationMatch[1].trim() : null,
             originalChords: chordNames,
-            correctedChords: correctedSequence,
-            corrections: legacyCorrections,
-            sequenceCorrections: sequenceCorrections,
-            romanNumerals: jsonResponse.romanNumerals || null,
-            rawResponse: text
-          };
-        } else {
-          // LEGACY: Individual chord corrections (fallback)
-          const corrections = sanitizeLegacyCorrections(chordNames, jsonResponse.corrections || {});
-
-          // Apply corrections to create corrected chord array
-          const correctedChords = chordNames.map(chord => {
-            // Apply correction if available, otherwise keep original
-            return corrections[chord] || chord;
-          });
-
-          result = {
-            primaryKey: jsonResponse.primaryKey || 'Unknown',
-            modulation: jsonResponse.modulation || null,
-            originalChords: chordNames,
-            correctedChords: correctedChords,
-            corrections: corrections,
-            romanNumerals: jsonResponse.romanNumerals || null,
+            correctedChords: chordNames,
+            corrections: {},
+            romanNumerals: null,
             rawResponse: text
           };
         }
-      } catch (parseError) {
-        console.error('Failed to parse JSON response:', parseError);
-        // Fallback to original format
+      } else {
         const primaryKeyMatch = text.match(/Primary Key:\s*\*\*([^*]+)\*\*/);
         const modulationMatch = text.match(/Possible Tonal Modulation:\s*\*\*([^*]+)\*\*/);
 
         result = {
           primaryKey: primaryKeyMatch ? primaryKeyMatch[1].trim() : 'Unknown',
           modulation: modulationMatch ? modulationMatch[1].trim() === 'None' ? null : modulationMatch[1].trim() : null,
-          originalChords: chordNames,
-          correctedChords: chordNames, // No correction if parsing failed
-          corrections: {},
-          romanNumerals: null, // No Roman numerals if parsing failed
           rawResponse: text
         };
       }
-    } else {
-      // Parse original format response
-      const primaryKeyMatch = text.match(/Primary Key:\s*\*\*([^*]+)\*\*/);
-      const modulationMatch = text.match(/Possible Tonal Modulation:\s*\*\*([^*]+)\*\*/);
 
-      result = {
-        primaryKey: primaryKeyMatch ? primaryKeyMatch[1].trim() : 'Unknown',
-        modulation: modulationMatch ? modulationMatch[1].trim() === 'None' ? null : modulationMatch[1].trim() : null,
-        rawResponse: text
-      };
+      if (!result.primaryKey || result.primaryKey === 'Unknown') {
+        return NextResponse.json(buildHeuristicKeyDetectionResult({
+          chordNames,
+          includeEnharmonicCorrection,
+          rawResponse: text,
+        }));
+      }
+
+      await saveKeyDetectionToCache(cacheKey, result);
+      return NextResponse.json(result);
+    } catch (geminiError) {
+      console.error('Gemini key detection failed, using heuristic fallback:', geminiError);
+      return NextResponse.json(buildHeuristicKeyDetectionResult({
+        chordNames,
+        includeEnharmonicCorrection,
+      }));
     }
-
-    // Save to cache
-    await saveKeyDetectionToCache(cacheKey, result);
-
-    return NextResponse.json(result);
 
   } catch (error) {
     console.error('Error detecting key:', error);

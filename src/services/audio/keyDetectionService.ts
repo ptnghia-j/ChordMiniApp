@@ -1,6 +1,8 @@
 export interface KeyDetectionResult {
   primaryKey: string;
   modulation: string | null;
+  fromCache?: boolean;
+  fromHeuristicFallback?: boolean;
   rawResponse?: string;
   originalChords?: string[];
   correctedChords?: string[];

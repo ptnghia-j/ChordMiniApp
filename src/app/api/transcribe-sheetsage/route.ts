@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: isFetchFailure
-          ? `Could not reach Sheet Sage backend at ${getSheetSageApiUrl()}. Start the standalone service or set LOCAL_SHEETSAGE_API_URL / SHEETSAGE_API_URL.`
+          ? 'Could not reach the Sheet Sage backend. Please try again later or contact support if the issue persists.'
           : isTimeoutFailure
             ? `Sheet Sage exceeded the ${Math.round(SHEETSAGE_BACKEND_TIMEOUT_MS / 1000)}s proxy timeout. Increase SHEETSAGE_BACKEND_TIMEOUT_MS or try a shorter audio segment.`
             : message,
@@ -240,7 +240,7 @@ export async function GET(request: NextRequest) {
           available: false,
           assetUnavailable: false,
           error: isFetchFailure
-            ? `Could not reach Sheet Sage backend at ${getSheetSageApiUrl()}.`
+            ? 'Could not reach the Sheet Sage backend.'
             : isTimeoutFailure
               ? 'Timed out while checking Sheet Sage backend readiness.'
               : message,

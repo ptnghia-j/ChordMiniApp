@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from 'react';
+import { useEffect, useMemo, type ReactElement } from 'react';
 import type { ActiveInstrument } from '@/components/piano-visualizer/FallingNotesCanvas';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
@@ -10,6 +10,7 @@ import {
   buildChordTimeline,
   type ChordEvent,
 } from '@/utils/chordToMidi';
+import { chordSheetDebugGroup } from '@/utils/debug/chordSheetDebug';
 import type { AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
@@ -221,6 +222,44 @@ export function usePianoVisualizerTimelineModel({
     () => PIANO_WHITE_KEY_COUNT * whiteKeyWidth,
     [whiteKeyWidth],
   );
+
+  useEffect(() => {
+    chordSheetDebugGroup('TimelineModel', 'Derived timeline alignment state', {
+      notationBeatOffset,
+      paddingCount: resolvedChordGridData?.paddingCount ?? 0,
+      shiftCount: resolvedChordGridData?.shiftCount ?? 0,
+      leadingResolvedChords: resolvedChordGridData?.chords?.slice(0, 16) ?? [],
+      leadingDisplayedChords: displayedChords.slice(0, 16),
+      playbackChordEvents: playbackChordEvents.slice(0, 8).map((event) => ({
+        chordName: event.chordName,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        beatIndex: event.beatIndex,
+      })),
+      stripChordEvents: stripChordEvents.slice(0, 8).map((event) => ({
+        chordName: event.chordName,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        beatIndex: event.beatIndex,
+      })),
+      mergedPlayableChordEvents: mergedPlayableChordEvents.slice(0, 8).map((event) => ({
+        chordName: event.chordName,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        beatIndex: event.beatIndex,
+        beatCount: event.beatCount ?? 1,
+      })),
+    });
+  }, [
+    displayedChords,
+    mergedPlayableChordEvents,
+    notationBeatOffset,
+    playbackChordEvents,
+    resolvedChordGridData?.chords,
+    resolvedChordGridData?.paddingCount,
+    resolvedChordGridData?.shiftCount,
+    stripChordEvents,
+  ]);
 
   return {
     playbackChordEvents,
