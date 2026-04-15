@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
-import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { usePlaybackStore } from '@/stores/playbackStore';
+import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 
 // Types for playback state management
 interface ClickInfo {
@@ -183,13 +183,10 @@ export const usePlaybackState = ({
   }, [setIsPlaying]);
 
   const handleYouTubeProgress = useCallback((state: { played: number; playedSeconds: number }) => {
-    if (isPitchShiftEnabled && isPitchShiftReady) {
-      return;
-    }
-
-    // Update current time from YouTube player progress
+    // Keep the app timeline tied to the embedded YouTube player even when
+    // pitch shift is active so the iframe controls remain authoritative.
     setCurrentTime(state.playedSeconds);
-  }, [isPitchShiftEnabled, isPitchShiftReady, setCurrentTime]);
+  }, [setCurrentTime]);
 
   // Auto-scroll implementation (lines 2561-2576): Smooth scrolling to current beat
   const scrollToCurrentBeat = useCallback(() => {

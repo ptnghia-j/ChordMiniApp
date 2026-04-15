@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
@@ -50,6 +50,8 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
 
   // Local state to control popover visibility independently from pitch shift state
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const triggerWrapperRef = useRef<HTMLDivElement | null>(null);
+  const popoverContentRef = useRef<HTMLDivElement | null>(null);
 
   // Pitch shift slider change handler
   const handleSliderChange = useCallback(
@@ -82,6 +84,35 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
     }
   }, [isPitchShiftEnabled, togglePitchShift]);
 
+  useEffect(() => {
+    if (!isPopoverOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const targetNode = event.target as Node | null;
+      if (!targetNode) {
+        return;
+      }
+
+      if (triggerWrapperRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      if (popoverContentRef.current?.contains(targetNode)) {
+        return;
+      }
+
+      setIsPopoverOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  }, [isPopoverOpen]);
+
   return (
     <>
       <Popover
@@ -96,116 +127,118 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
           content: 'p-0 border-none bg-transparent shadow-none'
         }}
       >
-      <PopoverTrigger>
-        <div className="relative inline-block">
-          <Tooltip
-            content={
-              isDisabled
-                ? 'Pitch Shift: Audio not available'
-                : isPitchShiftEnabled
-                ? 'Disable pitch shift'
-                : 'Enable pitch shift'
-            }
-            placement="top"
-            classNames={{
-              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-            }}
-          >
-            <motion.button
-              onClick={handleToggleClick}
-              disabled={isDisabled}
-              className={buttonClassName}
-              whileHover={!isDisabled ? { scale: 1.02 } : {}}
-              whileTap={!isDisabled ? { scale: 0.98 } : {}}
-              aria-label={
+        <PopoverTrigger>
+          <div ref={triggerWrapperRef} className="relative inline-block">
+            <Tooltip
+              content={
                 isDisabled
                   ? 'Pitch Shift: Audio not available'
                   : isPitchShiftEnabled
                   ? 'Disable pitch shift'
                   : 'Enable pitch shift'
               }
-              aria-pressed={isPitchShiftEnabled}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
             >
-              <TbMusicUp className="h-4 w-4" />
-            </motion.button>
-          </Tooltip>
+              <motion.button
+                onClick={handleToggleClick}
+                disabled={isDisabled}
+                className={buttonClassName}
+                whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                aria-label={
+                  isDisabled
+                    ? 'Pitch Shift: Audio not available'
+                    : isPitchShiftEnabled
+                    ? 'Disable pitch shift'
+                    : 'Enable pitch shift'
+                }
+                aria-pressed={isPitchShiftEnabled}
+              >
+                <TbMusicUp className="h-4 w-4" />
+              </motion.button>
+            </Tooltip>
 
-          {/* Beta tag */}
-          <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold pointer-events-none">
-            BETA
-          </div>
-        </div>
-      </PopoverTrigger>
-      
-      <PopoverContent>
-        <UtilityPopoverPanel bodyClassName="space-y-3 p-4 pb-6 min-w-[280px]">
-          <div className="pb-2 pitch-shift-slider">
-            <Slider
-              label="Pitch Shift"
-              size="sm"
-              color="success"
-              step={1}
-              minValue={MIN_SEMITONES}
-              maxValue={MAX_SEMITONES}
-              value={pitchShiftSemitones}
-              onChange={handleSliderChange}
-              isDisabled={isProcessingPitchShift}
-              showTooltip={true}
-              getValue={(value) => formatSemitones(Array.isArray(value) ? value[0] : value)}
-              marks={[
-                { value: MIN_SEMITONES, label: `${MIN_SEMITONES}` },
-                { value: 0, label: '0' },
-                { value: MAX_SEMITONES, label: `+${MAX_SEMITONES}` }
-              ]}
-              classNames={{
-                base: 'max-w-full mb-2',
-                label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
-                value: 'text-sm font-semibold text-green-600 dark:text-green-400',
-                ...successSliderClassNames,
-                mark: 'text-xs'
-              }}
-            />
-          </div>
-
-          <div className="border-t border-white/20 dark:border-white/10 my-3" />
-
-          <div className="pb-2 pitch-shift-slider">
-            <Slider
-              label="Playback Speed"
-              size="sm"
-              color="success"
-              step={0.25}
-              minValue={0.25}
-              maxValue={2.0}
-              value={playbackRate}
-              onChange={handlePlaybackRateChange}
-              isDisabled={isProcessingPitchShift}
-              showTooltip={true}
-              getValue={(value) => `${(Array.isArray(value) ? value[0] : value).toFixed(2)}x`}
-              marks={[
-                { value: 0.25, label: '0.25x' },
-                { value: 1.0, label: '1.0x' },
-                { value: 2.0, label: '2.0x' }
-              ]}
-              classNames={{
-                base: 'max-w-full mb-2',
-                label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
-                value: 'text-sm font-semibold text-green-600 dark:text-green-400',
-                ...successSliderClassNames,
-                mark: 'text-xs'
-              }}
-            />
-          </div>
-
-          {isProcessingPitchShift && (
-            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              <span>Processing...</span>
+            {/* Beta tag */}
+            <div className="absolute -top-1 -right-1 bg-green-500/70 dark:bg-green-500/30 text-white text-[8px] px-1 py-0.5 rounded-full font-bold pointer-events-none">
+              BETA
             </div>
-          )}
-        </UtilityPopoverPanel>
-      </PopoverContent>
-    </Popover>
+          </div>
+        </PopoverTrigger>
+
+        <PopoverContent>
+          <div ref={popoverContentRef}>
+            <UtilityPopoverPanel bodyClassName="space-y-3 p-4 pb-6 min-w-[280px]">
+              <div className="pb-2 pitch-shift-slider">
+                <Slider
+                  label="Pitch Shift"
+                  size="sm"
+                  color="success"
+                  step={1}
+                  minValue={MIN_SEMITONES}
+                  maxValue={MAX_SEMITONES}
+                  value={pitchShiftSemitones}
+                  onChange={handleSliderChange}
+                  isDisabled={isProcessingPitchShift}
+                  showTooltip={true}
+                  getValue={(value) => formatSemitones(Array.isArray(value) ? value[0] : value)}
+                  marks={[
+                    { value: MIN_SEMITONES, label: `${MIN_SEMITONES}` },
+                    { value: 0, label: '0' },
+                    { value: MAX_SEMITONES, label: `+${MAX_SEMITONES}` }
+                  ]}
+                  classNames={{
+                    base: 'max-w-full mb-2',
+                    label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                    value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                    ...successSliderClassNames,
+                    mark: 'text-xs'
+                  }}
+                />
+              </div>
+
+              <div className="border-t border-white/20 dark:border-white/10 my-3" />
+
+              <div className="pb-2 pitch-shift-slider">
+                <Slider
+                  label="Playback Speed"
+                  size="sm"
+                  color="success"
+                  step={0.25}
+                  minValue={0.25}
+                  maxValue={2.0}
+                  value={playbackRate}
+                  onChange={handlePlaybackRateChange}
+                  isDisabled={isProcessingPitchShift}
+                  showTooltip={true}
+                  getValue={(value) => `${(Array.isArray(value) ? value[0] : value).toFixed(2)}x`}
+                  marks={[
+                    { value: 0.25, label: '0.25x' },
+                    { value: 1.0, label: '1.0x' },
+                    { value: 2.0, label: '2.0x' }
+                  ]}
+                  classNames={{
+                    base: 'max-w-full mb-2',
+                    label: 'text-sm font-medium text-gray-700 dark:text-gray-300',
+                    value: 'text-sm font-semibold text-green-600 dark:text-green-400',
+                    ...successSliderClassNames,
+                    mark: 'text-xs'
+                  }}
+                />
+              </div>
+
+              {isProcessingPitchShift && (
+                <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Processing...</span>
+                </div>
+              )}
+            </UtilityPopoverPanel>
+          </div>
+        </PopoverContent>
+      </Popover>
     </>
   );
 };

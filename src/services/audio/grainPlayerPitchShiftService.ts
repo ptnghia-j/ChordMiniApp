@@ -120,7 +120,14 @@ export class GrainPlayerPitchShiftService {
 
       // Use proxy to avoid CORS issues (but not for blob URLs which are local)
       const isBlobUrl = audioUrl.startsWith('blob:');
-      const finalUrl = isBlobUrl ? audioUrl : buildAudioProxyUrl(audioUrl);
+      const finalUrl = isBlobUrl
+        ? audioUrl
+        : buildAudioProxyUrl(audioUrl, {
+            // Tone.js loads this from the browser, so a Firebase redirect would
+            // send the request back to storage and reintroduce the CORS issue the
+            // proxy route is meant to avoid.
+            forceProxy: true,
+          });
 
       // Ensure Tone.js context is started
       if (Tone.getContext().state !== 'running') {

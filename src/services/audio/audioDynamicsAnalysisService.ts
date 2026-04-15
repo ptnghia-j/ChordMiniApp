@@ -10,7 +10,11 @@ function resolveAnalysisFetchUrl(audioUrl: string): string {
   if (audioUrl.startsWith('blob:')) {
     return audioUrl;
   }
-  return buildAudioProxyUrl(audioUrl);
+  return buildAudioProxyUrl(audioUrl, {
+    // This fetch runs in the browser, so force the API route to stream bytes
+    // instead of redirecting Firebase URLs back to storage.
+    forceProxy: true,
+  });
 }
 
 function downmixAndDownsampleBuffer(

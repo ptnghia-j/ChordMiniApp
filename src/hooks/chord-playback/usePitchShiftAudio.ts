@@ -46,6 +46,10 @@ export interface UsePitchShiftAudioReturn {
   getPitchShiftVolume: () => number;
 }
 
+const YOUTUBE_SYNC_INTERVAL_MS = 100;
+const YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS = 0.15;
+const YOUTUBE_STATE_UPDATE_THRESHOLD_SECONDS = 0.1;
+
 /**
  * Hook for managing pitch-shifted audio playback
  */
@@ -88,6 +92,7 @@ export const usePitchShiftAudio = ({
   const currentTimeRef = useRef(currentTime);
   const isPlayingRef = useRef(isPlaying);
   const playbackRateRef = useRef(playbackRate);
+  const youtubePlayerRef = useRef<YouTubePlayer | null>(youtubePlayer);
 
   useEffect(() => {
     currentTimeRef.current = currentTime;
@@ -101,12 +106,30 @@ export const usePitchShiftAudio = ({
     playbackRateRef.current = playbackRate;
   }, [playbackRate]);
 
+  useEffect(() => {
+    youtubePlayerRef.current = youtubePlayer;
+  }, [youtubePlayer]);
+
   // Register service instance globally for volume control access
   useEffect(() => {
     setGlobalPitchShiftService(pitchShiftService.current);
     return () => {
       setGlobalPitchShiftService(null);
     };
+  }, []);
+
+  const getYoutubeTimelineTime = useCallback((): number | null => {
+    const player = youtubePlayerRef.current;
+    if (!player || typeof player.getCurrentTime !== 'function') {
+      return null;
+    }
+
+    try {
+      const time = player.getCurrentTime();
+      return Number.isFinite(time) ? time : null;
+    } catch {
+      return null;
+    }
   }, []);
 
   /**
@@ -150,8 +173,16 @@ export const usePitchShiftAudio = ({
       // Set up time update callback
       // CRITICAL FIX: Mark time updates from service to prevent seek feedback loop
       pitchShiftService.current.setOnTimeUpdate((time) => {
-        isTimeUpdateFromService.current = true;
         lastSyncedTime.current = time;
+        const youtubeTimelineTime = getYoutubeTimelineTime();
+
+        // On YouTube pages, the embedded player remains the source of truth for
+        // timeline updates so the visible video controls stay authoritative.
+        if (youtubeTimelineTime !== null) {
+          return;
+        }
+
+        isTimeUpdateFromService.current = true;
         setCurrentTime(time);
 
         if (resetServiceTimeUpdateFlagTimeout.current) {
@@ -177,9 +208,12 @@ export const usePitchShiftAudio = ({
 
       // Ensure service is aligned with current page state immediately
       try {
+        const timelineTime = getYoutubeTimelineTime();
+        const initialTime = timelineTime ?? currentTimeRef.current ?? 0;
+
         // Apply playback rate and seek position before starting
         pitchShiftService.current.setPlaybackRate(playbackRateRef.current);
-        pitchShiftService.current.seek(currentTimeRef.current || 0);
+        pitchShiftService.current.seek(initialTime);
         if (isPlayingRef.current) {
           // Start playback right away for upload page; YouTube visual sync not needed here
           pitchShiftService.current.play();
@@ -206,6 +240,7 @@ export const usePitchShiftAudio = ({
     setIsFirebaseAudioAvailable,
     setCurrentTime,
     setIsPlaying,
+    getYoutubeTimelineTime,
   ]);
 
   /**
@@ -367,6 +402,14 @@ export const usePitchShiftAudio = ({
       lastServicePlayingState.current = isPlaying;
 
       if (isPlaying) {
+        const youtubeTimelineTime = getYoutubeTimelineTime();
+        if (youtubeTimelineTime !== null) {
+          const drift = Math.abs(serviceState.currentTime - youtubeTimelineTime);
+          if (drift > YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS) {
+            service.seek(youtubeTimelineTime);
+          }
+        }
+
         // Only call play() if service is not already playing
         if (!serviceState.isPlaying) {
           service.play();
@@ -378,7 +421,7 @@ export const usePitchShiftAudio = ({
         }
       }
     }
-  }, [isPitchShiftEnabled, isPitchShiftReady, isPlaying]);
+  }, [isPitchShiftEnabled, isPitchShiftReady, isPlaying, getYoutubeTimelineTime]);
 
   /**
    * Sync seek position with pitch shift service
@@ -409,6 +452,49 @@ export const usePitchShiftAudio = ({
       service.seek(currentTime);
     }
   }, [isPitchShiftEnabled, isPitchShiftReady, currentTime]);
+
+  /**
+   * Keep the pitch-shifted audio locked to the embedded YouTube timeline.
+   * The service runs on its own clock, so we periodically compare it against
+   * the iframe's current time and correct any drift.
+   */
+  useEffect(() => {
+    if (!isPitchShiftEnabled || !isPitchShiftReady || !youtubePlayer) return;
+
+    const service = pitchShiftService.current;
+
+    const syncToYouTubeTimeline = () => {
+      const youtubeTimelineTime = getYoutubeTimelineTime();
+      if (youtubeTimelineTime === null) {
+        return;
+      }
+
+      if (Math.abs(currentTimeRef.current - youtubeTimelineTime) > YOUTUBE_STATE_UPDATE_THRESHOLD_SECONDS) {
+        setCurrentTime(youtubeTimelineTime);
+      }
+      currentTimeRef.current = youtubeTimelineTime;
+
+      const serviceState = service.getState();
+      const drift = Math.abs(serviceState.currentTime - youtubeTimelineTime);
+      if (drift > YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS) {
+        lastSyncedTime.current = youtubeTimelineTime;
+        service.seek(youtubeTimelineTime);
+      }
+    };
+
+    syncToYouTubeTimeline();
+    const intervalId = window.setInterval(syncToYouTubeTimeline, YOUTUBE_SYNC_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [
+    isPitchShiftEnabled,
+    isPitchShiftReady,
+    youtubePlayer,
+    setCurrentTime,
+    getYoutubeTimelineTime,
+  ]);
 
   /**
    * Sync playback rate with pitch shift service
