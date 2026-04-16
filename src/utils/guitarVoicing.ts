@@ -1,3 +1,4 @@
+import type { ChordSignalDynamics } from '@/services/audio/audioDynamicsTypes';
 import { chordMappingService } from '@/services/chord-analysis/chordMappingService';
 import { midiToNoteName, parseChordToMidiNotes, type MidiNote } from '@/utils/chordToMidi';
 import { calculateTargetKey, transposeChord } from '@/utils/chordTransposition';
@@ -36,6 +37,199 @@ export interface SuggestedCapoPosition {
 
 const SHORT_GUITAR_CHORD_BEATS = 3;
 export const DEFAULT_MAX_CAPO_SUGGESTION_FRET = 7;
+
+const STRUM_TIMING_EPSILON = 1e-6;
+
+function clampStrumDrive(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Single scalar 0…1 from audio contours so we can pick a strum density.
+ * Higher → busier patterns (8ths, pop syncopation); lower → fewer strokes.
+ */
+export function resolveGuitarStrumDrive(signalDynamics?: ChordSignalDynamics | null): number {
+  if (!signalDynamics) {
+    return 0.48;
+  }
+  const bandNudge = signalDynamics.intensityBand === 'loud'
+    ? 0.1
+    : signalDynamics.intensityBand === 'quiet'
+      ? -0.12
+      : 0;
+  return clampStrumDrive(
+    (1 - signalDynamics.quietness) * 0.34
+      + signalDynamics.fullness * 0.26
+      + signalDynamics.motion * 0.18
+      + signalDynamics.attack * 0.08
+      + signalDynamics.normalizedIntensity * 0.14
+      + bandNudge,
+  );
+}
+
+type StrumBeatDef = { beat: number; direction: GuitarStrumDirection };
+
+function defsToStrokes(defs: readonly StrumBeatDef[], beatDuration: number): GuitarStrumStroke[] {
+  const sorted = [...defs].sort((a, b) => a.beat - b.beat);
+  const out: GuitarStrumStroke[] = [];
+  for (const { beat, direction } of sorted) {
+    const startOffset = beat * beatDuration;
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.startOffset - startOffset) < STRUM_TIMING_EPSILON) {
+      continue;
+    }
+    out.push({ startOffset, direction });
+  }
+  return out;
+}
+
+/** 4/4: sparse ballad — downs on 1 and 3 only */
+const STRUM_4_4_SPARSE: readonly StrumBeatDef[] = [
+  { beat: 0, direction: 'down' },
+  { beat: 2, direction: 'down' },
+];
+
+/**
+ * 4/4: pop-rock with a half-note anchor and a driving tail — "D - - - D U D U".
+ * The long breath through beat 2 lets the chord ring; the 3-&-4-& tail
+ * delivers the groove. Very common feel in mid-tempo pop (Brown Eyed Girl,
+ * Let It Be-adjacent).
+ */
+const STRUM_4_4_CLASSIC: readonly StrumBeatDef[] = [
+  { beat: 0, direction: 'down' },   // 1
+  { beat: 2, direction: 'down' },   // 3
+  { beat: 2.5, direction: 'up' },   // 3&
+  { beat: 3, direction: 'down' },   // 4
+  { beat: 3.5, direction: 'up' },   // 4&
+];
+
+/**
+ * 4/4: "Island Strum" — D - D U - U D U.
+ * Ubiquitous pop/folk syncopation (e.g. "I'm Yours", "Riptide").
+ * The skipped "and" of 1 and the skipped "3" create the characteristic
+ * floating pocket between measures.
+ */
+const STRUM_4_4_POP_SYNCOPATED: readonly StrumBeatDef[] = [
+  { beat: 0, direction: 'down' },   // 1
+  { beat: 1, direction: 'down' },   // 2
+  { beat: 1.5, direction: 'up' },   // 2&
+  { beat: 2.5, direction: 'up' },   // 3&
+  { beat: 3, direction: 'down' },   // 4
+  { beat: 3.5, direction: 'up' },   // 4&
+];
+
+/**
+ * 4/4: "Old Faithful" driving variant — D - D U D - D U.
+ * Downstrokes on every quarter-note pulse with upstroke backbeats on 2&
+ * and 4&, and symmetric rests on 1& and 3& so the bar breathes twice
+ * instead of running as mechanical eighth notes.
+ */
+const STRUM_4_4_EIGHTHS: readonly StrumBeatDef[] = [
+  { beat: 0, direction: 'down' },   // 1
+  { beat: 1, direction: 'down' },   // 2
+  { beat: 1.5, direction: 'up' },   // 2&
+  { beat: 2, direction: 'down' },   // 3
+  { beat: 3, direction: 'down' },   // 4
+  { beat: 3.5, direction: 'up' },   // 4&
+];
+
+function patternForMeasure4_4(drive: number, beatDuration: number): GuitarStrumStroke[] {
+  if (drive < 0.34) {
+    return defsToStrokes(STRUM_4_4_SPARSE, beatDuration);
+  }
+  if (drive < 0.52) {
+    return defsToStrokes(STRUM_4_4_CLASSIC, beatDuration);
+  }
+  if (drive < 0.72) {
+    return defsToStrokes(STRUM_4_4_POP_SYNCOPATED, beatDuration);
+  }
+  return defsToStrokes(STRUM_4_4_EIGHTHS, beatDuration);
+}
+
+/** 3/4: one down per bar — very soft */
+const STRUM_3_4_SPARSE: readonly StrumBeatDef[] = [{ beat: 0, direction: 'down' }];
+
+/** 3/4: waltz — downs on 1 and 3 */
+const STRUM_3_4_WALTZ: readonly StrumBeatDef[] = [
+  { beat: 0, direction: 'down' },
+  { beat: 2, direction: 'down' },
+];
+
+/** 3/4: six eighth-notes D U D U D U */
+const STRUM_3_4_EIGHTHS: readonly StrumBeatDef[] = Array.from({ length: 6 }, (_, i) => ({
+  beat: i * 0.5,
+  direction: (i % 2 === 0 ? 'down' : 'up') as GuitarStrumDirection,
+}));
+
+function patternForMeasure3_4(drive: number, beatDuration: number): GuitarStrumStroke[] {
+  if (drive < 0.36) {
+    return defsToStrokes(STRUM_3_4_SPARSE, beatDuration);
+  }
+  if (drive < 0.62) {
+    return defsToStrokes(STRUM_3_4_WALTZ, beatDuration);
+  }
+  return defsToStrokes(STRUM_3_4_EIGHTHS, beatDuration);
+}
+
+/** 6/8 compound: three downs on strong pulses (legacy) */
+function patternForMeasure6_8Sparse(beatDuration: number): GuitarStrumStroke[] {
+  return Array.from({ length: 3 }, (_, index) => ({
+    startOffset: beatDuration * index * 2,
+    direction: 'down' as const,
+  }));
+}
+
+/** 6/8: alternating on each eighth of the bar */
+const STRUM_6_8_EIGHTHS: readonly StrumBeatDef[] = Array.from({ length: 6 }, (_, i) => ({
+  beat: i,
+  direction: (i % 2 === 0 ? 'down' : 'up') as GuitarStrumDirection,
+}));
+
+function patternForMeasure6_8(drive: number, beatDuration: number): GuitarStrumStroke[] {
+  if (drive < 0.4) {
+    return patternForMeasure6_8Sparse(beatDuration);
+  }
+  return defsToStrokes(STRUM_6_8_EIGHTHS, beatDuration);
+}
+
+/**
+ * Generic time signatures (5, 7, etc.): shape strokes into three rhythmic tiers
+ * rather than blindly filling every eighth-note slot.
+ *  - sparse:   downs on every other strong beat (ballad pulse)
+ *  - stable:   a downstroke on every beat (steady quarters)
+ *  - driving:  "Old Faithful" feel — downs on every beat plus an upstroke on
+ *              odd-indexed off-beats only (2&, 4&, …), so the bar breathes on
+ *              1&, 3&, 5& and the final off-beat lands into the next measure.
+ */
+function patternForMeasureGeneric(
+  timeSignature: number,
+  drive: number,
+  beatDuration: number,
+): GuitarStrumStroke[] {
+  if (drive < 0.45 || timeSignature <= 2) {
+    const count = Math.max(1, Math.ceil(timeSignature / 2));
+    return Array.from({ length: count }, (_, index) => ({
+      startOffset: beatDuration * index * 2,
+      direction: 'down' as const,
+    }));
+  }
+
+  if (drive < 0.68) {
+    return Array.from({ length: timeSignature }, (_, index) => ({
+      startOffset: beatDuration * index,
+      direction: 'down' as const,
+    }));
+  }
+
+  const defs: StrumBeatDef[] = [];
+  for (let i = 0; i < timeSignature; i += 1) {
+    defs.push({ beat: i, direction: 'down' });
+    if (i % 2 === 1 && i < timeSignature - 1) {
+      defs.push({ beat: i + 0.5, direction: 'up' });
+    }
+  }
+  return defsToStrokes(defs, beatDuration);
+}
 
 function isNoChord(chordName: string | null | undefined): boolean {
   return !chordName || chordName === 'N.C.' || chordName === 'N' || chordName === 'N/C' || chordName === 'NC';
@@ -319,39 +513,50 @@ export function buildGuitarStrumPattern(
   duration: number,
   beatDuration: number,
   timeSignature: number = 4,
+  signalDynamics?: ChordSignalDynamics | null,
 ): GuitarStrumStroke[] {
   if (duration <= 0 || beatDuration <= 0) {
     return [];
   }
 
   const durationInBeats = duration / beatDuration;
-  if (durationInBeats < SHORT_GUITAR_CHORD_BEATS || timeSignature <= 2) {
+  if (timeSignature <= 2 || durationInBeats < SHORT_GUITAR_CHORD_BEATS) {
+    // 2-beat chord holds are long enough that the ear craves a fill-in stroke.
+    // Emit [D - - U] across the four 8th-note slots so the upstrum lands on
+    // the "and" of beat 2. The off-beat upstroke is resolved downstream by
+    // `resolveStrumAccentScale`, which maps it to a low accent scale (~0.19),
+    // preserving the softer upstrumming rule.
+    const upstrumOffset = beatDuration * 1.5;
+    if (
+      durationInBeats >= SHORT_GUITAR_CHORD_BEATS - 1
+      && upstrumOffset < duration - STRUM_TIMING_EPSILON
+    ) {
+      return [
+        { startOffset: 0, direction: 'down' },
+        { startOffset: upstrumOffset, direction: 'up' },
+      ];
+    }
     return [{ startOffset: 0, direction: 'down' }];
   }
 
   const measureDuration = beatDuration * timeSignature;
   const strokes: GuitarStrumStroke[] = [];
+  const drive = resolveGuitarStrumDrive(signalDynamics);
 
   const patternForMeasure = (): GuitarStrumStroke[] => {
     if (timeSignature === 4) {
-      return [
-        { startOffset: 0, direction: 'down' },
-        { startOffset: beatDuration * 2.5, direction: 'up' },
-        { startOffset: beatDuration * 3, direction: 'down' },
-      ];
+      return patternForMeasure4_4(drive, beatDuration);
     }
 
     if (timeSignature === 3) {
-      return [
-        { startOffset: 0, direction: 'down' },
-        { startOffset: beatDuration * 2, direction: 'down' },
-      ];
+      return patternForMeasure3_4(drive, beatDuration);
     }
 
-    return Array.from({ length: Math.max(1, Math.ceil(timeSignature / 2)) }, (_, index) => ({
-      startOffset: beatDuration * index * 2,
-      direction: 'down' as const,
-    }));
+    if (timeSignature === 6) {
+      return patternForMeasure6_8(drive, beatDuration);
+    }
+
+    return patternForMeasureGeneric(timeSignature, drive, beatDuration);
   };
 
   const measurePattern = patternForMeasure();

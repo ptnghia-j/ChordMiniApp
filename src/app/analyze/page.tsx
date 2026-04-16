@@ -1331,6 +1331,8 @@ const simplifiedChordGridData = useMemo(() => {
                         chordCorrections={chordCorrections}
                         sequenceCorrections={sequenceCorrections}
                         segmentationData={segmentationData}
+                        isChordPlaybackEnabled={chordPlayback.isEnabled}
+                        audioUrl={audioProcessingState.audioUrl || null}
                       />
                     )}
 

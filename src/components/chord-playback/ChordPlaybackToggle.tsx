@@ -4,7 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { HiOutlineMusicalNote, HiMusicalNote, HiSpeakerWave, HiVideoCamera, HiXMark } from 'react-icons/hi2';
 import { MdPiano, MdRefresh } from 'react-icons/md';
-import { GiGuitar, GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
+import { GiViolin, GiFlute, GiGuitarBassHead } from 'react-icons/gi';
+import { LuGuitar } from 'react-icons/lu';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider, Divider, Button } from '@heroui/react';
 import { getAudioMixerService, type AudioMixerSettings } from '@/services/chord-playback/audioMixerService';
 import { DEFAULT_AUDIO_MIXER_SETTINGS } from '@/config/audioDefaults';
@@ -481,7 +482,7 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                     <div className="space-y-1">
                       <div className="mb-1 flex items-center justify-between gap-2.5">
                         <label className={MIXER_LABEL_CLASS}>
-                          <GiGuitar className="h-3.5 w-3.5" />
+                          <LuGuitar className="h-3.5 w-3.5" />
                           Guitar
                         </label>
                         <span className={MIXER_VALUE_CLASS}>

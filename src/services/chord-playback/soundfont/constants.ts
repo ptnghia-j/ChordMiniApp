@@ -9,9 +9,11 @@ export const SUSTAIN_RETRIGGER_OVERLAP_SECONDS = 0.16;
 export const SUSTAIN_RETRIGGER_VELOCITY_SCALE = 0.94;
 export const DENSITY_REFERENCE_VOICES = 3;
 export const MIN_DENSITY_COMPENSATION = 0.72;
-export const PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.22;
+// Cluster-chord compensation: offsets densityCompensation so simultaneous
+// (block/cluster) piano onsets balance against single-voice arpeggios.
+export const PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.51;
 export const PIANO_LATE_ONSET_GRACE_SECONDS = 0.18;
-export const PIANO_SUSTAIN_PEDAL_TAIL_SECONDS = 0.39;
+export const PIANO_SUSTAIN_PEDAL_TAIL_SECONDS = 0.65;
 export const PIANO_BASS_SUSTAIN_PEDAL_TAIL_SECONDS = 0.27;
 export const UNLOAD_DELAY_MS = 30000;
 export const SUSTAIN_RETRIGGER_INSTRUMENTS = new Set<InstrumentName>(['violin', 'melodyViolin', 'flute']);

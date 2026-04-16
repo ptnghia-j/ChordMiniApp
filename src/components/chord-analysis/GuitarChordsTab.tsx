@@ -10,7 +10,7 @@ import { ChordGridContainer } from '@/components/chord-analysis/ChordGridContain
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeat } from '@/utils/segmentationColors';
 import { useAnalysisResults, useShowCorrectedChords, useChordCorrections } from '@/stores/analysisStore';
-import { useCurrentBeatIndex } from '@/stores/playbackStore';
+import { useCurrentBeatIndex, useCurrentTime, useIsPlaying } from '@/stores/playbackStore';
 import { useSegmentationSelector } from '@/contexts/selectors'; // Now uses Zustand internally
 import {
   useGuitarCapoFret,
@@ -21,8 +21,15 @@ import {
   useUIStore,
 } from '@/stores/uiStore';
 import { transposeChord, calculateTargetKey } from '@/utils/chordTransposition';
-import { DEFAULT_MAX_CAPO_SUGGESTION_FRET, suggestCapoPosition } from '@/utils/guitarVoicing';
+import {
+  DEFAULT_MAX_CAPO_SUGGESTION_FRET,
+  suggestCapoPosition,
+  type GuitarVoicingSelection,
+} from '@/utils/guitarVoicing';
+import { buildChordTimeline, type ChordEvent } from '@/utils/chordToMidi';
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
+import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
+import { useGuitarOnlyPlayback } from '@/hooks/chord-playback/useGuitarOnlyPlayback';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
 import AppTooltip from '@/components/common/AppTooltip';
@@ -93,6 +100,8 @@ interface GuitarChordsTabProps {
   } | null;
   // Segmentation props for synchronized color overlay (data only; toggle from UIContext)
   segmentationData?: SegmentationResult | null;
+  isChordPlaybackEnabled?: boolean;
+  audioUrl?: string | null;
 }
 
 export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
@@ -108,8 +117,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   chordCorrections,
   sequenceCorrections = null,
   segmentationData = null,
+  isChordPlaybackEnabled = false,
+  audioUrl = null,
 }) => {
   const currentBeatIndex = useCurrentBeatIndex();
+  const currentTime = useCurrentTime();
+  const isPlaying = useIsPlaying();
 
   const targetKey = useTargetKey();
 
@@ -196,6 +209,58 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     chordCorrections: mergedChordCorrections,
     sequenceCorrections,
   });
+
+  // Build chord timeline for guitar-only playback (uses resolved grid to reflect pitch shifts/corrections)
+  const playbackChordEvents = useMemo<ChordEvent[]>(() => {
+    if (!resolvedChordGridData) return [];
+    return buildChordTimeline(
+      resolvedChordGridData.chords,
+      resolvedChordGridData.beats,
+      resolvedChordGridData.paddingCount,
+      resolvedChordGridData.shiftCount,
+    );
+  }, [resolvedChordGridData]);
+
+  const timeSignature = mergedAnalysisResults?.beatDetectionResult?.time_signature || 4;
+  const detectedBpm = mergedAnalysisResults?.beatDetectionResult?.bpm;
+  const playbackTotalDuration = useMemo(
+    () => (playbackChordEvents.length > 0
+      ? playbackChordEvents[playbackChordEvents.length - 1].endTime
+      : undefined),
+    [playbackChordEvents],
+  );
+  const dynamicsParams = useMemo(
+    () => ({
+      bpm: detectedBpm || 120,
+      timeSignature,
+      totalDuration: playbackTotalDuration,
+      segmentationData,
+    }),
+    [detectedBpm, segmentationData, timeSignature, playbackTotalDuration],
+  );
+  const dynamicsAnalyzer = useSharedAudioDynamics(audioUrl, dynamicsParams);
+
+  const guitarVoicing = useMemo<Partial<GuitarVoicingSelection>>(
+    () => ({
+      capoFret,
+      selectedPositions: chordPositions,
+    }),
+    [capoFret, chordPositions],
+  );
+
+  useGuitarOnlyPlayback(
+    playbackChordEvents,
+    currentTime,
+    currentBeatIndex,
+    isPlaying,
+    isChordPlaybackEnabled,
+    detectedBpm || 120,
+    timeSignature,
+    dynamicsAnalyzer,
+    segmentationData,
+    guitarVoicing,
+    targetKey,
+  );
 
   const normalizeChordNameForDisplay = useCallback((originalChord: string): string => {
     if (!originalChord ||

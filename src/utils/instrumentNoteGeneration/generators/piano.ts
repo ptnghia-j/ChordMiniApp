@@ -4,6 +4,7 @@ import { noteNameToMidi, type MidiNote } from '@/utils/chordToMidi';
 
 import {
   BASS_VELOCITY_BOOST,
+  PIANO_ARPEGGIATED_NOTE_VOLUME_REDUCTION,
   PIANO_ARPEGGIO_PATTERNS_COMMON,
   PIANO_ARPEGGIO_PATTERNS_SPARSE,
   PIANO_ARPEGGIO_PATTERNS_WALTZ,
@@ -301,14 +302,17 @@ export function generatePianoNotes(
     isNearSongEnding ? 0.88 : 0,
   ));
   const fullAttackBlend = clamp01(fullness * 0.7 + attack * 0.3);
-  const shouldUseSparsePattern = sparseBlend > 0.76;
+  // Lowered from 0.76 → 0.66 so the sparse texture engages a bit earlier.
+  const shouldUseSparsePattern = sparseBlend > 0.66;
   const activityBlend = clamp01(fullness * 0.46 + motion * 0.36 + attack * 0.18);
+  // Tightened from quietness<0.62 / activityBlend>0.38 to delay the dense
+  // 8th-note "fuller" pattern until the audio signal really earns it.
   const useFilledSubdivisionPattern = (
     timeSignature === 4
     && durationInBeats >= 4
     && !shouldUseSparsePattern
-    && quietness < 0.62
-    && activityBlend > 0.38
+    && quietness < 0.50
+    && activityBlend > 0.55
   );
   const shouldUseQuietHalfNotePattern = (
     timeSignature === 4
@@ -405,7 +409,10 @@ export function generatePianoNotes(
       midi,
       startOffset,
       duration: noteDuration,
-      velocityMultiplier,
+      // Single-onset notes get a large densityCompensation boost downstream,
+      // which makes them perceptually louder than the cluster/block onsets.
+      // Apply a per-note reduction so arpeggio voices sit under the clusters.
+      velocityMultiplier: velocityMultiplier * PIANO_ARPEGGIATED_NOTE_VOLUME_REDUCTION,
       isBass: isBassNote,
     });
   };
@@ -427,7 +434,9 @@ export function generatePianoNotes(
     );
   }
 
-  if (fullAttackBlend > 0.14 || shouldUseQuietHalfNotePattern || preserveUpperColorTones) {
+  // Raised from 0.14 → 0.32 so the simultaneous upper-chord attack at the head
+  // of an arpeggio only fires when the signal is meaningfully full/punchy.
+  if (fullAttackBlend > 0.32 || shouldUseQuietHalfNotePattern || preserveUpperColorTones) {
     pushUpperChordAttack(
       0,
       openingUpperAttackDuration,

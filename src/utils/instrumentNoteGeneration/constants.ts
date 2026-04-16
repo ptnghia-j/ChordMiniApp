@@ -1,5 +1,14 @@
 export const PIANO_SHORT_BLOCK_CHORD_VOLUME_REDUCTION = 0.92;
 
+/**
+ * Velocity reduction applied to individual piano arpeggio notes (both treble
+ * and bass single onsets). Single-note onsets get a large `densityCompensation`
+ * boost (~sqrt(3) ≈ 1.73×) inside the soundfont service because they have only
+ * one simultaneous voice. That made arpeggios sound much louder than the
+ * cluster/block-chord onsets. This multiplier rebalances them.
+ */
+export const PIANO_ARPEGGIATED_NOTE_VOLUME_REDUCTION = 0.72;
+
 /** Bass note velocity boost multiplier */
 export const BASS_VELOCITY_BOOST = 1.25;
 

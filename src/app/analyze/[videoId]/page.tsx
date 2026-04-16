@@ -1422,6 +1422,8 @@ export default function YouTubeVideoAnalyzePage() {
                           isUploadPage={false}
                           sequenceCorrections={simplifiedSequenceCorrections}
                           segmentationData={segmentationData}
+                          isChordPlaybackEnabled={chordPlayback.isEnabled}
+                          audioUrl={audioProcessingState.audioUrl || null}
                         />
                       )}
 
