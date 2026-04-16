@@ -86,6 +86,7 @@ import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabCon
 import AudioPlaybackDock from '@/components/analysis/AudioPlaybackDock';
 import type { UseChordPlaybackReturn } from '@/hooks/chord-playback/useChordPlayback';
 import { estimateKeySignatureFromChords } from '@/utils/chordUtils';
+import type { KeyDetectionResult } from '@/services/audio/keyDetectionService';
 import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEFAULT_FLUTE_VOLUME } from '@/config/audioDefaults';
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
 import { usePlaybackStore } from '@/stores/playbackStore';
@@ -441,25 +442,9 @@ export default function LocalAudioAnalyzePage() {
   const [keyDetectionAttempted, setKeyDetectionAttempted] = useState(false);
   const showCorrectedChords = false;
   const chordCorrections = useMemo(() => ({} as Record<string, string>), []);
-  const sequenceCorrections = useMemo(() => (null as {
-    originalSequence: string[];
-    correctedSequence: string[];
-    keyAnalysis?: {
-      sections: Array<{
-
-        startIndex: number;
-        endIndex: number;
-        key: string;
-        chords: string[];
-      }>;
-      modulations?: Array<{
-        fromKey: string;
-        toKey: string;
-        atIndex: number;
-        atTime?: number;
-      }>;
-    };
-  } | null), []);
+  const [sequenceCorrections, setSequenceCorrections] = useState<
+    KeyDetectionResult['sequenceCorrections'] | null
+  >(null);
 
   // Get state from Zustand stores (only what's actually used in this page)
 
@@ -583,6 +568,8 @@ export default function LocalAudioAnalyzePage() {
       audioUrl: null,
     });
     setAnalysisResults(null);
+    setKeyDetectionAttempted(false);
+    setSequenceCorrections(null);
 
     // Create a blob URL for the audio element (Safari-safe) and track it for cleanup
     if (audioRef.current) {
@@ -613,6 +600,9 @@ export default function LocalAudioAnalyzePage() {
     stageTimeoutRef.current = null;
 
     try {
+      setKeyDetectionAttempted(false);
+      setSequenceCorrections(null);
+
       // Start processing context
       startProcessing();
       setStage('chord-recognition');
@@ -850,6 +840,7 @@ export default function LocalAudioAnalyzePage() {
                 ? result.primaryKey
                 : heuristicKeySignature
             );
+            setSequenceCorrections(result.sequenceCorrections ?? null);
             // Update Roman numeral data in UI store for display
             try {
               useUIStore.getState().updateRomanNumeralData(result.romanNumerals ?? null);
@@ -857,6 +848,7 @@ export default function LocalAudioAnalyzePage() {
           })
           .catch(error => {
             console.error('Failed to detect key:', error);
+            setSequenceCorrections(null);
             try { useUIStore.getState().updateRomanNumeralData(null); } catch {}
           })
           .finally(() => {

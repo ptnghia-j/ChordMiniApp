@@ -11,7 +11,7 @@ export const maxDuration = 240; // 4 minutes for key detection processing
 
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
-const KEY_DETECTION_PROMPT_VERSION = 'v3-enharmonic-key-consistency';
+const KEY_DETECTION_PROMPT_VERSION = 'v4-modulation-markers';
 
 // Define types for chord data
 interface ChordData {
@@ -382,7 +382,15 @@ Please respond with ONLY a JSON object in this exact format:
 	- Roman numeral inversion notation belongs ONLY inside "romanNumerals.analysis" and "romanNumerals.temporalShifts[*].romanNumeral".
 	- Example: chord symbol output = "F#:maj/3" -> "Gb:maj/3"; Roman numeral output may be "I6" or "IV6" depending on the local key context. Keep these as separate representations.
 
-${includeRomanNumerals ? `
+${includeEnharmonicCorrection ? `
+KEY ANALYSIS AND MODULATION MARKERS (required in "sequenceCorrections.keyAnalysis"):
+- "sections" must cover the full chord index range 0 through (length of originalSequence minus 1) without gaps or overlaps; each section lists the local key and the slice of corrected chord symbols for that span.
+- Whenever the governing key changes for a sustained stretch (true modulation or new tonal center, not a one- or two-chord tonicization), you MUST append an object to "modulations" with "fromKey", "toKey", and "atIndex" equal to the first chord index where the new key clearly governs the harmony.
+- Indexing: "atIndex" is 0-based and matches the position in "originalSequence" / "correctedSequence" (same order as the CHORD SEQUENCE list at the top of this prompt). It must satisfy 0 <= atIndex < length(originalSequence).
+- If there is no modulation, set "modulations" to [].
+- Brief secondary-dominant or borrowed-chord tonicizations belong in "romanNumerals.temporalShifts" / bar notation when Roman analysis is requested; use "modulations" only for clear, section-level key changes.
+
+` : ''}${includeRomanNumerals ? `
 ROMAN NUMERAL ANALYSIS INSTRUCTIONS:
 1. **STANDARD NOTATION**: Use standard Roman numerals (I, ii, iii, IV, V, vi, vii°). Use uppercase for major-quality chords, lowercase for minor-quality chords, and include chord figures such as V7 when needed.
 

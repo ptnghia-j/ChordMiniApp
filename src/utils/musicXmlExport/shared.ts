@@ -559,12 +559,23 @@ export function getKeyAccidentalPreference(
 }
 
 export function formatLeadSheetChordLabel(chordName: string, keySignature?: string | null): string {
+  const accidentalPreference = getKeyAccidentalPreference(keySignature) ?? undefined;
+  return formatLeadSheetChordLabelWithAccidentalPreference(chordName, accidentalPreference);
+}
+
+export function formatLeadSheetChordLabelWithAccidentalPreference(
+  chordName: string,
+  accidentalPreference?: 'sharp' | 'flat' | null,
+): string {
   if (!chordName || chordName === 'N' || chordName === 'N/C' || chordName === 'N.C.') {
     return '';
   }
 
-  const accidentalPreference = getKeyAccidentalPreference(keySignature) ?? undefined;
-  const formatted = formatChordWithMusicalSymbols(chordName, false, accidentalPreference);
+  const formatted = formatChordWithMusicalSymbols(
+    chordName,
+    false,
+    accidentalPreference ?? undefined,
+  );
   return normalizeChordLabelAccidentals(stripHtmlTags(formatted));
 }
 

@@ -3,7 +3,6 @@ import { runVisualCompactionPipeline } from './gridCompaction';
 import { getBeatTime } from './gridShared';
 import { calculatePaddingAndShift } from './gridShifting';
 import { AudioMappingItem, ChordGridData, GridAnalysisResult } from './gridTypes';
-import { chordSheetDebugLog } from '@/utils/debug/chordSheetDebug';
 
 type GridAssemblyAdapter = {
   paddingChord: string;
@@ -229,7 +228,6 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
       firstChangedAudioIndex < protectedAudioBoundary;
 
     if (compactionStartsTooEarly) {
-      chordSheetDebugLog('GridAssembly', 'Returning initial grid data to protect early musical measures');
       return initialGridData;
     }
   }
