@@ -2,6 +2,20 @@ import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
 import { average, getBeatDurationsAroundWindow, getConsecutiveBeatDurations, getCyclicShiftDistance, isSilentChord } from './gridShared';
 import { ChordGridData, VisualCompactionWindow } from './gridTypes';
 
+export function hasNaturalLeadingSilenceWithOffset(
+  runEnd: number,
+  existingLeadingOffset: number,
+  timeSignature: number = 4
+): boolean {
+  if (existingLeadingOffset <= 0) {
+    return false;
+  }
+
+  const naturalLeadingSilenceRun = Math.max(0, runEnd - Math.max(0, existingLeadingOffset));
+  const naturalSilenceThreshold = Math.max(1, timeSignature - 1);
+  return naturalLeadingSilenceRun >= naturalSilenceThreshold;
+}
+
 function isSteadyBeatMeasure(durations: number[]): boolean {
   if (durations.length === 0) {
     return false;
@@ -101,7 +115,11 @@ function findTempoChangeBoundaries(
       continue;
     }
 
-    const boundaryIndex = index + 1;
+    // `index` is already the first beat in the new tempo segment because
+    // previousDurations cover [index-confirmationBeats, index) and
+    // nextDurations cover [index, index+confirmationBeats). Using index+1
+    // shifts compaction one beat late.
+    const boundaryIndex = index;
     const previousBoundary = boundaries[boundaries.length - 1];
     if (previousBoundary !== undefined && boundaryIndex - previousBoundary < timeSignature) {
       continue;
@@ -411,7 +429,8 @@ function buildTempoChangeWindows(
     return [];
   }
 
-  return findTempoChangeBoundaries(chordGridData.beats, timeSignature).flatMap((boundaryIndex) => {
+  const boundaries = findTempoChangeBoundaries(chordGridData.beats, timeSignature);
+  const windows = boundaries.flatMap((boundaryIndex): VisualCompactionWindow[] => {
     if (boundaryIndex <= 1 || boundaryIndex > chordGridData.chords.length) {
       return [];
     }
@@ -447,6 +466,8 @@ function buildTempoChangeWindows(
       source: 'tempo',
     }];
   });
+
+  return windows;
 }
 
 function buildLeadingSilenceExpansionWindow(
@@ -468,7 +489,10 @@ function buildLeadingSilenceExpansionWindow(
     return null;
   }
 
-  if (existingLeadingOffset > 0 && runEnd > existingLeadingOffset + timeSignature) {
+  // Guardrail: skip leading expansion only when there is *natural* leading
+  // silence in addition to the artificial global offset. For offset-only
+  // silence (runEnd === existingLeadingOffset), expansion can still be useful.
+  if (hasNaturalLeadingSilenceWithOffset(runEnd, existingLeadingOffset, timeSignature)) {
     return null;
   }
 
@@ -501,13 +525,15 @@ function buildLeadingSilenceExpansionWindow(
   }
 
   const currentModulo = runEnd % timeSignature;
-  return {
+  const selectedWindow: VisualCompactionWindow = {
     startIndex: 0,
     endIndex: runEnd,
     targetModulo: (currentModulo + bestExtraBeats) % timeSignature,
     mode: 'expand_only',
     source: 'leading_silence',
   };
+
+  return selectedWindow;
 }
 
 function resolveWindowTargetModulos(
@@ -628,10 +654,12 @@ export function runVisualCompactionPipeline(params: {
         chordGridData.paddingCount + chordGridData.shiftCount
       );
 
-  return compactVisualWindows(
+  const finalGridData = compactVisualWindows(
     compactedGapGridData,
     leadingSilenceWindow ? [leadingSilenceWindow, ...followupFlags] : followupFlags,
     timeSignature,
     enabled
   );
+
+  return finalGridData;
 }

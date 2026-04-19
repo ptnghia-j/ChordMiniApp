@@ -15,6 +15,7 @@ import { detectBeatsFromFile, detectBeatsWithRateLimit, detectBeatsFromFirebaseU
 import { synchronizeChords } from '@/utils/chordSynchronization';
 import { recognizeChordsWithRateLimit } from '@/services/chord-analysis/chordService';
 import type { AnalysisResult, BeatInfo, ChordDetectorType, ChordDetectionResult, BeatDetectionBackendResponse } from '@/types/audioAnalysis';
+import { beatGridDebugLog } from '@/utils/debug/beatGridDebug';
 
 import { getChordAnalysisWorker } from '@/workers/chordAnalysisClient';
 
@@ -89,6 +90,20 @@ function scoreDownbeatAlignment(chordSeries: string[], timeSignature: number): {
   }
 
   return { score: bestScore === -Infinity ? 0 : bestScore, bestShift };
+}
+
+function getDownbeatCandidateCounts(
+  candidates: Record<string, number[]> | undefined
+): { three: number; four: number; allKeys: string[] } {
+  if (!candidates) {
+    return { three: 0, four: 0, allKeys: [] };
+  }
+
+  return {
+    three: Array.isArray(candidates['3']) ? candidates['3'].length : 0,
+    four: Array.isArray(candidates['4']) ? candidates['4'].length : 0,
+    allKeys: Object.keys(candidates),
+  };
 }
 
 async function fetchFileFromUrl(url: string, videoId?: string): Promise<File> {
@@ -192,6 +207,11 @@ async function handleBlobPath(
     try {
       const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
       if (candidates) {
+        beatGridDebugLog('MeterSelection', 'Candidate set detected (blob path)', {
+          beatCount: Array.isArray(beatResults.beats) ? beatResults.beats.length : 0,
+          timeSignatureBeforeSelection: beatResults.time_signature,
+          ...getDownbeatCandidateCounts(candidates),
+        });
 
         try {
           const worker = getChordAnalysisWorker();
@@ -204,6 +224,10 @@ async function handleBlobPath(
             beatResults.downbeats = result.downbeats;
             beatResults.time_signature = result.timeSignature;
             console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+            beatGridDebugLog('MeterSelection', 'Worker selected meter (blob path)', {
+              winner: result.timeSignature,
+              downbeatCount: result.downbeats.length,
+            });
           } else {
             const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
             const tempSync = synchronizeChords(chordResults, beatsForSync);
@@ -214,6 +238,12 @@ async function handleBlobPath(
             beatResults.downbeats = candidates[String(winner)] || [];
             beatResults.time_signature = winner;
             console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+            beatGridDebugLog('MeterSelection', 'Main-thread fallback selected meter (blob path)', {
+              winner,
+              s3,
+              s4,
+              chordSeriesSample: chordSeries.slice(0, 24),
+            });
           }
         } catch (workerErr) {
           console.warn('Worker computation failed, using main thread fallback:', workerErr);
@@ -226,6 +256,12 @@ async function handleBlobPath(
           beatResults.downbeats = candidates[String(winner)] || [];
           beatResults.time_signature = winner;
           console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+          beatGridDebugLog('MeterSelection', 'Fallback after worker error selected meter (blob path)', {
+            winner,
+            s3,
+            s4,
+            workerError: workerErr instanceof Error ? workerErr.message : String(workerErr),
+          });
         }
       }
     } catch (selErr) {
@@ -372,6 +408,11 @@ export async function analyzeAudioWithRateLimit(
   try {
     const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
     if (candidates) {
+      beatGridDebugLog('MeterSelection', 'Candidate set detected (rate-limit path)', {
+        beatCount: Array.isArray(beatResults.beats) ? beatResults.beats.length : 0,
+        timeSignatureBeforeSelection: beatResults.time_signature,
+        ...getDownbeatCandidateCounts(candidates),
+      });
       try {
         const worker = getChordAnalysisWorker();
         if (worker) {
@@ -383,6 +424,10 @@ export async function analyzeAudioWithRateLimit(
           beatResults.downbeats = result.downbeats;
           beatResults.time_signature = result.timeSignature;
           console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+          beatGridDebugLog('MeterSelection', 'Worker selected meter (rate-limit path)', {
+            winner: result.timeSignature,
+            downbeatCount: result.downbeats.length,
+          });
         } else {
           const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
           const tempSync = synchronizeChords(chordResults, beatsForSync);
@@ -393,6 +438,12 @@ export async function analyzeAudioWithRateLimit(
           beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
           beatResults.time_signature = winner;
           console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+          beatGridDebugLog('MeterSelection', 'Main-thread fallback selected meter (rate-limit path)', {
+            winner,
+            s3,
+            s4,
+            chordSeriesSample: chordSeries.slice(0, 24),
+          });
         }
       } catch (workerErr) {
         console.warn('Worker computation failed, using main thread fallback:', workerErr);
@@ -405,6 +456,12 @@ export async function analyzeAudioWithRateLimit(
         beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
         beatResults.time_signature = winner;
         console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+        beatGridDebugLog('MeterSelection', 'Fallback after worker error selected meter (rate-limit path)', {
+          winner,
+          s3,
+          s4,
+          workerError: workerErr instanceof Error ? workerErr.message : String(workerErr),
+        });
       }
     }
   } catch (selErr) {
@@ -531,6 +588,11 @@ export async function analyzeAudio(
   try {
     const candidates = beatResults.downbeat_candidates as Record<string, number[]> | undefined;
     if (candidates) {
+      beatGridDebugLog('MeterSelection', 'Candidate set detected (analyzeAudio path)', {
+        beatCount: Array.isArray(beatResults.beats) ? beatResults.beats.length : 0,
+        timeSignatureBeforeSelection: beatResults.time_signature,
+        ...getDownbeatCandidateCounts(candidates),
+      });
       try {
         const worker = getChordAnalysisWorker();
         if (worker) {
@@ -542,6 +604,10 @@ export async function analyzeAudio(
           beatResults.downbeats = result.downbeats;
           beatResults.time_signature = result.timeSignature;
           console.log(`Auto-selected meter (worker): → ${result.timeSignature}/4`);
+          beatGridDebugLog('MeterSelection', 'Worker selected meter (analyzeAudio path)', {
+            winner: result.timeSignature,
+            downbeatCount: result.downbeats.length,
+          });
         } else {
           const beatsForSync: BeatInfo[] = (beatResults.beats as number[]).map((t) => ({ time: t, strength: 0.8 }));
           const tempSync = synchronizeChords(chordResults, beatsForSync);
@@ -552,6 +618,12 @@ export async function analyzeAudio(
           beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
           beatResults.time_signature = winner;
           console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+          beatGridDebugLog('MeterSelection', 'Main-thread fallback selected meter (analyzeAudio path)', {
+            winner,
+            s3,
+            s4,
+            chordSeriesSample: chordSeries.slice(0, 24),
+          });
         }
       } catch (workerErr) {
         console.warn('Worker computation failed, using main thread fallback:', workerErr);
@@ -564,6 +636,12 @@ export async function analyzeAudio(
         beatResults.downbeats = candidates[String(winner)] || beatResults.downbeats || [];
         beatResults.time_signature = winner;
         console.log(`Auto-selected meter (main thread fallback): → ${winner}/4`);
+        beatGridDebugLog('MeterSelection', 'Fallback after worker error selected meter (analyzeAudio path)', {
+          winner,
+          s3,
+          s4,
+          workerError: workerErr instanceof Error ? workerErr.message : String(workerErr),
+        });
       }
     }
   } catch (selErr) {

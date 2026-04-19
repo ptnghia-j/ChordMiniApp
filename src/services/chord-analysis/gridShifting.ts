@@ -34,10 +34,13 @@ function shouldKeepShortIntroAlignment(params: {
   const chordChangePenalty = bestOverall.chordChanges - bestIntroAligned.chordChanges;
   const retainedScoreRatio = bestIntroAligned.chordChanges / bestOverall.chordChanges;
 
-  return (
-    chordChangePenalty <= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.maxChordChangePenalty ||
-    retainedScoreRatio >= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.minCompetitiveRatio
-  );
+  // Guardrail: never preserve short-intro alignment when it costs too many
+  // downbeat-aligned chord starts globally.
+  if (chordChangePenalty > GRID_ALIGNMENT_CONFIG.shortIntroAlignment.maxChordChangePenalty) {
+    return false;
+  }
+
+  return retainedScoreRatio >= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.minCompetitiveRatio;
 }
 
 function getOptimalShiftResults(
@@ -132,21 +135,6 @@ function getOptimalShiftResults(
   const bestIntroAligned = selectBestShiftResult(introAlignedResults);
   const keepShortIntroAlignment = shouldKeepShortIntroAlignment({ bestOverall, bestIntroAligned });
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(
-      `[GridAlignment] Short intro shift evaluation ${JSON.stringify({
-        paddingCount,
-        leadingSilentRunLength,
-        timeSignature,
-        bestOverallShift: bestOverall.shift,
-        bestOverallChordChanges: bestOverall.chordChanges,
-        bestIntroAlignedShift: bestIntroAligned.shift,
-        bestIntroAlignedChordChanges: bestIntroAligned.chordChanges,
-        keepShortIntroAlignment,
-      })}`
-    );
-  }
-
   return keepShortIntroAlignment ? introAlignedResults : shiftResults;
 }
 
@@ -156,9 +144,7 @@ export function calculateOptimalShift(
   paddingCount: number = 0
 ): number {
   const evaluatedResults = getOptimalShiftResults(chords, timeSignature, paddingCount);
-  const bestResult = selectBestShiftResult(evaluatedResults);
-
-  return bestResult.shift;
+  return selectBestShiftResult(evaluatedResults).shift;
 }
 
 export function calculatePaddingAndShift(

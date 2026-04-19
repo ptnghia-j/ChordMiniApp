@@ -2,6 +2,11 @@
 // Stateless and independently testable
 
 import type { BeatInfo, ChordDetectionResult } from '@/types/audioAnalysis';
+import {
+  beatGridDebugLog,
+  beatGridDebugVerboseLog,
+  isBeatGridDebugEnabled,
+} from '@/utils/debug/beatGridDebug';
 
 /**
  * OPTIMIZED: Chord-to-beat alignment using two-pointer technique
@@ -19,6 +24,14 @@ function alignChordsToBeatsDirectly(
 
   const beatToChordMap = new Map<number, string>();
   let beatIndex = 0; // Two-pointer technique: maintain beat position
+  const debugEnabled = isBeatGridDebugEnabled();
+  const mappingSamples: Array<{
+    chord: string;
+    chordStart: number;
+    mappedBeatIndex: number;
+    mappedBeatTime: number;
+    beatDuration: number;
+  }> = [];
 
   // Two-pointer algorithm - advance both pointers simultaneously
   for (const chord of chords) {
@@ -43,6 +56,16 @@ function alignChordsToBeatsDirectly(
 
     // Map this beat to the chord
     beatToChordMap.set(beatIndex, chordName);
+
+    if (debugEnabled && mappingSamples.length < 24) {
+      mappingSamples.push({
+        chord: chordName,
+        chordStart,
+        mappedBeatIndex: beatIndex,
+        mappedBeatTime: beats[beatIndex]?.time ?? 0,
+        beatDuration,
+      });
+    }
   }
 
   // Create synchronized chords by forward-filling chord names
@@ -53,6 +76,21 @@ function alignChordsToBeatsDirectly(
     const chordName = beatToChordMap.get(i) || lastChord;
     synchronizedChords.push({ chord: chordName, beatIndex: i });
     lastChord = chordName;
+  }
+
+  if (debugEnabled) {
+    beatGridDebugLog('ChordSync', 'Chord-to-beat alignment summary', {
+      chordCount: chords.length,
+      beatCount: beats.length,
+      mappedBeatCount: beatToChordMap.size,
+      mappingSamples,
+    });
+
+    beatGridDebugVerboseLog(
+      'ChordSync',
+      'Final synchronized chords (first 48)',
+      synchronizedChords.slice(0, 48)
+    );
   }
 
   return synchronizedChords;
