@@ -160,7 +160,6 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     currentTime,
     displayMode,
     mergedKeySignature,
-    accidentalPreference: timelineModel.accidentalPreference,
     sheetSageResult,
     isPitchShiftActive,
     pitchShiftSemitones,

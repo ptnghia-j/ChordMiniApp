@@ -1,7 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { exportLeadSheetToMusicXml, exportPianoVisualizerScoreToMusicXml, type MusicXmlKeySection } from '@/utils/musicXmlExport';
 import { buildMelodyAbsoluteNoteEvents } from '@/utils/musicXmlExport/absoluteEvents';
-import { formatLeadSheetChordLabelWithAccidentalPreference } from '@/utils/musicXmlExport/shared';
 import { transposeKeySignature } from '@/utils/chordTransposition';
 import { isSilentChord } from '@/services/chord-analysis/gridShared';
 import { transposeSheetSageNoteEvents } from '@/utils/sheetSagePlayback';
@@ -13,27 +12,6 @@ import { countLeadingNullBeatSlots, findClosestTimedBeatIndex } from './helpers'
 import type { ChordGridData, SequenceCorrections, VisualizerDisplayMode } from './types';
 
 const SHEET_MUSIC_PITCH_SHIFT_DEBOUNCE_MS = 180;
-
-interface UseSheetMusicModelParams {
-  currentTime: number;
-  displayMode: VisualizerDisplayMode;
-  mergedKeySignature?: string | null;
-  accidentalPreference?: 'sharp' | 'flat' | null;
-  sheetSageResult?: SheetSageResult | null;
-  isPitchShiftActive: boolean;
-  pitchShiftSemitones: number;
-  resolvedChordGridData: ChordGridData | null | undefined;
-  mergedPlayableChordEvents: ChordEvent[];
-  stripChordEvents: ChordEvent[];
-  notationBeatOffset: number;
-  beatToChordSequenceMap: Record<number, number>;
-  shiftedOriginalChords: string[];
-  sequenceCorrections?: SequenceCorrections | null;
-  detectedBpm?: number | null;
-  timeSignature: number;
-  segmentationData?: SegmentationResult | null;
-  signalAnalysis: AudioDynamicsAnalysisResult | null;
-}
 
 type SheetPickupResolution = {
   resolvedPickupBeatCount: number;
@@ -198,19 +176,39 @@ export function resolveSheetPickupResolution(params: {
     : null;
 
   const hasNonZeroStructuralPickup = normalizedStructuralPickup !== null && normalizedStructuralPickup > 0;
+  const normalizedCombinedLeadInPickup = (
+    usesFirstPlayableLeadInPickup
+    && normalizedFirstPlayablePickup === 0
+    && notationBeatOffset > 0
+  )
+    ? normalizePickupCount(notationBeatOffset + (Number.isFinite(firstPlayableBeatIndex) ? firstPlayableBeatIndex : 0))
+    : null;
+  const shouldUseCombinedLeadInPickup = (
+    normalizedCombinedLeadInPickup !== null
+    && normalizedCombinedLeadInPickup > 0
+  );
+  const shouldRetainStructuralPickupAtBoundaryAlignedLeadIn = (
+    hasNonZeroStructuralPickup
+    && usesFirstPlayableLeadInPickup
+    && normalizedFirstPlayablePickup === 0
+    && !shouldUseCombinedLeadInPickup
+  );
   let resolvedPickupBeatCount = 0;
 
   if (melodyOverridesStructuralPickup) {
     resolvedPickupBeatCount = normalizedFirstMelodyPickup!;
   } else if (melodyOverridesFirstPlayableLeadInPickup) {
     resolvedPickupBeatCount = normalizedFirstMelodyPickup!;
-  } else if (hasNonZeroStructuralPickup && !usesFirstPlayableLeadInPickup) {
+  } else if (shouldUseCombinedLeadInPickup) {
+    resolvedPickupBeatCount = normalizedCombinedLeadInPickup!;
+  } else if (hasNonZeroStructuralPickup && (!usesFirstPlayableLeadInPickup || shouldRetainStructuralPickupAtBoundaryAlignedLeadIn)) {
     resolvedPickupBeatCount = normalizedStructuralPickup;
   } else if (
     usesFirstPlayableLeadInPickup
     && firstPlayableBeatIndex !== null
     && firstPlayableBeatIndex > 0
     && normalizedFirstPlayablePickup !== null
+    && normalizedFirstPlayablePickup > 0
   ) {
     resolvedPickupBeatCount = normalizedFirstPlayablePickup;
   } else if (isWithinFirstMeasure(leadingSilentCells) && normalizedLeadingSilentPickup !== null) {
@@ -242,8 +240,7 @@ export function resolveSheetPickupResolution(params: {
   }
 
   if (shouldForceZeroPickupForLongLeadingSilence) {
-    // Once the first musical content lands after a full bar, keep full-bar rests
-    // instead of folding the lead-in down to a misleading modulo pickup.
+    // Keep full-bar lead-ins as full-bar rests; modulo pickup would be misleading.
     resolvedPickupBeatCount = 0;
   }
 
@@ -277,11 +274,30 @@ export function resolveSheetPickupResolution(params: {
   };
 }
 
+interface UseSheetMusicModelParams {
+  currentTime: number;
+  displayMode: VisualizerDisplayMode;
+  mergedKeySignature?: string | null;
+  sheetSageResult?: SheetSageResult | null;
+  isPitchShiftActive: boolean;
+  pitchShiftSemitones: number;
+  resolvedChordGridData: ChordGridData | null | undefined;
+  mergedPlayableChordEvents: ChordEvent[];
+  stripChordEvents: ChordEvent[];
+  notationBeatOffset: number;
+  beatToChordSequenceMap: Record<number, number>;
+  shiftedOriginalChords: string[];
+  sequenceCorrections?: SequenceCorrections | null;
+  detectedBpm?: number | null;
+  timeSignature: number;
+  segmentationData?: SegmentationResult | null;
+  signalAnalysis: AudioDynamicsAnalysisResult | null;
+}
+
 export function useSheetMusicModel({
   currentTime,
   displayMode,
   mergedKeySignature,
-  accidentalPreference,
   sheetSageResult = null,
   isPitchShiftActive,
   pitchShiftSemitones,
@@ -448,7 +464,7 @@ export function useSheetMusicModel({
       }
 
       const displayChordName = typeof event.chordName === 'string'
-        ? formatLeadSheetChordLabelWithAccidentalPreference(event.chordName.trim(), accidentalPreference)
+        ? event.chordName.trim()
         : '';
       if (!displayChordName) {
         return;
@@ -464,7 +480,7 @@ export function useSheetMusicModel({
     });
 
     return byBeatIndex;
-  }, [accidentalPreference, stripChordEvents]);
+  }, [stripChordEvents]);
 
   const sheetMusicChordEvents = useMemo(() => {
     const rawBeatTimes = resolvedChordGridData?.beats;
@@ -502,19 +518,29 @@ export function useSheetMusicModel({
     });
   }, [mergedPlayableChordEvents, notationBeatOffset, resolvedChordGridData?.beats, stripChordNameByBeatIndex]);
 
-  const firstSheetMusicMelodyBeatIndex = useMemo(() => {
-    return resolveFirstMelodyBeatIndex(sheetMusicMelodyNoteEvents, sheetMusicMelodyBeatTimes);
-  }, [sheetMusicMelodyBeatTimes, sheetMusicMelodyNoteEvents]);
+  const firstSheetMusicMelodyBeatIndex = useMemo(() => (
+    resolveFirstMelodyBeatIndex(sheetMusicMelodyNoteEvents, sheetMusicMelodyBeatTimes)
+  ), [sheetMusicMelodyBeatTimes, sheetMusicMelodyNoteEvents]);
 
-  const sheetPickupResolution = useMemo(() => resolveSheetPickupResolution({
-    timeSignature,
+  const sheetPickupResolution = useMemo(() => {
+    return resolveSheetPickupResolution({
+      timeSignature,
+      notationBeatOffset,
+      resolvedChordGridData,
+      sheetMusicBeatTimes,
+      sheetMusicChordEvents,
+      firstMelodyBeatIndex: firstSheetMusicMelodyBeatIndex,
+      hasMelodyNotes: (sheetSageResult?.noteEvents?.length ?? 0) > 0,
+    });
+  }, [
+    firstSheetMusicMelodyBeatIndex,
     notationBeatOffset,
     resolvedChordGridData,
     sheetMusicBeatTimes,
     sheetMusicChordEvents,
-    firstMelodyBeatIndex: firstSheetMusicMelodyBeatIndex,
-    hasMelodyNotes: (sheetSageResult?.noteEvents?.length ?? 0) > 0,
-  }), [firstSheetMusicMelodyBeatIndex, notationBeatOffset, resolvedChordGridData, sheetMusicBeatTimes, sheetMusicChordEvents, sheetSageResult?.noteEvents?.length, timeSignature]);
+    sheetSageResult?.noteEvents?.length,
+    timeSignature,
+  ]);
 
   const sheetMusicPickupBeatCount = sheetPickupResolution.resolvedPickupBeatCount;
   const exportedSheetMusicPickupBeatCount = sheetPickupResolution.preferInferredExportPickup
@@ -613,6 +639,9 @@ export function useSheetMusicModel({
     sheetMusicDisplayKeySignature,
     sheetMusicKeySections,
     sheetMusicMelodyNoteEvents,
+    sheetMusicPickupBeatCount,
+    sheetPickupResolution.preferInferredExportPickup,
+    sheetPickupResolution.usesFirstPlayableLeadInPickup,
     sheetSageResult,
     segmentationData,
     signalAnalysis,

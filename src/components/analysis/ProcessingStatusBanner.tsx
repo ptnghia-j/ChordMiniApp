@@ -11,7 +11,7 @@ const PROCESSING_RATIOS: Record<string, number> = {
   'madmom': 0.3,
   'beat-transformer': 0.45,
   'auto': 0.3,
-  'chord-recognition': 0.1,
+  'chord-recognition': 0.12,
 };
 
 const FALLBACK_DURATION = 180; // 3 minutes default
@@ -95,9 +95,8 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
     // When chord-recognition starts, show chord toast
     if (stage === 'chord-recognition' && !chordToastKeyRef.current) {
       const effectiveDuration = audioDurationRef.current || FALLBACK_DURATION;
-      const beatRatio = PROCESSING_RATIOS[beatDetector] || 0.3;
-      // Chord toast stays for 1/10 of the beat detection estimate
-      const chordTimeoutMs = Math.ceil(effectiveDuration * beatRatio * 0.1) * 1000;
+      const chordRatio = PROCESSING_RATIOS['chord-recognition'] || 0.12;
+      const chordTimeoutMs = Math.ceil(effectiveDuration * chordRatio) * 1000;
 
       const key = addToast({
         title: 'Recognizing Chords',

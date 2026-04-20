@@ -323,7 +323,6 @@ export function assignVoicesForStaff(
 
   const voiceEnds = [0, 0];
   const voices = [new Set<QuantizedNotationNoteEvent>(), new Set<QuantizedNotationNoteEvent>()];
-  let hasExplicitSplitVoiceTexture = false;
 
   [...groups.entries()].sort((left, right) => left[0] - right[0]).forEach(([startDivision, group]) => {
     const { voice1, voice2 } = splitVoiceBundle(group);
@@ -331,7 +330,6 @@ export function assignVoicesForStaff(
     const canUseVoice2 = startDivision >= (voiceEnds[1] - VOICE_SEQUENTIAL_TOLERANCE_DIVISIONS);
 
     if (voice2.length > 0) {
-      hasExplicitSplitVoiceTexture = true;
       voice1.forEach((event) => {
         event.voice = 1;
         voiceEnds[0] = Math.max(voiceEnds[0], event.endDivision);
@@ -392,11 +390,8 @@ export function assignVoicesForStaff(
   );
 
   const collapsibleVoice2Events = voice2Events.filter((event) => (
-    !hasExplicitSplitVoiceTexture
-    && (
-      !overlapsWithVoice1(event)
-      || isCoextensiveWithVoice1(event)
-    )
+    !overlapsWithVoice1(event)
+    || isCoextensiveWithVoice1(event)
   ));
 
   if (collapsibleVoice2Events.length > 0) {
