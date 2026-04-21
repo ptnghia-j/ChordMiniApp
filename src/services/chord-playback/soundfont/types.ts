@@ -20,6 +20,13 @@ export interface PlaybackTimingContext {
   beatCount?: number;
   segmentationData?: SegmentationResult | null;
   signalDynamics?: ChordSignalDynamics | null;
+  /**
+   * Name of the chord scheduled immediately after the one being played.
+   * Forwarded to note generators so the guitar strum builder can decide
+   * whether short-measure transitions share enough anchor fingers to keep
+   * a syncopated upstrum on beat 2&.
+   */
+  nextChordName?: string;
 }
 
 export interface InstrumentRenderConfig {

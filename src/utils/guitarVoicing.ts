@@ -16,6 +16,12 @@ export interface ResolvedGuitarVoicing {
   positionIndex: number;
   midi: number[];
   noteNames: string[];
+  /** Per-string fret values relative to `baseFret` (−1 muted, 0 open). Only populated for diagram voicings. */
+  frets?: number[];
+  /** Starting fret of the diagram window (1-based). Only populated for diagram voicings. */
+  baseFret?: number;
+  /** Barre spans across strings, if any. Only populated for diagram voicings. */
+  barres?: number[];
 }
 
 export type GuitarStrumDirection = 'down' | 'up';
@@ -358,6 +364,11 @@ function compareCapoSuggestions(
     return candidate.totalBarres - currentBest.totalBarres;
   }
 
+  // Same aggregate barre workload: prefer lower capo before overall difficulty score.
+  if (candidate.capoFret !== currentBest.capoFret) {
+    return candidate.capoFret - currentBest.capoFret;
+  }
+
   if (candidate.score !== currentBest.score) {
     return candidate.score - currentBest.score;
   }
@@ -366,7 +377,7 @@ function compareCapoSuggestions(
     return candidate.averageRelativeFret - currentBest.averageRelativeFret;
   }
 
-  return candidate.capoFret - currentBest.capoFret;
+  return 0;
 }
 
 export function resolveGuitarShapeChordName(
@@ -414,6 +425,9 @@ export function resolveGuitarVoicing(
   }
 
   const soundingMidi = diagramMidi.map((value) => value + capoFret);
+  const frets = Array.isArray(position.frets) ? [...position.frets] : undefined;
+  const baseFret = typeof position.baseFret === 'number' ? position.baseFret : undefined;
+  const barres = Array.isArray(position.barres) ? [...position.barres] : undefined;
   return {
     source: 'diagram',
     soundingChordName,
@@ -422,6 +436,9 @@ export function resolveGuitarVoicing(
     positionIndex,
     midi: soundingMidi,
     noteNames: soundingMidi.map((value) => midiToNoteName(value)),
+    frets,
+    baseFret,
+    barres,
   };
 }
 
@@ -509,26 +526,70 @@ export function suggestCapoPosition(
   return bestSuggestion;
 }
 
+/**
+ * Count how many strings change absolute fret position between two diagram
+ * voicings. An "anchor finger" is a string whose absolute fret (or mute/open
+ * state) is preserved across the transition, so a lower count means the next
+ * chord shares more anchors with the current one and is easier to reach for.
+ *
+ * Returns `null` when either voicing lacks diagram-level fret data (fallback
+ * voicings, end-of-song, no-chord), signalling that the caller should fall
+ * back to its default decision rather than treat the transition as "hard".
+ */
+export function countAnchorFingerChanges(
+  current: ResolvedGuitarVoicing | null | undefined,
+  next: ResolvedGuitarVoicing | null | undefined,
+): number | null {
+  if (!current || !next) return null;
+  if (!current.frets || !next.frets) return null;
+
+  const currentBase = current.baseFret ?? 1;
+  const nextBase = next.baseFret ?? 1;
+  const stringCount = Math.max(current.frets.length, next.frets.length);
+
+  const absolute = (fret: number | undefined, base: number): number => {
+    if (fret === undefined || fret < 0) return -1;
+    if (fret === 0) return 0;
+    return fret + base - 1;
+  };
+
+  let changes = 0;
+  for (let i = 0; i < stringCount; i += 1) {
+    const currentAbs = absolute(current.frets[i], currentBase);
+    const nextAbs = absolute(next.frets[i], nextBase);
+    if (currentAbs !== nextAbs) {
+      changes += 1;
+    }
+  }
+  return changes;
+}
+
 export function buildGuitarStrumPattern(
   duration: number,
   beatDuration: number,
   timeSignature: number = 4,
   signalDynamics?: ChordSignalDynamics | null,
+  options: { allowShortMeasureUpstrum?: boolean } = {},
 ): GuitarStrumStroke[] {
   if (duration <= 0 || beatDuration <= 0) {
     return [];
   }
 
+  const { allowShortMeasureUpstrum = true } = options;
   const durationInBeats = duration / beatDuration;
   if (timeSignature <= 2 || durationInBeats < SHORT_GUITAR_CHORD_BEATS) {
     // 2-beat chord holds are long enough that the ear craves a fill-in stroke.
     // Emit [D - - U] across the four 8th-note slots so the upstrum lands on
     // the "and" of beat 2. The off-beat upstroke is resolved downstream by
-    // `resolveStrumAccentScale`, which maps it to a low accent scale (~0.19),
-    // preserving the softer upstrumming rule.
+    // `resolveStrumAccentScale`, which maps it to a low accent scale,
+    // preserving the softer upstrumming rule. The upstroke is gated by
+    // `allowShortMeasureUpstrum` so that transitions requiring more than two
+    // anchor-finger changes omit the syncopation and give the player extra
+    // time to reshape.
     const upstrumOffset = beatDuration * 1.5;
     if (
-      durationInBeats >= SHORT_GUITAR_CHORD_BEATS - 1
+      allowShortMeasureUpstrum
+      && durationInBeats >= SHORT_GUITAR_CHORD_BEATS - 1
       && upstrumOffset < duration - STRUM_TIMING_EPSILON
     ) {
       return [

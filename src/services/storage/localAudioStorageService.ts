@@ -3,7 +3,7 @@ import { tmpdir } from 'os';
 import { promises as fs } from 'fs';
 
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.opus', '.webm'] as const;
-const PROJECT_LOCAL_AUDIO_DIR = path.join(process.cwd(), 'temp');
+const PROJECT_LOCAL_AUDIO_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'temp');
 const LEGACY_LOCAL_AUDIO_DIR = path.join(tmpdir(), 'chordmini-ytdlp');
 const LOCAL_AUDIO_METADATA_FILE = path.join(PROJECT_LOCAL_AUDIO_DIR, 'cache-metadata.json');
 

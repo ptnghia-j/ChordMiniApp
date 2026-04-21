@@ -77,6 +77,12 @@ export function useGuitarOnlyPlayback(
       currentBeatIndex,
       PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
     );
+    const currentEventIndex = currentChordEvent
+      ? merged.indexOf(currentChordEvent)
+      : -1;
+    const nextChordName = currentEventIndex >= 0
+      ? merged[currentEventIndex + 1]?.chordName
+      : undefined;
 
     if (!currentChordEvent) {
       if (lastPlayedChordRef.current !== null) {
@@ -122,6 +128,7 @@ export function useGuitarOnlyPlayback(
         beatCount: currentChordEvent.beatCount,
         segmentationData,
         signalDynamics,
+        nextChordName,
       },
       timeSignature,
       guitarVoicing,

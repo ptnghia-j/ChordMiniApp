@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     } else if (!finalAudioPath) {
       console.log('❌ [API] No audioPath provided, checking for local audio file...');
       // Fallback: Check if we have a local audio file for this video ID
-      const audioDir = path.join(process.cwd(), 'public', 'audio');
+      const audioDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'audio');
       try {
         const files = await fs.readdir(audioDir);
         const matchingFile = files.find(file => file.startsWith(`${videoId}_`));

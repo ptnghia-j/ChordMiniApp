@@ -3,7 +3,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 
 // Define the public audio directory
-const PUBLIC_AUDIO_DIR = path.join(process.cwd(), 'public', 'audio');
+const PUBLIC_AUDIO_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'audio');
 
 /**
  * Proxy server for audio files

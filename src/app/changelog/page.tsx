@@ -29,6 +29,22 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.4',
+      date: 'April 21, 2026',
+      title: 'Guitar tablature, To be continued...',
+      features: [
+        'NEW: Guitar tablature display in Guitar Chords tab, showing fret numbers and string positions for each chord',
+      ],
+      technical: [
+        'NEW: Guitar tablature is implemented in-app with React and native SVG (six-string staff, fret number pills, sustain tails, strum-direction arrows). No dedicated tab engraving npm package (e.g. VexFlow, alphaTab).',
+        'NEW: Tab timing matches guitar soundfont playback by driving the staff from the same chord timeline (ChordEvent), mergeConsecutiveChordEvents, generateNotesForInstrument for guitar, scheduled-note clustering, and resolveGuitarVoicing—aligned with the smplr-based soundfont pipeline.',
+        'NEW: The chord strip above the staff reuses ScrollingChordStrip and getUniformTimelineBeatWidth from the piano visualizer; shared DynamicsAnalyzer input keeps picked vs strummed patterns consistent with signal-aware playback.',
+        'IMPROVED: Memoized SVG subcomponents and strum-column plus arrow layout computed in useMemo limit reconciliation work while playback time updates mostly adjust transform/RAF scrolling.',
+      ],
+      breaking: []
+    },
+
+    {
       version: 'v0.6.3.5',
       date: 'April 10, 2026',
       title: 'Sheet Music Sync Stabilization & Export Refactor',

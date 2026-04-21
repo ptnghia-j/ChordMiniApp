@@ -37,12 +37,14 @@ export function generateAllInstrumentVisualNotes(
   // Fall back to estimated beat duration from raw events when beat counts are unavailable.
   const bd = bpm ? beatDurationFromBpm(bpm) : estimateBeatDuration(events);
 
-  for (const event of merged) {
+  for (let eventIndex = 0; eventIndex < merged.length; eventIndex += 1) {
+    const event = merged[eventIndex];
     const { chordName, notes: chordNotes, startTime, endTime } = event;
     const duration = endTime - startTime;
     const eventBeatCount = Math.max(1, event.beatCount ?? 1);
     const eventBeatDuration = duration > 0 ? duration / eventBeatCount : bd;
     const signalDynamics = signalDynamicsSource?.getSignalDynamics(startTime, duration) ?? null;
+    const nextChordName = merged[eventIndex + 1]?.chordName;
 
     for (const inst of instruments) {
       const instrumentName = inst.name.toLowerCase() as InstrumentName;
@@ -60,6 +62,7 @@ export function generateAllInstrumentVisualNotes(
         signalDynamics,
         guitarVoicing,
         targetKey,
+        nextChordName,
       });
       const visualScheduled = playbackTime !== undefined
         ? scheduled

@@ -9,6 +9,14 @@ export const SUSTAIN_RETRIGGER_OVERLAP_SECONDS = 0.16;
 export const SUSTAIN_RETRIGGER_VELOCITY_SCALE = 0.94;
 export const DENSITY_REFERENCE_VOICES = 3;
 export const MIN_DENSITY_COMPENSATION = 0.72;
+/** Notes within this onset window count as one strum / pick burst for level compensation. */
+export const GUITAR_STRUM_CLUSTER_SECONDS = 0.095;
+/**
+ * Strum loudness curve: per-note gain ≈ √(DENSITY_REFERENCE_VOICES) × n^(γ−1).
+ * γ=1 matches the old “full stack” feel; γ<1 tapers large strums slightly without
+ * collapsing them toward a single-note level.
+ */
+export const GUITAR_STRUM_CLUSTER_LEVEL_GAMMA = 0.97;
 // Cluster-chord compensation: offsets densityCompensation so simultaneous
 // (block/cluster) piano onsets balance against single-voice arpeggios.
 export const PIANO_BLOCK_CHORD_VELOCITY_BOOST = 1.51;

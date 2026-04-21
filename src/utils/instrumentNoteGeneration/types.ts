@@ -60,6 +60,14 @@ export interface NoteGenerationParams {
   guitarVoicing?: Partial<GuitarVoicingSelection>;
   /** Enharmonic target key used when resolving capo-transposed shape names */
   targetKey?: string;
+  /**
+   * Name of the chord that follows this event in the scheduled playback
+   * sequence. Guitar note generation uses this to decide whether a short
+   * measure can accommodate a syncopated upstrum: transitions that share most
+   * anchor fingers keep the upstroke, while bigger reshapes suppress it so
+   * the player has time to move.
+   */
+  nextChordName?: string;
 }
 
 /** Active instrument descriptor (matches existing interface in FallingNotesCanvas) */

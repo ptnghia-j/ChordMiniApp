@@ -391,6 +391,10 @@ export const useChordPlayback = ({
         event.duration,
         signalDynamics,
       );
+      const currentLookupIndex = findChordEventIndexByBeatIndex(lookupSchedule, event.beatIndex);
+      const nextChordName = currentLookupIndex >= 0
+        ? lookupSchedule[currentLookupIndex + 1]?.scheduled.chord
+        : undefined;
 
       chordPlaybackService.current.playChord(
         event.chord,
@@ -404,6 +408,7 @@ export const useChordPlayback = ({
           beatCount: event.beatCount,
           segmentationData,
           signalDynamics,
+          nextChordName,
         },
         timeSignatureRef.current,
         guitarVoicing,
@@ -548,6 +553,10 @@ export const useChordPlayback = ({
       event.duration,
       signalDynamics,
     );
+    const currentLookupIndex = findChordEventIndexByBeatIndex(chordLookupSchedule, event.beatIndex);
+    const nextChordName = currentLookupIndex >= 0
+      ? chordLookupSchedule[currentLookupIndex + 1]?.scheduled.chord
+      : undefined;
 
     chordPlaybackService.current.playChord(
       event.chord,
@@ -561,6 +570,7 @@ export const useChordPlayback = ({
         beatCount: event.beatCount,
         segmentationData,
         signalDynamics,
+        nextChordName,
       },
       timeSignature,
       guitarVoicing,

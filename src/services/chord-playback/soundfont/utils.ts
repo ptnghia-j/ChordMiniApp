@@ -1,4 +1,8 @@
 import {
+  DENSITY_REFERENCE_VOICES,
+  GUITAR_STRUM_CLUSTER_LEVEL_GAMMA,
+  GUITAR_STRUM_CLUSTER_SECONDS,
+  MIN_DENSITY_COMPENSATION,
   SAMPLE_DURATION,
   SUSTAIN_RETRIGGER_OVERLAP_SECONDS,
   SUSTAIN_RETRIGGER_SEGMENT_SECONDS,
@@ -18,6 +22,50 @@ export function resolvePatternBeatDuration(
     return duration / beatCount;
   }
   return beatDurationFromBpm(bpm);
+}
+
+/**
+ * Group staggered guitar onsets (strum rake / pick bursts) so level compensation uses
+ * the full voicing size instead of treating each string as a lone voice.
+ */
+export function buildGuitarStrumClusterSizes(
+  notes: ScheduledNote[],
+  clusterWindowSeconds: number = GUITAR_STRUM_CLUSTER_SECONDS,
+): number[] {
+  if (notes.length === 0) {
+    return [];
+  }
+
+  const n = notes.length;
+  const order = notes.map((_, i) => i).sort((a, b) => notes[a].startOffset - notes[b].startOffset);
+  const sizes = new Array<number>(n).fill(1);
+
+  let start = 0;
+  while (start < order.length) {
+    const t0 = notes[order[start]].startOffset;
+    let end = start + 1;
+    while (
+      end < order.length
+      && notes[order[end]].startOffset - t0 <= clusterWindowSeconds
+    ) {
+      end += 1;
+    }
+    const size = end - start;
+    for (let k = start; k < end; k += 1) {
+      sizes[order[k]] = size;
+    }
+    start = end;
+  }
+
+  return sizes;
+}
+
+/** Softer than γ=1 (old stacking), but much fuller than linear 1/n leveling. */
+export function resolveGuitarClusterDensityCompensation(clusterVoices: number): number {
+  const n = Math.max(1, clusterVoices);
+  const base = Math.sqrt(DENSITY_REFERENCE_VOICES);
+  const comp = base * (n ** (GUITAR_STRUM_CLUSTER_LEVEL_GAMMA - 1));
+  return Math.max(MIN_DENSITY_COMPENSATION, comp);
 }
 
 export function getSwitchAttackMultiplier(

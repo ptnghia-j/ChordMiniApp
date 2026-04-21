@@ -76,14 +76,14 @@ const MIN_VELOCITY = 0.4;
 /** Velocity ceiling */
 const MAX_VELOCITY = 1.0;
 
-/** Downbeat accent multiplier */
-const DOWNBEAT_ACCENT = 1.04;
+/** Downbeat accent multiplier (kept narrow so metric steps feel gradual) */
+const DOWNBEAT_ACCENT = 1.025;
 
 /** Beat-3 mild accent in 4/4 */
-const BEAT3_ACCENT = 1.02;
+const BEAT3_ACCENT = 1.012;
 
 /** Weak beat softening multiplier */
-const WEAK_BEAT_SOFTEN = 0.97;
+const WEAK_BEAT_SOFTEN = 0.985;
 
 /** How much influence the energy contour has (0 = none, 1 = full) */
 const ENERGY_INFLUENCE = 0.25;
@@ -263,10 +263,14 @@ export class DynamicsAnalyzer {
   private energyContour: EnergyContour | null = null;
   private signalAnalysis: AudioDynamicsAnalysisResult | null = null;
   private sectionContour: SectionContourPoint[] = [];
-  /** Smoothed velocity to prevent abrupt jumps between consecutive chords */
+  /** Smoothed volatile layer to prevent abrupt jumps between consecutive chords */
   private lastVelocity: number | null = null;
   /** Time of the last velocity query for time-aware smoothing */
   private lastVelocityTime: number | null = null;
+  /** Smoothed harmonic tension so chord-quality changes do not click */
+  private lastHarmonicTensionMul: number | null = null;
+  /** Final blended output for extra continuity across chord boundaries */
+  private lastBlendedVelocity: number | null = null;
 
   /**
    * Set musical parameters for beat-strength shaping.
@@ -756,11 +760,15 @@ export class DynamicsAnalyzer {
       }
     }
 
-    // 6. Harmonic tension
+    // 6. Harmonic tension (blended so quality changes are not a hard step)
     if (chordName) {
       const quality = getChordQuality(chordName);
-      const tension = TENSION_MAP[quality] ?? 1.0;
-      volatile *= tension;
+      let tensionMul = TENSION_MAP[quality] ?? 1.0;
+      if (this.lastHarmonicTensionMul !== null) {
+        tensionMul = 0.52 * tensionMul + 0.48 * this.lastHarmonicTensionMul;
+      }
+      this.lastHarmonicTensionMul = tensionMul;
+      volatile *= tensionMul;
     }
 
     // 7. Tempo-aware dynamic range scaling
@@ -775,12 +783,14 @@ export class DynamicsAnalyzer {
       volatile = 0.75 + (volatile - 0.75) * tempoScale;
     }
 
+    const priorSampleTimeForBlend = this.lastVelocityTime;
+
     // EMA smoothing — only applied to the volatile component so intentional
     // phrasing / macro contour curves are preserved in full.
     if (this.lastVelocity !== null && this.lastVelocityTime !== null) {
       const timeSinceLast = Math.abs(time - this.lastVelocityTime);
       if (timeSinceLast < 4.0) {
-        const alpha = timeSinceLast < 0.8 ? 0.2 : timeSinceLast < 2.0 ? 0.34 : 0.52;
+        const alpha = timeSinceLast < 0.8 ? 0.13 : timeSinceLast < 2.0 ? 0.25 : 0.41;
         volatile = alpha * volatile + (1 - alpha) * this.lastVelocity;
       }
     }
@@ -792,6 +802,17 @@ export class DynamicsAnalyzer {
 
     // Clamp to valid range
     velocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, velocity));
+
+    // Second gentle blend on the final multiplier so chord-to-chord dynamics glide
+    if (this.lastBlendedVelocity !== null && priorSampleTimeForBlend !== null) {
+      const timeSinceLastBlend = Math.abs(time - priorSampleTimeForBlend);
+      if (timeSinceLastBlend < 3.5 && timeSinceLastBlend > 1e-4) {
+        const beta = timeSinceLastBlend < 0.4 ? 0.3 : timeSinceLastBlend < 1.2 ? 0.42 : 0.54;
+        velocity = beta * velocity + (1 - beta) * this.lastBlendedVelocity;
+        velocity = Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, velocity));
+      }
+    }
+    this.lastBlendedVelocity = velocity;
 
     return velocity;
   }
@@ -818,5 +839,7 @@ export class DynamicsAnalyzer {
     this.sectionContour = [];
     this.lastVelocity = null;
     this.lastVelocityTime = null;
+    this.lastHarmonicTensionMul = null;
+    this.lastBlendedVelocity = null;
   }
 }

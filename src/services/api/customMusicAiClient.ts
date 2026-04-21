@@ -27,7 +27,7 @@ const isPathWithinRoot = (candidatePath: string, rootPath: string): boolean => {
 
 const assertReadableLocalFilePath = (filePath: string): string => {
   const resolvedPath = path.resolve(filePath);
-  const allowedRoots = [process.cwd(), tmpdir()];
+  const allowedRoots = [path.join(/*turbopackIgnore: true*/ process.cwd()), tmpdir()];
 
   if (!allowedRoots.some(rootPath => isPathWithinRoot(resolvedPath, rootPath))) {
     throw new Error('Local file path is outside allowed directories');

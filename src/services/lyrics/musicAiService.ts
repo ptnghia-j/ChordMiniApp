@@ -101,7 +101,7 @@ const isPathWithinRoot = (candidatePath: string, rootPath: string): boolean => {
 };
 
 const resolveLocalAudioFilePath = (audioUrl: string): string => {
-  const projectRoot = process.cwd();
+  const projectRoot = path.join(/*turbopackIgnore: true*/ process.cwd());
   const publicRoot = path.join(projectRoot, 'public');
 
   let resolvedPath: string;

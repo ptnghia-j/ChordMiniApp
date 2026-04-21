@@ -21,6 +21,7 @@ export function generateNotesForInstrument(
     timeSignature = 4,
     guitarVoicing,
     targetKey,
+    nextChordName,
   } = params;
 
   if (isNoChordChordName(chordName) || chordNotes.length === 0) {
@@ -66,6 +67,7 @@ export function generateNotesForInstrument(
         signalDynamics,
         guitarVoicing,
         targetKey,
+        nextChordName,
       );
 
     case 'violin':

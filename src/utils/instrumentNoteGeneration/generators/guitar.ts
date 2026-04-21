@@ -1,7 +1,9 @@
 import type { ChordSignalDynamics } from '@/services/audio/audioDynamicsTypes';
-import type { MidiNote } from '@/utils/chordToMidi';
+import { isNoChordChordName, type MidiNote } from '@/utils/chordToMidi';
 import {
   buildGuitarStrumPattern,
+  countAnchorFingerChanges,
+  resolveGuitarVoicing,
   resolveGuitarVoicingMidiNotes,
   type GuitarStrumDirection,
   type GuitarVoicingSelection,
@@ -172,13 +174,17 @@ function resolveFingerpickPattern(
  * and apply a non-linear curve so weak strokes are pulled down harder than
  * strong ones.
  *
+ * Weak-beat floors were raised in a dedicated dynamics pass so the off-beat
+ * strokes stay audible against busy mixes while remaining visibly softer
+ * than the beat-1 accent.
+ *
  *   1.00 — measure downbeat (beat 1, down)
- *   0.80 — secondary accent (beat 3 in 4/4, beat 4 in 6/8)
- *   0.48 — on-beat backbeat downstroke (beats 2/4 in 4/4)
- *   0.36 — on-beat upstroke (uncommon; still softer than a down)
- *   0.28 — syncopated off-beat downstroke (anticipation push)
- *   0.19 — off-beat upstroke (ghost strum — soft, slightly lifted so 2& is
- *         audible under the backbeat without approaching beat 3)
+ *   0.82 — secondary accent (beat 3 in 4/4, beat 4 in 6/8)
+ *   0.56 — on-beat backbeat downstroke (beats 2/4 in 4/4)
+ *   0.44 — on-beat upstroke (uncommon; still softer than a down)
+ *   0.36 — syncopated off-beat downstroke (anticipation push)
+ *   0.28 — off-beat upstroke (ghost strum — lifted from the previous 0.19
+ *         floor so 2&/4& reads clearly without approaching beat 3)
  */
 function resolveStrumAccentScale(
   positionInMeasure: number,
@@ -186,33 +192,41 @@ function resolveStrumAccentScale(
   timeSignature: number,
   direction: GuitarStrumDirection,
 ): number {
-  if (beatDuration <= 0) return direction === 'down' ? 1 : 0.19;
+  if (beatDuration <= 0) return direction === 'down' ? 1 : 0.28;
   const beatIndexExact = positionInMeasure / beatDuration;
   const beatIndex = Math.round(beatIndexExact);
   const onBeat = Math.abs(beatIndexExact - beatIndex) < 0.15;
 
   if (direction === 'up') {
-    return onBeat ? 0.36 : 0.19;
+    return onBeat ? 0.44 : 0.28;
   }
 
   if (!onBeat) {
-    return 0.28;
+    return 0.36;
   }
 
   if (beatIndex === 0) return 1.0;
 
   if (timeSignature === 4) {
-    return beatIndex === 2 ? 0.80 : 0.48;
+    return beatIndex === 2 ? 0.82 : 0.56;
   }
   if (timeSignature === 3) {
-    return beatIndex === 2 ? 0.58 : 0.40;
+    return beatIndex === 2 ? 0.62 : 0.48;
   }
   if (timeSignature === 6) {
-    return beatIndex === 3 ? 0.74 : 0.36;
+    return beatIndex === 3 ? 0.76 : 0.44;
   }
   const half = Math.floor(timeSignature / 2);
-  return beatIndex === half ? 0.70 : 0.40;
+  return beatIndex === half ? 0.72 : 0.46;
 }
+
+/**
+ * Maximum anchor-finger changes permitted between a short-measure chord and
+ * the following chord for the syncopated eighth-note upstrum on beat 2& to be
+ * retained. Transitions with more changes suppress the upstroke so the player
+ * (or the listener's ear) has the full second half of the measure to reshape.
+ */
+const SHORT_MEASURE_UPSTRUM_MAX_ANCHOR_CHANGES = 2;
 
 export function generateGuitarNotes(
   chordName: string,
@@ -223,12 +237,30 @@ export function generateGuitarNotes(
   signalDynamics?: ChordSignalDynamics | null,
   guitarVoicing?: Partial<GuitarVoicingSelection>,
   targetKey?: string,
+  nextChordName?: string,
 ): ScheduledNote[] {
   const voicingNotes = resolveGuitarVoicingMidiNotes(chordName, guitarVoicing, targetKey)
     .sort((a, b) => a.midi - b.midi);
   const sourceNotes = voicingNotes.length > 0 ? voicingNotes : chordTones;
   if (sourceNotes.length === 0) {
     return [];
+  }
+
+  // Resolve the current voicing metadata so we can compare fret positions
+  // with the next chord's voicing for anchor-finger analysis.
+  const currentVoicing = resolveGuitarVoicing(chordName, guitarVoicing, targetKey);
+
+  // Decide whether a syncopated eighth-note upstrum is appropriate for short
+  // measures based on how many anchor fingers survive the transition. When
+  // the next chord is missing, is a no-chord marker, or lacks diagram data,
+  // default to allowing the upstrum so single-shape demos keep the pattern.
+  let allowShortMeasureUpstrum = true;
+  if (nextChordName && !isNoChordChordName(nextChordName)) {
+    const nextVoicing = resolveGuitarVoicing(nextChordName, guitarVoicing, targetKey);
+    const anchorChanges = countAnchorFingerChanges(currentVoicing, nextVoicing);
+    if (anchorChanges !== null && anchorChanges > SHORT_MEASURE_UPSTRUM_MAX_ANCHOR_CHANGES) {
+      allowShortMeasureUpstrum = false;
+    }
   }
 
   const quietness = resolveQuietness(signalDynamics);
@@ -295,7 +327,9 @@ export function generateGuitarNotes(
     return notes;
   }
 
-  const strums = buildGuitarStrumPattern(duration, beatDuration, timeSignature, signalDynamics);
+  const strums = buildGuitarStrumPattern(duration, beatDuration, timeSignature, signalDynamics, {
+    allowShortMeasureUpstrum,
+  });
   const notes: ScheduledNote[] = [];
   const trimmedVoiceCount = quietness > 0.58 ? 5 : quietness > 0.32 ? 6 : sourceNotes.length;
   const transitionVoiceFloor = Math.min(sourceNotes.length, 4);

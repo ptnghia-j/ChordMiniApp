@@ -51,7 +51,13 @@ import type {
   PlaybackTimingContext,
   SoundfontChordPlaybackOptions,
 } from './soundfont/types';
-import { buildSustainRetriggerPlan, getSwitchAttackMultiplier, resolvePatternBeatDuration } from './soundfont/utils';
+import {
+  buildGuitarStrumClusterSizes,
+  buildSustainRetriggerPlan,
+  getSwitchAttackMultiplier,
+  resolveGuitarClusterDensityCompensation,
+  resolvePatternBeatDuration,
+} from './soundfont/utils';
 
 export type { PlaybackTimingContext, SoundfontChordPlaybackOptions } from './soundfont/types';
 
@@ -221,6 +227,7 @@ export class SoundfontChordPlaybackService {
         signalDynamics: timingContext?.signalDynamics,
         guitarVoicing,
         targetKey,
+        nextChordName: timingContext?.nextChordName,
       });
 
       if (scheduledNotes.length > 0) {
@@ -269,6 +276,7 @@ export class SoundfontChordPlaybackService {
       signalDynamics: timingContext?.signalDynamics,
       guitarVoicing,
       targetKey,
+      nextChordName: timingContext?.nextChordName,
     });
 
     if (scheduledNotes.length === 0) {
@@ -373,17 +381,23 @@ export class SoundfontChordPlaybackService {
       onsetDensity.set(onsetKey, (onsetDensity.get(onsetKey) ?? 0) + 1);
     });
 
+    const guitarClusterSizes = instrumentName === 'guitar'
+      ? buildGuitarStrumClusterSizes(playbackNotes)
+      : null;
+
     const activeNotesForInstrument: ActiveScheduledNote[] = [];
 
-    for (const note of playbackNotes) {
+    playbackNotes.forEach((note, noteIndex) => {
       const simultaneousNotes = onsetDensity.get(note.startOffset.toFixed(4)) ?? 1;
       const isShortPianoBlockChordOnset = instrumentName === 'piano'
         && note.startOffset <= 0.0001
         && simultaneousNotes >= 3;
-      const densityCompensation = Math.max(
-        MIN_DENSITY_COMPENSATION,
-        Math.sqrt(DENSITY_REFERENCE_VOICES / simultaneousNotes),
-      );
+      const densityCompensation = instrumentName === 'guitar' && guitarClusterSizes
+        ? resolveGuitarClusterDensityCompensation(guitarClusterSizes[noteIndex])
+        : Math.max(
+          MIN_DENSITY_COMPENSATION,
+          Math.sqrt(DENSITY_REFERENCE_VOICES / simultaneousNotes),
+        );
       const switchAttackMultiplier = getSwitchAttackMultiplier(
         note.startOffset,
         isChordSwitch,
@@ -433,7 +447,7 @@ export class SoundfontChordPlaybackService {
           naturalFinishWindow: envelope.naturalFinishWindow,
         });
       }
-    }
+    });
 
     this.activeNotes.set(instrumentName, activeNotesForInstrument);
 

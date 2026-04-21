@@ -33,6 +33,7 @@ import { useGuitarOnlyPlayback } from '@/hooks/chord-playback/useGuitarOnlyPlayb
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
 import AppTooltip from '@/components/common/AppTooltip';
+import GuitarTablature from '@/components/chord-analysis/GuitarTablature';
 
 
 // Lazy load heavy guitar chord diagram component
@@ -126,7 +127,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
   const targetKey = useTargetKey();
 
-  const [viewMode, setViewMode] = useState<'animated' | 'summary'>('animated');
+  const [viewMode, setViewMode] = useState<'animated' | 'summary' | 'tab'>('animated');
   const [chordDataCache, setChordDataCache] = useState<Map<string, ChordData | null>>(new Map());
   const [isLoadingChords, setIsLoadingChords] = useState<boolean>(false);
 
@@ -552,10 +553,10 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
   return (
     <div className={`guitar-chords-tab space-y-2 sm:space-y-3 ${className}`}>
-      {/* Beat & Chord Progression Section */}
+      {/* Chord Timeline Section */}
       <div className="chord-grid-section space-y-2">
         <div className="mb-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 sm:text-lg">Beat & Chord Progression</h3>
+          <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 sm:text-lg">Chord Timeline</h3>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
             {/* Shape/Sound label toggle - appears to the left so capo stays in place beside view */}
             {capoFret > 0 && (
@@ -665,15 +666,18 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button onClick={() => setViewMode('animated')} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-sm ${viewMode === 'animated' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Animated</button>
               <button onClick={() => setViewMode('summary')} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-sm ${viewMode === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Summary</button>
+              <button onClick={() => setViewMode('tab')} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-sm ${viewMode === 'tab' ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Tab</button>
             </div>
           </div>
         </div>
-        <ScrollableTabContainer heightClass="h-[8.5rem] sm:h-32 md:h-40 lg:h-48">
-          <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
-        </ScrollableTabContainer>
+        {viewMode !== 'tab' && (
+          <ScrollableTabContainer heightClass="h-[8.5rem] sm:h-32 md:h-40 lg:h-48">
+            <ChordGridContainer {...{ analysisResults, chordGridData, keySignature, isDetectingKey, isChatbotOpen, isLyricsPanelOpen, isUploadPage, showCorrectedChords, chordCorrections, sequenceCorrections, segmentationData }} />
+          </ScrollableTabContainer>
+        )}
       </div>
 
-      {/* Guitar Chord Diagrams Section */}
+      {/* Guitar Chord Diagrams / Tablature Section */}
       <div className="chord-diagrams-section relative">
         {isLoadingChords && viewMode === 'animated' && (
           <div className="flex items-center justify-center py-8">
@@ -682,7 +686,20 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
           </div>
         )}
 
-        {!isLoadingChords && viewMode === 'animated' ? (
+        {viewMode === 'tab' ? (
+          <GuitarTablature
+            chordEvents={playbackChordEvents}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            bpm={detectedBpm || 120}
+            pixelsPerSecond={118}
+            timeSignature={timeSignature}
+            guitarVoicing={guitarVoicing}
+            targetKey={targetKey ?? undefined}
+            dynamicsAnalyzer={dynamicsAnalyzer}
+            segmentationData={segmentationData}
+          />
+        ) : !isLoadingChords && viewMode === 'animated' ? (
           <div className="animated-chord-view relative overflow-visible">
             <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.diagramHeight + 50, 100) }}>
                 <AnimatePresence initial={false}>
