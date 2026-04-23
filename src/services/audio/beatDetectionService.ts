@@ -178,7 +178,8 @@ export async function getModelInfo(): Promise<ModelInfoResult> {
  */
 export async function detectBeatsWithRateLimit(
   audioFile: File,
-  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer'
+  detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
+  stemsFolder?: string | null
 ): Promise<BeatDetectionResult> {
   try {
     // Enhanced input validation
@@ -204,6 +205,9 @@ export async function detectBeatsWithRateLimit(
     formData.append('detector', detector);
     if (detector === 'beat-transformer') {
       formData.append('force', 'true');
+    }
+    if (stemsFolder) {
+      formData.append('stems_folder', stemsFolder);
     }
 
     // Create a safe timeout signal that works across environments
