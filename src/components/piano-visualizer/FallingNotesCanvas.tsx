@@ -4,8 +4,9 @@ import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChordEvent, isBlackKey } from '@/utils/chordToMidi';
 import {
   attachVisualNotePositions,
-  generateAllInstrumentVisualNotes,
+  generateAllInstrumentVisualNotePlans,
   mergeConsecutiveChordEvents,
+  materializeInstrumentVisualNotes,
   type SignalDynamicsSource,
   type ActiveInstrument,
 } from '@/utils/instrumentNoteGeneration';
@@ -196,9 +197,9 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
 
   // Precompute instrument-specific visual notes when instruments are active
   // Uses shared module (single source of truth with audio playback)
-  const instrumentVisualTimings = useMemo(() => {
+  const instrumentVisualPlans = useMemo(() => {
     if (!hasInstruments || chordEvents.length === 0) return [];
-    return generateAllInstrumentVisualNotes(
+    return generateAllInstrumentVisualNotePlans(
       chordEvents,
       activeInstruments,
       bpm,
@@ -207,7 +208,6 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       guitarVoicing,
       targetKey,
       signalDynamicsSource,
-      playbackTime,
     );
   }, [
     chordEvents,
@@ -219,6 +219,15 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
     guitarVoicing,
     targetKey,
     signalDynamicsSource,
+  ]);
+
+  const instrumentVisualTimings = useMemo(() => {
+    return materializeInstrumentVisualNotes(
+      instrumentVisualPlans,
+      playbackTime,
+    );
+  }, [
+    instrumentVisualPlans,
     playbackTime,
   ]);
 

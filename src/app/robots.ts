@@ -25,8 +25,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
         disallow: [
           '/api/*',
-          '/cache-management',
-          '/cache-management/*',
           '/test',
           '/test/*',
           '/test-*',
@@ -62,8 +60,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
         disallow: [
           '/api/*',
-          '/cache-management',
-          '/cache-management/*',
           '/test',
           '/test/*',
           '/test-*',
@@ -99,8 +95,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
         disallow: [
           '/api/*',
-          '/cache-management',
-          '/cache-management/*',
           '/test',
           '/test/*',
           '/test-*',
@@ -139,7 +133,6 @@ export default function robots(): MetadataRoute.Robots {
           '/analyze/*',
           '/lyrics/*',
           '/api/*',
-          '/cache-management/*',
         ],
         allow: [
           '/',

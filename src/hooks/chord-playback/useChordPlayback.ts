@@ -11,7 +11,7 @@ import { useGuitarCapoFret, useGuitarSelectedPositions, useTargetKey } from '@/s
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { isNoChordChordName } from '@/utils/chordToMidi';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
-import { findChordEventForPlayback, findChordEventIndexByBeatIndex } from '@/utils/chordEventLookup';
+import { findChordEventIndexForPlayback } from '@/utils/chordEventLookup';
 import type { InstrumentName } from '@/utils/instrumentNoteGeneration';
 
 export interface UseChordPlaybackProps {
@@ -50,7 +50,9 @@ function isNoChord(chord: string | undefined | null): boolean {
 
 interface ScheduledChordEvent {
   /** Absolute audio time (seconds) when this chord starts */
-  audioTime: number;
+  startTime: number;
+  /** Absolute audio time (seconds) when this chord ends */
+  endTime: number;
   /** Chord symbol */
   chord: string;
   /** Duration in seconds */
@@ -59,13 +61,13 @@ interface ScheduledChordEvent {
   beatIndex: number;
   /** Number of aligned beat-grid cells covered by this event */
   beatCount: number;
+  /** Name of the chord immediately after this one, when present */
+  nextChordName?: string;
 }
 
-interface ScheduledChordLookupEvent {
-  startTime: number;
-  endTime: number;
-  beatIndex: number;
-  scheduled: ScheduledChordEvent;
+interface ScheduledChordMatch {
+  event: ScheduledChordEvent;
+  index: number;
 }
 
 const FOREGROUND_EVENT_BOUNDARY_TOLERANCE = 0.08;
@@ -89,10 +91,12 @@ function buildChordSchedule(
 
   const pushEvent = (endTime: number) => {
     if (activeChord === null || activeStartTime === null) return;
+    const effectiveEndTime = Math.max(endTime, activeStartTime + 0.5);
     events.push({
-      audioTime: activeStartTime,
+      startTime: activeStartTime,
+      endTime: effectiveEndTime,
       chord: activeChord,
-      duration: Math.max(0.5, endTime - activeStartTime),
+      duration: effectiveEndTime - activeStartTime,
       beatIndex: activeBeatIndex,
       beatCount: Math.max(1, activeBeatCount),
     });
@@ -138,29 +142,71 @@ function buildChordSchedule(
     pushEvent(estimatedSongDuration ?? activeStartTime + 2);
   }
 
+  for (let index = 0; index < events.length; index += 1) {
+    events[index].nextChordName = events[index + 1]?.chord;
+  }
+
   return events;
 }
 
-function findScheduledChordEventForPlayback(
-  schedule: ScheduledChordLookupEvent[],
+function findScheduledChordMatchForPlayback(
+  schedule: ScheduledChordEvent[],
   time: number,
   beatIndex: number,
+  cursorIndex: number,
   toleranceSeconds = FOREGROUND_EVENT_BOUNDARY_TOLERANCE,
-): ScheduledChordEvent | null {
-  return findChordEventForPlayback(schedule, time, beatIndex, toleranceSeconds)?.scheduled ?? null;
-}
+): ScheduledChordMatch | null {
+  const cursorEvent = cursorIndex >= 0 ? schedule[cursorIndex] : null;
+  if (cursorEvent) {
+    const isWithinCursorWindow = time >= cursorEvent.startTime - toleranceSeconds
+      && time < cursorEvent.endTime + toleranceSeconds;
+    if (isWithinCursorWindow) {
+      return { event: cursorEvent, index: cursorIndex };
+    }
 
-function findNextUnplayedChordEventForCatchUp(
-  schedule: ScheduledChordLookupEvent[],
-  time: number,
-  lastPlayedBeatIndex: number,
-  toleranceSeconds = FOREGROUND_EVENT_BOUNDARY_TOLERANCE,
-): ScheduledChordEvent | null {
-  if (lastPlayedBeatIndex < 0) {
+    const nextCursorEvent = schedule[cursorIndex + 1];
+    if (nextCursorEvent) {
+      const nextStartsSoon = nextCursorEvent.startTime >= time
+        && nextCursorEvent.startTime - time <= toleranceSeconds;
+      const nextAlreadyStarted = time >= nextCursorEvent.startTime
+        && time < nextCursorEvent.endTime + toleranceSeconds;
+      const beatAdvancesToNext = beatIndex >= 0
+        && beatIndex >= nextCursorEvent.beatIndex
+        && nextCursorEvent.startTime - time <= toleranceSeconds;
+
+      if (nextStartsSoon || nextAlreadyStarted || beatAdvancesToNext) {
+        return { event: nextCursorEvent, index: cursorIndex + 1 };
+      }
+    }
+  }
+
+  const fallbackIndex = findChordEventIndexForPlayback(
+    schedule,
+    time,
+    beatIndex,
+    toleranceSeconds,
+  );
+  if (fallbackIndex < 0) {
     return null;
   }
 
-  const candidateIndex = findChordEventIndexByBeatIndex(schedule, lastPlayedBeatIndex) + 1;
+  return {
+    event: schedule[fallbackIndex],
+    index: fallbackIndex,
+  };
+}
+
+function findNextUnplayedChordEventForCatchUp(
+  schedule: ScheduledChordEvent[],
+  time: number,
+  lastPlayedScheduleIndex: number,
+  toleranceSeconds = FOREGROUND_EVENT_BOUNDARY_TOLERANCE,
+): ScheduledChordMatch | null {
+  if (lastPlayedScheduleIndex < 0) {
+    return null;
+  }
+
+  const candidateIndex = lastPlayedScheduleIndex + 1;
   const candidate = candidateIndex >= 0 ? schedule[candidateIndex] : null;
   if (!candidate) {
     return null;
@@ -168,7 +214,7 @@ function findNextUnplayedChordEventForCatchUp(
 
   const catchUpWindow = Math.max(
     toleranceSeconds,
-    Math.min(candidate.scheduled.duration * 0.75, CHORD_EVENT_CATCH_UP_MAX_SECONDS),
+    Math.min(candidate.duration * 0.75, CHORD_EVENT_CATCH_UP_MAX_SECONDS),
   );
 
   const startsSoon = candidate.startTime >= time
@@ -176,7 +222,9 @@ function findNextUnplayedChordEventForCatchUp(
   const startedRecently = candidate.startTime < time
     && time - candidate.startTime <= catchUpWindow;
 
-  return (startsSoon || startedRecently) ? candidate.scheduled : null;
+  return (startsSoon || startedRecently)
+    ? { event: candidate, index: candidateIndex }
+    : null;
 }
 
 function estimateSongDuration(beats: (number | null)[]): number | undefined {
@@ -230,26 +278,15 @@ export const useChordPlayback = ({
 
   const chordPlaybackService = useRef(getSoundfontChordPlaybackService());
   const lastPlayedChordIndex = useRef(-1);
+  const lastPlayedScheduleIndexRef = useRef(-1);
+  const scheduleCursorIndexRef = useRef(-1);
   const lastPlayedChord = useRef<string | null>(null);
   // Derive total song duration from chord schedule (max end time of all events)
   // This matches the visual path's calculation, ensuring endgame windows are consistent.
   const chordSchedule = useMemo(() => buildChordSchedule(chords, beats), [chords, beats]);
-  const chordLookupSchedule = useMemo<ScheduledChordLookupEvent[]>(
-    () => chordSchedule.map((event) => ({
-      startTime: event.audioTime,
-      endTime: event.audioTime + event.duration,
-      beatIndex: event.beatIndex,
-      scheduled: event,
-    })),
-    [chordSchedule],
-  );
   const estimatedSongDuration = useMemo(() => {
     if (chordSchedule.length === 0) return estimateSongDuration(beats);
-    // Use the max end time from the chord schedule, consistent with the visual path
-    return chordSchedule.reduce(
-      (maxEnd, ev) => Math.max(maxEnd, ev.audioTime + ev.duration),
-      0,
-    );
+    return chordSchedule[chordSchedule.length - 1].endTime;
   }, [chordSchedule, beats]);
   const dynamicsParams = useMemo(
     () => ({
@@ -268,8 +305,7 @@ export const useChordPlayback = ({
 
   // Keep latest values in refs so the background poller can access them
   // without causing effect re-runs
-  const chordsRef = useRef(chords);
-  const beatsRef = useRef(beats);
+  const playbackScheduleRef = useRef(chordSchedule);
   const bpmRef = useRef(bpm);
   const timeSignatureRef = useRef(timeSignature);
   const isEnabledRef = useRef(isEnabled);
@@ -277,11 +313,18 @@ export const useChordPlayback = ({
   const isReadyRef = useRef(isReady);
   const currentTimeRef = useRef(currentTime);
   const estimatedSongDurationRef = useRef(estimatedSongDuration);
+  const audioUrlRef = useRef(audioUrl);
+  const dynamicsAnalyzerRef = useRef(dynamicsAnalyzer);
+  const segmentationDataRef = useRef(segmentationData);
+  const guitarVoicingRef = useRef(guitarVoicing);
+  const targetKeyRef = useRef(targetKey);
   const eventMissStartedAtRef = useRef<number | null>(null);
   const lastRecoveryAttemptAtRef = useRef(0);
 
-  useEffect(() => { chordsRef.current = chords; }, [chords]);
-  useEffect(() => { beatsRef.current = beats; }, [beats]);
+  useEffect(() => {
+    playbackScheduleRef.current = chordSchedule;
+    scheduleCursorIndexRef.current = -1;
+  }, [chordSchedule]);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   useEffect(() => { timeSignatureRef.current = timeSignature; }, [timeSignature]);
   useEffect(() => { isEnabledRef.current = isEnabled; }, [isEnabled]);
@@ -289,6 +332,11 @@ export const useChordPlayback = ({
   useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { estimatedSongDurationRef.current = estimatedSongDuration; }, [estimatedSongDuration]);
+  useEffect(() => { audioUrlRef.current = audioUrl; }, [audioUrl]);
+  useEffect(() => { dynamicsAnalyzerRef.current = dynamicsAnalyzer; }, [dynamicsAnalyzer]);
+  useEffect(() => { segmentationDataRef.current = segmentationData; }, [segmentationData]);
+  useEffect(() => { guitarVoicingRef.current = guitarVoicing; }, [guitarVoicing]);
+  useEffect(() => { targetKeyRef.current = targetKey; }, [targetKey]);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -346,15 +394,7 @@ export const useChordPlayback = ({
       return null;
     };
 
-    // Pre-compute the chord schedule once
-    const schedule = buildChordSchedule(chordsRef.current, beatsRef.current);
-    if (schedule.length === 0) return;
-    const lookupSchedule: ScheduledChordLookupEvent[] = schedule.map((event) => ({
-      startTime: event.audioTime,
-      endTime: event.audioTime + event.duration,
-      beatIndex: event.beatIndex,
-      scheduled: event,
-    }));
+    if (playbackScheduleRef.current.length === 0) return;
 
     // Poller: runs every 250ms (browsers clamp to ~1 000 ms in background)
     backgroundIntervalRef.current = setInterval(() => {
@@ -365,36 +405,49 @@ export const useChordPlayback = ({
       const time = getAudioTime();
       if (time === null) return;
 
-      let event = findScheduledChordEventForPlayback(lookupSchedule, time, -1);
-      if (!event || event.beatIndex === lastPlayedChordIndex.current) {
-        const catchUpEvent = findNextUnplayedChordEventForCatchUp(
-          lookupSchedule,
+      const schedule = playbackScheduleRef.current;
+      if (schedule.length === 0) {
+        return;
+      }
+
+      let match = findScheduledChordMatchForPlayback(
+        schedule,
+        time,
+        -1,
+        scheduleCursorIndexRef.current,
+      );
+      if (match) {
+        scheduleCursorIndexRef.current = match.index;
+      }
+
+      if (!match || match.event.beatIndex === lastPlayedChordIndex.current) {
+        const catchUpMatch = findNextUnplayedChordEventForCatchUp(
+          schedule,
           time,
-          lastPlayedChordIndex.current,
+          lastPlayedScheduleIndexRef.current,
         );
-        if (catchUpEvent) {
-          event = catchUpEvent;
+        if (catchUpMatch) {
+          match = catchUpMatch;
+          scheduleCursorIndexRef.current = catchUpMatch.index;
         }
       }
-      if (!event) return;
+      if (!match) return;
+
+      const event = match.event;
 
       // Skip if same chord already playing
       if (event.beatIndex === lastPlayedChordIndex.current) return;
 
-      const signalDynamics = audioUrl
-        ? dynamicsAnalyzer.getSignalDynamics(event.audioTime, event.duration)
+      const signalDynamics = audioUrlRef.current
+        ? dynamicsAnalyzerRef.current.getSignalDynamics(event.startTime, event.duration)
         : null;
-      const dynamicVelocity = dynamicsAnalyzer.getVelocityMultiplier(
-        event.audioTime,
+      const dynamicVelocity = dynamicsAnalyzerRef.current.getVelocityMultiplier(
+        event.startTime,
         event.beatIndex,
         event.chord,
         event.duration,
         signalDynamics,
       );
-      const currentLookupIndex = findChordEventIndexByBeatIndex(lookupSchedule, event.beatIndex);
-      const nextChordName = currentLookupIndex >= 0
-        ? lookupSchedule[currentLookupIndex + 1]?.scheduled.chord
-        : undefined;
 
       chordPlaybackService.current.playChord(
         event.chord,
@@ -402,23 +455,24 @@ export const useChordPlayback = ({
         bpmRef.current,
         dynamicVelocity,
         {
-          startTime: event.audioTime,
+          startTime: event.startTime,
           totalDuration: estimatedSongDurationRef.current,
           playbackTime: time,
           beatCount: event.beatCount,
-          segmentationData,
+          segmentationData: segmentationDataRef.current,
           signalDynamics,
-          nextChordName,
+          nextChordName: event.nextChordName,
         },
         timeSignatureRef.current,
-        guitarVoicing,
-        targetKey,
+        guitarVoicingRef.current,
+        targetKeyRef.current,
       );
 
       lastPlayedChord.current = event.chord;
       lastPlayedChordIndex.current = event.beatIndex;
+      lastPlayedScheduleIndexRef.current = match.index;
     }, 250);
-  }, [audioUrl, dynamicsAnalyzer, stopBackgroundPoller, segmentationData, guitarVoicing, targetKey]);
+  }, [stopBackgroundPoller]);
 
   const recoverForegroundPlayback = useCallback(async () => {
     if (!isEnabledRef.current || !isPlayingRef.current) {
@@ -439,6 +493,8 @@ export const useChordPlayback = ({
 
     lastPlayedChord.current = null;
     lastPlayedChordIndex.current = -1;
+    lastPlayedScheduleIndexRef.current = -1;
+    scheduleCursorIndexRef.current = -1;
     eventMissStartedAtRef.current = null;
     setPlaybackRecoveryNonce(prev => prev + 1);
   }, []);
@@ -500,22 +556,32 @@ export const useChordPlayback = ({
     // Skip if background poller is active — it handles chord scheduling independently
     if (isBackgroundRef.current) return;
 
-    if (!isEnabled || !isReady || !isPlaying || chordLookupSchedule.length === 0) {
+    if (!isEnabled || !isReady || !isPlaying || chordSchedule.length === 0) {
       return;
     }
 
-    let event = findScheduledChordEventForPlayback(chordLookupSchedule, currentTime, currentBeatIndex);
-    if (!event || event.beatIndex === lastPlayedChordIndex.current) {
-      const catchUpEvent = findNextUnplayedChordEventForCatchUp(
-        chordLookupSchedule,
+    let match = findScheduledChordMatchForPlayback(
+      chordSchedule,
+      currentTime,
+      currentBeatIndex,
+      scheduleCursorIndexRef.current,
+    );
+    if (match) {
+      scheduleCursorIndexRef.current = match.index;
+    }
+
+    if (!match || match.event.beatIndex === lastPlayedChordIndex.current) {
+      const catchUpMatch = findNextUnplayedChordEventForCatchUp(
+        chordSchedule,
         currentTime,
-        lastPlayedChordIndex.current,
+        lastPlayedScheduleIndexRef.current,
       );
-      if (catchUpEvent) {
-        event = catchUpEvent;
+      if (catchUpMatch) {
+        match = catchUpMatch;
+        scheduleCursorIndexRef.current = catchUpMatch.index;
       }
     }
-    if (!event) {
+    if (!match) {
       if (lastPlayedChord.current !== null) {
         if (eventMissStartedAtRef.current === null) {
           eventMissStartedAtRef.current = currentTime;
@@ -532,10 +598,14 @@ export const useChordPlayback = ({
         chordPlaybackService.current.softStopInstruments(CHORD_PLAYBACK_INSTRUMENTS);
         lastPlayedChord.current = null;
         lastPlayedChordIndex.current = -1;
+        lastPlayedScheduleIndexRef.current = -1;
+        scheduleCursorIndexRef.current = -1;
         eventMissStartedAtRef.current = null;
       }
       return;
     }
+
+    const event = match.event;
 
     eventMissStartedAtRef.current = null;
 
@@ -544,19 +614,15 @@ export const useChordPlayback = ({
     }
 
     const signalDynamics = audioUrl
-      ? dynamicsAnalyzer.getSignalDynamics(event.audioTime, event.duration)
+      ? dynamicsAnalyzer.getSignalDynamics(event.startTime, event.duration)
       : null;
     const dynamicVelocity = dynamicsAnalyzer.getVelocityMultiplier(
-      event.audioTime,
+      event.startTime,
       event.beatIndex,
       event.chord,
       event.duration,
       signalDynamics,
     );
-    const currentLookupIndex = findChordEventIndexByBeatIndex(chordLookupSchedule, event.beatIndex);
-    const nextChordName = currentLookupIndex >= 0
-      ? chordLookupSchedule[currentLookupIndex + 1]?.scheduled.chord
-      : undefined;
 
     chordPlaybackService.current.playChord(
       event.chord,
@@ -564,13 +630,13 @@ export const useChordPlayback = ({
       bpm,
       dynamicVelocity,
       {
-        startTime: event.audioTime,
+        startTime: event.startTime,
         totalDuration: estimatedSongDuration,
         playbackTime: currentTime,
         beatCount: event.beatCount,
         segmentationData,
         signalDynamics,
-        nextChordName,
+        nextChordName: event.nextChordName,
       },
       timeSignature,
       guitarVoicing,
@@ -578,11 +644,12 @@ export const useChordPlayback = ({
     );
 
     lastPlayedChordIndex.current = event.beatIndex;
+    lastPlayedScheduleIndexRef.current = match.index;
     lastPlayedChord.current = event.chord;
   }, [
     audioUrl,
     bpm,
-    chordLookupSchedule,
+    chordSchedule,
     currentBeatIndex,
     currentTime,
     dynamicsAnalyzer,
@@ -603,6 +670,8 @@ export const useChordPlayback = ({
       chordPlaybackService.current.stopInstruments(CHORD_PLAYBACK_INSTRUMENTS);
       lastPlayedChord.current = null;
       lastPlayedChordIndex.current = -1;
+      lastPlayedScheduleIndexRef.current = -1;
+      scheduleCursorIndexRef.current = -1;
       eventMissStartedAtRef.current = null;
     }
   }, [isPlaying, isEnabled]);
@@ -613,6 +682,8 @@ export const useChordPlayback = ({
     if (isEnabling) {
       lastPlayedChord.current = null;
       lastPlayedChordIndex.current = -1;
+      lastPlayedScheduleIndexRef.current = -1;
+      scheduleCursorIndexRef.current = -1;
       eventMissStartedAtRef.current = null;
       void chordPlaybackService.current.prepareForPlayback();
     }

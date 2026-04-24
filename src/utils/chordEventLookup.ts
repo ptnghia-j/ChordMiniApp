@@ -56,6 +56,22 @@ export function findChordEventForPlayback<T extends ChordTimedEventLike>(
   currentBeatIndex: number,
   toleranceSeconds: number,
 ): T | null {
+  const eventIndex = findChordEventIndexForPlayback(
+    events,
+    currentTime,
+    currentBeatIndex,
+    toleranceSeconds,
+  );
+
+  return eventIndex >= 0 ? events[eventIndex] : null;
+}
+
+export function findChordEventIndexForPlayback<T extends ChordTimedEventLike>(
+  events: T[],
+  currentTime: number,
+  currentBeatIndex: number,
+  toleranceSeconds: number,
+): number {
   const exactEventIndex = findChordEventIndexAtTime(events, currentTime);
   const exactEvent = exactEventIndex >= 0 ? events[exactEventIndex] : null;
 
@@ -67,12 +83,12 @@ export function findChordEventForPlayback<T extends ChordTimedEventLike>(
       && beatEvent.startTime - currentTime <= toleranceSeconds;
 
     if (beatEventStartsSoon) {
-      return beatEvent;
+      return beatEventIndex;
     }
   }
 
   if (exactEvent) {
-    return exactEvent;
+    return exactEventIndex;
   }
 
   if (beatEvent) {
@@ -80,7 +96,7 @@ export function findChordEventForPlayback<T extends ChordTimedEventLike>(
       && currentTime < beatEvent.endTime + toleranceSeconds;
 
     if (withinBeatEventWindow) {
-      return beatEvent;
+      return beatEventIndex;
     }
   }
 
@@ -88,7 +104,7 @@ export function findChordEventForPlayback<T extends ChordTimedEventLike>(
   if (forwardEventIndex >= 0) {
     const forwardEvent = events[forwardEventIndex];
     if (forwardEvent.startTime - currentTime <= toleranceSeconds) {
-      return forwardEvent;
+      return forwardEventIndex;
     }
   }
 
@@ -97,9 +113,9 @@ export function findChordEventForPlayback<T extends ChordTimedEventLike>(
   if (backwardEventIndex >= 0) {
     const backwardEvent = events[backwardEventIndex];
     if (currentTime - backwardEvent.endTime <= toleranceSeconds) {
-      return backwardEvent;
+      return backwardEventIndex;
     }
   }
 
-  return null;
+  return -1;
 }

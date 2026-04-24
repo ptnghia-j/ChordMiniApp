@@ -7,10 +7,10 @@ import {
 } from './constants';
 import type { PlaybackAdjustmentOptions, ScheduledNote } from './types';
 
-export function adjustScheduledNotesForPlayback(
-  scheduledNotes: ScheduledNote[],
+export function adjustScheduledNoteForPlayback(
+  scheduledNote: ScheduledNote,
   options: PlaybackAdjustmentOptions,
-): ScheduledNote[] {
+): ScheduledNote | null {
   const {
     instrumentName,
     elapsedInChord = 0,
@@ -18,75 +18,87 @@ export function adjustScheduledNotesForPlayback(
     latePianoMinAudibleSeconds = DEFAULT_LATE_PIANO_MIN_AUDIBLE_SECONDS,
   } = options;
 
-  return scheduledNotes
-    .map((scheduledNote) => {
-      const originalEndOffset = scheduledNote.startOffset + scheduledNote.duration;
-      const shouldRecoverLatePianoOnset = instrumentName === 'piano'
-        && scheduledNote.startOffset <= 0.0001
-        && elapsedInChord > 0
-        && elapsedInChord <= latePianoOnsetGraceSeconds;
+  const originalEndOffset = scheduledNote.startOffset + scheduledNote.duration;
+  const shouldRecoverLatePianoOnset = instrumentName === 'piano'
+    && scheduledNote.startOffset <= 0.0001
+    && elapsedInChord > 0
+    && elapsedInChord <= latePianoOnsetGraceSeconds;
 
-      if (originalEndOffset <= elapsedInChord) {
-        if (shouldRecoverLatePianoOnset) {
-          return {
-            ...scheduledNote,
-            startOffset: 0,
-            duration: Math.min(
-              scheduledNote.duration,
-              Math.max(
-                latePianoMinAudibleSeconds,
-                scheduledNote.duration * 0.75,
-              ),
-            ),
-          } satisfies ScheduledNote;
-        }
-        return null;
-      }
-
-      const adjustedStartOffset = Math.max(0, scheduledNote.startOffset - elapsedInChord);
-      const adjustedDuration = originalEndOffset - Math.max(elapsedInChord, scheduledNote.startOffset);
-      const shouldClampLatePianoOnset = shouldRecoverLatePianoOnset
-        && adjustedStartOffset <= 0.0001
-        && adjustedDuration < latePianoMinAudibleSeconds;
-
-      if (adjustedDuration <= 0) {
-        if (shouldRecoverLatePianoOnset) {
-          return {
-            ...scheduledNote,
-            startOffset: 0,
-            duration: Math.min(
-              scheduledNote.duration,
-              Math.max(
-                latePianoMinAudibleSeconds,
-                scheduledNote.duration * 0.75,
-              ),
-            ),
-          } satisfies ScheduledNote;
-        }
-        return null;
-      }
-
-      if (shouldClampLatePianoOnset) {
-        return {
-          ...scheduledNote,
-          startOffset: 0,
-          duration: Math.min(
-            scheduledNote.duration,
-            Math.max(
-              latePianoMinAudibleSeconds,
-              scheduledNote.duration * 0.75,
-            ),
-          ),
-        } satisfies ScheduledNote;
-      }
-
+  if (originalEndOffset <= elapsedInChord) {
+    if (shouldRecoverLatePianoOnset) {
       return {
         ...scheduledNote,
-        startOffset: adjustedStartOffset,
-        duration: adjustedDuration,
+        startOffset: 0,
+        duration: Math.min(
+          scheduledNote.duration,
+          Math.max(
+            latePianoMinAudibleSeconds,
+            scheduledNote.duration * 0.75,
+          ),
+        ),
       } satisfies ScheduledNote;
-    })
-    .filter((scheduledNote): scheduledNote is ScheduledNote => scheduledNote !== null);
+    }
+    return null;
+  }
+
+  const adjustedStartOffset = Math.max(0, scheduledNote.startOffset - elapsedInChord);
+  const adjustedDuration = originalEndOffset - Math.max(elapsedInChord, scheduledNote.startOffset);
+  const shouldClampLatePianoOnset = shouldRecoverLatePianoOnset
+    && adjustedStartOffset <= 0.0001
+    && adjustedDuration < latePianoMinAudibleSeconds;
+
+  if (adjustedDuration <= 0) {
+    if (shouldRecoverLatePianoOnset) {
+      return {
+        ...scheduledNote,
+        startOffset: 0,
+        duration: Math.min(
+          scheduledNote.duration,
+          Math.max(
+            latePianoMinAudibleSeconds,
+            scheduledNote.duration * 0.75,
+          ),
+        ),
+      } satisfies ScheduledNote;
+    }
+    return null;
+  }
+
+  if (shouldClampLatePianoOnset) {
+    return {
+      ...scheduledNote,
+      startOffset: 0,
+      duration: Math.min(
+        scheduledNote.duration,
+        Math.max(
+          latePianoMinAudibleSeconds,
+          scheduledNote.duration * 0.75,
+        ),
+      ),
+    } satisfies ScheduledNote;
+  }
+
+  return {
+    ...scheduledNote,
+    startOffset: adjustedStartOffset,
+    duration: adjustedDuration,
+  } satisfies ScheduledNote;
+}
+
+export function adjustScheduledNotesForPlayback(
+  scheduledNotes: ScheduledNote[],
+  options: PlaybackAdjustmentOptions,
+): ScheduledNote[] {
+  const adjustedNotes: ScheduledNote[] = [];
+
+  for (const scheduledNote of scheduledNotes) {
+    const adjustedNote = adjustScheduledNoteForPlayback(scheduledNote, options);
+    if (adjustedNote) {
+      adjustedNotes.push(adjustedNote);
+    }
+  }
+
+  return adjustedNotes;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -31,11 +31,14 @@ class MadmomDetectorService:
             return self._available
 
         try:
+            import pkg_resources  # noqa: F401
             import madmom
             self._available = True
             log_debug(f"Madmom availability: {self._available}, version: {getattr(madmom, '__version__', 'unknown')}")
             return True
         except ImportError as e:
+            if getattr(e, 'name', None) == 'pkg_resources':
+                log_error("Madmom import failed: pkg_resources missing. Pin setuptools<81 in the runtime environment.")
             log_error(f"Madmom import failed: {e}")
             self._available = False
             return False

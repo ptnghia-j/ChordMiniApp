@@ -32,9 +32,8 @@ services:
       - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}
 
-      # API Configuration (Public)
+      # API Configuration
       - NEXT_PUBLIC_YOUTUBE_API_KEY=${NEXT_PUBLIC_YOUTUBE_API_KEY}
-      - NEXT_PUBLIC_PYTHON_API_URL=${NEXT_PUBLIC_PYTHON_API_URL:-http://backend:8080}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
 
       # Feature Flags (Public)
@@ -46,6 +45,7 @@ services:
       - MUSIC_AI_API_KEY=${MUSIC_AI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GENIUS_API_KEY=${GENIUS_API_KEY}
+      - PYTHON_API_URL=${PYTHON_API_URL:-http://backend:8080}
 
       # Development Flags (Server-only)
       - USE_MOCK_MUSIC_AI=${USE_MOCK_MUSIC_AI:-false}

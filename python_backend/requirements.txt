@@ -113,6 +113,9 @@ pytube==15.0.0
 # ============================================================================
 # Additional Dependencies for Compatibility
 # ============================================================================
+# Pin to the pre-upgrade version observed in Cloud Build logs so
+# pkg_resources remains available for madmom/librosa runtime paths.
+setuptools==79.0.1
 h5py==3.13.0
 packaging==25.0
 typing_extensions==4.10.0

@@ -1,7 +1,8 @@
 /**
  * Chord Service - focused solely on chord recognition
  * - Handles both direct File input and URL input (via proxy -> File)
- * - Preserves Firebase offload upload path for >4MB files
+ * - Keeps local development on direct multipart uploads
+ * - Exposes explicit offload helpers for production orchestration
  * - Preserves timeout, validation, and error handling semantics
  */
 
@@ -10,7 +11,8 @@ import { offloadUploadService } from '@/services/storage/offloadUploadService';
 import type { ChordDetectorType, ChordDetectionResult, ChordRecognitionBackendResponse } from '@/types/audioAnalysis';
 
 /**
- * Recognize chords from a File with rate limiting and Blob upload handling
+ * Recognize chords from a File with rate limiting.
+ * Local development uses this direct multipart path.
  */
 export async function recognizeChordsWithRateLimit(
   audioFile: File,
@@ -20,39 +22,6 @@ export async function recognizeChordsWithRateLimit(
     // Validate input file
     if (!audioFile || audioFile.size === 0) {
       throw new Error('Invalid audio file for chord recognition');
-    }
-
-    // Blob path for > 4.5MB files
-    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
-      console.log(`🔄 File size ${offloadUploadService.getFileSizeString(audioFile.size)} > 4.5MB, using Firebase offload upload`);
-
-      try {
-        const blobResult = await offloadUploadService.recognizeChordsBlobUpload(audioFile, model);
-        if (blobResult.success) {
-          console.log(`✅ Firebase offload chord recognition completed successfully`);
-          const backendResponse = blobResult.data as ChordRecognitionBackendResponse;
-          console.log(`🔍 Backend response structure:`, {
-            hasSuccess: 'success' in backendResponse,
-            hasChords: 'chords' in backendResponse,
-            chordsIsArray: Array.isArray(backendResponse.chords),
-            chordsLength: backendResponse.chords?.length || 0,
-            modelUsed: backendResponse.model_used
-          });
-
-          if (!backendResponse.chords || !Array.isArray(backendResponse.chords)) {
-            throw new Error(`Invalid chord recognition response: chords array not found or not an array`);
-          }
-          return backendResponse.chords as ChordDetectionResult[];
-        } else {
-          const errorMsg = blobResult.error || 'Unknown blob upload error';
-          console.error(`❌ Firebase offload upload failed for large file: ${errorMsg}`);
-          throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
-        }
-      } catch (blobError) {
-        const errorMsg = blobError instanceof Error ? blobError.message : String(blobError) || 'Unknown error';
-        console.error(`❌ Firebase offload upload error for large file: ${errorMsg}`);
-        throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
-      }
     }
 
     if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
@@ -134,6 +103,35 @@ export async function recognizeChordsWithRateLimit(
     return chords;
   } catch (error) {
     console.error('Error in chord recognition with rate limiting:', error);
+    throw error;
+  }
+}
+
+/**
+ * Recognize chords from an existing offload URL.
+ * Production orchestration should prefer this path.
+ */
+export async function recognizeChordsFromOffloadUrl(
+  offloadUrl: string,
+  model: ChordDetectorType = 'chord-cnn-lstm'
+): Promise<ChordDetectionResult[]> {
+  try {
+    const result = await offloadUploadService.recognizeChordsFromOffloadUrl(offloadUrl, model, {
+      deleteAfterProcessing: true,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown offload error');
+    }
+
+    const backendResponse = result.data as ChordRecognitionBackendResponse;
+    if (!backendResponse.chords || !Array.isArray(backendResponse.chords)) {
+      throw new Error('Invalid chord recognition response: missing or invalid chords array');
+    }
+
+    return backendResponse.chords as ChordDetectionResult[];
+  } catch (error) {
+    console.error('Error in offload chord recognition:', error);
     throw error;
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPythonApiUrl } from '@/config/serverBackend';
+import { verifyAppCheckRequest } from '@/utils/serverAppCheck';
 
 /**
  * API route to recognize chords in an audio file using the BTC Pseudo-Label model
@@ -11,6 +12,12 @@ import { getPythonApiUrl } from '@/config/serverBackend';
 export const maxDuration = 300; // 5 minutes for ML processing
 export async function POST(request: NextRequest) {
   try {
+    // Verify App Check token
+    const appCheck = await verifyAppCheckRequest(request);
+    if (!appCheck.ok) {
+      return NextResponse.json({ success: false, error: appCheck.error }, { status: appCheck.status || 403 });
+    }
+
     // Get the form data from the request
     const formData = await request.formData();
 

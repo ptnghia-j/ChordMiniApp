@@ -24,8 +24,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 
-# Install build dependencies first for madmom compilation
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Install build dependencies first for madmom compilation.
+# Pin setuptools to the pre-upgrade version observed in Cloud Build logs so
+# pkg_resources remains available for madmom/librosa runtime paths.
+RUN pip install --no-cache-dir --upgrade pip "setuptools==79.0.1" wheel
 RUN pip install --no-cache-dir Cython>=0.29.0 numpy==1.26.4
 RUN pip install --no-cache-dir git+https://github.com/CPJKU/madmom
 # Install all requirements except Spleeter first, then install Spleeter without deps to avoid resolver conflicts with librosa/httpx
@@ -51,6 +53,10 @@ WORKDIR /app
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+
+# Sanity-check that the copied runtime environment still exposes the legacy
+# pkg_resources module required by madmom.
+RUN python -c "import pkg_resources; import madmom; print('madmom runtime import ok', getattr(madmom, '__version__', 'unknown'))"
 
 # Copy application code and essential files
 COPY app.py .

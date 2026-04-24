@@ -92,3 +92,17 @@ export interface PositionedVisualNote extends VisualNote {
 export interface SignalDynamicsSource {
   getSignalDynamics(time: number, chordDuration?: number): ChordSignalDynamics | null;
 }
+
+export interface InstrumentVisualNoteGroupPlan {
+  instrumentName: InstrumentName;
+  color: string;
+  visualTail: number;
+  scheduledNotes: ScheduledNote[];
+}
+
+export interface InstrumentVisualEventPlan {
+  chordName: string;
+  startTime: number;
+  endTime: number;
+  noteGroups: InstrumentVisualNoteGroupPlan[];
+}

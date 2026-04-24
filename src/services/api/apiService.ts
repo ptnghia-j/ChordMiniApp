@@ -8,6 +8,7 @@ import {
   getRateLimitMessage,
   ClientRateLimiter
 } from '@/utils/rateLimiting';
+import { getAppCheckTokenForApi } from '@/config/firebase';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -102,12 +103,19 @@ class ApiService {
         throw new Error(`Failed to set up timeout: ${errorMessage}`);
       }
 
+      // Fetch App Check token for request attestation (non-blocking)
+      const appCheckToken = typeof window !== 'undefined'
+        ? await getAppCheckTokenForApi()
+        : null;
+
       const requestOptions: RequestInit = {
         ...fetchOptions,
         signal: controller.signal,
         headers: {
           // Only set Content-Type for non-FormData requests
           ...(!(fetchOptions.body instanceof FormData) && { 'Content-Type': 'application/json' }),
+          // Attach App Check token when available
+          ...(appCheckToken && { 'X-Firebase-AppCheck': appCheckToken }),
           ...fetchOptions.headers,
         },
       };

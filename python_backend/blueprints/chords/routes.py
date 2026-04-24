@@ -14,6 +14,7 @@ from config import get_config
 from extensions import limiter
 from utils.logging import log_info, log_error, log_debug
 from utils.paths import AUDIO_DIR
+from services.audio.tempfiles import temporary_file
 from .validators import (
     validate_chord_recognition_request,
     validate_firebase_chord_recognition_request,
@@ -27,6 +28,16 @@ chords_bp = Blueprint('chords', __name__)
 
 # Get configuration
 config = get_config()
+
+
+def _download_remote_audio_to_temp_path(file_url: str, temp_path: str, timeout_seconds: int = 300) -> None:
+    """Stream a remote audio file into a temporary path."""
+    with requests.get(file_url, stream=True, timeout=(30, timeout_seconds)) as response:
+        response.raise_for_status()
+        with open(temp_path, 'wb') as file_handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    file_handle.write(chunk)
 
 
 @chords_bp.route('/api/recognize-chords', methods=['POST'])
@@ -145,8 +156,6 @@ def recognize_chords_firebase():
     Returns:
     - JSON with chord recognition results
     """
-    temp_file_path = None
-
     try:
         # Validate request
         is_valid, error_msg, params = validate_firebase_chord_recognition_request()
@@ -162,29 +171,23 @@ def recognize_chords_firebase():
 
         # Download file from Firebase Storage
         log_info("Downloading file from Firebase Storage...")
-        response = requests.get(firebase_url, timeout=300)  # 5 minute timeout
-        response.raise_for_status()
+        with temporary_file(suffix='.mp3') as temp_file_path:
+            _download_remote_audio_to_temp_path(firebase_url, temp_file_path)
 
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-        temp_file.write(response.content)
-        temp_file.close()
-        temp_file_path = temp_file.name
+            log_info(f"Downloaded file to: {temp_file_path}")
+            log_info(f"File size: {os.path.getsize(temp_file_path) / (1024 * 1024):.1f}MB")
 
-        log_info(f"Downloaded file to: {temp_file_path}")
-        log_info(f"File size: {os.path.getsize(temp_file_path) / (1024 * 1024):.1f}MB")
+            # Get chord recognition service
+            chord_service = current_app.extensions['services']['chord_recognition']
 
-        # Get chord recognition service
-        chord_service = current_app.extensions['services']['chord_recognition']
-
-        # Run chord recognition
-        result = chord_service.recognize_chords(
-            file_path=temp_file_path,
-            detector=detector,
-            chord_dict=chord_dict,
-            force=False,  # Don't force for Firebase requests
-            use_spleeter=False  # Don't use Spleeter for Firebase requests
-        )
+            # Run chord recognition
+            result = chord_service.recognize_chords(
+                file_path=temp_file_path,
+                detector=detector,
+                chord_dict=chord_dict,
+                force=False,  # Don't force for Firebase requests
+                use_spleeter=False  # Don't use Spleeter for Firebase requests
+            )
 
         if result.get('success'):
             log_info(f"Firebase chord recognition successful: {result['total_chords']} chords detected")

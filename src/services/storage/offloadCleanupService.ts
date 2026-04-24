@@ -1,8 +1,8 @@
 import { GoogleAuth } from 'google-auth-library';
 import {
-  getBlobStorageProvider,
+  getOffloadStorageProvider,
   parseFirebaseStorageObjectFromUrl,
-} from '@/utils/blobValidation';
+} from '@/utils/offloadValidation';
 
 const STORAGE_SCOPE = 'https://www.googleapis.com/auth/devstorage.full_control';
 
@@ -145,7 +145,7 @@ export interface OffloadDeletionResult {
  * Delete an offloaded file URL from Firebase Storage.
  */
 export async function deleteOffloadUrl(url: string): Promise<OffloadDeletionResult> {
-  const provider = getBlobStorageProvider(url);
+  const provider = getOffloadStorageProvider(url);
 
   if (!provider || provider !== 'firebase') {
     throw new Error('Unsupported storage URL provider');

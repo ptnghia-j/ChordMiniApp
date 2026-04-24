@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPythonApiUrl } from '@/config/serverBackend';
+import { verifyAppCheckRequest } from '@/utils/serverAppCheck';
 
 /**
  * Extract and Analyze API Route
@@ -16,6 +17,12 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify App Check token
+    const appCheck = await verifyAppCheckRequest(request);
+    if (!appCheck.ok) {
+      return NextResponse.json({ success: false, error: appCheck.error }, { status: appCheck.status || 403 });
+    }
+
     // Parse request body
     const data = await request.json();
     const { 

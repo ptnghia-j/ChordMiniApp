@@ -325,7 +325,7 @@ See the API Keys Setup section below for detailed instructions on obtaining thes
 # 1. Sign up at music.ai
 # 2. Get API key from dashboard
 # 3. Add to .env.local
-NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
+MUSIC_AI_API_KEY=your_key_here
 ```
 
 #### Google Gemini API
@@ -333,7 +333,7 @@ NEXT_PUBLIC_MUSIC_AI_API_KEY=your_key_here
 # 1. Visit Google AI Studio
 # 2. Generate API key
 # 3. Add to .env.local
-NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
 ```
 
 ---
@@ -349,7 +349,7 @@ For local development, you **must** run the Python backend on `localhost:5001`:
 
 ### ☁️ Production Backend (your VPS)
 
-Production deployments is configured based on your VPS and url should be set in the `NEXT_PUBLIC_PYTHON_API_URL` environment variable.
+Production deployments should set the backend URL privately via the `PYTHON_API_URL` environment variable.
 
 #### Prerequisites
 
@@ -458,7 +458,7 @@ netstat -ano | findstr :5001  # Windows
 
 # 3. Verify environment configuration
 cat .env.local | grep PYTHON_API_URL
-# Expected: NEXT_PUBLIC_PYTHON_API_URL=http://localhost:5001
+# Expected: PYTHON_API_URL=http://localhost:5001
 
 # 4. Check for macOS AirTunes conflict (if using port 5000)
 curl -I http://localhost:5000/health
@@ -515,6 +515,7 @@ We sincerely thank the following APIs and services for their support and contrib
 - **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api) - YouTube search and video information
 - **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction (local)
 - **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction (production)
+- **chord-db** - [github.com/tombatossals/chords-db](https://github.com/tombatossals/chords-db) - Comprehensive chord database for accurate guitar diagram generation
 - **LRClib** - [github.com/tranxuanthang/lrclib](https://github.com/tranxuanthang/lrclib) - Lyrics synchronization
 - **Sheetsage** -[github.com/chrisdonahue/sheetsage](https://github.com/chrisdonahue/sheetsage) - Experimental melody transcription model
 - **OpenSheetMusicDisplay** -[github.com/opensheetmusicdisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) - Sheet music rendering

@@ -7,19 +7,17 @@
 
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { isLocalBackend } from '@/utils/backendConfig';
+import { getAppCheckTokenForApi } from '@/config/firebase';
 
 export interface OffloadUploadResult {
   success: boolean;
   data?: unknown;
   error?: string;
-  blobUrl?: string;
+  offloadUrl?: string;
   processingTime?: number;
 }
 
 class OffloadUploadService {
-  // Keep this aligned with serverless body constraints.
-  private readonly REQUEST_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
-  private readonly MULTIPART_BODY_HEADROOM_BYTES = 512 * 1024;
   private readonly FIREBASE_OFFLOAD_PREFIX = 'temp';
 
   /**
@@ -49,9 +47,10 @@ class OffloadUploadService {
   }
 
   /**
-   * Check if file should use offload upload based on environment and file size.
+   * Production should always offload in browser contexts.
+   * Local development stays on direct multipart uploads.
    */
-  shouldUseOffloadUpload(fileSize: number): boolean {
+  shouldUseOffloadUpload(fileSize?: number): boolean {
     if (this.isLocalhostDevelopment()) {
       return false;
     }
@@ -62,24 +61,15 @@ class OffloadUploadService {
       return false;
     }
 
-    const sizeThreshold = this.REQUEST_BODY_LIMIT_BYTES - this.MULTIPART_BODY_HEADROOM_BYTES;
-    const isLargeFile = fileSize > sizeThreshold;
     const isConfigured = this.isFirebaseConfigured();
 
-    if (isLargeFile && !isConfigured) {
+    if (!isConfigured) {
       console.warn(
-        `⚠️ Large file detected but Firebase offload is unavailable. File: ${this.getFileSizeString(fileSize)}, Limit: ${this.getFileSizeString(this.REQUEST_BODY_LIMIT_BYTES)}`,
+        `⚠️ Firebase offload is unavailable for production audio analysis${typeof fileSize === 'number' ? ` (file=${this.getFileSizeString(fileSize)})` : ''}`,
       );
     }
 
-    return isLargeFile && isConfigured;
-  }
-
-  /**
-   * Compatibility alias.
-   */
-  shouldUseBlobUpload(fileSize: number): boolean {
-    return this.shouldUseOffloadUpload(fileSize);
+    return isConfigured;
   }
 
   /**
@@ -87,13 +77,6 @@ class OffloadUploadService {
    */
   isOffloadUploadAvailable(): boolean {
     return this.isFirebaseConfigured();
-  }
-
-  /**
-   * Compatibility alias.
-   */
-  isBlobUploadAvailable(): boolean {
-    return this.isOffloadUploadAvailable();
   }
 
   /**
@@ -105,9 +88,20 @@ class OffloadUploadService {
   }
 
   private async postOffloadProcessing(endpoint: string, formData: FormData): Promise<unknown> {
+    // Fetch App Check token for request attestation
+    const appCheckToken = typeof window !== 'undefined'
+      ? await getAppCheckTokenForApi()
+      : null;
+
+    const headers: HeadersInit = {};
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
       body: formData,
+      headers,
       signal: createSafeTimeoutSignal(800000), // 13+ minutes
     });
 
@@ -120,22 +114,25 @@ class OffloadUploadService {
   }
 
   /**
-   * Compatibility alias.
-   */
-  private async postBlobProcessing(endpoint: string, formData: FormData): Promise<unknown> {
-    return this.postOffloadProcessing(endpoint, formData);
-  }
-
-  /**
    * Delete an offload URL via the delete endpoint.
    */
   async deleteOffload(offloadUrl: string): Promise<void> {
     if (!offloadUrl) return;
 
     try {
-      const response = await fetch('/api/blob/delete', {
+      // Fetch App Check token for request attestation
+      const appCheckToken = typeof window !== 'undefined'
+        ? await getAppCheckTokenForApi()
+        : null;
+
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
+
+      const response = await fetch('/api/offload/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ url: offloadUrl }),
         keepalive: true,
       });
@@ -147,13 +144,6 @@ class OffloadUploadService {
     } catch (error) {
       console.warn('⚠️ Offload deletion request failed (non-critical):', error);
     }
-  }
-
-  /**
-   * Compatibility alias.
-   */
-  async deleteBlob(blobUrl: string): Promise<void> {
-    return this.deleteOffload(blobUrl);
   }
 
   private async uploadToFirebase(audioFile: File): Promise<string> {
@@ -221,36 +211,32 @@ class OffloadUploadService {
     return this.uploadToFirebase(audioFile);
   }
 
-  /**
-   * Compatibility alias.
-   */
-  async uploadToBlob(audioFile: File): Promise<string> {
-    return this.uploadToOffload(audioFile);
-  }
-
   async detectBeatsFromOffloadUrl(
     offloadUrl: string,
     detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-    options: { deleteAfterProcessing?: boolean } = {},
+    options: { deleteAfterProcessing?: boolean; audioDuration?: number } = {},
   ): Promise<OffloadUploadResult> {
     const startTime = Date.now();
 
     try {
       const formData = new FormData();
-      formData.append('blob_url', offloadUrl);
+      formData.append('offload_url', offloadUrl);
       formData.append('detector', detector);
-      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+      formData.append('delete_offload', options.deleteAfterProcessing === false ? '0' : '1');
+      if (typeof options.audioDuration === 'number' && Number.isFinite(options.audioDuration) && options.audioDuration > 0) {
+        formData.append('audio_duration', `${options.audioDuration}`);
+      }
 
       if (detector === 'beat-transformer') {
         formData.append('force', 'true');
       }
 
-      const result = await this.postBlobProcessing('/api/detect-beats-blob', formData);
+      const result = await this.postOffloadProcessing('/api/detect-beats-offload', formData);
 
       return {
         success: true,
         data: result,
-        blobUrl: offloadUrl,
+        offloadUrl,
         processingTime: Date.now() - startTime,
       };
     } catch (error) {
@@ -262,17 +248,6 @@ class OffloadUploadService {
     }
   }
 
-  /**
-   * Compatibility alias.
-   */
-  async detectBeatsFromBlobUrl(
-    blobUrl: string,
-    detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-    options: { deleteAfterProcessing?: boolean } = {},
-  ): Promise<OffloadUploadResult> {
-    return this.detectBeatsFromOffloadUrl(blobUrl, detector, options);
-  }
-
   async recognizeChordsFromOffloadUrl(
     offloadUrl: string,
     model: string = 'chord-cnn-lstm',
@@ -282,18 +257,18 @@ class OffloadUploadService {
 
     try {
       const formData = new FormData();
-      formData.append('blob_url', offloadUrl);
+      formData.append('offload_url', offloadUrl);
       formData.append('model', model);
       formData.append('detector', model);
       formData.append('chord_dict', (model === 'btc-sl' || model === 'btc-pl') ? 'large_voca' : 'full');
-      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+      formData.append('delete_offload', options.deleteAfterProcessing === false ? '0' : '1');
 
-      const result = await this.postBlobProcessing('/api/recognize-chords-blob', formData);
+      const result = await this.postOffloadProcessing('/api/recognize-chords-offload', formData);
 
       return {
         success: true,
         data: result,
-        blobUrl: offloadUrl,
+        offloadUrl,
         processingTime: Date.now() - startTime,
       };
     } catch (error) {
@@ -305,17 +280,6 @@ class OffloadUploadService {
     }
   }
 
-  /**
-   * Compatibility alias.
-   */
-  async recognizeChordsFromBlobUrl(
-    blobUrl: string,
-    model: string = 'chord-cnn-lstm',
-    options: { deleteAfterProcessing?: boolean } = {},
-  ): Promise<OffloadUploadResult> {
-    return this.recognizeChordsFromOffloadUrl(blobUrl, model, options);
-  }
-
   async transcribeSheetSageFromOffloadUrl(
     offloadUrl: string,
     videoId?: string,
@@ -325,13 +289,13 @@ class OffloadUploadService {
 
     try {
       const formData = new FormData();
-      formData.append('blob_url', offloadUrl);
-      formData.append('delete_blob', options.deleteAfterProcessing === false ? '0' : '1');
+      formData.append('offload_url', offloadUrl);
+      formData.append('delete_offload', options.deleteAfterProcessing === false ? '0' : '1');
       if (videoId) {
         formData.append('videoId', videoId);
       }
 
-      const payload = await this.postBlobProcessing('/api/transcribe-sheetsage', formData) as {
+      const payload = await this.postOffloadProcessing('/api/transcribe-sheetsage', formData) as {
         success?: boolean;
         data?: unknown;
         error?: string;
@@ -344,7 +308,7 @@ class OffloadUploadService {
       return {
         success: true,
         data: payload.data,
-        blobUrl: offloadUrl,
+        offloadUrl,
         processingTime: Date.now() - startTime,
       };
     } catch (error) {
@@ -356,17 +320,6 @@ class OffloadUploadService {
     }
   }
 
-  /**
-   * Compatibility alias.
-   */
-  async transcribeSheetSageFromBlobUrl(
-    blobUrl: string,
-    videoId?: string,
-    options: { deleteAfterProcessing?: boolean } = {},
-  ): Promise<OffloadUploadResult> {
-    return this.transcribeSheetSageFromOffloadUrl(blobUrl, videoId, options);
-  }
-
   async transcribeSheetSageOffloadUpload(
     audioFile: File,
     videoId?: string,
@@ -376,10 +329,10 @@ class OffloadUploadService {
 
     try {
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToOffload(audioFile);
+      const offloadUrl = await this.uploadToOffload(audioFile);
       if (onProgress) onProgress(35);
 
-      const result = await this.transcribeSheetSageFromOffloadUrl(blobUrl, videoId, {
+      const result = await this.transcribeSheetSageFromOffloadUrl(offloadUrl, videoId, {
         deleteAfterProcessing: true,
       });
 
@@ -387,7 +340,7 @@ class OffloadUploadService {
 
       return {
         ...result,
-        blobUrl,
+        offloadUrl,
         processingTime: Date.now() - startTime,
       };
     } catch (error) {
@@ -399,18 +352,7 @@ class OffloadUploadService {
   }
 
   /**
-   * Compatibility alias.
-   */
-  async transcribeSheetSageBlobUpload(
-    audioFile: File,
-    videoId?: string,
-    onProgress?: (percent: number) => void,
-  ): Promise<OffloadUploadResult> {
-    return this.transcribeSheetSageOffloadUpload(audioFile, videoId, onProgress);
-  }
-
-  /**
-   * Detect beats using offload upload for large files.
+   * Detect beats using the browser offload pipeline.
    */
   async detectBeatsOffloadUpload(
     audioFile: File,
@@ -422,12 +364,12 @@ class OffloadUploadService {
     try {
       // Step 1: Upload to offload storage
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToOffload(audioFile);
+      const offloadUrl = await this.uploadToOffload(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send offload URL to Python backend for processing
       // deleteAfterProcessing=true keeps cleanup on the server route and avoids duplicate client delete calls.
-      const result = await this.detectBeatsFromOffloadUrl(blobUrl, detector, {
+      const result = await this.detectBeatsFromOffloadUrl(offloadUrl, detector, {
         deleteAfterProcessing: true,
       });
 
@@ -437,7 +379,7 @@ class OffloadUploadService {
 
       return {
         ...result,
-        blobUrl,
+        offloadUrl,
         processingTime,
       };
     } catch (error) {
@@ -450,18 +392,7 @@ class OffloadUploadService {
   }
 
   /**
-   * Compatibility alias.
-   */
-  async detectBeatsBlobUpload(
-    audioFile: File,
-    detector: 'auto' | 'madmom' | 'beat-transformer' = 'beat-transformer',
-    onProgress?: (percent: number) => void,
-  ): Promise<OffloadUploadResult> {
-    return this.detectBeatsOffloadUpload(audioFile, detector, onProgress);
-  }
-
-  /**
-   * Recognize chords using offload upload for large files.
+   * Recognize chords using the browser offload pipeline.
    */
   async recognizeChordsOffloadUpload(
     audioFile: File,
@@ -473,12 +404,12 @@ class OffloadUploadService {
     try {
       // Step 1: Upload to offload storage
       if (onProgress) onProgress(10);
-      const blobUrl = await this.uploadToOffload(audioFile);
+      const offloadUrl = await this.uploadToOffload(audioFile);
       if (onProgress) onProgress(30);
 
       // Step 2: Send offload URL to Python backend for processing
       // deleteAfterProcessing=true keeps cleanup on the server route and avoids duplicate client delete calls.
-      const result = await this.recognizeChordsFromOffloadUrl(blobUrl, model, {
+      const result = await this.recognizeChordsFromOffloadUrl(offloadUrl, model, {
         deleteAfterProcessing: true,
       });
 
@@ -488,7 +419,7 @@ class OffloadUploadService {
 
       return {
         ...result,
-        blobUrl,
+        offloadUrl,
         processingTime,
       };
     } catch (error) {
@@ -501,21 +432,9 @@ class OffloadUploadService {
   }
 
   /**
-   * Compatibility alias.
-   */
-  async recognizeChordsBlobUpload(
-    audioFile: File,
-    model: string = 'chord-cnn-lstm',
-    onProgress?: (percent: number) => void,
-  ): Promise<OffloadUploadResult> {
-    return this.recognizeChordsOffloadUpload(audioFile, model, onProgress);
-  }
-
-  /**
-   * Process audio file with automatic routing based on environment and file size.
-   * - Localhost development: Always use direct Python backend (no offload upload)
-   * - Production small files (below size threshold with multipart headroom): standard proxy
-   * - Production larger files: Firebase offload upload
+   * Process audio file with environment-based routing.
+   * - Localhost development: direct Python backend multipart
+   * - Production browser clients: universal offload upload
    */
   async processAudioFile(
     audioFile: File,
@@ -528,7 +447,7 @@ class OffloadUploadService {
   ): Promise<OffloadUploadResult> {
     const { detector = 'beat-transformer', model = 'chord-cnn-lstm', onProgress } = options;
 
-    // Check if we should use offload upload (considers both environment and file size)
+    // Universal production offload; local development keeps direct multipart.
     if (this.shouldUseOffloadUpload(audioFile.size)) {
       if (operation === 'detect-beats') {
         return this.detectBeatsOffloadUpload(audioFile, detector, onProgress);

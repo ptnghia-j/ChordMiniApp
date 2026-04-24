@@ -11,7 +11,7 @@ const SearchContainerLoading = () => (
     {/* Clean Search Form Skeleton */}
     <div className="flex gap-3">
       <div className="flex-1">
-        <div className="h-12 bg-white dark:bg-content-bg rounded-2xl shadow-lg"></div>
+        <div className="h-12 bg-white dark:bg-slate-800/95 dark:backdrop-blur-sm rounded-2xl border border-transparent dark:border-slate-400/35 shadow-lg"></div>
       </div>
       <div className="h-12 w-32 bg-default-100 dark:bg-default-200/20 rounded-lg shadow-lg border border-default-300 dark:border-default-400"></div>
     </div>

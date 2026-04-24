@@ -45,17 +45,17 @@ export async function requestSheetSageTranscription(
 ): Promise<SheetSageResult> {
   const sourceFile = await resolveSheetSageAudioFile(audioFile, audioUrl, videoId);
 
-  if (offloadUploadService.shouldUseBlobUpload(sourceFile.size)) {
-    const blobResult = await offloadUploadService.transcribeSheetSageBlobUpload(
+  if (offloadUploadService.shouldUseOffloadUpload(sourceFile.size)) {
+    const offloadResult = await offloadUploadService.transcribeSheetSageOffloadUpload(
       sourceFile,
       videoId || undefined,
     );
 
-    if (!blobResult.success || !blobResult.data) {
-      throw new Error(blobResult.error || 'Sheet Sage transcription failed');
+    if (!offloadResult.success || !offloadResult.data) {
+      throw new Error(offloadResult.error || 'Sheet Sage transcription failed');
     }
 
-    return blobResult.data as SheetSageResult;
+    return offloadResult.data as SheetSageResult;
   }
 
   const formData = new FormData();

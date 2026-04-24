@@ -7,6 +7,7 @@ export {
 } from './constants';
 
 export {
+  adjustScheduledNoteForPlayback,
   adjustScheduledNotesForPlayback,
   mergeConsecutiveChordEvents,
   estimateBeatDuration,
@@ -14,7 +15,12 @@ export {
 } from './playback';
 
 export { generateNotesForInstrument } from './dispatch';
-export { generateAllInstrumentVisualNotes, attachVisualNotePositions } from './visualNotes';
+export {
+  generateAllInstrumentVisualNotePlans,
+  materializeInstrumentVisualNotes,
+  generateAllInstrumentVisualNotes,
+  attachVisualNotePositions,
+} from './visualNotes';
 
 export type {
   InstrumentName,
@@ -26,4 +32,6 @@ export type {
   VisualNote,
   PositionedVisualNote,
   SignalDynamicsSource,
+  InstrumentVisualNoteGroupPlan,
+  InstrumentVisualEventPlan,
 } from './types';

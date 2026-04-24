@@ -3,8 +3,9 @@ import { getSheetSageApiUrl } from '@/config/serverBackend';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import type { SheetSageResult } from '@/types/sheetSage';
 import { setDocumentWithAdminAccess } from '@/services/firebase/firestoreAdminService';
-import { validateBlobUrl } from '@/utils/blobValidation';
+import { validateOffloadUrl } from '@/utils/offloadValidation';
 import { deleteOffloadUrl } from '@/services/storage/offloadCleanupService';
+import { verifyAppCheckRequest } from '@/utils/serverAppCheck';
 
 export const maxDuration = 300;
 
@@ -32,8 +33,8 @@ function isValidVideoId(videoId: string): boolean {
   return /^[a-zA-Z0-9_-]{11}$/.test(videoId);
 }
 
-function shouldDeleteBlobAfterProcessing(formData: FormData): boolean {
-  const raw = formData.get('delete_blob');
+function shouldDeleteOffloadAfterProcessing(formData: FormData): boolean {
+  const raw = formData.get('delete_offload') ?? formData.get('delete_blob');
   if (typeof raw !== 'string') return true;
 
   const normalized = raw.trim().toLowerCase();
@@ -46,35 +47,35 @@ async function resolveAudioFileFromRequest(formData: FormData): Promise<File> {
     return file;
   }
 
-  const blobUrlEntry = formData.get('blob_url');
-  if (typeof blobUrlEntry !== 'string') {
+  const offloadUrlEntry = formData.get('offload_url') ?? formData.get('blob_url');
+  if (typeof offloadUrlEntry !== 'string') {
     throw new Error('No audio file provided');
   }
 
-  const blobUrl = validateBlobUrl(blobUrlEntry);
-  const shouldDeleteBlob = shouldDeleteBlobAfterProcessing(formData);
+  const offloadUrl = validateOffloadUrl(offloadUrlEntry);
+  const shouldDeleteOffload = shouldDeleteOffloadAfterProcessing(formData);
 
-  const blobResponse = await fetch(blobUrl);
-  if (!blobResponse.ok) {
-    throw new Error(`Failed to download audio from offload storage: ${blobResponse.status} ${blobResponse.statusText}`);
+  const offloadResponse = await fetch(offloadUrl);
+  if (!offloadResponse.ok) {
+    throw new Error(`Failed to download audio from offload storage: ${offloadResponse.status} ${offloadResponse.statusText}`);
   }
 
-  const audioBuffer = await blobResponse.arrayBuffer();
-  const contentType = blobResponse.headers.get('content-type') || 'audio/mpeg';
+  const audioBuffer = await offloadResponse.arrayBuffer();
+  const contentType = offloadResponse.headers.get('content-type') || 'audio/mpeg';
   const audioBlob = new Blob([audioBuffer], { type: contentType });
 
-  const urlParts = blobUrl.split('/');
+  const urlParts = offloadUrl.split('/');
   const fileName = urlParts[urlParts.length - 1] || 'audio-upload';
 
-  if (shouldDeleteBlob) {
+  if (shouldDeleteOffload) {
     try {
-      const deletion = await deleteOffloadUrl(blobUrl);
-      console.log(`🗑️ [SheetSage] Offload file deleted after download (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${blobUrl.substring(0, 80)}...`);
+      const deletion = await deleteOffloadUrl(offloadUrl);
+      console.log(`🗑️ [SheetSage] Offload file deleted after download (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${offloadUrl.substring(0, 80)}...`);
     } catch (error) {
       console.warn('⚠️ [SheetSage] Non-critical: failed to delete offload file after download:', error);
     }
   } else {
-    console.log('ℹ️ [SheetSage] Skipping offload file deletion after download (delete_blob=0)');
+    console.log('ℹ️ [SheetSage] Skipping offload file deletion after download (delete_offload=0)');
   }
 
   return new File([audioBlob], fileName, { type: contentType });
@@ -132,6 +133,12 @@ export async function POST(request: NextRequest) {
   const backendUrl = getSheetSageApiUrl();
 
   try {
+    // Verify App Check token
+    const appCheck = await verifyAppCheckRequest(request);
+    if (!appCheck.ok) {
+      return NextResponse.json({ success: false, error: appCheck.error }, { status: appCheck.status || 403 });
+    }
+
     const formData = await request.formData();
     const videoIdField = formData.get('videoId');
     const videoId = typeof videoIdField === 'string' ? videoIdField.trim() : '';

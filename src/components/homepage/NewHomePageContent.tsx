@@ -167,7 +167,7 @@ function NewHomePageContentInner() {
                     duration: 0.8,
                     ease: "easeOut",
                   }}
-                  className="text-base md:text-lg text-slate-600 dark:text-gray-400 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
+                  className="text-base md:text-lg text-slate-600 dark:text-gray-200 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
                 >
                   Open source chord & beat detection application. Get your favorite songs transcribed!
                 </motion.p>

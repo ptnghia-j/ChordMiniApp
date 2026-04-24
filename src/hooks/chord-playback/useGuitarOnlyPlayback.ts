@@ -4,7 +4,7 @@ import type { DynamicsAnalyzer } from '@/services/audio/dynamicsAnalyzer';
 import { getSoundfontChordPlaybackService } from '@/services/chord-playback/soundfontChordPlaybackService';
 import { mergeConsecutiveChordEvents } from '@/utils/instrumentNoteGeneration';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
-import { findChordEventForPlayback as findPlayableChordEvent } from '@/utils/chordEventLookup';
+import { findChordEventIndexForPlayback } from '@/utils/chordEventLookup';
 import type { ChordEvent } from '@/utils/chordToMidi';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 
@@ -13,6 +13,43 @@ const PLAYBACK_EVENT_MISS_GRACE_PERIOD = 0.12;
 
 function hasPlayableNotes(event: ChordEvent): boolean {
   return event.notes.length > 0;
+}
+
+function findPlayableChordEventIndex(
+  events: ChordEvent[],
+  currentTime: number,
+  currentBeatIndex: number,
+  cursorIndex: number,
+): number {
+  const cursorEvent = cursorIndex >= 0 ? events[cursorIndex] : null;
+  if (cursorEvent) {
+    const isWithinCursorWindow = currentTime >= cursorEvent.startTime - PLAYBACK_EVENT_BOUNDARY_TOLERANCE
+      && currentTime < cursorEvent.endTime + PLAYBACK_EVENT_BOUNDARY_TOLERANCE;
+    if (isWithinCursorWindow) {
+      return cursorIndex;
+    }
+
+    const nextCursorEvent = events[cursorIndex + 1];
+    if (nextCursorEvent) {
+      const nextStartsSoon = nextCursorEvent.startTime >= currentTime
+        && nextCursorEvent.startTime - currentTime <= PLAYBACK_EVENT_BOUNDARY_TOLERANCE;
+      const nextAlreadyStarted = currentTime >= nextCursorEvent.startTime
+        && currentTime < nextCursorEvent.endTime + PLAYBACK_EVENT_BOUNDARY_TOLERANCE;
+      const beatAdvancesToNext = currentBeatIndex >= nextCursorEvent.beatIndex
+        && nextCursorEvent.startTime - currentTime <= PLAYBACK_EVENT_BOUNDARY_TOLERANCE;
+
+      if (nextStartsSoon || nextAlreadyStarted || beatAdvancesToNext) {
+        return cursorIndex + 1;
+      }
+    }
+  }
+
+  return findChordEventIndexForPlayback(
+    events,
+    currentTime,
+    currentBeatIndex,
+    PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
+  );
 }
 
 export function useGuitarOnlyPlayback(
@@ -29,6 +66,8 @@ export function useGuitarOnlyPlayback(
   targetKey?: string | null,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
+  const lastPlayedEventIndexRef = useRef(-1);
+  const lookupCursorIndexRef = useRef(-1);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
   const guitarOnlyActiveRef = useRef(false);
   const eventMissStartedAtRef = useRef<number | null>(null);
@@ -65,21 +104,24 @@ export function useGuitarOnlyPlayback(
       }
       guitarOnlyActiveRef.current = false;
       lastPlayedChordRef.current = null;
+      lastPlayedEventIndexRef.current = -1;
+      lookupCursorIndexRef.current = -1;
     }
   }, [shouldActivate, isChordPlaybackEnabled]);
 
   useEffect(() => {
     if (!shouldActivate || merged.length === 0) return;
 
-    const currentChordEvent = findPlayableChordEvent(
+    const currentEventIndex = findPlayableChordEventIndex(
       merged,
       currentTime,
       currentBeatIndex,
-      PLAYBACK_EVENT_BOUNDARY_TOLERANCE,
+      lookupCursorIndexRef.current,
     );
-    const currentEventIndex = currentChordEvent
-      ? merged.indexOf(currentChordEvent)
-      : -1;
+    lookupCursorIndexRef.current = currentEventIndex;
+    const currentChordEvent = currentEventIndex >= 0
+      ? merged[currentEventIndex]
+      : null;
     const nextChordName = currentEventIndex >= 0
       ? merged[currentEventIndex + 1]?.chordName
       : undefined;
@@ -97,6 +139,8 @@ export function useGuitarOnlyPlayback(
 
         serviceRef.current.stopInstruments(['guitar']);
         lastPlayedChordRef.current = null;
+        lastPlayedEventIndexRef.current = -1;
+        lookupCursorIndexRef.current = -1;
         eventMissStartedAtRef.current = null;
       }
       return;
@@ -104,7 +148,8 @@ export function useGuitarOnlyPlayback(
 
     eventMissStartedAtRef.current = null;
 
-    if (currentChordEvent.chordName === lastPlayedChordRef.current) return;
+    if (currentEventIndex === lastPlayedEventIndexRef.current
+      && currentChordEvent.chordName === lastPlayedChordRef.current) return;
 
     const duration = currentChordEvent.endTime - currentChordEvent.startTime;
     const signalDynamics = dynamicsAnalyzer.getSignalDynamics(currentChordEvent.startTime, duration);
@@ -135,6 +180,7 @@ export function useGuitarOnlyPlayback(
       targetKey as string | undefined,
     );
     lastPlayedChordRef.current = currentChordEvent.chordName;
+    lastPlayedEventIndexRef.current = currentEventIndex;
   }, [
     bpm,
     currentBeatIndex,
@@ -156,6 +202,8 @@ export function useGuitarOnlyPlayback(
         service.stopInstruments(['guitar']);
         service.updateOptions({ enabled: false });
         guitarOnlyActiveRef.current = false;
+        lastPlayedEventIndexRef.current = -1;
+        lookupCursorIndexRef.current = -1;
       }
     };
   }, []);
@@ -164,6 +212,8 @@ export function useGuitarOnlyPlayback(
     if (!isPlaying && guitarOnlyActiveRef.current) {
       serviceRef.current.stopInstruments(['guitar']);
       lastPlayedChordRef.current = null;
+      lastPlayedEventIndexRef.current = -1;
+      lookupCursorIndexRef.current = -1;
       eventMissStartedAtRef.current = null;
     }
   }, [isPlaying]);

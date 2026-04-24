@@ -1,6 +1,6 @@
 {
   "name": "chord-mini-app",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "sideEffects": [
     "*.css",
@@ -81,7 +81,7 @@
     "smplr": "^0.16.3",
     "tailwind-merge": "^2.2.1",
     "tone": "^15.1.22",
-    "uuid": "^11.1.0",
+    "uuid": "14.0.0",
     "web-vitals": "^5.0.3",
     "youtube-search-api": "^2.0.0",
     "ytdl-core": "^4.11.5",
@@ -95,7 +95,8 @@
     "teeny-request": "10.1.2",
     "test-exclude": {
       "minimatch": "3.1.5"
-    }
+    },
+    "uuid": "14.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.7",

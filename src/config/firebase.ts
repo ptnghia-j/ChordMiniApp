@@ -10,7 +10,8 @@ import {
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getAuth, Auth, signInAnonymously, onAuthStateChanged, User, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getFirebaseConfig, getFirebaseConfigSync } from '@/config/publicConfig';
+import { getFirebaseConfig, getFirebaseConfigSync, loadPublicConfig } from '@/config/publicConfig';
+import type { AppCheck } from "firebase/app-check";
 
 // RUNTIME CONFIG SUPPORT:
 // This file now loads Firebase configuration at runtime from /api/config endpoint
@@ -29,6 +30,7 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 let auth: Auth | null = null;
+let appCheckInstance: AppCheck | null = null;
 
 // Initialization state
 let initializationPromise: Promise<void> | null = null;
@@ -86,6 +88,9 @@ async function initializeFirebase(): Promise<void> {
 
       // Only set up client-side features when window is available
       if (typeof window !== 'undefined') {
+        // Initialize App Check before other client-side features
+        await initializeAppCheck(app);
+
         // Set up authentication persistence to survive page refreshes
         setupAuthPersistence();
 
@@ -456,4 +461,76 @@ export async function initializeFirebaseApp(): Promise<FirebaseApp> {
  */
 export async function preloadFirebase(): Promise<void> {
   await initializeFirebase();
+}
+
+// ---------------------------------------------------------------------------
+// Firebase App Check – reCAPTCHA v3
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialize Firebase App Check with reCAPTCHA v3 (client-side only).
+ * Must be called after the Firebase app is created but before other services
+ * start making requests.
+ */
+async function initializeAppCheck(firebaseApp: FirebaseApp): Promise<void> {
+  // SSR guard – App Check is browser-only
+  if (typeof window === 'undefined') return;
+
+  // Load the site key from runtime config (supports Docker "build once, run anywhere")
+  // process.env.NEXT_PUBLIC_* is empty in Docker builds because Railway env vars
+  // are only available at container runtime, not during `docker build`.
+  const config = await loadPublicConfig();
+  const siteKey = config.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY;
+  if (!siteKey) {
+    console.warn(
+      '⚠️ NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY not set – App Check will not be initialised.',
+    );
+    return;
+  }
+
+  try {
+    const {
+      initializeAppCheck: initAppCheck,
+      ReCaptchaV3Provider,
+    } = await import('firebase/app-check');
+
+    // Enable debug token for local development so reCAPTCHA is not required.
+    // The generated token must be registered in Firebase Console → App Check
+    // → Manage Debug Tokens.
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+
+    appCheckInstance = initAppCheck(firebaseApp, {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+
+    console.log('✅ Firebase App Check initialised (reCAPTCHA v3)');
+  } catch (error) {
+    console.warn('⚠️ Firebase App Check initialisation failed (non-fatal):', error);
+  }
+}
+
+/**
+ * Get a current App Check token string for attaching to outbound BFF requests.
+ * Returns `null` when App Check is unavailable (e.g. missing site key, SSR,
+ * or initialisation failure) – callers should treat a `null` return as
+ * "do not attach the header".
+ */
+export async function getAppCheckTokenForApi(): Promise<string | null> {
+  // SSR guard
+  if (typeof window === 'undefined') return null;
+
+  if (!appCheckInstance) return null;
+
+  try {
+    const { getToken } = await import('firebase/app-check');
+    const result = await getToken(appCheckInstance, /* forceRefresh */ false);
+    return result.token;
+  } catch (error) {
+    console.warn('⚠️ Failed to obtain App Check token (non-fatal):', error);
+    return null;
+  }
 }

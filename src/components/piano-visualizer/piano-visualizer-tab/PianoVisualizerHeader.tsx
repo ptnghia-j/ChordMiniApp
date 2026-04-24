@@ -27,6 +27,10 @@ export const PianoVisualizerHeader: React.FC<PianoVisualizerHeaderProps> = ({
   speedIndex,
   onSpeedChange,
 }) => {
+  const segmentedControlClassName = 'rounded-full bg-white/75 p-1 shadow-sm backdrop-blur dark:bg-gray-800/50';
+  const activeSegmentClassName = 'bg-slate-900 text-white shadow-sm dark:bg-gray-900';
+  const inactiveSegmentClassName = 'text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10';
+
   return (
     <div className="chord-timeline-section">
       <div className="mb-2 flex items-center justify-between flex-wrap gap-y-2">
@@ -55,11 +59,12 @@ export const PianoVisualizerHeader: React.FC<PianoVisualizerHeaderProps> = ({
             onSelectionChange={(key) => onDisplayModeChange(key as VisualizerDisplayMode)}
             size="sm"
             radius="full"
+            variant="light"
             classNames={{
-              tabList: 'bg-gray-100 dark:bg-gray-800 p-1',
-              cursor: 'bg-white dark:bg-gray-700 shadow-sm',
+              tabList: segmentedControlClassName,
+              cursor: activeSegmentClassName,
               tab: 'h-7 px-3',
-              tabContent: 'text-xs font-medium text-gray-700 group-data-[selected=true]:text-gray-900 dark:text-gray-300 dark:group-data-[selected=true]:text-white',
+              tabContent: 'text-xs font-medium text-gray-700 group-data-[selected=true]:text-white dark:text-gray-200 dark:group-data-[selected=true]:text-white',
             }}
           >
             <Tab key="piano-roll" title="Piano Roll" />
@@ -78,7 +83,7 @@ export const PianoVisualizerHeader: React.FC<PianoVisualizerHeaderProps> = ({
             <label className="whitespace-nowrap text-sm font-medium text-gray-700 dark:text-gray-300">
               Speed:
             </label>
-            <div className="flex space-x-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+            <div className={`flex space-x-1 ${segmentedControlClassName}`}>
               {SPEED_PRESETS.map((preset, idx) => (
                 <AppTooltip key={preset.label} content={preset.description}>
                   <span className="inline-flex">
@@ -87,8 +92,8 @@ export const PianoVisualizerHeader: React.FC<PianoVisualizerHeaderProps> = ({
                       disabled={effectiveDisplayMode === 'sheet-music'}
                       className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                         speedIndex === idx
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+                          ? activeSegmentClassName
+                          : inactiveSegmentClassName
                       }`}
                     >
                       {preset.label}

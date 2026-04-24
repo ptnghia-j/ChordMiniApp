@@ -27,6 +27,16 @@ beats_bp = Blueprint('beats', __name__)
 config = get_config()
 
 
+def _download_remote_audio_to_temp_path(file_url: str, temp_path: str, timeout_seconds: int = 300) -> None:
+    """Stream a remote audio file into a temporary path."""
+    with requests.get(file_url, stream=True, timeout=(30, timeout_seconds)) as response:
+        response.raise_for_status()
+        with open(temp_path, 'wb') as file_handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    file_handle.write(chunk)
+
+
 @beats_bp.route('/api/detect-beats', methods=['POST'])
 @limiter.limit(config.get_rate_limit('heavy_processing'))
 def detect_beats():
@@ -133,13 +143,9 @@ def detect_beats_firebase():
 
         # Download file from Firebase
         try:
-            response = requests.get(params['firebase_url'], timeout=30)
-            response.raise_for_status()
-
             # Create temporary file
             with temporary_file(suffix='.mp3') as temp_path:
-                with open(temp_path, 'wb') as f:
-                    f.write(response.content)
+                _download_remote_audio_to_temp_path(params['firebase_url'], temp_path)
 
                 log_info(f"Downloaded Firebase file to: {temp_path}")
                 log_info(f"File size: {os.path.getsize(temp_path) / (1024 * 1024):.1f}MB")

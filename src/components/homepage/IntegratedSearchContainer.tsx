@@ -122,17 +122,17 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
                 setSearchError(null);
               }}
               placeholder="Search for music or paste YouTube URL..."
-              className="w-full pl-4 pr-12 py-3 text-base bg-white dark:bg-dark-bg text-black dark:text-white rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 shadow-sm border-0 dark:shadow-gray-500"
+              className="w-full pl-4 pr-12 py-3 text-base bg-white text-black placeholder:text-gray-500 dark:bg-slate-800/95 dark:backdrop-blur-sm dark:text-slate-100 dark:placeholder:text-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-sky-400/90 focus:outline-none transition-all duration-200 shadow-sm border-0 dark:border dark:border-slate-400/35"
             />
             {/* Search Icon Button */}
             <button
               type="submit"
               disabled={isSearching}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 disabled:opacity-50"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-blue-600 dark:text-slate-300 dark:hover:text-sky-300 transition-colors duration-200 disabled:opacity-50"
               aria-label="Search"
             >
               {isSearching ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 dark:border-sky-400"></div>
               ) : (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

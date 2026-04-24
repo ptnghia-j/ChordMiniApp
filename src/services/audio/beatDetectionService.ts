@@ -1,8 +1,8 @@
 // Beat detection service to communicate with the Next.js API proxy
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
-import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';
 import { offloadUploadService } from '../storage/offloadUploadService';
+import { getAppCheckTokenForApi } from '@/config/firebase';
 
 // Interface for Python backend beat detection response
 export interface BeatDetectionBackendResponse {
@@ -212,9 +212,20 @@ export async function detectBeatsWithRateLimit(
 
     const abortSignal = createSafeTimeoutSignal(timeoutValue);
 
+    // Fetch App Check token for request attestation
+    const appCheckToken = typeof window !== 'undefined'
+      ? await getAppCheckTokenForApi()
+      : null;
+
+    const headers: HeadersInit = {};
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+
     const response = await fetch('/api/detect-beats', {
       method: 'POST',
       body: formData,
+      headers,
       signal: abortSignal,
     });
 
@@ -293,366 +304,23 @@ export async function detectBeatsFromFile(
   onProgress?: (percent: number) => void
 ): Promise<BeatDetectionResult> {
   try {
-
-    // Enhanced input validation
     if (!audioFile || audioFile.size === 0) {
       throw new Error('Invalid audio file for beat detection');
     }
 
-    // Check if file should use Firebase offload upload (> 4.5MB)
-    if (offloadUploadService.shouldUseBlobUpload(audioFile.size)) {
-
-
-      try {
-        // Use Firebase offload upload for large files
-        const blobResult = await offloadUploadService.detectBeatsBlobUpload(audioFile, detector, onProgress);
-
-        if (blobResult.success) {
-
-          // The blob result data is the Python backend response; normalize fields before returning
-          const backendResponse = blobResult.data as BeatDetectionBackendResponse;
-
-          // Validate that we have a beats array
-          if (!backendResponse.beats || !Array.isArray(backendResponse.beats)) {
-            throw new Error(`Invalid beat detection response: beats array not found or not an array`);
-          }
-
-          // Normalize to BeatDetectionResult with numeric time_signature
-          const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
-            success: true,
-            beats: backendResponse.beats || [],
-            downbeats: backendResponse.downbeats || [],
-            // Pass through optional dual-candidate downbeats when present (Madmom)
-            downbeat_candidates: backendResponse.downbeat_candidates,
-            downbeat_candidates_meta: backendResponse.downbeat_candidates_meta,
-            bpm: (backendResponse.BPM as number) || (backendResponse.bpm as number) || 120,
-            total_beats: (backendResponse.beats || []).length,
-            duration: (backendResponse.duration as number) || 0,
-            time_signature: parseTimeSignature(backendResponse.time_signature),
-            model: (backendResponse.model_used as string) || (backendResponse.model as string)
-          };
-
-          return normalized;
-        } else {
-          // For large files, don't fall back to direct processing - throw error instead
-          const errorMsg = blobResult.error || 'Unknown blob upload error';
-          console.error(`❌ Firebase offload upload failed for large file: ${errorMsg}`);
-          throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload failed: ${errorMsg}. Please try a smaller file or check your internet connection.`);
-        }
-      } catch (blobError) {
-        // For large files, don't fall back to direct processing - throw error instead
-        const errorMsg = blobError instanceof Error ? blobError.message : String(blobError) || 'Unknown error';
-        console.error(`❌ Firebase offload upload error for large file: ${errorMsg}`);
-        throw new Error(`File too large for direct processing (${offloadUploadService.getFileSizeString(audioFile.size)}). Blob upload error: ${errorMsg}. Please try a smaller file or check your internet connection.`);
-      }
-    }
-
-    if (audioFile.size > 100 * 1024 * 1024) { // 100MB limit
+    if (audioFile.size > 100 * 1024 * 1024) {
       throw new Error('Audio file is too large for beat detection (>100MB)');
     }
 
-    // Validate detector parameter
     const validDetectors = ['auto', 'madmom', 'beat-transformer'];
     if (!validDetectors.includes(detector)) {
       throw new Error(`Invalid detector: ${detector}. Must be one of: ${validDetectors.join(', ')}`);
     }
 
-    // Check file size and warn if over 20MB
-    const fileSizeMB = audioFile.size / (1024 * 1024);
-    if (fileSizeMB > 20) {
-      console.warn(`Large file detected (${fileSizeMB.toFixed(1)}MB). Processing may take longer.`);
-
-      // For files over 30MB, prefer madmom or librosa for better performance
-      if (fileSizeMB > 30) {
-        // If user explicitly requested beat-transformer, keep it and add force parameter
-        if (detector === 'beat-transformer') {
-          console.warn('File is very large. Adding force=true parameter to use Beat-Transformer.');
-          // Add force=true parameter to the formData later
-        }
-        // If auto-selected, switch to madmom or librosa
-        else if (detector === 'auto') {
-          console.warn('File is very large. Using madmom or librosa for better performance.');
-          // Will use the best available model on the server side
-        }
-      }
-    }
-
-    // Log audio duration for debugging before sending to ML service
-    try {
-      await getAudioDurationFromFile(audioFile);
-      // console.log(`🎵 Audio duration detected: ${duration.toFixed(1)} seconds - proceeding with beat detection analysis`);
-    } catch {
-      // console.warn(`⚠️ Could not detect audio duration for debugging: ${error}`);
-    }
-
-    const formData = new FormData();
-    formData.append('file', audioFile);
-    formData.append('detector', detector);
-
-    // Add force=true parameter if Beat-Transformer is explicitly requested for large files
-    if (detector === 'beat-transformer' && fileSizeMB > 30) {
-      formData.append('force', 'true');
-      // console.log(`Added force=true parameter for ${detector} with large file`);
-    }
-
-    // Use XMLHttpRequest to track upload progress
-    if (onProgress) {
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = Math.round((event.loaded / event.total) * 100);
-            onProgress(percentComplete);
-          }
-        });
-
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              resolve(response);
-            } catch {
-              reject(new Error('Invalid response format from beat detection API'));
-            }
-          } else {
-            // Handle 413 Payload Too Large specifically
-            if (xhr.status === 413) {
-              if (detector === 'beat-transformer') {
-                // If Beat-Transformer was requested but still got 413, the file is extremely large
-                reject(new Error('The audio file is too large even with force=true. Try a smaller file or use madmom detector.'));
-              } else {
-                reject(new Error('The audio file is too large to process. Try a smaller file or use madmom detector.'));
-              }
-            } else {
-              try {
-                const errorData = JSON.parse(xhr.responseText);
-                // Provide more helpful error messages for common issues
-                if (errorData.error?.includes('No beat detection model available')) {
-                  // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-                  if (detector === 'beat-transformer') {
-                    // console.log('Beat-Transformer failed, trying madmom as fallback...');
-                    resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
-                    return;
-                  }
-                  reject(new Error('Beat detection service is temporarily unavailable. Please try again in a few moments or contact support.'));
-                } else {
-                  reject(new Error(errorData.error || `Failed to detect beats (HTTP ${xhr.status})`));
-                }
-              } catch {
-                if (xhr.status === 500) {
-                  // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-                  if (detector === 'beat-transformer') {
-
-                    resolve(detectBeatsFromFile(audioFile, 'madmom', onProgress));
-                    return;
-                  }
-                  reject(new Error('Beat detection service encountered an internal error. Please try again or contact support.'));
-                } else {
-                  reject(new Error(`Beat detection failed with status ${xhr.status}`));
-                }
-              }
-            }
-          }
-        });
-
-        xhr.addEventListener('error', () => {
-          reject(new Error('Network error occurred during beat detection'));
-        });
-
-        xhr.addEventListener('abort', () => {
-          reject(new Error('Beat detection was aborted'));
-        });
-
-        xhr.open('POST', '/api/detect-beats');
-        xhr.send(formData);
-      });
-    }
-
-    // Use the frontend API route for consistent timeout and error handling
-    try {
-      const formData = new FormData();
-      formData.append('file', audioFile);
-      formData.append('detector', detector);
-      if (detector === 'beat-transformer') {
-        formData.append('force', 'true');
-      }
-
-      const response = await fetch('/api/detect-beats', {
-        method: 'POST',
-        body: formData,
-        signal: createSafeTimeoutSignal(800000), // 13+ minutes timeout to match API routes
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-
-        // Handle 403 Forbidden errors - likely port conflict or backend unavailable
-        if (response.status === 403) {
-          console.error(`❌ Beat detection API returned 403 Forbidden`);
-          const responseText = await response.text().catch(() => 'Unable to read response');
-          console.error(`📄 Error response: ${responseText}`);
-
-          // Check if this is Apple AirTunes intercepting port 5000
-          const serverHeader = response.headers.get('server');
-          if (serverHeader && serverHeader.includes('AirTunes')) {
-            throw new Error('Port conflict: Port 5000 is being used by Apple AirTunes. Change Python backend to use a different port (e.g., 5001, 8000)');
-          }
-
-          throw new Error(`Beat detection failed: Backend returned 403 Forbidden. Ensure Python backend is running and accessible.`);
-        }
-
-        // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-        if (detector === 'beat-transformer') {
-          return detectBeatsFromFile(audioFile, 'madmom', onProgress);
-        }
-        throw new Error(errorData.error || `Beat detection failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-
-
-      // Enhanced validation of response data
-      if (!data || !data.success) {
-        throw new Error(`Beat detection failed: ${data?.error || 'Unknown error from beat detection service'}`);
-      }
-
-      // Add model identification for debugging
-      // console.log(`✅ Beat detection successful using: ${data.model || 'unknown'}`);
-
-      // Validate response data structure
-      if (!data.beats || !Array.isArray(data.beats)) {
-        throw new Error('Invalid beat detection response: missing or invalid beats array');
-      }
-
-      if (data.beats.length === 0) {
-        throw new Error('No beats detected in the audio. The audio may be too quiet, too short, or not contain rhythmic content.');
-      }
-
-      // Validate beat timestamps with bounds checking
-      const invalidBeats = data.beats.filter((time: unknown) =>
-        typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600 // 1 hour max
-      );
-
-      if (invalidBeats.length > 0) {
-        console.warn(`⚠️  Found ${invalidBeats.length} invalid beat timestamps, filtering them out`);
-        data.beats = data.beats.filter((time: unknown) =>
-          typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
-        );
-
-        if (data.beats.length === 0) {
-          throw new Error('All detected beats have invalid timestamps');
-        }
-      }
-
-      // Validate BPM
-      if (typeof data.bpm !== 'number' || isNaN(data.bpm) || data.bpm <= 0 || data.bpm > 300) {
-        console.warn(`Invalid BPM detected: ${data.bpm}, using default 120`);
-        data.bpm = 120;
-      }
-
-      // Parse and validate time signature using helper function
-      data.time_signature = parseTimeSignature(data.time_signature);
-
-      // Validate downbeats if present
-      if (data.downbeats && Array.isArray(data.downbeats)) {
-        const invalidDownbeats = data.downbeats.filter((time: unknown) =>
-          typeof time !== 'number' || isNaN(time) || time < 0 || time > 3600
-        );
-
-        if (invalidDownbeats.length > 0) {
-          console.warn(`⚠️  Found ${invalidDownbeats.length} invalid downbeat timestamps, filtering them out`);
-          data.downbeats = data.downbeats.filter((time: unknown) =>
-            typeof time === 'number' && !isNaN(time) && time >= 0 && time <= 3600
-          );
-        }
-      } else {
-        data.downbeats = [];
-      }
-
-      // Validate beats_with_positions if present
-      const beatsWithPositions = (data as Record<string, unknown>).beats_with_positions;
-      if (beatsWithPositions && Array.isArray(beatsWithPositions)) {
-        const invalidPositions = beatsWithPositions.filter((beat: unknown) =>
-          !beat ||
-          typeof (beat as Record<string, unknown>).time !== 'number' ||
-          typeof (beat as Record<string, unknown>).beatNum !== 'number' ||
-          isNaN((beat as Record<string, unknown>).time as number) ||
-          isNaN((beat as Record<string, unknown>).beatNum as number) ||
-          ((beat as Record<string, unknown>).time as number) < 0 ||
-          ((beat as Record<string, unknown>).time as number) > 3600 ||
-          ((beat as Record<string, unknown>).beatNum as number) < 1 ||
-          ((beat as Record<string, unknown>).beatNum as number) > (data.time_signature || 4)
-        );
-
-        if (invalidPositions.length > 0) {
-          console.warn(`⚠️  Found ${invalidPositions.length} invalid beat positions, filtering them out`);
-          (data as Record<string, unknown>).beats_with_positions = beatsWithPositions.filter((beat: unknown) =>
-            beat &&
-            typeof (beat as Record<string, unknown>).time === 'number' &&
-            typeof (beat as Record<string, unknown>).beatNum === 'number' &&
-            !isNaN((beat as Record<string, unknown>).time as number) &&
-            !isNaN((beat as Record<string, unknown>).beatNum as number) &&
-            ((beat as Record<string, unknown>).time as number) >= 0 &&
-            ((beat as Record<string, unknown>).time as number) <= 3600 &&
-            ((beat as Record<string, unknown>).beatNum as number) >= 1 &&
-            ((beat as Record<string, unknown>).beatNum as number) <= (data.time_signature || 4)
-          );
-        }
-      } else {
-        (data as Record<string, unknown>).beats_with_positions = [];
-      }
-
-      // Validate time range values
-      if (typeof data.beat_time_range_start !== 'number' || isNaN(data.beat_time_range_start) || data.beat_time_range_start < 0) {
-        console.warn(`Invalid beat_time_range_start: ${data.beat_time_range_start}, using 0`);
-        data.beat_time_range_start = 0;
-      }
-
-      if (typeof data.beat_time_range_end !== 'number' || isNaN(data.beat_time_range_end) || data.beat_time_range_end < 0) {
-        console.warn(`Invalid beat_time_range_end: ${data.beat_time_range_end}, using last beat time`);
-        data.beat_time_range_end = data.beats.length > 0 ? data.beats[data.beats.length - 1] : 0;
-      }
-
-
-
-      return data;
-    } catch (error) {
-      console.error('Error in beat detection:', error);
-
-      // If Beat-Transformer failed and we haven't tried madmom yet, try madmom as fallback
-      if (detector === 'beat-transformer') {
-
-        return detectBeatsFromFile(audioFile, 'madmom', onProgress);
-      }
-
-      // Enhanced error handling with specific suggestions
-      let errorMessage = 'Unknown error in beat detection';
-
-      if (error instanceof Error) {
-        if (error.message.includes('out of bounds') || error.message.includes('bounds')) {
-          errorMessage = 'Beat detection failed due to data bounds error. This may be caused by corrupted audio data or unsupported audio format. Please try a different audio file.';
-        } else if (error.message.includes('memory') || error.message.includes('allocation')) {
-          errorMessage = 'Beat detection failed due to memory constraints. Please try a shorter audio clip or use the madmom detector.';
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'Beat detection timed out. Please try a shorter audio clip or use the madmom detector for better performance.';
-        } else if (error.message.includes('too large')) {
-          errorMessage = 'Audio file is too large for beat detection. Please use a smaller file or try the madmom detector.';
-        } else {
-          errorMessage = error.message;
-        }
-      }
-
-      return {
-        success: false,
-        beats: [],
-        bpm: 0,
-        total_beats: 0,
-        duration: 0,
-        error: errorMessage
-      };
-    }
+    if (onProgress) onProgress(10);
+    const normalized = await detectBeatsWithRateLimit(audioFile, detector);
+    if (onProgress) onProgress(100);
+    return normalized;
   } catch (error) {
     console.error('Error in detectBeatsFromFile:', error);
     return {
@@ -667,8 +335,8 @@ export async function detectBeatsFromFile(
 }
 
 /**
- * Detects beats from a Firebase Storage URL by downloading the file first and then processing it
- * This bypasses CSP issues by using our existing API infrastructure
+ * Detects beats from an existing Firebase/offload URL.
+ * Production flows should forward the URL directly rather than re-downloading bytes in the browser.
  *
  * @param firebaseUrl - Firebase Storage URL of the audio file
  * @param detector - Which beat detector to use ('auto', 'madmom', or 'beat-transformer')
@@ -677,68 +345,32 @@ export async function detectBeatsFromFile(
 export async function detectBeatsFromFirebaseUrl(
   firebaseUrl: string,
   detector: 'auto' | 'madmom' | 'beat-transformer' = 'madmom',
-  videoId?: string
+  _videoId?: string
 ): Promise<BeatDetectionResult> {
   try {
-
-
-    // Step 1: Download the Firebase Storage file using our proxy service
-    const proxyUrl = buildAudioProxyUrl(firebaseUrl, { videoId });
-
-    console.log(`[36m[detectBeatsFromFirebaseUrl][0m videoId=${videoId || 'none'} -> proxyUrl=${proxyUrl.substring(0, 140)}...`);
-
-    const response = await fetch(proxyUrl);
-    if (!response.ok) {
-      console.error(`[31m[detectBeatsFromFirebaseUrl][0m proxy fetch failed: status=${response.status} ${response.statusText}`);
-      throw new Error(`Failed to fetch audio from Firebase URL: ${response.status} ${response.statusText}`);
-    }
-
-    const audioBlob = await response.blob();
-
-    // Validate audio blob
-    if (audioBlob.size === 0) {
-      throw new Error('Downloaded audio file is empty');
-    }
-
-
-
-    // Step 2: Create a File object from the blob
-    const audioFile = new File([audioBlob], "firebase_audio.wav", { type: "audio/wav" });
-
-    // Step 3: Use our existing beat detection service with the downloaded file
-
-
-    // Use the offload upload service which has our environment-aware logic
-    const blobResult = await offloadUploadService.processAudioFile(audioFile, 'detect-beats', {
-      detector: detector
+    const result = await offloadUploadService.detectBeatsFromOffloadUrl(firebaseUrl, detector, {
+      deleteAfterProcessing: true,
     });
 
-    if (blobResult.success) {
-      // Convert blob service response to beat detection format
-      const backendResponse = blobResult.data as BeatDetectionBackendResponse;
-
-
-      const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
-        success: true,
-        beats: backendResponse.beats || [],
-        downbeats: backendResponse.downbeats || [],
-        // Pass through optional dual-candidate downbeats when present (Madmom)
-        downbeat_candidates: backendResponse.downbeat_candidates,
-        downbeat_candidates_meta: backendResponse.downbeat_candidates_meta,
-        bpm: backendResponse.BPM || backendResponse.bpm || 120,
-        total_beats: (backendResponse.beats || []).length,
-        duration: backendResponse.duration || 0,
-        time_signature: parseTimeSignature(backendResponse.time_signature),
-        model: backendResponse.model_used || detector
-      };
-      return normalized;
-    } else if (blobResult.error === 'USE_STANDARD_FLOW') {
-      // Fallback to standard beat detection flow
-
-      return await detectBeatsFromFile(audioFile, detector);
-    } else {
-      throw new Error(`Beat detection failed: ${blobResult.error}`);
+    if (!result.success) {
+      throw new Error(`Beat detection failed: ${result.error || 'Unknown offload error'}`);
     }
+
+    const backendResponse = result.data as BeatDetectionBackendResponse;
+    const normalized: BeatDetectionResult & Partial<BeatDetectionBackendResponse> = {
+      success: true,
+      beats: backendResponse.beats || [],
+      downbeats: backendResponse.downbeats || [],
+      downbeat_candidates: backendResponse.downbeat_candidates,
+      downbeat_candidates_meta: backendResponse.downbeat_candidates_meta,
+      bpm: backendResponse.BPM || backendResponse.bpm || 120,
+      total_beats: (backendResponse.beats || []).length,
+      duration: backendResponse.duration || 0,
+      time_signature: parseTimeSignature(backendResponse.time_signature),
+      model: backendResponse.model_used || backendResponse.model || detector
+    };
+
+    return normalized;
 
   } catch (error) {
     console.error('Error in Firebase URL beat detection:', error);
@@ -771,9 +403,20 @@ export async function detectBeatsFromPath(
 
     }
 
+    // Fetch App Check token for request attestation
+    const appCheckToken = typeof window !== 'undefined'
+      ? await getAppCheckTokenForApi()
+      : null;
+
+    const headers: HeadersInit = {};
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
+
     const response = await fetch('/api/detect-beats', {
       method: 'POST',
       body: formData,
+      headers,
     });
 
     if (!response.ok) {

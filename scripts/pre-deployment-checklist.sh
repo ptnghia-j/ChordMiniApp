@@ -131,10 +131,10 @@ else
             check_fail "GEMINI_API_KEY missing"
         fi
 
-        if grep -q "NEXT_PUBLIC_PYTHON_API_URL" .env.local; then
+        if grep -q "PYTHON_API_URL" .env.local; then
             check_pass "Python API URL configured"
         else
-            check_fail "NEXT_PUBLIC_PYTHON_API_URL missing"
+            check_fail "PYTHON_API_URL missing"
         fi
     else
         check_fail ".env.local file not found"

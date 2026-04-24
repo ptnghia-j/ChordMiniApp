@@ -44,7 +44,6 @@ export const API_ROUTES = {
   DETECT_KEY: '/api/detect-key',
   VALIDATE_GEMINI_KEY: '/api/validate-gemini-key',
   VALIDATE_MUSIC_AI_KEY: '/api/validate-music-ai-key',
-  CACHE: '/api/cache',
   CHATBOT: '/api/chatbot',
   MODEL_INFO: '/api/model-info',
   DOCS: '/api/docs',
