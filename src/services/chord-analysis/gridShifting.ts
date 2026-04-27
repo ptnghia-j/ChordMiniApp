@@ -147,6 +147,45 @@ export function calculateOptimalShift(
   return selectBestShiftResult(evaluatedResults).shift;
 }
 
+function normalizeCombinedLeadingOffset(params: {
+  paddingCount: number;
+  shiftCount: number;
+  timeSignature: number;
+}): { paddingCount: number; shiftCount: number } {
+  const { paddingCount, shiftCount, timeSignature } = params;
+
+  if (timeSignature <= 0) {
+    return { paddingCount, shiftCount };
+  }
+
+  const totalLeadingOffset = paddingCount + shiftCount;
+  const removableFullMeasureBeats =
+    Math.floor(totalLeadingOffset / timeSignature) * timeSignature;
+
+  if (removableFullMeasureBeats <= 0) {
+    return { paddingCount, shiftCount };
+  }
+
+  let remainingToTrim = removableFullMeasureBeats;
+  let nextShiftCount = shiftCount;
+  let nextPaddingCount = paddingCount;
+
+  // Prefer trimming visual-only shift beats before trimming real padding beats.
+  const trimShift = Math.min(nextShiftCount, remainingToTrim);
+  nextShiftCount -= trimShift;
+  remainingToTrim -= trimShift;
+
+  if (remainingToTrim > 0) {
+    const trimPadding = Math.min(nextPaddingCount, remainingToTrim);
+    nextPaddingCount -= trimPadding;
+  }
+
+  return {
+    paddingCount: nextPaddingCount,
+    shiftCount: nextShiftCount,
+  };
+}
+
 export function calculatePaddingAndShift(
   firstDetectedBeatTime: number,
   bpm: number,
@@ -178,9 +217,17 @@ export function calculatePaddingAndShift(
         return finalBeatPosition === 1 ? 0 : (timeSignature - finalBeatPosition + 1);
       })();
 
+  const normalizedCounts = chords.length > 0
+    ? normalizeCombinedLeadingOffset({
+        paddingCount,
+        shiftCount,
+        timeSignature,
+      })
+    : { paddingCount, shiftCount };
+
   return {
-    paddingCount,
-    shiftCount,
-    totalPaddingCount: paddingCount + shiftCount,
+    paddingCount: normalizedCounts.paddingCount,
+    shiftCount: normalizedCounts.shiftCount,
+    totalPaddingCount: normalizedCounts.paddingCount + normalizedCounts.shiftCount,
   };
 }
