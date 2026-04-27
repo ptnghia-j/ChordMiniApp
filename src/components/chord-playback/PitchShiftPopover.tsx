@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip, Slider } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { TbMusicUp } from 'react-icons/tb';
@@ -29,7 +29,13 @@ interface PitchShiftPopoverProps {
   setPlaybackRate: (rate: number) => void;
 }
 
-export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
+// React.memo prevents re-renders from parent (UtilityBar) when only unrelated
+// props change (e.g. chordPlayback, segmentation objects). Without this,
+// YouTube progress events (~4×/sec) cascade through the viewModel → UtilityBar
+// → PitchShiftPopover, causing slider jitter during drags. The internal
+// zustand selectors (pitchShiftSemitones, etc.) still trigger re-renders when
+// the slice they subscribe to changes, which is the desired behavior.
+const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = memo(({
   playbackRate,
   setPlaybackRate,
 }) => {
@@ -63,12 +69,22 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
   );
 
   // Playback speed slider change handler
+  //
+  // The HeroUI `<Slider>` fires `onChange` on every pointer move even when the
+  // snapped value is unchanged, which produced ~60 redundant store writes per
+  // second of drag. `playbackStore.setPlayerPlaybackRate` already short-circuits
+  // on identical rates, but suppressing the call here (a) keeps the console
+  // clean of `.called`/`.shortCircuit` pairs, and (b) avoids the parent
+  // viewModel re-running its `setAudioPlayerState(prev => ...)` updater, which
+  // allocates a fresh object reference each time and triggers needless
+  // re-renders downstream.
   const handlePlaybackRateChange = useCallback(
     (value: number | number[]) => {
       const numValue = Array.isArray(value) ? value[0] : value;
+      if (Math.abs(numValue - playbackRate) < 0.001) return;
       setPlaybackRate(numValue);
     },
-    [setPlaybackRate]
+    [setPlaybackRate, playbackRate]
   );
 
   // Handle toggle button click
@@ -241,6 +257,8 @@ export const PitchShiftPopover: React.FC<PitchShiftPopoverProps> = ({
       </Popover>
     </>
   );
-};
+});
+
+PitchShiftPopover.displayName = 'PitchShiftPopover';
 
 export default PitchShiftPopover;

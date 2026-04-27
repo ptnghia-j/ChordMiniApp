@@ -17,6 +17,7 @@ import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrches
 import { useAnalysisUsageTracker } from '@/hooks/analyze/useAnalysisUsageTracker';
 import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
 import { transcribeLyricsWithAI as transcribeLyricsWithAIService } from '@/services/audio/audioProcessingExtracted';
+import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
 import { getChordGridData as getChordGridDataService } from '@/services/chord-analysis/chordGridCalculationService';
 import { useAudioInteractions } from '@/hooks/chord-playback/useAudioInteractions';
 import { useScrollAndAnimation } from '@/hooks/scroll/useScrollAndAnimation';
@@ -47,8 +48,9 @@ import { useTabsAndEditing } from '@/hooks/ui/useTabsAndEditing';
 import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useIsLoopEnabled, useLoopEndBeat, useLoopStartBeat } from '@/stores/uiStore';
+import { useIsLoopEnabled, useLoopEndBeat, useLoopStartBeat, useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 import { usePlaybackStore } from '@/stores/playbackStore';
+import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
 import type { AnalyzePageViewModel } from '../_types/analyzePageViewModel';
 import { useAnalyzePageStoreSync } from './useAnalyzePageStoreSync';
@@ -438,6 +440,8 @@ export function useAnalyzePageViewModel({
   const isLoopEnabled = useIsLoopEnabled();
   const loopStartBeat = useLoopStartBeat();
   const loopEndBeat = useLoopEndBeat();
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
+  const isPitchShiftReady = useIsPitchShiftReady();
 
   const { toggleEnharmonicCorrection } = useAudioInteractions({
     showCorrectedChords,
@@ -941,14 +945,20 @@ export function useAnalyzePageViewModel({
     return newEnabled;
   }, [toggleMetronomeWithSync]);
 
+  // PITCH-SHIFT AWARE: Only unmute YouTube when pitch-shift is OFF.
+  // When pitch-shift is ON, the pitch-shift toggle effect in usePitchShiftAudio
+  // owns muting (mutes YouTube + audio element). If we unconditionally unmute
+  // YouTube here on youtubePlayer load, we override the pitch-shift mute and
+  // the user hears BOTH the YouTube source audio AND the Firebase pitch-shifted
+  // audio simultaneously — which also creates a perceived timing mismatch.
   useEffect(() => {
-    if (youtubePlayer) {
+    if (youtubePlayer && !isPitchShiftEnabled) {
       youtubePlayer.muted = false;
     }
     if (audioRef.current) {
       audioRef.current.muted = true;
     }
-  }, [youtubePlayer, audioRef]);
+  }, [youtubePlayer, audioRef, isPitchShiftEnabled]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -1128,17 +1138,46 @@ export function useAnalyzePageViewModel({
             countdownStateRef.current.completed = false;
             try { (youtubePlayer as any)?.playVideo?.(); } catch {}
             setIsPlaying(true);
+            youtubeMasterClock.onPlay();
           }
           return;
         }
         setIsPlaying(true);
+        youtubeMasterClock.onPlay();
       },
       onPause: () => {
         setIsPlaying(false);
+        youtubeMasterClock.onPause();
       },
       onProgress: handleYouTubeProgress,
       onSeek: (time: number) => {
-        setCurrentTime(time);
+        // CLOCK AUTHORITY (post-unification): the YouTube scrubber is a
+        // user-initiated seek — route it through the master clock, which
+        // raises the store fence (R2), bumps the seek token (R3), and
+        // publishes the new position. The YouTube iframe is still the
+        // primary controller, so we also call `seekTo` so the iframe's own
+        // timeline lands at the requested position.
+        //
+        // CRITICAL: we MUST immediately seek the GrainPlayer here, mirroring
+        // the grid-click path in `usePlaybackState.handleBeatClick`. The
+        // slave re-anchor loop in `usePitchShiftAudio` CANNOT be relied upon
+        // to catch up on its own because `youtubeMasterClock.anchorTo`
+        // invokes the re-anchor listener which calls
+        // `grainPlayerPitchShiftService.syncAnchor`, and that method
+        // overwrites the service's reported `_currentTime` to match the
+        // new master position. The slave loop's drift check
+        // (`|serviceState.currentTime - masterPos|`) therefore reads ≈ 0
+        // and NEVER fires `service.seek(masterPos)` — meaning the actual
+        // audio buffer position stays at the pre-scrub location while the
+        // beat grid and YouTube iframe both jump forward. Calling
+        // `service.seek` here is the only path that actually relocates
+        // the GrainPlayer buffer cursor to the new timestamp.
+        youtubeMasterClock.onUserSeek(time);
+        if (isPitchShiftEnabled && isPitchShiftReady) {
+          try {
+            getPitchShiftService()?.seek(time);
+          } catch {}
+        }
         if (youtubePlayer && youtubePlayer.seekTo) {
           youtubePlayer.seekTo(time, 'seconds');
         }
@@ -1146,16 +1185,22 @@ export function useAnalyzePageViewModel({
       onEnded: () => {
         if (!isLoopEnabled) {
           setIsPlaying(false);
+          youtubeMasterClock.onPause();
           return;
         }
         const beats = simplifiedChordGridData?.beats || [];
         const resolvedLoopRange = resolveLoopRange(beats, loopStartBeat, loopEndBeat, duration);
         if (!resolvedLoopRange) return;
         const startTimestamp = resolvedLoopRange.startTimestamp;
+        // CLOCK AUTHORITY: programmatic loop-wrap is a seek — route through
+        // the master clock so the fence + seek token + position publish all
+        // happen atomically.
+        youtubeMasterClock.onUserSeek(startTimestamp);
         try { (youtubePlayer as any)?.seekTo?.(startTimestamp, 'seconds'); } catch {}
         setLastClickInfo({ visualIndex: resolvedLoopRange.resolvedStartBeat, timestamp: startTimestamp, clickTime: Date.now() });
         try { (youtubePlayer as any)?.playVideo?.(); } catch {}
         setIsPlaying(true);
+        youtubeMasterClock.onPlay();
       },
       youtubeEmbedUrl: audioProcessingState.youtubeEmbedUrl,
       videoUrl: audioProcessingState.videoUrl,
@@ -1168,8 +1213,35 @@ export function useAnalyzePageViewModel({
       isCountingDown,
       countdownDisplay,
       onRequestCountdown: async () => await runCountdown(),
+      // UNIFIED CLOCK: when the user changes rate via YouTube's native
+      // gear-menu inside the iframe, we receive the new rate here and
+      // fan it out to master clock + GrainPlayer + store via the same
+      // path the app's own rate slider uses. Without this, those
+      // components retain the old rate and extrapolation drift ensues.
+      onPlaybackRateChange: (rate: number) => {
+        setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
+        try {
+          usePlaybackStore.getState().setPlayerPlaybackRate(rate);
+        } catch (error) {
+          console.warn('onPlaybackRateChange fan-out failed:', error);
+        }
+      },
     },
   };
+
+  // STABLE CALLBACK: Wrapping setPlaybackRate in useCallback prevents the
+  // function identity from changing on every viewModel render. Without this,
+  // UtilityBar's memo() breaks on every YouTube progress event (~4×/sec),
+  // cascading re-renders into PitchShiftPopover and causing slider jitter
+  // during drags. setAudioPlayerState is stable (useState setter).
+  const stableSetPlaybackRate = useCallback((rate: number) => {
+    setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
+    try {
+      usePlaybackStore.getState().setPlayerPlaybackRate(rate);
+    } catch (error) {
+      console.warn('setPlayerPlaybackRate fan-out failed:', error);
+    }
+  }, [setAudioPlayerState]);
 
   const utilityBarProps = {
     isFollowModeEnabled,
@@ -1177,9 +1249,7 @@ export function useAnalyzePageViewModel({
     melodicTranscriptionPlayback: melodicTranscriptionPlaybackConfig,
     youtubePlayer,
     playbackRate,
-    setPlaybackRate: (rate: number) => {
-      setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
-    },
+    setPlaybackRate: stableSetPlaybackRate,
     toggleFollowMode,
     isCountdownEnabled,
     isCountingDown,

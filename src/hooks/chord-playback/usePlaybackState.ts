@@ -1,7 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
-import { usePlaybackStore } from '@/stores/playbackStore';
+import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
+import {
+  usePlaybackStore,
+  useCurrentBeatIndex,
+  useCurrentDownbeatIndex,
+} from '@/stores/playbackStore';
 import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 
 // Types for playback state management
@@ -83,24 +88,28 @@ export const usePlaybackState = ({
   // Current state for playback (lines 319-329)
   const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const isPitchShiftReady = useIsPitchShiftReady();
-  const [currentBeatIndexState, setCurrentBeatIndexState] = useState(-1);
+
+  // Beat/downbeat indices are owned by playbackStore. Subscribe to them here
+  // so consumers of this hook see changes; avoid maintaining a duplicate
+  // React state copy that must be kept in sync.
+  const currentBeatIndex = useCurrentBeatIndex();
+  const currentDownbeatIndex = useCurrentDownbeatIndex();
   const currentBeatIndexRef = useRef(-1);
-  const [currentDownbeatIndexState, setCurrentDownbeatIndexState] = useState(-1);
 
   // Track recent user clicks for smart animation positioning
   const [lastClickInfo, setLastClickInfo] = useState<ClickInfo | null>(null);
   const [globalSpeedAdjustmentState, setGlobalSpeedAdjustmentState] = useState<number | null>(null); // Store calculated speed adjustment
 
-  // Create stable setter functions with useCallback to prevent infinite loops
+  // Create stable setter functions with useCallback to prevent infinite loops.
+  // The ref mirrors the store value so synchronous readers (e.g. the rAF loop)
+  // can avoid waiting for a re-render.
   const setCurrentBeatIndex = useCallback((index: number) => {
     currentBeatIndexRef.current = index;
     usePlaybackStore.getState().setCurrentBeatIndex(index);
-    setCurrentBeatIndexState(index);
   }, []);
 
   const setCurrentDownbeatIndex = useCallback((index: number) => {
     usePlaybackStore.getState().setCurrentDownbeatIndex(index);
-    setCurrentDownbeatIndexState(index);
   }, []);
 
   const setGlobalSpeedAdjustment = useCallback((adjustment: number | null) => {
@@ -110,9 +119,6 @@ export const usePlaybackState = ({
   // Extract state from audio player hook (lines 262-263)
   const { isPlaying, currentTime, duration, playbackRate } = audioPlayerState;
 
-  // Use the state values for return
-  const currentBeatIndex = currentBeatIndexState;
-  const currentDownbeatIndex = currentDownbeatIndexState;
   const globalSpeedAdjustment = globalSpeedAdjustmentState;
 
   // Create setters for individual state properties (lines 265-272)
@@ -128,36 +134,108 @@ export const usePlaybackState = ({
   const handleBeatClick = useCallback((beatIndex: number, timestamp: number) => {
     const clickTime = Date.now();
 
+    // P0 FIX: When pitch-shift is active, clamp the click timestamp to the
+    // actually-loaded audio buffer duration BEFORE any publisher writes. The
+    // Firebase audio buffer can be 100-300 ms shorter than the YouTube video's
+    // reported duration; an un-clamped click near the end would cause
+    // GrainPlayer.seek() to clamp internally to `_duration`, and the clamped
+    // value then propagates to all three surfaces, which users perceive as
+    // "audio jumped to the end". By clamping up-front we keep all three
+    // surfaces (store, GrainPlayer, YouTube) agreeing on the same safe target.
+    let effectiveTimestamp = timestamp;
+    if (isPitchShiftEnabled && isPitchShiftReady) {
+      const service = getPitchShiftService();
+      const serviceDuration = service?.getState().duration ?? 0;
+      if (serviceDuration > 0 && timestamp > serviceDuration - 0.05) {
+        const clamped = Math.max(0, serviceDuration - 0.05);
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(
+            `[pitch-shift] beat click timestamp ${timestamp.toFixed(3)}s exceeds buffer duration ${serviceDuration.toFixed(3)}s; clamping to ${clamped.toFixed(3)}s`,
+          );
+        }
+        effectiveTimestamp = clamped;
+      }
+    }
+
+    // P0 FIX: Re-anchor the master clock with the EFFECTIVE (potentially
+    // clamped) timestamp. The store's `onBeatClick` already called
+    // `youtubeMasterClock.onUserSeek(timestamp)` with the RAW timestamp,
+    // but if we clamped `effectiveTimestamp` (because the Firebase audio
+    // buffer is shorter than the YouTube video), the master clock anchor
+    // is now past the buffer boundary while the GrainPlayer (sought below)
+    // is at the clamped position. Re-anchoring here keeps all three
+    // surfaces — master clock, GrainPlayer, YouTube — pointing at the
+    // same safe target. In the non-clamping case this call is idempotent.
+    if (effectiveTimestamp !== timestamp) {
+      youtubeMasterClock.onUserSeek(effectiveTimestamp);
+    }
+
+    // R2 + R3 FIX: This path was missing a `noteUserSeek()` call, which meant
+    // the drift-correction loop in usePitchShiftAudio didn't know a user seek
+    // had just happened. The loop would then fire a correction immediately
+    // after the click — fighting the user's target. Calling this FIRST bumps
+    // `seekToken` (aborts any in-flight async coordination work) and stamps
+    // `lastUserSeekAt` so the 500 ms user-seek fence kicks in. Without this,
+    // beat clicks at non-1× playback rates cause the "YouTube keeps
+    // refreshing to catch up" flicker the user reported.
+    const playbackStore = usePlaybackStore.getState();
+    playbackStore.noteUserSeek();
+
     // Establish the clicked beat as the immediate visual source of truth before
     // asynchronous media players catch up to the target timestamp.
-    setCurrentTime(timestamp);
+    setCurrentTime(effectiveTimestamp);
     setCurrentBeatIndex(beatIndex);
     setLastClickInfo({
       visualIndex: beatIndex,
-      timestamp,
+      timestamp: effectiveTimestamp,
       clickTime,
     });
 
-    const playbackStore = usePlaybackStore.getState();
-    playbackStore.setCurrentTime(timestamp);
+    playbackStore.setCurrentTime(effectiveTimestamp);
 
     if (isPitchShiftEnabled && isPitchShiftReady) {
       try {
-        getPitchShiftService()?.seek(timestamp);
+        getPitchShiftService()?.seek(effectiveTimestamp);
       } catch {}
     }
 
     if (youtubePlayer && youtubePlayer.seekTo) {
       try {
-        youtubePlayer.seekTo(timestamp, 'seconds');
+        youtubePlayer.seekTo(effectiveTimestamp, 'seconds');
+
+        // RATE RE-APPLY AFTER SEEK: the YouTube iframe silently resets its
+        // effective playback rate during the seekTo round-trip (the rate
+        // value reported by getPlaybackRate stays correct, but the rendered
+        // frames for ~200–500 ms after seek are paced at ~1× until the
+        // buffer catches up). At non-1× rates this produces: GrainPlayer
+        // audio racing ahead at 2×, YouTube frames crawling at ~1.6×, drift
+        // accumulates fast, drift-loop seeks again, cycle repeats — exactly
+        // the "keeps refreshing like crazy" symptom. Re-push the rate ~250 ms
+        // after the seek settles so the iframe picks up the intended tempo.
+        if (
+          isPitchShiftEnabled
+          && isPitchShiftReady
+          && Math.abs(playbackRate - 1) > 0.001
+        ) {
+          const playerWithRate = youtubePlayer as unknown as {
+            setPlaybackRate?: (rate: number) => void;
+          };
+          if (typeof playerWithRate.setPlaybackRate === 'function') {
+            setTimeout(() => {
+              try {
+                playerWithRate.setPlaybackRate!(playbackRate);
+              } catch {}
+            }, 250);
+          }
+        }
       } catch {}
     } else if (audioRef.current) {
       try {
-        audioRef.current.currentTime = timestamp;
+        audioRef.current.currentTime = effectiveTimestamp;
       } catch {}
     }
 
-  }, [audioRef, isPitchShiftEnabled, isPitchShiftReady, youtubePlayer, setCurrentTime, setCurrentBeatIndex]);
+  }, [audioRef, isPitchShiftEnabled, isPitchShiftReady, youtubePlayer, setCurrentTime, setCurrentBeatIndex, playbackRate]);
 
   // YouTube player event handlers (lines 1150-1191): Comprehensive player integration
   const handleYouTubeReady = useCallback((player: unknown) => {
@@ -175,18 +253,29 @@ export const usePlaybackState = ({
   const handleYouTubePlay = useCallback(() => {
     // Update state when YouTube starts playing
     setIsPlaying(true);
+    // CLOCK AUTHORITY: notify the master clock so its live-position
+    // extrapolation begins advancing.
+    youtubeMasterClock.onPlay();
   }, [setIsPlaying]);
 
   const handleYouTubePause = useCallback(() => {
     // Update state when YouTube pauses
     setIsPlaying(false);
+    // CLOCK AUTHORITY: freeze the master clock's live position at the
+    // current anchor so the beat animation stops advancing.
+    youtubeMasterClock.onPause();
   }, [setIsPlaying]);
 
   const handleYouTubeProgress = useCallback((state: { played: number; playedSeconds: number }) => {
-    // Keep the app timeline tied to the embedded YouTube player even when
-    // pitch shift is active so the iframe controls remain authoritative.
-    setCurrentTime(state.playedSeconds);
-  }, [setCurrentTime]);
+    // CLOCK AUTHORITY (post-unification): the YouTube iframe is the primary
+    // controller and feeds its reported position into the master clock. The
+    // master applies hysteresis (drift > 0.08 × rate or age > 400 ms) before
+    // re-anchoring, so calling this on every onProgress tick is cheap and
+    // correct. The master's `getLivePosition()` is the single source of
+    // truth read by the beat animation rAF loop; we do NOT write to the
+    // store here — that would compete with the master clock publish.
+    youtubeMasterClock.onYoutubeProgress(state.playedSeconds);
+  }, []);
 
   // Auto-scroll implementation (lines 2561-2576): Smooth scrolling to current beat
   const scrollToCurrentBeat = useCallback(() => {
@@ -228,9 +317,17 @@ export const usePlaybackState = ({
       setIsPlaying(false);
     };
     const handleTimeUpdate = () => {
-      if (audioElement) {
-        setCurrentTime(audioElement.currentTime);
-      }
+      if (!audioElement) return;
+      // CLOCK AUTHORITY GUARD: when pitch-shift is active, GrainPlayer is
+      // the sole writer of `currentTime`. The HTMLAudioElement keeps playing
+      // (muted) behind the scenes, and its `timeupdate` events run on a
+      // different clock (native media element) than the Tone.js AudioContext
+      // that drives the GrainPlayer counter. If we let this listener write,
+      // it races the GrainPlayer tick and produces 90-300 ms backward-step
+      // jitter in the store (the "GrainPlayer must be sole writer" guard
+      // in playbackStore.setCurrentTime fires exactly this symptom).
+      if (isPitchShiftEnabled && isPitchShiftReady) return;
+      setCurrentTime(audioElement.currentTime);
     };
 
     audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -246,7 +343,7 @@ export const usePlaybackState = ({
         audioElement.removeEventListener('timeupdate', handleTimeUpdate);
       }
     };
-  }, [audioRef, setCurrentTime, setDuration, setIsPlaying]);
+  }, [audioRef, setCurrentTime, setDuration, setIsPlaying, isPitchShiftEnabled, isPitchShiftReady]);
 
   // Audio source management: Ensure YouTube is unmuted and extracted audio is muted
   useEffect(() => {

@@ -72,7 +72,7 @@ const PianoVisualizerTab = dynamic(() => import('@/components/piano-visualizer/P
 import { useProcessing } from '@/contexts/ProcessingContext';
 import BeatTimeline from '@/components/analysis/BeatTimeline';
 import { simplifyChordArray } from '@/utils/chordSimplification';
-import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat } from '@/stores/uiStore';
+import { useUIStore, useIsLoopEnabled, useLoopStartBeat, useLoopEndBeat, useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 
 import { useMetronomeSync } from '@/hooks/chord-playback/useMetronomeSync';
 import { useMelodicTranscriptionPlayback } from '@/hooks/chord-playback/useMelodicTranscriptionPlayback';
@@ -89,7 +89,7 @@ import { estimateKeySignatureFromChords } from '@/utils/chordUtils';
 import type { KeyDetectionResult } from '@/services/audio/keyDetectionService';
 import { DEFAULT_PIANO_VOLUME, DEFAULT_GUITAR_VOLUME, DEFAULT_VIOLIN_VOLUME, DEFAULT_FLUTE_VOLUME } from '@/config/audioDefaults';
 import { ChordPlaybackManager } from '@/components/chord-playback/ChordPlaybackManager';
-import { usePlaybackStore } from '@/stores/playbackStore';
+import { usePlaybackStore, useCurrentBeatIndex } from '@/stores/playbackStore';
 import { usePitchShiftAudio } from '@/hooks/chord-playback/usePitchShiftAudio';
 import ResultsTabs from '@/components/homepage/ResultsTabs';
 import type { TabKey } from '@/components/homepage/ResultsTabs';
@@ -417,8 +417,14 @@ export default function LocalAudioAnalyzePage() {
   const toggleChatbot = () => setIsChatbotOpen(prev => !prev);
 
 
-  // Current state for playback - FIXED: Add missing state variables for beat animation
-  const [currentBeatIndex, setCurrentBeatIndex] = useState(-1);
+  // Current state for playback
+  // SSoT: currentBeatIndex is owned by playbackStore. We subscribe here so the
+  // component re-renders when the animation loop publishes a new beat, and we
+  // keep a ref for synchronous reads inside the rAF callback below.
+  const currentBeatIndex = useCurrentBeatIndex();
+  const setCurrentBeatIndex = useCallback((index: number) => {
+    usePlaybackStore.getState().setCurrentBeatIndex(index);
+  }, []);
   const currentBeatIndexRef = useRef(-1);
   const lastScrollTimeRef = useRef(0);
 
@@ -734,14 +740,28 @@ export default function LocalAudioAnalyzePage() {
   };
 
   const changePlaybackRate = (rate: number) => {
-    if (!audioRef.current) return;
-
-    audioRef.current.playbackRate = rate;
     setPlaybackRate(rate);
+    // Fan out through the store so the pitch shift service and HTMLAudioElement
+    // stay aligned with the slider even when the local <audio> ref is not yet
+    // attached.
+    try {
+      usePlaybackStore.getState().setPlayerPlaybackRate(rate);
+    } catch (error) {
+      console.warn('setPlayerPlaybackRate fan-out failed:', error);
+    }
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
   };
 
 
   // Set up audio element event listeners
+  // Pitch-shift gating: used by the audio-element `timeupdate` listener
+  // below to honour the "GrainPlayer is the sole writer of currentTime"
+  // invariant. Declared here so the useEffect below captures a stable
+  // selector subscription (Zustand re-renders when either flag flips).
+  const isPitchShiftEnabledForGuard = useIsPitchShiftEnabled();
+  const isPitchShiftReadyForGuard = useIsPitchShiftReady();
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement) return;
@@ -759,9 +779,13 @@ export default function LocalAudioAnalyzePage() {
       setIsPlaying(false);
     };
     const handleTimeUpdate = () => {
-      if (audioElement) {
-        setCurrentTime(audioElement.currentTime);
-      }
+      if (!audioElement) return;
+      // CLOCK AUTHORITY GUARD: see matching comment in usePlaybackState.ts.
+      // During pitch-shift mode, GrainPlayer is the sole writer of
+      // `currentTime`. The muted <audio> element keeps running its own
+      // native clock and must NOT race the GrainPlayer tick here.
+      if (isPitchShiftEnabledForGuard && isPitchShiftReadyForGuard) return;
+      setCurrentTime(audioElement.currentTime);
     };
 
     audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -778,7 +802,7 @@ export default function LocalAudioAnalyzePage() {
         audioElement.removeEventListener('timeupdate', handleTimeUpdate);
       }
     };
-  }, []);
+  }, [isPitchShiftEnabledForGuard, isPitchShiftReadyForGuard]);
 
   // Use standardized chord grid data processing from service
   // This ensures perfect consistency with the YouTube workflow
@@ -1083,12 +1107,13 @@ const simplifiedChordGridData = useMemo(() => {
     playbackStore.setPlaybackRate(playbackRate);
     playbackStore.setYoutubePlayer(null); // No YouTube player in upload page
     playbackStore.setAudioRef(audioRef as React.RefObject<HTMLAudioElement>);
-    playbackStore.setCurrentBeatIndex(currentBeatIndex);
+    // NOTE: currentBeatIndex is owned by playbackStore directly (see useCurrentBeatIndex
+    // hook at top of component); do NOT re-mirror it here or you create a feedback loop.
   }, [
     // CRITICAL: Do NOT include showRomanNumerals, simplifyChords, or other Zustand-managed state
     // Only include local state that needs to be synced to Zustand
     analysisResults, audioProcessingState.isAnalyzing, audioProcessingState.error,
-    isPlaying, currentTime, duration, playbackRate, currentBeatIndex
+    isPlaying, currentTime, duration, playbackRate
   ]);
 
   useEffect(() => {

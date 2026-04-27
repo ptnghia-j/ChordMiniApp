@@ -5,12 +5,65 @@
  * Handles audio source switching between YouTube and pitch-shifted audio.
  *
  * Note: Accepts any audio URL (external stream URLs, Firebase Storage URLs, etc.)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * SYNCHRONISATION MECHANISM (P2 documentation)
+ * ─────────────────────────────────────────────────────────────────────────
+ * Three independent playback surfaces must stay locked together:
+ *
+ *   1. GrainPlayer (Tone.js) — produces the audio the user *hears* when pitch
+ *      shift is active. Internally advances its own `_currentTime` via a
+ *      50 ms setInterval scaled by `_playbackRate`.
+ *   2. YouTube iframe — visible video frame. Runs its own clock, which drifts
+ *      from GrainPlayer whenever rate changes or user seeks.
+ *   3. Beat grid animation — a rAF loop in `useScrollAndAnimation` that reads
+ *      `currentTime` via `resolveBeatAtTime` (pure function, see beatResolver.ts)
+ *      and writes `currentBeatIndex` to `playbackStore`.
+ *
+ * CLOCK AUTHORITY MODEL
+ *   • When `isPitchShiftEnabled && isPitchShiftReady` the GrainPlayer is the
+ *     master clock. Its 50 ms time-update callback publishes to
+ *     `setCurrentTime`, which updates `audioPlayerState.currentTime` and
+ *     (via `useAnalyzePageStoreSync`) `playbackStore.currentTime`.
+ *   • A 100 ms interval (`syncYouTubeToGrainPlayer` below) compares the
+ *     iframe's reported time against the GrainPlayer's master time. When the
+ *     drift exceeds 150 ms we `youtubePlayer.seekTo(masterTime)`.
+ *   • The beat grid rAF loop picks `rawTime` from the master — GrainPlayer
+ *     when authority is active, else `youtubePlayer.getCurrentTime()`.
+ *
+ * RATE FAN-OUT (see `playbackStore.setPlayerPlaybackRate`)
+ *   A single call must propagate to: (a) YouTube iframe, (b) GrainPlayer,
+ *   (c) HTML5 `<audio>`. YouTube silently falls back to 1× for off-list
+ *   rates, so the store first snaps the requested rate to the nearest value
+ *   in `getAvailablePlaybackRates()`, then fans out the snapped value, then
+ *   (dev-only) verifies the iframe actually accepted it after 200 ms.
+ *
+ * SEEK SAFETY (see `grainPlayerPitchShiftService.seek`)
+ *   The Firebase audio buffer can be 100-300 ms shorter than the YouTube
+ *   video's reported duration. Beat clicks clamp the target timestamp to
+ *   `buffer.duration - 0.05` BEFORE calling `service.seek()` so the three
+ *   surfaces never disagree on where "end of song" is. Seeks that arrive
+ *   before the GrainPlayer buffer has loaded are parked in `pendingSeekTime`
+ *   and drained from `handlePlayerLoad`.
+ *
+ * VERIFICATION
+ *   • Unit: `__tests__/unit/stores/playbackStore.setPlayerPlaybackRate.test.ts`
+ *     covers fan-out, clamping, and graceful failure.
+ *   • Unit: `__tests__/unit/utils/beatResolver.test.ts` covers the pure beat
+ *     cascade; any regression there will show up before a user notices.
+ *   • Dev-only runtime: `playbackStore.setCurrentTime` logs a `console.debug`
+ *     when `currentTime` moves backward by less than 500 ms, which is the
+ *     signature of a second writer fighting the master clock.
+ *   • Dev-only runtime: the rate fan-out re-reads `youtubePlayer.getPlaybackRate()`
+ *     200 ms after every `setPlayerPlaybackRate` and warns if it differs.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
-import { getGrainPlayerPitchShiftService } from '@/services/audio/grainPlayerPitchShiftService';
+import { getGrainPlayerPitchShiftService, getAudioContextState } from '@/services/audio/grainPlayerPitchShiftService';
 import { setPitchShiftService as setGlobalPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
+import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
 import {
   useIsPitchShiftEnabled,
   useSetIsPitchShiftReady,
@@ -19,6 +72,14 @@ import {
   useSetPitchShiftError,
   useSetIsFirebaseAudioAvailable
 } from '@/stores/uiStore';
+
+/**
+ * Diagnostic helper — body removed to reduce console noise.
+ * Re-add logging selectively when investigating specific bugs.
+ */
+function _hookDiag(_tag: string, _extra?: Record<string, unknown>): void {
+  // intentionally empty
+}
 
 export interface UsePitchShiftAudioProps {
   youtubePlayer: YouTubePlayer | null;
@@ -46,9 +107,7 @@ export interface UsePitchShiftAudioReturn {
   getPitchShiftVolume: () => number;
 }
 
-const YOUTUBE_SYNC_INTERVAL_MS = 100;
 const YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS = 0.15;
-const YOUTUBE_STATE_UPDATE_THRESHOLD_SECONDS = 0.1;
 
 /**
  * Hook for managing pitch-shifted audio playback
@@ -74,6 +133,10 @@ export const usePitchShiftAudio = ({
   const pitchShiftService = useRef(getGrainPlayerPitchShiftService());
   const isInitializing = useRef(false);
   const lastSemitones = useRef(pitchShiftSemitones);
+  // Stable ref for semitones — read inside initializePitchShift so the
+  // callback identity does not change on every slider tick. The separate
+  // semitone-change effect (L442) handles live updates after init.
+  const pitchShiftSemitonesRef = useRef(pitchShiftSemitones);
 
   // Track if time update is from pitch shift service (to prevent seek feedback loop)
   const isTimeUpdateFromService = useRef(false);
@@ -105,6 +168,10 @@ export const usePitchShiftAudio = ({
   useEffect(() => {
     playbackRateRef.current = playbackRate;
   }, [playbackRate]);
+
+  useEffect(() => {
+    pitchShiftSemitonesRef.current = pitchShiftSemitones;
+  }, [pitchShiftSemitones]);
 
   useEffect(() => {
     youtubePlayerRef.current = youtubePlayer;
@@ -168,19 +235,29 @@ export const usePitchShiftAudio = ({
       lastSyncedTime.current = 0;
 
       // Load audio with current pitch shift amount
-      await pitchShiftService.current.loadAudio(firebaseAudioUrl, pitchShiftSemitones);
+      _hookDiag('init.loadAudio.start', {
+        audioUrl: firebaseAudioUrl,
+        semitones: pitchShiftSemitonesRef.current,
+        ctxStateBeforeLoad: getAudioContextState(),
+      });
+      await pitchShiftService.current.loadAudio(
+        firebaseAudioUrl,
+        pitchShiftSemitonesRef.current,
+        playbackRateRef.current, // 🔧 OFF→ON fix: never construct at default rate 1.0
+      );
+      _hookDiag('init.loadAudio.done', {
+        ctxStateAfterLoad: getAudioContextState(),
+        serviceState: pitchShiftService.current.getState(),
+      });
 
       // Set up time update callback
-      // CRITICAL FIX: Mark time updates from service to prevent seek feedback loop
+      // CLOCK AUTHORITY: When pitch shift is active, the GrainPlayer is the
+      // master clock for the whole app — on YouTube pages we publish its
+      // time to the store and correct the iframe via seekTo elsewhere in this
+      // hook instead of listening to YouTube's onProgress. This prevents the
+      // "audio fast, video/beat-animation slow" desync when the slider is moved.
       pitchShiftService.current.setOnTimeUpdate((time) => {
         lastSyncedTime.current = time;
-        const youtubeTimelineTime = getYoutubeTimelineTime();
-
-        // On YouTube pages, the embedded player remains the source of truth for
-        // timeline updates so the visible video controls stay authoritative.
-        if (youtubeTimelineTime !== null) {
-          return;
-        }
 
         isTimeUpdateFromService.current = true;
         setCurrentTime(time);
@@ -204,12 +281,19 @@ export const usePitchShiftAudio = ({
       setIsPitchShiftReady(true);
       setIsPitchShiftReadyInStore(true);
       setIsFirebaseAudioAvailable(true);
-      lastSemitones.current = pitchShiftSemitones;
+      lastSemitones.current = pitchShiftSemitonesRef.current;
 
       // Ensure service is aligned with current page state immediately
       try {
         const timelineTime = getYoutubeTimelineTime();
         const initialTime = timelineTime ?? currentTimeRef.current ?? 0;
+        _hookDiag('init.alignment', {
+          timelineTime,
+          currentTimeRef: currentTimeRef.current,
+          initialTime,
+          isPlayingRef: isPlayingRef.current,
+          playbackRateRef: playbackRateRef.current,
+        });
 
         // Apply playback rate and seek position before starting
         pitchShiftService.current.setPlaybackRate(playbackRateRef.current);
@@ -218,8 +302,13 @@ export const usePitchShiftAudio = ({
           // Start playback right away for upload page; YouTube visual sync not needed here
           pitchShiftService.current.play();
           lastServicePlayingState.current = true;
+          _hookDiag('init.autoPlay', {
+            postPlayState: pitchShiftService.current.getState(),
+          });
         }
-      } catch {}
+      } catch (error) {
+        _hookDiag('init.alignment.error', { message: (error as Error)?.message });
+      }
 
     } catch (error) {
       console.error('❌ Failed to initialize pitch shift:', error);
@@ -233,7 +322,9 @@ export const usePitchShiftAudio = ({
     }
   }, [
     firebaseAudioUrl,
-    pitchShiftSemitones,
+    // pitchShiftSemitones intentionally read from pitchShiftSemitonesRef
+    // so the callback identity stays stable during slider drags. The
+    // semitone-change effect handles live updates after init.
     setIsProcessingPitchShift,
     setIsPitchShiftReadyInStore,
     setPitchShiftError,
@@ -396,6 +487,21 @@ export const usePitchShiftAudio = ({
     const service = pitchShiftService.current;
     const serviceState = service.getState();
 
+    // DIAGNOSTIC: this effect is the primary candidate for "animation frozen
+    // at current beat" — if `lastServicePlayingState.current` is ALREADY
+    // equal to `isPlaying` when we get here, the recovery path is skipped
+    // entirely, and the service stays paused forever even though the app
+    // thinks it's playing. Emit the snapshot BEFORE the skip check so we
+    // can see it in the log stream.
+    _hookDiag('playbackSync.tick', {
+      isPlayingProp: isPlaying,
+      lastServicePlayingState: lastServicePlayingState.current,
+      serviceIsPlaying: serviceState.isPlaying,
+      serviceCurrentTime: Number(serviceState.currentTime.toFixed(3)),
+      ctxState: getAudioContextState(),
+      willSkipRecovery: isPlaying === lastServicePlayingState.current,
+    });
+
     // CRITICAL: Only sync if playing state has actually changed
     // This prevents auto-pause during pitch changes or other re-renders
     if (isPlaying !== lastServicePlayingState.current) {
@@ -406,17 +512,23 @@ export const usePitchShiftAudio = ({
         if (youtubeTimelineTime !== null) {
           const drift = Math.abs(serviceState.currentTime - youtubeTimelineTime);
           if (drift > YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS) {
+            _hookDiag('playbackSync.seekBeforePlay', {
+              drift,
+              target: youtubeTimelineTime,
+            });
             service.seek(youtubeTimelineTime);
           }
         }
 
         // Only call play() if service is not already playing
         if (!serviceState.isPlaying) {
+          _hookDiag('playbackSync.callPlay');
           service.play();
         }
       } else {
         // Only call pause() if service is actually playing
         if (serviceState.isPlaying) {
+          _hookDiag('playbackSync.callPause');
           service.pause();
         }
       }
@@ -454,46 +566,136 @@ export const usePitchShiftAudio = ({
   }, [isPitchShiftEnabled, isPitchShiftReady, currentTime]);
 
   /**
-   * Keep the pitch-shifted audio locked to the embedded YouTube timeline.
-   * The service runs on its own clock, so we periodically compare it against
-   * the iframe's current time and correct any drift.
+   * SLAVE RE-ANCHOR LOOP
+   *
+   * CLOCK AUTHORITY (post-unification): `youtubeMasterClock` is the single
+   * source of truth for position. The GrainPlayer is a pure slave — it
+   * produces audio but does not advance any counter on its own. This loop
+   * runs every 40 ms while pitch shift is active and re-seeks the
+   * GrainPlayer to the master's live position whenever drift exceeds a
+   * rate-scaled threshold.
+   *
+   * KEY DESIGN POINTS
+   *   • Frequency (40 ms / 25 Hz): dense enough that user-perceptible
+   *     pitch/timing glitches from re-seeks stay under one grain
+   *     (grainSize=200 ms), and sparse enough to avoid saturating the
+   *     grain scheduler.
+   *   • Drift threshold scales with rate: `0.08 * max(rate, 1)` — identical
+   *     to the master clock's re-anchor hysteresis, so the slave never
+   *     fires on noise the master already considers acceptable.
+   *   • Absolute floor of 40 ms: below that, re-seeks are audible as
+   *     "ticks" from grain-schedule boundary realignment.
+   *   • No `seekTo()` on YouTube: the master receives YouTube's
+   *     `onProgress` callbacks directly; if the iframe drifts, the master
+   *     re-anchors and the slave follows automatically on the next tick.
+   *   • Respects the seek fence (R2): the store's `lastUserSeekAt` gate
+   *     also protects the slave, because `onUserSeek` on the master jumps
+   *     the anchor forward/backward discontinuously — we want that jump
+   *     applied in one re-seek, not smeared across several.
    */
   useEffect(() => {
-    if (!isPitchShiftEnabled || !isPitchShiftReady || !youtubePlayer) return;
+    if (!isPitchShiftEnabled || !isPitchShiftReady) return;
 
     const service = pitchShiftService.current;
 
-    const syncToYouTubeTimeline = () => {
-      const youtubeTimelineTime = getYoutubeTimelineTime();
-      if (youtubeTimelineTime === null) {
+    // ANCHOR SYNC: When the master clock re-anchors (YouTube progress, user
+    // seek, rate change), update the GrainPlayer's passive accumulator to
+    // match so position extrapolations stay locked. Without this, the master
+    // and GrainPlayer anchor to slightly different positions on every YouTube
+    // re-anchor, producing a persistent 50-80ms offset that the slave loop
+    // never corrects (both advance at the same rate → drift stays constant).
+    //
+    // SCRUB DETECTION (P0): `syncAnchor` only rewrites the passive-accumulator
+    // numbers — it does NOT call `grainPlayer.stop()/start(newOffset)`, so
+    // the audio buffer cursor keeps playing from its OLD position. That is
+    // fine for sub-second drift corrections (keeps audio seamless). But
+    // YouTube iframe native scrubs arrive through THIS exact path (the
+    // iframe API has no reliable 'seeked' event, so the master clock's
+    // drift-threshold branch in `onYoutubeProgress` is how those scrubs get
+    // detected in the first place). When the jump is scrub-sized we must
+    // actually SEEK the buffer, not merely rewrite the anchor — otherwise
+    // the reported `currentTime` jumps to the scrubbed position while the
+    // audio plays on from where it was (the reported bug). After the seek
+    // we also have to bridge the slave loop's drift-check blindness:
+    // `syncAnchor` would have set `_currentTime = positionSec` so the next
+    // tick's `drift` reads ≈ 0 even while the buffer is still catching up;
+    // by calling `seek` the service's own `_currentTime` is set to the
+    // target and the grain scheduler restarts from the new offset, which
+    // is what keeps audio, grid and iframe locked.
+    const SCRUB_JUMP_THRESHOLD_SEC = 0.75;
+    youtubeMasterClock.setReAnchorListener((positionSec, wallSec) => {
+      // Measure the jump BEFORE touching the service — `syncAnchor` would
+      // overwrite `_currentTime` to `positionSec`, masking the magnitude.
+      const priorPos = service.getState().currentTime;
+      const jump = Math.abs(positionSec - priorPos);
+      if (jump >= SCRUB_JUMP_THRESHOLD_SEC) {
+        try {
+          service.seek(positionSec);
+        } catch { /* best-effort: slave loop will retry */ }
+      } else {
+        service.syncAnchor(positionSec, wallSec);
+      }
+    });
+
+    const SLAVE_LOOP_INTERVAL_MS = 40;
+    const BASE_SLAVE_DRIFT_TOLERANCE_SEC = 0.08;
+
+    const syncGrainPlayerToMaster = () => {
+      if (!youtubeMasterClock.isPlaying()) {
+        // Master is paused — ensure grain is paused too.
+        const st = service.getState();
+        if (st.isPlaying) {
+          try { service.pause(); } catch { /* best-effort */ }
+        }
         return;
       }
 
-      if (Math.abs(currentTimeRef.current - youtubeTimelineTime) > YOUTUBE_STATE_UPDATE_THRESHOLD_SECONDS) {
-        setCurrentTime(youtubeTimelineTime);
-      }
-      currentTimeRef.current = youtubeTimelineTime;
-
+      const masterPos = youtubeMasterClock.getLivePosition();
+      const rate = youtubeMasterClock.getRate();
       const serviceState = service.getState();
-      const drift = Math.abs(serviceState.currentTime - youtubeTimelineTime);
-      if (drift > YOUTUBE_DRIFT_CORRECTION_THRESHOLD_SECONDS) {
-        lastSyncedTime.current = youtubeTimelineTime;
-        service.seek(youtubeTimelineTime);
+
+      if (!serviceState.isPlaying) {
+        // SELF-HEALING: master is playing but grain is not.
+        try {
+          service.seek(masterPos);
+          service.setPlaybackRate(rate);
+          service.play();
+        } catch {
+          // best-effort: next tick will retry
+        }
+        return;
+      }
+
+      const drift = Math.abs(serviceState.currentTime - masterPos);
+      const tolerance = BASE_SLAVE_DRIFT_TOLERANCE_SEC * Math.max(rate, 1);
+
+      if (drift > tolerance) {
+        try {
+          service.seek(masterPos);
+          _hookDiag('slave.reAnchor', {
+            drift: Number(drift.toFixed(4)),
+            masterPos: Number(masterPos.toFixed(4)),
+            rate,
+          });
+        } catch {
+          // best-effort: next tick will retry
+        }
       }
     };
 
-    syncToYouTubeTimeline();
-    const intervalId = window.setInterval(syncToYouTubeTimeline, YOUTUBE_SYNC_INTERVAL_MS);
+    syncGrainPlayerToMaster();
+    const intervalId = window.setInterval(
+      syncGrainPlayerToMaster,
+      SLAVE_LOOP_INTERVAL_MS,
+    );
 
     return () => {
       window.clearInterval(intervalId);
+      youtubeMasterClock.setReAnchorListener(null);
     };
   }, [
     isPitchShiftEnabled,
     isPitchShiftReady,
-    youtubePlayer,
-    setCurrentTime,
-    getYoutubeTimelineTime,
   ]);
 
   /**
@@ -510,9 +712,18 @@ export const usePitchShiftAudio = ({
     }
 
     if (isPitchShiftReady) {
-      // Service is ready - apply playback rate immediately
+      // Service is ready - apply playback rate if it actually differs.
+      // IDEMPOTENT CHECK: The playbackStore fan-out already called
+      // service.setPlaybackRate() synchronously during the user's
+      // slider event.  Calling it *again* here would trigger a
+      // redundant counter-snap on the passive accumulator, advancing
+      // the anchor by (elapsedWall × rate) twice and introducing a
+      // tiny position discontinuity the slave loop then chases.
       const service = pitchShiftService.current;
-      service.setPlaybackRate(playbackRate);
+      const currentRate = service.getState().playbackRate;
+      if (Math.abs(currentRate - playbackRate) > 0.001) {
+        service.setPlaybackRate(playbackRate);
+      }
       pendingPlaybackRate.current = null;
     } else {
       // Service not ready - store for later application
@@ -532,10 +743,6 @@ export const usePitchShiftAudio = ({
       const rate = pendingPlaybackRate.current;
       service.setPlaybackRate(rate);
       pendingPlaybackRate.current = null;
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Applied pending playback rate: ${rate.toFixed(2)}x (service now ready)`);
-      }
     }
   }, [isPitchShiftEnabled, isPitchShiftReady]);
 

@@ -30,19 +30,22 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.6.4',
-      date: 'April 23, 2026',
-      title: 'Guitar tablature, Backend inference directly from URL',
+      date: 'April 26, 2026',
+      title: 'Guitar tablature, Backend inference from URL, Pitch-shift sync hardening',
       features: [
-        'NEW: Guitar tablature display in Guitar Chords tab, showing fret numbers and string positions for each chord',
-        'IMPROVED: Optimized and eliminated redundant computation in playback generation'
-
+        'NEW: Guitar tablature display in Guitar Chords tab, showing fret numbers and string positions for each chord.',
+        'FIX: Pitch-shift toggle off→on at non-default playback speeds (e.g. 1.5×, 2×) now resumes at the correct YouTube timeline position instead of jumping ahead by position × speed.',
+        'IMPROVED: Pitch-shifted audio, YouTube iframe, and beat-grid animation now stay tightly in sync at any playback rate, eliminating audible and visual drift.',
+        'IMPROVED: Optimized and eliminated redundant computation in playback generation.'
       ],
       technical: [
         'NEW: Guitar tablature is implemented in-app with React and native SVG (six-string staff, fret number pills, sustain tails, strum-direction arrows). No dedicated tab engraving npm package (e.g. VexFlow, alphaTab).',
         'NEW: Tab timing matches guitar soundfont playback by driving the staff from the same chord timeline (ChordEvent), mergeConsecutiveChordEvents, generateNotesForInstrument for guitar, scheduled-note clustering, and resolveGuitarVoicing—aligned with the smplr-based soundfont pipeline.',
         'NEW: The chord strip above the staff reuses ScrollingChordStrip and getUniformTimelineBeatWidth from the piano visualizer; shared DynamicsAnalyzer input keeps picked vs strummed patterns consistent with signal-aware playback.',
+        'NEW: Introduced a YouTube Master Clock (youtubeMasterClock.ts) as the single source of truth for playback position and rate, with a passive wall-clock accumulator, counter-snap on rate changes, and a 40 ms slave re-anchor loop driving the pitch-shifted GrainPlayer, HTMLAudioElement, and beat resolver.',
+        'FIX: Compensated a Tone.js GrainPlayer internal quirk where the start() offset is silently multiplied by playbackRate when converted to clock ticks — the service now divides the requested offset by the active rate so the first grain lands at the intended buffer position.',
         'IMPROVED: Memoized SVG subcomponents and strum-column plus arrow layout computed in useMemo limit reconciliation work while playback time updates mostly adjust transform/RAF scrolling.',
-        'IMPROVED: Beat and Chord backend endpoints in production now accepts direct URL input for backend inference, eliminating uploading to BFF.',
+        'IMPROVED: Beat and Chord backend endpoints in production now accept direct URL input for backend inference, eliminating uploading to BFF.',
         'REFACTOR: Main analysis page is refactored for ease of future maintenance and feature additions.'
       ],
       breaking: []

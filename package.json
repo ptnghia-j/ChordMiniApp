@@ -91,6 +91,7 @@
     "@tootallnate/once": "3.0.1",
     "google-gax": "5.0.6",
     "http-proxy-agent": "9.0.0",
+    "postcss": "$postcss",
     "retry-request": "8.0.2",
     "teeny-request": "10.1.2",
     "test-exclude": {
@@ -124,7 +125,7 @@
     "jest-environment-jsdom": "^30.0.2",
     "jest-junit": "^16.0.0",
     "jest-watch-typeahead": "^3.0.1",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.12",
     "postcss-import": "^16.1.1",
     "postcss-preset-env": "^10.2.4",
     "sharp": "^0.34.3",

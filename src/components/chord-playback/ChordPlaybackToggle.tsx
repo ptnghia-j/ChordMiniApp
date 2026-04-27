@@ -355,7 +355,6 @@ const ChordPlaybackToggle: React.FC<ChordPlaybackToggleProps> = ({
                                 const pitchShiftService = getPitchShiftService();
                                 if (pitchShiftService) {
                                   pitchShiftService.setVolume(vol);
-                                  console.log(`🔊 Pitch-shifted audio volume set to ${vol}%`);
                                   // Update the pitch-shifted audio volume in audio mixer
                                   audioMixer.current?.setPitchShiftedAudioVolume(vol);
                                   // Update the audioSettings state to sync the slider UI

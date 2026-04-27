@@ -29,6 +29,72 @@ async function getTone() {
   return ToneModule;
 }
 
+/**
+ * Synchronous accessor for the cached Tone module.
+ *
+ * Returns the module if it has been loaded (via a prior `getTone()` call),
+ * else null. Used by `getCurrentTimeLive()` below, which must run in a hot
+ * loop (rAF / drift loop) and cannot afford an `await`.
+ */
+function getToneSync(): typeof import('tone') | null {
+  return ToneModule;
+}
+
+/**
+ * Read the shared AudioContext's `currentTime` (the "heard now" clock).
+ *
+ * `Tone.now()` returns `audioContext.currentTime + lookAhead` (default 0.1 s)
+ * — a FUTURE moment at which scheduled events will fire. For anything that
+ * needs to represent "what the user is hearing right now", we must use the
+ * raw `currentTime`, not `Tone.now()`. Mixing the two clocks causes the
+ * counter to lead the actual audio output by `lookAhead × playbackRate`,
+ * which is the root cause of the non-1×-rate drift between the
+ * pitch-shifted audio and (beat grid + YouTube iframe).
+ */
+function _getAudioContextCurrentTime(): number | null {
+  const Tone = getToneSync();
+  if (Tone) {
+    try {
+      const ctx = Tone.getContext() as unknown as { currentTime?: number };
+      if (typeof ctx?.currentTime === 'number') return ctx.currentTime;
+    } catch { /* fall through */ }
+  }
+  try {
+    return audioContextManager.getCurrentTime();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * DIAGNOSTIC TAG — kept as a constant for any future structured logging.
+ * All prior `console.debug` calls have been removed to reduce console noise;
+ * re-add selectively when investigating specific bugs.
+ */
+const _DIAG_TAG = '[pitch-diag/service]';
+
+/**
+ * Read the AudioContext's current run-state (`running` / `suspended` /
+ * `closed`). Exposed so the surrounding hooks can cross-reference service
+ * state against context state when explaining "animation frozen at current
+ * beat" — a suspended context is the #1 candidate for "_isPlaying=true but
+ * no audio heard and lastUpdateTime delta stays 0".
+ */
+export function getAudioContextState(): AudioContextState | 'unknown' {
+  const Tone = getToneSync();
+  if (Tone) {
+    try {
+      const ctx = Tone.getContext() as unknown as { state?: AudioContextState };
+      if (ctx?.state) return ctx.state;
+    } catch { /* fall through */ }
+  }
+  try {
+    const raw = audioContextManager.getContext() as unknown as { state?: AudioContextState };
+    if (raw?.state) return raw.state;
+  } catch { /* ignore */ }
+  return 'unknown';
+}
+
 export interface GrainPlayerPitchShiftOptions {
   semitones: number; // -12 to +12
   grainSize?: number; // Default: 0.2 (200ms) - Duration of each grain
@@ -66,11 +132,70 @@ export class GrainPlayerPitchShiftService {
   private _playbackRate = 1;
   private _volume = DEFAULT_PITCH_SHIFTED_AUDIO_VOLUME; // 0-100 (default for balanced audio with YouTube)
 
-  // Time tracking
-  private timeTrackingInterval: ReturnType<typeof setInterval> | null = null;
-  private lastUpdateTime = 0;
+  // CLOCK AUTHORITY (post-unification): this service is a pure SLAVE. The
+  // beat grid and the store's currentTime are both driven by
+  // `youtubeMasterClock`; the GrainPlayer does not drive any other surface.
+  //
+  // However, the service still needs to REPORT its own live playback
+  // position so the slave re-anchor loop in `usePitchShiftAudio` can compute
+  // drift vs. the master. We do this with a PASSIVE wall-clock accumulator
+  // (anchor + rate), NOT a setInterval:
+  //   • `_playAnchorWallTime` — performance.now()/1000 captured at the last
+  //     play / seek / rate-change
+  //   • `_playAnchorPosition` — media-time the grain started playing at
+  //     that anchor
+  //   • live position = anchor + (wallNow − anchorWall) × _playbackRate
+  //
+  // This eliminates the original freeze bug (no `_currentTime >= _duration`
+  // auto-pause branch, no `setInterval`) AND fixes the constant-re-seek
+  // storm the drift-loop was producing when the position never advanced.
+  // `onTimeUpdateCallback` is still fired once per `seek()` so consumers
+  // observe the landing point synchronously.
+  private _playAnchorWallTime: number | null = null;
+  private _playAnchorPosition = 0;
   private onTimeUpdateCallback: ((time: number) => void) | null = null;
   private onEndedCallback: (() => void) | null = null;
+
+  /**
+   * Wall-clock now (seconds). Mirrors the master clock's time base so the
+   * slave and master use the SAME clock for position extrapolation and
+   * drift measurement produces real numbers (not wall-vs-audio skew).
+   */
+  private _wallNow(): number {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now() / 1000;
+    }
+    return Date.now() / 1000;
+  }
+
+  /**
+   * Compute the live playback position from the anchor + wall-clock × rate.
+   * When not playing (or anchor not set), return the frozen `_currentTime`.
+   * Clamped to `[0, _duration]` when duration is known, else `[0, ∞)`.
+   */
+  private _computeLivePosition(): number {
+    if (!this._isPlaying || this._playAnchorWallTime === null) {
+      return this._currentTime;
+    }
+    const elapsedWall = this._wallNow() - this._playAnchorWallTime;
+    const live = this._playAnchorPosition + elapsedWall * this._playbackRate;
+    if (this._duration > 0) {
+      return Math.max(0, Math.min(live, this._duration));
+    }
+    return Math.max(0, live);
+  }
+
+  // P0 HARDENING: when seek() is called before the buffer finishes loading we
+  // park the target here and drain it from handlePlayerLoad().
+  private pendingSeekTime: number | null = null;
+
+  /**
+   * Diagnostic log helper — body removed to reduce console noise.
+   * Re-add logging selectively when investigating specific bugs.
+   */
+  private _diag(_tag: string, _extra?: Record<string, unknown>): void {
+    // intentionally empty
+  }
 
   /**
    * Initialize Tone.js context (lazy loads Tone.js on first use)
@@ -104,9 +229,18 @@ export class GrainPlayerPitchShiftService {
   }
 
   /**
-   * Load audio from Firebase Storage URL and apply pitch shift
+   * Load audio from Firebase Storage URL and apply pitch shift.
+   *
+   * @param audioUrl        Firebase Storage URL for the audio file
+   * @param semitones       Pitch shift amount in semitones (-12 to +12)
+   * @param initialPlaybackRate  Playback speed to construct the GrainPlayer
+   *                             with. MUST be passed on re-initialization to
+   *                             prevent the player starting at the class default
+   *                             (1.0) and then transitioning via setPlaybackRate
+   *                             — the Tone.js grain scheduler may ingest buffer
+   *                             metadata at the default rate before switching.
    */
-  async loadAudio(audioUrl: string, semitones: number = 0): Promise<void> {
+  async loadAudio(audioUrl: string, semitones: number = 0, initialPlaybackRate?: number): Promise<void> {
     if (!this.isInitialized) {
       await this.initialize();
     }
@@ -180,6 +314,15 @@ export class GrainPlayerPitchShiftService {
       const grainSize = 0.2;  // 200ms grains (Tone.js default)
       const overlap = 0.1;    // 100ms crossfade (50% overlap - industry standard)
 
+      // If an initial playback rate was provided (e.g. during
+      // OFF→ON re-init while the slider is at 2.0×), prefer it over the
+      // class default so the GrainPlayer never constructs at rate 1.0
+      // and then flips to the desired rate via setPlaybackRate — the
+      // grain scheduler may have already pre-computed at rate 1.0.
+      if (initialPlaybackRate !== undefined) {
+        this._playbackRate = initialPlaybackRate;
+      }
+
       this.grainPlayer = new Tone.GrainPlayer({
         url: finalUrl,
         grainSize: grainSize,  // 200ms grains
@@ -199,11 +342,40 @@ export class GrainPlayerPitchShiftService {
       // Connect GrainPlayer to signal chain
       this.grainPlayer.connect(this.lowPassFilter);
 
-      // Wait for audio to load
+      // Wait for audio to load.
+      //
+      // FIRST-TOGGLE FREEZE FIX: Tone.js can flip `grainPlayer.loaded` to true
+      // BEFORE the `onload` callback (`handlePlayerLoad`) has run to populate
+      // `_duration` from the buffer. If we resolve solely on `loaded=true`,
+      // the caller can race in with `seek(initialTime)` while `_duration` is
+      // still 0 — `seek()` then clamps `_currentTime = min(initialTime, 0) = 0`,
+      // the 50 ms tracking tick clamps every advance against the same 0, and
+      // the auto-stop branch (`_currentTime >= _duration`) immediately calls
+      // `pause()`, flipping `_isPlaying` back to false. From the rAF loop's
+      // perspective, `getCurrentTimeLive()` returns the frozen `_currentTime`
+      // (0) forever and the beat grid stays glued to the first cell. Page
+      // refresh hides the bug because the browser-cached buffer makes `onload`
+      // fire effectively synchronously.
+      //
+      // We force `_duration` to be populated before resolving by reading the
+      // buffer ourselves if `handlePlayerLoad` hasn't run yet, mirroring what
+      // the onload callback does.
       await new Promise<void>((resolve, reject) => {
         const checkLoaded = setInterval(() => {
           if (this.grainPlayer && this.grainPlayer.loaded) {
             clearInterval(checkLoaded);
+            const onloadAlreadyRan = this._duration > 0;
+            if (this._duration === 0 && this.grainPlayer.buffer) {
+              const bufferDuration = this.grainPlayer.buffer.duration;
+              if (typeof bufferDuration === 'number' && bufferDuration > 0) {
+                this._duration = bufferDuration;
+              }
+            }
+            this._diag('loadAudio.resolved', {
+              onloadAlreadyRan,
+              durationAfterForcedRead: this._duration,
+              bufferPresent: !!this.grainPlayer.buffer,
+            });
             resolve();
           }
         }, 100);
@@ -251,8 +423,23 @@ export class GrainPlayerPitchShiftService {
    * Handle player load event
    */
   private handlePlayerLoad(): void {
+    const priorDuration = this._duration;
     if (this.grainPlayer && this.grainPlayer.buffer) {
       this._duration = this.grainPlayer.buffer.duration;
+    }
+    this._diag('handlePlayerLoad', {
+      priorDuration,
+      newDuration: this._duration,
+      hasPendingSeek: this.pendingSeekTime !== null,
+      pendingSeekTime: this.pendingSeekTime,
+    });
+
+    // Drain any seek that arrived before the buffer was ready.
+    if (this.pendingSeekTime !== null) {
+      const target = this.pendingSeekTime;
+      this.pendingSeekTime = null;
+      // grainPlayer.loaded is now true, so this path will not recurse.
+      this.seek(target);
     }
   }
 
@@ -305,19 +492,35 @@ export class GrainPlayerPitchShiftService {
    */
   play(): void {
     if (!this.grainPlayer || !this.grainPlayer.loaded) {
-      console.warn('⚠️ [DEBUG] play() called but GrainPlayer not loaded');
       return;
     }
 
     try {
       if (!this._isPlaying) {
-        // Start from current time position
-        this.grainPlayer.start(undefined, this._currentTime);
+        // TONE.JS GRAINPLAYER RATE-SCALED OFFSET COMPENSATION
+        // ────────────────────────────────────────────────────
+        // GrainPlayer._start() converts the `offset` argument to initial
+        // clock ticks via `offset / (grainSize / playbackRate)`, which
+        // evaluates to `offset × playbackRate / grainSize`. The very first
+        // grain is then scheduled at buffer position `ticks × grainSize`
+        // = `offset × playbackRate`. At 1.0× the multiplier is identity so
+        // the bug is invisible; at 1.5× asking for buffer position 30 lands
+        // at 45, at 2.0× it lands at 60, etc.
+        //
+        // We compensate by pre-dividing the offset by the current playbackRate
+        // so the grain scheduler's internal `× playbackRate` yields the
+        // intended buffer position. See GrainPlayer.js _start + _tick in
+        // node_modules/tone/build/esm/source/buffer/GrainPlayer.js.
+        const compensatedOffset = this._playbackRate > 0
+          ? this._currentTime / this._playbackRate
+          : this._currentTime;
+        this.grainPlayer.start(undefined, compensatedOffset);
         this._isPlaying = true;
-        this.startTimeTracking();
+        this._playAnchorWallTime = this._wallNow();
+        this._playAnchorPosition = this._currentTime;
       }
     } catch (error) {
-      console.error('❌ Failed to start playback:', error);
+      console.error('[GrainPlayerPitchShiftService] play() failed:', error);
     }
   }
 
@@ -326,44 +529,71 @@ export class GrainPlayerPitchShiftService {
    */
   pause(): void {
     if (!this.grainPlayer) {
-      console.warn('⚠️ [DEBUG] pause() called but no GrainPlayer exists');
       return;
     }
 
     try {
       if (this._isPlaying) {
+        this._currentTime = this._computeLivePosition();
         this.grainPlayer.stop();
         this._isPlaying = false;
-        this.stopTimeTracking();
+        this._playAnchorWallTime = null;
 
-        // Call ended callback if at end of audio
-        if (this._currentTime >= this._duration && this.onEndedCallback) {
+        if (this._duration > 0 && this._currentTime >= this._duration && this.onEndedCallback) {
           this.onEndedCallback();
         }
       }
     } catch (error) {
-      console.error('❌ Failed to pause playback:', error);
+      console.error('[GrainPlayerPitchShiftService] pause() failed:', error);
     }
   }
 
   /**
-   * Seek to specific time in seconds
+   * Seek to specific time in seconds.
+   *
+   * P0 HARDENING:
+   *   - If the GrainPlayer buffer is not yet loaded, the seek target is queued
+   *     so it is applied as soon as loadAudio() finishes (instead of being
+   *     silently dropped, which previously caused "click-seeks-to-middle
+   *     during pitch-shift buffer reload" to end up at an unexpected position).
+   *   - When the requested time exceeds the buffer duration, we emit a
+   *     development-only warning identifying the caller, to help surface
+   *     duration-mismatch bugs early.
    */
   seek(time: number): void {
-    if (!this.grainPlayer || !this.grainPlayer.loaded) return;
+    if (!this.grainPlayer || !this.grainPlayer.loaded) {
+      this.pendingSeekTime = time;
+      return;
+    }
 
     try {
       const wasPlaying = this._isPlaying;
+      this._diag('seek.enter', { target: time, wasPlaying });
 
-      // Stop current playback and time tracking
+      // Stop current playback
       if (this._isPlaying) {
         this.grainPlayer.stop();
         this._isPlaying = false;
-        this.stopTimeTracking();
       }
 
-      // Update current time
-      this._currentTime = Math.max(0, Math.min(time, this._duration));
+      if (process.env.NODE_ENV !== 'production'
+        && this._duration > 0
+        && time > this._duration
+      ) {
+        console.warn(
+          `[GrainPlayerPitchShiftService] seek(${time.toFixed(3)}s) exceeds buffer duration ${this._duration.toFixed(3)}s; clamping`,
+        );
+      }
+
+      // Update current time. DEFENSIVE: when `_duration` is still 0 (rare race
+      // where seek arrives before the buffer's duration has been read), don't
+      // collapse `_currentTime` to 0 — that would freeze the rAF clock at the
+      // first beat. Treat unknown duration as unbounded; the
+      // pre-loadAudio-resolution guard plus auto-clamp on the next tick will
+      // re-anchor once `_duration` is known.
+      this._currentTime = this._duration > 0
+        ? Math.max(0, Math.min(time, this._duration))
+        : Math.max(0, time);
 
       // Publish the seek target immediately so UI consumers do not sit on the
       // previous service time until the next 50ms tracking tick.
@@ -373,48 +603,133 @@ export class GrainPlayerPitchShiftService {
 
       // Restart playback from new position if was playing
       if (wasPlaying) {
-        this.grainPlayer.start(undefined, this._currentTime);
+        // CLOCK AUTHORITY (post-unification): re-anchor the passive
+        // accumulator at the new position. The slave re-anchor loop in
+        // usePitchShiftAudio will continuously verify this service against
+        // the master clock after the restart.
+        //
+        // RATE-SCALED OFFSET COMPENSATION — see play() for full explanation.
+        // Tone.js GrainPlayer._start() multiplies the offset by playbackRate
+        // when converting to clock ticks, so we divide here to cancel it.
+        const compensatedOffset = this._playbackRate > 0
+          ? this._currentTime / this._playbackRate
+          : this._currentTime;
+        this.grainPlayer.start(undefined, compensatedOffset);
         this._isPlaying = true;
-        this.startTimeTracking();
+        this._playAnchorWallTime = this._wallNow();
+        this._playAnchorPosition = this._currentTime;
+      } else {
+        // When seeking while paused, still refresh the anchor position so
+        // a subsequent play() starts from the right place.
+        this._playAnchorPosition = this._currentTime;
+        this._playAnchorWallTime = null;
       }
+      this._diag('seek.exit', { appliedTime: this._currentTime, resumedPlayback: wasPlaying });
     } catch (error) {
       console.error('❌ Failed to seek:', error);
+      this._diag('seek.error', { message: (error as Error)?.message });
     }
   }
 
   /**
-   * Set playback rate (speed) for the GrainPlayer
+   * Synchronize the passive accumulator anchors to match the master clock
+   * WITHOUT seeking (no stop/restart → no audio gap).
    *
-   * GrainPlayer's `playbackRate` property is INDEPENDENT of pitch.
-   * No compensation needed - this is the key advantage of GrainPlayer!
+   * Called by the master clock's ReAnchorListener every time the master
+   * re-anchors to a new position (YouTube progress, user seek, etc.). This
+   * eliminates the persistent ~80ms offset that the slave loop would
+   * otherwise never correct because both systems advance at the same rate.
+   */
+  syncAnchor(positionSec: number, wallSec: number): void {
+    if (this._isPlaying) {
+      this._playAnchorPosition = positionSec;
+      this._playAnchorWallTime = wallSec;
+      this._currentTime = positionSec;
+    } else {
+      // When paused, just update the resting position
+      this._playAnchorPosition = positionSec;
+      this._playAnchorWallTime = null;
+      this._currentTime = positionSec;
+    }
+  }
+
+  /**
+   * Set playback rate (speed) for the GrainPlayer.
+   *
+   * GrainPlayer's `playbackRate` property is INDEPENDENT of pitch — the
+   * key advantage of the grain-based architecture. Tone.js schedules grains
+   * ahead of time (200 ms grainSize, 100 ms overlap). When the rate changes
+   * live (without a stop/restart), pre-scheduled grains play at the OLD
+   * rate for up to 200 ms while new grains start at the NEW rate. This
+   * produces a brief cross-fade between old and new rates — perceptually
+   * smoother than a position jump caused by the AudioContext scheduling
+   * lag of a stop→start cycle.
+   *
+   * IMPORTANT: We deliberately do NOT call stop()/start() here. A stop/start
+   * cycle resets the grain scheduler and anchors at synchronous wall-clock,
+   * but the AudioContext is ~50 ms ahead of wall-clock (lookAhead), so the
+   * passive accumulator says "started at t, position P" while the audio
+   * actually starts at `t + lookAhead`. The slave loop then sees drift and
+   * nudges the position, producing a cumulative forward jump on successive
+   * rate changes. Let Tone.js gracefully transition via live rate changes.
    */
   setPlaybackRate(rate: number): void {
-    if (!this.grainPlayer) return;
+    if (!this.grainPlayer) {
+      return;
+    }
+
+    const previousRate = this._playbackRate;
+    if (Math.abs(previousRate - rate) < 0.001) {
+      return; // idempotent — prevents needless stop/start cycles
+    }
 
     try {
-      // Store the playback rate
+      // Counter-snap the passive accumulator at the OLD rate before switching.
+      if (this._isPlaying && this._playAnchorWallTime !== null) {
+        const nowSec = this._wallNow();
+        const elapsedWall = nowSec - this._playAnchorWallTime;
+        this._playAnchorPosition = this._playAnchorPosition + elapsedWall * previousRate;
+        this._playAnchorWallTime = nowSec;
+        this._currentTime = this._playAnchorPosition;
+      }
+
+      // Store & apply new rate.
       this._playbackRate = rate;
-
-      // Apply playback rate to GrainPlayer (independent of pitch)
       this.grainPlayer.playbackRate = rate;
-
-
-
     } catch (error) {
-      console.error('❌ Failed to set playback rate:', error);
+      console.error('[GrainPlayerPitchShiftService] setPlaybackRate failed:', error);
     }
   }
 
   /**
    * Get current playback state
+   *
+   * CLOCK AUTHORITY (post-unification): `currentTime` is the LIVE extrapolated
+   * position (anchor + wall-clock × rate). Callers that want the frozen
+   * "last seek target" can read via `getState()` while `isPlaying=false`;
+   * while playing, this returns a moving value so the slave re-anchor loop
+   * in `usePitchShiftAudio` measures real drift vs. the master, not just the
+   * elapsed wall-clock since the last seek.
    */
   getState(): PitchShiftPlaybackState {
     return {
       isPlaying: this._isPlaying,
-      currentTime: this._currentTime,
+      currentTime: this._computeLivePosition(),
       duration: this._duration,
       playbackRate: this._playbackRate
     };
+  }
+
+  /**
+   * Get the LIVE current time.
+   *
+   * CLOCK AUTHORITY (post-unification): returns the passive-accumulator
+   * position (anchor + wall-clock × rate) while playing, or the frozen
+   * `_currentTime` while paused. Preserved for backward compatibility —
+   * new code should prefer `youtubeMasterClock.getLivePosition()`.
+   */
+  getCurrentTimeLive(): number {
+    return this._computeLivePosition();
   }
 
   /**
@@ -432,52 +747,9 @@ export class GrainPlayerPitchShiftService {
   }
 
   /**
-   * Start time tracking
-   */
-  private async startTimeTracking(): Promise<void> {
-    this.stopTimeTracking();
-
-    // Lazy load Tone.js
-    const Tone = await getTone();
-    this.lastUpdateTime = Tone.now();
-
-    this.timeTrackingInterval = setInterval(async () => {
-      if (this._isPlaying && this.grainPlayer) {
-        const Tone = await getTone();
-        const now = Tone.now();
-        const elapsed = (now - this.lastUpdateTime) * this._playbackRate;
-        this._currentTime = Math.min(this._currentTime + elapsed, this._duration);
-        this.lastUpdateTime = now;
-
-        // Call time update callback if set
-        if (this.onTimeUpdateCallback) {
-          this.onTimeUpdateCallback(this._currentTime);
-        }
-
-        // Auto-stop at end
-        if (this._currentTime >= this._duration) {
-          this.pause();
-        }
-      }
-    }, 50); // Update every 50ms
-  }
-
-  /**
-   * Stop time tracking
-   */
-  private stopTimeTracking(): void {
-    if (this.timeTrackingInterval) {
-      clearInterval(this.timeTrackingInterval);
-      this.timeTrackingInterval = null;
-    }
-  }
-
-  /**
    * Dispose of the player and clean up resources
    */
   private disposePlayer(): void {
-    this.stopTimeTracking();
-
     if (this.grainPlayer) {
       try {
         this.grainPlayer.dispose();
@@ -517,6 +789,8 @@ export class GrainPlayerPitchShiftService {
     this._isPlaying = false;
     this._currentTime = 0;
     this._duration = 0;
+    this._playAnchorWallTime = null;
+    this._playAnchorPosition = 0;
   }
 
   /**

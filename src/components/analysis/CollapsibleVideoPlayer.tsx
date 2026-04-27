@@ -36,6 +36,8 @@ interface CollapsibleVideoPlayerProps {
   onProgress?: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek?: (time: number) => void;
   onEnded?: () => void;
+  /** Fired when the user changes rate via YouTube's native gear-menu. */
+  onPlaybackRateChange?: (rate: number) => void;
 }
 
 export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
@@ -49,7 +51,8 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   onPause,
   onProgress,
   onSeek,
-  onEnded
+  onEnded,
+  onPlaybackRateChange
 }) => {
   const getInitialIsMobile = () => (
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
@@ -61,20 +64,37 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const isPlayerReady = readyVideoId === videoId;
 
-  // Sync playback rate with YouTube player
+  // Sync playback rate with YouTube iframe.
+  // Re-run when the player becomes ready so the initial rate is always applied,
+  // and clamp to the nearest YouTube-supported rate (YouTube only honours a
+  // fixed set of rates; off-list values silently fall back to 1.0x).
   useEffect(() => {
-    if (playerRef.current) {
+    if (!isPlayerReady || !playerRef.current) return;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const internalPlayer = (playerRef.current as any).getInternalPlayer();
+      if (!internalPlayer || typeof internalPlayer.setPlaybackRate !== 'function') return;
+
+      let targetRate = playbackRate;
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const internalPlayer = (playerRef.current as any).getInternalPlayer();
-        if (internalPlayer && typeof internalPlayer.setPlaybackRate === 'function') {
-          internalPlayer.setPlaybackRate(playbackRate);
+        if (typeof internalPlayer.getAvailablePlaybackRates === 'function') {
+          const available: number[] = internalPlayer.getAvailablePlaybackRates() || [];
+          if (Array.isArray(available) && available.length > 0) {
+            targetRate = available.reduce((best, rate) =>
+              Math.abs(rate - playbackRate) < Math.abs(best - playbackRate) ? rate : best
+            );
+          }
         }
-      } catch (error) {
-        console.error('Error setting playback rate:', error);
+      } catch {
+        // Ignore – fall back to the raw rate if clamping fails.
       }
+
+      internalPlayer.setPlaybackRate(targetRate);
+    } catch (error) {
+      console.error('Error setting playback rate:', error);
     }
-  }, [playbackRate]);
+  }, [playbackRate, isPlayerReady]);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -120,9 +140,50 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           playVideo: () => internalPlayer.playVideo(),
           pauseVideo: () => internalPlayer.pauseVideo(),
           setPlaybackRate: (rate: number) => internalPlayer.setPlaybackRate(rate),
+          // Forward rate inspection methods so the playbackStore can
+          // (a) snap requested rates to the YouTube-supported set, and
+          // (b) verify the iframe actually applied the rate after ~200 ms.
+          // Without these, the store sees `undefined` and silently skips both.
+          getPlaybackRate: () => {
+            try {
+              return typeof internalPlayer.getPlaybackRate === 'function'
+                ? internalPlayer.getPlaybackRate()
+                : undefined;
+            } catch {
+              return undefined;
+            }
+          },
+          getAvailablePlaybackRates: () => {
+            try {
+              return typeof internalPlayer.getAvailablePlaybackRates === 'function'
+                ? internalPlayer.getAvailablePlaybackRates()
+                : undefined;
+            } catch {
+              return undefined;
+            }
+          },
           muted: false
         };
         onReady?.(enhancedPlayer);
+
+        // Subscribe to YouTube's native onPlaybackRateChange event.
+        // This fires when the user changes rate via YouTube's gear-menu
+        // INSIDE the iframe — a code path the app's own rate slider doesn't
+        // cover. Without this, the master clock and GrainPlayer retain the
+        // old rate → extrapolation drift → constant re-seeks.
+        if (typeof internalPlayer.addEventListener === 'function') {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            internalPlayer.addEventListener('onPlaybackRateChange', (event: any) => {
+              const newRate = typeof event === 'number' ? event : event?.data;
+              if (typeof newRate === 'number' && newRate > 0) {
+                onPlaybackRateChange?.(newRate);
+              }
+            });
+          } catch {
+            /* best-effort: some YT player builds don't expose addEventListener */
+          }
+        }
       } else {
         // Fallback: create a basic wrapper without volume control
         const basicPlayer = {
@@ -190,6 +251,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 onEnded={onEnded}
 
                 onProgress={onProgress}
+                onSeek={onSeek}
                 progressInterval={250}
                 muted={false}
                 config={{
@@ -308,6 +370,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
             onEnded={onEnded}
 
             onProgress={onProgress}
+            onSeek={onSeek}
             progressInterval={250}
             muted={false}
             config={{
