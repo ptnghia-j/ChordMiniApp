@@ -36,6 +36,99 @@ type SheetPickupResolution = {
   shouldForceZeroPickupForLongLeadingSilence: boolean;
 };
 
+export function buildSheetMusicKeySections(params: {
+  mergedKeySignature?: string | null;
+  sequenceCorrections?: SequenceCorrections | null;
+  sheetMusicPitchShiftSemitones: number;
+  beatToChordSequenceMap: Record<number, number>;
+  notationBeatOffset: number;
+  shiftedOriginalChords: string[];
+}): MusicXmlKeySection[] | undefined {
+  const resolveSheetMusicKeySignature = (value?: string | null): string | null => {
+    const trimmedValue = value?.trim();
+    if (!trimmedValue) {
+      return null;
+    }
+
+    return transposeKeySignature(trimmedValue, params.sheetMusicPitchShiftSemitones) ?? trimmedValue;
+  };
+
+  const sections = params.sequenceCorrections?.keyAnalysis?.sections ?? [];
+  const modulations = params.sequenceCorrections?.keyAnalysis?.modulations ?? [];
+  const rawKeyEntries = [
+    ...sections.map((section) => ({
+      startIndex: section.startIndex,
+      keySignature: resolveSheetMusicKeySignature(section.key),
+    })),
+    ...modulations.map((modulation) => ({
+      startIndex: modulation.atIndex,
+      keySignature: resolveSheetMusicKeySignature(modulation.toKey),
+    })),
+  ];
+
+  const initialKeySignature = resolveSheetMusicKeySignature(params.mergedKeySignature);
+  const hasExplicitOrigin = rawKeyEntries.some((entry) => entry.startIndex === 0);
+  if (initialKeySignature && !hasExplicitOrigin) {
+    rawKeyEntries.unshift({ startIndex: 0, keySignature: initialKeySignature });
+  }
+
+  if (!rawKeyEntries.length) {
+    return initialKeySignature
+      ? [{ startBeatIndex: 0, keySignature: initialKeySignature }]
+      : undefined;
+  }
+
+  const seqIndexToFirstBeatIndex = new Map<number, number>();
+  for (let beatIndex = 0; beatIndex < params.shiftedOriginalChords.length; beatIndex += 1) {
+    const sequenceIndex = params.beatToChordSequenceMap[beatIndex];
+    if (sequenceIndex === undefined || seqIndexToFirstBeatIndex.has(sequenceIndex)) {
+      continue;
+    }
+
+    seqIndexToFirstBeatIndex.set(sequenceIndex, beatIndex);
+  }
+
+  if (seqIndexToFirstBeatIndex.size === 0) {
+    return undefined;
+  }
+
+  const mappedSections = rawKeyEntries
+    .filter((entry) => Number.isInteger(entry.startIndex))
+    .sort((left, right) => left.startIndex - right.startIndex)
+    .reduce<MusicXmlKeySection[]>((accumulator, entry) => {
+      if (typeof entry.keySignature !== 'string' || entry.keySignature.trim().length === 0) {
+        return accumulator;
+      }
+
+      const rawBeatIndex = seqIndexToFirstBeatIndex.get(entry.startIndex);
+      if (rawBeatIndex === undefined && entry.startIndex > 0) {
+        return accumulator;
+      }
+
+      const nextSection: MusicXmlKeySection = {
+        startBeatIndex: rawBeatIndex !== undefined
+          ? Math.max(0, rawBeatIndex - params.notationBeatOffset)
+          : 0,
+        keySignature: entry.keySignature.trim(),
+      };
+      const previousSection = accumulator[accumulator.length - 1];
+
+      if (previousSection?.startBeatIndex === nextSection.startBeatIndex) {
+        accumulator[accumulator.length - 1] = nextSection;
+        return accumulator;
+      }
+
+      if (previousSection?.keySignature === nextSection.keySignature) {
+        return accumulator;
+      }
+
+      accumulator.push(nextSection);
+      return accumulator;
+    }, []);
+
+  return mappedSections.length > 0 ? mappedSections : undefined;
+}
+
 export function resolveFirstMelodyBeatIndex(
   melodyNoteEvents: SheetSageNoteEvent[] | undefined,
   beatTimes: Array<number | null> | undefined,
@@ -239,6 +332,21 @@ export function resolveSheetPickupResolution(params: {
     resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
   }
 
+  const shouldUpgradeStructuralPickupFromVisibleGridSilence = (
+    hasNonZeroStructuralPickup
+    && !melodyOverridesStructuralPickup
+    && !melodyOverridesFirstPlayableLeadInPickup
+    && firstNonSilentVisibleGridIndex !== null
+    && isWithinFirstMeasure(firstNonSilentVisibleGridIndex)
+    && normalizedFirstNonSilentVisibleGridPickup !== null
+    && normalizedStructuralPickup !== null
+    && normalizedFirstNonSilentVisibleGridPickup > normalizedStructuralPickup
+  );
+
+  if (shouldUpgradeStructuralPickupFromVisibleGridSilence) {
+    resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
+  }
+
   if (shouldForceZeroPickupForLongLeadingSilence) {
     // Keep full-bar lead-ins as full-bar rests; modulo pickup would be misleading.
     resolvedPickupBeatCount = 0;
@@ -340,91 +448,20 @@ export function useSheetMusicModel({
     [sheetMusicPitchShiftSemitones, sheetSageResult?.noteEvents],
   );
 
-  const sheetMusicKeySections = useMemo<MusicXmlKeySection[] | undefined>(() => {
-    const resolveSheetMusicKeySignature = (value?: string | null): string | null => {
-      const trimmedValue = value?.trim();
-      if (!trimmedValue) {
-        return null;
-      }
-
-      return transposeKeySignature(trimmedValue, sheetMusicPitchShiftSemitones) ?? trimmedValue;
-    };
-    const sections = sequenceCorrections?.keyAnalysis?.sections;
-    const modulations = sequenceCorrections?.keyAnalysis?.modulations;
-    const rawKeyEntries = sections?.length
-      ? sections.map((section) => ({
-          startIndex: section.startIndex,
-          keySignature: resolveSheetMusicKeySignature(section.key),
-        }))
-      : [
-          ...(resolveSheetMusicKeySignature(mergedKeySignature)
-            ? [{ startIndex: 0, keySignature: resolveSheetMusicKeySignature(mergedKeySignature) }]
-            : []),
-          ...((modulations ?? []).map((modulation) => ({
-            startIndex: modulation.atIndex,
-            keySignature: resolveSheetMusicKeySignature(modulation.toKey),
-          }))),
-        ];
-
-    if (!rawKeyEntries.length) {
-      return undefined;
-    }
-
-    const seqIndexToFirstBeatIndex = new Map<number, number>();
-    for (let beatIndex = 0; beatIndex < shiftedOriginalChords.length; beatIndex += 1) {
-      const sequenceIndex = beatToChordSequenceMap[beatIndex];
-      if (sequenceIndex === undefined || seqIndexToFirstBeatIndex.has(sequenceIndex)) {
-        continue;
-      }
-
-      seqIndexToFirstBeatIndex.set(sequenceIndex, beatIndex);
-    }
-
-    if (seqIndexToFirstBeatIndex.size === 0) {
-      return undefined;
-    }
-
-    const mappedSections = rawKeyEntries
-      .filter((entry) => Number.isInteger(entry.startIndex))
-      .sort((left, right) => left.startIndex - right.startIndex)
-      .reduce<MusicXmlKeySection[]>((accumulator, entry) => {
-        if (typeof entry.keySignature !== 'string' || entry.keySignature.trim().length === 0) {
-          return accumulator;
-        }
-
-        const rawBeatIndex = seqIndexToFirstBeatIndex.get(entry.startIndex);
-        if (rawBeatIndex === undefined && entry.startIndex > 0) {
-          return accumulator;
-        }
-
-        const nextSection: MusicXmlKeySection = {
-          startBeatIndex: rawBeatIndex !== undefined
-            ? Math.max(0, rawBeatIndex - notationBeatOffset)
-            : 0,
-          keySignature: entry.keySignature.trim(),
-        };
-        const previousSection = accumulator[accumulator.length - 1];
-
-        if (previousSection?.startBeatIndex === nextSection.startBeatIndex) {
-          accumulator[accumulator.length - 1] = nextSection;
-          return accumulator;
-        }
-
-        if (previousSection?.keySignature === nextSection.keySignature) {
-          return accumulator;
-        }
-
-        accumulator.push(nextSection);
-        return accumulator;
-      }, []);
-
-    return mappedSections.length > 0 ? mappedSections : undefined;
-  }, [
+  const sheetMusicKeySections = useMemo<MusicXmlKeySection[] | undefined>(() => (
+    buildSheetMusicKeySections({
+      mergedKeySignature,
+      sequenceCorrections,
+      sheetMusicPitchShiftSemitones,
+      beatToChordSequenceMap,
+      notationBeatOffset,
+      shiftedOriginalChords,
+    })
+  ), [
     beatToChordSequenceMap,
     mergedKeySignature,
     notationBeatOffset,
-    sequenceCorrections?.keyAnalysis?.modulations,
-    sequenceCorrections?.keyAnalysis?.sections,
+    sequenceCorrections,
     sheetMusicPitchShiftSemitones,
     shiftedOriginalChords,
   ]);
