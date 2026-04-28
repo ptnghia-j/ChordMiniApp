@@ -49,13 +49,14 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Install runtime dependencies including yt-dlp and ffmpeg for audio extraction
-RUN apk add --no-cache \
+RUN --mount=type=cache,id=s/adaaedf7-afba-4890-8e0a-5c50d7897398-/var/cache/apk,target=/var/cache/apk \
+    --mount=type=cache,id=s/adaaedf7-afba-4890-8e0a-5c50d7897398-/root/.cache/pip,target=/root/.cache/pip \
+    apk add \
     curl \
     python3 \
     py3-pip \
     ffmpeg \
-    && pip3 install --no-cache-dir --break-system-packages yt-dlp \
-    && rm -rf /var/cache/apk/*
+    && pip3 install --break-system-packages yt-dlp
 
 # Copy built application
 COPY --from=builder /app/public ./public
