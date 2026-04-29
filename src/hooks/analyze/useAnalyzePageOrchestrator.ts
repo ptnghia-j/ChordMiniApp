@@ -620,6 +620,61 @@ export function useAnalyzePageOrchestrator({
       return;
     }
 
+    const applyCachedTranscriptionIfAvailable = async () => {
+      const cachedTranscription = await loadTranscriptionSnapshot(beatDetector, chordDetector).catch((error) => {
+        console.warn('Cached analysis lookup failed before extraction fallback:', error);
+        return null;
+      });
+      if (!cachedTranscription) {
+        return false;
+      }
+
+      setCacheAvailable(true);
+      setCacheCheckCompleted(true);
+      setCacheCheckInProgress(false);
+      setStage('idle');
+      setProgress(0);
+      setStatusMessage('');
+
+      if (cachedTranscription.audioDuration && cachedTranscription.audioDuration > 0) {
+        setDuration(cachedTranscription.audioDuration);
+      }
+
+      if (titleFromSearch) {
+        setVideoTitle(titleFromSearch);
+      } else if (cachedTranscription.title) {
+        setVideoTitle(cachedTranscription.title);
+      }
+
+      const cachedAudioUrl =
+        typeof cachedTranscription.audioUrl === 'string' && cachedTranscription.audioUrl.trim().length > 0
+          ? cachedTranscription.audioUrl
+          : null;
+
+      if (cachedAudioUrl) {
+        setAudioProcessingState((prev) => ({
+          ...prev,
+          isExtracting: false,
+          isDownloading: false,
+          isExtracted: true,
+          audioUrl: cachedAudioUrl,
+          fromCache: true,
+          error: null,
+          suggestion: null,
+        }));
+      } else {
+        setAudioProcessingState((prev) => ({
+          ...prev,
+          isExtracting: false,
+          isDownloading: false,
+          error: null,
+          suggestion: null,
+        }));
+      }
+
+      return true;
+    };
+
     try {
       setInitialCacheCheckDone(true);
 
@@ -660,12 +715,20 @@ export function useAnalyzePageOrchestrator({
         return;
       }
 
+      if (await applyCachedTranscriptionIfAvailable()) {
+        return;
+      }
+
       const extractionResult = await extractAudioFromYouTube(false);
       if (extractionResult?.title) {
         setVideoTitle(extractionResult.title);
       }
     } catch (error) {
       console.error('Error checking cached audio:', error);
+      if (await applyCachedTranscriptionIfAvailable()) {
+        return;
+      }
+
       const extractionResult = await extractAudioFromYouTube(false);
       if (extractionResult?.title) {
         setVideoTitle(extractionResult.title);
@@ -675,6 +738,9 @@ export function useAnalyzePageOrchestrator({
     extractAudioFromYouTube,
     firebaseReady,
     initialCacheCheckDone,
+    beatDetector,
+    chordDetector,
+    loadTranscriptionSnapshot,
     setAudioProcessingState,
     setDuration,
     setProgress,
@@ -688,8 +754,6 @@ export function useAnalyzePageOrchestrator({
   useEffect(() => {
     const checkAnalysisCache = async () => {
       if (
-        !audioProcessingState.isExtracted ||
-        !audioProcessingState.audioUrl ||
         audioProcessingState.isAnalyzed ||
         audioProcessingState.isAnalyzing ||
         !modelsInitialized ||
@@ -720,10 +784,8 @@ export function useAnalyzePageOrchestrator({
 
     void checkAnalysisCache();
   }, [
-    audioProcessingState.audioUrl,
     audioProcessingState.isAnalyzed,
     audioProcessingState.isAnalyzing,
-    audioProcessingState.isExtracted,
     beatDetector,
     cacheCheckCompleted,
     cacheCheckInProgress,

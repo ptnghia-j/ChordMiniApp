@@ -69,25 +69,27 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
     return null;
   }
 
-  const actionLabel = !isExtracted
-    ? 'Preparing audio'
-    : isAnalyzing
-      ? 'Analyzing...'
-      : actionDisabledReason
-        ? 'Analysis unavailable'
-      : cacheCheckCompleted && cacheAvailable
-        ? 'Open cached results'
-        : 'Run analysis';
+  const canOpenCachedResults = cacheCheckCompleted && cacheAvailable;
 
-  const statusTone = !isExtracted
-    ? 'primary'
+  const actionLabel = isAnalyzing
+    ? 'Analyzing...'
     : actionDisabledReason
-      ? 'warning'
-    : !cacheCheckCompleted
-      ? 'default'
-      : cacheAvailable
-        ? 'success'
-        : 'warning';
+      ? 'Analysis unavailable'
+      : canOpenCachedResults
+        ? 'Open cached results'
+        : !isExtracted
+          ? 'Preparing audio'
+          : 'Run analysis';
+
+  const statusTone = actionDisabledReason
+    ? 'warning'
+    : canOpenCachedResults
+      ? 'success'
+      : !isExtracted
+        ? 'primary'
+        : !cacheCheckCompleted
+          ? 'default'
+          : 'warning';
 
   const statusStyles = statusTone === 'success'
     ? 'border-success-200/80 bg-success-50/70 dark:border-success-700/40 dark:bg-success-900/10'
@@ -105,25 +107,27 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
         ? 'bg-primary-500'
         : 'bg-default-400';
 
-  const statusTitle = !isExtracted
-    ? 'Preparing analysis session'
-    : actionDisabledReason
-      ? 'Analysis unavailable for this track'
-    : !cacheCheckCompleted
-      ? 'Checking cache availability'
-      : cacheAvailable
-        ? 'Cached results ready'
-        : 'Fresh analysis required';
+  const statusTitle = actionDisabledReason
+    ? 'Analysis unavailable for this track'
+    : canOpenCachedResults
+      ? 'Cached results ready'
+      : !isExtracted
+        ? 'Preparing analysis session'
+        : !cacheCheckCompleted
+          ? 'Checking cache availability'
+          : 'Fresh analysis required';
 
-  const statusDescription = !isExtracted
-    ? 'Audio is still being prepared. You can choose models now and continue as soon as extraction finishes.'
-    : actionDisabledReason
-      ? actionDisabledReason
-    : !cacheCheckCompleted
-      ? 'Looking for previously processed results for the selected model combination.'
-      : cacheAvailable
-        ? `We found saved results for ${BEAT_MODEL_LABELS[beatDetector]} and ${CHORD_MODEL_LABELS[chordDetector]}.`
-        : `No saved results were found for ${BEAT_MODEL_LABELS[beatDetector]} and ${CHORD_MODEL_LABELS[chordDetector]}.`;
+  const statusDescription = actionDisabledReason
+    ? actionDisabledReason
+    : canOpenCachedResults
+      ? `We found saved results for ${BEAT_MODEL_LABELS[beatDetector]} and ${CHORD_MODEL_LABELS[chordDetector]}.`
+      : !isExtracted
+        ? 'Audio is still being prepared. You can choose models now and continue as soon as extraction finishes.'
+        : !cacheCheckCompleted
+          ? 'Looking for previously processed results for the selected model combination.'
+          : `No saved results were found for ${BEAT_MODEL_LABELS[beatDetector]} and ${CHORD_MODEL_LABELS[chordDetector]}.`;
+
+  const isActionDisabled = (!isExtracted && !canOpenCachedResults) || isAnalyzing || hasError || !!actionDisabledReason;
 
   return (
     <Card
@@ -199,7 +203,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
             size="lg"
             className="w-full md:w-auto md:min-w-[220px] font-medium"
             variant="solid"
-            isDisabled={!isExtracted || isAnalyzing || hasError || !!actionDisabledReason}
+            isDisabled={isActionDisabled}
             isLoading={isAnalyzing}
             spinner={
               <svg className="animate-spin h-5 w-5 text-current" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

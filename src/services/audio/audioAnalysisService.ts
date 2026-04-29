@@ -151,6 +151,7 @@ async function handleOffloadPath(
   _videoId?: string
 ): Promise<AnalysisResult> {
   let offloadUrl: string | null = null;
+  const shouldDeleteOffloadUrl = typeof audioSource !== 'string';
   const fileSizeLabel = typeof audioSource === 'string'
     ? 'existing offload URL'
     : offloadUploadService.getFileSizeString(audioSource.size);
@@ -319,7 +320,7 @@ async function handleOffloadPath(
       }
     };
   } finally {
-    if (offloadUrl) {
+    if (offloadUrl && shouldDeleteOffloadUrl) {
       await offloadUploadService.deleteOffload(offloadUrl);
     }
   }

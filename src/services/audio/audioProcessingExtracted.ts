@@ -130,11 +130,6 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
     thumbnailFromSearch,
   } = deps;
 
-  if (!audioProcessingState.audioUrl) {
-    console.error('No audio URL available for analysis');
-    return;
-  }
-
   // Get current model values from refs to ensure we have the latest values
   const currentBeatDetector = beatDetectorRef.current;
   const currentChordDetector = chordDetectorRef.current;
@@ -217,6 +212,11 @@ export const handleAudioAnalysis = async (deps: AudioProcessingServiceDependenci
     }
   } catch (cacheError) {
     console.warn('Cache check failed, proceeding with new analysis:', cacheError);
+  }
+
+  if (!audioProcessingState.audioUrl) {
+    console.error('No audio URL available for analysis');
+    return;
   }
 
   // No cached results found, proceed with new analysis

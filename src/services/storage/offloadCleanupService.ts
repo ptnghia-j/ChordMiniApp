@@ -91,6 +91,10 @@ async function deleteFirebaseStorageUrl(url: string): Promise<{ success: boolean
     throw new Error('Failed to parse Firebase Storage object from URL');
   }
 
+  if (!storageObject.objectPath.startsWith('temp/')) {
+    throw new Error(`Refusing to delete non-temporary Firebase Storage object: ${storageObject.objectPath}`);
+  }
+
   // Try Firebase Storage REST delete first so permissive Storage Rules (for example
   // temp/* paths) can clean up without requiring admin credentials.
   const firebaseRestEndpoint = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(storageObject.bucket)}/o/${encodeURIComponent(storageObject.objectPath)}`;

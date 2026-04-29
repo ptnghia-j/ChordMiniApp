@@ -66,6 +66,7 @@ export interface TranscriptionData {
   title?: string; // Video title field for proper display in RecentVideos
   channelTitle?: string; // FIXED: Add channel title for complete metadata
   thumbnail?: string; // FIXED: Add thumbnail URL for complete metadata
+  audioUrl?: string | null;
   beatModel: string;
   chordModel: string;
   beats: BeatInfo[];
@@ -889,6 +890,10 @@ async function performFirestoreSave(
       title: transcriptionData.title || null, // Include video title for proper display
       channelTitle: transcriptionData.channelTitle || null,
       thumbnail: normalizedThumbnail || null,
+      audioUrl:
+        typeof transcriptionData.audioUrl === 'string' && transcriptionData.audioUrl.trim().length > 0
+          ? transcriptionData.audioUrl
+          : null,
       beatModel: transcriptionData.beatModel,
       chordModel: transcriptionData.chordModel,
       beats: transcriptionData.beats.map((beat) => {
