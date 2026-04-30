@@ -64,6 +64,7 @@ import { YouTubePlayer } from '@/types/youtube';
 import { getGrainPlayerPitchShiftService, getAudioContextState } from '@/services/audio/grainPlayerPitchShiftService';
 import { setPitchShiftService as setGlobalPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
+import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 import {
   useIsPitchShiftEnabled,
   useSetIsPitchShiftReady,
@@ -379,18 +380,10 @@ export const usePitchShiftAudio = ({
   useEffect(() => {
     if (isPitchShiftEnabled && firebaseAudioUrl) {
       // Pitch shift enabled: mute YouTube (but keep it playing for visual sync)
-      if (youtubePlayer) {
-        // Use YouTube IFrame API mute() method
-        if (typeof youtubePlayer.mute === 'function') {
-          youtubePlayer.mute();
-        } else {
-          youtubePlayer.muted = true;
-        }
-
-        // CRITICAL: DO NOT pause YouTube - keep it playing for visual sync
-        // The YouTube video timeline should stay synchronized with the pitch-shifted audio
-        // Only the audio is muted, the video continues playing
-      }
+      setYouTubePlayerMuted(youtubePlayer, true);
+      // CRITICAL: DO NOT pause YouTube - keep it playing for visual sync.
+      // The YouTube video timeline should stay synchronized with the
+      // pitch-shifted audio; only the audio is muted.
 
       if (audioRef.current) {
         audioRef.current.muted = true; // Keep extracted audio muted
@@ -402,14 +395,7 @@ export const usePitchShiftAudio = ({
       }
     } else {
       // Pitch shift disabled: unmute YouTube, cleanup pitch shift
-      if (youtubePlayer) {
-        // Use YouTube IFrame API unMute() method
-        if (typeof youtubePlayer.unMute === 'function') {
-          youtubePlayer.unMute();
-        } else {
-          youtubePlayer.muted = false;
-        }
-      }
+      setYouTubePlayerMuted(youtubePlayer, false);
 
       if (audioRef.current) {
         // CRITICAL FIX: Unmute audio element when pitch shift is disabled
@@ -786,4 +772,3 @@ export const usePitchShiftAudio = ({
     getPitchShiftVolume,
   };
 };
-

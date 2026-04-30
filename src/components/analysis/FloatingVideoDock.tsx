@@ -74,6 +74,7 @@ interface FloatingVideoDockProps {
   onProgress: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek: (time: number) => void;
   onEnded?: () => void;
+  youtubeMuted?: boolean;
   /** Fired when the user changes rate via YouTube's native gear-menu. */
   onPlaybackRateChange?: (rate: number) => void;
 
@@ -148,6 +149,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   onProgress,
   onSeek,
   onEnded,
+  youtubeMuted = false,
   onPlaybackRateChange,
   youtubeEmbedUrl,
   videoUrl,
@@ -372,6 +374,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
               onProgress={onProgress}
               onSeek={onSeek}
               onEnded={onEnded}
+              muted={youtubeMuted}
               onPlaybackRateChange={onPlaybackRateChange}
             />
           </div>

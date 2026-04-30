@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { YouTubePlayer } from '@/types/youtube';
+import { useIsPitchShiftEnabled } from '@/stores/uiStore';
+import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 
 export interface AudioPlayerState {
   isPlaying: boolean;
@@ -9,6 +11,7 @@ export interface AudioPlayerState {
 }
 
 export const useAudioPlayer = () => {
+  const isPitchShiftEnabled = useIsPitchShiftEnabled();
   const [state, setState] = useState<AudioPlayerState>({
     isPlaying: false,
     currentTime: 0,
@@ -61,15 +64,16 @@ export const useAudioPlayer = () => {
     setYoutubePlayer(player);
   }, []);
 
-  // Ensure YouTube player is unmuted and extracted audio is muted
+  // Keep source ownership explicit: pitch-shifted playback mutes YouTube,
+  // otherwise YouTube is the audible source. The extracted audio stays muted.
   useEffect(() => {
     if (youtubePlayer) {
-      youtubePlayer.unMute?.();
+      setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
     }
     if (audioRef.current) {
       audioRef.current.muted = true;
     }
-  }, [youtubePlayer]);
+  }, [youtubePlayer, isPitchShiftEnabled]);
 
   const setDuration = useCallback((duration: number) => {
     setState(prev => ({ ...prev, duration }));

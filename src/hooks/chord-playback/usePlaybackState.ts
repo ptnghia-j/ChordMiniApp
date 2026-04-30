@@ -8,6 +8,7 @@ import {
   useCurrentDownbeatIndex,
 } from '@/stores/playbackStore';
 import { useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
+import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 
 // Types for playback state management
 interface ClickInfo {
@@ -244,19 +245,22 @@ export const usePlaybackState = ({
     // ReactPlayer doesn't directly expose the YouTube player instance
     // Instead, it provides a ref to the player object which has its own API
     // Type assertion to our YouTubePlayer interface
-    setYoutubePlayer(player as YouTubePlayer);
+    const typedPlayer = player as YouTubePlayer;
+    setYouTubePlayerMuted(typedPlayer, isPitchShiftEnabled);
+    setYoutubePlayer(typedPlayer);
 
     // We can't directly call YouTube player methods here
     // ReactPlayer handles playback rate through its props
-  }, [setYoutubePlayer]);
+  }, [setYoutubePlayer, isPitchShiftEnabled]);
 
   const handleYouTubePlay = useCallback(() => {
+    setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
     // Update state when YouTube starts playing
     setIsPlaying(true);
     // CLOCK AUTHORITY: notify the master clock so its live-position
     // extrapolation begins advancing.
     youtubeMasterClock.onPlay();
-  }, [setIsPlaying]);
+  }, [youtubePlayer, isPitchShiftEnabled, setIsPlaying]);
 
   const handleYouTubePause = useCallback(() => {
     // Update state when YouTube pauses
@@ -345,15 +349,16 @@ export const usePlaybackState = ({
     };
   }, [audioRef, setCurrentTime, setDuration, setIsPlaying, isPitchShiftEnabled, isPitchShiftReady]);
 
-  // Audio source management: Ensure YouTube is unmuted and extracted audio is muted
+  // Audio source management: YouTube is muted whenever pitch-shifted audio is
+  // the active source, including after iframe-ready/replay cycles.
   useEffect(() => {
     if (youtubePlayer) {
-      youtubePlayer.unMute?.();
+      setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
     }
     if (audioRef.current) {
       audioRef.current.muted = true;
     }
-  }, [youtubePlayer, audioRef]);
+  }, [youtubePlayer, audioRef, isPitchShiftEnabled]);
 
   return {
     // Beat tracking state

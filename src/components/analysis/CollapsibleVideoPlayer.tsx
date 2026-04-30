@@ -36,6 +36,7 @@ interface CollapsibleVideoPlayerProps {
   onProgress?: (state: { playedSeconds: number; played: number; loadedSeconds: number; loaded: number }) => void;
   onSeek?: (time: number) => void;
   onEnded?: () => void;
+  muted?: boolean;
   /** Fired when the user changes rate via YouTube's native gear-menu. */
   onPlaybackRateChange?: (rate: number) => void;
 }
@@ -52,6 +53,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   onProgress,
   onSeek,
   onEnded,
+  muted = false,
   onPlaybackRateChange
 }) => {
   const getInitialIsMobile = () => (
@@ -95,6 +97,25 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
       console.error('Error setting playback rate:', error);
     }
   }, [playbackRate, isPlayerReady]);
+
+  useEffect(() => {
+    if (!isPlayerReady || !playerRef.current) return;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const internalPlayer = (playerRef.current as any).getInternalPlayer();
+      if (!internalPlayer) return;
+
+      if (muted && typeof internalPlayer.mute === 'function') {
+        internalPlayer.mute();
+      } else if (!muted && typeof internalPlayer.unMute === 'function') {
+        internalPlayer.unMute();
+      }
+    } catch {
+      // ReactPlayer also applies the muted prop. This best-effort iframe API
+      // sync makes the native YouTube speaker icon update promptly.
+    }
+  }, [muted, isPlayerReady]);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -162,7 +183,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
               return undefined;
             }
           },
-          muted: false
+          muted
         };
         onReady?.(enhancedPlayer);
 
@@ -196,7 +217,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
           playVideo: () => console.warn('playVideo not available'),
           pauseVideo: () => console.warn('pauseVideo not available'),
           setPlaybackRate: (rate: number) => console.warn('setPlaybackRate not available', rate),
-          muted: false
+          muted
         };
         onReady?.(basicPlayer);
       }
@@ -213,7 +234,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
         playVideo: () => console.warn('playVideo not available'),
         pauseVideo: () => console.warn('pauseVideo not available'),
         setPlaybackRate: (rate: number) => console.warn('setPlaybackRate not available', rate),
-        muted: false
+        muted
       };
       onReady?.(fallbackPlayer);
     }
@@ -253,7 +274,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
                 onProgress={onProgress}
                 onSeek={onSeek}
                 progressInterval={250}
-                muted={false}
+                muted={muted}
                 config={{
                   playerVars: {
                     showinfo: 0,
@@ -372,7 +393,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
             onProgress={onProgress}
             onSeek={onSeek}
             progressInterval={250}
-            muted={false}
+            muted={muted}
             config={{
               playerVars: {
                 showinfo: 1,
@@ -392,6 +413,7 @@ export const CollapsibleVideoPlayer = React.memo<CollapsibleVideoPlayerProps>(({
   return prevProps.videoId === nextProps.videoId &&
          prevProps.isPlaying === nextProps.isPlaying &&
          prevProps.playbackRate === nextProps.playbackRate &&
+         prevProps.muted === nextProps.muted &&
          Math.abs(prevTime - nextTime) < 0.1 &&
          prevProps.duration === nextProps.duration;
 });

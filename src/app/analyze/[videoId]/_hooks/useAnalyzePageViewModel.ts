@@ -51,6 +51,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useIsLoopEnabled, useLoopEndBeat, useLoopStartBeat, useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
 import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
+import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
 import type { AnalyzePageViewModel } from '../_types/analyzePageViewModel';
 import { useAnalyzePageStoreSync } from './useAnalyzePageStoreSync';
@@ -952,8 +953,8 @@ export function useAnalyzePageViewModel({
   // the user hears BOTH the YouTube source audio AND the Firebase pitch-shifted
   // audio simultaneously — which also creates a perceived timing mismatch.
   useEffect(() => {
-    if (youtubePlayer && !isPitchShiftEnabled) {
-      youtubePlayer.muted = false;
+    if (youtubePlayer) {
+      setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
     }
     if (audioRef.current) {
       audioRef.current.muted = true;
@@ -1131,11 +1132,13 @@ export function useAnalyzePageViewModel({
       duration,
       onReady: handleYouTubeReady,
       onPlay: async () => {
+        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         if (isCountdownEnabled && !isPlaying && !countdownStateRef.current.inProgress && !countdownStateRef.current.completed) {
           try { (youtubePlayer as any)?.pauseVideo?.(); } catch {}
           const ok = await runCountdown();
           if (ok) {
             countdownStateRef.current.completed = false;
+            setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
             try { (youtubePlayer as any)?.playVideo?.(); } catch {}
             setIsPlaying(true);
             youtubeMasterClock.onPlay();
@@ -1173,6 +1176,7 @@ export function useAnalyzePageViewModel({
         // `service.seek` here is the only path that actually relocates
         // the GrainPlayer buffer cursor to the new timestamp.
         youtubeMasterClock.onUserSeek(time);
+        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         if (isPitchShiftEnabled && isPitchShiftReady) {
           try {
             getPitchShiftService()?.seek(time);
@@ -1196,6 +1200,7 @@ export function useAnalyzePageViewModel({
         // the master clock so the fence + seek token + position publish all
         // happen atomically.
         youtubeMasterClock.onUserSeek(startTimestamp);
+        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         try { (youtubePlayer as any)?.seekTo?.(startTimestamp, 'seconds'); } catch {}
         setLastClickInfo({ visualIndex: resolvedLoopRange.resolvedStartBeat, timestamp: startTimestamp, clickTime: Date.now() });
         try { (youtubePlayer as any)?.playVideo?.(); } catch {}
@@ -1205,6 +1210,7 @@ export function useAnalyzePageViewModel({
       youtubeEmbedUrl: audioProcessingState.youtubeEmbedUrl,
       videoUrl: audioProcessingState.videoUrl,
       youtubePlayer,
+      youtubeMuted: isPitchShiftEnabled,
       melodicTranscriptionPlayback: melodicTranscriptionPlaybackConfig,
       showTopToggles: true as const,
       positionMode: 'relative' as const,
@@ -1219,6 +1225,7 @@ export function useAnalyzePageViewModel({
       // path the app's own rate slider uses. Without this, those
       // components retain the old rate and extrapolation drift ensues.
       onPlaybackRateChange: (rate: number) => {
+        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
         try {
           usePlaybackStore.getState().setPlayerPlaybackRate(rate);

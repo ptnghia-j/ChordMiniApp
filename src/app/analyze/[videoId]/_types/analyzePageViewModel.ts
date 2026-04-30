@@ -138,6 +138,7 @@ export interface AnalyzeFloatingDockSectionProps {
     onProgress: (state: { played: number; playedSeconds: number }) => void;
     onSeek: (time: number) => void;
     onEnded: () => void;
+    youtubeMuted: boolean;
     youtubeEmbedUrl?: string;
     videoUrl?: string;
     youtubePlayer: YouTubePlayer | null;
