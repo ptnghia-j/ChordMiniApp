@@ -138,19 +138,7 @@ function scoreLeadingExpansion(
   timeSignature: number,
   extraBeats: number
 ): number {
-  const chordStartIndices: number[] = [];
-
-  for (let index = segmentStart; index < segmentEnd; index += 1) {
-    const chord = chords[index];
-    if (isSilentChord(chord)) {
-      continue;
-    }
-
-    const previousChord = index > segmentStart ? chords[index - 1] : '';
-    if (index === segmentStart || isSilentChord(previousChord) || previousChord !== chord) {
-      chordStartIndices.push(index);
-    }
-  }
+  const chordStartIndices = getMusicalChordStartIndices(chords, segmentStart, segmentEnd);
 
   if (chordStartIndices.length === 0) {
     return Number.NEGATIVE_INFINITY;
@@ -178,6 +166,95 @@ function scoreLeadingExpansion(
 
     return score - (distanceToDownbeat * weight);
   }, -extraBeats * extraBeatPenalty);
+}
+
+function getMusicalChordStartIndices(
+  chords: string[],
+  segmentStart: number,
+  segmentEnd: number
+): number[] {
+  const chordStartIndices: number[] = [];
+
+  for (let index = segmentStart; index < segmentEnd; index += 1) {
+    const chord = chords[index];
+    if (isSilentChord(chord)) {
+      continue;
+    }
+
+    const previousChord = index > segmentStart ? chords[index - 1] : '';
+    if (index === segmentStart || isSilentChord(previousChord) || previousChord !== chord) {
+      chordStartIndices.push(index);
+    }
+  }
+
+  return chordStartIndices;
+}
+
+function countChordStartModulos(
+  chordStartIndices: number[],
+  timeSignature: number,
+  shift: number
+): number[] {
+  const counts = Array(timeSignature).fill(0);
+
+  chordStartIndices.forEach((chordStartIndex) => {
+    const modulo = (chordStartIndex + shift) % timeSignature;
+    counts[modulo] += 1;
+  });
+
+  return counts;
+}
+
+function applyBeat4BiasCorrection(params: {
+  chordStartIndices: number[];
+  chosenCandidate: { shift: number; score: number };
+  scoredCandidates: Array<{ shift: number; score: number }>;
+  timeSignature: number;
+}): { shift: number; score: number } {
+  const {
+    chordStartIndices,
+    chosenCandidate,
+    scoredCandidates,
+    timeSignature,
+  } = params;
+  const config = GRID_ALIGNMENT_CONFIG.beat4BiasCorrection;
+
+  if (!config.enabled || timeSignature !== 4 || chordStartIndices.length < config.minStarts) {
+    return chosenCandidate;
+  }
+
+  const chosenCounts = countChordStartModulos(chordStartIndices, timeSignature, chosenCandidate.shift);
+  const downbeatCount = chosenCounts[0] ?? 0;
+  const beat4Count = chosenCounts[timeSignature - 1] ?? 0;
+  const totalStarts = chordStartIndices.length;
+  const downbeatShare = downbeatCount / totalStarts;
+  const beat4Share = beat4Count / totalStarts;
+
+  if (
+    downbeatShare > config.maxDownbeatShare ||
+    beat4Share < config.minBeat4Share
+  ) {
+    return chosenCandidate;
+  }
+
+  const correctedShift = (chosenCandidate.shift + 1) % timeSignature;
+  const correctedCandidate = scoredCandidates.find((candidate) => candidate.shift === correctedShift);
+  if (!correctedCandidate) {
+    return chosenCandidate;
+  }
+
+  const correctedCounts = countChordStartModulos(chordStartIndices, timeSignature, correctedShift);
+  const correctedDownbeatCount = correctedCounts[0] ?? 0;
+  const minCompetitiveDownbeats = beat4Count * config.minCompetitiveRatio;
+
+  if (
+    correctedDownbeatCount <= downbeatCount ||
+    correctedDownbeatCount < minCompetitiveDownbeats
+  ) {
+    return chosenCandidate;
+  }
+
+  return correctedCandidate;
 }
 
 function buildSilentRunWindows(
@@ -589,10 +666,19 @@ function resolveWindowTargetModulos(
       }
       return best;
     });
+    const chordStartIndices = getMusicalChordStartIndices(segmentChords, 0, segmentChords.length);
+    const correctedCandidate = window.source === 'gap' || window.source === 'silence'
+      ? applyBeat4BiasCorrection({
+          chordStartIndices,
+          chosenCandidate,
+          scoredCandidates,
+          timeSignature,
+        })
+      : chosenCandidate;
 
     return {
       ...window,
-      targetModulo: chosenCandidate.shift,
+      targetModulo: correctedCandidate.shift,
     };
   });
 }
