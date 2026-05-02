@@ -26,10 +26,14 @@ export interface ApiRequestOptions {
   maxDelay?: number;
 }
 
+const APP_CHECK_TOKEN_REUSE_MS = 45_000;
+const isDev = process.env.NODE_ENV !== 'production';
+
 class ApiService {
   private backendUrl: string;
   private frontendUrl: string;
   private clientLimiter: ClientRateLimiter;
+  private appCheckTokenCache: { token: string; expiresAt: number } | null = null;
 
   constructor() {
     this.frontendUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -50,6 +54,23 @@ class ApiService {
     return this.frontendUrl;
   }
 
+  private async getReusableAppCheckToken(): Promise<string | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const now = Date.now();
+    if (this.appCheckTokenCache && this.appCheckTokenCache.expiresAt > now) {
+      return this.appCheckTokenCache.token;
+    }
+
+    const token = await getAppCheckTokenForApi();
+    this.appCheckTokenCache = token
+      ? { token, expiresAt: now + APP_CHECK_TOKEN_REUSE_MS }
+      : null;
+    return token;
+  }
+
   /**
    * Make an API request with rate limiting support
    */
@@ -63,12 +84,16 @@ class ApiService {
       maxAttempts = 3,
       baseDelay = 1000,
       maxDelay = 10000,
+      signal: callerSignal,
       ...fetchOptions
     } = options;
 
     const baseUrl = this.getBaseUrlForEndpoint(endpoint);
     const url = `${baseUrl}${endpoint}`;
     const clientKey = `${fetchOptions.method || 'GET'}:${endpoint}`;
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const abortFromCaller = () => controller.abort();
 
     try {
       // Check client-side rate limit
@@ -83,20 +108,29 @@ class ApiService {
       }
 
       // Add timeout to fetch options with detailed logging
-      console.log(`🔍 ApiService timeout value: ${timeout} (type: ${typeof timeout}, isInteger: ${Number.isInteger(timeout)})`);
+      if (isDev) {
+        console.log(`🔍 ApiService timeout value: ${timeout} (type: ${typeof timeout}, isInteger: ${Number.isInteger(timeout)})`);
+      }
 
-      const controller = new AbortController();
-      let timeoutId: NodeJS.Timeout;
+      if (callerSignal?.aborted) {
+        abortFromCaller();
+      } else {
+        callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+      }
 
       try {
         if (!Number.isInteger(timeout) || timeout <= 0) {
           throw new Error(`Invalid timeout value: ${timeout}. Must be a positive integer.`);
         }
         timeoutId = setTimeout(() => {
-          console.log(`⏰ ApiService timeout triggered after ${timeout}ms`);
+          if (isDev) {
+            console.log(`⏰ ApiService timeout triggered after ${timeout}ms`);
+          }
           controller.abort();
         }, timeout);
-        console.log(`✅ ApiService timeout set successfully for ${timeout}ms`);
+        if (isDev) {
+          console.log(`✅ ApiService timeout set successfully for ${timeout}ms`);
+        }
       } catch (timeoutError) {
         console.error(`❌ ApiService timeout setup failed:`, timeoutError);
         const errorMessage = timeoutError instanceof Error ? timeoutError.message : 'Unknown timeout error';
@@ -104,9 +138,7 @@ class ApiService {
       }
 
       // Fetch App Check token for request attestation (non-blocking)
-      const appCheckToken = typeof window !== 'undefined'
-        ? await getAppCheckTokenForApi()
-        : null;
+      const appCheckToken = await this.getReusableAppCheckToken();
 
       const requestOptions: RequestInit = {
         ...fetchOptions,
@@ -131,8 +163,6 @@ class ApiService {
       } else {
         response = await fetch(url, requestOptions);
       }
-
-      clearTimeout(timeoutId);
 
       // Handle rate limiting
       if (response.status === 429) {
@@ -237,6 +267,11 @@ class ApiService {
         success: false,
         error: 'Unknown error occurred'
       };
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      callerSignal?.removeEventListener('abort', abortFromCaller);
     }
   }
 

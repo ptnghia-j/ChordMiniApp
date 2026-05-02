@@ -4,11 +4,13 @@ import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChordEvent, isBlackKey } from '@/utils/chordToMidi';
 import {
   attachVisualNotePositions,
+  findInstrumentVisualEventPlanIndexAtTime,
   generateAllInstrumentVisualNotePlans,
   mergeConsecutiveChordEvents,
-  materializeInstrumentVisualNotes,
+  materializeInstrumentVisualEventNotes,
   type SignalDynamicsSource,
   type ActiveInstrument,
+  type PositionedVisualNote,
 } from '@/utils/instrumentNoteGeneration';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
 import type { SegmentationResult } from '@/types/chatbotTypes';
@@ -17,6 +19,11 @@ import type { SheetSageVisualNote } from '@/utils/sheetSagePlayback';
 // Re-export ActiveInstrument so existing consumers don't break
 export type { ActiveInstrument } from '@/utils/instrumentNoteGeneration';
 export type ExtraVisualNote = SheetSageVisualNote;
+
+interface TimeRange {
+  startTime: number;
+  endTime: number;
+}
 
 interface FallingNotesCanvasProps {
   /** Chord events to render as falling notes */
@@ -95,6 +102,72 @@ const DRIFT_BLEND_FACTOR = 0.35;
  *  When instruments are not active (default mode), use a single uniform color. */
 function getNoteColor(_noteIndex: number, _isBass: boolean): string {
   return DEFAULT_NOTE_COLOR;
+}
+
+export function isTimeRangeVisible(
+  range: TimeRange,
+  windowStart: number,
+  windowEnd: number,
+): boolean {
+  return range.endTime >= windowStart && range.startTime <= windowEnd;
+}
+
+export function getMaxTimeRangeDuration<T extends TimeRange>(items: T[]): number {
+  return items.reduce((maxDuration, item) => (
+    Math.max(maxDuration, Math.max(0, item.endTime - item.startTime))
+  ), 0);
+}
+
+function lowerBoundStartTime<T extends TimeRange>(items: T[], target: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (items[mid].startTime < target) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+function upperBoundStartTime<T extends TimeRange>(items: T[], target: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (items[mid].startTime <= target) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+export function getVisibleTimeRangeItems<T extends TimeRange>(
+  sortedItems: T[],
+  windowStart: number,
+  windowEnd: number,
+  maxDuration: number,
+): T[] {
+  if (sortedItems.length === 0) {
+    return [];
+  }
+
+  const startIndex = lowerBoundStartTime(sortedItems, windowStart - maxDuration);
+  const endIndex = upperBoundStartTime(sortedItems, windowEnd);
+  const visibleItems: T[] = [];
+
+  for (let index = startIndex; index < endIndex; index += 1) {
+    const item = sortedItems[index];
+    if (isTimeRangeVisible(item, windowStart, windowEnd)) {
+      visibleItems.push(item);
+    }
+  }
+
+  return visibleItems;
 }
 
 // Note: Instrument voicing logic is now in @/utils/instrumentNoteGeneration
@@ -221,19 +294,59 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
     signalDynamicsSource,
   ]);
 
-  const instrumentVisualTimings = useMemo(() => {
-    return materializeInstrumentVisualNotes(
-      instrumentVisualPlans,
-      playbackTime,
-    );
-  }, [
-    instrumentVisualPlans,
-    playbackTime,
-  ]);
+  const staticInstrumentVisualNotesByEvent = useMemo(
+    () => instrumentVisualPlans.map((plan) => (
+      attachVisualNotePositions(
+        materializeInstrumentVisualEventNotes(plan),
+        midiKeyPositions,
+      )
+    )),
+    [instrumentVisualPlans, midiKeyPositions],
+  );
 
-  const instrumentVisualNotes = useMemo(
-    () => attachVisualNotePositions(instrumentVisualTimings, midiKeyPositions),
-    [instrumentVisualTimings, midiKeyPositions],
+  const activeInstrumentVisualEventIndex = useMemo(() => {
+    if (playbackTime === undefined) return -1;
+    return findInstrumentVisualEventPlanIndexAtTime(instrumentVisualPlans, playbackTime);
+  }, [instrumentVisualPlans, playbackTime]);
+
+  const activeInstrumentVisualNotes = useMemo<PositionedVisualNote[] | null>(() => {
+    if (activeInstrumentVisualEventIndex < 0 || playbackTime === undefined) {
+      return null;
+    }
+
+    const activePlan = instrumentVisualPlans[activeInstrumentVisualEventIndex];
+    if (!activePlan) return null;
+
+    return attachVisualNotePositions(
+      materializeInstrumentVisualEventNotes(activePlan, playbackTime),
+      midiKeyPositions,
+    );
+  }, [activeInstrumentVisualEventIndex, instrumentVisualPlans, midiKeyPositions, playbackTime]);
+
+  const staticInstrumentVisualEventRanges = useMemo(
+    () => staticInstrumentVisualNotesByEvent.map((eventNotes) => {
+      if (eventNotes.length === 0) {
+        return { startTime: 0, endTime: 0 };
+      }
+
+      let startTime = Number.POSITIVE_INFINITY;
+      let endTime = Number.NEGATIVE_INFINITY;
+      for (const note of eventNotes) {
+        startTime = Math.min(startTime, note.startTime);
+        endTime = Math.max(endTime, note.endTime);
+      }
+      return { startTime, endTime };
+    }),
+    [staticInstrumentVisualNotesByEvent],
+  );
+
+  const sortedExtraVisualNotes = useMemo(
+    () => [...extraVisualNotes].sort((left, right) => left.startTime - right.startTime),
+    [extraVisualNotes],
+  );
+  const maxExtraVisualNoteDuration = useMemo(
+    () => getMaxTimeRangeDuration(sortedExtraVisualNotes),
+    [sortedExtraVisualNotes],
   );
 
   // ─── Render Frame ────────────────────────────────────────────────────────
@@ -366,23 +479,34 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
 
     if (hasInstruments) {
       // ─── Instrument-specific rendering ─────────────────────────────────
-      for (const note of instrumentVisualNotes) {
-        if (!note.pos) continue;
-        if (note.endTime < windowStart || note.startTime > windowEnd) continue;
-
-        const geom = computeNoteGeometry(note.startTime, note.endTime);
-        if (!geom) continue;
-
-        const { x, width } = note.pos;
-        const noteX = x + 1;
-        const noteW = width - 2;
-
-        if (geom.isActive) {
-          activeNotes.add(note.midi);
-          activeColors.set(note.midi, note.color);
+      for (let eventIndex = 0; eventIndex < staticInstrumentVisualNotesByEvent.length; eventIndex += 1) {
+        const eventRange = staticInstrumentVisualEventRanges[eventIndex];
+        if (eventRange && !isTimeRangeVisible(eventRange, windowStart, windowEnd)) {
+          continue;
         }
 
-        drawNote(noteX, noteW, geom.drawTop, geom.drawHeight, note.color, geom.isActive, geom.opacity);
+        const eventNotes = eventIndex === activeInstrumentVisualEventIndex && activeInstrumentVisualNotes
+          ? activeInstrumentVisualNotes
+          : staticInstrumentVisualNotesByEvent[eventIndex];
+
+        for (const note of eventNotes) {
+          if (!note.pos) continue;
+          if (note.endTime < windowStart || note.startTime > windowEnd) continue;
+
+          const geom = computeNoteGeometry(note.startTime, note.endTime);
+          if (!geom) continue;
+
+          const { x, width } = note.pos;
+          const noteX = x + 1;
+          const noteW = width - 2;
+
+          if (geom.isActive) {
+            activeNotes.add(note.midi);
+            activeColors.set(note.midi, note.color);
+          }
+
+          drawNote(noteX, noteW, geom.drawTop, geom.drawHeight, note.color, geom.isActive, geom.opacity);
+        }
       }
     } else {
       // ─── Default interval-based coloring ─────────────────────────────────
@@ -410,7 +534,12 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       }
     }
 
-    for (const note of extraVisualNotes) {
+    for (const note of getVisibleTimeRangeItems(
+      sortedExtraVisualNotes,
+      windowStart,
+      windowEnd,
+      maxExtraVisualNoteDuration,
+    )) {
       const pos = midiKeyPositions.get(note.midi);
       if (!pos) continue;
       if (note.endTime < windowStart || note.startTime > windowEnd) continue;
@@ -440,7 +569,21 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       prevActiveSignatureRef.current = activeSignature;
       onActiveNotesChange?.(activeNotes, activeColors);
     }
-  }, [eventPositions, extraVisualNotes, instrumentVisualNotes, midiKeyPositions, whiteKeyXPositions, lookAheadSeconds, lookBehindSeconds, onActiveNotesChange, hasInstruments]);
+  }, [
+    activeInstrumentVisualEventIndex,
+    activeInstrumentVisualNotes,
+    eventPositions,
+    midiKeyPositions,
+    maxExtraVisualNoteDuration,
+    sortedExtraVisualNotes,
+    staticInstrumentVisualEventRanges,
+    staticInstrumentVisualNotesByEvent,
+    whiteKeyXPositions,
+    lookAheadSeconds,
+    lookBehindSeconds,
+    onActiveNotesChange,
+    hasInstruments,
+  ]);
 
   // Keep renderFrameRef in sync with the latest renderFrame callback.
   useEffect(() => {

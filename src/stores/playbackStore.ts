@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { RefObject } from 'react';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
@@ -491,22 +492,22 @@ youtubeMasterClock.setStoreAdapter({
 
 // Action selectors
 export const usePlaybackControls = () =>
-  usePlaybackStore((state) => ({
+  usePlaybackStore(useShallow((state) => ({
     play: state.play,
     pause: state.pause,
     seek: state.seek,
     setPlayerPlaybackRate: state.setPlayerPlaybackRate,
-  }));
+  })));
 
 export const useBeatHandlers = () =>
-  usePlaybackStore((state) => ({
+  usePlaybackStore(useShallow((state) => ({
     onBeatClick: state.onBeatClick,
     setCurrentBeatIndex: state.setCurrentBeatIndex,
     setCurrentDownbeatIndex: state.setCurrentDownbeatIndex,
-  }));
+  })));
 
 export const useVideoUIControls = () =>
-  usePlaybackStore((state) => ({
+  usePlaybackStore(useShallow((state) => ({
     toggleVideoMinimization: state.toggleVideoMinimization,
     toggleFollowMode: state.toggleFollowMode,
-  }));
+  })));

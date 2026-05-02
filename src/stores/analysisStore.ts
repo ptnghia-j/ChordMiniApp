@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { LyricsData } from '@/types/musicAiTypes';
 import { SheetSageResult } from '@/types/sheetSage';
@@ -304,11 +305,11 @@ export const useChordDetector = () => useAnalysisStore((state) => state.chordDet
 export const useModelsInitialized = () => useAnalysisStore((state) => state.modelsInitialized);
 
 export const useCacheState = () =>
-  useAnalysisStore((state) => ({
+  useAnalysisStore(useShallow((state) => ({
     cacheAvailable: state.cacheAvailable,
     cacheCheckCompleted: state.cacheCheckCompleted,
     cacheCheckInProgress: state.cacheCheckInProgress,
-  }));
+  })));
 
 export const useLyrics = () => useAnalysisStore((state) => state.lyrics);
 export const useShowLyrics = () => useAnalysisStore((state) => state.showLyrics);
@@ -330,32 +331,32 @@ export const useSheetSageBackendError = () => useAnalysisStore((state) => state.
 
 // Action selectors
 export const useAnalysisActions = () =>
-  useAnalysisStore((state) => ({
+  useAnalysisStore(useShallow((state) => ({
     startAnalysis: state.startAnalysis,
     completeAnalysis: state.completeAnalysis,
     failAnalysis: state.failAnalysis,
     resetAnalysis: state.resetAnalysis,
-  }));
+  })));
 
 export const useModelActions = () =>
-  useAnalysisStore((state) => ({
+  useAnalysisStore(useShallow((state) => ({
     setBeatDetector: state.setBeatDetector,
     setChordDetector: state.setChordDetector,
     setModelsInitialized: state.setModelsInitialized,
-  }));
+  })));
 
 export const useLyricsActions = () =>
-  useAnalysisStore((state) => ({
+  useAnalysisStore(useShallow((state) => ({
     startLyricsTranscription: state.startLyricsTranscription,
     completeLyricsTranscription: state.completeLyricsTranscription,
     failLyricsTranscription: state.failLyricsTranscription,
     toggleLyricsVisibility: state.toggleLyricsVisibility,
     setLyrics: state.setLyrics,
     setHasCachedLyrics: state.setHasCachedLyrics,
-  }));
+  })));
 
 export const useSheetSageActions = () =>
-  useAnalysisStore((state) => ({
+  useAnalysisStore(useShallow((state) => ({
     setSheetSageResult: state.setSheetSageResult,
     setIsComputingSheetSage: state.setIsComputingSheetSage,
     setSheetSageError: state.setSheetSageError,
@@ -363,4 +364,4 @@ export const useSheetSageActions = () =>
     setIsSheetSageBackendAvailable: state.setIsSheetSageBackendAvailable,
     setSheetSageBackendError: state.setSheetSageBackendError,
     clearSheetSage: state.clearSheetSage,
-  }));
+  })));

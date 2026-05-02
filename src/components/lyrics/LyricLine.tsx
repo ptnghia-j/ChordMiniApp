@@ -31,6 +31,17 @@ interface WordSegment {
   startPos: number;
 }
 
+interface RgbColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+interface CharacterTiming {
+  startTime: number;
+  endTime: number;
+}
+
 interface LyricLineProps {
   line: EnhancedLyricLine & {
     isInstrumental?: boolean;
@@ -137,6 +148,96 @@ const getSectionLabel = (timestamp: number, segmentationData?: SegmentationResul
 
   return segment ? (segment.label || segment.type || null) : null;
 };
+
+export function parseHexColor(color: string): RgbColor | null {
+  const normalized = color.trim();
+  const match = normalized.match(/^#([0-9a-fA-F]{6})$/);
+  if (!match) return null;
+
+  return {
+    r: parseInt(match[1].slice(0, 2), 16),
+    g: parseInt(match[1].slice(2, 4), 16),
+    b: parseInt(match[1].slice(4, 6), 16),
+  };
+}
+
+export function interpolateRgbColor(
+  from: RgbColor | null,
+  to: RgbColor | null,
+  progress: number,
+  fallback: string,
+): string {
+  if (!from || !to) return fallback;
+
+  const safeProgress = Math.max(0, Math.min(1, progress));
+  const r = Math.round(from.r + (to.r - from.r) * safeProgress);
+  const g = Math.round(from.g + (to.g - from.g) * safeProgress);
+  const b = Math.round(from.b + (to.b - from.b) * safeProgress);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function getLyricColorChangePosition({
+  currentTime,
+  lineStartTime,
+  lineEndTime,
+  textLength,
+  characterTimings,
+}: {
+  currentTime: number;
+  lineStartTime: number;
+  lineEndTime: number;
+  textLength: number;
+  characterTimings?: CharacterTiming[];
+}): { colorChangePosition: number; lineProgress: number } {
+  const duration = lineEndTime - lineStartTime;
+  const lineProgress = duration > 0
+    ? Math.max(0, Math.min(1, (currentTime - lineStartTime) / duration))
+    : 0;
+
+  if (characterTimings?.length) {
+    const activeCharIndex = characterTimings.findIndex(
+      (charTiming) => currentTime >= charTiming.startTime && currentTime <= charTiming.endTime,
+    );
+
+    if (activeCharIndex >= 0) {
+      return { colorChangePosition: activeCharIndex, lineProgress };
+    }
+  }
+
+  return {
+    colorChangePosition: Math.floor(lineProgress * textLength),
+    lineProgress,
+  };
+}
+
+export function getSegmentWordRanges(segmentText: string): { start: number; end: number; text: string }[] {
+  if (segmentText.trim().length > 0 && !segmentText.includes(' ')) {
+    return [{
+      start: 0,
+      end: segmentText.length - 1,
+      text: segmentText,
+    }];
+  }
+
+  const segmentWords: { start: number; end: number; text: string }[] = [];
+  let wordStart = 0;
+
+  for (let index = 0; index < segmentText.length; index += 1) {
+    if (segmentText[index] === ' ' || index === segmentText.length - 1) {
+      const end = index === segmentText.length - 1 ? index : index - 1;
+      if (end >= wordStart) {
+        segmentWords.push({
+          start: wordStart,
+          end,
+          text: segmentText.substring(wordStart, end + 1),
+        });
+      }
+      wordStart = index + 1;
+    }
+  }
+
+  return segmentWords;
+}
 
 /**
  * LyricLine component - extracted from LeadSheetDisplay
@@ -343,6 +444,11 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
     };
   }, [index, line.startTime, processedLines, segmentationData]);
 
+  const parsedTextColors = useMemo(() => ({
+    played: parseHexColor(textColors.played),
+    unplayed: parseHexColor(textColors.unplayed),
+  }), [textColors.played, textColors.unplayed]);
+
   return (
     <div key={index}>
       {/* Section Label - only show at the beginning of each section */}
@@ -437,32 +543,14 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
                   <span>
                     {/* Calculate the overall line progress with character-level timing */}
                     {(() => {
-                      // Calculate overall line progress (0 to 1)
-                      const lineProgress = Math.max(0, Math.min(1,
-                        (currentTime - line.startTime) / (line.endTime - line.startTime)
-                      ));
-
-                      // Use character-level timing if available
-                      let colorChangePosition = 0;
                       const totalLineLength = line.text.length;
-
-                      if (line.characterTimings && line.characterTimings.length > 0) {
-                        // Find the active character based on current time
-                        const activeCharIndex = line.characterTimings.findIndex(
-                          charTiming => currentTime >= charTiming.startTime && currentTime <= charTiming.endTime
-                        );
-
-                        // If we found an active character, use it as the color change position
-                        if (activeCharIndex >= 0) {
-                          colorChangePosition = activeCharIndex;
-                        } else {
-                          // Otherwise, fall back to the traditional calculation
-                          colorChangePosition = Math.floor(lineProgress * totalLineLength);
-                        }
-                      } else {
-                        // Fall back to the traditional calculation if character timings aren't available
-                        colorChangePosition = Math.floor(lineProgress * totalLineLength);
-                      }
+                      const { colorChangePosition, lineProgress } = getLyricColorChangePosition({
+                        currentTime,
+                        lineStartTime: line.startTime,
+                        lineEndTime: line.endTime,
+                        textLength: totalLineLength,
+                        characterTimings: line.characterTimings,
+                      });
 
                       // Calculate the absolute position of this segment in the line
                       // Use indexOf with a start position to handle repeated segments correctly
@@ -487,34 +575,7 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
                         );
                       } else {
                         // Segment contains the color change - split into characters
-                        // First, identify word boundaries within this segment
-                        const segmentWords: { start: number; end: number; text: string }[] = [];
-                        let wordStart = 0;
-
-                        // For most segments, the entire segment is a single word
-                        // This simplifies the logic and ensures proper word-level coloring
-                        if (segment.text.trim().length > 0 && !segment.text.includes(' ')) {
-                          segmentWords.push({
-                            start: 0,
-                            end: segment.text.length - 1,
-                            text: segment.text
-                          });
-                        } else {
-                          // For segments with spaces, use the original logic
-                          for (let i = 0; i < segment.text.length; i++) {
-                            if (segment.text[i] === ' ' || i === segment.text.length - 1) {
-                              const end = i === segment.text.length - 1 ? i : i - 1;
-                              if (end >= wordStart) {
-                                segmentWords.push({
-                                  start: wordStart,
-                                  end: end,
-                                  text: segment.text.substring(wordStart, end + 1)
-                                });
-                              }
-                              wordStart = i + 1;
-                            }
-                          }
-                        }
+                        const segmentWords = getSegmentWordRanges(segment.text);
 
                         // PERFORMANCE OPTIMIZATION: Use memoized character array instead of split() on every render
                         const characters = memoizedCharacterArrays.getCharArray(segment.text);
@@ -561,21 +622,18 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
                                   fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
                                 }
 
-                                // Interpolate between colors
-                                const r1 = parseInt(textColors.unplayed.slice(1, 3), 16);
-                                const g1 = parseInt(textColors.unplayed.slice(3, 5), 16);
-                                const b1 = parseInt(textColors.unplayed.slice(5, 7), 16);
-
-                                const r2 = parseInt(textColors.played.slice(1, 3), 16);
-                                const g2 = parseInt(textColors.played.slice(3, 5), 16);
-                                const b2 = parseInt(textColors.played.slice(5, 7), 16);
-
-                                const r = Math.round(r1 + (r2 - r1) * fractionalProgress);
-                                const g = Math.round(g1 + (g2 - g1) * fractionalProgress);
-                                const b = Math.round(b1 + (b2 - b1) * fractionalProgress);
-
                                 return (
-                                  <span key={charIndex} style={{ color: `rgb(${r}, ${g}, ${b})` }}>
+                                  <span
+                                    key={charIndex}
+                                    style={{
+                                      color: interpolateRgbColor(
+                                        parsedTextColors.unplayed,
+                                        parsedTextColors.played,
+                                        fractionalProgress,
+                                        textColors.played,
+                                      ),
+                                    }}
+                                  >
                                     {char}
                                   </span>
                                 );

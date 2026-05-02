@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { calculateGridLayout, estimateBeatCellWidth, getDynamicFontSize, getGridColumnsClass, GridLayoutConfig } from '@/utils/chordStyling';
 
 /**
@@ -15,7 +15,7 @@ export const useChordGridLayout = (
   // Container and screen dimensions
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [screenWidth, setScreenWidth] = useState<number>(0);
-  const [cellSize, setCellSize] = useState<number>(80);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   // Initialize screen width
   useEffect(() => {
@@ -30,17 +30,32 @@ export const useChordGridLayout = (
 
   // Container resize observer
   const containerRef = useCallback((node: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+
     if (!node) return;
+
+    const updateContainerWidth = (width: number) => {
+      setContainerWidth((currentWidth) => (
+        Math.abs(currentWidth - width) >= 1 ? width : currentWidth
+      ));
+    };
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width } = entry.contentRect;
-        setContainerWidth(width);
+        updateContainerWidth(width);
       }
     });
 
+    updateContainerWidth(node.getBoundingClientRect().width);
     resizeObserver.observe(node);
-    return () => resizeObserver.disconnect();
+    resizeObserverRef.current = resizeObserver;
+  }, []);
+
+  useEffect(() => () => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
   }, []);
 
   // Grid layout configuration
@@ -57,7 +72,7 @@ export const useChordGridLayout = (
   }, [isUploadPage, timeSignature, chordsLength, containerWidth, screenWidth, isChatbotOpen, isLyricsPanelOpen]);
 
   // Calculate cell size based on layout
-  const calculatedCellSize = useMemo(() => {
+  const cellSize = useMemo(() => {
     if (containerWidth === 0) return 80; // Default fallback
 
     const { measuresPerRow } = gridLayoutConfig;
@@ -68,11 +83,6 @@ export const useChordGridLayout = (
     const MIN_CELL_SIZE = 44;
     return Math.max(cellWidth, MIN_CELL_SIZE);
   }, [containerWidth, gridLayoutConfig, timeSignature]);
-
-  // Update cell size when calculated size changes
-  useEffect(() => {
-    setCellSize(calculatedCellSize);
-  }, [calculatedCellSize]);
 
   // Memoized utility functions
   const getDynamicFontSizeLocal = useCallback((chordLength: number = 1): string => {

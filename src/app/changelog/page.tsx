@@ -29,6 +29,28 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5',
+      date: 'May 1, 2026',
+      title: 'Performance & Optimization, Documentation, And Test Suites Release (To be updated)',
+      description: 'Focused on performance optimizations across rendering, playback, and API interactions, along with documentation updates and test suite expansions to ensure stability and maintainability.',
+      features: [
+        'IMPROVED: Implemented render and playback optimizations (shallow Zustand selectors, ResizeObserver cleanup, derived cell sizing, chord-grid render trimming, tooltip reduction).',
+        'IMPROVED: Piano-roll and visual-note caching to avoid rematerializing on every tick; cancellable chord-playback readiness; in-flight request dedupe and short-TTL SheetSage cache.',
+        'IMPROVED: Tightened API request lifecycle (abort-signal composition, timeout cleanup) and added opt-in pitch-shift metrics without changing current clock behavior.',
+        'PLANNED: Mobile-specific optimizations (viewport snapshot hook, virtualized scrolling chord strip, canvas visible-window filtering, lyric render helpers, guitar-tab subscription split) to reduce battery and render cost while preserving fidelity.',
+        'TESTED: Lint, TypeScript build, and Jest unit suite verified; production build successful in baseline verification.'
+      ],
+      technical: [
+        'Verified non-mutating, evidence-based changes anchored to inspected files and hot paths (render, playback, requests).',
+        'Added focused unit tests for visible-window helpers and store-sync separation to prevent unnecessary re-renders.',
+        'Prioritized low-risk, high-maintainability changes first; larger clock-loop changes left as opt-in instrumentation or separate projects.'
+      ],
+      breaking: [
+        'Documentation released in Github Wiki with detailed architecture diagrams, API references, and contribution guidelines.',
+        'Test suites released for upcoming CI integration, covering critical paths in chord recognition, synchronization, playback, and UI rendering.'
+      ]
+    },
+    {
       version: 'v0.6.4',
       date: 'April 26, 2026',
       title: 'Guitar tablature, Backend inference from URL, Pitch-shift sync hardening',

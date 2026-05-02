@@ -117,6 +117,23 @@ interface ChordGridProps {
   originalChordsForRomanNumerals?: string[]; // Original chords before transposition for Roman numeral alignment
 }
 
+const MEASURES_PER_ROW_GRID_CLASS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
+  5: 'grid-cols-5',
+  6: 'grid-cols-6',
+  7: 'grid-cols-7',
+  8: 'grid-cols-8',
+  9: 'grid-cols-9',
+  10: 'grid-cols-10',
+};
+
+function getMeasuresPerRowGridClass(measuresPerRow: number): string {
+  return MEASURES_PER_ROW_GRID_CLASS[measuresPerRow] ?? MEASURES_PER_ROW_GRID_CLASS[4];
+}
+
 /**
  * Custom comparison function for ChordGrid memoization
  * Only re-render if props that actually affect the visual output change
@@ -317,6 +334,10 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
   // PERFORMANCE OPTIMIZATION: Extract layout values from memoized config
   const { measuresPerRow: dynamicMeasuresPerRow } = gridLayoutConfig;
+  const measuresPerRowGridClass = useMemo(
+    () => getMeasuresPerRowGridClass(dynamicMeasuresPerRow),
+    [dynamicMeasuresPerRow],
+  );
 
   const sectionStripMetrics = useCallback((rowCount: number) => {
     const rowGapPx = 2; // matches section content wrapper space-y-0.5
@@ -543,6 +564,18 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     };
   }, [romanNumeralData]);
 
+  const modulationByChordSequenceIndex = useMemo(() => {
+    const map = new Map<number, { isModulation: true; fromKey: string; toKey: string }>();
+    sequenceCorrections?.keyAnalysis?.modulations?.forEach((mod) => {
+      map.set(mod.atIndex, {
+        isModulation: true,
+        fromKey: mod.fromKey,
+        toKey: mod.toKey,
+      });
+    });
+    return map;
+  }, [sequenceCorrections?.keyAnalysis?.modulations]);
+
   const renderChordGridCell = useCallback((chord: string, globalIndex: number, cellKey: string) => {
     const showChordLabel = shouldShowChordLabelLocal(globalIndex);
     const isEmpty = chord === '';
@@ -553,14 +586,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       ? romanNumeralData.analysis[chordSequenceIndex] || ''
       : '';
     const romanNumeral = rawRomanNumeral ? formatRomanNumeralMemo(rawRomanNumeral) : '';
-    const modulationInfo = sequenceCorrections?.keyAnalysis?.modulations?.find(
-      (mod) => mod.atIndex === chordSequenceIndex
-    );
-    const modulationMarker = modulationInfo ? {
-      isModulation: true,
-      fromKey: modulationInfo.fromKey,
-      toKey: modulationInfo.toKey,
-    } : undefined;
+    const modulationMarker = chordSequenceIndex !== undefined
+      ? modulationByChordSequenceIndex.get(chordSequenceIndex)
+      : undefined;
     const labelOverflow = labelOverflowMap.get(globalIndex);
 
     return (
@@ -611,28 +639,16 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     isLoopEnabled,
     labelOverflowMap,
     makeCellRef,
+    modulationByChordSequenceIndex,
     onChordEdit,
     romanNumeralData?.analysis,
-    sequenceCorrections?.keyAnalysis?.modulations,
     shouldShowChordLabelLocal,
     showRomanNumerals,
   ]);
 
   const renderMeasureRow = useCallback((row: GroupedMeasure[], rowKey: string) => (
     <div key={rowKey} className="measure-row min-w-0">
-      <div className={`grid gap-1 sm:gap-1 w-full ${
-        dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
-        dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
-        dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
-        dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
-        dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
-        dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
-        dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
-        dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
-        dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
-        dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
-        'grid-cols-4'
-      }`}>
+      <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
         {row.map((measure, measureIdx) => (
           <div
             key={`${rowKey}-measure-${measure.measureNumber}-${measureIdx}`}
@@ -650,26 +666,14 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       </div>
     </div>
   ), [
-    dynamicMeasuresPerRow,
     getGridColumnsClass,
+    measuresPerRowGridClass,
     renderChordGridCell,
   ]);
 
   const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string) => (
     <div key={rowKey} className="measure-row min-w-0">
-      <div className={`grid gap-1 sm:gap-1 w-full ${
-        dynamicMeasuresPerRow === 1 ? 'grid-cols-1' :
-        dynamicMeasuresPerRow === 2 ? 'grid-cols-2' :
-        dynamicMeasuresPerRow === 3 ? 'grid-cols-3' :
-        dynamicMeasuresPerRow === 4 ? 'grid-cols-4' :
-        dynamicMeasuresPerRow === 5 ? 'grid-cols-5' :
-        dynamicMeasuresPerRow === 6 ? 'grid-cols-6' :
-        dynamicMeasuresPerRow === 7 ? 'grid-cols-7' :
-        dynamicMeasuresPerRow === 8 ? 'grid-cols-8' :
-        dynamicMeasuresPerRow === 9 ? 'grid-cols-9' :
-        dynamicMeasuresPerRow === 10 ? 'grid-cols-10' :
-        'grid-cols-4'
-      }`}>
+      <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
         {row.slots.map((slot, measureIdx) => {
           const visibleCells = getVisibleCellsForSegmentedSlot(slot.cells);
           const showMeasureBar = shouldRenderSegmentedSlotMeasureBar(slot.cells);
@@ -695,7 +699,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         })}
       </div>
     </div>
-  ), [dynamicMeasuresPerRow, getGridColumnsClass, renderChordGridCell]);
+  ), [getGridColumnsClass, measuresPerRowGridClass, renderChordGridCell]);
 
   // Early return if no chords available
   if (chords.length === 0) {
@@ -706,49 +710,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         </p>
       </div>
     );
-  }
-
-  // Group consecutive identical chords and calculate their durations
-  const chordDurations: Array<{chord: string, startBeat: number, endBeat: number, startTime: number, endTime: number, duration: number}> = [];
-  let currentChordGroup = { chord: shiftedChords[0] || 'undefined', startIndex: 0 };
-
-  for (let i = 1; i <= shiftedChords.length; i++) {
-    const currentChord = i < shiftedChords.length ? shiftedChords[i] : 'END';
-
-    // If chord changes or we reach the end
-    if (currentChord !== currentChordGroup.chord || i === shiftedChords.length) {
-      const endIndex = i - 1;
-      const startTime = beats[currentChordGroup.startIndex];
-      const endTime = beats[endIndex];
-
-      // Calculate duration
-      let duration = 0;
-      if (typeof startTime === 'number' && typeof endTime === 'number') {
-        duration = endTime - startTime;
-      } else if (typeof startTime === 'number' && i < beats.length) {
-        // For last chord, estimate duration
-        const nextTime = beats[i];
-        if (typeof nextTime === 'number') {
-          duration = nextTime - startTime;
-        } else {
-          duration = 0.5; // Default estimate
-        }
-      }
-
-      chordDurations.push({
-        chord: currentChordGroup.chord,
-        startBeat: currentChordGroup.startIndex,
-        endBeat: endIndex,
-        startTime: typeof startTime === 'number' ? startTime : 0,
-        endTime: typeof endTime === 'number' ? endTime : 0,
-        duration: duration
-      });
-
-      // Start new group
-      if (i < shiftedChords.length) {
-        currentChordGroup = { chord: currentChord, startIndex: i };
-      }
-    }
   }
 
   return (

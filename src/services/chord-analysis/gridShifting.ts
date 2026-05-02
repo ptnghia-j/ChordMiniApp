@@ -43,6 +43,26 @@ function shouldKeepShortIntroAlignment(params: {
   return retainedScoreRatio >= GRID_ALIGNMENT_CONFIG.shortIntroAlignment.minCompetitiveRatio;
 }
 
+function shouldKeepLongIntroAlignment(params: {
+  bestOverall: ShiftEvaluationResult;
+  bestIntroAligned: ShiftEvaluationResult;
+}): boolean {
+  const { bestOverall, bestIntroAligned } = params;
+
+  if (bestOverall.chordChanges <= 0) {
+    return true;
+  }
+
+  const chordChangePenalty = bestOverall.chordChanges - bestIntroAligned.chordChanges;
+  const retainedScoreRatio = bestIntroAligned.chordChanges / bestOverall.chordChanges;
+
+  if (chordChangePenalty > GRID_ALIGNMENT_CONFIG.longIntroAlignment.maxChordChangePenalty) {
+    return false;
+  }
+
+  return retainedScoreRatio >= GRID_ALIGNMENT_CONFIG.longIntroAlignment.minCompetitiveRatio;
+}
+
 function getOptimalShiftResults(
   chords: string[],
   timeSignature: number,
@@ -68,6 +88,9 @@ function getOptimalShiftResults(
     leadingSilentRunLength < timeSignature &&
     leadingSilentRunLength < chords.length &&
     ((paddingCount + leadingSilentRunLength) % timeSignature) === 0;
+  const shouldPreserveLongIntroAlignment =
+    leadingSilentRunLength >= timeSignature &&
+    leadingSilentRunLength < chords.length;
 
   const shiftResults: ShiftEvaluationResult[] = [];
 
@@ -75,7 +98,7 @@ function getOptimalShiftResults(
     let chordChangeCount = 0;
     const downbeatPositions: number[] = [];
     const chordLabels: string[] = [];
-    const firstMusicalChordOnDownbeat = shouldPreserveShortIntroAlignment
+    const firstMusicalChordOnDownbeat = shouldPreserveShortIntroAlignment || shouldPreserveLongIntroAlignment
       ? ((paddingCount + shift + leadingSilentRunLength) % timeSignature) === 0
       : false;
 
@@ -122,7 +145,7 @@ function getOptimalShiftResults(
     });
   }
 
-  if (!shouldPreserveShortIntroAlignment) {
+  if (!shouldPreserveShortIntroAlignment && !shouldPreserveLongIntroAlignment) {
     return shiftResults;
   }
 
@@ -133,9 +156,11 @@ function getOptimalShiftResults(
 
   const bestOverall = selectBestShiftResult(shiftResults);
   const bestIntroAligned = selectBestShiftResult(introAlignedResults);
-  const keepShortIntroAlignment = shouldKeepShortIntroAlignment({ bestOverall, bestIntroAligned });
+  const keepIntroAlignment = shouldPreserveShortIntroAlignment
+    ? shouldKeepShortIntroAlignment({ bestOverall, bestIntroAligned })
+    : shouldKeepLongIntroAlignment({ bestOverall, bestIntroAligned });
 
-  return keepShortIntroAlignment ? introAlignedResults : shiftResults;
+  return keepIntroAlignment ? introAlignedResults : shiftResults;
 }
 
 export function calculateOptimalShift(

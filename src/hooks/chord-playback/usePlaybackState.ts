@@ -100,6 +100,7 @@ export const usePlaybackState = ({
   // Track recent user clicks for smart animation positioning
   const [lastClickInfo, setLastClickInfo] = useState<ClickInfo | null>(null);
   const [globalSpeedAdjustmentState, setGlobalSpeedAdjustmentState] = useState<number | null>(null); // Store calculated speed adjustment
+  const rateReapplyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Create stable setter functions with useCallback to prevent infinite loops.
   // The ref mirrors the store value so synchronous readers (e.g. the rAF loop)
@@ -222,10 +223,14 @@ export const usePlaybackState = ({
             setPlaybackRate?: (rate: number) => void;
           };
           if (typeof playerWithRate.setPlaybackRate === 'function') {
-            setTimeout(() => {
+            if (rateReapplyTimeoutRef.current) {
+              clearTimeout(rateReapplyTimeoutRef.current);
+            }
+            rateReapplyTimeoutRef.current = setTimeout(() => {
               try {
                 playerWithRate.setPlaybackRate!(playbackRate);
               } catch {}
+              rateReapplyTimeoutRef.current = null;
             }, 250);
           }
         }
@@ -237,6 +242,13 @@ export const usePlaybackState = ({
     }
 
   }, [audioRef, isPitchShiftEnabled, isPitchShiftReady, youtubePlayer, setCurrentTime, setCurrentBeatIndex, playbackRate]);
+
+  useEffect(() => () => {
+    if (rateReapplyTimeoutRef.current) {
+      clearTimeout(rateReapplyTimeoutRef.current);
+      rateReapplyTimeoutRef.current = null;
+    }
+  }, []);
 
   // YouTube player event handlers (lines 1150-1191): Comprehensive player integration
   const handleYouTubeReady = useCallback((player: unknown) => {

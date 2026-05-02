@@ -284,3 +284,28 @@ jobs:
           exit 1
         fi
         echo "✅ Environment configuration verified"
+
+  # Publish wiki pages from .qoder/repowiki to the GitHub Wiki repo
+  publish-wiki:
+    name: Publish Wiki
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure git identity
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Publish wiki pages
+      env:
+        WIKI_REPO_URL: "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/ptnghia-j/ChordMiniApp.wiki.git"
+      run: |
+        chmod +x scripts/publish-repowiki-to-github-wiki.sh
+        ./scripts/publish-repowiki-to-github-wiki.sh

@@ -36,7 +36,7 @@ function pushVisualNote(
   });
 }
 
-function findVisualEventPlanIndexAtTime(
+export function findInstrumentVisualEventPlanIndexAtTime(
   eventPlans: InstrumentVisualEventPlan[],
   time: number,
 ): number {
@@ -59,6 +59,60 @@ function findVisualEventPlanIndexAtTime(
   }
 
   return time < eventPlans[idx].endTime ? idx : -1;
+}
+
+export function materializeInstrumentVisualEventNotes(
+  eventPlan: InstrumentVisualEventPlan,
+  playbackTime?: number,
+): VisualNote[] {
+  const notes: VisualNote[] = [];
+  const isActiveEvent = playbackTime !== undefined &&
+    playbackTime >= eventPlan.startTime &&
+    playbackTime < eventPlan.endTime;
+  const elapsedInChord = isActiveEvent
+    ? Math.max(0, playbackTime - eventPlan.startTime)
+    : 0;
+
+  for (const noteGroup of eventPlan.noteGroups) {
+    if (!isActiveEvent) {
+      for (const scheduledNote of noteGroup.scheduledNotes) {
+        pushVisualNote(notes, scheduledNote, noteGroup, eventPlan);
+      }
+      continue;
+    }
+
+    for (const scheduledNote of noteGroup.scheduledNotes) {
+      const originalEndOffset = scheduledNote.startOffset + scheduledNote.duration;
+      if (originalEndOffset > elapsedInChord) {
+        pushVisualNote(notes, scheduledNote, noteGroup, eventPlan);
+        continue;
+      }
+
+      // Reuse the audio-path recovery rules so visuals keep the same late-entry
+      // piano grace/min-audible behavior without widening the 180 ms onset
+      // window to the broader 220 ms catch-up scheduler tolerance.
+      const recoveredNote = adjustScheduledNoteForPlayback(scheduledNote, {
+        instrumentName: noteGroup.instrumentName,
+        elapsedInChord,
+      });
+
+      if (!recoveredNote) {
+        continue;
+      }
+
+      pushVisualNote(
+        notes,
+        {
+          ...recoveredNote,
+          startOffset: elapsedInChord,
+        },
+        noteGroup,
+        eventPlan,
+      );
+    }
+  }
+
+  return notes;
 }
 
 /**
@@ -153,53 +207,14 @@ export function materializeInstrumentVisualNotes(
   const notes: VisualNote[] = [];
   const activeEventPlanIndex = playbackTime === undefined
     ? -1
-    : findVisualEventPlanIndexAtTime(eventPlans, playbackTime);
+    : findInstrumentVisualEventPlanIndexAtTime(eventPlans, playbackTime);
 
   for (let eventIndex = 0; eventIndex < eventPlans.length; eventIndex += 1) {
     const eventPlan = eventPlans[eventIndex];
-    const isActiveEvent = eventIndex === activeEventPlanIndex && playbackTime !== undefined;
-    const elapsedInChord = isActiveEvent
-      ? Math.max(0, playbackTime - eventPlan.startTime)
-      : 0;
-
-    for (const noteGroup of eventPlan.noteGroups) {
-      if (!isActiveEvent) {
-        for (const scheduledNote of noteGroup.scheduledNotes) {
-          pushVisualNote(notes, scheduledNote, noteGroup, eventPlan);
-        }
-        continue;
-      }
-
-      for (const scheduledNote of noteGroup.scheduledNotes) {
-        const originalEndOffset = scheduledNote.startOffset + scheduledNote.duration;
-        if (originalEndOffset > elapsedInChord) {
-          pushVisualNote(notes, scheduledNote, noteGroup, eventPlan);
-          continue;
-        }
-
-        // Reuse the audio-path recovery rules so visuals keep the same late-entry
-        // piano grace/min-audible behavior without widening the 180 ms onset
-        // window to the broader 220 ms catch-up scheduler tolerance.
-        const recoveredNote = adjustScheduledNoteForPlayback(scheduledNote, {
-          instrumentName: noteGroup.instrumentName,
-          elapsedInChord,
-        });
-
-        if (!recoveredNote) {
-          continue;
-        }
-
-        pushVisualNote(
-          notes,
-          {
-            ...recoveredNote,
-            startOffset: elapsedInChord,
-          },
-          noteGroup,
-          eventPlan,
-        );
-      }
-    }
+    notes.push(...materializeInstrumentVisualEventNotes(
+      eventPlan,
+      eventIndex === activeEventPlanIndex ? playbackTime : undefined,
+    ));
   }
 
   return notes;

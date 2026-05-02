@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { calculateTargetKey } from '@/utils/chordTransposition';
 
 // Identity wrapper to disable devtools middleware in production with proper typing
@@ -451,10 +452,10 @@ export const useEditedTitle = () => useUIStore((state) => state.editedTitle);
 export const useEditedChords = () => useUIStore((state) => state.editedChords);
 
 export const useRomanNumerals = () =>
-  useUIStore((state) => ({
+  useUIStore(useShallow((state) => ({
     showRomanNumerals: state.showRomanNumerals,
     romanNumeralData: state.romanNumeralData,
-  }));
+  })));
 
 export const useShowRomanNumerals = () => useUIStore((state) => state.showRomanNumerals);
 export const useToggleRomanNumerals = () => useUIStore((state) => state.toggleRomanNumerals);
@@ -482,7 +483,7 @@ export const useSetLoopEndBeat = () => useUIStore((state) => state.setLoopEndBea
 export const useSetLoopRange = () => useUIStore((state) => state.setLoopRange);
 
 export const usePitchShift = () =>
-  useUIStore((state) => ({
+  useUIStore(useShallow((state) => ({
     isPitchShiftEnabled: state.isPitchShiftEnabled,
     isPitchShiftReady: state.isPitchShiftReady,
     pitchShiftSemitones: state.pitchShiftSemitones,
@@ -491,7 +492,7 @@ export const usePitchShift = () =>
     isFirebaseAudioAvailable: state.isFirebaseAudioAvailable,
     originalKey: state.originalKey,
     targetKey: state.targetKey,
-  }));
+  })));
 
 export const useIsPitchShiftEnabled = () => useUIStore((state) => state.isPitchShiftEnabled);
 export const useIsPitchShiftReady = () => useUIStore((state) => state.isPitchShiftReady);

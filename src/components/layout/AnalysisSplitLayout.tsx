@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import { useViewportSnapshot } from '@/hooks/ui/useViewportSnapshot';
 
 interface AnalysisSplitLayoutProps {
   left: React.ReactNode;
@@ -29,7 +30,7 @@ export default function AnalysisSplitLayout({
   defaultDesktopLayout = [60, 40],
   defaultMobileLayout = [60, 40],
 }: AnalysisSplitLayoutProps) {
-  const isMobile = useIsMobile();
+  const { isMobile } = useViewportSnapshot();
   const orientation: 'horizontal' | 'vertical' = isMobile ? 'vertical' : 'horizontal';
 
   // Single-pane mode is handled in JSX below to preserve hook call order
@@ -109,22 +110,3 @@ export default function AnalysisSplitLayout({
     </div>
   );
 }
-
-function useIsMobile(breakpointPx: number = 768) {
-  const [isMobile, setIsMobile] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth < breakpointPx;
-  });
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia(`(max-width: ${breakpointPx - 1}px)`);
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, [breakpointPx]);
-
-  return isMobile;
-}
-

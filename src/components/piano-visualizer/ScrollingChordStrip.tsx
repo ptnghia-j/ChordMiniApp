@@ -47,6 +47,7 @@ const MIN_TIMELINE_BEAT_WIDTH = 36;
 const SOFT_SYNC_DRIFT_THRESHOLD = 0.05;
 const HARD_SYNC_DRIFT_THRESHOLD = 0.24;
 const DRIFT_BLEND_FACTOR = 0.35;
+const MIN_TIMELINE_OVERSCAN_PX = 240;
 
 function getEffectiveTimelineBeats(timeSignature: number): number {
   if (timeSignature >= 6 && timeSignature % 3 === 0) {
@@ -79,6 +80,32 @@ export function getUniformTimelineBeatWidth(
   const minBeatWidth = MIN_TIMELINE_BEAT_WIDTH * measureScale;
 
   return Math.max(rawBeatWidth, minBeatWidth);
+}
+
+export interface TimelineVisibleRange {
+  startX: number;
+  endX: number;
+}
+
+export function getTimelineVisibleRange(
+  normalizedX: number,
+  containerWidth: number,
+  sweepLineX: number,
+): TimelineVisibleRange {
+  const overscanPx = Math.max(containerWidth * 2, MIN_TIMELINE_OVERSCAN_PX);
+  const viewportStartX = normalizedX - sweepLineX;
+
+  return {
+    startX: Math.max(0, viewportStartX - overscanPx),
+    endX: viewportStartX + containerWidth + overscanPx,
+  };
+}
+
+export function isTimelineBoxVisible(
+  box: { x: number; width: number },
+  range: TimelineVisibleRange,
+): boolean {
+  return box.x + box.width >= range.startX && box.x <= range.endX;
 }
 
 // ─── Enharmonic sharp↔flat maps for normalization ────────────────────────────
@@ -367,6 +394,25 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   // Sync the mapping function to a ref so the RAF closure always uses the latest version
   useEffect(() => { timeToNormalizedXRef.current = timeToNormalizedX; }, [timeToNormalizedX]);
 
+  const visibleRange = useMemo(
+    () => getTimelineVisibleRange(
+      timeToNormalizedX(currentTime),
+      containerWidth,
+      sweepLineX,
+    ),
+    [containerWidth, currentTime, sweepLineX, timeToNormalizedX],
+  );
+
+  const visibleMeasureSeparators = useMemo(
+    () => measureSeparators.filter((x) => x >= visibleRange.startX && x <= visibleRange.endX),
+    [measureSeparators, visibleRange],
+  );
+
+  const visibleChordBoxes = useMemo(
+    () => chordBoxes.filter((box) => isTimelineBoxVisible(box, visibleRange)),
+    [chordBoxes, visibleRange],
+  );
+
   // ── Stable ChordCell callbacks (memoized to avoid re-renders) ─────────────
 
   /** ChordCell's getChordStyle — returns transparent layout-only classes so the
@@ -414,9 +460,9 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
         }}
       >
         {/* Measure separators — matching ChordGrid's border-l-[3px] */}
-        {measureSeparators.map((x, i) => (
+        {visibleMeasureSeparators.map((x) => (
           <div
-            key={`sep-${i}`}
+            key={`sep-${x}`}
             className="absolute top-0 bottom-0 border-l-[3px] border-gray-600 dark:border-gray-400 z-[1]"
             style={{ left: x }}
           />
@@ -424,7 +470,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
 
         {/* Chord boxes — rendered using ChordCell for unified formatting,
             roman numerals, enharmonic corrections, and corrected chord styling */}
-        {chordBoxes.map((box) => {
+        {visibleChordBoxes.map((box) => {
           const isActive = currentTime >= box.startTime && currentTime < box.endTime;
           const isPast = currentTime >= box.endTime;
           const isEmpty = !box.chordName;

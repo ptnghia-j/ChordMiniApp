@@ -30,6 +30,7 @@ import { buildChordTimeline, type ChordEvent } from '@/utils/chordToMidi';
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import { useSharedAudioDynamics } from '@/hooks/audio/useSharedAudioDynamics';
 import { useGuitarOnlyPlayback } from '@/hooks/chord-playback/useGuitarOnlyPlayback';
+import { useViewportSnapshot } from '@/hooks/ui/useViewportSnapshot';
 import ScrollableTabContainer from '@/components/chord-analysis/ScrollableTabContainer';
 import CapoNeckPreview from '@/components/chord-analysis/CapoNeckPreview';
 import AppTooltip from '@/components/common/AppTooltip';
@@ -70,6 +71,26 @@ interface ChordGridData {
   }>;
 }
 
+interface ProcessedChordData {
+  soundingNameByIndex: Map<number, string>;
+  soundingNameByShape: Map<string, string>;
+}
+
+interface UniqueChordProgressionItem {
+  chord: string;
+  startIndex: number;
+  timestamp: number;
+}
+
+interface DiagramConfig {
+  size: 'small' | 'medium' | 'large';
+  diagramWidth: number;
+  diagramHeight: number;
+  cellWidth: number;
+  marginX: number;
+  labelClass: string;
+}
+
 interface GuitarChordsTabProps {
   analysisResults?: AnalysisResult | null;
   chordGridData: ChordGridData;
@@ -105,6 +126,219 @@ interface GuitarChordsTabProps {
   audioUrl?: string | null;
 }
 
+const itemTransition = {
+  type: "tween",
+  duration: 0.8,
+  ease: "easeInOut"
+} as const;
+
+function GuitarPlaybackBridge({
+  playbackChordEvents,
+  isChordPlaybackEnabled,
+  detectedBpm,
+  timeSignature,
+  dynamicsAnalyzer,
+  segmentationData,
+  guitarVoicing,
+  targetKey,
+}: {
+  playbackChordEvents: ChordEvent[];
+  isChordPlaybackEnabled: boolean;
+  detectedBpm?: number;
+  timeSignature: number;
+  dynamicsAnalyzer: ReturnType<typeof useSharedAudioDynamics>;
+  segmentationData?: SegmentationResult | null;
+  guitarVoicing: Partial<GuitarVoicingSelection>;
+  targetKey?: string | null;
+}) {
+  const currentBeatIndex = useCurrentBeatIndex();
+  const currentTime = useCurrentTime();
+  const isPlaying = useIsPlaying();
+
+  useGuitarOnlyPlayback(
+    playbackChordEvents,
+    currentTime,
+    currentBeatIndex,
+    isPlaying,
+    isChordPlaybackEnabled,
+    detectedBpm || 120,
+    timeSignature,
+    dynamicsAnalyzer,
+    segmentationData,
+    guitarVoicing,
+    targetKey,
+  );
+
+  return null;
+}
+
+function GuitarTablaturePlaybackView({
+  playbackChordEvents,
+  detectedBpm,
+  timeSignature,
+  guitarVoicing,
+  targetKey,
+  dynamicsAnalyzer,
+  segmentationData,
+}: {
+  playbackChordEvents: ChordEvent[];
+  detectedBpm?: number;
+  timeSignature: number;
+  guitarVoicing: Partial<GuitarVoicingSelection>;
+  targetKey?: string | null;
+  dynamicsAnalyzer: ReturnType<typeof useSharedAudioDynamics>;
+  segmentationData?: SegmentationResult | null;
+}) {
+  const currentTime = useCurrentTime();
+  const isPlaying = useIsPlaying();
+
+  return (
+    <GuitarTablature
+      chordEvents={playbackChordEvents}
+      currentTime={currentTime}
+      isPlaying={isPlaying}
+      bpm={detectedBpm || 120}
+      pixelsPerSecond={118}
+      timeSignature={timeSignature}
+      guitarVoicing={guitarVoicing}
+      targetKey={targetKey ?? undefined}
+      dynamicsAnalyzer={dynamicsAnalyzer}
+      segmentationData={segmentationData}
+    />
+  );
+}
+
+function AnimatedChordDiagramView({
+  progression,
+  windowWidth,
+  resolvedChordGridData,
+  segmentationData,
+  showSegmentation,
+  diagramConfig,
+  chordDataCache,
+  chordPositions,
+  processedChordData,
+  handlePositionChange,
+  capoFret,
+  capoLabelMode,
+}: {
+  progression: UniqueChordProgressionItem[];
+  windowWidth: number;
+  resolvedChordGridData?: ChordGridData | null;
+  segmentationData?: SegmentationResult | null;
+  showSegmentation: boolean;
+  diagramConfig: DiagramConfig;
+  chordDataCache: Map<string, ChordData | null>;
+  chordPositions: Record<string, number>;
+  processedChordData: ProcessedChordData;
+  handlePositionChange: (chordName: string, positionIndex: number) => void;
+  capoFret: number;
+  capoLabelMode: 'shape' | 'sound';
+}) {
+  const currentBeatIndex = useCurrentBeatIndex();
+
+  const currentChordInProgressionIndex = useMemo(() => {
+    if (progression.length === 0) return 0;
+
+    const foundIndex = progression.findIndex((chordInfo, index) => (
+      currentBeatIndex >= chordInfo.startIndex
+      && (index + 1 === progression.length || currentBeatIndex < progression[index + 1].startIndex)
+    ));
+
+    return foundIndex === -1 ? 0 : foundIndex;
+  }, [progression, currentBeatIndex]);
+
+  const visibleChordRange = useMemo(() => {
+    if (progression.length === 0) return [];
+    const getVisibleCount = () => {
+      if (windowWidth >= 1280) return 7;
+      if (windowWidth >= 1024) return 5;
+      if (windowWidth >= 768) return 3;
+      if (windowWidth >= 640) return 2;
+      return 1;
+    };
+    const getFocusOffset = (count: number) => {
+      if (count >= 7) return 2;
+      if (count >= 3) return 1;
+      return 0;
+    };
+    const visibleCount = getVisibleCount();
+    const focusOffset = getFocusOffset(visibleCount);
+    let startIndex = Math.max(0, currentChordInProgressionIndex - focusOffset);
+    const endIndex = Math.min(progression.length, startIndex + visibleCount);
+    if (endIndex - startIndex < visibleCount) {
+      startIndex = Math.max(0, endIndex - visibleCount);
+    }
+    return progression.slice(startIndex, endIndex).map((chordInfo) => ({
+      ...chordInfo,
+      isCurrent: chordInfo.startIndex === progression[currentChordInProgressionIndex].startIndex,
+    }));
+  }, [progression, currentChordInProgressionIndex, windowWidth]);
+
+  return (
+    <div className="animated-chord-view relative overflow-visible">
+      <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.diagramHeight + 50, 100) }}>
+        <AnimatePresence initial={false}>
+          {visibleChordRange.map((chordInfo) => {
+            const timestamp = resolvedChordGridData?.beats[chordInfo.startIndex];
+            const segmentationColor = getSegmentationColorForBeat(
+              chordInfo.startIndex,
+              resolvedChordGridData?.beats || [],
+              segmentationData ?? null,
+              showSegmentation,
+              typeof timestamp === 'number' ? timestamp : undefined
+            );
+
+            return (
+              <motion.div
+                layout
+                key={`guitar-chord-${chordInfo.startIndex}`}
+                initial={false}
+                animate={{
+                  opacity: chordInfo.isCurrent ? 1 : 0.6,
+                  scale: 1,
+                  filter: `blur(${chordInfo.isCurrent ? 0 : 1}px)`,
+                  zIndex: chordInfo.isCurrent ? 10 : 1
+                }}
+                exit={{ opacity: 0.6 }}
+                transition={itemTransition}
+                className="flex-shrink-0 relative rounded-lg will-change-transform"
+                style={{
+                  width: `${diagramConfig.cellWidth}px`,
+                  margin: `0 ${diagramConfig.marginX}px`,
+                }}
+              >
+                <GuitarChordDiagram
+                  chordData={chordDataCache.get(chordInfo.chord) || null}
+                  positionIndex={chordPositions[chordInfo.chord] || 0}
+                  size={diagramConfig.size}
+                  customWidth={diagramConfig.diagramWidth}
+                  customHeight={diagramConfig.diagramHeight}
+                  showChordName={true}
+                  displayName={chordInfo.chord}
+                  soundingChordName={
+                    processedChordData.soundingNameByIndex.get(chordInfo.startIndex)
+                    || processedChordData.soundingNameByShape.get(chordInfo.chord)
+                  }
+                  isFocused={chordInfo.isCurrent}
+                  segmentationColor={segmentationColor}
+                  showPositionSelector={chordInfo.isCurrent}
+                  onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
+                  capoFret={capoFret}
+                  capoLabelMode={capoLabelMode}
+                  showRomanNumerals={false}
+                  romanNumeral=""
+                  labelClassName={diagramConfig.labelClass}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
 export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   analysisResults,
   chordGridData,
@@ -121,10 +355,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   isChordPlaybackEnabled = false,
   audioUrl = null,
 }) => {
-  const currentBeatIndex = useCurrentBeatIndex();
-  const currentTime = useCurrentTime();
-  const isPlaying = useIsPlaying();
-
   const targetKey = useTargetKey();
 
   const [viewMode, setViewMode] = useState<'animated' | 'summary' | 'tab'>('animated');
@@ -143,7 +373,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const capoSuggestionSignatureRef = useRef('');
   const capoPreviewCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const { width: windowWidth } = useViewportSnapshot();
 
   // Wrapped setter that clears chord data cache when capo changes (new chord shapes need to be loaded)
   const setCapoFret = useCallback((value: number | ((prev: number) => number), options?: { isUserInitiated?: boolean }) => {
@@ -180,15 +410,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
   const handlePositionChange = useCallback((chordName: string, positionIndex: number) => {
     setSharedChordPosition(chordName, positionIndex);
   }, [setSharedChordPosition]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-
 
   // Pull analysis toggles and data from Zustand stores when not provided via props
   // Segmentation toggle from UIStore
@@ -247,20 +468,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       selectedPositions: chordPositions,
     }),
     [capoFret, chordPositions],
-  );
-
-  useGuitarOnlyPlayback(
-    playbackChordEvents,
-    currentTime,
-    currentBeatIndex,
-    isPlaying,
-    isChordPlaybackEnabled,
-    detectedBpm || 120,
-    timeSignature,
-    dynamicsAnalyzer,
-    segmentationData,
-    guitarVoicing,
-    targetKey,
   );
 
   const normalizeChordNameForDisplay = useCallback((originalChord: string): string => {
@@ -429,19 +636,12 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return Array.from(chordSet).sort();
   }, [resolvedChordGridData, processedChordData.entries]);
 
-  const currentChordNameForCache = useMemo(() => {
-    return processedChordData.entries[currentBeatIndex]?.shape || null;
-  }, [processedChordData.entries, currentBeatIndex]);
-
   useEffect(() => {
     const loadChordData = async () => {
       const chordsToLoad = new Set<string>();
       uniqueChordsForGuitarDiagrams.forEach(chord => {
         if (!chordDataCache.has(chord)) chordsToLoad.add(chord);
       });
-      if (currentChordNameForCache && !chordDataCache.has(currentChordNameForCache)) {
-        chordsToLoad.add(currentChordNameForCache);
-      }
       if (chordsToLoad.size > 0) {
         setIsLoadingChords(true);
         try {
@@ -458,7 +658,7 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
       }
     };
     loadChordData();
-  }, [uniqueChordsForGuitarDiagrams, currentChordNameForCache, chordDataCache]);
+  }, [uniqueChordsForGuitarDiagrams, chordDataCache]);
 
   // Unfiltered chord data for guitar diagrams (always shows all chords with consistent corrections)
   const uniqueChordDataForGuitarDiagrams = useMemo(() => {
@@ -494,47 +694,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     return uniqueProgression;
   }, [processedChordData.entries, resolvedChordGridData]);
 
-  const currentChordInProgressionIndex = useMemo(() => {
-    const progression = getUniqueChordProgressionForGuitarDiagrams;
-    if (progression.length === 0) return 0;
-
-    const foundIndex = progression.findIndex((chordInfo, index) => (
-      currentBeatIndex >= chordInfo.startIndex
-      && (index + 1 === progression.length || currentBeatIndex < progression[index + 1].startIndex)
-    ));
-
-    return foundIndex === -1 ? 0 : foundIndex;
-  }, [getUniqueChordProgressionForGuitarDiagrams, currentBeatIndex]);
-
-  const visibleChordRange = useMemo(() => {
-    const progression = getUniqueChordProgressionForGuitarDiagrams;
-    if (progression.length === 0) return [];
-    const getVisibleCount = () => {
-      if (windowWidth >= 1280) return 7;
-      if (windowWidth >= 1024) return 5;
-      if (windowWidth >= 768) return 3;
-      if (windowWidth >= 640) return 2;
-      return 1;
-    };
-    const getFocusOffset = (count: number) => {
-      if (count >= 7) return 2;
-      if (count >= 3) return 1;
-      return 0;
-    };
-    const visibleCount = getVisibleCount();
-    const focusOffset = getFocusOffset(visibleCount);
-    let startIndex = Math.max(0, currentChordInProgressionIndex - focusOffset);
-    const endIndex = Math.min(progression.length, startIndex + visibleCount);
-    if (endIndex - startIndex < visibleCount) {
-      startIndex = Math.max(0, endIndex - visibleCount);
-    }
-    return progression.slice(startIndex, endIndex).map((chordInfo) => ({
-      ...chordInfo,
-      isCurrent: chordInfo.startIndex === progression[currentChordInProgressionIndex].startIndex,
-    }));
-  }, [getUniqueChordProgressionForGuitarDiagrams, currentChordInProgressionIndex, windowWidth]);
-
-
   if (!mergedAnalysisResults) {
     return (
       <div className={`flex items-center justify-center p-8 bg-white dark:bg-content-bg rounded-lg shadow-card ${className}`}>
@@ -543,14 +702,6 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
     );
   }
 
-  // DEFINE A SLOW, SMOOTH TWEEN TRANSITION
-  // This provides a graceful, predictable motion that stops precisely on time.
-  const itemTransition = {
-    type: "tween",
-    duration: 0.8,
-    ease: "easeInOut"
-  };
-
   const segmentedControlClassName = 'flex space-x-1 rounded-full bg-white/75 p-1 shadow-sm backdrop-blur dark:bg-gray-800/50';
   const activeSegmentClassName = 'bg-slate-900 text-white shadow-sm dark:bg-gray-900';
   const inactiveSegmentClassName = 'text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10';
@@ -558,6 +709,17 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
 
   return (
     <div className={`guitar-chords-tab space-y-2 sm:space-y-3 ${className}`}>
+      <GuitarPlaybackBridge
+        playbackChordEvents={playbackChordEvents}
+        isChordPlaybackEnabled={isChordPlaybackEnabled}
+        detectedBpm={detectedBpm}
+        timeSignature={timeSignature}
+        dynamicsAnalyzer={dynamicsAnalyzer}
+        segmentationData={segmentationData}
+        guitarVoicing={guitarVoicing}
+        targetKey={targetKey}
+      />
+
       {/* Chord Timeline Section */}
       <div className="chord-grid-section space-y-2">
         <div className="mb-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -692,81 +854,30 @@ export const GuitarChordsTab: React.FC<GuitarChordsTabProps> = ({
         )}
 
         {viewMode === 'tab' ? (
-          <GuitarTablature
-            chordEvents={playbackChordEvents}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            bpm={detectedBpm || 120}
-            pixelsPerSecond={118}
+          <GuitarTablaturePlaybackView
+            playbackChordEvents={playbackChordEvents}
+            detectedBpm={detectedBpm}
             timeSignature={timeSignature}
             guitarVoicing={guitarVoicing}
-            targetKey={targetKey ?? undefined}
+            targetKey={targetKey}
             dynamicsAnalyzer={dynamicsAnalyzer}
             segmentationData={segmentationData}
           />
         ) : !isLoadingChords && viewMode === 'animated' ? (
-          <div className="animated-chord-view relative overflow-visible">
-            <div className="flex justify-center items-start py-1" style={{ minHeight: Math.max(diagramConfig.diagramHeight + 50, 100) }}>
-                <AnimatePresence initial={false}>
-                  {visibleChordRange.map((chordInfo) => {
-                    // Get segmentation color for this chord position
-                    // Use the timestamp from the chord info for accurate mapping
-                    const timestamp = resolvedChordGridData?.beats[chordInfo.startIndex];
-                    const segmentationColor = getSegmentationColorForBeat(
-                      chordInfo.startIndex,
-                      resolvedChordGridData?.beats || [],
-                      segmentationData,
-                      showSegmentation,
-                      typeof timestamp === 'number' ? timestamp : undefined
-                    );
-
-                    return (
-                      <motion.div
-                        layout
-                        key={`guitar-chord-${chordInfo.startIndex}`}
-                        initial={false}
-                        animate={{
-                          opacity: chordInfo.isCurrent ? 1 : 0.6,
-                          scale: 1,
-                          filter: `blur(${chordInfo.isCurrent ? 0 : 1}px)`,
-                          zIndex: chordInfo.isCurrent ? 10 : 1
-                        }}
-                        exit={{ opacity: 0.6 }}
-                        transition={itemTransition}
-                        className="flex-shrink-0 relative rounded-lg will-change-transform"
-                        style={{
-                          width: `${diagramConfig.cellWidth}px`,
-                          margin: `0 ${diagramConfig.marginX}px`,
-                        }}
-                      >
-                        <GuitarChordDiagram
-                          chordData={chordDataCache.get(chordInfo.chord) || null}
-                          positionIndex={chordPositions[chordInfo.chord] || 0}
-                          size={diagramConfig.size}
-                          customWidth={diagramConfig.diagramWidth}
-                          customHeight={diagramConfig.diagramHeight}
-                          showChordName={true}
-                          displayName={chordInfo.chord}
-                          soundingChordName={
-                            processedChordData.soundingNameByIndex.get(chordInfo.startIndex)
-                            || processedChordData.soundingNameByShape.get(chordInfo.chord)
-                          }
-                          isFocused={chordInfo.isCurrent}
-                          segmentationColor={segmentationColor}
-                          showPositionSelector={chordInfo.isCurrent}
-                          onPositionChange={(positionIndex) => handlePositionChange(chordInfo.chord, positionIndex)}
-                          capoFret={capoFret}
-                          capoLabelMode={capoLabelMode}
-                          showRomanNumerals={false}
-                          romanNumeral=""
-                          labelClassName={diagramConfig.labelClass}
-                        />
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-            </div>
-          </div>
+          <AnimatedChordDiagramView
+            progression={getUniqueChordProgressionForGuitarDiagrams}
+            windowWidth={windowWidth}
+            resolvedChordGridData={resolvedChordGridData}
+            segmentationData={segmentationData}
+            showSegmentation={showSegmentation}
+            diagramConfig={diagramConfig}
+            chordDataCache={chordDataCache}
+            chordPositions={chordPositions}
+            processedChordData={processedChordData}
+            handlePositionChange={handlePositionChange}
+            capoFret={capoFret}
+            capoLabelMode={capoLabelMode}
+          />
         ) : !isLoadingChords && (
           <div className="summary-chord-view relative p-4 sm:p-6">
             <h3 className="mb-4 text-center text-base font-medium text-gray-700 dark:text-gray-300 sm:mb-6 sm:text-lg">All Chords in Song ({uniqueChordsForGuitarDiagrams.length} unique)</h3>

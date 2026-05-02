@@ -251,6 +251,12 @@ tasks.md
 !README.md
 !README-PYTHON-BACKEND.md
 !CONTRIBUTING.md
+!.qoder/
+!.qoder/repowiki/
+!.qoder/repowiki/en/
+!.qoder/repowiki/en/content/
+!.qoder/repowiki/en/content/**/
+!.qoder/repowiki/en/content/**/*.md
 
 # Backup files
 *.bak

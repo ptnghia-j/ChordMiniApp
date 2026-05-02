@@ -16,7 +16,9 @@ export {
 
 export { generateNotesForInstrument } from './dispatch';
 export {
+  findInstrumentVisualEventPlanIndexAtTime,
   generateAllInstrumentVisualNotePlans,
+  materializeInstrumentVisualEventNotes,
   materializeInstrumentVisualNotes,
   generateAllInstrumentVisualNotes,
   attachVisualNotePositions,

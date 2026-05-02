@@ -12,6 +12,7 @@ import {
   TranscriptionData,
   updateTranscriptionEnrichment,
 } from '@/services/firebase/firestoreService';
+import type { AudioFileData } from '@/services/firebase/firebaseStorageService';
 import { ProcessingStage } from '@/contexts/ProcessingContext';
 import { LyricsData } from '@/types/musicAiTypes';
 
@@ -293,6 +294,9 @@ export function useAnalyzePageOrchestrator({
   const latestRequestIdRef = useRef<string | null>(null);
   const audioExtractionAbortControllerRef = useRef<AbortController | null>(null);
   const transcriptionSnapshotsRef = useRef<Record<string, TranscriptionSnapshot | null | undefined>>({});
+  const transcriptionSnapshotPromisesRef = useRef<Record<string, Promise<TranscriptionSnapshot | null> | undefined>>({});
+  const cachedAudioPromisesRef = useRef<Record<string, Promise<AudioFileData | null> | undefined>>({});
+  const lyricsCacheCheckPromisesRef = useRef<Record<string, Promise<void> | undefined>>({});
   const romanNumeralDataRef = useRef<RomanNumeralSnapshot | null>(null);
   const [persistedSnapshotKeys, setPersistedSnapshotKeys] = useState<Record<string, true>>({});
   const [snapshotUsageCounts, setSnapshotUsageCounts] = useState<Record<string, number>>({});
@@ -364,10 +368,46 @@ export function useAnalyzePageOrchestrator({
       return inMemorySnapshot;
     }
 
-    const snapshot = await getTranscription(videoId, snapshotBeatDetector, snapshotChordDetector);
-    storeTranscriptionSnapshot(snapshot, snapshotBeatDetector, snapshotChordDetector);
-    return snapshot;
+    const inFlightSnapshot = transcriptionSnapshotPromisesRef.current[snapshotKey];
+    if (inFlightSnapshot) {
+      return inFlightSnapshot;
+    }
+
+    const snapshotPromise = (async () => {
+      const snapshot = await getTranscription(videoId, snapshotBeatDetector, snapshotChordDetector);
+      storeTranscriptionSnapshot(snapshot, snapshotBeatDetector, snapshotChordDetector);
+      return snapshot;
+    })();
+
+    transcriptionSnapshotPromisesRef.current[snapshotKey] = snapshotPromise;
+    try {
+      return await snapshotPromise;
+    } finally {
+      delete transcriptionSnapshotPromisesRef.current[snapshotKey];
+    }
   }, [beatDetector, chordDetector, storeTranscriptionSnapshot, videoId]);
+
+  const loadCachedAudioFile = useCallback(async () => {
+    const inFlightCachedAudio = cachedAudioPromisesRef.current[videoId];
+    if (inFlightCachedAudio) {
+      return inFlightCachedAudio;
+    }
+
+    const cachedAudioPromise = (async () => {
+      const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
+      return withFirebaseConnectionCheck(async () => {
+        const { getCachedAudioFile } = await import('@/services/firebase/firebaseStorageService');
+        return getCachedAudioFile(videoId);
+      }, 'cached audio check');
+    })();
+
+    cachedAudioPromisesRef.current[videoId] = cachedAudioPromise;
+    try {
+      return await cachedAudioPromise;
+    } finally {
+      delete cachedAudioPromisesRef.current[videoId];
+    }
+  }, [videoId]);
 
   const syncKeySignature = useCallback((nextKeySignature: string | null) => {
     setKeySignature((current) => current === nextKeySignature ? current : nextKeySignature);
@@ -397,6 +437,9 @@ export function useAnalyzePageOrchestrator({
 
   useEffect(() => {
     transcriptionSnapshotsRef.current = {};
+    transcriptionSnapshotPromisesRef.current = {};
+    cachedAudioPromisesRef.current = {};
+    lyricsCacheCheckPromisesRef.current = {};
     setPersistedSnapshotKeys({});
     setSnapshotUsageCounts({});
     audioExtractionAbortControllerRef.current?.abort();
@@ -681,11 +724,7 @@ export function useAnalyzePageOrchestrator({
       const { ensureFirebaseInitialized } = await import('@/config/firebase');
       await ensureFirebaseInitialized();
 
-      const { withFirebaseConnectionCheck } = await import('@/utils/firebaseConnectionManager');
-      const cachedAudio = await withFirebaseConnectionCheck(async () => {
-        const { getCachedAudioFile } = await import('@/services/firebase/firebaseStorageService');
-        return getCachedAudioFile(videoId);
-      }, 'cached audio check');
+      const cachedAudio = await loadCachedAudioFile();
 
       if (cachedAudio) {
         setStage('idle');
@@ -740,6 +779,7 @@ export function useAnalyzePageOrchestrator({
     initialCacheCheckDone,
     beatDetector,
     chordDetector,
+    loadCachedAudioFile,
     loadTranscriptionSnapshot,
     setAudioProcessingState,
     setDuration,
@@ -1060,34 +1100,50 @@ export function useAnalyzePageOrchestrator({
 
   useEffect(() => {
     const autoLoadCachedLyrics = async () => {
-      if ((lyrics?.lines?.length ?? 0) > 0 || !audioProcessingState.audioUrl) {
+      const audioUrl = audioProcessingState.audioUrl;
+      if ((lyrics?.lines?.length ?? 0) > 0 || !audioUrl) {
         return;
       }
 
-      try {
-        const response = await fetch('/api/transcribe-lyrics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoId,
-            audioPath: audioProcessingState.audioUrl,
-            forceRefresh: false,
-            checkCacheOnly: true,
-          }),
-        });
+      const cacheKey = `${videoId}:${audioUrl}`;
+      const inFlightLyricsCheck = lyricsCacheCheckPromisesRef.current[cacheKey];
+      if (inFlightLyricsCheck) {
+        return inFlightLyricsCheck;
+      }
 
-        const data = await response.json();
-        if (response.ok && data.success && data.lyrics?.lines?.length) {
-          setLyrics(data.lyrics);
-          setShowLyrics(true);
+      const lyricsCheckPromise = (async () => {
+        try {
+          const response = await fetch('/api/transcribe-lyrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              videoId,
+              audioPath: audioUrl,
+              forceRefresh: false,
+              checkCacheOnly: true,
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok && data.success && data.lyrics?.lines?.length) {
+            setLyrics(data.lyrics);
+            setShowLyrics(true);
+            setHasCachedLyrics(false);
+            return;
+          }
+
           setHasCachedLyrics(false);
-          return;
+        } catch (error) {
+          console.log('Cache check failed:', error);
+          setHasCachedLyrics(false);
         }
+      })();
 
-        setHasCachedLyrics(false);
-      } catch (error) {
-        console.log('Cache check failed:', error);
-        setHasCachedLyrics(false);
+      lyricsCacheCheckPromisesRef.current[cacheKey] = lyricsCheckPromise;
+      try {
+        return await lyricsCheckPromise;
+      } finally {
+        delete lyricsCacheCheckPromisesRef.current[cacheKey];
       }
     };
 

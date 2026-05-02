@@ -340,16 +340,29 @@ export const useChordPlayback = ({
 
   // Initialize service and check readiness
   useEffect(() => {
+    let cancelled = false;
+    let readinessTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const checkReadiness = () => {
+      if (cancelled) return;
+
       if (chordPlaybackService.current.isReady()) {
         setIsReady(true);
-      } else {
-        // Check again in 100ms if not ready
-        setTimeout(checkReadiness, 100);
+        return;
+      }
+
+      // Check again in 100ms if not ready
+      readinessTimeoutId = setTimeout(checkReadiness, 100);
+    };
+
+    checkReadiness();
+
+    return () => {
+      cancelled = true;
+      if (readinessTimeoutId) {
+        clearTimeout(readinessTimeoutId);
       }
     };
-    
-    checkReadiness();
   }, []);
 
   // Update service options when state changes

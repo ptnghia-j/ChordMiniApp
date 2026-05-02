@@ -16,6 +16,7 @@ import { useModelState } from '@/hooks/chord-analysis/useModelState';
 import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrchestrator';
 import { useAnalysisUsageTracker } from '@/hooks/analyze/useAnalysisUsageTracker';
 import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
+import { useViewportSnapshot } from '@/hooks/ui/useViewportSnapshot';
 import { transcribeLyricsWithAI as transcribeLyricsWithAIService } from '@/services/audio/audioProcessingExtracted';
 import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
 import { getChordGridData as getChordGridDataService } from '@/services/chord-analysis/chordGridCalculationService';
@@ -74,7 +75,7 @@ export function useAnalyzePageViewModel({
   const channelFromSearch = routeParams.channel;
   const thumbnailFromSearch = routeParams.thumbnail;
   const autoStartRequested = Boolean(routeParams.autoStart);
-  const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const { isMobile: isCompactViewport } = useViewportSnapshot();
   const durationLimitToastShownRef = useRef(false);
   const [initialAnalyzeHandoff] = useState(() => consumeAnalyzeSessionHandoff(
     videoId,
@@ -82,17 +83,6 @@ export function useAnalyzePageViewModel({
     routeParams.chordModel
   ));
   const shouldSkipInitialCacheBootstrap = Boolean(initialAnalyzeHandoff?.audioProcessingState?.audioUrl);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia('(max-width: 767px)');
-    const updateViewportMode = () => setIsCompactViewport(mediaQuery.matches);
-    updateViewportMode();
-    mediaQuery.addEventListener('change', updateViewportMode);
-
-    return () => mediaQuery.removeEventListener('change', updateViewportMode);
-  }, []);
 
   const {
     stage,

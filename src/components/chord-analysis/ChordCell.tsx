@@ -214,6 +214,8 @@ export const ChordCell = React.memo<ChordCellProps>(({
   const labelOverflowWidth = canOverflowLabel
     ? `calc(${labelOverflowCells + 1} * 100% + ${labelOverflowGapPx}px)`
     : '100%';
+  const renderedChord = editedChord || displayChord;
+  const showChordTooltip = isEditMode || canOverflowLabel || renderedChord.length >= (compact ? 8 : 5);
 
   const stateClassName = isInLoopRange
     ? '!bg-blue-500/10 !border-blue-300/60 dark:!bg-blue-800/40 dark:!border-blue-400/35'
@@ -224,6 +226,38 @@ export const ChordCell = React.memo<ChordCellProps>(({
   const modulationTooltip = modulationInfo?.isModulation
     ? `Key change: ${modulationInfo.fromKey} → ${modulationInfo.toKey}`
     : null;
+  const chordLabel = (
+    <div
+      // ✅ APPLY FONT: Use font-varela Tailwind class
+      className={`font-varela ${
+        showRomanNumerals
+          ? getDynamicFontSize(cellSize * 0.7, renderedChord.length) // 30% smaller when Roman numerals shown
+          : getDynamicFontSize(cellSize, renderedChord.length)
+      } leading-tight whitespace-nowrap ${
+        wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
+      } ${canOverflowLabel ? 'overflow-visible' : 'overflow-hidden text-ellipsis max-w-full'} ${
+        isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
+      }`}
+      style={{
+        ...getChordLabelStyles(),
+        fontSize: getGridLabelFontSize(renderedChord.length),
+        width: labelOverflowWidth,
+        maxWidth: labelOverflowWidth,
+        minWidth: '100%',
+        alignSelf: 'flex-start',
+        overflow: canOverflowLabel ? 'visible' : 'hidden',
+        textOverflow: canOverflowLabel ? 'clip' : 'ellipsis',
+        position: 'relative',
+        zIndex: canOverflowLabel ? 2 : 1,
+      }}
+      onClick={isEditMode ? handleClick : undefined}
+      dangerouslySetInnerHTML={{
+        __html: editedChord
+          ? editedChord // Show raw edited value without formatting
+          : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
+      }}
+    />
+  );
 
   const chordCell = (
     <div
@@ -269,38 +303,11 @@ export const ChordCell = React.memo<ChordCellProps>(({
           ) : (
             <div className="flex flex-col items-center justify-center h-full" style={{ overflow: canOverflowLabel ? 'visible' : 'hidden', width: '100%' }}>
               {/* Chord label */}
-              <AppTooltip content={isEditMode ? `Click to edit: ${editedChord || displayChord}` : (editedChord || displayChord)}>
-                <div
-                  // ✅ APPLY FONT: Use font-varela Tailwind class
-                  className={`font-varela ${
-                    showRomanNumerals
-                      ? getDynamicFontSize(cellSize * 0.7, (editedChord || displayChord).length) // 30% smaller when Roman numerals shown
-                      : getDynamicFontSize(cellSize, (editedChord || displayChord).length)
-                  } leading-tight whitespace-nowrap ${
-                    wasCorrected ? 'text-purple-700 dark:text-purple-300' : ''
-                  } ${canOverflowLabel ? 'overflow-visible' : 'overflow-hidden text-ellipsis max-w-full'} ${
-                    isEditMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-1' : ''
-                  }`}
-                  style={{
-                    ...getChordLabelStyles(),
-                    fontSize: getGridLabelFontSize((editedChord || displayChord).length),
-                    width: labelOverflowWidth,
-                    maxWidth: labelOverflowWidth,
-                    minWidth: '100%',
-                    alignSelf: 'flex-start',
-                    overflow: canOverflowLabel ? 'visible' : 'hidden',
-                    textOverflow: canOverflowLabel ? 'clip' : 'ellipsis',
-                    position: 'relative',
-                    zIndex: canOverflowLabel ? 2 : 1,
-                  }}
-                  onClick={isEditMode ? handleClick : undefined}
-                  dangerouslySetInnerHTML={{
-                    __html: editedChord
-                      ? editedChord // Show raw edited value without formatting
-                      : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
-                  }}
-                />
-              </AppTooltip>
+              {showChordTooltip ? (
+                <AppTooltip content={isEditMode ? `Click to edit: ${renderedChord}` : renderedChord}>
+                  {chordLabel}
+                </AppTooltip>
+              ) : chordLabel}
 
               {/* FIXED: Roman numeral display with stable layout */}
               {showRomanNumerals && romanNumeral && (
