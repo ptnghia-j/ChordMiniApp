@@ -26,20 +26,46 @@ else
   git clone "$WIKI_REPO_URL" "$WIKI_WORKTREE"
 fi
 
+sanitize_wiki_markdown() {
+  local file="$1"
+
+  # Qoder emits top-level <cite> reference blocks. GitHub preserves those as
+  # raw HTML, so the Markdown links inside render as noisy italic text.
+  perl -0pi -e 's{\n?<cite>\s*.*?</cite>\s*\n?}{\n}gs' "$file"
+
+  # Convert remaining file:// source references to GitHub blob URLs.
+  perl -0pi -e 's{file://([^\)\s>]+)(\#[^\)\s>]*)?}{'"$SOURCE_BLOB_URL"'/$1$2}g' "$file"
+
+  # Keep pages tidy after removing generated metadata blocks.
+  perl -0pi -e 's/\n{3,}/\n\n/g' "$file"
+}
+
+copy_wiki_markdown() {
+  local src="$1"
+  local dest="$2"
+
+  cp "$src" "$dest"
+  sanitize_wiki_markdown "$dest"
+}
+
 # Clean all existing wiki content (except .git and navigation files we'll regenerate)
 find "$WIKI_WORKTREE" -mindepth 1 -maxdepth 1 \
   ! -name ".git" \
   -exec rm -rf {} +
 
-# --- Build Home.md ---
-{
-  echo "# ChordMiniApp Wiki"
-  echo
-  echo "Published from \`.qoder/repowiki/en/content\`."
-  echo
-  echo "## Pages"
-  echo
-} > "$WIKI_WORKTREE/Home.md"
+# --- Build Home.md from Getting Started ---
+HOME_SOURCE="$SOURCE_DIR/Getting Started.md"
+if [[ -f "$HOME_SOURCE" ]]; then
+  copy_wiki_markdown "$HOME_SOURCE" "$WIKI_WORKTREE/Home.md"
+else
+  {
+    echo "# ChordMiniApp Wiki"
+    echo
+    echo "Published from \`.qoder/repowiki/en/content\`."
+    echo
+    echo "Use the sidebar to browse documentation pages."
+  } > "$WIKI_WORKTREE/Home.md"
+fi
 
 # --- Build _Sidebar.md header ---
 {
@@ -58,19 +84,11 @@ while IFS= read -r src; do
   page_name="${rel%.md}"
   wiki_file="${page_name//\// - }.md"
 
-  cp "$src" "$WIKI_WORKTREE/$wiki_file"
-
-  # Convert file:// links to GitHub blob URLs.
-  # Uses single-quoted Perl regex with shell variable spliced in to avoid
-  # double-quote escaping issues that previously broke the substitution.
-  perl -0pi -e 's{file://([^\)\s>]+)(\#[^\)\s>]*)?}{'"$SOURCE_BLOB_URL"'/$1$2}g' "$WIKI_WORKTREE/$wiki_file"
+  copy_wiki_markdown "$src" "$WIKI_WORKTREE/$wiki_file"
 
   title="${page_name//\// / }"
   slug="${wiki_file%.md}"
   wiki_slug="${slug// /-}"
-
-  # Append to Home.md page list
-  echo "- [$title]($WIKI_BASE_URL/$wiki_slug)" >> "$WIKI_WORKTREE/Home.md"
 
   # Collect sidebar entry: category, title, slug
   top_level="${rel%%/*}"
