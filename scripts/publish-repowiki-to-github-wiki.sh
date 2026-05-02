@@ -40,6 +40,89 @@ sanitize_wiki_markdown() {
   perl -0pi -e 's/\n{3,}/\n\n/g' "$file"
 }
 
+rewrite_internal_wiki_links() {
+  python3 - "$WIKI_WORKTREE" <<'PY'
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote
+import re
+import sys
+
+root = Path(sys.argv[1])
+md_files = sorted(root.glob("*.md"))
+slug_set = {path.stem.replace(" ", "-") for path in md_files}
+source_rels = {}
+
+for path in md_files:
+    if path.name == "Home.md":
+        source_rels[path.name] = PurePosixPath("Getting Started.md")
+    elif path.name == "_Sidebar.md":
+        source_rels[path.name] = PurePosixPath("_Sidebar.md")
+    else:
+        source_rels[path.name] = PurePosixPath(path.stem.replace(" - ", "/") + ".md")
+
+source_to_slug = {
+    str(source_rels[path.name]): path.stem.replace(" ", "-")
+    for path in md_files
+    if path.name not in {"Home.md", "_Sidebar.md"}
+}
+
+link_re = re.compile(r"(\[[^\]]+\]\()([^)]+)(\))")
+changed_links = 0
+
+
+def normalize_posix(path):
+    parts = []
+    for part in PurePosixPath(path).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    return PurePosixPath(*parts)
+
+
+for path in md_files:
+    source_dir = source_rels[path.name].parent
+    text = path.read_text()
+
+    def replacement(match):
+        global changed_links
+
+        target = match.group(2).strip()
+        if "://" in target or target.startswith(("#", "mailto:")):
+            return match.group(0)
+
+        base, separator, fragment = target.partition("#")
+        decoded = unquote(base)
+        if not decoded.endswith(".md"):
+            return match.group(0)
+
+        if decoded.startswith("/"):
+            candidate = normalize_posix(decoded.lstrip("/"))
+        else:
+            candidate = normalize_posix(source_dir / decoded)
+
+        slug = source_to_slug.get(str(candidate))
+        if slug not in slug_set:
+            return match.group(0)
+
+        new_target = slug + (separator + fragment if separator else "")
+        if new_target == target:
+            return match.group(0)
+
+        changed_links += 1
+        return f"{match.group(1)}{new_target}{match.group(3)}"
+
+    updated = link_re.sub(replacement, text)
+    if updated != text:
+        path.write_text(updated)
+
+print(f"Rewrote {changed_links} internal wiki links.")
+PY
+}
+
 copy_wiki_markdown() {
   local src="$1"
   local dest="$2"
@@ -109,6 +192,8 @@ sort -t$'\t' -k1,1 "$SIDEBAR_ENTRIES" | while IFS=$'\t' read -r section title sl
   echo "- [$title]($slug)" >> "$WIKI_WORKTREE/_Sidebar.md"
 done
 echo >> "$WIKI_WORKTREE/_Sidebar.md"
+
+rewrite_internal_wiki_links
 
 git -C "$WIKI_WORKTREE" add .
 

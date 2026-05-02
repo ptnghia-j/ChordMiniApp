@@ -8,7 +8,7 @@ Standalone Flask API for Sheet Sage melody transcription.
 - `GET /info`
 - `POST /transcribe`
 
-`POST /transcribe` accepts multipart `file` uploads and returns `noteEvents` in the app format:
+`POST /transcribe` accepts either multipart `file` uploads or JSON/form Firebase Storage URLs via `audioUrl` and returns `noteEvents` in the app format:
 
 ```json
 {
@@ -61,10 +61,11 @@ gcloud builds submit . --tag "$IMAGE"
 gcloud run deploy sheetsage \
   --image "$IMAGE" \
   --region "$REGION" \
-  --cpu 6 \
-  --memory 4Gi \
-  --timeout 900 \
-  --concurrency 1
+  --cpu 4 \
+  --memory 8Gi \
+  --timeout 300 \
+  --concurrency 1 \
+  --execution-environment gen2
 ```
 
 ## Frontend env

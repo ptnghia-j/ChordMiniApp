@@ -41,44 +41,87 @@ function shouldDeleteOffloadAfterProcessing(formData: FormData): boolean {
   return !(normalized === '0' || normalized === 'false' || normalized === 'no');
 }
 
-async function resolveAudioFileFromRequest(formData: FormData): Promise<File> {
-  const file = formData.get('file');
-  if (file instanceof File) {
-    return file;
+function readStringField(formData: FormData, ...names: string[]): string | null {
+  for (const name of names) {
+    const value = formData.get(name);
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
   }
 
-  const offloadUrlEntry = formData.get('offload_url') ?? formData.get('blob_url');
-  if (typeof offloadUrlEntry !== 'string') {
+  return null;
+}
+
+type SheetSageAudioSource = {
+  file?: File;
+  audioUrl?: string;
+  shouldDeleteRemoteUrl?: boolean;
+};
+
+async function resolveAudioSourceFromFormData(formData: FormData): Promise<SheetSageAudioSource> {
+  const file = formData.get('file');
+  if (file instanceof File) {
+    return { file };
+  }
+
+  const remoteUrlEntry = readStringField(formData, 'audioUrl', 'firebase_url', 'offload_url', 'blob_url');
+  if (!remoteUrlEntry) {
     throw new Error('No audio file provided');
   }
 
-  const offloadUrl = validateOffloadUrl(offloadUrlEntry);
+  const audioUrl = validateOffloadUrl(remoteUrlEntry);
   const shouldDeleteOffload = shouldDeleteOffloadAfterProcessing(formData);
 
-  const offloadResponse = await fetch(offloadUrl);
-  if (!offloadResponse.ok) {
-    throw new Error(`Failed to download audio from offload storage: ${offloadResponse.status} ${offloadResponse.statusText}`);
+  return {
+    audioUrl,
+    shouldDeleteRemoteUrl: shouldDeleteOffload && (
+      formData.has('offload_url')
+      || formData.has('blob_url')
+      || formData.has('delete_offload')
+      || formData.has('delete_blob')
+    ),
+  };
+}
+
+function getJsonString(payload: unknown, ...names: string[]): string | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
 
-  const audioBuffer = await offloadResponse.arrayBuffer();
-  const contentType = offloadResponse.headers.get('content-type') || 'audio/mpeg';
-  const audioBlob = new Blob([audioBuffer], { type: contentType });
-
-  const urlParts = offloadUrl.split('/');
-  const fileName = urlParts[urlParts.length - 1] || 'audio-upload';
-
-  if (shouldDeleteOffload) {
-    try {
-      const deletion = await deleteOffloadUrl(offloadUrl);
-      console.log(`🗑️ [SheetSage] Offload file deleted after download (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${offloadUrl.substring(0, 80)}...`);
-    } catch (error) {
-      console.warn('⚠️ [SheetSage] Non-critical: failed to delete offload file after download:', error);
+  const record = payload as Record<string, unknown>;
+  for (const name of names) {
+    const value = record[name];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
     }
-  } else {
-    console.log('ℹ️ [SheetSage] Skipping offload file deletion after download (delete_offload=0)');
   }
 
-  return new File([audioBlob], fileName, { type: contentType });
+  return null;
+}
+
+function resolveAudioSourceFromJson(payload: unknown): SheetSageAudioSource {
+  const remoteUrlEntry = getJsonString(payload, 'audioUrl', 'firebase_url', 'offload_url', 'blob_url');
+  if (!remoteUrlEntry) {
+    throw new Error('No audio file provided');
+  }
+
+  return {
+    audioUrl: validateOffloadUrl(remoteUrlEntry),
+    shouldDeleteRemoteUrl: false,
+  };
+}
+
+async function cleanupRemoteAudioSource(audioSource: SheetSageAudioSource): Promise<void> {
+  if (!audioSource.audioUrl || !audioSource.shouldDeleteRemoteUrl) {
+    return;
+  }
+
+  try {
+    const deletion = await deleteOffloadUrl(audioSource.audioUrl);
+    console.log(`🗑️ [SheetSage] Offload file deleted after backend processing (provider=${deletion.provider}, alreadyDeleted=${deletion.alreadyDeleted === true}): ${audioSource.audioUrl.substring(0, 80)}...`);
+  } catch (deleteError) {
+    console.warn('⚠️ [SheetSage] Non-critical: failed to delete offload file after backend processing:', deleteError);
+  }
 }
 
 function normalizeMelodyResultForCache(videoId: string, result: SheetSageResult) {
@@ -139,13 +182,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: appCheck.error }, { status: appCheck.status || 403 });
     }
 
-    const formData = await request.formData();
-    const videoIdField = formData.get('videoId');
+    const contentType = request.headers.get('content-type') || '';
+    const isJsonRequest = contentType.toLowerCase().includes('application/json');
+    const requestPayload = isJsonRequest ? await request.json().catch(() => null) : null;
+    const formData = isJsonRequest ? null : await request.formData();
+    const videoIdField = isJsonRequest
+      ? getJsonString(requestPayload, 'videoId')
+      : formData?.get('videoId');
     const videoId = typeof videoIdField === 'string' ? videoIdField.trim() : '';
 
-    let file: File;
+    let audioSource: SheetSageAudioSource;
     try {
-      file = await resolveAudioFileFromRequest(formData);
+      audioSource = isJsonRequest
+        ? resolveAudioSourceFromJson(requestPayload)
+        : await resolveAudioSourceFromFormData(formData as FormData);
     } catch (resolveError) {
       return NextResponse.json(
         {
@@ -156,16 +206,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const backendFormData = new FormData();
-    backendFormData.append('file', file, file.name || 'audio-upload');
+    const backendRequest = audioSource.audioUrl
+      ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioUrl: audioSource.audioUrl }),
+        signal: createSafeTimeoutSignal(SHEETSAGE_BACKEND_TIMEOUT_MS),
+      }
+      : (() => {
+        const backendFormData = new FormData();
+        backendFormData.append('file', audioSource.file as File, audioSource.file?.name || 'audio-upload');
+        return {
+          method: 'POST',
+          body: backendFormData,
+          signal: createSafeTimeoutSignal(SHEETSAGE_BACKEND_TIMEOUT_MS),
+        };
+      })();
 
     const response = await fetch(`${backendUrl}/transcribe`, {
-      method: 'POST',
-      body: backendFormData,
-      signal: createSafeTimeoutSignal(SHEETSAGE_BACKEND_TIMEOUT_MS),
+      ...backendRequest,
     });
 
     const payload = await response.json().catch(() => null);
+    await cleanupRemoteAudioSource(audioSource);
 
     if (!response.ok) {
       return NextResponse.json(
