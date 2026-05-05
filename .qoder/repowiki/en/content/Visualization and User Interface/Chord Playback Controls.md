@@ -24,11 +24,13 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced pitch shift audio system with improved scrub detection mechanism featuring 0.75-second threshold-based seek operations
-- Updated seek safety mechanisms with comprehensive diagnostic logging and improved feedback loop prevention
-- Refined slave re-anchor loop with enhanced drift correction and threshold-based synchronization
-- Improved threshold-based seek operations for better synchronization between audio playback and visual elements
-- Enhanced scrub detection algorithm with sophisticated jump magnitude analysis and automatic seek vs. anchor decisions
+- Resolved a YouTube iframe pre-play blackout bug by gating programmatic seeks behind a `hasUserActivatedPlayback` flag and queueing a `pendingSeekTimestamp` until the user starts playback.
+- Added a `PlaybackPromptToast` component to provide a persistent, non-intrusive prompt guiding users to start video playback after 5 seconds of inactivity.
+- Enhanced pitch shift audio system with improved scrub detection mechanism featuring 0.75-second threshold-based seek operations.
+- Updated seek safety mechanisms with comprehensive diagnostic logging and improved feedback loop prevention.
+- Refined slave re-anchor loop with enhanced drift correction and threshold-based synchronization.
+- Improved threshold-based seek operations for better synchronization between audio playback and visual elements.
+- Enhanced scrub detection algorithm with sophisticated jump magnitude analysis and automatic seek vs. anchor decisions.
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -798,6 +800,8 @@ PM["PerformanceMonitor"] --> UPSA
   - Confirm GrainPlayerPitchShiftService is loaded and playback rate is set correctly.
   - Ensure YouTube player is muted while pitch shift is active to maintain visual sync.
   - Monitor YoutubeMasterClock diagnostics for synchronization issues.
+- **YouTube video iframe blacks out**:
+  - This is typically caused by calling `seekTo()` programmatically before the user has manually initiated playback. Ensure the `hasUserActivatedPlayback` state is checked before seeking, and use the `pendingSeekTimestamp` queue for pre-play interactions.
   - Check scrub detection logs for threshold-based seek operation analysis.
 - **Metronome desync**:
   - Regenerate metronome tracks when settings change (sound style, mode, BPM).

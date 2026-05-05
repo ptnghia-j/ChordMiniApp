@@ -1173,7 +1173,12 @@ export function useAnalyzePageViewModel({
           } catch {}
         }
         if (youtubePlayer && youtubePlayer.seekTo) {
-          youtubePlayer.seekTo(time, 'seconds');
+          // PRE-PLAY GUARD: only seekTo if the user has activated playback
+          if (usePlaybackStore.getState().hasUserActivatedPlayback) {
+            youtubePlayer.seekTo(time, 'seconds');
+          } else {
+            usePlaybackStore.getState().setPendingSeekTimestamp(time);
+          }
         }
       },
       onEnded: () => {
@@ -1297,6 +1302,10 @@ export function useAnalyzePageViewModel({
       durationSeconds: duration || (durationFromSearch ? Number(durationFromSearch) : 0),
       hasResult: hasSheetSageNotes,
       errorMessage: sheetSageError,
+    },
+    playbackPromptToastProps: {
+      isAnalyzed: audioProcessingState.isAnalyzed,
+      isPlaying,
     },
   };
 

@@ -66,6 +66,11 @@ interface PlaybackStore {
   isVideoMinimized: boolean;
   isFollowModeEnabled: boolean;
 
+  // Pre-play protection: prevents seekTo() on the YouTube iframe before the
+  // user has clicked play, which would cause the iframe to black out.
+  hasUserActivatedPlayback: boolean;
+  pendingSeekTimestamp: number | null;
+
   // State setters
   setIsPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
@@ -76,6 +81,7 @@ interface PlaybackStore {
   setCurrentBeatIndex: (index: number) => void;
   setCurrentDownbeatIndex: (index: number) => void;
   setBeatClickHandler: (handler: BeatClickHandler | null) => void;
+  setPendingSeekTimestamp: (timestamp: number | null) => void;
   setIsVideoMinimized: (minimized: boolean) => void;
   setIsFollowModeEnabled: (enabled: boolean) => void;
 
@@ -116,9 +122,32 @@ export const usePlaybackStore = create<PlaybackStore>()(
       lastUserSeekAt: 0,
       isVideoMinimized: false,
       isFollowModeEnabled: true,
+      hasUserActivatedPlayback: false,
+      pendingSeekTimestamp: null,
 
       // State setters
-      setIsPlaying: (playing) => set({ isPlaying: playing }, false, 'setIsPlaying'),
+      setIsPlaying: (playing) => {
+        const patch: Partial<PlaybackStore> = { isPlaying: playing };
+
+        // Mark activation on the very first play event so subsequent
+        // seekTo() calls on the YouTube iframe are allowed.
+        if (playing && !get().hasUserActivatedPlayback) {
+          patch.hasUserActivatedPlayback = true;
+
+          // If a beat-click happened before the user pressed play,
+          // apply the queued seek now that the iframe is active.
+          const pending = get().pendingSeekTimestamp;
+          if (pending !== null) {
+            patch.pendingSeekTimestamp = null;
+            const player = get().youtubePlayer as { seekTo?: (time: number, type: string) => void } | null;
+            if (player && typeof player.seekTo === 'function') {
+              try { player.seekTo(pending, 'seconds'); } catch {}
+            }
+          }
+        }
+
+        set(patch, false, 'setIsPlaying');
+      },
 
       setCurrentTime: (time) => {
         set({ currentTime: time }, false, 'setCurrentTime');
@@ -137,6 +166,8 @@ export const usePlaybackStore = create<PlaybackStore>()(
       setCurrentDownbeatIndex: (index) => set({ currentDownbeatIndex: index }, false, 'setCurrentDownbeatIndex'),
 
       setBeatClickHandler: (handler) => set({ beatClickHandler: handler }, false, 'setBeatClickHandler'),
+
+      setPendingSeekTimestamp: (timestamp) => set({ pendingSeekTimestamp: timestamp }, false, 'setPendingSeekTimestamp'),
 
       setIsVideoMinimized: (minimized) => set({ isVideoMinimized: minimized }, false, 'setIsVideoMinimized'),
 
@@ -164,8 +195,11 @@ export const usePlaybackStore = create<PlaybackStore>()(
       seek: (time) => {
         const state = get();
         const player = state.youtubePlayer as { seekTo?: (time: number, allowSeekAhead: string) => void } | null;
-        if (player && typeof player.seekTo === 'function') {
+        if (state.hasUserActivatedPlayback && player && typeof player.seekTo === 'function') {
           player.seekTo(time, 'seconds');
+        } else if (!state.hasUserActivatedPlayback) {
+          // Queue the seek for when the user activates playback
+          set({ pendingSeekTimestamp: time }, false, 'seek.pending');
         }
         set({ currentTime: time }, false, 'seek');
       },
@@ -413,9 +447,14 @@ export const usePlaybackStore = create<PlaybackStore>()(
             console.error('Failed to delegate beat click handler:', error);
           }
         } else {
-          // Prefer YouTube player when present
-          if (player && typeof player.seekTo === 'function') {
+          const activated = get().hasUserActivatedPlayback;
+          // Prefer YouTube player when present — but only seekTo if the
+          // user has already activated playback to avoid iframe blackout.
+          if (activated && player && typeof player.seekTo === 'function') {
             try { player.seekTo(timestamp, 'seconds'); } catch {}
+          } else if (!activated && player) {
+            // Queue the seek for when the user activates playback
+            set({ pendingSeekTimestamp: timestamp }, false, 'onBeatClick.pending');
           } else if (audioRef?.current) {
             // Fallback to HTMLAudioElement for the upload page
             try {
@@ -443,6 +482,8 @@ export const usePlaybackStore = create<PlaybackStore>()(
             lastUserSeekAt: 0,
             isVideoMinimized: false,
             isFollowModeEnabled: true,
+            hasUserActivatedPlayback: false,
+            pendingSeekTimestamp: null,
           },
           false,
           'reset'
@@ -462,6 +503,7 @@ export const useCurrentBeatIndex = () => usePlaybackStore((state) => state.curre
 export const useCurrentDownbeatIndex = () => usePlaybackStore((state) => state.currentDownbeatIndex);
 export const useIsVideoMinimized = () => usePlaybackStore((state) => state.isVideoMinimized);
 export const useIsFollowModeEnabled = () => usePlaybackStore((state) => state.isFollowModeEnabled);
+export const useHasUserActivatedPlayback = () => usePlaybackStore((state) => state.hasUserActivatedPlayback);
 export const useSeekToken = () => usePlaybackStore((state) => state.seekToken);
 export const useLastUserSeekAt = () => usePlaybackStore((state) => state.lastUserSeekAt);
 

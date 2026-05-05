@@ -379,8 +379,8 @@ E --> F["Render ChordGrid with props"]
 - [formatChord.ts:47-327](file://src/utils/chordFormatting/formatChord.ts#L47-L327)
 
 ### Chord Simplification Toggle
-- Simplifies chord labels to five basic types (major, minor, augmented, diminished, suspended) for display.
-- Preserves original enharmonic spelling and supports sequence corrections.
+- A user-facing toggle button that reduces complex chord labels to five basic types (major, minor, augmented, diminished, suspended) for display, hiding complex extensions (e.g., 9ths, 11ths, 13ths) to make the progression easier to read for beginners.
+- Preserves original enharmonic spelling and supports sequence corrections under the hood, ensuring that underlying playback and data modeling are unaffected.
 
 **Section sources**
 - [chordSimplification.ts:61-201](file://src/utils/chordSimplification.ts#L61-L201)

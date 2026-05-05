@@ -35,6 +35,10 @@ export interface AnalyzePageChromeProps {
     hasResult: boolean;
     errorMessage: string | null;
   };
+  playbackPromptToastProps: {
+    isAnalyzed: boolean;
+    isPlaying: boolean;
+  };
 }
 
 export interface AnalyzeControlsPropsGroup {

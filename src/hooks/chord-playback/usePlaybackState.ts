@@ -202,39 +202,48 @@ export const usePlaybackState = ({
     }
 
     if (youtubePlayer && youtubePlayer.seekTo) {
-      try {
-        youtubePlayer.seekTo(effectiveTimestamp, 'seconds');
+      // PRE-PLAY GUARD: only issue seekTo on the iframe if the user has
+      // already activated playback. Calling seekTo before the first user
+      // gesture blacks-out the YouTube iframe.
+      const activated = usePlaybackStore.getState().hasUserActivatedPlayback;
+      if (!activated) {
+        // Queue the seek so it can be applied when the user presses play.
+        usePlaybackStore.getState().setPendingSeekTimestamp(effectiveTimestamp);
+      } else {
+        try {
+          youtubePlayer.seekTo(effectiveTimestamp, 'seconds');
 
-        // RATE RE-APPLY AFTER SEEK: the YouTube iframe silently resets its
-        // effective playback rate during the seekTo round-trip (the rate
-        // value reported by getPlaybackRate stays correct, but the rendered
-        // frames for ~200–500 ms after seek are paced at ~1× until the
-        // buffer catches up). At non-1× rates this produces: GrainPlayer
-        // audio racing ahead at 2×, YouTube frames crawling at ~1.6×, drift
-        // accumulates fast, drift-loop seeks again, cycle repeats — exactly
-        // the "keeps refreshing like crazy" symptom. Re-push the rate ~250 ms
-        // after the seek settles so the iframe picks up the intended tempo.
-        if (
-          isPitchShiftEnabled
-          && isPitchShiftReady
-          && Math.abs(playbackRate - 1) > 0.001
-        ) {
-          const playerWithRate = youtubePlayer as unknown as {
-            setPlaybackRate?: (rate: number) => void;
-          };
-          if (typeof playerWithRate.setPlaybackRate === 'function') {
-            if (rateReapplyTimeoutRef.current) {
-              clearTimeout(rateReapplyTimeoutRef.current);
+          // RATE RE-APPLY AFTER SEEK: the YouTube iframe silently resets its
+          // effective playback rate during the seekTo round-trip (the rate
+          // value reported by getPlaybackRate stays correct, but the rendered
+          // frames for ~200–500 ms after seek are paced at ~1× until the
+          // buffer catches up). At non-1× rates this produces: GrainPlayer
+          // audio racing ahead at 2×, YouTube frames crawling at ~1.6×, drift
+          // accumulates fast, drift-loop seeks again, cycle repeats — exactly
+          // the "keeps refreshing like crazy" symptom. Re-push the rate ~250 ms
+          // after the seek settles so the iframe picks up the intended tempo.
+          if (
+            isPitchShiftEnabled
+            && isPitchShiftReady
+            && Math.abs(playbackRate - 1) > 0.001
+          ) {
+            const playerWithRate = youtubePlayer as unknown as {
+              setPlaybackRate?: (rate: number) => void;
+            };
+            if (typeof playerWithRate.setPlaybackRate === 'function') {
+              if (rateReapplyTimeoutRef.current) {
+                clearTimeout(rateReapplyTimeoutRef.current);
+              }
+              rateReapplyTimeoutRef.current = setTimeout(() => {
+                try {
+                  playerWithRate.setPlaybackRate!(playbackRate);
+                } catch {}
+                rateReapplyTimeoutRef.current = null;
+              }, 250);
             }
-            rateReapplyTimeoutRef.current = setTimeout(() => {
-              try {
-                playerWithRate.setPlaybackRate!(playbackRate);
-              } catch {}
-              rateReapplyTimeoutRef.current = null;
-            }, 250);
           }
-        }
-      } catch {}
+        } catch {}
+      }
     } else if (audioRef.current) {
       try {
         audioRef.current.currentTime = effectiveTimestamp;
@@ -272,6 +281,18 @@ export const usePlaybackState = ({
     // CLOCK AUTHORITY: notify the master clock so its live-position
     // extrapolation begins advancing.
     youtubeMasterClock.onPlay();
+
+    // PRE-PLAY GUARD: if the user clicked a beat cell before pressing play,
+    // we queued the target timestamp.  Now that the iframe is active, apply
+    // the seek so playback starts from the position the user selected.
+    const pending = usePlaybackStore.getState().pendingSeekTimestamp;
+    if (pending !== null) {
+      usePlaybackStore.getState().setPendingSeekTimestamp(null);
+      if (youtubePlayer && youtubePlayer.seekTo) {
+        try { youtubePlayer.seekTo(pending, 'seconds'); } catch {}
+      }
+      youtubeMasterClock.onUserSeek(pending);
+    }
   }, [youtubePlayer, isPitchShiftEnabled, setIsPlaying]);
 
   const handleYouTubePause = useCallback(() => {

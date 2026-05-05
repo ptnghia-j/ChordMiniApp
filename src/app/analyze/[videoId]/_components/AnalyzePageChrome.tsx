@@ -4,6 +4,7 @@ import Navigation from '@/components/common/Navigation';
 import AnalyzePageBackdrop from '@/components/analysis/AnalyzePageBackdrop';
 import ProcessingBanners from '@/components/analysis/ProcessingBanners';
 import MelodyTranscriptionStatusToast from '@/components/analysis/MelodyTranscriptionStatusToast';
+import PlaybackPromptToast from '@/components/analysis/PlaybackPromptToast';
 import type { AnalyzePageChromeProps } from '../_types/analyzePageViewModel';
 
 export default function AnalyzePageChrome({
@@ -11,6 +12,7 @@ export default function AnalyzePageChrome({
   showFooterTransition,
   processingBannersProps,
   melodyToastProps,
+  playbackPromptToastProps,
 }: AnalyzePageChromeProps) {
   return (
     <>
@@ -23,6 +25,7 @@ export default function AnalyzePageChrome({
       <Navigation />
       <ProcessingBanners {...processingBannersProps} />
       <MelodyTranscriptionStatusToast {...melodyToastProps} />
+      <PlaybackPromptToast {...playbackPromptToastProps} />
     </>
   );
 }

@@ -23,6 +23,8 @@
 - Added documentation for the new key signature processing pipeline and its integration with the sheet music model
 - Enhanced the musicXML export section to include key section normalization and resolution
 - Updated the architecture overview to show the new key signature processing workflow
+- Implemented context-aware stem directions for multi-voice staves (e.g., ensuring upper voice stems point up, lower voice down) for cleaner notation.
+- Fixed pickup measure calculation to accurately render 3-beat anacrusis measures with correct rest values before the first musical chord.
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -272,6 +274,8 @@ The sheet music display consumes MusicXML produced by the analysis workflow. Exp
 
 - Notation score building:
   - Constructs generic measure events, splits notes across measures, expands durations respecting meter and tuplets, prunes orphan ties, and normalizes key sections.
+  - Generates context-aware stem directions for multi-voice staves, forcing upper voice stems up and lower voice stems down to prevent collision.
+  - Implements accurate pickup measure calculations (e.g., correctly computing 3-beat anacrusis rests) preceding the first measure.
   - **Updated** Key sections are now processed through the dedicated `normalizeScoreKeySections` function which handles key signature normalization, division conversion, and accidental preference resolution.
 
 **Section sources**
@@ -361,6 +365,9 @@ Common issues and remedies:
 - **Updated** Key signature issues:
   - Verify that key signatures are properly transposed when pitch shifting is applied. Check the `transposeKeySignature` function for proper key signature parsing and transposition.
   - Ensure that key sections are properly normalized and sorted before export to MusicXML.
+- Incorrect pickup rests or stem directions:
+  - If pickup measures show single-beat rests when they should have more, check the pickup beat count calculation in `useSheetMusicModel`. It correctly handles anacrusis up to full measure minus one beat.
+  - For overlapping stems in complex chords, ensure the multi-voice logic correctly identifies the top and bottom voice boundaries.
 
 **Section sources**
 - [osmdLoader.ts:33-64](file://src/components/piano-visualizer/sheet-music-display/osmdLoader.ts#L33-L64)
