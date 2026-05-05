@@ -111,6 +111,7 @@ export function generatePianoNotes(
   timeSignature: number = 4,
   segmentationData?: SegmentationResult | null,
   signalDynamics?: ChordSignalDynamics | null,
+  simpleBlockChord: boolean = false,
 ): ScheduledNote[] {
   const notes: ScheduledNote[] = [];
   // For compound time (6/8), the repeating pattern unit is 3 beats (one compound beat group),
@@ -259,7 +260,7 @@ export function generatePianoNotes(
     }
   };
 
-  if (!useRepeatingPattern) {
+  if (simpleBlockChord || !useRepeatingPattern) {
     const shortChordVolume = mix(0.8, 1.0, easeInOutSineCurve(fullness));
     pushSingleChord(
       0,
@@ -270,7 +271,7 @@ export function generatePianoNotes(
         dropUpperExtensions: !preserveUpperColorTones && quietness > 0.58 && fullness < 0.46,
         fifthVelocityScale: mix(0.46, 1.0, easeInOutSineCurve(fullness + (1 - quietness) * 0.35)),
         upperVelocityScale: mix(0.58, 1.06, easeInOutSineCurve(fullness * 0.75 + motion * 0.25)),
-        addBassOctaveBelow: shouldAddBassOctave,
+        addBassOctaveBelow: simpleBlockChord ? false : shouldAddBassOctave,
       },
     );
     return notes;

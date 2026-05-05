@@ -45,6 +45,8 @@ export interface RasterizedScorePage {
   height: number;
 }
 
+export type SheetMusicPdfSize = 'normal' | 'large' | 'extra-large';
+
 export interface PdfWriter {
   addPage: () => void;
   addImage: (...args: unknown[]) => void;

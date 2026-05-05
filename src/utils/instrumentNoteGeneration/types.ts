@@ -56,6 +56,8 @@ export interface NoteGenerationParams {
   segmentationData?: SegmentationResult | null;
   /** Optional signal-derived intensity snapshot for this chord window */
   signalDynamics?: ChordSignalDynamics | null;
+  /** Render piano as one block chord instead of generated accompaniment patterns */
+  simpleBlockChord?: boolean;
   /** Shared guitar diagram/capo selection to keep playback aligned with diagrams */
   guitarVoicing?: Partial<GuitarVoicingSelection>;
   /** Enharmonic target key used when resolving capo-transposed shape names */

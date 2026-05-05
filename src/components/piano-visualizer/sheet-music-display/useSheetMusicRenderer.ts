@@ -12,7 +12,7 @@ import {
   resolveMeasureStartScoreTimes,
   stabilizeMeasureBoxAnchors,
 } from './sync';
-import type { MeasureHighlightBox, OpenSheetMusicDisplayCtor, PdfWriter } from './types';
+import type { MeasureHighlightBox, OpenSheetMusicDisplayCtor, PdfWriter, SheetMusicPdfSize } from './types';
 
 interface UseSheetMusicRendererParams {
   musicXml: string;
@@ -24,6 +24,11 @@ interface UseSheetMusicRendererParams {
 }
 
 const CHORD_SYMBOL_SCOPE_SELECTOR = 'g.vf-stavetext, g[class*="stavetext"], g[class*="chord"], g[id*="chord"]';
+const PDF_SIZE_ZOOM_SCALE: Record<SheetMusicPdfSize, number> = {
+  normal: 1,
+  large: 1.22,
+  'extra-large': 1.42,
+};
 
 function normalizeChordAccidentalText(value: string): string {
   return value
@@ -95,6 +100,7 @@ export function useSheetMusicRenderer({
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<InstanceType<OpenSheetMusicDisplayCtor> | null>(null);
+  const renderedMusicXmlRef = useRef('');
   const [isRendering, setIsRendering] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -349,8 +355,20 @@ export function useSheetMusicRenderer({
   useEffect(() => {
     if (isComputing || !musicXml.trim()) {
       setIsPresentationReady(false);
+      if (!musicXml.trim()) {
+        renderedMusicXmlRef.current = '';
+      }
+      return;
     }
-  }, [isComputing, musicXml]);
+
+    if (
+      renderedMusicXmlRef.current === musicXml
+      && !isRendering
+      && containerRef.current?.childElementCount
+    ) {
+      setIsPresentationReady(true);
+    }
+  }, [isComputing, isRendering, musicXml]);
 
   useEffect(() => {
     let cancelled = false;
@@ -420,6 +438,7 @@ export function useSheetMusicRenderer({
         });
         setMeasureBoxes(buildMeasureBoxMap());
         if (!cancelled) {
+          renderedMusicXmlRef.current = musicXml;
           setIsPresentationReady(true);
         }
       } catch (error) {
@@ -500,7 +519,7 @@ export function useSheetMusicRenderer({
     return () => window.removeEventListener('resize', handleResize);
   }, [buildMeasureBoxMap]);
 
-  const handleDownloadPdf = useCallback(async () => {
+  const handleDownloadPdf = useCallback(async (pdfSize: SheetMusicPdfSize = 'large') => {
     if (isExportingPdf || isRendering || isComputing || !musicXml.trim()) {
       return;
     }
@@ -532,6 +551,7 @@ export function useSheetMusicRenderer({
       const dedicatedCanvasPages = await rasterizeScoreWithDedicatedCanvasBackend({
         musicXml,
         targetWidth: content.clientWidth || content.scrollWidth,
+        zoomScale: PDF_SIZE_ZOOM_SCALE[pdfSize],
       });
 
       if (dedicatedCanvasPages.length === 0) {

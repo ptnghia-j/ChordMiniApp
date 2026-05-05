@@ -31,6 +31,7 @@ export function exportPianoVisualizerScoreToMusicXml(input: PianoVisualizerScore
     timeSignature,
     segmentationData: input.segmentationData,
     signalAnalysis: input.signalAnalysis,
+    simpleBlockChord: input.simplePianoBlockChords ?? false,
   });
   const melodyNotes = melodyQuantization.notes.map((event) => ({
     ...event,

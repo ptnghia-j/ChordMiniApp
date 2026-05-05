@@ -58,6 +58,8 @@ interface FallingNotesCanvasProps {
   targetKey?: string;
   /** Optional signal-aware dynamics source so visuals mirror playback note patterns */
   signalDynamicsSource?: SignalDynamicsSource | null;
+  /** Render generated piano notes as one block chord per chord event */
+  simplePianoBlockChords?: boolean;
   /** Playback position used to apply the same in-chord scheduling adjustments as audio playback */
   playbackTime?: number;
   /** Optional precomputed overlay notes such as melodic transcription */
@@ -192,6 +194,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
   guitarVoicing,
   targetKey,
   signalDynamicsSource,
+  simplePianoBlockChords = false,
   playbackTime,
   extraVisualNotes = [],
   onActiveNotesChange,
@@ -281,6 +284,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
       guitarVoicing,
       targetKey,
       signalDynamicsSource,
+      simplePianoBlockChords,
     );
   }, [
     chordEvents,
@@ -292,6 +296,7 @@ export const FallingNotesCanvas: React.FC<FallingNotesCanvasProps> = React.memo(
     guitarVoicing,
     targetKey,
     signalDynamicsSource,
+    simplePianoBlockChords,
   ]);
 
   const staticInstrumentVisualNotesByEvent = useMemo(

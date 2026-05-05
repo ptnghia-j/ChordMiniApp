@@ -18,6 +18,7 @@ export function generateNotesForInstrument(
     totalDuration,
     segmentationData,
     signalDynamics,
+    simpleBlockChord,
     timeSignature = 4,
     guitarVoicing,
     targetKey,
@@ -55,6 +56,7 @@ export function generateNotesForInstrument(
         timeSignature,
         segmentationData,
         signalDynamics,
+        simpleBlockChord,
       );
 
     case 'guitar':

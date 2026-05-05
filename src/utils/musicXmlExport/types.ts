@@ -175,6 +175,7 @@ export interface PianoVisualizerScoreInput extends MusicXmlExportOptions {
   keySections?: MusicXmlKeySection[];
   segmentationData?: SegmentationResult | null;
   signalAnalysis?: AudioDynamicsAnalysisResult | null;
+  simplePianoBlockChords?: boolean;
 }
 
 export interface BuildPianoNotationNoteEventsOptions {
@@ -182,6 +183,7 @@ export interface BuildPianoNotationNoteEventsOptions {
   timeSignature?: number;
   segmentationData?: SegmentationResult | null;
   signalAnalysis?: AudioDynamicsAnalysisResult | null;
+  simpleBlockChord?: boolean;
 }
 
 export interface GenericDurationMapping {

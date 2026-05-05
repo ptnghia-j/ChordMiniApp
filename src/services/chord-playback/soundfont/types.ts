@@ -20,6 +20,8 @@ export interface PlaybackTimingContext {
   beatCount?: number;
   segmentationData?: SegmentationResult | null;
   signalDynamics?: ChordSignalDynamics | null;
+  /** When true, piano uses one block chord instead of accompaniment patterns. */
+  simplePianoBlockChord?: boolean;
   /**
    * Name of the chord scheduled immediately after the one being played.
    * Forwarded to note generators so the guitar strum builder can decide

@@ -400,6 +400,8 @@ interface UseSheetMusicModelParams {
   timeSignature: number;
   segmentationData?: SegmentationResult | null;
   signalAnalysis: AudioDynamicsAnalysisResult | null;
+  simplePianoBlockChords: boolean;
+  includeMelodyInSheetMusic: boolean;
 }
 
 export function useSheetMusicModel({
@@ -420,6 +422,8 @@ export function useSheetMusicModel({
   timeSignature,
   segmentationData = null,
   signalAnalysis,
+  simplePianoBlockChords,
+  includeMelodyInSheetMusic,
 }: UseSheetMusicModelParams) {
   const targetSheetMusicPitchShiftSemitones = isPitchShiftActive ? pitchShiftSemitones : 0;
   const [sheetMusicPitchShiftSemitones, setSheetMusicPitchShiftSemitones] = useState(targetSheetMusicPitchShiftSemitones);
@@ -433,10 +437,10 @@ export function useSheetMusicModel({
     return () => window.clearTimeout(timeoutId);
   }, [targetSheetMusicPitchShiftSemitones]);
 
-  const hasLeadSheetData = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
+  const hasLeadSheetData = includeMelodyInSheetMusic && (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const hasPianoSheetData = mergedPlayableChordEvents.length > 0;
   const hasSheetMusicData = hasPianoSheetData || hasLeadSheetData;
-  const sheetMusicDisabledTooltip = 'Sheet music requires playable piano chords or melody transcription.';
+  const sheetMusicDisabledTooltip = 'Sheet music requires playable piano chords or enabled melody playback.';
   const effectiveDisplayMode: VisualizerDisplayMode = hasSheetMusicData ? displayMode : 'piano-roll';
 
   const sheetMusicDisplayKeySignature = useMemo(
@@ -444,8 +448,12 @@ export function useSheetMusicModel({
     [mergedKeySignature, sheetMusicPitchShiftSemitones],
   );
   const sheetMusicMelodyNoteEvents = useMemo(
-    () => transposeSheetSageNoteEvents(sheetSageResult?.noteEvents, sheetMusicPitchShiftSemitones),
-    [sheetMusicPitchShiftSemitones, sheetSageResult?.noteEvents],
+    () => (
+      includeMelodyInSheetMusic
+        ? transposeSheetSageNoteEvents(sheetSageResult?.noteEvents, sheetMusicPitchShiftSemitones)
+        : []
+    ),
+    [includeMelodyInSheetMusic, sheetMusicPitchShiftSemitones, sheetSageResult?.noteEvents],
   );
 
   const sheetMusicKeySections = useMemo<MusicXmlKeySection[] | undefined>(() => (
@@ -567,7 +575,7 @@ export function useSheetMusicModel({
       sheetMusicBeatTimes,
       sheetMusicChordEvents,
       firstMelodyBeatIndex: firstSheetMusicMelodyBeatIndex,
-      hasMelodyNotes: (sheetSageResult?.noteEvents?.length ?? 0) > 0,
+      hasMelodyNotes: sheetMusicMelodyNoteEvents.length > 0,
     });
   }, [
     firstSheetMusicMelodyBeatIndex,
@@ -575,7 +583,7 @@ export function useSheetMusicModel({
     resolvedChordGridData,
     sheetMusicBeatTimes,
     sheetMusicChordEvents,
-    sheetSageResult?.noteEvents?.length,
+    sheetMusicMelodyNoteEvents.length,
     timeSignature,
   ]);
 
@@ -620,8 +628,8 @@ export function useSheetMusicModel({
       const nextSheetMusicXml = hasPianoSheetData
         ? exportPianoVisualizerScoreToMusicXml({
             chordEvents: sheetMusicChordEvents,
-            melodyNoteEvents: sheetMusicMelodyNoteEvents,
-            melodyBeatTimes: sheetMusicExportMelodyBeatTimes,
+            melodyNoteEvents: hasLeadSheetData ? sheetMusicMelodyNoteEvents : undefined,
+            melodyBeatTimes: hasLeadSheetData ? sheetMusicExportMelodyBeatTimes : undefined,
             pickupBeatCount: exportedSheetMusicPickupBeatCount,
             bpm: detectedBpm || undefined,
             timeSignature,
@@ -630,6 +638,7 @@ export function useSheetMusicModel({
             keySections: sheetMusicKeySections,
             segmentationData,
             signalAnalysis,
+            simplePianoBlockChords,
           })
         : (hasLeadSheetData && sheetSageResult
           ? exportLeadSheetToMusicXml(sheetMusicMelodyNoteEvents, mergedPlayableChordEvents, musicXmlOptions)
@@ -682,6 +691,7 @@ export function useSheetMusicModel({
     sheetSageResult,
     segmentationData,
     signalAnalysis,
+    simplePianoBlockChords,
     timeSignature,
   ]);
 

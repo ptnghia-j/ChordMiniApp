@@ -128,7 +128,7 @@ function NewHomePageContentInner() {
       </div>
 
       {/* Navigation */}
-      <Navigation showStickySearch={shouldShowStickySearch} />
+      <Navigation showStickySearch={shouldShowStickySearch} overlay />
 
 
       {/* <WarningBanner /> */}
@@ -152,7 +152,7 @@ function NewHomePageContentInner() {
         )}
 
         {/* Split-Screen Layout */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-8 pb-20 lg:pb-24">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-24 pb-20 lg:pb-24">
           {/* Left Side: Hero Content (60%) */}
           <div className="lg:col-span-3 space-y-8">
             {/* Title - Centered */}
@@ -236,7 +236,7 @@ function NewHomePageContentInner() {
       </motion.section>
 
       {/* Recent Videos Section - Light source in the center */}
-      <section className="relative z-20 -mt-10 w-full overflow-hidden rounded-[36px] border border-slate-200/80 bg-white py-16 shadow-[0_-24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-800 min-h-[33vh]">
+      <section className="relative z-20 -mt-10 w-full overflow-hidden rounded-[36px] border border-slate-200/80 bg-gray-50 py-16 shadow-[0_-24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-900 min-h-[33vh]">
         {/* Background Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {theme === 'dark' ? (

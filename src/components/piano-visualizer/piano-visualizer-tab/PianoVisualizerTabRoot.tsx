@@ -13,6 +13,7 @@ import {
   useGuitarSelectedPositions,
   usePitchShiftSemitones,
   useRomanNumerals,
+  useSimplifyChords,
   useTargetKey,
 } from '@/stores/uiStore';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
@@ -55,6 +56,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   const guitarCapoFret = useGuitarCapoFret();
   const guitarSelectedPositions = useGuitarSelectedPositions();
   const pitchShiftSemitones = usePitchShiftSemitones();
+  const simplePianoBlockChords = useSimplifyChords();
   const { showRomanNumerals, romanNumeralData } = useRomanNumerals() as {
     showRomanNumerals?: boolean;
     romanNumeralData?: { analysis?: string[] } | null;
@@ -174,6 +176,8 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     timeSignature: timelineModel.timeSignature,
     segmentationData,
     signalAnalysis: timelineModel.signalAnalysis,
+    simplePianoBlockChords,
+    includeMelodyInSheetMusic: showMelodicOverlay,
   });
 
   const effectiveActiveInstruments = useMemo(() => {
@@ -216,6 +220,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     segmentationData,
     guitarVoicing,
     targetKey,
+    simplePianoBlockChords,
   );
 
   const handleMidiDownload = useCallback(() => {
@@ -314,6 +319,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
           guitarVoicing={guitarVoicing}
           targetKey={targetKey}
           dynamicsAnalyzer={timelineModel.dynamicsAnalyzer}
+          simplePianoBlockChords={simplePianoBlockChords}
           melodyOverlayNotes={timelineModel.melodyOverlayNotes}
           handleActiveNotesChange={handleActiveNotesChange}
           activeNotes={activeNotes}

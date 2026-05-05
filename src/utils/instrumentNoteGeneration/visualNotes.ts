@@ -127,6 +127,7 @@ export function generateAllInstrumentVisualNotePlans(
   guitarVoicing?: Partial<GuitarVoicingSelection>,
   targetKey?: string,
   signalDynamicsSource?: SignalDynamicsSource | null,
+  simplePianoBlockChords: boolean = false,
 ): InstrumentVisualEventPlan[] {
   const eventPlans: InstrumentVisualEventPlan[] = [];
   // Merge consecutive beats with same chord — audio only triggers on chord changes
@@ -159,6 +160,7 @@ export function generateAllInstrumentVisualNotePlans(
         timeSignature,
         segmentationData,
         signalDynamics,
+        simpleBlockChord: simplePianoBlockChords && instrumentName === 'piano',
         guitarVoicing,
         targetKey,
         nextChordName,
@@ -233,6 +235,7 @@ export function generateAllInstrumentVisualNotes(
   targetKey?: string,
   signalDynamicsSource?: SignalDynamicsSource | null,
   playbackTime?: number,
+  simplePianoBlockChords: boolean = false,
 ): VisualNote[] {
   return materializeInstrumentVisualNotes(
     generateAllInstrumentVisualNotePlans(
@@ -244,6 +247,7 @@ export function generateAllInstrumentVisualNotes(
       guitarVoicing,
       targetKey,
       signalDynamicsSource,
+      simplePianoBlockChords,
     ),
     playbackTime,
   );

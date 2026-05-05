@@ -349,6 +349,7 @@ export function buildPianoNotationNoteEvents(
       timeSignature,
       segmentationData: options?.segmentationData ?? null,
       signalDynamics,
+      simpleBlockChord: options?.simpleBlockChord ?? false,
     });
 
     for (const scheduledNote of scheduledNotes) {

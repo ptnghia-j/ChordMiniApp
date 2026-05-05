@@ -23,6 +23,7 @@ export function usePianoOnlyPlayback(
   segmentationData?: SegmentationResult | null,
   guitarVoicing?: Partial<GuitarVoicingSelection>,
   targetKey?: string | null,
+  simplePianoBlockChords: boolean = false,
 ) {
   const lastPlayedChordRef = useRef<string | null>(null);
   const serviceRef = useRef(getSoundfontChordPlaybackService());
@@ -113,6 +114,7 @@ export function usePianoOnlyPlayback(
         beatCount: currentChordEvent.beatCount,
         segmentationData,
         signalDynamics,
+        simplePianoBlockChord: simplePianoBlockChords,
       },
       timeSignature,
       guitarVoicing,
@@ -128,6 +130,7 @@ export function usePianoOnlyPlayback(
     merged,
     segmentationData,
     shouldActivate,
+    simplePianoBlockChords,
     targetKey,
     timeSignature,
     totalDuration,

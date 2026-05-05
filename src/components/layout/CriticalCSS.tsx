@@ -22,13 +22,16 @@ export const CriticalCSS: React.FC = () => {
       }
       
       /* Navigation critical styles */
-      nav {
-        position: sticky;
+      nav[data-chordmini-navigation="true"] {
+        position: fixed;
+        inset-inline: 0;
         top: 0;
-        z-index: 50;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid #e5e7eb;
+        z-index: 100;
+        background: transparent;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        border: 0;
+        box-shadow: none;
       }
       
       /* Hero section critical styles */

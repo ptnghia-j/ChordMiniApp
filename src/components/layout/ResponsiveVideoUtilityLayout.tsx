@@ -94,6 +94,11 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
   const baseOverlap = Math.max(0, Math.min(Math.round(videoHeight * (panelsOpen ? 0.85 : 0.95)), 420));
   const extraLift = panelsOpen ? 32 : 104;
   const shouldUseFixedMobileDock = !isMdUp && !isDockPinnedAboveFooter;
+  const desktopDockWidthStyle = isMdUp && panelsOpen
+    ? {
+        maxWidth: 'calc(var(--analysis-left-pane-width, 100vw) + 2rem)',
+      }
+    : undefined;
 
   useEffect(() => {
     const dockHeight = shouldUseFixedMobileDock ? layoutHeight + 12 : 0;
@@ -117,7 +122,10 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
             ? 'pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-stretch gap-2 px-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-1.5'
             : 'pointer-events-none relative z-[60] flex flex-col items-stretch gap-2 px-2.5 pb-0 sm:px-4 sm:pb-0 md:flex-row md:items-end md:gap-3'
         }
-        style={{ marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -28 : -88)) : 0 }}
+        style={{
+          ...desktopDockWidthStyle,
+          marginTop: isMdUp ? (baseOverlap ? -(baseOverlap + extraLift) : (panelsOpen ? -28 : -88)) : 0,
+        }}
       >
         {shouldUseFixedMobileDock ? (
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/50 via-slate-950/18 to-transparent dark:from-slate-950/72" />

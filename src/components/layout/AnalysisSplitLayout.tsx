@@ -32,6 +32,7 @@ export default function AnalysisSplitLayout({
 }: AnalysisSplitLayoutProps) {
   const { isMobile } = useViewportSnapshot();
   const orientation: 'horizontal' | 'vertical' = isMobile ? 'vertical' : 'horizontal';
+  const leftPanelRef = React.useRef<HTMLDivElement>(null);
 
   // Single-pane mode is handled in JSX below to preserve hook call order
 
@@ -55,6 +56,37 @@ export default function AnalysisSplitLayout({
     } catch { /* ignore */ }
   }, [orientation, storageKey]);
 
+  React.useEffect(() => {
+    const root = document.documentElement;
+
+    if (!isSplit || orientation !== 'horizontal') {
+      root.style.removeProperty('--analysis-left-pane-width');
+      return;
+    }
+
+    const updateLeftPaneWidth = () => {
+      const rect = leftPanelRef.current?.getBoundingClientRect();
+      if (rect?.width) {
+        root.style.setProperty('--analysis-left-pane-width', `${Math.round(rect.width)}px`);
+      }
+    };
+
+    updateLeftPaneWidth();
+
+    const resizeObserver = new ResizeObserver(updateLeftPaneWidth);
+    const leftPanel = leftPanelRef.current;
+    if (leftPanel) {
+      resizeObserver.observe(leftPanel);
+    }
+
+    window.addEventListener('resize', updateLeftPaneWidth);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateLeftPaneWidth);
+      root.style.removeProperty('--analysis-left-pane-width');
+    };
+  }, [isSplit, orientation]);
+
   return (
     <div className="h-full min-h-0 flex-1">
       {isSplit ? (
@@ -69,7 +101,7 @@ export default function AnalysisSplitLayout({
             maxSize={70}
             className="min-w-0 min-h-0 overflow-hidden"
           >
-            <div className="h-full min-h-0 overflow-y-auto">{left}</div>
+            <div ref={leftPanelRef} className="h-full min-h-0 overflow-y-auto">{left}</div>
           </Panel>
           <PanelResizeHandle className="group relative z-[40]">
             <div

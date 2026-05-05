@@ -33,12 +33,13 @@ function rasterizeScoreCanvasPages(container: HTMLElement): RasterizedScorePage[
 export async function rasterizeScoreWithDedicatedCanvasBackend(params: {
   musicXml: string;
   targetWidth: number;
+  zoomScale?: number;
 }): Promise<RasterizedScorePage[]> {
   if (typeof document === 'undefined') {
     return [];
   }
 
-  const { musicXml, targetWidth } = params;
+  const { musicXml, targetWidth, zoomScale = 1 } = params;
   const OpenSheetMusicDisplay = await loadOsmdConstructor();
   const host = document.createElement('div');
   const exportContainer = document.createElement('div');
@@ -74,7 +75,7 @@ export async function rasterizeScoreWithDedicatedCanvasBackend(params: {
     configureOsmdChordSymbolRules(exportOsmd);
     await exportOsmd.load(musicXml);
     configureOsmdChordSymbolRules(exportOsmd);
-    exportOsmd.Zoom = 0.82;
+    exportOsmd.Zoom = 0.82 * Math.max(0.75, Math.min(1.8, zoomScale));
     exportOsmd.render();
 
     await new Promise<void>((resolve) => {

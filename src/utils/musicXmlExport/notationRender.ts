@@ -12,10 +12,22 @@ import {
 } from './shared';
 import type {
   GenericMeasureEvent,
+  NotationChord,
   NotationMeasure,
   NotationScore,
   NotationStaff,
 } from './types';
+
+type StemDirection = 'up' | 'down';
+
+interface StemDirectionContext {
+  staff: number;
+  voice: number;
+  startDivision: number;
+  endDivision: number;
+  pitchKey: string;
+  direction: StemDirection;
+}
 
 function getChordLabelVisualWidth(label: string): number {
   const compactLabel = label.replace(/\s+/g, '');
@@ -207,6 +219,222 @@ function getStemDirectionForPitches(
   return lowestPitch < getStaffMiddleLineMidi(staff) ? 'up' : 'down';
 }
 
+function getMeasureStavesForPart(
+  measure: NotationMeasure,
+  partId: NotationPartId,
+): NotationStaff[] {
+  return partId === 'PMelody'
+    ? (measure.melodyStaff ? [measure.melodyStaff] : [])
+    : measure.pianoStaves;
+}
+
+function hasIndependentOverlappingLines(staff: NotationStaff): boolean {
+  const chords = staff.voices
+    .flatMap((voice) => voice.chords)
+    .sort((left, right) => left.startDivision - right.startDivision || left.endDivision - right.endDivision);
+
+  for (let leftIndex = 0; leftIndex < chords.length; leftIndex += 1) {
+    const left = chords[leftIndex];
+
+    for (let rightIndex = leftIndex + 1; rightIndex < chords.length; rightIndex += 1) {
+      const right = chords[rightIndex];
+
+      if (right.startDivision >= left.endDivision) {
+        break;
+      }
+
+      const overlaps = left.startDivision < right.endDivision && right.startDivision < left.endDivision;
+      const isSameChordAttack = left.startDivision === right.startDivision && left.endDivision === right.endDivision;
+      if (overlaps && !isSameChordAttack) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function buildMultiLineStaffMeasureKeys(
+  measures: NotationMeasure[],
+  partId: NotationPartId,
+): Set<string> {
+  const seedKeys = new Set<string>();
+  const notedKeys = new Set<string>();
+
+  measures.forEach((measure) => {
+    getMeasureStavesForPart(measure, partId).forEach((staff) => {
+      const activeVoices = staff.voices.filter((voice) => voice.chords.length > 0);
+      if (activeVoices.length > 0) {
+        notedKeys.add(`${measure.measureIndex}:${staff.staff}`);
+      }
+
+      if (activeVoices.length > 1 || hasIndependentOverlappingLines(staff)) {
+        seedKeys.add(`${measure.measureIndex}:${staff.staff}`);
+      }
+    });
+  });
+
+  const keys = new Set(seedKeys);
+  seedKeys.forEach((key) => {
+    const [measureIndexValue, staffValue] = key.split(':');
+    const measureIndex = Number(measureIndexValue);
+    const staff = Number(staffValue);
+
+    [measureIndex - 1, measureIndex + 1].forEach((neighborMeasureIndex) => {
+      const neighborKey = `${neighborMeasureIndex}:${staff}`;
+      if (notedKeys.has(neighborKey)) {
+        keys.add(neighborKey);
+      }
+    });
+  });
+
+  return keys;
+}
+
+function getStemPitchKey(pitches: number[]): string {
+  return [...pitches].sort((left, right) => left - right).join(',');
+}
+
+function getAveragePitch(pitches: number[]): number {
+  return pitches.length > 0
+    ? pitches.reduce((sum, pitch) => sum + pitch, 0) / pitches.length
+    : Number.NEGATIVE_INFINITY;
+}
+
+function getHighestPitch(pitches: number[]): number {
+  return pitches.length > 0 ? Math.max(...pitches) : Number.NEGATIVE_INFINITY;
+}
+
+function getLowestPitch(pitches: number[]): number {
+  return pitches.length > 0 ? Math.min(...pitches) : Number.POSITIVE_INFINITY;
+}
+
+function compareChordPitchRole(
+  left: NotationChord,
+  right: NotationChord,
+): number {
+  const centerDelta = getAveragePitch(left.pitches) - getAveragePitch(right.pitches);
+  if (Math.abs(centerDelta) > 0.5) {
+    return centerDelta;
+  }
+
+  const highestDelta = getHighestPitch(left.pitches) - getHighestPitch(right.pitches);
+  if (highestDelta !== 0) {
+    return highestDelta;
+  }
+
+  return getLowestPitch(left.pitches) - getLowestPitch(right.pitches);
+}
+
+function chordsOverlap(left: NotationChord, right: NotationChord): boolean {
+  return left.startDivision < right.endDivision && right.startDivision < left.endDivision;
+}
+
+function buildContextualStemDirectionContexts(
+  staff: NotationStaff,
+  hasMultiLineContext: boolean,
+): StemDirectionContext[] {
+  if (!hasMultiLineContext) {
+    return [];
+  }
+
+  const chords = staff.voices.flatMap((voice) => voice.chords);
+  if (chords.length < 2) {
+    return [];
+  }
+
+  const voiceProfiles = [...staff.voices]
+    .map((voice) => {
+      const pitches = voice.chords.flatMap((chord) => chord.pitches);
+      return {
+        voice: voice.voice,
+        noteCount: pitches.length,
+        maxPitch: getHighestPitch(pitches),
+        averagePitch: getAveragePitch(pitches),
+      };
+    })
+    .filter((profile) => profile.noteCount > 0)
+    .sort((left, right) => (
+      right.maxPitch - left.maxPitch
+      || right.averagePitch - left.averagePitch
+      || right.noteCount - left.noteCount
+      || left.voice - right.voice
+    ));
+  if (voiceProfiles.length < 2) {
+    return [];
+  }
+
+  const upperVoice = voiceProfiles[0]?.voice;
+  const lowerVoice = voiceProfiles[voiceProfiles.length - 1]?.voice;
+  const getVoiceProfileDirection = (voice: number): StemDirection | undefined => {
+    if (upperVoice !== undefined && voice === upperVoice) {
+      return 'up';
+    }
+
+    if (lowerVoice !== undefined && voice === lowerVoice) {
+      return 'down';
+    }
+
+    return undefined;
+  };
+
+  return chords.flatMap((chord): StemDirectionContext[] => {
+    const overlappingChords = chords.filter((candidate) => (
+      candidate !== chord && chordsOverlap(chord, candidate)
+    ));
+    let direction: StemDirection | undefined;
+
+    if (overlappingChords.length > 0) {
+      const orderedCluster = [chord, ...overlappingChords].sort(compareChordPitchRole);
+      const lowestChord = orderedCluster[0];
+      const highestChord = orderedCluster[orderedCluster.length - 1];
+
+      if (highestChord === chord && compareChordPitchRole(chord, lowestChord) > 0) {
+        direction = 'up';
+      } else if (lowestChord === chord && compareChordPitchRole(chord, highestChord) < 0) {
+        direction = 'down';
+      } else {
+        direction = getVoiceProfileDirection(chord.voice);
+      }
+    } else {
+      direction = getVoiceProfileDirection(chord.voice);
+    }
+
+    if (!direction) {
+      return [];
+    }
+
+    return [{
+      staff: staff.staff,
+      voice: chord.voice,
+      startDivision: chord.startDivision,
+      endDivision: chord.endDivision,
+      pitchKey: getStemPitchKey(chord.pitches),
+      direction,
+    }];
+  });
+}
+
+function findContextualStemDirection(
+  event: GenericMeasureEvent,
+  staff: number,
+  voice: number,
+  contexts: StemDirectionContext[] | undefined,
+): StemDirection | undefined {
+  if (event.kind !== 'chord' || !contexts?.length) {
+    return undefined;
+  }
+
+  const pitchKey = getStemPitchKey(event.pitches);
+  return contexts.find((context) => (
+    context.staff === staff
+    && context.voice === voice
+    && context.pitchKey === pitchKey
+    && event.startInMeasure >= context.startDivision
+    && event.startInMeasure < context.endDivision
+  ))?.direction;
+}
+
 function renderGenericNotationXml(params: {
   tieStart: boolean;
   tieStop: boolean;
@@ -239,6 +467,7 @@ function renderGenericMeasureEvent(
     staff?: number;
     hideRests?: boolean;
     stemOverrideMap?: Map<string, 'up' | 'down'>;
+    stemDirectionContexts?: StemDirectionContext[];
     forceStemDirection?: 'up' | 'down';
   },
 ): string {
@@ -261,9 +490,20 @@ function renderGenericMeasureEvent(
   const overlappingVoiceStemDirection = event.pitches
     .map((pitch) => options?.stemOverrideMap?.get(`${staff}:${event.startInMeasure}:${pitch}:${voice}`))
     .find((direction): direction is 'up' | 'down' => Boolean(direction));
+  const contextualStemDirection = findContextualStemDirection(
+    event,
+    staff,
+    voice,
+    options?.stemDirectionContexts,
+  );
   const stemDirection = event.type === 'whole'
     ? null
-    : (options?.forceStemDirection ?? overlappingVoiceStemDirection ?? getStemDirectionForPitches(event.pitches, staff, event.type));
+    : (
+      contextualStemDirection
+      ?? options?.forceStemDirection
+      ?? overlappingVoiceStemDirection
+      ?? getStemDirectionForPitches(event.pitches, staff, event.type)
+    );
   const stemXml = stemDirection ? `<stem>${stemDirection}</stem>` : '';
 
   return event.pitches.map((pitchValue, pitchIndex) => {
@@ -302,6 +542,7 @@ function renderMeasureStreams(
   timeSignature: number,
   accidentalPreference: 'sharp' | 'flat' | null | undefined,
   divisionsPerQuarter: number,
+  multiLineStaffMeasureKeys: Set<string>,
 ): string {
   const sharedPitchVoiceMap = new Map<string, Set<number>>();
   const multiVoiceStaffs = new Set<number>();
@@ -341,6 +582,11 @@ function renderMeasureStreams(
     const voices = staff.voices.length > 0
       ? staff.voices
       : [{ voice: 1, staff: staff.staff, chords: [] }];
+    const hasMultiLineContext = (
+      multiVoiceStaffs.has(staff.staff)
+      || multiLineStaffMeasureKeys.has(`${measure.measureIndex}:${staff.staff}`)
+    );
+    const stemDirectionContexts = buildContextualStemDirectionContexts(staff, hasMultiLineContext);
 
     return voices
       .filter((voice) => voice.voice <= GENERIC_MAX_VOICES_PER_STAFF)
@@ -381,7 +627,8 @@ function renderMeasureStreams(
             staff: staff.staff,
             hideRests: false,
             stemOverrideMap,
-            forceStemDirection: multiVoiceStaffs.has(staff.staff)
+            stemDirectionContexts,
+            forceStemDirection: hasMultiLineContext
               ? (voice.voice === 1 ? 'up' : 'down')
               : undefined,
           },
@@ -409,6 +656,7 @@ function buildPartMeasureXmlGeneric(params: {
     includeChordDirections,
   } = params;
   const systemBreakIndexes = buildChordAwareSystemBreakIndexes(score.measures, includeChordDirections);
+  const multiLineStaffMeasureKeys = buildMultiLineStaffMeasureKeys(score.measures, partId);
 
   return score.measures.map((measure) => {
     const isPickup = measure.measureIndex === 0
@@ -417,9 +665,7 @@ function buildPartMeasureXmlGeneric(params: {
     const previousMeasure = measure.measureIndex > 0
       ? score.measures[measure.measureIndex - 1]
       : null;
-    const staves = partId === 'PMelody'
-      ? (measure.melodyStaff ? [measure.melodyStaff] : [])
-      : measure.pianoStaves;
+    const staves = getMeasureStavesForPart(measure, partId);
     const chordDirectionXml = includeChordDirections && measure.chordDirections.length > 0
       ? (
         measure.chordDirections.map((direction) => (
@@ -467,7 +713,7 @@ function buildPartMeasureXmlGeneric(params: {
       + `${printXml}`
       + `${attributesXml}`
       + `${chordDirectionXml}`
-      + `${renderMeasureStreams(staves, measure, partId, score.timeSignature, measure.keyContext.accidentalPreference, score.divisionsPerQuarter)}`
+      + `${renderMeasureStreams(staves, measure, partId, score.timeSignature, measure.keyContext.accidentalPreference, score.divisionsPerQuarter, multiLineStaffMeasureKeys)}`
       + `${isLastMeasure ? '<barline location="right"><bar-style>light-heavy</bar-style></barline>' : ''}`
       + `</measure>`
     );

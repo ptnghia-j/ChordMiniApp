@@ -7,7 +7,7 @@ import {
   DEFAULT_VIOLIN_VOLUME,
   DEFAULT_FLUTE_VOLUME,
 } from '@/config/audioDefaults';
-import { useGuitarCapoFret, useGuitarSelectedPositions, useTargetKey } from '@/stores/uiStore';
+import { useGuitarCapoFret, useGuitarSelectedPositions, useSimplifyChords, useTargetKey } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { isNoChordChordName } from '@/utils/chordToMidi';
 import type { GuitarVoicingSelection } from '@/utils/guitarVoicing';
@@ -268,6 +268,7 @@ export const useChordPlayback = ({
   const guitarCapoFret = useGuitarCapoFret();
   const guitarSelectedPositions = useGuitarSelectedPositions();
   const targetKey = useTargetKey();
+  const simplePianoBlockChords = useSimplifyChords();
   const guitarVoicing = useMemo<Partial<GuitarVoicingSelection>>(
     () => ({
       capoFret: guitarCapoFret,
@@ -318,6 +319,7 @@ export const useChordPlayback = ({
   const segmentationDataRef = useRef(segmentationData);
   const guitarVoicingRef = useRef(guitarVoicing);
   const targetKeyRef = useRef(targetKey);
+  const simplePianoBlockChordsRef = useRef(simplePianoBlockChords);
   const eventMissStartedAtRef = useRef<number | null>(null);
   const lastRecoveryAttemptAtRef = useRef(0);
 
@@ -337,6 +339,7 @@ export const useChordPlayback = ({
   useEffect(() => { segmentationDataRef.current = segmentationData; }, [segmentationData]);
   useEffect(() => { guitarVoicingRef.current = guitarVoicing; }, [guitarVoicing]);
   useEffect(() => { targetKeyRef.current = targetKey; }, [targetKey]);
+  useEffect(() => { simplePianoBlockChordsRef.current = simplePianoBlockChords; }, [simplePianoBlockChords]);
 
   // Initialize service and check readiness
   useEffect(() => {
@@ -474,6 +477,7 @@ export const useChordPlayback = ({
           beatCount: event.beatCount,
           segmentationData: segmentationDataRef.current,
           signalDynamics,
+          simplePianoBlockChord: simplePianoBlockChordsRef.current,
           nextChordName: event.nextChordName,
         },
         timeSignatureRef.current,
@@ -649,6 +653,7 @@ export const useChordPlayback = ({
         beatCount: event.beatCount,
         segmentationData,
         signalDynamics,
+        simplePianoBlockChord: simplePianoBlockChords,
         nextChordName: event.nextChordName,
       },
       timeSignature,
@@ -673,6 +678,7 @@ export const useChordPlayback = ({
     isReady,
     playbackRecoveryNonce,
     segmentationData,
+    simplePianoBlockChords,
     targetKey,
     timeSignature,
   ]);

@@ -24,6 +24,7 @@ interface PianoRollPanelProps {
   guitarVoicing: Partial<GuitarVoicingSelection>;
   targetKey?: string | null;
   dynamicsAnalyzer: DynamicsAnalyzer;
+  simplePianoBlockChords: boolean;
   melodyOverlayNotes: Array<{ midi: number; startTime: number; endTime: number; color: string }>;
   handleActiveNotesChange: (notes: Set<number>, colors: Map<number, string>) => void;
   activeNotes: Set<number>;
@@ -47,6 +48,7 @@ export const PianoRollPanel: React.FC<PianoRollPanelProps> = ({
   guitarVoicing,
   targetKey,
   dynamicsAnalyzer,
+  simplePianoBlockChords,
   melodyOverlayNotes,
   handleActiveNotesChange,
   activeNotes,
@@ -96,6 +98,7 @@ export const PianoRollPanel: React.FC<PianoRollPanelProps> = ({
               guitarVoicing={guitarVoicing}
               targetKey={targetKey ?? undefined}
               signalDynamicsSource={dynamicsAnalyzer}
+              simplePianoBlockChords={simplePianoBlockChords}
               playbackTime={currentTime}
               extraVisualNotes={melodyOverlayNotes}
               onActiveNotesChange={handleActiveNotesChange}

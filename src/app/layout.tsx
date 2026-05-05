@@ -176,8 +176,18 @@ export default function RootLayout({
             /* Font display optimization */
             @font-face { font-display: swap; }
             /* Navigation critical styles */
-            nav { position: sticky; top: 0; z-index: 50; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-            .dark nav { background: rgba(30, 37, 46, 0.95); }
+            nav[data-chordmini-navigation="true"] {
+              position: fixed;
+              inset-inline: 0;
+              top: 0;
+              z-index: 100;
+              background: transparent;
+              backdrop-filter: none;
+              -webkit-backdrop-filter: none;
+              border: 0;
+              box-shadow: none;
+            }
+            .dark nav[data-chordmini-navigation="true"] { background: transparent; }
             /* Hero section optimization */
             .hero-section { min-height: calc(100vh - 80px); display: flex; align-items: start; justify-content: center; }
             /* Button base styles */
