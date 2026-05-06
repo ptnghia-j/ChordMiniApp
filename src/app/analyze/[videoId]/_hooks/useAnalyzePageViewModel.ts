@@ -16,7 +16,6 @@ import { useModelState } from '@/hooks/chord-analysis/useModelState';
 import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrchestrator';
 import { useAnalysisUsageTracker } from '@/hooks/analyze/useAnalysisUsageTracker';
 import { useNavigationHelpers } from '@/hooks/ui/useNavigationHelpers';
-import { useViewportSnapshot } from '@/hooks/ui/useViewportSnapshot';
 import { transcribeLyricsWithAI as transcribeLyricsWithAIService } from '@/services/audio/audioProcessingExtracted';
 import { youtubeMasterClock } from '@/services/audio/youtubeMasterClock';
 import { getChordGridData as getChordGridDataService } from '@/services/chord-analysis/chordGridCalculationService';
@@ -75,7 +74,7 @@ export function useAnalyzePageViewModel({
   const channelFromSearch = routeParams.channel;
   const thumbnailFromSearch = routeParams.thumbnail;
   const autoStartRequested = Boolean(routeParams.autoStart);
-  const { isMobile: isCompactViewport } = useViewportSnapshot();
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const durationLimitToastShownRef = useRef(false);
   const [initialAnalyzeHandoff] = useState(() => consumeAnalyzeSessionHandoff(
     videoId,
@@ -83,6 +82,17 @@ export function useAnalyzePageViewModel({
     routeParams.chordModel
   ));
   const shouldSkipInitialCacheBootstrap = Boolean(initialAnalyzeHandoff?.audioProcessingState?.audioUrl);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateViewportMode = () => setIsCompactViewport(mediaQuery.matches);
+    updateViewportMode();
+    mediaQuery.addEventListener('change', updateViewportMode);
+
+    return () => mediaQuery.removeEventListener('change', updateViewportMode);
+  }, []);
 
   const {
     stage,
@@ -1122,13 +1132,11 @@ export function useAnalyzePageViewModel({
       duration,
       onReady: handleYouTubeReady,
       onPlay: async () => {
-        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         if (isCountdownEnabled && !isPlaying && !countdownStateRef.current.inProgress && !countdownStateRef.current.completed) {
           try { (youtubePlayer as any)?.pauseVideo?.(); } catch {}
           const ok = await runCountdown();
           if (ok) {
             countdownStateRef.current.completed = false;
-            setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
             try { (youtubePlayer as any)?.playVideo?.(); } catch {}
             setIsPlaying(true);
             youtubeMasterClock.onPlay();
@@ -1166,19 +1174,13 @@ export function useAnalyzePageViewModel({
         // `service.seek` here is the only path that actually relocates
         // the GrainPlayer buffer cursor to the new timestamp.
         youtubeMasterClock.onUserSeek(time);
-        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         if (isPitchShiftEnabled && isPitchShiftReady) {
           try {
             getPitchShiftService()?.seek(time);
           } catch {}
         }
         if (youtubePlayer && youtubePlayer.seekTo) {
-          // PRE-PLAY GUARD: only seekTo if the user has activated playback
-          if (usePlaybackStore.getState().hasUserActivatedPlayback) {
-            youtubePlayer.seekTo(time, 'seconds');
-          } else {
-            usePlaybackStore.getState().setPendingSeekTimestamp(time);
-          }
+          youtubePlayer.seekTo(time, 'seconds');
         }
       },
       onEnded: () => {
@@ -1195,7 +1197,6 @@ export function useAnalyzePageViewModel({
         // the master clock so the fence + seek token + position publish all
         // happen atomically.
         youtubeMasterClock.onUserSeek(startTimestamp);
-        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         try { (youtubePlayer as any)?.seekTo?.(startTimestamp, 'seconds'); } catch {}
         setLastClickInfo({ visualIndex: resolvedLoopRange.resolvedStartBeat, timestamp: startTimestamp, clickTime: Date.now() });
         try { (youtubePlayer as any)?.playVideo?.(); } catch {}
@@ -1220,7 +1221,6 @@ export function useAnalyzePageViewModel({
       // path the app's own rate slider uses. Without this, those
       // components retain the old rate and extrapolation drift ensues.
       onPlaybackRateChange: (rate: number) => {
-        setYouTubePlayerMuted(youtubePlayer, isPitchShiftEnabled);
         setAudioPlayerState(prev => ({ ...prev, playbackRate: rate }));
         try {
           usePlaybackStore.getState().setPlayerPlaybackRate(rate);

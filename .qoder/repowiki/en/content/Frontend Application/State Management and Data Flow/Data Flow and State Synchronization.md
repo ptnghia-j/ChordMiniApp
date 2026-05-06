@@ -405,10 +405,10 @@ UI-->>UI : "Displays results or errors"
 
 ```mermaid
 graph LR
-AS["analysisStore.ts"] <- --> |updates| AC["AnalysisControls.tsx"]
-PS["playbackStore.ts"] <- --> |consumes| UPS["usePlaybackState.ts"]
-US["uiStore.ts"] <- --> |consumes| UPS
-UPS <- --> |calls| PS
+AS["analysisStore.ts"] <--> |updates| AC["AnalysisControls.tsx"]
+PS["playbackStore.ts"] <--> |consumes| UPS["usePlaybackState.ts"]
+US["uiStore.ts"] <--> |consumes| UPS
+UPS <--> |calls| PS
 UAO["useAnalyzePageOrchestrator.ts"] --> AS
 UAO --> PS
 UAO --> US

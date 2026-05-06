@@ -82,18 +82,6 @@ function _hookDiag(_tag: string, _extra?: Record<string, unknown>): void {
   // intentionally empty
 }
 
-const PITCH_SHIFT_SLAVE_LOOP_METRICS_KEY = 'chordmini:pitchShiftSlaveLoopMetrics';
-
-function shouldCollectPitchShiftSlaveLoopMetrics(): boolean {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    return window.localStorage.getItem(PITCH_SHIFT_SLAVE_LOOP_METRICS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 export interface UsePitchShiftAudioProps {
   youtubePlayer: YouTubePlayer | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
@@ -637,21 +625,8 @@ export const usePitchShiftAudio = ({
 
     const SLAVE_LOOP_INTERVAL_MS = 40;
     const BASE_SLAVE_DRIFT_TOLERANCE_SEC = 0.08;
-    let lastSlaveLoopMetricAt = 0;
-
-    const maybeReportSlaveLoopMetric = (metric: Record<string, number | boolean>) => {
-      if (!shouldCollectPitchShiftSlaveLoopMetrics()) return;
-
-      const now = performance.now();
-      if (now - lastSlaveLoopMetricAt < 1000) return;
-      lastSlaveLoopMetricAt = now;
-
-      console.debug('[pitch-shift slave loop]', metric);
-    };
 
     const syncGrainPlayerToMaster = () => {
-      const tickStartedAt = performance.now();
-
       if (!youtubeMasterClock.isPlaying()) {
         // Master is paused — ensure grain is paused too.
         const st = service.getState();
@@ -679,14 +654,6 @@ export const usePitchShiftAudio = ({
 
       const drift = Math.abs(serviceState.currentTime - masterPos);
       const tolerance = BASE_SLAVE_DRIFT_TOLERANCE_SEC * Math.max(rate, 1);
-      maybeReportSlaveLoopMetric({
-        drift: Number(drift.toFixed(4)),
-        isPlaying: serviceState.isPlaying,
-        loopMs: Number((performance.now() - tickStartedAt).toFixed(3)),
-        masterPos: Number(masterPos.toFixed(4)),
-        rate,
-        tolerance: Number(tolerance.toFixed(4)),
-      });
 
       if (drift > tolerance) {
         try {

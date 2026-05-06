@@ -158,40 +158,72 @@ fi
   echo
 } > "$WIKI_WORKTREE/_Sidebar.md"
 
-# Temp file to collect sidebar entries as "category\ttitle\tslug" lines
-SIDEBAR_ENTRIES=$(mktemp)
-trap 'rm -f "$SIDEBAR_ENTRIES"' EXIT
-
 while IFS= read -r src; do
   rel="${src#"$SOURCE_DIR"/}"
   page_name="${rel%.md}"
   wiki_file="${page_name//\// - }.md"
 
   copy_wiki_markdown "$src" "$WIKI_WORKTREE/$wiki_file"
-
-  title="${page_name//\// / }"
-  slug="${wiki_file%.md}"
-  wiki_slug="${slug// /-}"
-
-  # Collect sidebar entry: category, title, slug
-  top_level="${rel%%/*}"
-  if [[ "$top_level" == "$rel" ]]; then
-    top_level="General"
-  fi
-  printf '%s\t%s\t%s\n' "$top_level" "$title" "$wiki_slug" >> "$SIDEBAR_ENTRIES"
 done < <(find "$SOURCE_DIR" -type f -name "*.md" | sort)
 
-# --- Write sidebar sections grouped by category ---
-current_section=""
-sort -t$'\t' -k1,1 "$SIDEBAR_ENTRIES" | while IFS=$'\t' read -r section title slug; do
-  if [[ "$section" != "$current_section" ]]; then
-    echo "### $section" >> "$WIKI_WORKTREE/_Sidebar.md"
-    echo >> "$WIKI_WORKTREE/_Sidebar.md"
-    current_section="$section"
-  fi
-  echo "- [$title]($slug)" >> "$WIKI_WORKTREE/_Sidebar.md"
-done
-echo >> "$WIKI_WORKTREE/_Sidebar.md"
+# --- Write nested sidebar sections ---
+python3 - "$SOURCE_DIR" "$WIKI_WORKTREE" <<'PY'
+from pathlib import Path
+import sys
+
+source_dir = Path(sys.argv[1])
+wiki_worktree = Path(sys.argv[2])
+
+md_files = sorted(source_dir.rglob("*.md"))
+
+tree = {'__files__': [], 'subdirs': {}}
+
+for path in md_files:
+    rel_path = path.relative_to(source_dir)
+    
+    # Skip Getting Started as it's already mapped to Home
+    if rel_path.name == "Getting Started.md":
+        continue
+        
+    # Walk tree
+    current = tree
+    for part in rel_path.parts[:-1]:
+        if part not in current['subdirs']:
+            current['subdirs'][part] = {'__files__': [], 'subdirs': {}}
+        current = current['subdirs'][part]
+        
+    stem = rel_path.stem
+    page_name = str(rel_path.with_suffix('')).replace('\\', '/')
+    wiki_slug = page_name.replace('/', ' - ').replace(' ', '-')
+    
+    current['__files__'].append((stem, wiki_slug))
+
+with open(wiki_worktree / "_Sidebar.md", "a") as f:
+    # Handle root files explicitly under General
+    if tree['__files__']:
+        f.write("### General\n\n")
+        for fname, slug in sorted(tree['__files__']):
+            f.write(f"- [{fname}]({slug})\n")
+        f.write("\n")
+
+    def write_tree(node, indent=0, is_root=False):
+        # Write subdirectories
+        for dname, subnode in sorted(node['subdirs'].items()):
+            if is_root:
+                f.write(f"### {dname}\n\n")
+                write_tree(subnode, indent=0, is_root=False)
+                f.write("\n")
+            else:
+                f.write(f"{'  ' * indent}- **{dname}**\n")
+                write_tree(subnode, indent=indent+1, is_root=False)
+                
+        # Write files
+        for fname, slug in sorted(node['__files__']):
+            if not is_root:
+                f.write(f"{'  ' * indent}- [{fname}]({slug})\n")
+
+    write_tree(tree, indent=0, is_root=True)
+PY
 
 rewrite_internal_wiki_links
 

@@ -284,7 +284,7 @@ class ChatbotResponse {
 +string error?
 }
 ChatbotRequest --> SongContext : "contains"
-ChatbotRequest --> ChatMessage[] : "contains"
+ChatbotRequest --> ChatMessage : "contains"
 ChatbotResponse <-- Route : "returns"
 ```
 
