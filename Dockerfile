@@ -1,20 +1,7 @@
 # ChordMiniApp Frontend Dockerfile
 # Multi-stage build for optimized Next.js production deployment
 
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
-WORKDIR /app
-
-# Install dependencies needed for node-gyp and native modules
-RUN apk add --no-cache libc6-compat python3 make g++
-
-# Copy package files and npm configuration
-COPY package.json package-lock.json .npmrc ./
-
-# Install dependencies with clean npm cache
-RUN npm ci --only=production --ignore-scripts && npm cache clean --force
-
-# Stage 2: Builder
+# Stage 1: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -28,9 +15,6 @@ RUN npm ci --ignore-scripts
 # Copy source code
 COPY . .
 
-# Copy production dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
@@ -40,7 +24,7 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # Build the application
 RUN npm run build
 
-# Stage 3: Runner
+# Stage 2: Runner
 FROM node:20-alpine AS runner
 WORKDIR /app
 

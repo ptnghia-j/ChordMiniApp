@@ -158,6 +158,5 @@ echo "  docker pull ${FRONTEND_REPO}:${VERSION}"
 echo "  docker pull ${BACKEND_REPO}:${VERSION}"
 echo ""
 echo -e "${YELLOW}📝 Or use docker-compose:${NC}"
-echo "  docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d"
+echo "  docker compose -f docker-compose.prod.yml --env-file .env.docker up -d"
 echo ""
-

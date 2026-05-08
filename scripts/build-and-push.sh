@@ -122,8 +122,8 @@ case $REGISTRY_TYPE in
             print_error "Username required for Docker Hub"
             exit 1
         fi
-        FRONTEND_IMAGE="$USERNAME/chordmini-frontend:$VERSION_TAG"
-        BACKEND_IMAGE="$USERNAME/chordmini-backend:$VERSION_TAG"
+        FRONTEND_IMAGE="$USERNAME/chordminiapp-frontend:$VERSION_TAG"
+        BACKEND_IMAGE="$USERNAME/chordminiapp-backend:$VERSION_TAG"
         REGISTRY_URL="docker.io"
         ;;
     ghcr)

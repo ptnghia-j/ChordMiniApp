@@ -30,24 +30,22 @@ export default function ChangelogPage() {
   const releases = [
     {
       version: 'v0.6.5',
-      date: 'May 1, 2026',
-      title: 'Performance & Optimization, Documentation, And Test Suites Release (To be updated)',
-      description: 'Focused on performance optimizations across rendering, playback, and API interactions, along with documentation updates and test suite expansions to ensure stability and maintainability.',
+      date: 'May 8, 2026',
+      title: 'Logic Patches, Documentation, And Test Coverage',
+      description: 'A maintenance release with focused logic hardening, expanded regression coverage, CI test guards, and refreshed contributor documentation.',
       features: [
-        'IMPROVED: Implemented render and playback optimizations (shallow Zustand selectors, ResizeObserver cleanup, derived cell sizing, chord-grid render trimming, tooltip reduction).',
-        'IMPROVED: Piano-roll and visual-note caching to avoid rematerializing on every tick; cancellable chord-playback readiness; in-flight request dedupe and short-TTL SheetSage cache.',
-        'IMPROVED: Tightened API request lifecycle (abort-signal composition, timeout cleanup) and added opt-in pitch-shift metrics without changing current clock behavior.',
-        'PLANNED: Mobile-specific optimizations (viewport snapshot hook, virtualized scrolling chord strip, canvas visible-window filtering, lyric render helpers, guitar-tab subscription split) to reduce battery and render cost while preserving fidelity.',
-        'TESTED: Lint, TypeScript build, and Jest unit suite verified; production build successful in baseline verification.'
+        'FIX: Minor patches across beat/chord alignment, grid handling, and service-level edge cases to reduce regression risk.',
+        'IMPROVED: Expanded unit coverage around synchronization, grid alignment, beat resolution, and meter-selection behavior.',
+        'IMPROVED: Added unit and integration tests to the deployment validation path so CI guards core logic before builds.',
+        'IMPROVED: Added manual review safeguards for pull requests that change tests or CI behavior.'
       ],
       technical: [
-        'Verified non-mutating, evidence-based changes anchored to inspected files and hot paths (render, playback, requests).',
-        'Added focused unit tests for visible-window helpers and store-sync separation to prevent unnecessary re-renders.',
-        'Prioritized low-risk, high-maintainability changes first; larger clock-loop changes left as opt-in instrumentation or separate projects.'
+        'Updated package metadata and footer version display to v0.6.5.',
+        'Added CODEOWNERS coverage, a pull request template, and a tests-approved label gate for test-related PR changes.',
+        'Refreshed documentation and release notes for the current maintenance patch.'
       ],
       breaking: [
-        'Documentation released in Github Wiki with detailed architecture diagrams, API references, and contribution guidelines.',
-        'Test suites released for upcoming CI integration, covering critical paths in chord recognition, synchronization, playback, and UI rendering.'
+        'Github Wiki page release and logic test suite updates for v0.6.5 maintenance release.'
       ]
     },
     {

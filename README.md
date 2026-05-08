@@ -189,74 +189,12 @@ ls -la python_backend/models/ChordMini/
 
 ---
 
-## 🐳 Docker Deployment (Recommended for Production)
+## 🐳 Docker Setup
 
-### Prerequisites
-- Docker and Docker Compose installed ([Get Docker](https://docs.docker.com/get-docker/))
-- Firebase account with API keys configured
-
-### Quick Start
-
-1. **Download configuration files**
-   ```bash
-   curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/docker-compose.prod.yml
-   curl -O https://raw.githubusercontent.com/ptnghia-j/ChordMiniApp/main/.env.docker.example
-   ```
-
-2. **Configure environment**
-   ```bash
-   cp .env.docker.example .env.docker
-   # Edit .env.docker with your API keys (see API Keys Setup section below)
-   ```
-
-3. **Start the application**
-   ```bash
-   docker compose -f docker-compose.prod.yml --env-file .env.docker up -d
-   ```
-
-4. **Access the application**
-
-   Visit [http://localhost:3000](http://localhost:3000)
-
-5. **Stop the application**
-   ```bash
-   docker compose -f docker-compose.prod.yml down
-   ```
+Docker instructions live in [docker/README.md](docker/README.md), including Docker Desktop GUI steps, command-line setup, local image builds, and troubleshooting notes.
 
 > [!NOTE]
-> If you have Docker Compose V1 installed, use `docker-compose` (with hyphen) instead of `docker compose` (with space).
-
-> [!IMPORTANT]
-> The currently pinned Docker Hub images in [docker-compose.prod.yml](docker-compose.prod.yml) (`ptnghia/chordmini-frontend:v0.5.3` and `ptnghia/chordmini-backend:v0.5.3`) are published as `linux/arm64` images. They will not pull on Windows/x86_64 or other `amd64` hosts. On Windows/x86_64, build local `linux/amd64` images instead:
->
-> ```bash
-> docker buildx build --platform linux/amd64 -f Dockerfile -t chordmini-frontend:local . --load
-> docker buildx build --platform linux/amd64 -f python_backend/Dockerfile -t chordmini-backend:local python_backend --load
-> ```
->
-> Then update `docker-compose.prod.yml` to use `chordmini-frontend:local` and `chordmini-backend:local`.
-
-
-### Docker Desktop GUI (Alternative)
-
-If you prefer using Docker Desktop GUI:
-1. Open Docker Desktop
-2. Go to "Images" tab and search for `ptnghia/chordmini-frontend` and `ptnghia/chordmini-backend`
-3. Pull both images
-4. Use the "Containers" tab to manage running containers
-
-### Required Environment Variables
-
-Edit `.env.docker` with these required values:
-- `NEXT_PUBLIC_FIREBASE_API_KEY` - Firebase API key
-- `NEXT_PUBLIC_FIREBASE_PROJECT_ID` - Firebase project ID
-- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` - Firebase storage bucket
-- `NEXT_PUBLIC_YOUTUBE_API_KEY` - YouTube Data API v3 key
-- `MUSIC_AI_API_KEY` - Music.AI API key
-- `GEMINI_API_KEY` - Google Gemini API key
-- `GENIUS_API_KEY` - Genius API key
-
-See the API Keys Setup section below for detailed instructions on obtaining these keys.
+> If you are installing ChordMini with Docker Desktop, start with the Docker guide.
 
 ---
 
@@ -536,7 +474,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 **Available on multiple registries:**
-- **Docker Hub**: `ptnghia/chordmini-frontend:latest`, `ptnghia/chordmini-backend:latest`
+- **Docker Hub**: `ptnghia/chordminiapp-frontend:latest`, `ptnghia/chordminiapp-backend:latest`
 - **GitHub Container Registry**: `ghcr.io/ptnghia-j/chordminiapp/frontend:latest`
 
 **Deployment targets:**
@@ -552,4 +490,3 @@ For custom deployments, see the [Local Setup](#-quick-setup) section above. -->
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-

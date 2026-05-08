@@ -3,18 +3,17 @@
 #
 # Quick Start:
 #   1. Copy .env.docker.example to .env.docker and configure your values
-#   2. Run: docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+#   2. Run: docker compose -f docker-compose.prod.yml --env-file .env.docker up -d
 #   3. Access: http://localhost:3000
 #
 # Stop:
-#   docker-compose -f docker-compose.prod.yml down
-
-version: '3.8'
+#   docker compose -f docker-compose.prod.yml down
 
 services:
   # Frontend - Next.js Application
   frontend:
-    image: ptnghia/chordmini-frontend:v0.5.3
+    image: ptnghia/chordminiapp-frontend:latest
+    platform: linux/amd64
     container_name: chordmini-frontend
     ports:
       - "3000:3000"
@@ -24,28 +23,45 @@ services:
       - NEXT_TELEMETRY_DISABLED=${NEXT_TELEMETRY_DISABLED:-1}
 
       # Firebase Configuration (Public - exposed to browser via /api/config)
-      - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
-      - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
-      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
-      - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}
-      - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
-      - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
-      - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}
+      - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY:-}
+      - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:-}
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}
+      - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:-}
+      - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}
+      - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID:-}
+      - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:-}
 
       # API Configuration
-      - NEXT_PUBLIC_YOUTUBE_API_KEY=${NEXT_PUBLIC_YOUTUBE_API_KEY}
+      - NEXT_PUBLIC_YOUTUBE_API_KEY=${NEXT_PUBLIC_YOUTUBE_API_KEY:-}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
 
       # Feature Flags (Public)
-      - NEXT_PUBLIC_AUDIO_STRATEGY=${NEXT_PUBLIC_AUDIO_STRATEGY:-ytdlp}
+      - NEXT_PUBLIC_AUDIO_STRATEGY=${NEXT_PUBLIC_AUDIO_STRATEGY:-auto}
+      - NEXT_PUBLIC_ENABLE_SERVICE_WORKER=${NEXT_PUBLIC_ENABLE_SERVICE_WORKER:-false}
       - NEXT_PUBLIC_ENABLE_TRUE_STREAMING=${NEXT_PUBLIC_ENABLE_TRUE_STREAMING:-false}
+      - NEXT_PUBLIC_SEGMENTATION_ACCESS_REQUEST_EMAIL=${NEXT_PUBLIC_SEGMENTATION_ACCESS_REQUEST_EMAIL:-phantrongnghia510@gmail.com}
+      - NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY:-}
       - NEXT_DISABLE_DEV_OVERLAY=${NEXT_DISABLE_DEV_OVERLAY:-true}
+      - AUDIO_PROXY_FIREBASE_REDIRECT_ENABLED=${AUDIO_PROXY_FIREBASE_REDIRECT_ENABLED:-false}
 
       # Server-Only Secrets (Never exposed to browser)
-      - MUSIC_AI_API_KEY=${MUSIC_AI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GENIUS_API_KEY=${GENIUS_API_KEY}
+      - MUSIC_AI_API_KEY=${MUSIC_AI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GENIUS_API_KEY=${GENIUS_API_KEY:-}
       - PYTHON_API_URL=${PYTHON_API_URL:-http://backend:8080}
+      # Backend URL used by the app's API health check.
+      - NEXT_PUBLIC_PYTHON_API_URL=${NEXT_PUBLIC_PYTHON_API_URL:-http://backend:8080}
+      - SONGFORMER_API_URL=${SONGFORMER_API_URL:-http://backend:8080}
+      - SHEETSAGE_API_URL=${SHEETSAGE_API_URL:-http://backend:8080}
+      - SONGFORMER_BACKEND_TIMEOUT_MS=${SONGFORMER_BACKEND_TIMEOUT_MS:-600000}
+      - SONGFORMER_CALLBACK_BASE_URL=${SONGFORMER_CALLBACK_BASE_URL:-http://localhost:3000}
+      - SHEETSAGE_BACKEND_TIMEOUT_MS=${SHEETSAGE_BACKEND_TIMEOUT_MS:-600000}
+      - SEGMENTATION_ACCESS_CODE=${SEGMENTATION_ACCESS_CODE:-}
+      - CRON_SECRET=${CRON_SECRET:-replace_with_random_secret}
+      - SEGMENTATION_STALE_JOB_CLEANUP_LIMIT=${SEGMENTATION_STALE_JOB_CLEANUP_LIMIT:-200}
+      - FIREBASE_SERVICE_ACCOUNT_KEY=${FIREBASE_SERVICE_ACCOUNT_KEY:-}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+      - APPCHECK_ENFORCE=${APPCHECK_ENFORCE:-0}
 
       # Development Flags (Server-only)
       - USE_MOCK_MUSIC_AI=${USE_MOCK_MUSIC_AI:-false}
@@ -64,7 +80,8 @@ services:
 
   # Backend - Python Flask ML Service
   backend:
-    image: ptnghia/chordmini-backend:v0.5.3
+    image: ptnghia/chordminiapp-backend:latest
+    platform: linux/amd64
     container_name: chordmini-backend
     ports:
       - "8080:8080"
@@ -84,7 +101,7 @@ services:
       - chordmini-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -93,9 +110,7 @@ services:
 networks:
   chordmini-network:
     driver: bridge
-    name: chordmini-network
 
 volumes:
   backend-cache:
     name: chordmini-backend-cache
-

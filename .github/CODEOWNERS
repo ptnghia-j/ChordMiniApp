@@ -1,0 +1,9 @@
+__tests__/** @ptnghia-j
+*.test.ts @ptnghia-j
+*.test.tsx @ptnghia-j
+*.spec.ts @ptnghia-j
+*.spec.tsx @ptnghia-j
+jest.config.js @ptnghia-j
+jest.setup.js @ptnghia-j
+tsconfig.test.json @ptnghia-j
+.github/workflows/** @ptnghia-j
