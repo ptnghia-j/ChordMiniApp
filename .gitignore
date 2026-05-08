@@ -288,6 +288,6 @@ scripts/utilities
 
 __tests__/
 # !__tests__/
-# __tests__/*
+__tests__/*
 # !__tests__/chordSynchronization.test.ts
 __test-results__/

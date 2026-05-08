@@ -218,7 +218,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
   const showChordTooltip = isEditMode || canOverflowLabel || renderedChord.length >= (compact ? 8 : 5);
 
   const stateClassName = isInLoopRange
-    ? '!bg-blue-500/10 !border-blue-300/60 dark:!bg-blue-800/40 dark:!border-blue-400/35'
+    ? '!bg-[#d7e7f5] !border-[#8fb6d8] dark:!bg-[#3d4d66] dark:!border-[#51627c]'
     : modulationInfo?.isModulation
       ? '!bg-green-300/20 dark:!bg-green-900/30 !border-green-500/50 dark:!border-green-500/70'
       : segmentationClassName || '';

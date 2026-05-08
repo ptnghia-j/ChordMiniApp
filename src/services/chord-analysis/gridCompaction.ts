@@ -506,6 +506,23 @@ function buildTempoChangeWindows(
     return [];
   }
 
+  const buildTempoShrinkWindow = (runStart: number, runEnd: number): VisualCompactionWindow[] => {
+    const maxShrink = Math.min(GRID_ALIGNMENT_CONFIG.tempo.maxShrinkBeats, timeSignature - 1);
+    const maxWindowLength = Math.min(runEnd - runStart, maxShrink + 1);
+    const startIndex = Math.max(runStart, runEnd - maxWindowLength);
+
+    if (runEnd - startIndex < 2) {
+      return [];
+    }
+
+    return [{
+      startIndex,
+      endIndex: runEnd,
+      mode: 'shrink_only',
+      source: 'tempo',
+    }];
+  };
+
   const boundaries = findTempoChangeBoundaries(chordGridData.beats, timeSignature);
   const windows = boundaries.flatMap((boundaryIndex): VisualCompactionWindow[] => {
     if (boundaryIndex <= 1 || boundaryIndex > chordGridData.chords.length) {
@@ -527,21 +544,22 @@ function buildTempoChangeWindows(
       trailingEnd += 1;
     }
 
-    const maxShrink = Math.min(GRID_ALIGNMENT_CONFIG.tempo.maxShrinkBeats, timeSignature - 1);
-    const maxWindowLength = Math.min(trailingEnd - trailingStart, maxShrink + 1);
-    const startIndex = Math.max(trailingStart, trailingEnd - maxWindowLength);
-    const windowEnd = trailingEnd;
+    const trailingWindow = buildTempoShrinkWindow(trailingStart, trailingEnd);
+    if (trailingWindow.length > 0) {
+      return trailingWindow;
+    }
 
-    if (windowEnd - startIndex < 2) {
+    const leadingChord = chordGridData.chords[boundaryIndex];
+    if (isSilentChord(leadingChord)) {
       return [];
     }
 
-    return [{
-      startIndex,
-      endIndex: windowEnd,
-      mode: 'shrink_only',
-      source: 'tempo',
-    }];
+    let leadingEnd = boundaryIndex + 1;
+    while (leadingEnd < chordGridData.chords.length && chordGridData.chords[leadingEnd] === leadingChord) {
+      leadingEnd += 1;
+    }
+
+    return buildTempoShrinkWindow(boundaryIndex, leadingEnd);
   });
 
   return windows;
