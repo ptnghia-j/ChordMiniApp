@@ -8,19 +8,19 @@ import {
 } from '@/services/api/segmentationAsyncService';
 
 describe('SegmentationAsyncService polling strategy', () => {
-  it('waits at least 5 minutes before the first poll for 4-minute songs', () => {
+  it('polls long-song jobs quickly instead of hiding completed backend work', () => {
     const strategy = getSegmentationPollingStrategy({ duration: 240 });
 
-    expect(strategy.initialDelayMs).toBe(300_000);
-    expect(strategy.pollIntervalMs).toBe(15_000);
-    expect(strategy.maxPollAttempts).toBe(40);
+    expect(strategy.initialDelayMs).toBe(15_000);
+    expect(strategy.pollIntervalMs).toBe(10_000);
+    expect(strategy.maxPollAttempts).toBe(90);
   });
 
-  it('waits about 6 minutes before the first poll for 5-minute songs', () => {
+  it('uses the same quick polling for 5-minute songs', () => {
     const strategy = getSegmentationPollingStrategy({ duration: 300 });
 
-    expect(strategy.initialDelayMs).toBe(360_000);
-    expect(strategy.pollIntervalMs).toBe(15_000);
+    expect(strategy.initialDelayMs).toBe(15_000);
+    expect(strategy.pollIntervalMs).toBe(10_000);
   });
 
   it('uses a shorter initial wait for shorter songs', () => {

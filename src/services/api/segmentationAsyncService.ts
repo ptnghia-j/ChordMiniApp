@@ -33,9 +33,6 @@ export interface SegmentationPollingStrategy {
 }
 
 const LONG_SONG_DURATION_SECONDS = 4 * 60;
-const VERY_LONG_SONG_DURATION_SECONDS = 5 * 60;
-const LONG_SONG_MIN_INITIAL_DELAY_MS = 5 * 60 * 1000;
-const LONG_SONG_MAX_INITIAL_DELAY_MS = 6 * 60 * 1000;
 
 function getLastBeatTime(beats?: BeatInfo[]): number | null {
   if (!beats || beats.length === 0) return null;
@@ -75,16 +72,11 @@ export function getSegmentationPollingStrategy(
   }
 
   if (durationSeconds !== null && durationSeconds >= LONG_SONG_DURATION_SECONDS) {
-    const scaledInitialDelayMs = Math.round(durationSeconds * 1_200);
-    const initialDelayMs = durationSeconds >= VERY_LONG_SONG_DURATION_SECONDS
-      ? Math.min(Math.max(scaledInitialDelayMs, LONG_SONG_MIN_INITIAL_DELAY_MS), LONG_SONG_MAX_INITIAL_DELAY_MS)
-      : Math.max(scaledInitialDelayMs, LONG_SONG_MIN_INITIAL_DELAY_MS);
-
-    return { initialDelayMs, pollIntervalMs: 15_000, maxPollAttempts: 40 };
+    return { initialDelayMs: 15_000, pollIntervalMs: 10_000, maxPollAttempts: 90 };
   }
 
   if (durationSeconds !== null && durationSeconds >= 3 * 60) {
-    return { initialDelayMs: 2 * 60 * 1000, pollIntervalMs: 10_000, maxPollAttempts: 54 };
+    return { initialDelayMs: 10_000, pollIntervalMs: 10_000, maxPollAttempts: 90 };
   }
 
   if (durationSeconds !== null && durationSeconds >= 60) {

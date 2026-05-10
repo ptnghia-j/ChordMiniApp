@@ -82,6 +82,22 @@ interface KeyDetectionCacheEntry {
   romanNumerals?: KeyDetectionResult['romanNumerals'];
 }
 
+function removeUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => removeUndefinedFields(item)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, fieldValue]) => fieldValue !== undefined)
+        .map(([key, fieldValue]) => [key, removeUndefinedFields(fieldValue)])
+    ) as T;
+  }
+
+  return value;
+}
+
 function buildLegacyCorrections(
   sequenceCorrections: KeyDetectionResult['sequenceCorrections']
 ): Record<string, string> {
@@ -179,7 +195,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
     // Also log the full data structure for debugging
     // console.log('🔍 FULL CACHE DATA STRUCTURE:', JSON.stringify(cacheData, null, 2));
 
-    await setDoc(docRef, cacheData);
+    await setDoc(docRef, removeUndefinedFields(cacheData));
     console.log('✅ Key detection saved to cache successfully');
   } catch (error) {
     console.error('❌ Error saving key detection to cache:', error);

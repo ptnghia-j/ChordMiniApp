@@ -222,6 +222,30 @@ describe('POST /api/detect-key', () => {
     );
   });
 
+  it('strips undefined fields before saving key detection cache entries', async () => {
+    mockGenerateContent.mockResolvedValue({
+      text: `{"primaryKey":"C major","modulation":null,"sequenceCorrections":{"originalSequence":["C","G"],"correctedSequence":["C","G"]}}`,
+    });
+
+    const { POST } = await importRoute();
+    const response = await POST(
+      makeRequest({
+        chords: [{ chord: 'C', time: 0 }, { chord: 'G', time: 1 }],
+        includeEnharmonicCorrection: true,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockSetDoc).toHaveBeenCalledTimes(1);
+    const savedPayload = mockSetDoc.mock.calls[0][1];
+    expect(JSON.stringify(savedPayload)).not.toContain('undefined');
+    expect(savedPayload.sequenceCorrections).toEqual({
+      originalSequence: ['C', 'G'],
+      correctedSequence: ['C', 'G'],
+    });
+    expect(savedPayload.sequenceCorrections).not.toHaveProperty('keyAnalysis');
+  });
+
   it('falls back to legacy text parsing when enhanced JSON parsing fails', async () => {
     mockGenerateContent.mockResolvedValue({
       text: 'Primary Key: **B♭ major**\nPossible Tonal Modulation: **None**',

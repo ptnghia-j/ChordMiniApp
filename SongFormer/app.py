@@ -59,7 +59,7 @@ DEFAULT_MAX_UPLOAD_BYTES = int(os.getenv("SONGFORMER_MAX_UPLOAD_BYTES", str(50 *
 DEFAULT_RESULT_CACHE_TTL_SECONDS = int(os.getenv("SONGFORMER_RESULT_CACHE_TTL_SECONDS", str(24 * 60 * 60)))
 DEFAULT_RESULT_CACHE_MAX_ITEMS = int(os.getenv("SONGFORMER_RESULT_CACHE_MAX_ITEMS", "32"))
 DEFAULT_ENABLE_30S_BATCHING = (os.getenv("SONGFORMER_ENABLE_30S_BATCHING", "1").strip().lower() in {"1", "true", "yes", "on"})
-DEFAULT_30S_BATCH_SIZE = max(1, int(os.getenv("SONGFORMER_30S_BATCH_SIZE", "8")))
+DEFAULT_30S_BATCH_SIZE = max(1, int(os.getenv("SONGFORMER_30S_BATCH_SIZE", "4")))
 DEFAULT_CALLBACK_TIMEOUT = int(os.getenv("SONGFORMER_CALLBACK_TIMEOUT", "30"))
 DEFAULT_CALLBACK_RETRY_COUNT = max(1, int(os.getenv("SONGFORMER_CALLBACK_RETRY_COUNT", "3")))
 MIN_AUDIO_SAMPLES = 1025
@@ -357,11 +357,12 @@ def process_audio(audio_path: str, win_size: int = 420, hop_size: int = 420, num
     )
     stats = result.stats
     logger.info(
-        "SongFormer process_audio timings: total=%.2fs audio_load=%.2fs device=%s threads=%s interop_threads=%s "
+        "SongFormer process_audio timings: total=%.2fs audio_load=%.2fs audio_duration=%.2fs device=%s threads=%s interop_threads=%s "
         "420_windows=%s 30s_chunks=%s 30s_full=%s 30s_tail=%s 30s_batches=%s batch30_enabled=%s batch30_size=%s "
         "muq_420=%.2fs musicfm_420=%.2fs muq_30=%.2fs musicfm_30=%.2fs msa_infer=%.2fs",
         stats.total_seconds,
         stats.audio_load_seconds,
+        stats.audio_duration_seconds,
         device,
         torch.get_num_threads(),
         torch.get_num_interop_threads(),
@@ -429,7 +430,11 @@ def format_as_json(segments):
 
 
 def segment_audio_file(file_path: str) -> dict[str, Any]:
+    file_size = Path(file_path).stat().st_size if Path(file_path).exists() else 0
+    logger.info("Starting SongFormer audio processing path=%s size_bytes=%s", file_path, file_size)
+    process_start = time.perf_counter()
     msa_output = process_audio(file_path)
+    logger.info("Finished SongFormer audio processing in %.2fs", time.perf_counter() - process_start)
     cleaned_output = rule_post_processing(msa_output)
     segments = format_as_segments(cleaned_output)
     return {

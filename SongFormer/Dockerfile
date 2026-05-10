@@ -4,7 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080 \
-    SONGFORMER_PRELOAD=false
+    SONGFORMER_PRELOAD=false \
+    SONGFORMER_30S_BATCH_SIZE=4 \
+    SONGFORMER_GUNICORN_TIMEOUT=900
 
 WORKDIR /app
 
@@ -22,4 +24,4 @@ COPY src ./src
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 1 --threads 2 --timeout 600 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 1 --threads 2 --timeout ${SONGFORMER_GUNICORN_TIMEOUT:-900} app:app"]

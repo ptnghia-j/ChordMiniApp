@@ -6,8 +6,8 @@ import { SegmentationRequest } from '@/types/chatbotTypes';
 const CLOUD_TASKS_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const DEFAULT_TASKS_LOCATION = 'us-central1';
 const DEFAULT_TASKS_QUEUE = 'songformer-segmentation';
-const DEFAULT_DISPATCH_DEADLINE_SECONDS = 600;
 const MAX_HTTP_TASK_DISPATCH_DEADLINE_SECONDS = 30 * 60;
+const DEFAULT_DISPATCH_DEADLINE_SECONDS = 15 * 60;
 
 let authClientPromise: Promise<Awaited<ReturnType<GoogleAuth['getClient']>>> | null = null;
 let parsedServiceAccount: Record<string, string> | null | undefined;

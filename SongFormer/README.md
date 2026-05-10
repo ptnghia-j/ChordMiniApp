@@ -102,7 +102,7 @@ The ChordMini frontend should **not** call this backend directly from the browse
 SONGFORMER_API_URL=https://your-songformer-cloud-run-url
 SONGFORMER_TASKS_LOCATION=us-central1
 SONGFORMER_TASKS_QUEUE=songformer-segmentation
-SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=600
+SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=900
 ```
 
 If `SONGFORMER_API_URL` is not set, the frontend server route falls back to `PYTHON_API_URL`.
@@ -116,7 +116,7 @@ PYTHON_API_URL=https://your-main-python-backend
 SONGFORMER_API_URL=https://your-songformer-cloud-run-url
 SONGFORMER_TASKS_LOCATION=us-central1
 SONGFORMER_TASKS_QUEUE=songformer-segmentation
-SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=600
+SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=900
 ```
 
 ## Cloud Run notes

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -9,11 +10,14 @@ import librosa
 import numpy as np
 import torch
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class ProcessAudioStats:
     total_seconds: float
     audio_load_seconds: float
+    audio_duration_seconds: float
     num_420_windows: int
     num_30s_chunks: int
     num_30s_full_chunks: int
@@ -64,9 +68,18 @@ def process_audio_sequential(
     wav, _sr = librosa.load(audio_path, sr=input_sampling_rate)
     audio = torch.tensor(wav, dtype=torch.float32, device=device)
     audio_load_seconds = time.perf_counter() - audio_load_start
+    audio_duration_seconds = audio.shape[-1] / input_sampling_rate if input_sampling_rate else 0
 
     total_len = ((audio.shape[0] // input_sampling_rate) // time_dur * time_dur) + time_dur
     total_frames = math.ceil(total_len * after_downsampling_frame_rates)
+    estimated_420_windows = max(1, math.ceil(audio_duration_seconds / hop_size))
+    logger.info(
+        "SongFormer audio loaded in %.2fs duration=%.2fs samples=%s estimated_420_windows=%s",
+        audio_load_seconds,
+        audio_duration_seconds,
+        audio.shape[-1],
+        estimated_420_windows,
+    )
     logits = {
         "function_logits": np.zeros([total_frames, num_classes], dtype=np.float32),
         "boundary_logits": np.zeros([total_frames], dtype=np.float32),
@@ -107,6 +120,13 @@ def process_audio_sequential(
 
             audio_seg = audio[start_idx:end_idx]
             num_420_windows += 1
+            logger.info(
+                "SongFormer processing 420s window %s/%s start=%.2fs end=%.2fs",
+                num_420_windows,
+                estimated_420_windows,
+                start_idx / input_sampling_rate,
+                end_idx / input_sampling_rate,
+            )
 
             muq_420_start = time.perf_counter()
             muq_embd_420s = run_muq_hidden_state_batch(audio_seg.unsqueeze(0))
@@ -221,6 +241,14 @@ def process_audio_sequential(
                 lens += end_frame - start_frame
 
             i += hop_size
+            logger.info(
+                "SongFormer completed 420s window %s/%s elapsed=%.2fs 30s_chunks=%s batches=%s",
+                num_420_windows,
+                estimated_420_windows,
+                time.perf_counter() - process_start,
+                num_30s_chunks,
+                num_30s_batches,
+            )
 
     logits["function_logits"] /= np.maximum(logits_num["function_logits"], 1)
     logits["boundary_logits"] /= np.maximum(logits_num["boundary_logits"], 1)
@@ -232,6 +260,7 @@ def process_audio_sequential(
         stats=ProcessAudioStats(
             total_seconds=time.perf_counter() - process_start,
             audio_load_seconds=audio_load_seconds,
+            audio_duration_seconds=audio_duration_seconds,
             num_420_windows=num_420_windows,
             num_30s_chunks=num_30s_chunks,
             num_30s_full_chunks=num_30s_full_chunks,
