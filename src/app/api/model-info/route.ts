@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getPythonApiUrl } from '@/config/serverBackend';
 
+function formatModelInfoFallbackReason(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  return String(error);
+}
+
 /**
  * API route to get information about available models
  * This provides fallback model information when the Python backend is not available
@@ -32,7 +40,7 @@ export async function GET() {
         });
       }
     } catch (error) {
-      console.warn('Backend model-info not available, using fallback:', error);
+      console.info(`Backend model-info not available, using fallback (${formatModelInfoFallbackReason(error)})`);
     }
 
     // Fallback model information when the backend is not available

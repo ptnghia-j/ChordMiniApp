@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+import { getAppCheckTokenForApi } from '@/config/firebase';
 import { apiKeyStorage } from '@/services/cache/apiKeyStorageService';
 import { BeatInfo } from '@/services/audio/beatDetectionService';
 import { SegmentationRequest, SegmentationResult, SongContext } from '@/types/chatbotTypes';
@@ -15,11 +16,6 @@ interface SegmentationJobCreateResponse {
   reused?: boolean;
   data?: SegmentationResult;
   error?: string;
-  workerRequest?: {
-    endpointUrl: string;
-    audioUrl: string;
-    callbackUrl: string;
-  };
 }
 
 interface SegmentationJobStatusResponse {
@@ -101,7 +97,6 @@ export function getSegmentationPollingStrategy(
 export class SegmentationAsyncService {
   private static instance: SegmentationAsyncService;
   private readonly baseUrl: string;
-  private readonly backendTimeoutMs = 10 * 60 * 1000;
 
   constructor() {
     this.baseUrl = typeof window !== 'undefined'
@@ -117,6 +112,11 @@ export class SegmentationAsyncService {
     return SegmentationAsyncService.instance;
   }
 
+  private async getAppCheckHeaders(): Promise<Record<string, string>> {
+    const token = await getAppCheckTokenForApi();
+    return token ? { 'X-Firebase-AppCheck': token } : {};
+  }
+
   async requestSegmentation(songContext: SongContext): Promise<SegmentationResult> {
     const accessCode = await apiKeyStorage.getApiKey('songformerAccess');
     const request: SegmentationRequest = {
@@ -128,7 +128,10 @@ export class SegmentationAsyncService {
       request,
       {
         timeout: 30000,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await this.getAppCheckHeaders()),
+        },
       },
     );
 
@@ -145,18 +148,9 @@ export class SegmentationAsyncService {
       return this.pollJobCompletion(createPayload.jobId, songContext, { reused: true });
     }
 
-    if (!createPayload.jobId || !createPayload.updateToken || !createPayload.workerRequest) {
-      throw new Error('Segmentation job was created without worker metadata');
+    if (!createPayload.jobId) {
+      throw new Error('Segmentation job was created without job metadata');
     }
-
-    void this.runBrowserWorker(
-      createPayload.jobId,
-      createPayload.updateToken,
-      createPayload.workerRequest.endpointUrl,
-      createPayload.workerRequest.audioUrl,
-      createPayload.workerRequest.callbackUrl,
-      songContext,
-    );
 
     return this.pollJobCompletion(createPayload.jobId, songContext);
   }
@@ -176,6 +170,7 @@ export class SegmentationAsyncService {
 
       const response = await axios.get<SegmentationJobStatusResponse>(`${this.baseUrl}/api/segmentation/jobs/${jobId}`, {
         timeout: 15000,
+        headers: await this.getAppCheckHeaders(),
       });
 
       const payload = response.data;
@@ -193,68 +188,6 @@ export class SegmentationAsyncService {
     }
 
     throw new Error('Segmentation job did not complete in time');
-  }
-
-  private async runBrowserWorker(
-    jobId: string,
-    updateToken: string,
-    endpointUrl: string,
-    audioUrl: string,
-    callbackUrl: string,
-    songContext: SongContext,
-  ): Promise<void> {
-    try {
-      const directResponse = await axios.post(
-        endpointUrl,
-        {
-          audioUrl,
-          asyncJob: {
-            jobId,
-            updateToken,
-            callbackUrl,
-            songContext,
-          },
-        },
-        {
-          timeout: this.backendTimeoutMs,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-
-      const directPayload = directResponse.data;
-      if (!directPayload?.success) {
-        throw new Error(directPayload?.error || 'SongFormer backend request failed');
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'SongFormer segmentation failed';
-      await this.patchJob(jobId, updateToken, {
-        status: 'failed',
-        error: message,
-      });
-    }
-  }
-
-  private async patchJob(
-    jobId: string,
-    updateToken: string,
-    payload: {
-      status: 'processing' | 'completed' | 'failed';
-      error?: string;
-      data?: SegmentationResult;
-      model?: string;
-    },
-  ): Promise<void> {
-    await axios.patch(
-      `${this.baseUrl}/api/segmentation/jobs/${jobId}`,
-      {
-        updateToken,
-        ...payload,
-      },
-      {
-        timeout: 30000,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
   }
 }
 

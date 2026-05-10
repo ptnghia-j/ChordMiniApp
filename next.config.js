@@ -142,7 +142,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization',
+            value: 'Content-Type, Authorization, X-Firebase-AppCheck',
           },
         ],
       },
@@ -160,7 +160,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization, X-Requested-With',
+            value: 'Content-Type, Authorization, X-Requested-With, X-Firebase-AppCheck',
           },
           {
             key: 'Content-Security-Policy',

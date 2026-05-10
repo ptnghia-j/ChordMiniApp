@@ -20,6 +20,27 @@ Standalone Flask API for SongFormer structural segmentation, intended for local 
 }
 ```
 
+The same endpoint also accepts the async job callback payload used by the ChordMini
+frontend:
+
+```json
+{
+  "audioUrl": "https://.../audio.mp3",
+  "asyncJob": {
+    "jobId": "seg_...",
+    "updateToken": "...",
+    "callbackUrl": "https://your-frontend/api/segmentation/jobs/seg_...",
+    "songContext": {}
+  }
+}
+```
+
+With `asyncJob`, the backend downloads `audioUrl`, runs SongFormer inference, then
+PATCHes the callback with `processing`, `completed`, or `failed` status. The
+HTTP request stays open while inference runs so Cloud Run keeps CPU allocated
+under request-based billing. The browser should poll ChordMini's
+`/api/segmentation/jobs/:jobId` endpoint for completion.
+
 ### Multipart upload
 
 Send a `file` field containing the audio binary.
@@ -72,11 +93,16 @@ gunicorn --bind 0.0.0.0:${PORT:-8080} app:app
 
 The ChordMini frontend should **not** call this backend directly from the browser.
 
-- Frontend browser calls: `POST /api/segmentation`
-- Next.js server route calls this SongFormer backend using a **server-only** environment variable:
+- Frontend browser calls: `POST /api/segmentation/jobs`
+- Next.js server route verifies App Check, creates a Firestore job, and enqueues
+  a Cloud Tasks HTTP request to this SongFormer backend using **server-only**
+  environment variables:
 
 ```bash
 SONGFORMER_API_URL=https://your-songformer-cloud-run-url
+SONGFORMER_TASKS_LOCATION=us-central1
+SONGFORMER_TASKS_QUEUE=songformer-segmentation
+SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=600
 ```
 
 If `SONGFORMER_API_URL` is not set, the frontend server route falls back to `PYTHON_API_URL`.
@@ -88,6 +114,9 @@ Set these in the Next.js deployment environment, not as `NEXT_PUBLIC_*` vars:
 ```bash
 PYTHON_API_URL=https://your-main-python-backend
 SONGFORMER_API_URL=https://your-songformer-cloud-run-url
+SONGFORMER_TASKS_LOCATION=us-central1
+SONGFORMER_TASKS_QUEUE=songformer-segmentation
+SONGFORMER_TASKS_DISPATCH_DEADLINE_SECONDS=600
 ```
 
 ## Cloud Run notes

@@ -546,6 +546,42 @@ def patch_async_job_callback(callback_url: str, payload: dict[str, Any]) -> None
     raise RuntimeError(f"Failed to PATCH async callback after {DEFAULT_CALLBACK_RETRY_COUNT} attempts") from last_error
 
 
+def report_async_job_failure(callback_url: str, update_token: str, error: str) -> None:
+    try:
+        patch_async_job_callback(callback_url, {
+            "updateToken": update_token,
+            "status": "failed",
+            "error": error,
+        })
+    except Exception:
+        logger.exception("Failed to report async SongFormer failure")
+
+
+def process_async_segmentation_job(
+    audio_url: str,
+    update_token: str,
+    callback_url: str,
+    song_context: dict[str, Any],
+) -> dict[str, Any]:
+    patch_async_job_callback(callback_url, {
+        "updateToken": update_token,
+        "status": "processing",
+    })
+
+    logger.info("Processing async SongFormer request from audioUrl source")
+    result = segment_audio_source(audio_url)
+    logger.info("SongFormer async segmentation completed with %s segments", len(result.get("segments", [])))
+
+    patch_async_job_callback(callback_url, {
+        "updateToken": update_token,
+        "status": "completed",
+        "rawSegments": result.get("segments", []),
+        "songContext": song_context,
+        "model": result.get("model", "songformer"),
+    })
+    return result
+
+
 def create_app() -> Flask:
     flask_app = Flask(__name__)
     flask_app.config["MAX_CONTENT_LENGTH"] = DEFAULT_MAX_UPLOAD_BYTES
@@ -597,6 +633,10 @@ def create_app() -> Flask:
     @flask_app.post("/api/songformer/segment")
     def segment_songformer():
         temp_upload_path: str | None = None
+        payload: dict[str, Any] = {}
+        async_job: Any = None
+        update_token: str | None = None
+        callback_url: str | None = None
         try:
             payload = request.get_json(silent=True) if request.is_json else None
             audio_url = payload.get("audioUrl") if isinstance(payload, dict) else None
@@ -618,9 +658,17 @@ def create_app() -> Flask:
                 if not isinstance(song_context, dict):
                     raise ValueError("asyncJob.songContext is required")
 
-                patch_async_job_callback(callback_url.strip(), {
-                    "updateToken": update_token.strip(),
-                    "status": "processing",
+                result = process_async_segmentation_job(
+                    audio_url.strip(),
+                    update_token.strip(),
+                    callback_url.strip(),
+                    song_context,
+                )
+                return jsonify({
+                    "success": True,
+                    "status": "completed",
+                    "jobId": job_id.strip(),
+                    "segments": len(result.get("segments", [])),
                 })
 
             if isinstance(audio_url, str) and audio_url.strip():
@@ -633,48 +681,23 @@ def create_app() -> Flask:
 
             logger.info("SongFormer segmentation completed with %s segments", len(result.get("segments", [])))
 
-            if async_job is not None:
-                patch_async_job_callback(callback_url.strip(), {
-                    "updateToken": update_token.strip(),
-                    "status": "completed",
-                    "rawSegments": result.get("segments", []),
-                    "songContext": song_context,
-                    "model": result.get("model", "songformer"),
-                })
-
             return jsonify({"success": True, "data": result})
 
         except FileNotFoundError as exc:
+            if isinstance(update_token, str) and isinstance(callback_url, str):
+                report_async_job_failure(callback_url.strip(), update_token.strip(), str(exc))
             return jsonify({"success": False, "error": str(exc)}), 404
         except ValueError as exc:
+            if isinstance(update_token, str) and isinstance(callback_url, str):
+                report_async_job_failure(callback_url.strip(), update_token.strip(), str(exc))
             return jsonify({"success": False, "error": str(exc)}), 400
         except requests.RequestException as exc:
-            if request.is_json:
-                payload = request.get_json(silent=True) or {}
-                async_job = payload.get("asyncJob") if isinstance(payload, dict) else None
-                if isinstance(async_job, dict) and isinstance(async_job.get("callbackUrl"), str) and isinstance(async_job.get("updateToken"), str):
-                    try:
-                        patch_async_job_callback(async_job["callbackUrl"].strip(), {
-                            "updateToken": async_job["updateToken"].strip(),
-                            "status": "failed",
-                            "error": f"Failed to download audio source: {exc}",
-                        })
-                    except Exception:
-                        logger.exception("Failed to report async SongFormer download error")
+            if isinstance(update_token, str) and isinstance(callback_url, str):
+                report_async_job_failure(callback_url.strip(), update_token.strip(), f"Failed to download audio source: {exc}")
             return jsonify({"success": False, "error": f"Failed to download audio source: {exc}"}), 502
         except Exception as exc:
-            if request.is_json:
-                payload = request.get_json(silent=True) or {}
-                async_job = payload.get("asyncJob") if isinstance(payload, dict) else None
-                if isinstance(async_job, dict) and isinstance(async_job.get("callbackUrl"), str) and isinstance(async_job.get("updateToken"), str):
-                    try:
-                        patch_async_job_callback(async_job["callbackUrl"].strip(), {
-                            "updateToken": async_job["updateToken"].strip(),
-                            "status": "failed",
-                            "error": str(exc),
-                        })
-                    except Exception:
-                        logger.exception("Failed to report async SongFormer failure")
+            if isinstance(update_token, str) and isinstance(callback_url, str):
+                report_async_job_failure(callback_url.strip(), update_token.strip(), str(exc))
             logger.exception("SongFormer segmentation failed")
             return jsonify({"success": False, "error": str(exc)}), 500
         finally:

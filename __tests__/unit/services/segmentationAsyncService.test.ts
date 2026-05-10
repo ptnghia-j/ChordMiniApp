@@ -1,3 +1,7 @@
+jest.mock('@/config/firebase', () => ({
+  getAppCheckTokenForApi: jest.fn().mockResolvedValue(null),
+}));
+
 import {
   estimateSegmentationDurationSeconds,
   getSegmentationPollingStrategy,

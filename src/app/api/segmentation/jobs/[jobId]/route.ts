@@ -9,6 +9,7 @@ import {
   verifySegmentationJobUpdateToken,
 } from '@/services/firebase/segmentationJobService';
 import { normalizeSongFormerSegmentation } from '@/services/lyrics/songSegmentationService';
+import { verifyAppCheckRequest } from '@/utils/serverAppCheck';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { SongContext } from '@/types/chatbotTypes';
 
@@ -62,6 +63,15 @@ function getStaleJobError(status: 'created' | 'processing'): string {
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
+    const appCheck = await verifyAppCheckRequest(_request);
+    if (!appCheck.ok) {
+      const { jobId } = await params;
+      return NextResponse.json(
+        { success: false, jobId, status: 'not_found', error: appCheck.error },
+        { status: appCheck.status || 403 },
+      );
+    }
+
     const { jobId } = await params;
     const job = await getSegmentationJob(jobId);
 
