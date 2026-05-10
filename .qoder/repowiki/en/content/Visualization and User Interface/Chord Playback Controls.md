@@ -7,6 +7,9 @@
 - [MetronomeControls.tsx](file://src/components/chord-playback/MetronomeControls.tsx)
 - [GuitarChordDiagram.tsx](file://src/components/chord-playback/GuitarChordDiagram.tsx)
 - [PitchShiftAudioManager.tsx](file://src/components/chord-playback/PitchShiftAudioManager.tsx)
+- [PlaybackPromptToast.tsx](file://src/components/analysis/PlaybackPromptToast.tsx)
+- [AnalyzePageChrome.tsx](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx)
+- [useAnalyzePageViewModel.ts](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts)
 - [useChordPlayback.ts](file://src/hooks/chord-playback/useChordPlayback.ts)
 - [audioMixerService.ts](file://src/services/chord-playback/audioMixerService.ts)
 - [soundfontChordPlaybackService.ts](file://src/services/chord-playback/soundfontChordPlaybackService.ts)
@@ -25,7 +28,7 @@
 ## Update Summary
 **Changes Made**
 - Resolved a YouTube iframe pre-play blackout bug by gating programmatic seeks behind a `hasUserActivatedPlayback` flag and queueing a `pendingSeekTimestamp` until the user starts playback.
-- Added a `PlaybackPromptToast` component to provide a persistent, non-intrusive prompt guiding users to start video playback after 5 seconds of inactivity.
+- Updated `PlaybackPromptToast` behavior so the "Press Play to Start" prompt is consumed once per analysis prompt ID. It appears only after analysis has loaded and the user has not started playback for 5 seconds; it is dismissed and marked consumed when playback starts, so it does not return after pauses or song end.
 - Enhanced pitch shift audio system with improved scrub detection mechanism featuring 0.75-second threshold-based seek operations.
 - Updated seek safety mechanisms with comprehensive diagnostic logging and improved feedback loop prevention.
 - Refined slave re-anchor loop with enhanced drift correction and threshold-based synchronization.
@@ -50,7 +53,7 @@ This document describes the chord playback control system in ChordMiniApp, focus
 
 ## Project Structure
 The chord playback system spans React components, hooks, services, and utilities:
-- Components: ChordPlaybackManager, ChordPlaybackToggle, MetronomeControls, GuitarChordDiagram, PitchShiftAudioManager
+- Components: ChordPlaybackManager, ChordPlaybackToggle, MetronomeControls, GuitarChordDiagram, PitchShiftAudioManager, PlaybackPromptToast
 - Hooks: useChordPlayback, usePitchShiftAudio, useLoopPlayback, useMetronomeSync
 - Services: AudioMixerService, SoundfontChordPlaybackService, MetronomeService, GrainPlayerPitchShiftService, YoutubeMasterClock
 - Utilities: AudioContextManager, Instrument Registry, Performance Monitor
@@ -63,6 +66,8 @@ CPT["ChordPlaybackToggle"]
 MC["MetronomeControls"]
 GCD["GuitarChordDiagram"]
 PSAM["PitchShiftAudioManager"]
+PPT["PlaybackPromptToast"]
+APC["AnalyzePageChrome"]
 end
 subgraph "Hooks"
 UCP["useChordPlayback"]
@@ -84,6 +89,7 @@ CPM --> UCP
 CPT --> AMS
 MC --> MS
 PSAM --> UPSA
+APC --> PPT
 UPSA --> GPS
 UPSA --> YMC
 UCP --> SCP
@@ -99,6 +105,9 @@ PM --> UPSA
 - [MetronomeControls.tsx:12-135](file://src/components/chord-playback/MetronomeControls.tsx#L12-L135)
 - [GuitarChordDiagram.tsx:99-361](file://src/components/chord-playback/GuitarChordDiagram.tsx#L99-L361)
 - [PitchShiftAudioManager.tsx:29-35](file://src/components/chord-playback/PitchShiftAudioManager.tsx#L29-L35)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:1-31](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L1-L31)
+- [useAnalyzePageViewModel.ts:1280-1310](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts#L1280-L1310)
 - [useChordPlayback.ts:250-738](file://src/hooks/chord-playback/useChordPlayback.ts#L250-L738)
 - [audioMixerService.ts:39-370](file://src/services/chord-playback/audioMixerService.ts#L39-L370)
 - [soundfontChordPlaybackService.ts:64-715](file://src/services/chord-playback/soundfontChordPlaybackService.ts#L64-L715)
@@ -116,12 +125,15 @@ PM --> UPSA
 - [MetronomeControls.tsx:1-138](file://src/components/chord-playback/MetronomeControls.tsx#L1-L138)
 - [GuitarChordDiagram.tsx:1-364](file://src/components/chord-playback/GuitarChordDiagram.tsx#L1-L364)
 - [PitchShiftAudioManager.tsx:1-39](file://src/components/chord-playback/PitchShiftAudioManager.tsx#L1-L39)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:1-31](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L1-L31)
+- [useAnalyzePageViewModel.ts:1280-1310](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts#L1280-L1310)
 - [useChordPlayback.ts:1-739](file://src/hooks/chord-playback/useChordPlayback.ts#L1-L739)
 - [audioMixerService.ts:1-371](file://src/services/chord-playback/audioMixerService.ts#L1-L371)
 - [soundfontChordPlaybackService.ts:1-716](file://src/services/chord-playback/soundfontChordPlaybackService.ts#L1-L716)
 - [metronomeService.ts:1-499](file://src/services/chord-playback/metronomeService.ts#L1-L499)
-- [usePitchShiftAudio.ts:1-790](file://src/hooks/chord-playback/usePitchShiftAudio.ts#L1-L790)
-- [grainPlayerPitchShiftService.ts:1-831](file://src/services/audio/grainPlayerPitchShiftService.ts#L1-L831)
+- [usePitchShiftAudio.ts:1-775](file://src/hooks/chord-playback/usePitchShiftAudio.ts#L1-L775)
+- [grainPlayerPitchShiftService.ts:1-829](file://src/services/audio/grainPlayerPitchShiftService.ts#L1-L829)
 - [youtubeMasterClock.ts:1-409](file://src/services/audio/youtubeMasterClock.ts#L1-L409)
 - [audioContextManager.ts:1-125](file://src/services/audio/audioContextManager.ts#L1-L125)
 - [instrumentRegistry.ts:1-121](file://src/services/chord-playback/soundfont/instrumentRegistry.ts#L1-L121)
@@ -133,6 +145,7 @@ PM --> UPSA
 - MetronomeControls: Offers metronome and drum track modes with real-time settings changes and test click functionality.
 - GuitarChordDiagram: Renders interactive guitar chord diagrams with responsive sizing, position selection, and optional Roman numeral overlays.
 - PitchShiftAudioManager: Initializes and manages pitch-shifted audio playback using Tone.js GrainPlayer, coordinating with YouTube and beat animations.
+- PlaybackPromptToast: Renderless analysis-page toast that waits 5 seconds after analysis loads, prompts the user to start the YouTube player if playback has not begun, and then consumes the prompt per `promptId` so it cannot reappear after pauses or when the song ends.
 
 **Updated** The PitchShiftAudioManager now integrates with the enhanced scrub detection mechanism featuring sophisticated threshold-based seek operations that provide superior synchronization between audio playback and visual elements.
 
@@ -142,6 +155,9 @@ PM --> UPSA
 - [MetronomeControls.tsx:12-135](file://src/components/chord-playback/MetronomeControls.tsx#L12-L135)
 - [GuitarChordDiagram.tsx:99-361](file://src/components/chord-playback/GuitarChordDiagram.tsx#L99-L361)
 - [PitchShiftAudioManager.tsx:29-35](file://src/components/chord-playback/PitchShiftAudioManager.tsx#L29-L35)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:21-28](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L21-L28)
+- [useAnalyzePageViewModel.ts:1304-1308](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts#L1304-L1308)
 
 ## Architecture Overview
 The chord playback system integrates React components, hooks, and services around a centralized master clock architecture:

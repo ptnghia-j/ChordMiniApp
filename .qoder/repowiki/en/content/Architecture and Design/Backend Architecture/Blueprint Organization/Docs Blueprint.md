@@ -72,7 +72,7 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 - [extensions.py:41-92](file://python_backend/extensions.py#L41-L92)
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [README.md:1-71](file://docs/README.md#L1-L71)
 
 **Section sources**
@@ -84,7 +84,7 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 - [extensions.py:41-92](file://python_backend/extensions.py#L41-L92)
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [README.md:1-71](file://docs/README.md#L1-L71)
 
 ## Core Components
@@ -105,7 +105,7 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 - [route.ts:39-207](file://src/app/api/docs/route.ts#L39-L207)
 - [config.py:47-60](file://python_backend/config.py#L47-L60)
 - [extensions.py:41-58](file://python_backend/extensions.py#L41-L58)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 
 ## Architecture Overview
 The documentation service follows a hybrid architecture:
@@ -253,13 +253,13 @@ BFF --> DBP
 
 **Diagram sources**
 - [app_factory.py:68-101](file://python_backend/app_factory.py#L68-L101)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 - [route.ts:12-22](file://src/app/api/docs/route.ts#L12-L22)
 
 **Section sources**
 - [app_factory.py:68-101](file://python_backend/app_factory.py#L68-L101)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 - [route.ts:12-22](file://src/app/api/docs/route.ts#L12-L22)
 
@@ -297,7 +297,7 @@ FE_Config["src/config/serverBackend.ts"] --> FE_API
 - [extensions.py:41-58](file://python_backend/extensions.py#L41-L58)
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [app_factory.py:68-101](file://python_backend/app_factory.py#L68-L101)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 
 **Section sources**
@@ -308,7 +308,7 @@ FE_Config["src/config/serverBackend.ts"] --> FE_API
 - [extensions.py:41-58](file://python_backend/extensions.py#L41-L58)
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [app_factory.py:68-101](file://python_backend/app_factory.py#L68-L101)
-- [Navigation.tsx:46-52](file://src/components/common/Navigation.tsx#L46-L52)
+- [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 
 ## Performance Considerations

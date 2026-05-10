@@ -52,6 +52,49 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   const SUPERSCRIPT_STYLE = 'font-weight: inherit; font-size: 0.7em; line-height: 1; vertical-align: super;';
   const PAREN_GROUP_STYLE = 'display: inline-flex; align-items: flex-start; font-weight: inherit; font-size: 0.7em; line-height: 1; position: relative; top: -0.42em; white-space: nowrap;';
   const stylizeAccidentals = (text: string) => text.replace(/([♭♯𝄫𝄪])/gu, `<span style="${ACCIDENTAL_STYLE}">$1</span>`);
+  const formatNumericExtensions = (text: string) => text.replace(/([b#]?)(\d+)/g, (_match, accidental: string, extension: string) => {
+    if (accidental === 'b') {
+      return `<sup style="${SUPERSCRIPT_STYLE}"><span style="${ACCIDENTAL_STYLE}">♭</span>${extension}</sup>`;
+    }
+
+    if (accidental === '#') {
+      return `<sup style="${SUPERSCRIPT_STYLE}"><span style="${ACCIDENTAL_STYLE}">♯</span>${extension}</sup>`;
+    }
+
+    return `<sup style="${SUPERSCRIPT_STYLE}">${extension}</sup>`;
+  });
+  const formatParenthesizedExtension = (extension: string) => {
+    const trimmedExtension = extension.trim();
+    const alteredExtensionMatch = trimmedExtension.match(/^([b#])(\d+)$/);
+
+    if (alteredExtensionMatch) {
+      const [, accidental, degree] = alteredExtensionMatch;
+      const symbol = accidental === 'b' ? '♭' : '♯';
+
+      return `<span style="${PAREN_GROUP_STYLE}">(<span style="${ACCIDENTAL_STYLE}">${symbol}</span>${degree})</span>`;
+    }
+
+    if (/^\d+$/.test(trimmedExtension)) {
+      return `<span style="${PAREN_GROUP_STYLE}">(${trimmedExtension})</span>`;
+    }
+
+    return `<span style="${PAREN_GROUP_STYLE}">(${formatNumericExtensions(trimmedExtension)})</span>`;
+  };
+  const formatMajorExtensionSuffix = (suffix: string) => {
+    let formattedSuffix = '';
+    let lastIndex = 0;
+
+    suffix.replace(/\(([^)]*)\)/g, (match, extension: string, index: number) => {
+      formattedSuffix += formatNumericExtensions(suffix.slice(lastIndex, index));
+      formattedSuffix += formatParenthesizedExtension(extension);
+      lastIndex = index + match.length;
+      return match;
+    });
+
+    formattedSuffix += formatNumericExtensions(suffix.slice(lastIndex));
+
+    return formattedSuffix;
+  };
 
 
 
@@ -77,6 +120,10 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     normalizedQuality = normalizedQuality
       .replace(/°/g, 'dim')
       .replace(/\+/g, 'aug');
+
+    normalizedQuality = normalizedQuality
+      .replace(/^major/i, 'maj')
+      .replace(/^maj/i, 'maj');
 
     return normalizedQuality;
   };
@@ -229,6 +276,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   // Apply professional chord quality notation with uniform font weight
   // All parts of chord labels use regular font weight for cleaner appearance
   const formattedRoot = `<span style="font-weight: inherit;">${root}</span>`;
+  let qualityHasFormattedParentheses = false;
 
   if (quality === 'maj') {
     // Major chords don't need a suffix in standard notation
@@ -275,12 +323,10 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
     if (quality.startsWith('min')) {
       quality = '<span style="font-weight: inherit;">m</span>' + quality.substring(3).replace(/(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
     } else if (quality.startsWith('maj')) {
-      // Use triangle (Δ) for major 7th chords - industry standard
-      if (quality === 'maj7') {
-        quality = `<span style="${MAJOR_TRIANGLE_STYLE}">Δ</span><sup style="${SUPERSCRIPT_STYLE}">7</sup>`;
-      } else {
-        quality = '<span style="font-weight: inherit;">maj</span>' + quality.substring(3).replace(/(\d+)/g, `<sup style="${SUPERSCRIPT_STYLE}">$1</sup>`);
-      }
+      // Use triangle (Δ) for major-family extension notation - industry standard.
+      const majorSuffix = quality.substring(3);
+      qualityHasFormattedParentheses = majorSuffix.includes('(') && majorSuffix.includes(')');
+      quality = `<span style="${MAJOR_TRIANGLE_STYLE}">Δ</span>${formatMajorExtensionSuffix(majorSuffix)}`;
     } else {
       // Make numeric extensions superscript with consistent sizing
       quality = '<span style="font-weight: inherit;">' + quality.replace(/(\d+)/g, `</span><sup style="${SUPERSCRIPT_STYLE}">$1</sup><span style="font-weight: inherit;">`) + '</span>';
@@ -298,7 +344,7 @@ export function formatChordWithMusicalSymbols(chordName: string, isDarkMode: boo
   }
 
   // FIXED: Handle parentheses around chord extensions with consistent sizing and stable layout
-  if (quality.includes('(') && quality.includes(')')) {
+  if (!qualityHasFormattedParentheses && quality.includes('(') && quality.includes(')')) {
     // Handle flat extensions in parentheses as a positioned inline group so the parentheses align with the accidental+number
     quality = quality.replace(/\(b(\d+)\)/g, `<span style="${PAREN_GROUP_STYLE}">(<span style="${ACCIDENTAL_STYLE}">♭</span>$1)</span>`);
     // Handle sharp extensions in parentheses similarly

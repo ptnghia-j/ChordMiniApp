@@ -5,8 +5,11 @@ import { addToast, closeToast } from '@heroui/react';
 
 /** Delay (ms) before showing the "press play" prompt. */
 const PROMPT_DELAY_MS = 5_000;
+const consumedPlaybackPromptIds = new Set<string>();
 
 interface PlaybackPromptToastProps {
+  /** Stable identifier for the current analysis page/song. */
+  promptId?: string;
   /** Whether analysis results have loaded and the chord grid is visible. */
   isAnalyzed: boolean;
   /** Whether the YouTube player is currently playing. */
@@ -22,28 +25,35 @@ interface PlaybackPromptToastProps {
  *  - After 5 seconds, if the user has not started playback (`!isPlaying`),
  *    a persistent blue toast appears.
  *  - The toast auto-dismisses the moment `isPlaying` becomes `true`.
- *  - If the user starts playback within the 5 seconds, the toast never shows.
+ *  - Once playback has started, the prompt is consumed and will not appear
+ *    again after pauses or song end.
  */
 const PlaybackPromptToast: React.FC<PlaybackPromptToastProps> = ({
+  promptId = 'default',
   isAnalyzed,
   isPlaying,
 }) => {
   const toastKeyRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasShownRef = useRef(false);
+  const hasConsumedPromptRef = useRef(consumedPlaybackPromptIds.has(promptId));
+
+  useEffect(() => {
+    hasConsumedPromptRef.current = consumedPlaybackPromptIds.has(promptId);
+  }, [promptId]);
 
   // Start/cancel the 5-second delay when analysis loads
   useEffect(() => {
-    if (!isAnalyzed || isPlaying || hasShownRef.current) {
+    if (!isAnalyzed || isPlaying || hasConsumedPromptRef.current) {
       return;
     }
 
     // Start the delay timer
     timerRef.current = setTimeout(() => {
       // Double-check — the user could have pressed play during the delay
-      if (hasShownRef.current) return;
+      if (hasConsumedPromptRef.current) return;
 
-      hasShownRef.current = true;
+      consumedPlaybackPromptIds.add(promptId);
+      hasConsumedPromptRef.current = true;
       const key = addToast({
         title: '▶ Press Play to Start',
         description:
@@ -62,15 +72,20 @@ const PlaybackPromptToast: React.FC<PlaybackPromptToastProps> = ({
         timerRef.current = null;
       }
     };
-  }, [isAnalyzed, isPlaying]);
+  }, [isAnalyzed, isPlaying, promptId]);
 
   // Auto-dismiss the toast when the user starts playback
   useEffect(() => {
+    if (isPlaying) {
+      consumedPlaybackPromptIds.add(promptId);
+      hasConsumedPromptRef.current = true;
+    }
+
     if (isPlaying && toastKeyRef.current) {
       closeToast(toastKeyRef.current);
       toastKeyRef.current = null;
     }
-  }, [isPlaying]);
+  }, [isPlaying, promptId]);
 
   // Cleanup on unmount
   useEffect(() => () => {

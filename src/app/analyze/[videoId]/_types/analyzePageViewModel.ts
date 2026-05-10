@@ -36,6 +36,7 @@ export interface AnalyzePageChromeProps {
     errorMessage: string | null;
   };
   playbackPromptToastProps: {
+    promptId: string;
     isAnalyzed: boolean;
     isPlaying: boolean;
   };

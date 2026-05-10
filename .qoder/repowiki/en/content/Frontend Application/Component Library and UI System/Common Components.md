@@ -4,6 +4,7 @@
 **Referenced Files in This Document**
 - [AppTooltip.tsx](file://src/components/common/AppTooltip.tsx)
 - [Navigation.tsx](file://src/components/common/Navigation.tsx)
+- [StickySearchBar.tsx](file://src/components/common/StickySearchBar.tsx)
 - [Footer.tsx](file://src/components/common/Footer.tsx)
 - [ThemeToggle.tsx](file://src/components/common/ThemeToggle.tsx)
 - [SkeletonLoaders.tsx](file://src/components/common/SkeletonLoaders.tsx)
@@ -40,6 +41,7 @@ graph TB
 subgraph "Common Components"
 A["AppTooltip.tsx"]
 B["Navigation.tsx"]
+SB["StickySearchBar.tsx"]
 C["Footer.tsx"]
 D["ThemeToggle.tsx"]
 E["SkeletonLoaders.tsx"]
@@ -58,7 +60,7 @@ end
 D --> A
 D --> T
 B --> D
-B --> A
+B --> SB
 F --> G
 H --> |"uses"| U["errorMessageUtils<br/>utility"]
 S1 --> S3
@@ -67,7 +69,8 @@ S2 --> S3
 
 **Diagram sources**
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [Footer.tsx:1-187](file://src/components/common/Footer.tsx#L1-L187)
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 - [SkeletonLoaders.tsx:1-152](file://src/components/common/SkeletonLoaders.tsx#L1-L152)
@@ -81,7 +84,8 @@ S2 --> S3
 
 **Section sources**
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [Footer.tsx:1-187](file://src/components/common/Footer.tsx#L1-L187)
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 - [SkeletonLoaders.tsx:1-152](file://src/components/common/SkeletonLoaders.tsx#L1-L152)
@@ -95,7 +99,8 @@ S2 --> S3
 
 ## Core Components
 - AppTooltip: A thin wrapper around a UI library tooltip with default dark/light theme-aware styling and optional test-mode bypass.
-- Navigation: Sticky header with responsive behavior, mobile menu, logo variants per theme, and active-route highlighting.
+- Navigation: Sticky header with responsive behavior, mobile menu, logo variants per theme, active-route highlighting, and route-aware search visibility.
+- StickySearchBar: Shared YouTube search control used in the navbar. It syncs with the homepage search state, can optionally hide its upload shortcut, and uses the same inactive gray color treatment as the analysis utility bar buttons.
 - Footer: Multi-column footer with brand, navigation sections, social links, and metadata.
 - ThemeToggle: Interactive theme switcher using a shared theme context and tooltip.
 - SkeletonLoaders: Multiple skeleton variants for audio player, analysis controls, chord grid, lyrics, chatbot, and processing status.
@@ -104,7 +109,8 @@ S2 --> S3
 
 **Section sources**
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [Footer.tsx:1-187](file://src/components/common/Footer.tsx#L1-L187)
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 - [SkeletonLoaders.tsx:1-152](file://src/components/common/SkeletonLoaders.tsx#L1-L152)
@@ -142,7 +148,6 @@ end
 Nav --> TT
 TT --> TCtx
 TT --> Tip
-Nav --> Tip
 ErrC --> ErrG
 UED --> |"uses"| Util["errorMessageUtils"]
 TW --> GCSS
@@ -150,7 +155,7 @@ PC --> GCSS
 ```
 
 **Diagram sources**
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 - [Footer.tsx:1-187](file://src/components/common/Footer.tsx#L1-L187)
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
@@ -193,12 +198,13 @@ class AppTooltip {
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
 
 ### Navigation
-- Purpose: Sticky header with responsive behavior, active route highlighting, and mobile menu.
-- Composition pattern: Uses a UI library navbar, integrates ThemeToggle and a sticky search bar, computes active state from Next.js path and hash.
-- Props interface: Optional className and showStickySearch flag.
-- Styling approach: Tailwind classes for backdrop blur, borders, and theme-aware backgrounds; responsive variants for desktop and mobile.
+- Purpose: Sticky header with responsive behavior, active route highlighting, mobile menu, and route-aware search access.
+- Composition pattern: Uses a UI library navbar, integrates ThemeToggle and StickySearchBar, computes active state from Next.js path and hash, and derives `isAnalyzeRoute`, `shouldRenderSearch`, and `shouldShowSearch` from the current route.
+- Props interface: Optional className, showStickySearch flag, and overlay flag.
+- Styling approach: Tailwind classes for backdrop blur, borders, and theme-aware backgrounds; responsive variants for desktop and mobile. The navbar search input inherits the analysis utility bar inactive button palette (`bg-gray-200/60`, `dark:bg-gray-600/60`, `text-gray-800`, `dark:text-gray-100`) for visual consistency.
 - Accessibility: Uses semantic navigation elements and proper focus management; mobile menu toggles body scroll and click-outside behavior.
-- Customization: Add/remove navigation items via the configuration array; adjust active state logic as needed.
+- Search behavior: On the homepage, the search appears only when the hero search has scrolled out of view via `showStickySearch`. On `/analyze` and nested analysis routes, the search is always visible. The upload shortcut inside StickySearchBar is hidden on analysis routes by passing `showUpload={false}`.
+- Customization: Add/remove navigation items via the configuration array; adjust active state and route-aware search logic as needed.
 
 ```mermaid
 sequenceDiagram
@@ -211,16 +217,24 @@ N->>P : Navigate or scroll
 P-->>N : pathname/hash update
 N->>N : isActiveRoute()
 N-->>U : Render active state
+N->>N : shouldRenderSearch / shouldShowSearch
+N-->>U : Show sticky search on home or persistent search on analysis routes
 U->>T : Toggle theme
 T-->>N : Theme change reflected
 ```
 
 **Diagram sources**
-- [Navigation.tsx:88-114](file://src/components/common/Navigation.tsx#L88-L114)
+- [Navigation.tsx:24-31](file://src/components/common/Navigation.tsx#L24-L31)
+- [Navigation.tsx:92-118](file://src/components/common/Navigation.tsx#L92-L118)
+- [Navigation.tsx:185-195](file://src/components/common/Navigation.tsx#L185-L195)
+- [Navigation.tsx:240-250](file://src/components/common/Navigation.tsx#L240-L250)
+- [StickySearchBar.tsx:9-18](file://src/components/common/StickySearchBar.tsx#L9-L18)
+- [StickySearchBar.tsx:67-102](file://src/components/common/StickySearchBar.tsx#L67-L102)
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 
 **Section sources**
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 
 ### Footer
 - Purpose: Multi-column footer with brand, sections, social links, and metadata.
@@ -347,14 +361,14 @@ Buttons --> End
 
 ## Dependency Analysis
 - Theming: ThemeToggle depends on ThemeContext for theme state and toggle function; ThemeContext reads/writes the dark class on the document element and persists preferences in localStorage.
-- Navigation: Depends on ThemeToggle and a sticky search component; uses Next.js routing utilities for active state and scroll behavior.
+- Navigation: Depends on ThemeToggle and StickySearchBar; uses Next.js routing utilities for active state, scroll behavior, and route-aware search visibility.
 - Styling: Tailwind configuration defines theme tokens and animations; PostCSS processes Tailwind directives; global CSS adds base styles and device-specific tweaks.
 
 ```mermaid
 graph LR
 TT["ThemeToggle"] --> TC["ThemeContext"]
 Nav["Navigation"] --> TT
-Nav --> Tip["AppTooltip"]
+Nav --> Search["StickySearchBar"]
 GC["globals.css"] <-- Tailwind --> TW["tailwind.config.js"]
 PC["postcss.config.js"] --> TW
 ```
@@ -362,7 +376,8 @@ PC["postcss.config.js"] --> TW
 **Diagram sources**
 - [ThemeToggle.tsx:7-92](file://src/components/common/ThemeToggle.tsx#L7-L92)
 - [ThemeContext.tsx:54-63](file://src/contexts/ThemeContext.tsx#L54-L63)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
 - [globals.css:1-657](file://src/app/globals.css#L1-L657)
 - [tailwind.config.js:1-194](file://tailwind.config.js#L1-L194)
@@ -371,7 +386,7 @@ PC["postcss.config.js"] --> TW
 **Section sources**
 - [ThemeToggle.tsx:1-95](file://src/components/common/ThemeToggle.tsx#L1-L95)
 - [ThemeContext.tsx:1-71](file://src/contexts/ThemeContext.tsx#L1-L71)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
 - [AppTooltip.tsx:1-43](file://src/components/common/AppTooltip.tsx#L1-L43)
 - [globals.css:1-657](file://src/app/globals.css#L1-L657)
 - [tailwind.config.js:1-194](file://tailwind.config.js#L1-L194)
@@ -379,7 +394,7 @@ PC["postcss.config.js"] --> TW
 
 ## Performance Considerations
 - Hydration safety: ThemeToggle avoids rendering theme-dependent icons during SSR and defers to a neutral icon until mounted.
-- Navigation optimizations: Uses CSS-based theme switching for logos to avoid hydration mismatches; applies performance classes for smooth scrolling and backdrop blur.
+- Navigation optimizations: Uses CSS-based theme switching for logos to avoid hydration mismatches; applies performance classes for smooth scrolling and backdrop blur; keeps analysis-page search available without remounting a separate analysis-only control.
 - Skeletons: Provide immediate feedback and reduce perceived load time; use minimal DOM and efficient animations.
 - Tailwind purging: Keep unused classes minimal to reduce bundle size; the Tailwind configuration includes a safelist for dynamic grid columns.
 
@@ -391,13 +406,13 @@ PC["postcss.config.js"] --> TW
   - Navigation uses semantic elements and manages focus and click-outside behavior for the mobile menu.
   - Footer links include rel and target attributes for external resources.
 - Responsiveness:
-  - Navigation adapts between desktop and mobile views, with a sticky search bar appearing conditionally.
+  - Navigation adapts between desktop and mobile views. The search bar appears conditionally on the homepage and persistently on analysis routes; mobile search appears inside the open mobile menu when search is active for that route.
   - Global CSS includes media queries for mobile, tablet, and landscape orientations with performance optimizations.
   - Tailwind utilities provide responsive variants for spacing, typography, and layout.
 
 **Section sources**
 - [ThemeToggle.tsx:18-45](file://src/components/common/ThemeToggle.tsx#L18-L45)
-- [Navigation.tsx:73-84](file://src/components/common/Navigation.tsx#L73-L84)
+- [Navigation.tsx:77-88](file://src/components/common/Navigation.tsx#L77-L88)
 - [Footer.tsx:93-106](file://src/components/common/Footer.tsx#L93-L106)
 - [globals.css:202-328](file://src/app/globals.css#L202-L328)
 
@@ -406,7 +421,7 @@ PC["postcss.config.js"] --> TW
   - Wrap your app with the ThemeProvider to enable theme-aware components.
   - Use ThemeToggle within layouts to allow user-driven theme switching.
 - Navigation:
-  - Place Navigation at the top of pages or layouts; pass className to extend styling; configure showStickySearch based on viewport conditions.
+  - Place Navigation at the top of pages or layouts; pass className to extend styling; configure showStickySearch for homepage hero-scroll behavior. Analysis routes derive persistent search visibility automatically and hide the upload shortcut in the navbar search.
 - Footers:
   - Use Footer in main layouts; customize sections via the configuration object.
 - Tooltips:
@@ -419,7 +434,7 @@ PC["postcss.config.js"] --> TW
 
 **Section sources**
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
-- [Navigation.tsx:23-269](file://src/components/common/Navigation.tsx#L23-L269)
+- [Navigation.tsx:23-297](file://src/components/common/Navigation.tsx#L23-L297)
 - [Footer.tsx:10-187](file://src/components/common/Footer.tsx#L10-L187)
 - [AppTooltip.tsx:16-41](file://src/components/common/AppTooltip.tsx#L16-L41)
 - [SkeletonLoaders.tsx:10-151](file://src/components/common/SkeletonLoaders.tsx#L10-L151)
@@ -440,7 +455,7 @@ PC["postcss.config.js"] --> TW
 
 **Section sources**
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
-- [Navigation.tsx:88-114](file://src/components/common/Navigation.tsx#L88-L114)
+- [Navigation.tsx:92-118](file://src/components/common/Navigation.tsx#L92-L118)
 - [AppTooltip.tsx:25-27](file://src/components/common/AppTooltip.tsx#L25-L27)
 - [ClientErrorBoundary.tsx:10-12](file://src/components/common/ClientErrorBoundary.tsx#L10-L12)
 - [GlobalErrorBoundary.tsx:38-47](file://src/components/common/GlobalErrorBoundary.tsx#L38-L47)

@@ -9,11 +9,13 @@ import { useTheme } from '@/contexts/ThemeContext';
 interface StickySearchBarProps {
   isVisible: boolean;
   className?: string;
+  showUpload?: boolean;
 }
 
 const StickySearchBar: React.FC<StickySearchBarProps> = ({
   isVisible,
-  className = ''
+  className = '',
+  showUpload = true,
 }) => {
   const { theme } = useTheme();
   const [showResults, setShowResults] = useState(false);
@@ -67,12 +69,12 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
               value={searchQuery}
               onChange={(e) => updateSearchQuery(e.target.value)}
               placeholder="Search music or paste URL..."
-              className="w-full min-w-[200px] xl:min-w-[300px] pl-2 xl:pl-3 pr-8 xl:pr-10 py-1 xl:py-1.5 text-xs xl:text-sm border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full min-w-[200px] xl:min-w-[300px] pl-2 xl:pl-3 pr-8 xl:pr-10 py-1 xl:py-1.5 text-xs xl:text-sm border border-transparent bg-gray-200/60 text-gray-800 placeholder:text-gray-700/70 dark:bg-gray-600/60 dark:text-gray-100 dark:placeholder:text-gray-100/70 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
             />
             <button
               type="submit"
               disabled={isSearching}
-              className="absolute right-1 xl:right-2 top-1/2 transform -translate-y-1/2 p-0.5 xl:p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 disabled:opacity-50"
+              className="absolute right-1 xl:right-2 top-1/2 transform -translate-y-1/2 p-0.5 xl:p-1 text-gray-800/75 hover:text-blue-600 dark:text-gray-100/75 dark:hover:text-blue-400 transition-colors duration-200 disabled:opacity-50"
               aria-label="Search"
             >
               {isSearching ? (
@@ -88,14 +90,16 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
 
         </form>
 
-        <Link
-          href="/analyze"
-          className="font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
-          aria-label="Upload audio file"
-        >
-          <HiUpload className="w-3 h-3 xl:w-4 xl:h-4" />
-          <span className="hidden lg:inline xl:inline">Upload</span>
-        </Link>
+        {showUpload && (
+          <Link
+            href="/analyze"
+            className="font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
+            aria-label="Upload audio file"
+          >
+            <HiUpload className="w-3 h-3 xl:w-4 xl:h-4" />
+            <span className="hidden lg:inline xl:inline">Upload</span>
+          </Link>
+        )}
 
         {/* Search Results Dropdown - positioned relative to parent container */}
         {showResults && (

@@ -1304,6 +1304,7 @@ export function useAnalyzePageViewModel({
       errorMessage: sheetSageError,
     },
     playbackPromptToastProps: {
+      promptId: videoId,
       isAnalyzed: audioProcessingState.isAnalyzed,
       isPlaying,
     },

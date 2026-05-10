@@ -12,6 +12,7 @@
 - [SkeletonLoaders.tsx](file://src/components/common/SkeletonLoaders.tsx)
 - [ThemeToggle.tsx](file://src/components/common/ThemeToggle.tsx)
 - [Navigation.tsx](file://src/components/common/Navigation.tsx)
+- [StickySearchBar.tsx](file://src/components/common/StickySearchBar.tsx)
 - [appSliderStyles.ts](file://src/components/ui/appSliderStyles.ts)
 - [analysis-embedded.css](file://src/styles/analysis-embedded.css)
 - [chord-grid.css](file://src/styles/chord-grid.css)
@@ -62,7 +63,7 @@ A --> K["Feature Styles<br/>analysis-embedded.css, chord-grid.css"]
 - [ClientErrorBoundary.tsx:10-12](file://src/components/common/ClientErrorBoundary.tsx#L10-L12)
 - [GlobalErrorBoundary.tsx:19-84](file://src/components/common/GlobalErrorBoundary.tsx#L19-L84)
 - [CriticalCSS.tsx:9-242](file://src/components/layout/CriticalCSS.tsx#L9-L242)
-- [Navigation.tsx:23-265](file://src/components/common/Navigation.tsx#L23-L265)
+- [Navigation.tsx:23-297](file://src/components/common/Navigation.tsx#L23-L297)
 - [ThemeToggle.tsx:7-94](file://src/components/common/ThemeToggle.tsx#L7-L94)
 - [SkeletonLoaders.tsx:10-151](file://src/components/common/SkeletonLoaders.tsx#L10-L151)
 - [appSliderStyles.ts:5-10](file://src/components/ui/appSliderStyles.ts#L5-L10)
@@ -90,7 +91,7 @@ Key responsibilities:
 - [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
 - [ClientErrorBoundary.tsx:10-12](file://src/components/common/ClientErrorBoundary.tsx#L10-L12)
 - [GlobalErrorBoundary.tsx:19-84](file://src/components/common/GlobalErrorBoundary.tsx#L19-L84)
-- [Navigation.tsx:23-265](file://src/components/common/Navigation.tsx#L23-L265)
+- [Navigation.tsx:23-297](file://src/components/common/Navigation.tsx#L23-L297)
 - [ThemeToggle.tsx:7-94](file://src/components/common/ThemeToggle.tsx#L7-L94)
 - [SkeletonLoaders.tsx:10-151](file://src/components/common/SkeletonLoaders.tsx#L10-L151)
 
@@ -250,7 +251,8 @@ UpdateDOM --> End(["Re-render consumers"])
 - [layout.tsx:151-156](file://src/app/layout.tsx#L151-L156)
 
 ### Common Component Library
-- Navigation: Responsive navigation with mobile menu, scroll-to-section behavior, and theme-aware logos.
+- Navigation: Responsive navigation with mobile menu, scroll-to-section behavior, theme-aware logos, and route-aware search. Homepage search visibility is driven by `showStickySearch`, while `/analyze` routes always render the navbar search and hide the search bar's upload shortcut.
+- StickySearchBar: Shared search input/dropdown that synchronizes with homepage search state, exposes an optional `showUpload` prop, and uses the same inactive gray color treatment as analysis utility bar buttons.
 - ThemeToggle: Hydration-safe toggle with tooltips and aria labels.
 - SkeletonLoaders: Realistic placeholders for audio player, controls, chord grid, lyrics, chatbot, and processing status.
 - UI utilities: Slider class customization helper for tone-based styling.
@@ -261,7 +263,8 @@ Accessibility and responsiveness:
 - Responsive breakpoints and mobile-first design.
 
 **Section sources**
-- [Navigation.tsx:23-265](file://src/components/common/Navigation.tsx#L23-L265)
+- [Navigation.tsx:23-297](file://src/components/common/Navigation.tsx#L23-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [ThemeToggle.tsx:7-94](file://src/components/common/ThemeToggle.tsx#L7-L94)
 - [SkeletonLoaders.tsx:10-151](file://src/components/common/SkeletonLoaders.tsx#L10-L151)
 - [appSliderStyles.ts:5-10](file://src/components/ui/appSliderStyles.ts#L5-L10)
@@ -298,7 +301,7 @@ Patterns:
 **Section sources**
 - [ProcessingContext.tsx:32-38](file://src/contexts/ProcessingContext.tsx#L32-L38)
 - [ThemeContext.tsx:14-20](file://src/contexts/ThemeContext.tsx#L14-L20)
-- [Navigation.tsx:99-114](file://src/components/common/Navigation.tsx#L99-L114)
+- [Navigation.tsx:103-118](file://src/components/common/Navigation.tsx#L103-L118)
 - [ThemeToggle.tsx:50-91](file://src/components/common/ThemeToggle.tsx#L50-L91)
 
 ### Component Testing Strategies
@@ -329,7 +332,7 @@ Evidence in code:
 
 **Section sources**
 - [ThemeToggle.tsx:24-25](file://src/components/common/ThemeToggle.tsx#L24-L25)
-- [Navigation.tsx:178-182](file://src/components/common/Navigation.tsx#L178-L182)
+- [Navigation.tsx:185-195](file://src/components/common/Navigation.tsx#L185-L195)
 - [GlobalErrorBoundary.tsx:68-77](file://src/components/common/GlobalErrorBoundary.tsx#L68-L77)
 
 ### Responsive Design Patterns
@@ -340,11 +343,12 @@ Patterns:
 - Breakpoint-specific component visibility and behavior.
 
 Examples:
-- Navigation adapts from desktop buttons to a collapsible mobile menu.
+- Navigation adapts from desktop buttons to a collapsible mobile menu, with route-aware search rendered inline on desktop and inside the mobile menu when active.
 - CriticalCSS targets above-the-fold content with responsive typography and spacing.
 
 **Section sources**
-- [Navigation.tsx:116-265](file://src/components/common/Navigation.tsx#L116-L265)
+- [Navigation.tsx:122-297](file://src/components/common/Navigation.tsx#L122-L297)
+- [StickySearchBar.tsx:55-178](file://src/components/common/StickySearchBar.tsx#L55-L178)
 - [CriticalCSS.tsx:11-242](file://src/components/layout/CriticalCSS.tsx#L11-L242)
 
 ## Dependency Analysis
@@ -385,7 +389,7 @@ CC["CriticalCSS.tsx"] --> L
 - [GlobalErrorBoundary.tsx:19-84](file://src/components/common/GlobalErrorBoundary.tsx#L19-L84)
 - [ProcessingContext.tsx:44-183](file://src/contexts/ProcessingContext.tsx#L44-L183)
 - [ThemeContext.tsx:44-69](file://src/contexts/ThemeContext.tsx#L44-L69)
-- [Navigation.tsx:23-265](file://src/components/common/Navigation.tsx#L23-L265)
+- [Navigation.tsx:23-297](file://src/components/common/Navigation.tsx#L23-L297)
 - [ThemeToggle.tsx:7-94](file://src/components/common/ThemeToggle.tsx#L7-L94)
 - [SkeletonLoaders.tsx:10-151](file://src/components/common/SkeletonLoaders.tsx#L10-L151)
 - [appSliderStyles.ts:5-10](file://src/components/ui/appSliderStyles.ts#L5-L10)

@@ -7,6 +7,7 @@
 - [tailwind.config.js](file://tailwind.config.js)
 - [chord-grid.css](file://src/styles/chord-grid.css)
 - [Navigation.tsx](file://src/components/common/Navigation.tsx)
+- [StickySearchBar.tsx](file://src/components/common/StickySearchBar.tsx)
 - [AnalysisHeader.tsx](file://src/components/analysis/AnalysisHeader.tsx)
 - [ChordGrid.tsx](file://src/components/chord-analysis/ChordGrid.tsx)
 - [ChordCell.tsx](file://src/components/chord-analysis/ChordCell.tsx)
@@ -52,6 +53,7 @@ TWCFG["Tailwind Config<br/>tailwind.config.js"]
 end
 subgraph "Common UI"
 NAV["Navigation<br/>src/components/common/Navigation.tsx"]
+SEARCH["StickySearchBar<br/>src/components/common/StickySearchBar.tsx"]
 end
 subgraph "Analysis UI"
 AH["AnalysisHeader<br/>src/components/analysis/AnalysisHeader.tsx"]
@@ -75,6 +77,7 @@ end
 LAYOUT --> GLOBALS
 LAYOUT --> TWCFG
 LAYOUT --> NAV
+NAV --> SEARCH
 LAYOUT --> AH
 AH --> CGRID
 CGRID --> CCELL
@@ -88,9 +91,10 @@ LAYOUT --> EL
 - [layout.tsx:143-227](file://src/app/layout.tsx#L143-L227)
 - [globals.css:1-657](file://src/app/globals.css#L1-L657)
 - [tailwind.config.js:1-194](file://tailwind.config.js#L1-L194)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [AnalysisHeader.tsx:1-201](file://src/components/analysis/AnalysisHeader.tsx#L1-L201)
-- [ChordGrid.tsx:1-831](file://src/components/chord-analysis/ChordGrid.tsx#L1-L831)
+- [ChordGrid.tsx:1-792](file://src/components/chord-analysis/ChordGrid.tsx#L1-L792)
 - [ChordCell.tsx:1-357](file://src/components/chord-analysis/ChordCell.tsx#L1-L357)
 - [useChordDataProcessing.ts:1-88](file://src/hooks/chord-analysis/useChordDataProcessing.ts#L1-L88)
 - [ChordPlaybackManager.tsx:1-123](file://src/components/chord-playback/ChordPlaybackManager.tsx#L1-L123)
@@ -108,7 +112,8 @@ LAYOUT --> EL
 This section outlines the primary component families and their roles:
 
 - Common UI
-  - Navigation: responsive navigation with theme toggle, sticky search, and mobile menu
+  - Navigation: responsive navigation with theme toggle, route-aware sticky search, and mobile menu. Homepage search appears after the hero search scrolls away; analysis routes always show the navbar search and suppress the upload shortcut there.
+  - StickySearchBar: shared search input with dropdown results, optional upload shortcut, and utility-bar-matched inactive gray colors.
   - Tooltips, Footers, Skeleton loaders, and error boundaries: consistent UX across pages
 
 - Analysis UI
@@ -132,9 +137,10 @@ This section outlines the primary component families and their roles:
   - EnhancedLyricsDisplay: synchronized lyrics with chord overlays and auto-scroll
 
 **Section sources**
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [AnalysisHeader.tsx:1-201](file://src/components/analysis/AnalysisHeader.tsx#L1-L201)
-- [ChordGrid.tsx:1-831](file://src/components/chord-analysis/ChordGrid.tsx#L1-L831)
+- [ChordGrid.tsx:1-792](file://src/components/chord-analysis/ChordGrid.tsx#L1-L792)
 - [ChordCell.tsx:1-357](file://src/components/chord-analysis/ChordCell.tsx#L1-L357)
 - [useChordDataProcessing.ts:1-88](file://src/hooks/chord-analysis/useChordDataProcessing.ts#L1-L88)
 - [ChordPlaybackManager.tsx:1-123](file://src/components/chord-playback/ChordPlaybackManager.tsx#L1-L123)
@@ -154,12 +160,14 @@ The UI system follows a layered architecture:
 graph TB
 APP["App Shell<br/>layout.tsx"]
 COMMON["Common UI<br/>Navigation.tsx"]
+SEARCH["StickySearchBar.tsx"]
 ANALYSIS["Analysis UI<br/>AnalysisHeader.tsx"]
 CHORD_ANALYSIS["Chord Analysis<br/>ChordGrid.tsx + ChordCell.tsx"]
 CHORD_PLAYBACK["Chord Playback<br/>ChordPlaybackManager.tsx + GuitarChordDiagram.tsx"]
 PIANO_VIS["Piano Visualizer<br/>PianoVisualizerTab.tsx + HeroPianoVisualizerMock.tsx"]
 LYRICS["Lyrics<br/>EnhancedLyricsDisplay.tsx"]
 APP --> COMMON
+COMMON --> SEARCH
 APP --> ANALYSIS
 ANALYSIS --> CHORD_ANALYSIS
 CHORD_ANALYSIS --> CHORD_PLAYBACK
@@ -169,9 +177,10 @@ APP --> LYRICS
 
 **Diagram sources**
 - [layout.tsx:143-227](file://src/app/layout.tsx#L143-L227)
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [AnalysisHeader.tsx:1-201](file://src/components/analysis/AnalysisHeader.tsx#L1-L201)
-- [ChordGrid.tsx:1-831](file://src/components/chord-analysis/ChordGrid.tsx#L1-L831)
+- [ChordGrid.tsx:1-792](file://src/components/chord-analysis/ChordGrid.tsx#L1-L792)
 - [ChordCell.tsx:1-357](file://src/components/chord-analysis/ChordCell.tsx#L1-L357)
 - [ChordPlaybackManager.tsx:1-123](file://src/components/chord-playback/ChordPlaybackManager.tsx#L1-L123)
 - [GuitarChordDiagram.tsx:1-364](file://src/components/chord-playback/GuitarChordDiagram.tsx#L1-L364)
@@ -212,11 +221,11 @@ ChordGrid --> ChordCell : "renders"
 ```
 
 **Diagram sources**
-- [ChordGrid.tsx:178-831](file://src/components/chord-analysis/ChordGrid.tsx#L178-L831)
+- [ChordGrid.tsx:178-792](file://src/components/chord-analysis/ChordGrid.tsx#L178-L792)
 - [ChordCell.tsx:115-357](file://src/components/chord-analysis/ChordCell.tsx#L115-L357)
 
 **Section sources**
-- [ChordGrid.tsx:1-831](file://src/components/chord-analysis/ChordGrid.tsx#L1-L831)
+- [ChordGrid.tsx:1-792](file://src/components/chord-analysis/ChordGrid.tsx#L1-L792)
 - [ChordCell.tsx:1-357](file://src/components/chord-analysis/ChordCell.tsx#L1-L357)
 
 ### Chord Data Processing Hook
@@ -367,12 +376,15 @@ RESP --> REUSABILITY
 Component dependencies and relationships:
 - ChordGrid depends on ChordCell, hooks, and theme context
 - ChordPlaybackManager depends on chord playback hooks and transposed chord data
-- Navigation integrates with theme and search components
+- Navigation integrates with theme and search components; it derives route-aware search visibility from `usePathname`.
+- StickySearchBar shares search state with the homepage search, renders dropdown results, and uses the same inactive gray background/text palette as the analysis utility bar buttons.
 - Global styles and Tailwind config define base styles and theme tokens
 
 ```mermaid
 graph LR
 NAV["Navigation.tsx"] --> THEME["ThemeContext"]
+NAV --> SEARCH["StickySearchBar.tsx"]
+SEARCH --> SEARCH_STATE["useSharedSearchState"]
 AH["AnalysisHeader.tsx"] --> NAV
 CGRID["ChordGrid.tsx"] --> CCELL["ChordCell.tsx"]
 CGRID --> HOOKS["useChordDataProcessing.ts"]
@@ -383,9 +395,10 @@ CGRID --> CGCSS["chord-grid.css"]
 ```
 
 **Diagram sources**
-- [Navigation.tsx:1-269](file://src/components/common/Navigation.tsx#L1-L269)
+- [Navigation.tsx:1-297](file://src/components/common/Navigation.tsx#L1-L297)
+- [StickySearchBar.tsx:1-182](file://src/components/common/StickySearchBar.tsx#L1-L182)
 - [AnalysisHeader.tsx:1-201](file://src/components/analysis/AnalysisHeader.tsx#L1-L201)
-- [ChordGrid.tsx:1-831](file://src/components/chord-analysis/ChordGrid.tsx#L1-L831)
+- [ChordGrid.tsx:1-792](file://src/components/chord-analysis/ChordGrid.tsx#L1-L792)
 - [ChordCell.tsx:1-357](file://src/components/chord-analysis/ChordCell.tsx#L1-L357)
 - [useChordDataProcessing.ts:1-88](file://src/hooks/chord-analysis/useChordDataProcessing.ts#L1-L88)
 - [ChordPlaybackManager.tsx:1-123](file://src/components/chord-playback/ChordPlaybackManager.tsx#L1-L123)
@@ -418,7 +431,7 @@ CGRID --> CGCSS["chord-grid.css"]
 - Dark mode SVG overrides: Guitar chord diagrams adjust inline SVG colors for crisp rendering in dark mode
 
 **Section sources**
-- [Navigation.tsx:29-30](file://src/components/common/Navigation.tsx#L29-L30)
+- [Navigation.tsx:29-31](file://src/components/common/Navigation.tsx#L29-L31)
 - [layout.tsx:152-161](file://src/app/layout.tsx#L152-L161)
 - [layout.tsx:65-109](file://src/app/layout.tsx#L65-L109)
 - [globals.css:443-481](file://src/app/globals.css#L443-L481)

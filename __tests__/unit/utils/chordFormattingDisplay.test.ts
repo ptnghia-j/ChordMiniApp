@@ -23,4 +23,28 @@ describe('chordFormatting inversion display', () => {
     expect(formatted).toContain('ø');
     expect(formatted).toContain('7');
   });
+
+  it('renders parenthesized major extensions with the delta symbol', () => {
+    const formatted = formatChordWithMusicalSymbols('Cmaj(9)');
+
+    expect(formatted).toContain('Δ');
+    expect(formatted).toContain('(9)');
+    expect(formatted).not.toContain('maj');
+  });
+
+  it('renders major extension family labels with the delta symbol', () => {
+    const formatted = formatChordWithMusicalSymbols('Cmaj9');
+
+    expect(formatted).toContain('Δ');
+    expect(formatted).toContain('9');
+    expect(formatted).not.toContain('maj');
+  });
+
+  it('renders long-form major seventh labels with the delta symbol', () => {
+    const formatted = formatChordWithMusicalSymbols('Cmajor7');
+
+    expect(formatted).toContain('Δ');
+    expect(formatted).toContain('7');
+    expect(formatted).not.toContain('major');
+  });
 });

@@ -26,6 +26,9 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentHash, setCurrentHash] = useState('');
   const [isClient, setIsClient] = useState(false);
+  const isAnalyzeRoute = pathname?.startsWith('/analyze') ?? false;
+  const shouldRenderSearch = pathname === '/' || isAnalyzeRoute;
+  const shouldShowSearch = isAnalyzeRoute || showStickySearch;
 
   // Use CSS-based theme switching for logos to prevent hydration mismatch
 
@@ -180,11 +183,12 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
         </NavbarContent>
 
         <NavbarContent justify="end" className="gap-1 sm:gap-2">
-          {/* Sticky Search Bar - only show on homepage when original search is out of view */}
-          {pathname === '/' && (
+          {/* Search Bar - sticky on home, always visible on analysis pages */}
+          {shouldRenderSearch && (
             <NavbarItem className="hidden md:flex">
               <StickySearchBar
-                isVisible={showStickySearch}
+                isVisible={shouldShowSearch}
+                showUpload={!isAnalyzeRoute}
                 className="max-w-[200px] lg:max-w-xs xl:max-w-md"
               />
             </NavbarItem>
@@ -234,11 +238,12 @@ const Navigation: React.FC<NavigationProps> = ({ className = '', showStickySearc
         </NavbarContent>
 
         <NavbarMenu>
-          {/* Mobile Sticky Search Bar - only show on homepage when original search is out of view AND mobile menu is open */}
-          {pathname === '/' && showStickySearch && isMobileMenuOpen && (
+          {/* Mobile Search Bar */}
+          {shouldRenderSearch && shouldShowSearch && isMobileMenuOpen && (
             <NavbarMenuItem>
               <StickySearchBar
                 isVisible={true}
+                showUpload={!isAnalyzeRoute}
                 className="w-full mb-4"
               />
             </NavbarMenuItem>

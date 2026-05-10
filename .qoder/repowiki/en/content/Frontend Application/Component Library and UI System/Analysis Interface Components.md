@@ -8,6 +8,8 @@
 - [AudioPlaybackDock.tsx](file://src/components/analysis/AudioPlaybackDock.tsx)
 - [ProcessingBanners.tsx](file://src/components/analysis/ProcessingBanners.tsx)
 - [ProcessingStatusBanner.tsx](file://src/components/analysis/ProcessingStatusBanner.tsx)
+- [PlaybackPromptToast.tsx](file://src/components/analysis/PlaybackPromptToast.tsx)
+- [AnalyzePageChrome.tsx](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx)
 - [DownloadingIndicator.tsx](file://src/components/analysis/DownloadingIndicator.tsx)
 - [ExtractionNotification.tsx](file://src/components/analysis/ExtractionNotification.tsx)
 - [HeroUIBeatModelSelector.tsx](file://src/components/analysis/HeroUIBeatModelSelector.tsx)
@@ -52,7 +54,7 @@ The analysis interface is composed of several focused UI components and supporti
 - Control panels: AnalysisControls, AnalysisHeader, AudioPlaybackDock
 - Visualization: BeatTimeline
 - Model selection: HeroUIBeatModelSelector, HeroUIChordModelSelector
-- Processing feedback: ProcessingBanners, ProcessingStatusBanner, DownloadingIndicator, ExtractionNotification
+- Processing feedback: ProcessingBanners, ProcessingStatusBanner, PlaybackPromptToast, DownloadingIndicator, ExtractionNotification
 - State management: useModelState hook, analysisStore store
 - Orchestration: useAnalyzePageOrchestrator hook with enhanced cache pipeline
 - Services: audioAnalysisService, chordRecognitionService
@@ -70,8 +72,10 @@ HBMS["HeroUIBeatModelSelector"]
 HCMS["HeroUIChordModelSelector"]
 PB["ProcessingBanners"]
 PSB["ProcessingStatusBanner"]
+PPT["PlaybackPromptToast"]
 DI["DownloadingIndicator"]
 EN["ExtractionNotification"]
+APC["AnalyzePageChrome"]
 end
 subgraph "State Management"
 UMS["useModelState"]
@@ -96,6 +100,7 @@ AH --> AS
 APD --> AS
 BT --> AS
 PB --> PSB
+APC --> PPT
 PB --> DI
 PB --> EN
 UMS --> AS
@@ -118,6 +123,8 @@ HBMS --> MF
 - [HeroUIChordModelSelector.tsx:1-234](file://src/components/analysis/HeroUIChordModelSelector.tsx#L1-L234)
 - [ProcessingBanners.tsx:1-104](file://src/components/analysis/ProcessingBanners.tsx#L1-L104)
 - [ProcessingStatusBanner.tsx:1-234](file://src/components/analysis/ProcessingStatusBanner.tsx#L1-L234)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:1-31](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L1-L31)
 - [DownloadingIndicator.tsx:1-56](file://src/components/analysis/DownloadingIndicator.tsx#L1-L56)
 - [ExtractionNotification.tsx:1-46](file://src/components/analysis/ExtractionNotification.tsx#L1-L46)
 - [useModelState.ts:1-147](file://src/hooks/chord-analysis/useModelState.ts#L1-L147)
@@ -135,6 +142,8 @@ HBMS --> MF
 - [HeroUIBeatModelSelector.tsx:1-209](file://src/components/analysis/HeroUIBeatModelSelector.tsx#L1-L209)
 - [HeroUIChordModelSelector.tsx:1-234](file://src/components/analysis/HeroUIChordModelSelector.tsx#L1-L234)
 - [ProcessingBanners.tsx:1-104](file://src/components/analysis/ProcessingBanners.tsx#L1-L104)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:1-31](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L1-L31)
 - [useModelState.ts:1-147](file://src/hooks/chord-analysis/useModelState.ts#L1-L147)
 - [analysisStore.ts:1-367](file://src/stores/analysisStore.ts#L1-L367)
 - [useAnalyzePageOrchestrator.ts:622-720](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L622-L720)
@@ -153,6 +162,7 @@ This section examines the primary components that form the analysis interface an
 - AudioPlaybackDock: Offers playback controls with seek, play/pause, and tempo adjustment, integrating with audio duration and BPM display.
 - BeatTimeline: Visualizes beat events and downbeats with automatic scrolling to the current beat and measure markers.
 - ProcessingBanners: Aggregates downloading, extraction, processing status, and error banners for cohesive user feedback with cache-aware notifications.
+- PlaybackPromptToast: Renderless prompt mounted by AnalyzePageChrome. It waits 5 seconds after analysis is ready, prompts the user to start YouTube playback if needed, and consumes the prompt once per analysis prompt ID so it does not reappear after pauses or song end.
 - Model Selection Interfaces: HeroUIBeatModelSelector and HeroUIChordModelSelector provide environment-aware model selection with dynamic descriptions and availability filtering.
 
 **Updated** Enhanced cache pipeline integration allows immediate access to cached results even when audio extraction is in progress, significantly improving user experience.
@@ -163,6 +173,8 @@ This section examines the primary components that form the analysis interface an
 - [AudioPlaybackDock.tsx:1-145](file://src/components/analysis/AudioPlaybackDock.tsx#L1-L145)
 - [BeatTimeline.tsx:1-228](file://src/components/analysis/BeatTimeline.tsx#L1-L228)
 - [ProcessingBanners.tsx:1-104](file://src/components/analysis/ProcessingBanners.tsx#L1-L104)
+- [PlaybackPromptToast.tsx:1-105](file://src/components/analysis/PlaybackPromptToast.tsx#L1-L105)
+- [AnalyzePageChrome.tsx:21-28](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx#L21-L28)
 - [HeroUIBeatModelSelector.tsx:1-209](file://src/components/analysis/HeroUIBeatModelSelector.tsx#L1-L209)
 - [HeroUIChordModelSelector.tsx:1-234](file://src/components/analysis/HeroUIChordModelSelector.tsx#L1-L234)
 
