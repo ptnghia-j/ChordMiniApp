@@ -174,6 +174,56 @@ describe('grid compaction edge behavior', () => {
     expect(musicalSequence(result.chords)).toEqual(expect.arrayContaining(['C', 'G', 'Am']));
   });
 
+  it('does not spend global offset on a small steady timing drift', () => {
+    const chords = [
+      '',
+      '',
+      'N.C.',
+      ...Array(16).fill('C'),
+      ...Array(16).fill('G'),
+      ...Array(16).fill('Am'),
+    ];
+    const globalOffset = 3;
+    const slowIntroTimes = Array.from({ length: 16 }, (_, index) => index * 0.9);
+    const slightlySlowerTimes = Array.from({ length: 32 }, (_, index) => (
+      slowIntroTimes[slowIntroTimes.length - 1] + ((index + 1) * 1.0)
+    ));
+    const beatTimes = [...slowIntroTimes, ...slightlySlowerTimes];
+    const beats = [
+      null,
+      null,
+      0,
+      ...beatTimes,
+    ];
+    const mapping = chords.slice(globalOffset).map((chord, index) => ({
+      chord,
+      timestamp: beatTimes[index],
+      visualIndex: globalOffset + index,
+      audioIndex: index,
+    }));
+
+    const result = runVisualCompactionPipeline({
+      chordGridData: makeGridData({
+        chords,
+        beats,
+        paddingCount: 1,
+        shiftCount: 2,
+        totalPaddingCount: globalOffset,
+        originalAudioMapping: mapping,
+      }),
+      chordIntervals: [],
+      beatTimes,
+      timeSignature: 4,
+      beatDuration: 0.9,
+      enabled: true,
+    });
+    const remappedByAudioIndex = new Map(
+      result.originalAudioMapping?.map((item) => [item.audioIndex, item.visualIndex]) ?? []
+    );
+
+    expect(remappedByAudioIndex.get(16)).toBe(globalOffset + 16);
+  });
+
   it('leaves unsteady tempo regions structurally valid', () => {
     const beats = [0, 1, 2.1, 2.9, 4.4, 5.0, 6.3, 7.1, 9.0, 9.4, 10.6, 11.7];
     const chords = [

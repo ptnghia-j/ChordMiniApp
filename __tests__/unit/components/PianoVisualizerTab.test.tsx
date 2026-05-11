@@ -536,6 +536,74 @@ describe('PianoVisualizerTab piano-only playback', () => {
     expect(latestCall.pickupBeatCount).toBe(2);
   });
 
+  it('exports a two-beat pickup when stale padding metadata overstates the visible beat alignment', async () => {
+    mockChordEvents = [
+      { chordName: 'G', notes: [67], startTime: 2, endTime: 4, beatIndex: 2, beatCount: 2 },
+      { chordName: 'D/F#', notes: [66], startTime: 4, endTime: 6, beatIndex: 4, beatCount: 2 },
+    ] as any;
+
+    render(
+      <PianoVisualizerTab
+        chordGridData={{
+          chords: ['N.C.', 'N.C.', 'G', 'G', 'D/F#', 'D/F#', 'Em', 'Em'],
+          beats: [0, 1, 2, 3, 4, 5, 6, 7],
+          hasPadding: true,
+          paddingCount: 3,
+          shiftCount: 0,
+          totalPaddingCount: 3,
+        }}
+        analysisResults={{ beatDetectionResult: { bpm: 120, time_signature: 4 } } as any}
+        currentTime={2}
+        isPlaying={false}
+        isChordPlaybackEnabled={false}
+      />,
+    );
+
+    await openSheetMusicMode();
+
+    await waitFor(() => {
+      expect(mockExportPianoVisualizerScoreToMusicXml).toHaveBeenCalled();
+    });
+
+    const latestCall = mockExportPianoVisualizerScoreToMusicXml.mock.calls.at(-1)?.[0];
+    expect(latestCall.chordEvents[0].beatIndex).toBe(2);
+    expect(latestCall.pickupBeatCount).toBe(2);
+  });
+
+  it('exports the visible two-cell pickup for a shift-only long silent intro', async () => {
+    mockChordEvents = [
+      { chordName: 'G', notes: [67], startTime: 9.43, endTime: 10.29, beatIndex: 13, beatCount: 1 },
+      { chordName: 'D/F#', notes: [66], startTime: 12, endTime: 12.86, beatIndex: 16, beatCount: 1 },
+    ] as any;
+
+    render(
+      <PianoVisualizerTab
+        chordGridData={{
+          chords: ['', '', 'N.C.', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'N/C', 'G', 'N/C', 'N/C', 'D/F#'],
+          beats: [null, null, 0, 0.86, 1.71, 2.57, 3.43, 4.29, 5.14, 6, 6.86, 7.71, 8.57, 9.43, 10.29, 11.14, 12],
+          hasPadding: true,
+          paddingCount: 1,
+          shiftCount: 2,
+          totalPaddingCount: 3,
+        }}
+        analysisResults={{ beatDetectionResult: { bpm: 70, time_signature: 4 } } as any}
+        currentTime={9.43}
+        isPlaying={false}
+        isChordPlaybackEnabled={false}
+      />,
+    );
+
+    await openSheetMusicMode();
+
+    await waitFor(() => {
+      expect(mockExportPianoVisualizerScoreToMusicXml).toHaveBeenCalled();
+    });
+
+    const latestCall = mockExportPianoVisualizerScoreToMusicXml.mock.calls.at(-1)?.[0];
+    expect(latestCall.chordEvents[0].beatIndex).toBe(11);
+    expect(latestCall.pickupBeatCount).toBe(2);
+  });
+
   it('keeps reliable grid pickup when melody exists and stale padding disagrees by one beat', async () => {
     mockChordEvents = [
       { chordName: 'G', notes: [67], startTime: 2, endTime: 4, beatIndex: 2, beatCount: 2 },

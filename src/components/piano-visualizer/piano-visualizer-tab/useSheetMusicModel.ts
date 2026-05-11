@@ -286,6 +286,21 @@ export function resolveSheetPickupResolution(params: {
     && normalizedFirstPlayablePickup === 0
     && !shouldUseCombinedLeadInPickup
   );
+  const notationOffsetModulo = timeSignature > 0
+    ? normalizePickupCount(notationBeatOffset)
+    : 0;
+  const normalizedFirstGridMeasurePickup = notationOffsetModulo > 0
+    ? normalizePickupCount(timeSignature - notationOffsetModulo)
+    : null;
+  const shouldUseFirstGridMeasurePickupForShiftedLeadIn = (
+    usesFirstPlayableLeadInPickup
+    && firstNonSilentVisibleGridIndex !== null
+    && timeSignature > 0
+    && firstNonSilentVisibleGridIndex >= timeSignature
+    && normalizedFirstGridMeasurePickup !== null
+    && normalizedFirstGridMeasurePickup > 0
+    && notationOffsetModulo > (normalizedStructuralPickup ?? 0)
+  );
   let resolvedPickupBeatCount = 0;
 
   if (melodyOverridesStructuralPickup) {
@@ -294,6 +309,8 @@ export function resolveSheetPickupResolution(params: {
     resolvedPickupBeatCount = normalizedFirstMelodyPickup!;
   } else if (shouldUseCombinedLeadInPickup) {
     resolvedPickupBeatCount = normalizedCombinedLeadInPickup!;
+  } else if (shouldUseFirstGridMeasurePickupForShiftedLeadIn) {
+    resolvedPickupBeatCount = normalizedFirstGridMeasurePickup!;
   } else if (hasNonZeroStructuralPickup && (!usesFirstPlayableLeadInPickup || shouldRetainStructuralPickupAtBoundaryAlignedLeadIn)) {
     resolvedPickupBeatCount = normalizedStructuralPickup;
   } else if (
@@ -344,6 +361,25 @@ export function resolveSheetPickupResolution(params: {
   );
 
   if (shouldUpgradeStructuralPickupFromVisibleGridSilence) {
+    resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
+  }
+
+  const shouldCorrectStructuralPickupFromVisibleGridSilence = (
+    hasNonZeroStructuralPickup
+    && !melodyOverridesStructuralPickup
+    && !melodyOverridesFirstPlayableLeadInPickup
+    && firstNonSilentVisibleGridIndex !== null
+    && isWithinFirstMeasure(firstNonSilentVisibleGridIndex)
+    && normalizedFirstNonSilentVisibleGridPickup !== null
+    && normalizedStructuralPickup !== null
+    && normalizedFirstNonSilentVisibleGridPickup < normalizedStructuralPickup
+    && (
+      normalizedFirstPlayablePickup === null
+      || normalizedFirstPlayablePickup === normalizedFirstNonSilentVisibleGridPickup
+    )
+  );
+
+  if (shouldCorrectStructuralPickupFromVisibleGridSilence) {
     resolvedPickupBeatCount = normalizedFirstNonSilentVisibleGridPickup;
   }
 

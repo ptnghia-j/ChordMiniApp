@@ -318,6 +318,8 @@ DC --> BED
   - Use TypeScript strict mode; configure ESLint and Prettier per project settings.
 - Linting
   - Run npm run lint; address issues before opening PRs.
+- Validation
+  - Run `npm audit`, `npm run lint`, `npm run build`, and `npm test -- --runInBand` before shipping frontend changes. Use focused Jest commands first for narrow regressions, then the full suite.
 - Debugging
   - Use browser devtools for frontend; backend logs via Flask/Gunicorn; Docker logs for containerized services.
 - Build and Bundle Analysis
@@ -396,7 +398,7 @@ These guidelines consolidate the project’s coding standards, testing strategy,
 
 ## Appendices
 - Quick Commands
-  - Frontend: npm run dev, lint, test, build, analyze
+  - Frontend: `npm run dev`, `npm audit`, `npm run lint`, `npm run build`, `npm test -- --runInBand`, `npm run analyze`
   - Backend: Python virtual environment, pip install, python app.py
   - Docker: docker-compose up/down with .env.docker
 

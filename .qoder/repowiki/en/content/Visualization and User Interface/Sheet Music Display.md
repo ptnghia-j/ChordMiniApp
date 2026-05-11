@@ -19,12 +19,12 @@
 
 ## Update Summary
 **Changes Made**
-- Updated key signature processing section to reflect the extraction of key signature logic into dedicated `useSheetMusicModel key-section processing` utility function
+- Updated key signature processing section to reflect the centralized `buildSheetMusicKeySections` helper in `useSheetMusicModel.ts`
 - Added documentation for the new key signature processing pipeline and its integration with the sheet music model
 - Enhanced the musicXML export section to include key section normalization and resolution
 - Updated the architecture overview to show the new key signature processing workflow
 - Implemented context-aware stem directions for multi-voice staves (e.g., ensuring upper voice stems point up, lower voice down) for cleaner notation.
-- Fixed pickup measure calculation to accurately render 3-beat anacrusis measures with correct rest values before the first musical chord.
+- Updated pickup measure resolution to align sheet music anacrusis rests with the visible beat grid, including stale padding metadata, shift-only lead-ins, melody onset, and explicit `pickupBeatCount` export.
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -104,7 +104,7 @@ ExportIndex --> NotationScore["utils/musicXmlExport/notationScore.ts"]
 - [chordTransposition.ts:151-187](file://src/utils/chordTransposition.ts#L151-L187)
 
 ## Architecture Overview
-The system composes a React component with a renderer hook that orchestrates OSMD rendering, measure synchronization, and PDF export. Synchronization data embedded in MusicXML enables precise scrolling to the active measure during audio playback. The key signature processing has been extracted into a dedicated utility function for improved code organization and maintainability.
+The system composes a React component with a renderer hook that orchestrates OSMD rendering, measure synchronization, and PDF export. Synchronization data embedded in MusicXML enables precise scrolling to the active measure during audio playback. Key signature processing is centralized in `buildSheetMusicKeySections`, and pickup resolution is handled by `resolveSheetPickupResolution` before MusicXML export.
 
 ```mermaid
 sequenceDiagram
@@ -134,7 +134,7 @@ PDF->>Loader : loadOsmdConstructor()
 PDF->>OSMD : new OSMD(canvas backend)
 PDF->>OSMD : load(musicXml) + render()
 PDF-->>UI : PDF with pages
-UI->>Model : useSheetMusicModel key-section processing
+UI->>Model : buildSheetMusicKeySections()
 Model->>Transpose : transposeKeySignature()
 Transpose-->>Model : transposed key signature
 Model-->>UI : normalized key sections
@@ -234,7 +234,7 @@ Responsive design and navigation:
 - [chordSymbolLayout.ts:84-99](file://src/components/piano-visualizer/sheet-music-display/chordSymbolLayout.ts#L84-L99)
 
 ### Key Signature Processing Pipeline
-**Updated** The key signature processing logic has been extracted into a dedicated `useSheetMusicModel key-section processing` utility function for improved code organization and maintainability.
+**Updated** The key signature processing logic is centralized in the exported `buildSheetMusicKeySections` helper inside `useSheetMusicModel.ts` for improved code organization and maintainability.
 
 Responsibilities:
 - Process key signature sections from sequence corrections and modulations.
@@ -275,7 +275,7 @@ The sheet music display consumes MusicXML produced by the analysis workflow. Exp
 - Notation score building:
   - Constructs generic measure events, splits notes across measures, expands durations respecting meter and tuplets, prunes orphan ties, and normalizes key sections.
   - Generates context-aware stem directions for multi-voice staves, forcing upper voice stems up and lower voice stems down to prevent collision.
-  - Implements accurate pickup measure calculations (e.g., correctly computing 3-beat anacrusis rests) preceding the first measure.
+  - Uses the explicit `pickupBeatCount` from the sheet music model so pickup rests reflect visible beat alignment rather than stale padding metadata or shifted silent lead-ins.
   - **Updated** Key sections are now processed through the dedicated `normalizeScoreKeySections` function which handles key signature normalization, division conversion, and accidental preference resolution.
 
 **Section sources**
@@ -366,7 +366,7 @@ Common issues and remedies:
   - Verify that key signatures are properly transposed when pitch shifting is applied. Check the `transposeKeySignature` function for proper key signature parsing and transposition.
   - Ensure that key sections are properly normalized and sorted before export to MusicXML.
 - Incorrect pickup rests or stem directions:
-  - If pickup measures show single-beat rests when they should have more, check the pickup beat count calculation in `useSheetMusicModel`. It correctly handles anacrusis up to full measure minus one beat.
+  - If pickup measures show too many or too few leading rests, check `resolveSheetPickupResolution` in `useSheetMusicModel`. It reconciles structural padding, visible grid silence, shift-only lead-ins, first playable chord beats, and melody onset before passing `pickupBeatCount` to MusicXML export.
   - For overlapping stems in complex chords, ensure the multi-voice logic correctly identifies the top and bottom voice boundaries.
 
 **Section sources**
@@ -380,7 +380,7 @@ Common issues and remedies:
 ## Conclusion
 The sheet music display system integrates OSMD with a robust renderer hook that manages MusicXML loading, measure synchronization, responsive layout, and PDF export. It ensures consistent chord symbol rendering, smooth scrolling to the active measure, and accessible UI states. The system is designed to scale to larger scores by stabilizing measure anchors, caching sync data, and using efficient canvas-based PDF generation.
 
-**Updated** The recent extraction of key signature processing logic into the dedicated `useSheetMusicModel key-section processing` utility function improves code organization, maintainability, and separation of concerns. This enhancement demonstrates the system's commitment to clean architecture and modular design patterns.
+**Updated** The recent centralization of key signature processing in `buildSheetMusicKeySections` and pickup resolution in `resolveSheetPickupResolution` improves code organization, maintainability, and alignment between the beat grid and rendered sheet music.
 
 ## Appendices
 
@@ -433,10 +433,10 @@ Scroll --> End(["Update Wrapper Scroll"])
 ```mermaid
 sequenceDiagram
 participant Model as "useSheetMusicModel.ts"
-participant Build as "useSheetMusicModel key-section processing"
+participant Build as "buildSheetMusicKeySections"
 participant Transpose as "transposeKeySignature()"
 participant Export as "MusicXML Export"
-Model->>Build : useSheetMusicModel key-section processing(params)
+Model->>Build : buildSheetMusicKeySections(params)
 Build->>Transpose : transposeKeySignature(key, semitones)
 Transpose-->>Build : transposed key signature
 Build->>Build : merge sections & modulations

@@ -35,7 +35,7 @@ export const GRID_ALIGNMENT_CONFIG = {
   tempo: {
     minConfirmationBeats: 3,
     steadyToleranceRatio: 0.18,
-    changeThresholdRatio: 1.08,
+    changeThresholdRatio: 1.15,
     maxShrinkBeats: 3,
   },
   leadingExpansion: {

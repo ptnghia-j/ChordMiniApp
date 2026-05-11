@@ -16,15 +16,16 @@
 - [ScrollingChordStrip.tsx](file://src/components/piano-visualizer/ScrollingChordStrip.tsx)
 - [SheetMusicDisplay.tsx](file://src/components/piano-visualizer/SheetMusicDisplay.tsx)
 - [SheetMusicDisplayRoot.tsx](file://src/components/piano-visualizer/sheet-music-display/SheetMusicDisplayRoot.tsx)
-- [useSheetMusicModel key-section processing.ts](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts)
+- [buildSheetMusicKeySections](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts)
 </cite>
 
 ## Update Summary
 **Changes Made**
 - Updated Sheet Music Model Hook section to reflect centralization of key signature processing logic
-- Added new section documenting the useSheetMusicModel key-section processing
+- Added documentation for the `buildSheetMusicKeySections` helper in `useSheetMusicModel.ts`
 - Enhanced Sheet Music Model Hook documentation to explain the extraction and utilization of key signature processing logic
 - Updated architecture overview to show the relationship between the utility function and the main model hook
+- Updated pickup resolution documentation to cover visible-grid silence, stale padding metadata, shift-only lead-ins, melody onset, and explicit `pickupBeatCount` export.
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -47,7 +48,7 @@ The piano visualizer is organized into a tab-level container that composes sever
 - Scrolling chord strip for timeline navigation
 - Sheet music display powered by MusicXML export and rendering
 - Timeline model and sheet music model hooks for data orchestration
-- Centralized key signature processing utility function
+- Centralized key signature and pickup-resolution helpers
 - Constants, helpers, and types supporting the system
 
 ```mermaid
@@ -60,7 +61,7 @@ Panel --> Keyboard["PianoKeyboard.tsx"]
 PVTab --> Sheet["SheetMusicDisplayRoot.tsx"]
 PVTab --> TimelineModel["usePianoVisualizerTimelineModel.ts"]
 PVTab --> SheetModel["useSheetMusicModel.ts"]
-PVTab --> KeySectionsUtil["useSheetMusicModel key-section processing.ts"]
+PVTab --> KeySectionsUtil["buildSheetMusicKeySections"]
 PVTab --> Types["types.ts"]
 PVTab --> Consts["constants.ts"]
 PVTab --> Helpers["helpers.ts"]
@@ -76,7 +77,7 @@ SheetModel --> KeySectionsUtil
 - [SheetMusicDisplayRoot.tsx:1-139](file://src/components/piano-visualizer/sheet-music-display/SheetMusicDisplayRoot.tsx#L1-L139)
 - [usePianoVisualizerTimelineModel.ts:1-247](file://src/components/piano-visualizer/piano-visualizer-tab/usePianoVisualizerTimelineModel.ts#L1-L247)
 - [useSheetMusicModel.ts:1-697](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L1-L697)
-- [useSheetMusicModel key-section processing.ts:1-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L1-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
 - [types.ts:1-66](file://src/components/piano-visualizer/piano-visualizer-tab/types.ts#L1-L66)
 - [constants.ts:1-26](file://src/components/piano-visualizer/piano-visualizer-tab/constants.ts#L1-L26)
 - [helpers.ts:1-97](file://src/components/piano-visualizer/piano-visualizer-tab/helpers.ts#L1-L97)
@@ -93,7 +94,8 @@ SheetModel --> KeySectionsUtil
 - ScrollingChordStrip: Horizontal timeline strip with smooth 60 fps scrolling synchronized to playback.
 - SheetMusicDisplayRoot: Renders MusicXML-backed sheet music with measure highlighting and PDF export.
 - Timeline and Sheet Music Models: Compute derived data (events, BPM/time signature, instrument lists, white key sizing, melody overlays) and manage sheet music export pipeline.
-- **useSheetMusicModel key-section processing Utility**: Centralized function for processing key signature sections and modulations with pitch shifting support.
+- **buildSheetMusicKeySections**: Centralized helper for processing key signature sections and modulations with pitch shifting support.
+- **resolveSheetPickupResolution**: Centralized helper for reconciling structural padding, visible grid silence, shift-only lead-ins, melody onset, and first playable beats into the explicit `pickupBeatCount` used by MusicXML export.
 
 **Section sources**
 - [PianoRollPanel.tsx:1-120](file://src/components/piano-visualizer/piano-visualizer-tab/PianoRollPanel.tsx#L1-L120)
@@ -103,7 +105,8 @@ SheetModel --> KeySectionsUtil
 - [SheetMusicDisplayRoot.tsx:1-139](file://src/components/piano-visualizer/sheet-music-display/SheetMusicDisplayRoot.tsx#L1-L139)
 - [usePianoVisualizerTimelineModel.ts:1-247](file://src/components/piano-visualizer/piano-visualizer-tab/usePianoVisualizerTimelineModel.ts#L1-L247)
 - [useSheetMusicModel.ts:1-697](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L1-L697)
-- [useSheetMusicModel key-section processing.ts:1-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L1-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [resolveSheetPickupResolution:166-441](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L166-L441)
 
 ## Architecture Overview
 The visualizer follows a data-driven architecture:
@@ -118,7 +121,7 @@ participant User as "User"
 participant Tab as "PianoVisualizerTabRoot"
 participant Timeline as "usePianoVisualizerTimelineModel"
 participant Sheet as "useSheetMusicModel"
-participant KeyUtil as "useSheetMusicModel key-section processing"
+participant KeyUtil as "buildSheetMusicKeySections"
 participant Panel as "PianoRollPanel"
 participant Canvas as "FallingNotesCanvas"
 participant Keyboard as "PianoKeyboard"
@@ -141,7 +144,7 @@ Note over Canvas,Keyboard : Real-time animation via RAF interpolation
 - [PianoVisualizerTabRoot.tsx:129-177](file://src/components/piano-visualizer/piano-visualizer-tab/PianoVisualizerTabRoot.tsx#L129-L177)
 - [usePianoVisualizerTimelineModel.ts:66-245](file://src/components/piano-visualizer/piano-visualizer-tab/usePianoVisualizerTimelineModel.ts#L66-L245)
 - [useSheetMusicModel.ts:572-649](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L572-L649)
-- [useSheetMusicModel key-section processing.ts:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
 - [PianoRollPanel.tsx:82-102](file://src/components/piano-visualizer/piano-visualizer-tab/PianoRollPanel.tsx#L82-L102)
 - [FallingNotesCanvas.tsx:513-534](file://src/components/piano-visualizer/FallingNotesCanvas.tsx#L513-L534)
 - [ScrollingChordStrip.tsx:220-249](file://src/components/piano-visualizer/ScrollingChordStrip.tsx#L220-L249)
@@ -238,19 +241,20 @@ The timeline model:
 The sheet music model:
 - Resolves pickup counts considering structural padding, first playable beats, and melody onset.
 - Transposes key signatures and melody events according to pitch shift.
-- **Centralizes key signature processing through useSheetMusicModel key-section processing**.
+- Centralizes key signature processing through `buildSheetMusicKeySections`.
+- Resolves pickup counts through `resolveSheetPickupResolution` so sheet music rests match visible beat alignment before export.
 - Builds MusicXML with key sections and segmentation markers.
 - Defer-computes XML via requestAnimationFrame and timeout to keep UI responsive.
 
-**Updated** The sheet music model now delegates complex key signature processing to a dedicated utility function, improving code organization and maintainability.
+**Updated** The sheet music model delegates complex key signature processing to `buildSheetMusicKeySections` and pickup resolution to `resolveSheetPickupResolution`, improving code organization and making sheet rendering behavior easier to test.
 
 **Section sources**
 - [useSheetMusicModel.ts:451-467](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L451-L467)
 - [useSheetMusicModel.ts:572-649](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L572-L649)
 - [useSheetMusicModel.ts:663-686](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L663-L686)
 
-### useSheetMusicModel Key-Section Processing
-**New** The useSheetMusicModel key-section processing function centralizes complex key signature processing logic:
+### buildSheetMusicKeySections and Pickup Resolution
+`buildSheetMusicKeySections` centralizes complex key signature processing logic:
 
 - Processes key sections and modulations from sequence corrections
 - Applies pitch shifting transformations to key signatures
@@ -259,8 +263,15 @@ The sheet music model:
 - Handles explicit origin keys and fallback scenarios
 - Computes start beat indices with notation beat offset consideration
 
+`resolveSheetPickupResolution` determines the pickup rest length exported to MusicXML:
+
+- Prefers reliable visible-grid silence when stale padding metadata overstates the pickup.
+- Handles shift-only silent lead-ins so a long intro does not become a misleading modulo pickup.
+- Considers melody onset and first playable chord position before producing explicit `pickupBeatCount`.
+
 **Section sources**
-- [useSheetMusicModel key-section processing.ts:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [resolveSheetPickupResolution:166-441](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L166-L441)
 
 ### Piano Visualizer Tab Container
 The tab container:
@@ -279,7 +290,8 @@ The tab container:
 The visualizer components depend on:
 - Timeline model for derived data (events, BPM, time signature, instruments).
 - Sheet music model for MusicXML export and rendering.
-- **useSheetMusicModel key-section processing utility for centralized key signature processing**.
+- `buildSheetMusicKeySections` for centralized key signature processing.
+- `resolveSheetPickupResolution` for explicit pickup counts passed to MusicXML export.
 - Shared utilities for MIDI note generation and chord processing.
 - Audio dynamics for signal-aware note patterns.
 
@@ -290,7 +302,7 @@ Consts["constants.ts"] --> PVTab
 Helpers["helpers.ts"] --> PVTab
 PVTab --> Timeline["usePianoVisualizerTimelineModel.ts"]
 PVTab --> Sheet["useSheetMusicModel.ts"]
-PVTab --> KeyUtil["useSheetMusicModel key-section processing.ts"]
+PVTab --> KeyUtil["buildSheetMusicKeySections"]
 PVTab --> Panel["PianoRollPanel.tsx"]
 Panel --> Canvas["FallingNotesCanvas.tsx"]
 Panel --> Keyboard["PianoKeyboard.tsx"]
@@ -311,7 +323,7 @@ KeyUtil --> Sheet
 - [PianoVisualizerTabRoot.tsx:129-177](file://src/components/piano-visualizer/piano-visualizer-tab/PianoVisualizerTabRoot.tsx#L129-L177)
 - [usePianoVisualizerTimelineModel.ts:66-245](file://src/components/piano-visualizer/piano-visualizer-tab/usePianoVisualizerTimelineModel.ts#L66-L245)
 - [useSheetMusicModel.ts:572-649](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L572-L649)
-- [useSheetMusicModel key-section processing.ts:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
 - [PianoRollPanel.tsx:82-102](file://src/components/piano-visualizer/piano-visualizer-tab/PianoRollPanel.tsx#L82-L102)
 - [FallingNotesCanvas.tsx:200-237](file://src/components/piano-visualizer/FallingNotesCanvas.tsx#L200-L237)
 - [ScrollingChordStrip.tsx:220-249](file://src/components/piano-visualizer/ScrollingChordStrip.tsx#L220-L249)
@@ -321,7 +333,7 @@ KeyUtil --> Sheet
 - [PianoVisualizerTabRoot.tsx:129-177](file://src/components/piano-visualizer/piano-visualizer-tab/PianoVisualizerTabRoot.tsx#L129-L177)
 - [usePianoVisualizerTimelineModel.ts:66-245](file://src/components/piano-visualizer/piano-visualizer-tab/usePianoVisualizerTimelineModel.ts#L66-L245)
 - [useSheetMusicModel.ts:572-649](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L572-L649)
-- [useSheetMusicModel key-section processing.ts:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
 
 ## Performance Considerations
 - Canvas rendering:
@@ -353,17 +365,19 @@ KeyUtil --> Sheet
 - Sheet music not rendering:
   - Ensure playable chords or melody events exist; confirm MusicXML export completes without errors.
 - **Key signature issues**:
-  - **Verify useSheetMusicModel key-section processing utility processes key sections correctly**.
+  - Verify `buildSheetMusicKeySections` processes key sections correctly.
   - **Check pitch shift transformations are applied consistently**.
   - **Confirm sequence corrections mapping works with beat-to-chord sequence map**.
+- Incorrect pickup rests:
+  - Check `resolveSheetPickupResolution` when the sheet display disagrees with the beat grid. It should prefer the visible two-cell pickup for stale three-beat padding and shift-only silent lead-ins.
 - Keyboard not highlighting:
   - Confirm active notes signature change triggers updates and colors are propagated.
 
 **Section sources**
 - [FallingNotesCanvas.tsx:461-495](file://src/components/piano-visualizer/FallingNotesCanvas.tsx#L461-L495)
 - [useSheetMusicModel.ts:572-649](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L572-L649)
-- [useSheetMusicModel key-section processing.ts:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
+- [buildSheetMusicKeySections:39-130](file://src/components/piano-visualizer/piano-visualizer-tab/useSheetMusicModel.ts#L39-L130)
 - [PianoRollPanel.tsx:192-205](file://src/components/piano-visualizer/piano-visualizer-tab/PianoRollPanel.tsx#L192-L205)
 
 ## Conclusion
-The piano visualizer combines canvas-based real-time rendering with DOM overlays and MusicXML-backed sheet music to deliver an immersive, synchronized musical experience. Its modular design, robust synchronization, and performance optimizations enable responsive playback visualization across diverse input sources and display modes. **The recent centralization of key signature processing logic into the useSheetMusicModel key-section processing improves code organization, maintainability, and performance by extracting complex key signature resolution logic from the main sheet music model hook.**
+The piano visualizer combines canvas-based real-time rendering with DOM overlays and MusicXML-backed sheet music to deliver an immersive, synchronized musical experience. Its modular design, robust synchronization, and performance optimizations enable responsive playback visualization across diverse input sources and display modes. Recent centralization in `buildSheetMusicKeySections` and `resolveSheetPickupResolution` keeps key signature handling and pickup rests testable while preserving alignment between the beat grid and rendered sheet music.

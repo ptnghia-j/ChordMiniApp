@@ -279,6 +279,45 @@ describe('resolveSheetPickupResolution', () => {
     expect(result.resolvedPickupBeatCount).toBe(1);
   });
 
+  it('uses the first visible grid measure remainder for a shift-only long silent lead-in', () => {
+    const result = resolveSheetPickupResolution({
+      timeSignature: 4,
+      notationBeatOffset: 2,
+      resolvedChordGridData: {
+        chords: [
+          '',
+          '',
+          'N.C.',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'N/C',
+          'G',
+        ],
+        beats: [null, null, 0, 0.86, 1.71, 2.57, 3.43, 4.29, 5.14, 6, 6.86, 7.71, 8.57, 9.43],
+        hasPadding: true,
+        paddingCount: 1,
+        shiftCount: 2,
+        totalPaddingCount: 3,
+      },
+      sheetMusicBeatTimes: [0, 0.86, 1.71, 2.57, 3.43, 4.29, 5.14, 6, 6.86, 7.71, 8.57, 9.43],
+      sheetMusicChordEvents: [{ beatIndex: 11 }],
+      firstMelodyBeatIndex: null,
+      hasMelodyNotes: false,
+    });
+
+    expect(result.rawStructuralPickupCount).toBe(1);
+    expect(result.firstNonSilentVisibleGridIndex).toBe(11);
+    expect(result.normalizedFirstPlayablePickup).toBe(3);
+    expect(result.resolvedPickupBeatCount).toBe(2);
+  });
+
   it('resolves half-rest pickup from notation offset plus boundary-aligned full-measure lead-in', () => {
     const result = resolveSheetPickupResolution({
       timeSignature: 4,
@@ -333,6 +372,30 @@ describe('resolveSheetPickupResolution', () => {
     // The critical assertion: pickup should reflect the full leading silence (3 beats),
     // not just the grid assembly's padding count (1 beat).
     expect(result.resolvedPickupBeatCount).toBe(3);
+  });
+
+  it('corrects stale three-beat padding down to the two silent cells visible in beat alignment', () => {
+    const result = resolveSheetPickupResolution({
+      timeSignature: 4,
+      notationBeatOffset: 0,
+      resolvedChordGridData: {
+        chords: ['N.C.', 'N.C.', 'G', 'G', 'D/F#', 'D/F#'],
+        beats: [0, 1, 2, 3, 4, 5],
+        hasPadding: true,
+        paddingCount: 3,
+        shiftCount: 0,
+        totalPaddingCount: 3,
+      },
+      sheetMusicBeatTimes: [0, 1, 2, 3, 4, 5],
+      sheetMusicChordEvents: [{ beatIndex: 2 }],
+      firstMelodyBeatIndex: null,
+      hasMelodyNotes: false,
+    });
+
+    expect(result.rawStructuralPickupCount).toBe(3);
+    expect(result.firstNonSilentVisibleGridIndex).toBe(2);
+    expect(result.normalizedFirstPlayablePickup).toBe(2);
+    expect(result.resolvedPickupBeatCount).toBe(2);
   });
 
   it('does not upgrade structural pickup when the visible grid silence spans a full measure or more', () => {

@@ -14,7 +14,8 @@
 - [constants.ts](file://src/components/piano-visualizer/piano-visualizer-tab/constants.ts)
 - [helpers.ts](file://src/components/piano-visualizer/piano-visualizer-tab/helpers.ts)
 - [types.ts](file://src/components/piano-visualizer/piano-visualizer-tab/types.ts)
-- [SheetMusicDisplayRoot.tsx](file://src/components/piano-visualizer/SheetMusicDisplay.tsx)
+- [SheetMusicDisplay.tsx](file://src/components/piano-visualizer/SheetMusicDisplay.tsx)
+- [SheetMusicDisplayRoot.tsx](file://src/components/piano-visualizer/sheet-music-display/SheetMusicDisplayRoot.tsx)
 </cite>
 
 ## Table of Contents
@@ -81,7 +82,7 @@ PR --> PK
 - PianoVisualizerTabRoot: Coordinates timeline and sheet music models, manages display modes, handles MIDI export, and wires piano-only playback.
 - usePianoOnlyPlayback: Provides piano-only playback when chord playback is disabled, integrating with the soundfont service and dynamics analyzer.
 - usePianoVisualizerTimelineModel: Builds chord timelines, computes roman numerals and modulations, determines instrument mix, and calculates responsive keyboard sizing.
-- useSheetMusicModel: Produces MusicXML for sheet music, resolves pickups, key sections, and melody alignment, and manages computation lifecycle.
+- useSheetMusicModel: Produces MusicXML for sheet music, resolves pickups against structural padding and visible beat-grid silence, maps key sections, aligns melody, and manages computation lifecycle.
 
 **Section sources**
 - [FallingNotesCanvas.tsx:105-567](file://src/components/piano-visualizer/FallingNotesCanvas.tsx#L105-L567)
@@ -95,7 +96,7 @@ PR --> PK
 ## Architecture Overview
 The visualizer integrates tightly with analysis and playback services:
 - Timeline model transforms chord grids into time-aligned events and prepares metadata for both the piano roll and chord strip.
-- Sheet music model exports MusicXML from either piano events or lead sheet transcription, with key sections and pickups resolved.
+- Sheet music model exports MusicXML from either piano events or lead sheet transcription, with key sections and explicit pickup counts resolved before export.
 - Piano-only playback uses a soundfont service to play chords with dynamic velocity derived from audio dynamics.
 
 ```mermaid
@@ -299,7 +300,7 @@ Sizes --> DoneTL(["Return model"])
 
 ### useSheetMusicModel
 Produces sheet music:
-- Resolves pickup beats considering melody, structural padding, and first playable lead-in.
+- Resolves pickup beats considering melody, structural padding, visible grid silence, shift-only lead-ins, and first playable lead-in.
 - Transposes key signatures and melody events according to pitch shift.
 - Builds MusicXML from piano events or lead sheet transcription with key sections and segmentation.
 - Debounces pitch shift changes and computes MusicXML on demand.
