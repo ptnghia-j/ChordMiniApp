@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-export const GEMINI_MODEL_NAME = 'gemini-3.1-flash-lite-preview';
+export const GEMINI_MODEL_NAME = 'gemini-3.1-flash-lite';
 export const GEMINI_DEFAULT_TIMEOUT_MS = 120000;
 
 const serverClients = new Map<number, GoogleGenAI>();
