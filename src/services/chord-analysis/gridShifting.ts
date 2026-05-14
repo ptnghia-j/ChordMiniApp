@@ -7,6 +7,7 @@ type ShiftEvaluationResult = {
   downbeatPositions: number[];
   chordLabels: string[];
   firstMusicalChordOnDownbeat: boolean;
+  earlyDownbeatStarts: number;
 };
 
 function selectBestShiftResult(results: ShiftEvaluationResult[]): ShiftEvaluationResult {
@@ -49,6 +50,14 @@ function shouldKeepLongIntroAlignment(params: {
 }): boolean {
   const { bestOverall, bestIntroAligned } = params;
 
+  const earlyDownbeatAdvantage = bestIntroAligned.earlyDownbeatStarts - bestOverall.earlyDownbeatStarts;
+  if (
+    bestIntroAligned.firstMusicalChordOnDownbeat &&
+    earlyDownbeatAdvantage >= GRID_ALIGNMENT_CONFIG.longIntroAlignment.minEarlyDownbeatAdvantage
+  ) {
+    return true;
+  }
+
   if (bestOverall.chordChanges <= 0) {
     return true;
   }
@@ -75,6 +84,7 @@ function getOptimalShiftResults(
       downbeatPositions: [],
       chordLabels: [],
       firstMusicalChordOnDownbeat: false,
+      earlyDownbeatStarts: 0,
     }];
   }
 
@@ -91,6 +101,24 @@ function getOptimalShiftResults(
   const shouldPreserveLongIntroAlignment =
     leadingSilentRunLength >= timeSignature &&
     leadingSilentRunLength < chords.length;
+  const chordStartIndices: number[] = [];
+
+  for (let index = 0; index < chords.length; index += 1) {
+    const currentChord = chords[index];
+    if (!currentChord || isSilentChord(currentChord)) {
+      continue;
+    }
+
+    const previousChord = index > 0 ? chords[index - 1] : '';
+    if (index === 0 || isSilentChord(previousChord) || previousChord !== currentChord) {
+      chordStartIndices.push(index);
+    }
+  }
+
+  const earlyChordStartIndices = chordStartIndices.slice(
+    0,
+    GRID_ALIGNMENT_CONFIG.longIntroAlignment.earlyStartWindow
+  );
 
   const shiftResults: ShiftEvaluationResult[] = [];
 
@@ -98,15 +126,18 @@ function getOptimalShiftResults(
     let chordChangeCount = 0;
     const downbeatPositions: number[] = [];
     const chordLabels: string[] = [];
+    const totalPadding = paddingCount + shift;
     const firstMusicalChordOnDownbeat = shouldPreserveShortIntroAlignment || shouldPreserveLongIntroAlignment
-      ? ((paddingCount + shift + leadingSilentRunLength) % timeSignature) === 0
+      ? ((totalPadding + leadingSilentRunLength) % timeSignature) === 0
       : false;
+    const earlyDownbeatStarts = earlyChordStartIndices.filter((chordStartIndex) => (
+      (totalPadding + chordStartIndex) % timeSignature
+    ) === 0).length;
 
     let previousDownbeatChord = '';
 
     for (let index = 0; index < chords.length; index += 1) {
       const currentChord = chords[index];
-      const totalPadding = paddingCount + shift;
       const visualPosition = totalPadding + index;
       const beatInMeasure = (visualPosition % timeSignature) + 1;
       const isDownbeat = beatInMeasure === 1;
@@ -142,6 +173,7 @@ function getOptimalShiftResults(
       downbeatPositions,
       chordLabels,
       firstMusicalChordOnDownbeat,
+      earlyDownbeatStarts,
     });
   }
 

@@ -72,12 +72,18 @@ function countLeadingSilentChords(chords: string[]): number {
   let count = 0;
   while (count < chords.length) {
     const chord = chords[count];
-    if (!GRID_ALIGNMENT_CONFIG.silentChordValues.includes(chord as typeof GRID_ALIGNMENT_CONFIG.silentChordValues[number])) {
+    if (!isSilentGridChord(chord)) {
       break;
     }
     count += 1;
   }
   return count;
+}
+
+function isSilentGridChord(chord: string): boolean {
+  return GRID_ALIGNMENT_CONFIG.silentChordValues.includes(
+    chord as typeof GRID_ALIGNMENT_CONFIG.silentChordValues[number]
+  );
 }
 
 function buildOriginalAudioMapping(
@@ -92,6 +98,63 @@ function buildOriginalAudioMapping(
     visualIndex: shiftCount + paddingCount + index,
     audioIndex: index,
   }));
+}
+
+export function trimLeadingEmptyMeasures(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): ChordGridData {
+  if (timeSignature <= 1 || chordGridData.chords.length < timeSignature) {
+    return chordGridData;
+  }
+
+  let trimCount = 0;
+  while (
+    trimCount + timeSignature <= chordGridData.chords.length &&
+    chordGridData.chords
+      .slice(trimCount, trimCount + timeSignature)
+      .every((chord) => chord === '')
+  ) {
+    trimCount += timeSignature;
+  }
+
+  if (trimCount === 0) {
+    return chordGridData;
+  }
+
+  const originalAudioMapping = chordGridData.originalAudioMapping
+    ?.filter((item) => item.visualIndex >= trimCount)
+    .map((item) => ({
+      ...item,
+      visualIndex: item.visualIndex - trimCount,
+    }));
+  const minimumMappedOffset = originalAudioMapping?.reduce((minimumOffset, item) => {
+    const offset = item.visualIndex - item.audioIndex;
+    return Number.isFinite(offset) ? Math.min(minimumOffset, Math.max(0, offset)) : minimumOffset;
+  }, Number.POSITIVE_INFINITY);
+  const firstMusicalMapping = originalAudioMapping?.find((item) => !isSilentGridChord(item.chord));
+  const firstMusicalMappedOffset = firstMusicalMapping
+    ? Math.max(0, firstMusicalMapping.visualIndex - firstMusicalMapping.audioIndex)
+    : Number.POSITIVE_INFINITY;
+  const mappedOffset = Number.isFinite(firstMusicalMappedOffset)
+    ? firstMusicalMappedOffset
+    : minimumMappedOffset;
+  const effectiveLeadingOffset =
+    typeof mappedOffset === 'number' && Number.isFinite(mappedOffset)
+      ? Math.max(0, Math.min(timeSignature - 1, mappedOffset))
+      : 0;
+  const nextPaddingCount = Math.min(chordGridData.paddingCount, effectiveLeadingOffset);
+  const nextShiftCount = Math.max(0, effectiveLeadingOffset - nextPaddingCount);
+
+  return {
+    ...chordGridData,
+    chords: chordGridData.chords.slice(trimCount),
+    beats: chordGridData.beats.slice(trimCount),
+    paddingCount: nextPaddingCount,
+    shiftCount: nextShiftCount,
+    totalPaddingCount: nextPaddingCount + nextShiftCount,
+    originalAudioMapping,
+  };
 }
 
 function findFirstChangedAudioIndex(
@@ -232,5 +295,5 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     }
   }
 
-  return compactedGridData;
+  return trimLeadingEmptyMeasures(compactedGridData, timeSignature);
 }

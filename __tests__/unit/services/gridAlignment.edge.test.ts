@@ -2,7 +2,7 @@ import {
   calculatePaddingAndShift,
   calculateOptimalShift,
 } from '@/services/chord-analysis/gridShifting';
-import { getChordGridData } from '@/services/chord-analysis/gridAssembly';
+import { getChordGridData, trimLeadingEmptyMeasures } from '@/services/chord-analysis/gridAssembly';
 import { runVisualCompactionPipeline } from '@/services/chord-analysis/gridCompaction';
 import type { ChordGridData, GridAnalysisResult } from '@/services/chord-analysis/gridTypes';
 
@@ -68,6 +68,35 @@ describe('grid alignment edge behavior', () => {
 
     expect((result.paddingCount + result.shiftCount + leadingSilence) % 5).toBe(0);
     expect(calculateOptimalShift(chords, 5, result.paddingCount)).toBe(result.shiftCount);
+  });
+
+  it('keeps an early phrase downbeat-aligned when a later section favors another global shift', () => {
+    const leadingSilence = 11;
+    const earlyPhrase = [
+      'E:min', 'E:min', 'C:maj', 'C:maj',
+      'G:maj', 'G:maj', 'D:maj', 'G:maj',
+      'E:min', 'E:min', 'C:maj', 'C:maj',
+      'D:maj', 'D:maj', 'A:min', 'E:min',
+      'E:min', 'E:min', 'C:maj', 'C:maj',
+      'G:maj', 'G:maj', 'D:maj', 'G:maj',
+      'E:min', 'E:min', 'C:maj', 'C:maj',
+      'D:maj', 'D:maj', 'C:maj', 'C:maj',
+    ];
+    const laterShiftOnePressure = Array.from({ length: 40 }, (_, index) => (
+      Array(4).fill(index % 2 === 0 ? 'A:min' : 'B:min')
+    )).flat();
+    const chords = [
+      ...Array(leadingSilence).fill('N/C'),
+      ...earlyPhrase,
+      ...Array(59).fill('N/C'),
+      ...laterShiftOnePressure,
+    ];
+
+    const result = calculatePaddingAndShift(0.33, 130.4347826087, 4, chords);
+
+    expect(result.paddingCount).toBe(1);
+    expect(result.shiftCount).toBe(0);
+    expect((result.totalPaddingCount + leadingSilence) % 4).toBe(0);
   });
 
   it('extracts timestamps from object-form beats when assembling the grid', () => {
@@ -276,5 +305,41 @@ describe('grid compaction edge behavior', () => {
 
     expect(suppressed.chords.length).toBeLessThanOrEqual(unsuppressed.chords.length);
     expect(suppressed.beats).toHaveLength(suppressed.chords.length);
+  });
+
+  it('strips full leading empty measures while preserving the remaining musical offset', () => {
+    const grid = makeGridData({
+      chords: [
+        '', '', '', '',
+        '', 'N.C.', 'N/C', 'N/C',
+        'Ab:min', 'Ab:min', 'Ab:min', 'Ab:min',
+      ],
+      beats: [
+        null, null, null, null,
+        null, 0, 0.16, 0.52,
+        0.88, 1.24, 1.6, 1.96,
+      ],
+      paddingCount: 1,
+      shiftCount: 2,
+      totalPaddingCount: 3,
+      originalAudioMapping: [
+        { chord: 'N/C', timestamp: 0.16, visualIndex: 6, audioIndex: 0 },
+        { chord: 'N/C', timestamp: 0.52, visualIndex: 7, audioIndex: 1 },
+        { chord: 'Ab:min', timestamp: 0.88, visualIndex: 8, audioIndex: 2 },
+        { chord: 'Ab:min', timestamp: 1.24, visualIndex: 9, audioIndex: 3 },
+      ],
+    });
+
+    const result = trimLeadingEmptyMeasures(grid, 4);
+    const firstMusicalIndex = result.chords.findIndex((chord) => chord === 'Ab:min');
+    const abMapping = result.originalAudioMapping?.find((item) => item.chord === 'Ab:min');
+
+    expect(result.chords.slice(0, 4)).toEqual(['', 'N.C.', 'N/C', 'N/C']);
+    expect(result.chords.slice(0, 4).every((chord) => chord === '')).toBe(false);
+    expect(firstMusicalIndex).toBe(4);
+    expect(abMapping?.visualIndex).toBe(4);
+    expect(result.paddingCount).toBe(1);
+    expect(result.shiftCount).toBe(1);
+    expect(result.totalPaddingCount).toBe(2);
   });
 });

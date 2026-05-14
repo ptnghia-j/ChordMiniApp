@@ -9,6 +9,8 @@ export const GRID_ALIGNMENT_CONFIG = {
   longIntroAlignment: {
     maxChordChangePenalty: 16,
     minCompetitiveRatio: 0.75,
+    earlyStartWindow: 12,
+    minEarlyDownbeatAdvantage: 2,
   },
   beat4BiasCorrection: {
     enabled: true,
