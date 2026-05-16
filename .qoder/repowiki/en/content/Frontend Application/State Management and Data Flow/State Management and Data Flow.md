@@ -33,12 +33,13 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the state management architecture used in the application, focusing on global state stores built with Zustand, React Context providers, and a comprehensive set of React hooks. It details how data flows between components, services, and stores, and documents specialized hooks for analysis orchestration, chord processing, audio manipulation, and user interactions. It also covers persistence, synchronization strategies, performance optimizations, and memory management for audio-related state.
+This document explains the state management architecture used in the application, focusing on global state stores built with Zustand, React Context providers, TanStack Query for server state, and a comprehensive set of React hooks. It details how data flows between components, services, and stores, and documents specialized hooks for analysis orchestration, chord processing, audio manipulation, query-backed read caching, and user interactions. It also covers persistence, synchronization strategies, performance optimizations, and memory management for audio-related state.
 
 ## Project Structure
 The state management system is organized around three primary layers:
 - Global state stores (Zustand): analysis, playback, and UI stores
 - Context providers: processing and theme contexts
+- TanStack Query: remote/server-state cache for model info, recent transcriptions, Sheet Sage availability/cache checks, and cached lyrics lookups
 - Hooks: specialized orchestration and UI interaction logic
 
 ```mermaid
@@ -46,6 +47,7 @@ graph TB
 subgraph "Providers"
 PC["ProcessingContext"]
 TC["ThemeContext"]
+QC["QueryClientProvider"]
 end
 subgraph "Zustand Stores"
 AS["AnalysisStore"]
@@ -54,6 +56,7 @@ US["UIStore"]
 end
 subgraph "Hooks"
 HAP["useAudioProcessing"]
+HQ["Query hooks<br/>useModelInfoQuery/useRecentVideosQuery"]
 HCDP["useChordDataProcessing"]
 HCG["useChordGridLayout"]
 HCI["useChordInteractions"]
@@ -68,6 +71,7 @@ CRS["ChordRecognitionService"]
 end
 PC --> AS
 TC --> AS
+QC --> HQ
 HAP --> APS
 HAP --> AS
 HAP --> US
@@ -78,12 +82,13 @@ HCDP --> AS
 HCG --> AS
 HCI --> AS
 HPS --> US
+HQ --> APS
 APS --> AAS
 AAS --> CRS
 ```
 
 **Diagram sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ProcessingContext.tsx:44-184](file://src/contexts/ProcessingContext.tsx#L44-L184)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 - [analysisStore.ts:101-295](file://src/stores/analysisStore.ts#L101-L295)
@@ -97,7 +102,7 @@ AAS --> CRS
 - [chordRecognitionService.ts:14-31](file://src/services/chord-analysis/chordRecognitionService.ts#L14-L31)
 
 **Section sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ProcessingContext.tsx:44-184](file://src/contexts/ProcessingContext.tsx#L44-L184)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 
@@ -107,6 +112,7 @@ AAS --> CRS
 - UIStore: manages UI toggles, editing modes, pitch shift state, loop playback, segmentation, simplification, and shared guitar voicing selections.
 - ProcessingContext: provides processing stage, progress, and elapsed time for analysis workflows.
 - ThemeContext: provides theme state and toggle using useSyncExternalStore for hydration-safe DOM-based theme.
+- TanStack Query: owns server-state reads and cache invalidation for shared remote data. Zustand remains responsible for client/workflow state such as playback, selected panels, processing progress, and analysis results.
 
 **Section sources**
 - [analysisStore.ts:14-99](file://src/stores/analysisStore.ts#L14-L99)
@@ -123,6 +129,7 @@ AAS --> CRS
 ## Architecture Overview
 The architecture follows a unidirectional data flow:
 - Services orchestrate analysis and audio operations and update Zustand stores.
+- Query hooks fetch and cache read-oriented server state; mutations and Firestore writes invalidate relevant query keys.
 - Hooks subscribe to stores and expose typed selectors/actions to components.
 - Context providers supply runtime state (processing stage, theme) to the component tree.
 - Master clock and coordinated rate management ensure synchronization across YouTube iframe, HTML5 audio, and pitch-shifted audio.

@@ -2,11 +2,10 @@
  * Audio Extraction Service - Environment-Aware Integration
  *
  * This service provides environment-aware audio extraction:
- * 1. Uses ytdown.io for production (reliable, works from datacenter IPs)
+ * 1. Uses yt-mp3-go for production (reliable, works from datacenter IPs)
  * 2. Uses yt-dlp for localhost/development (more reliable, no API limits)
- * 3. Uses yt-mp3-go as fallback (non-functional but preserved)
- * 4. Video ID-based caching and storage
- * 5. Leverages existing search results for metadata
+ * 3. Video ID-based caching and storage
+ * 4. Leverages existing search results for metadata
  */
 
 
@@ -17,7 +16,6 @@ import { firebaseStorageSimplified, SimplifiedAudioData } from '@/services/fireb
 import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from '@/services/youtube/ytDlpService';
 import { asyncJobService } from '@/services/api/asyncJobService';
-import { YtdownIoCompatService } from '@/services/youtube/ytdownIoCompatService';
 import { validateFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 /**
@@ -105,12 +103,6 @@ export class AudioExtractionServiceSimplified {
             error: 'yt-dlp is only available in development environment or when NEXT_PUBLIC_AUDIO_STRATEGY=ytdlp'
           };
         }
-
-      case 'ytdown-io':
-        // DEPRECATED: ytdown-io is blocked by Cloudflare bot protection
-        // Fallback to yt-mp3-go instead
-        console.warn(`⚠️ ytdown-io is deprecated (Cloudflare blocked), using yt-mp3-go fallback`);
-        return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
 
       default:
         // Fallback to yt-mp3-go for unknown strategies
@@ -508,7 +500,7 @@ export class AudioExtractionServiceSimplified {
             // Validate Firebase Storage URL accessibility before using it
             const { url: validatedUrl, isStorageUrl: validatedIsStorageUrl } = await validateAndReturnUrl(
               uploadResult.audioUrl,
-              finalAudioUrl, // Fall back to current URL (ytdown.io)
+              finalAudioUrl, // Fall back to current URL
               videoId
             );
 
@@ -517,7 +509,7 @@ export class AudioExtractionServiceSimplified {
 
             console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${uploadResult.audioUrl}`);
             console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
-            console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback ytdown.io'} URL: ${finalAudioUrl}`);
+            console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback'} URL: ${finalAudioUrl}`);
 
             // Save detailed metadata to Firestore with enhanced video information
             await saveAudioFileMetadata({
@@ -591,212 +583,6 @@ export class AudioExtractionServiceSimplified {
   */
 
 
-
-
-
-
-
-
-
-  /**
-   * Extract audio using ytdown.io service (production-ready method)
-   * This replaces downr.org with a more reliable service that works from datacenter IPs
-   */
-  private async extractAudioWithYtdownIo(
-    videoMetadata: YouTubeVideoMetadata,
-    forceRedownload: boolean = false
-  ): Promise<AudioExtractionResult> {
-    const videoId = videoMetadata.id;
-    const title = videoMetadata.title;
-
-    try {
-      // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
-      if (!forceRedownload) {
-        // CRITICAL FIX: Ensure Firebase is initialized before cache check
-        try {
-          const { ensureFirebaseInitialized } = await import('@/config/firebase');
-          await ensureFirebaseInitialized();
-        } catch (initError) {
-          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
-        }
-
-        console.log(`🔍 Checking Firebase Storage for existing audio file: ${videoId}`);
-        try {
-          const { findExistingAudioFile } = await import('@/services/firebase/firebaseStorageService');
-          const existingFile = await findExistingAudioFile(videoId);
-
-          if (existingFile) {
-            console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
-            console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
-
-            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
-            firebaseStorageSimplified.saveAudioMetadataBackground({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fileSize: existingFile.fileSize || 0,
-              extractionService: 'firebase-storage-cache',
-              extractionTimestamp: Date.now(),
-              videoDuration: videoMetadata.duration
-            });
-
-            return {
-              success: true,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fromCache: true,
-              isStreamUrl: false // Firebase Storage URLs are permanent
-            };
-          }
-        } catch (storageError) {
-          console.warn(`⚠️ Firebase Storage check failed for ${videoId}:`, storageError);
-        }
-
-        // Step 2: Check simplified Firestore cache as fallback
-        const cached = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-        if (cached) {
-          console.log(`✅ Using cached audio metadata for ${videoId}: "${cached.title}"`);
-          console.log(`📈 Firestore Cache Hit: videoId=${videoId}, source=metadata_cache`);
-          return {
-            success: true,
-            audioUrl: cached.audioUrl,
-            title: cached.title,
-            duration: cached.duration,
-            fromCache: true,
-            isStreamUrl: cached.isStreamUrl,
-            streamExpiresAt: cached.streamExpiresAt
-          };
-        }
-      }
-
-      // Step 3: Extract audio using ytdown.io service
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      console.log(`🚀 [ytdown.io] Starting audio extraction for: ${videoUrl}`);
-      console.log(`📹 Video: "${title}" (${videoId})`);
-
-      const ytdownCompatService = new YtdownIoCompatService();
-      const extractResult = await ytdownCompatService.extractAudio(videoUrl);
-
-      if (!extractResult.success) {
-        throw new Error(extractResult.error || 'ytdown.io extraction failed');
-      }
-
-      console.log(`✅ [ytdown.io] Audio extraction successful: ${extractResult.allFormats?.length || 0} formats available`);
-
-      // Step 4: Get direct download URL (Vercel-optimized approach)
-      const directUrl = extractResult.directDownloadUrl || extractResult.audioUrl;
-      if (!directUrl) {
-        throw new Error('No audio URL available from ytdown.io');
-      }
-
-      console.log(`🔗 [ytdown.io] Using direct download URL (Vercel-optimized)`);
-      console.log(`   Direct URL: ${directUrl}`);
-
-      // Step 5: Start parallel pipeline - Firebase upload + immediate processing capability
-      let finalAudioUrl = '';
-      let isStorageUrl = false;
-
-      try {
-        console.log(`🚀 Starting parallel pipeline: Firebase upload + direct URL processing`);
-
-        // Import parallel pipeline service
-        const { startParallelPipeline, canUseDirectUrlWithBackend } = await import('@/services/api/parallelPipelineService');
-
-        // Check if direct URL can be used with backend
-        if (canUseDirectUrlWithBackend(directUrl)) {
-          console.log(`✅ Direct URL compatible with Google Cloud Run backend`);
-
-          // Start parallel pipeline (Firebase upload in background)
-          const pipelineResult = await startParallelPipeline({
-            videoId,
-            title,
-            directUrl,
-            contentType: 'audio/mp4'
-          });
-
-          if (pipelineResult.success) {
-            // Use direct URL immediately for processing
-            finalAudioUrl = directUrl;
-            isStorageUrl = false; // Direct URL, not Firebase Storage
-            console.log(`🚀 Parallel pipeline started - processing can begin immediately`);
-            console.log(`   Processing URL: ${finalAudioUrl}`);
-            console.log(`   Firebase upload: Running in background`);
-          } else {
-            throw new Error('Failed to start parallel pipeline');
-          }
-        } else {
-          // Fallback to sequential upload if direct URL not compatible
-          console.log(`⚠️ Direct URL not compatible with backend, using sequential upload`);
-
-          const { uploadAudioFromUrlWithRetry } = await import('@/services/firebase/streamingFirebaseUpload');
-          const uploadResult = await uploadAudioFromUrlWithRetry(
-            directUrl,
-            {
-              videoId,
-              title,
-              contentType: 'audio/mp4'
-            }
-          );
-
-          if (uploadResult.success && uploadResult.audioUrl) {
-            finalAudioUrl = uploadResult.audioUrl;
-            isStorageUrl = true;
-            console.log(`✅ Sequential Firebase Storage upload successful: ${finalAudioUrl}`);
-          } else {
-            throw new Error(uploadResult.error || 'Upload failed');
-          }
-        }
-      } catch (uploadError) {
-        console.warn(`⚠️ Pipeline optimization failed for ${videoId}:`, uploadError);
-        console.log(`   Falling back to direct URL: ${directUrl}`);
-        // Continue without permanent storage - use direct URL
-        finalAudioUrl = directUrl;
-        isStorageUrl = false;
-      }
-
-      // Step 6: Save metadata to cache
-      // Estimate file size from ytdown.io metadata if available
-      const estimatedFileSize = extractResult.selectedFormat?.extension === 'm4a' ?
-        this.estimateFileSizeFromDuration(this.parseDuration(videoMetadata.duration), 128) : 0;
-
-      const audioData: SimplifiedAudioData = {
-        videoId,
-        audioUrl: finalAudioUrl,
-        title,
-        duration: this.parseDuration(videoMetadata.duration),
-        fileSize: estimatedFileSize, // Estimated size since we didn't download
-        extractionService: 'ytdown.io',
-        extractionTimestamp: Date.now(),
-        videoDuration: videoMetadata.duration,
-        isStreamUrl: !isStorageUrl,
-        streamExpiresAt: isStorageUrl ? undefined : Date.now() + (24 * 60 * 60 * 1000), // 24 hours for ytdown.io URLs
-        createdAt: Date.now() // Add the required createdAt field
-      };
-
-      await firebaseStorageSimplified.saveAudioMetadata(audioData);
-      console.log(`💾 Cached ytdown.io extraction result for ${videoId}`);
-
-      return {
-        success: true,
-        audioUrl: finalAudioUrl || extractResult.audioUrl,
-        title,
-        duration: this.parseDuration(videoMetadata.duration),
-        fromCache: false,
-        isStreamUrl: !isStorageUrl,
-        streamExpiresAt: audioData.streamExpiresAt
-      };
-
-    } catch (error) {
-      console.error(`❌ [ytdown.io] Audio extraction failed for ${videoId}:`, error);
-
-      return {
-        success: false,
-        error: `ytdown.io audio extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      };
-    }
-  }
 
 
 
@@ -950,12 +736,10 @@ export class AudioExtractionServiceSimplified {
         if (!extractionResult.success) {
           console.log(`⚠️ yt-mp3-go low quality also failed: ${extractionResult.error}`);
 
-          // No more fallbacks available
-
           // All methods failed
           return {
             success: false,
-            error: `All extraction methods failed. yt-mp3-go: ${extractionResult.error}. QuickTube also failed.`
+            error: `All extraction methods failed. yt-mp3-go: ${extractionResult.error}`
           };
         } else {
           console.log('✅ yt-mp3-go low quality succeeded');
@@ -1176,12 +960,9 @@ export class AudioExtractionServiceSimplified {
         //   break;
 
         default:
-          // Fallback to ytdown.io for unknown strategies
-          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to ytdown.io`);
-          // For direct ID extraction, we need to create minimal metadata
-          const minimalMetadata = { id: videoId, title: `Video ${videoId}`, duration: '0:00', thumbnail: '', channelTitle: '' };
-          const ytdownResult = await this.extractAudioWithYtdownIo(minimalMetadata, false);
-          extractionResult = ytdownResult;
+          // Fallback to yt-mp3-go for unknown strategies
+          console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to yt-mp3-go`);
+          extractionResult = await ytMp3GoService.extractAudio(videoId, undefined, undefined, 'medium');
           break;
       }
 
@@ -1423,7 +1204,7 @@ export class AudioExtractionServiceSimplified {
       //   return await quickTubeServiceSimplified.isAvailable();
 
       default:
-        // Fallback to ytdown.io (always available)
+        // Fallback: yt-mp3-go is generally available
         return true;
     }
   }

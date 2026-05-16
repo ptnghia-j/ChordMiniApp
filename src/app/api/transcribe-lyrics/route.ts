@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
 import musicAiService from '@/services/lyrics/musicAiService';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { firebaseApp } from '@/services/firebase/firebaseService';
+import {
+  getDocumentWithAdminAccess,
+  setDocumentWithAdminAccess,
+} from '@/services/firebase/firestoreAdminService';
 import { isFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 interface CachedLyricsData {
@@ -51,19 +53,18 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ [API] Video ID provided:', videoId);
 
-    // Initialize Firestore
-    const db = getFirestore(firebaseApp);
-    console.log('🔥 [API] Firestore initialized');
-
     // Check if lyrics are already cached in Firestore (unless forceRefresh is true)
     console.log('🔍 [API] Checking for cached lyrics in Firestore...');
-    const lyricsDocRef = doc(db, 'lyrics', videoId);
-    const lyricsDoc = await getDoc(lyricsDocRef);
+    let cachedData: CachedLyricsData | null = null;
+    try {
+      cachedData = await getDocumentWithAdminAccess<CachedLyricsData>('lyrics', videoId);
+    } catch (cacheLookupError) {
+      console.warn('⚠️ [API] Lyrics cache lookup unavailable, continuing without cache:', cacheLookupError);
+    }
 
     // If lyrics are cached and forceRefresh is not true, return them
-    if (lyricsDoc.exists() && !forceRefresh) {
+    if (cachedData && !forceRefresh) {
       console.log(`✅ [API] Found cached lyrics for video ID: ${videoId}`);
-      const cachedData = lyricsDoc.data() as CachedLyricsData;
       console.log('📦 [API] Cached data structure:', {
         type: typeof cachedData,
         hasLyrics: !!cachedData?.lyrics,
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    if (forceRefresh && lyricsDoc.exists()) {
+    if (forceRefresh && cachedData) {
       console.log(`Force refreshing lyrics for video ID: ${videoId}`);
     }
 
@@ -246,9 +247,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const lyricsDocRef = doc(db, 'lyrics', videoId);
-      console.log('🔍 [PRODUCTION DEBUG] Document reference created for collection: lyrics, document:', videoId);
-
       const dataWithTimestamp = {
         ...lyricsData,
         videoId,
@@ -301,7 +299,7 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('🔍 [PRODUCTION DEBUG] Attempting setDoc operation...');
-      await setDoc(lyricsDocRef, dataWithTimestamp);
+      await setDocumentWithAdminAccess('lyrics', videoId, dataWithTimestamp);
       console.log(`✅ Successfully cached lyrics for video ID: ${videoId}`);
     } catch (cacheError: unknown) {
       console.error('❌ [PRODUCTION DEBUG] Error caching lyrics - COMPREHENSIVE ERROR ANALYSIS:');

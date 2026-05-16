@@ -1,7 +1,11 @@
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 
 import { useAnalyzePageOrchestrator } from '@/hooks/analyze/useAnalyzePageOrchestrator';
+import { extractAudioFromYouTube } from '@/services/audio/audioProcessingExtracted';
 import { getTranscription, updateTranscriptionEnrichment } from '@/services/firebase/firestoreService';
+import { getCachedAudioFile } from '@/services/firebase/firebaseStorageService';
 import { detectKey } from '@/services/audio/keyDetectionService';
 
 jest.mock('@/services/audio/audioProcessingExtracted', () => ({
@@ -18,10 +22,39 @@ jest.mock('@/services/audio/keyDetectionService', () => ({
   detectKey: jest.fn(),
 }));
 
+jest.mock('@/config/firebase', () => ({
+  ensureFirebaseInitialized: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/utils/firebaseConnectionManager', () => ({
+  withFirebaseConnectionCheck: jest.fn((operation: () => unknown) => operation()),
+}));
+
+jest.mock('@/services/firebase/firebaseStorageService', () => ({
+  getCachedAudioFile: jest.fn(),
+}));
+
+const mockExtractAudioFromYouTube = extractAudioFromYouTube as jest.MockedFunction<typeof extractAudioFromYouTube>;
 const mockGetTranscription = getTranscription as jest.MockedFunction<typeof getTranscription>;
+const mockGetCachedAudioFile = getCachedAudioFile as jest.MockedFunction<typeof getCachedAudioFile>;
 const mockUpdateTranscriptionEnrichment = updateTranscriptionEnrichment as jest.MockedFunction<typeof updateTranscriptionEnrichment>;
 const mockDetectKey = detectKey as jest.MockedFunction<typeof detectKey>;
 const mockFetch = global.fetch as jest.Mock;
+
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: Infinity,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+  };
+};
 
 const createProps = (overrides: Record<string, unknown> = {}) => ({
   videoId: 'video-123',
@@ -76,6 +109,8 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUpdateTranscriptionEnrichment.mockResolvedValue(true);
+    mockGetCachedAudioFile.mockResolvedValue(null);
+    mockExtractAudioFromYouTube.mockResolvedValue(undefined);
     mockFetch.mockReset();
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });
@@ -99,7 +134,7 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
     } as any);
 
     const props = createProps({ showRomanNumerals: false });
-    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any));
+    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.keySignature).toBe('C major'));
 
@@ -130,7 +165,7 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
     });
 
     const props = createProps();
-    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any));
+    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mockDetectKey).toHaveBeenCalledTimes(1));
 
@@ -168,7 +203,7 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
         ],
       } as any,
     });
-    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any));
+    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.keySignature).toBe('Bb major'));
     expect(mockDetectKey).toHaveBeenCalledTimes(1);
@@ -198,7 +233,7 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
         ],
       } as any,
     });
-    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any));
+    const { result } = renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mockDetectKey).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(result.current.keySignature).toBe('A minor'));
@@ -232,13 +267,11 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
       },
     });
 
-    renderHook(() => useAnalyzePageOrchestrator(props as any));
+    renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
-
-    expect(props.setLyrics).toHaveBeenCalledWith({
+    await waitFor(() => expect(props.setLyrics).toHaveBeenCalledWith({
       lines: [{ text: 'Hello world', startTime: 0, endTime: 1 }],
-    });
+    }));
     expect(props.setShowLyrics).toHaveBeenCalledWith(true);
     expect(props.setHasCachedLyrics).toHaveBeenCalledWith(false);
     expect(props.setLyrics).not.toHaveBeenCalledWith(null);
@@ -263,11 +296,30 @@ describe('useAnalyzePageOrchestrator key detection cache flow', () => {
       },
     });
 
-    renderHook(() => useAnalyzePageOrchestrator(props as any));
+    renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
 
     await waitFor(() => expect(props.setHasCachedLyrics).toHaveBeenCalledWith(false));
 
     expect(props.setLyrics).not.toHaveBeenCalled();
     expect(props.setShowLyrics).not.toHaveBeenCalled();
+  });
+
+  it('does not retry extraction when the initial extraction request fails', async () => {
+    mockGetTranscription.mockResolvedValue(null);
+    mockGetCachedAudioFile.mockResolvedValue(null);
+    mockExtractAudioFromYouTube.mockRejectedValue(new Error('provider unavailable'));
+
+    const props = createProps({
+      firebaseReady: true,
+      analysisResults: null,
+      showRomanNumerals: false,
+      skipInitialCacheBootstrap: false,
+    });
+
+    renderHook(() => useAnalyzePageOrchestrator(props as any), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(mockExtractAudioFromYouTube).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockExtractAudioFromYouTube).toHaveBeenCalledTimes(1);
   });
 });

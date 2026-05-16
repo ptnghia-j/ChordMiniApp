@@ -52,7 +52,7 @@ A --> K["Pages & Dynamic Routes<br/>src/app/*"]
 
 **Diagram sources**
 - [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ProcessingContext.tsx:44-184](file://src/contexts/ProcessingContext.tsx#L44-L184)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 - [ServiceWorkerRegistration.tsx:9-102](file://src/components/layout/ServiceWorkerRegistration.tsx#L9-L102)
@@ -65,7 +65,8 @@ A --> K["Pages & Dynamic Routes<br/>src/app/*"]
 
 ## Core Components
 - Root layout: Defines metadata, fonts, critical CSS, DNS prefetch, and composes providers and client components.
-- Providers: Wraps children with UI provider, toast provider, processing context, and theme context.
+- Providers: Wraps children with TanStack Query, UI provider, toast provider, processing context, and theme context.
+- Query layer: TanStack Query centralizes shared server-state reads for model info, recent transcriptions, Sheet Sage cache checks, and cached lyrics lookups.
 - Theme context: Manages light/dark theme with useSyncExternalStore to avoid hydration mismatches.
 - Processing context: Centralizes analysis lifecycle and timing metrics.
 - Stores: Zustand stores for analysis, playback, and UI state with selector hooks for efficient re-renders.
@@ -75,7 +76,7 @@ A --> K["Pages & Dynamic Routes<br/>src/app/*"]
 
 **Section sources**
 - [layout.tsx:19-228](file://src/app/layout.tsx#L19-L228)
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 - [ProcessingContext.tsx:44-184](file://src/contexts/ProcessingContext.tsx#L44-L184)
 - [analysisStore.ts:101-295](file://src/stores/analysisStore.ts#L101-L295)
@@ -89,8 +90,8 @@ A --> K["Pages & Dynamic Routes<br/>src/app/*"]
 The frontend architecture centers on:
 - App Router with dynamic routes under src/app (e.g., analyze/[videoId], lyrics/[videoId]).
 - Strict client/server component boundaries enforced by "use client" directives.
-- Providers pattern for UI, theme, and processing state.
-- Zustand stores for global UI and playback state.
+- Providers pattern for query cache, UI, theme, and processing state.
+- Zustand stores for global UI and playback state; TanStack Query owns remote read caching and invalidation.
 - Firebase integration via a runtime-configurable initializer and service layer.
 - Performance-first approach with critical CSS, font optimization, DNS prefetch, and service worker caching.
 
@@ -131,7 +132,7 @@ FS --> FC
 
 **Diagram sources**
 - [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ServiceWorkerRegistration.tsx:9-102](file://src/components/layout/ServiceWorkerRegistration.tsx#L9-L102)
 - [FirebaseInitializer.tsx:12-61](file://src/components/layout/FirebaseInitializer.tsx#L12-L61)
 - [ClientErrorBoundary.tsx:10-12](file://src/components/common/ClientErrorBoundary.tsx#L10-L12)

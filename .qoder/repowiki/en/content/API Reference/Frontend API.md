@@ -167,6 +167,8 @@ ApiService provides a robust HTTP client with:
 - Built-in methods for health checks, model info, beats, chords, and lyrics retrieval.
 - Specialized methods for heavy operations with increased timeouts and disabled retries.
 
+Read-oriented frontend APIs now prefer TanStack Query hooks over component-local `useEffect` fetches where caching and deduplication are useful. `useModelInfoQuery` shares `/api/model-info` across model selectors, `useRecentVideosQuery` owns homepage recent transcription pagination, Sheet Sage query hooks cache health and melody-cache reads, and `useCachedLyricsQuery` deduplicates cache-only lyrics lookups. Heavy uploads, chatbot sends, audio extraction, and long-running analysis remain imperative because they carry workflow state, user progress, and custom retry/abort behavior.
+
 Key interfaces:
 - ApiResponse<T>: success flag, optional data, error message, rateLimited indicator, and retryAfter seconds.
 - ApiRequestOptions: timeout, retries, maxAttempts, baseDelay, maxDelay.

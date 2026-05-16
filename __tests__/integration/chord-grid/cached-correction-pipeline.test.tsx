@@ -1,4 +1,5 @@
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { AudioProcessingState } from '@/services/audio/audioProcessingService';
@@ -25,6 +26,25 @@ jest.mock('@/components/chord-analysis/ChordGrid', () => ({
 
 const mockGetTranscription = getTranscription as jest.MockedFunction<typeof getTranscription>;
 const fetchMock = jest.fn();
+
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: Infinity,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    );
+  };
+};
 
 const buildDetectKeyResponse = (overrides?: Partial<ReturnType<typeof buildDetectKeyResponseBase>>) => ({
   ...buildDetectKeyResponseBase(),
@@ -140,7 +160,7 @@ describe('cached correction pipeline', () => {
       updateRomanNumeralData: jest.fn(),
       analyzeAudioFromService: jest.fn(),
       skipInitialCacheBootstrap: true,
-    }));
+    }), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.sequenceCorrections?.correctedSequence).toEqual(['Db', 'Eb', 'Ab']));
     await waitFor(() => expect(result.current.showCorrectedChords).toBe(true));
@@ -205,7 +225,7 @@ describe('cached correction pipeline', () => {
       updateRomanNumeralData: jest.fn(),
       analyzeAudioFromService: jest.fn(),
       skipInitialCacheBootstrap: true,
-    }));
+    }), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.sequenceCorrections?.correctedSequence).toEqual(['Db', 'Eb', 'Ab']));
     await waitFor(() => expect(result.current.showCorrectedChords).toBe(true));
@@ -302,6 +322,7 @@ describe('cached correction pipeline', () => {
     const { result, rerender } = renderHook((props: typeof baseProps & { showRomanNumerals: boolean }) => {
       return useAnalyzePageOrchestrator(props);
     }, {
+      wrapper: createWrapper(),
       initialProps: {
         ...baseProps,
         showRomanNumerals: false,

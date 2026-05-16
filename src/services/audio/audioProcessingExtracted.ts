@@ -108,6 +108,7 @@ export interface AudioProcessingServiceDependencies {
     chordDetector: ChordDetectorType
   ) => Promise<TranscriptionData | Omit<TranscriptionData, 'createdAt'> | null>;
   setTranscriptionSnapshot?: (data: Omit<TranscriptionData, 'createdAt'> | TranscriptionData) => void;
+  onLyricsTranscribed?: (lyrics: LyricsData) => void;
 }
 
 /**
@@ -303,7 +304,8 @@ export const transcribeLyricsWithAI = async (deps: AudioProcessingServiceDepende
     setActiveTab,
     setIsTranscribingLyrics,
     setLyricsError,
-    lyrics
+    lyrics,
+    onLyricsTranscribed
   } = deps;
 
   if (!audioProcessingState.audioUrl) {
@@ -349,6 +351,7 @@ export const transcribeLyricsWithAI = async (deps: AudioProcessingServiceDepende
 
     if (data && data.lyrics) {
       setLyrics(data.lyrics);
+      onLyricsTranscribed?.(data.lyrics);
       setShowLyrics(true);
       setHasCachedLyrics(false);
       setActiveTab('lyricsChords');

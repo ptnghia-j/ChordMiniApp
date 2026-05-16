@@ -257,6 +257,58 @@ function applyBeat4BiasCorrection(params: {
   return correctedCandidate;
 }
 
+function applyLeadingBeat2BiasCorrection(params: {
+  chordStartIndices: number[];
+  chosenCandidate: { extraBeats: number; score: number };
+  scoredCandidates: Array<{ extraBeats: number; score: number }>;
+  timeSignature: number;
+}): { extraBeats: number; score: number } {
+  const {
+    chordStartIndices,
+    chosenCandidate,
+    scoredCandidates,
+    timeSignature,
+  } = params;
+  const config = GRID_ALIGNMENT_CONFIG.leadingBeat2BiasCorrection;
+
+  if (!config.enabled || timeSignature !== 4 || chordStartIndices.length < config.minStarts) {
+    return chosenCandidate;
+  }
+
+  const chosenCounts = countChordStartModulos(chordStartIndices, timeSignature, chosenCandidate.extraBeats);
+  const downbeatCount = chosenCounts[0] ?? 0;
+  const beat2Count = chosenCounts[1] ?? 0;
+  const totalStarts = chordStartIndices.length;
+  const downbeatShare = downbeatCount / totalStarts;
+  const beat2Share = beat2Count / totalStarts;
+
+  if (
+    downbeatShare > config.maxDownbeatShare ||
+    beat2Share < config.minBeat2Share
+  ) {
+    return chosenCandidate;
+  }
+
+  const correctedExtraBeats = (chosenCandidate.extraBeats + timeSignature - 1) % timeSignature;
+  const correctedCandidate = scoredCandidates.find((candidate) => candidate.extraBeats === correctedExtraBeats);
+  if (!correctedCandidate) {
+    return chosenCandidate;
+  }
+
+  const correctedCounts = countChordStartModulos(chordStartIndices, timeSignature, correctedExtraBeats);
+  const correctedDownbeatCount = correctedCounts[0] ?? 0;
+  const minCompetitiveDownbeats = beat2Count * config.minCompetitiveRatio;
+
+  if (
+    correctedDownbeatCount <= downbeatCount ||
+    correctedDownbeatCount < minCompetitiveDownbeats
+  ) {
+    return chosenCandidate;
+  }
+
+  return correctedCandidate;
+}
+
 function buildSilentRunWindows(
   chordGridData: ChordGridData,
   timeSignature: number
@@ -587,7 +639,13 @@ function buildLeadingSilenceExpansionWindow(
   // Guardrail: skip leading expansion only when there is *natural* leading
   // silence in addition to the artificial global offset. For offset-only
   // silence (runEnd === existingLeadingOffset), expansion can still be useful.
-  if (hasNaturalLeadingSilenceWithOffset(runEnd, existingLeadingOffset, timeSignature)) {
+  const naturalLeadingSilenceRun = Math.max(0, runEnd - Math.max(0, existingLeadingOffset));
+  const naturalSilenceSuppressionThreshold =
+    timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.minNaturalSilenceMeasuresForSuppression;
+  if (
+    hasNaturalLeadingSilenceWithOffset(runEnd, existingLeadingOffset, timeSignature) &&
+    naturalLeadingSilenceRun >= naturalSilenceSuppressionThreshold
+  ) {
     return null;
   }
 
@@ -597,25 +655,31 @@ function buildLeadingSilenceExpansionWindow(
   }
 
   const maxExtraBeats = Math.min(GRID_ALIGNMENT_CONFIG.leadingExpansion.maxExtraBeats, timeSignature - 1);
-  let bestExtraBeats = 0;
-  let bestScore = scoreLeadingExpansion(chordGridData.chords, runEnd, nextFlagStart, timeSignature, 0);
-
-  for (let extraBeats = 1; extraBeats <= maxExtraBeats; extraBeats += 1) {
-    const candidateScore = scoreLeadingExpansion(
+  const scoredCandidates = Array.from({ length: maxExtraBeats + 1 }, (_, extraBeats) => ({
+    extraBeats,
+    score: scoreLeadingExpansion(
       chordGridData.chords,
       runEnd,
       nextFlagStart,
       timeSignature,
       extraBeats
-    );
-
-    if (candidateScore > bestScore + GRID_ALIGNMENT_CONFIG.leadingExpansion.scoreImprovementThreshold) {
-      bestScore = candidateScore;
-      bestExtraBeats = extraBeats;
+    ),
+  }));
+  const chosenCandidate = scoredCandidates.slice(1).reduce((best, current) => {
+    if (current.score > best.score + GRID_ALIGNMENT_CONFIG.leadingExpansion.scoreImprovementThreshold) {
+      return current;
     }
-  }
+    return best;
+  }, scoredCandidates[0]);
+  const chordStartIndices = getMusicalChordStartIndices(chordGridData.chords, runEnd, nextFlagStart);
+  const correctedCandidate = applyLeadingBeat2BiasCorrection({
+    chordStartIndices,
+    chosenCandidate,
+    scoredCandidates,
+    timeSignature,
+  });
 
-  if (bestExtraBeats === 0) {
+  if (correctedCandidate.extraBeats === 0) {
     return null;
   }
 
@@ -623,7 +687,7 @@ function buildLeadingSilenceExpansionWindow(
   const selectedWindow: VisualCompactionWindow = {
     startIndex: 0,
     endIndex: runEnd,
-    targetModulo: (currentModulo + bestExtraBeats) % timeSignature,
+    targetModulo: (currentModulo + correctedCandidate.extraBeats) % timeSignature,
     mode: 'expand_only',
     source: 'leading_silence',
   };

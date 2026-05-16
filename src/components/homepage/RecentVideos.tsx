@@ -1,35 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { db } from '@/config/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, DocumentSnapshot, DocumentData, QuerySnapshot, QueryConstraint } from 'firebase/firestore';
 import { Card, CardBody, Button, Chip, Select, SelectItem, Skeleton } from '@heroui/react';
 import { useIsVisible } from '@/hooks/scroll/useIntersectionObserver';
+import { useRecentVideosQuery } from '@/hooks/query/useRecentVideosQuery';
 import { buildAnalyzePageUrl } from '@/utils/analyzeRouteUtils';
-import { buildSearchableKeys } from '@/utils/keySignatureUtils';
-import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
+import {
+  ALL_KEYS_VALUE,
+  RECENT_VIDEOS_PAGE_SIZE,
+} from '@/services/query/recentVideos';
 
-interface TranscribedVideo {
-  videoId: string;
-  title?: string;
-  channelTitle?: string;
-  thumbnailUrl?: string;
-  processedAt: number;
-  duration?: number;
-  beatModel?: string;
-  chordModel?: string;
-  bpm?: number;
-  timeSignature?: number;
-  keySignature?: string;
-  usageCount?: number;
-}
-
-const TRANSCRIPTIONS_COLLECTION = 'transcriptions';
-const PAGE_SIZE = 12;
-const LEGACY_QUERY_FETCH_LIMIT = PAGE_SIZE * 2;
-const MAX_SCAN_PAGES = 4;
-const ALL_KEYS_VALUE = 'all';
 const KEY_OPTIONS = [
   { value: ALL_KEYS_VALUE, label: 'All Keys' },
   { value: 'C major', label: 'C Major' },
@@ -57,37 +38,10 @@ const KEY_OPTIONS = [
   { value: 'B major', label: 'B Major' },
   { value: 'B minor', label: 'B Minor' },
 ];
-type QueryMode = 'primary' | 'legacy';
-type FirestoreTranscriptionDoc = {
-  videoId?: string;
-  beats?: unknown[];
-  chords?: unknown[];
-  createdAt?: { toMillis?: () => number; seconds?: number };
-  audioDuration?: number;
-  beatModel?: string;
-  chordModel?: string;
-  bpm?: number;
-  timeSignature?: number;
-  keySignature?: string;
-  primaryKey?: string;
-  title?: string;
-  channelTitle?: string;
-  thumbnail?: string;
-  searchableKeys?: string[];
-  isPrimaryVariant?: boolean;
-  usageCount?: number;
-};
 
 export default function RecentVideos() {
-  const [videos, setVideos] = useState<TranscribedVideo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(true); // State to track if more videos can be loaded
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedKey, setSelectedKey] = useState(ALL_KEYS_VALUE);
-  const [queryMode, setQueryMode] = useState<QueryMode | null>(null);
 
   // PERFORMANCE FIX #5: Lazy load using Intersection Observer
   const [containerRef, isVisible] = useIsVisible<HTMLDivElement>({
@@ -96,254 +50,29 @@ export default function RecentVideos() {
     freezeOnceVisible: true // Only load once
   });
 
-  const fetchVideos = useCallback(async (isLoadMore = false, skipCache = false) => {
-    if (!isLoadMore && !skipCache) {
-      try {
-        const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
-        const cacheKey = `recent-videos-${PAGE_SIZE}-${selectedKey}`;
-        const cachedData = recentVideosCache.peek(cacheKey);
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isFetchingNextPage,
+    isPending,
+  } = useRecentVideosQuery({
+    selectedKey,
+    enabled: isVisible,
+  });
 
-        if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
-          setVideos(cachedData as unknown as TranscribedVideo[]);
-          setLoading(false);
-          setHasMore(cachedData.length >= PAGE_SIZE);
-          // Background revalidate
-          setTimeout(() => { void fetchVideos(false, true); }, 0);
-          return;
-        }
-      } catch (cacheError) {
-        console.warn('Cache check failed, proceeding with Firebase query:', cacheError);
-      }
-    }
+  const videos = useMemo(
+    () => data?.pages.flatMap((page) => page.videos) ?? [],
+    [data]
+  );
 
-    // CRITICAL FIX: Ensure Firebase is initialized before fetching
-    // Race condition: Component mounts before setTimeout(0) in firebase.ts completes
-    // This ensures db is initialized before attempting to fetch data
-    let firestoreDb = db;
-    if (!firestoreDb) {
-      try {
-        const { ensureFirebaseInitialized } = await import('@/config/firebase');
-        const { db: initializedDb } = await ensureFirebaseInitialized();
-        firestoreDb = initializedDb;
-      } catch (error) {
-        console.error('❌ Firebase initialization failed:', error);
-        setError('Firebase not initialized');
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (!firestoreDb) {
-      setError('Firebase not initialized');
-      setLoading(false);
-      return;
-    }
-
-    // Prevent fetching more if we know there are no more documents
-    if (isLoadMore && !hasMore) {
-        setLoadingMore(false);
-        return;
-    }
-
-    try {
-      if (isLoadMore) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true); // Only set main loading state for initial fetch
-      }
-
-      const transcriptionsRef = collection(firestoreDb, TRANSCRIPTIONS_COLLECTION);
-      const existingVideoIds = new Set(isLoadMore ? videos.map(v => v.videoId) : []);
-      const selectedKeyVariants = selectedKey === ALL_KEYS_VALUE
-        ? []
-        : buildSearchableKeys(selectedKey);
-
-      const mapSnapshotDocToVideo = (docData: FirestoreTranscriptionDoc): TranscribedVideo | null => {
-        if (
-          !docData.videoId ||
-          existingVideoIds.has(docData.videoId) ||
-          (docData.beats?.length ?? 0) === 0 ||
-          (docData.chords?.length ?? 0) === 0
-        ) {
-          return null;
-        }
-
-        return {
-          videoId: docData.videoId,
-          title: docData.title || `Video ${docData.videoId}`,
-          channelTitle: docData.channelTitle || undefined,
-          thumbnailUrl: normalizeThumbnailUrl(docData.videoId, docData.thumbnail, 'mqdefault'),
-          processedAt: docData.createdAt?.toMillis?.() || (docData.createdAt?.seconds ? docData.createdAt.seconds * 1000 : Date.now()),
-          duration: docData.audioDuration,
-          beatModel: docData.beatModel,
-          chordModel: docData.chordModel,
-          bpm: docData.bpm,
-          timeSignature: docData.timeSignature || 4,
-          keySignature: docData.keySignature || docData.primaryKey,
-          usageCount: docData.usageCount,
-        };
-      };
-
-      const matchesSelectedKey = (docData: FirestoreTranscriptionDoc) => {
-        if (selectedKeyVariants.length === 0) return true;
-        const docKeys = Array.isArray(docData.searchableKeys) && docData.searchableKeys.length > 0
-          ? docData.searchableKeys
-          : buildSearchableKeys(docData.keySignature || docData.primaryKey);
-        return docKeys.some((docKey) => selectedKeyVariants.includes(docKey));
-      };
-
-      const fetchPrimaryPage = async (cursor: DocumentSnapshot | null) => {
-        const constraints: QueryConstraint[] = [
-          where('isPrimaryVariant', '==', true),
-        ];
-
-        if (selectedKeyVariants.length > 0) {
-          constraints.push(where('searchableKeys', 'array-contains-any', selectedKeyVariants));
-        }
-
-        constraints.push(orderBy('createdAt', 'desc'));
-
-        if (cursor) {
-          constraints.push(startAfter(cursor));
-        }
-
-        constraints.push(limit(PAGE_SIZE));
-
-        const snapshot = await getDocs(query(transcriptionsRef, ...constraints));
-        const pageVideos = snapshot.docs
-          .map((docSnapshot) => mapSnapshotDocToVideo(docSnapshot.data() as FirestoreTranscriptionDoc))
-          .filter((video): video is TranscribedVideo => Boolean(video));
-
-        return {
-          videos: pageVideos,
-          lastVisible: snapshot.docs[snapshot.docs.length - 1] || null,
-          hasMore: snapshot.size === PAGE_SIZE && snapshot.docs.length === PAGE_SIZE,
-        };
-      };
-
-      const fetchLegacyPage = async (cursor: DocumentSnapshot | null) => {
-        const videoMap = new Map<string, TranscribedVideo>();
-        let lastVisibleLocal: DocumentSnapshot | null = null;
-        let fetchedDocCount = 0;
-        let scanCursor = cursor;
-
-        const addFromSnapshot = (snap: QuerySnapshot<DocumentData>) => {
-          snap.forEach((docSnapshot) => {
-            const docData = docSnapshot.data() as FirestoreTranscriptionDoc;
-            if (!matchesSelectedKey(docData)) return;
-
-            const video = mapSnapshotDocToVideo(docData);
-            if (!video || videoMap.has(video.videoId)) return;
-            videoMap.set(video.videoId, video);
-          });
-        };
-
-        for (let page = 0; page < MAX_SCAN_PAGES; page += 1) {
-          const snapshot = scanCursor
-            ? await getDocs(query(transcriptionsRef, orderBy('createdAt', 'desc'), startAfter(scanCursor), limit(LEGACY_QUERY_FETCH_LIMIT)))
-            : await getDocs(query(transcriptionsRef, orderBy('createdAt', 'desc'), limit(LEGACY_QUERY_FETCH_LIMIT)));
-
-          addFromSnapshot(snapshot);
-          fetchedDocCount = snapshot.size;
-          lastVisibleLocal = snapshot.docs[snapshot.docs.length - 1] || null;
-          scanCursor = lastVisibleLocal;
-
-          if (videoMap.size >= PAGE_SIZE || fetchedDocCount < LEGACY_QUERY_FETCH_LIMIT) {
-            break;
-          }
-        }
-
-        return {
-          videos: Array.from(videoMap.values()).slice(0, PAGE_SIZE),
-          lastVisible: lastVisibleLocal,
-          hasMore: fetchedDocCount === LEGACY_QUERY_FETCH_LIMIT && !!lastVisibleLocal,
-        };
-      };
-
-      let transcribedVideos: TranscribedVideo[] = [];
-      let lastVisibleLocal: DocumentSnapshot | null = null;
-      let nextHasMore = false;
-
-      const preferredMode: QueryMode = isLoadMore ? (queryMode ?? 'primary') : 'primary';
-
-      if (preferredMode === 'primary') {
-        try {
-          const primaryResult = await fetchPrimaryPage(isLoadMore ? lastDoc : null);
-          transcribedVideos = primaryResult.videos;
-          lastVisibleLocal = primaryResult.lastVisible;
-          nextHasMore = primaryResult.hasMore;
-          setQueryMode('primary');
-
-          if (!isLoadMore && transcribedVideos.length === 0) {
-            const legacyResult = await fetchLegacyPage(null);
-            transcribedVideos = legacyResult.videos;
-            lastVisibleLocal = legacyResult.lastVisible;
-            nextHasMore = legacyResult.hasMore;
-            setQueryMode('legacy');
-          }
-        } catch (primaryError) {
-          console.warn('Primary recent videos query failed, using legacy fallback:', primaryError);
-          const legacyResult = await fetchLegacyPage(isLoadMore ? lastDoc : null);
-          transcribedVideos = legacyResult.videos;
-          lastVisibleLocal = legacyResult.lastVisible;
-          nextHasMore = legacyResult.hasMore;
-          setQueryMode('legacy');
-        }
-      } else {
-        const legacyResult = await fetchLegacyPage(isLoadMore ? lastDoc : null);
-        transcribedVideos = legacyResult.videos;
-        lastVisibleLocal = legacyResult.lastVisible;
-        nextHasMore = legacyResult.hasMore;
-      }
-
-      if (isLoadMore) {
-        setVideos(prev => [...prev, ...transcribedVideos]);
-      } else {
-        setVideos(transcribedVideos);
-        setLoading(false);
-        try {
-          const { recentVideosCache } = await import('@/services/cache/smartFirebaseCache');
-          const cacheKey = `recent-videos-${PAGE_SIZE}-${selectedKey}`;
-          recentVideosCache.set(cacheKey, transcribedVideos as unknown as Record<string, unknown>[], true);
-        } catch (cacheError) {
-          console.warn('Failed to cache recent videos:', cacheError);
-        }
-      }
-
-      setLastDoc(lastVisibleLocal || null);
-      setHasMore(nextHasMore);
-
-    } catch (err) {
-      console.error('Error fetching transcribed videos:', err);
-      setError('Failed to load transcribed videos');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [hasMore, lastDoc, queryMode, selectedKey, videos]);
+  const loading = !isVisible || (isPending && videos.length === 0);
+  const errorMessage = error ? 'Failed to load transcribed videos' : null;
 
   const handleShowMore = () => setIsExpanded(true);
   const handleShowLess = () => setIsExpanded(false);
-
-  // PERFORMANCE FIX #5: Only fetch when component is visible (Intersection Observer)
-  const hasLoadedRef = useRef(false);
-  const previousFilterRef = useRef(selectedKey);
-  useEffect(() => {
-    if (!isVisible) return;
-
-    const filterChanged = previousFilterRef.current !== selectedKey;
-    if (!hasLoadedRef.current || filterChanged) {
-      hasLoadedRef.current = true;
-      previousFilterRef.current = selectedKey;
-      setVideos([]);
-      setLastDoc(null);
-      setHasMore(true);
-      setQueryMode(null);
-      setError(null);
-      setIsExpanded(false);
-      void fetchVideos(false);
-    }
-  }, [fetchVideos, isVisible, selectedKey]);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -395,6 +124,9 @@ export default function RecentVideos() {
               if (keys === 'all') return;
               const nextValue = Array.from(keys)[0];
               if (typeof nextValue === 'string') {
+                if (nextValue !== selectedKey) {
+                  setIsExpanded(false);
+                }
                 setSelectedKey(nextValue);
               }
             }}
@@ -420,7 +152,7 @@ export default function RecentVideos() {
         {renderHeader(<Chip size="sm" variant="flat" color="default">Loading...</Chip>)}
         <div className="max-h-96 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(PAGE_SIZE)].map((_, index) => (
+            {[...Array(RECENT_VIDEOS_PAGE_SIZE)].map((_, index) => (
               <Card key={index} className="w-full bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10">
                 <CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody>
               </Card>
@@ -431,21 +163,21 @@ export default function RecentVideos() {
     );
   }
 
-  if (error || videos.length === 0) {
+  if (errorMessage || videos.length === 0) {
     return (
       <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
         {renderHeader(
           <Chip size="sm" variant="flat" color={error ? "danger" : "default"}>
-            {error ? "Error" : "Empty"}
+            {errorMessage ? "Error" : "Empty"}
           </Chip>
         )}
         <div className="h-48 flex items-center justify-center">
           <div className="text-center">
             <h4 className="text-base font-medium text-gray-800 dark:text-gray-100 mb-1">
-              {error ? 'Failed to load transcribed videos' : 'No recent transcriptions found'}
+              {errorMessage ? 'Failed to load transcribed videos' : 'No recent transcriptions found'}
             </h4>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              {error
+              {errorMessage
                 ? 'Please retry or check your connection.'
                 : selectedKey === ALL_KEYS_VALUE
                   ? 'New analyses will appear here as they are created.'
@@ -461,7 +193,7 @@ export default function RecentVideos() {
     <div ref={containerRef} style={{ contentVisibility: 'auto', containIntrinsicSize: '384px' }} className="w-full">
       {renderHeader(
         <Chip size="sm" variant="flat" color="default" className="text-foreground dark:text-white">
-          {videos.length} song{videos.length !== 1 ? 's' : ''}
+          {isFetching && !isFetchingNextPage ? 'Updating...' : `${videos.length} song${videos.length !== 1 ? 's' : ''}`}
         </Chip>
       )}
 
@@ -525,10 +257,10 @@ export default function RecentVideos() {
 
         {/* "Load More" button and loading indicator */}
         <div className="flex justify-center mt-6">
-          {hasMore && !loadingMore && (
-            <Button onPress={() => fetchVideos(true)} color="primary" variant="flat">Load More</Button>
+          {hasNextPage && !isFetchingNextPage && (
+            <Button onPress={() => void fetchNextPage()} color="primary" variant="flat">Load More</Button>
           )}
-          {loadingMore && (
+          {isFetchingNextPage && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
               {[...Array(2)].map((_, index) => (
                 <Card key={`loading-${index}`} className="w-full bg-content1 dark:bg-white/[0.06] border border-divider dark:border-white/10"><CardBody className="p-3"><div className="flex gap-3"><Skeleton className="w-20 h-12 rounded-md" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4 rounded" /><Skeleton className="h-3 w-1/2 rounded" /></div></div></CardBody></Card>

@@ -15,6 +15,7 @@ import {
 import type { AudioFileData } from '@/services/firebase/firebaseStorageService';
 import { ProcessingStage } from '@/contexts/ProcessingContext';
 import { LyricsData } from '@/types/musicAiTypes';
+import { useCachedLyricsQuery } from '@/hooks/query/useCachedLyricsQuery';
 
 type BeatDetectorType = 'auto' | 'madmom' | 'beat-transformer';
 type ChordDetectorType = 'chord-cnn-lstm' | 'btc-sl' | 'btc-pl';
@@ -296,10 +297,18 @@ export function useAnalyzePageOrchestrator({
   const transcriptionSnapshotsRef = useRef<Record<string, TranscriptionSnapshot | null | undefined>>({});
   const transcriptionSnapshotPromisesRef = useRef<Record<string, Promise<TranscriptionSnapshot | null> | undefined>>({});
   const cachedAudioPromisesRef = useRef<Record<string, Promise<AudioFileData | null> | undefined>>({});
-  const lyricsCacheCheckPromisesRef = useRef<Record<string, Promise<void> | undefined>>({});
   const romanNumeralDataRef = useRef<RomanNumeralSnapshot | null>(null);
   const [persistedSnapshotKeys, setPersistedSnapshotKeys] = useState<Record<string, true>>({});
   const [snapshotUsageCounts, setSnapshotUsageCounts] = useState<Record<string, number>>({});
+  const shouldCheckCachedLyrics =
+    audioProcessingState.isExtracted &&
+    !!audioProcessingState.audioUrl &&
+    (lyrics?.lines?.length ?? 0) === 0;
+  const cachedLyricsQuery = useCachedLyricsQuery({
+    videoId,
+    audioUrl: audioProcessingState.audioUrl,
+    enabled: shouldCheckCachedLyrics,
+  });
 
   const storeTranscriptionSnapshot = useCallback((
     snapshot: TranscriptionSnapshot | null,
@@ -439,7 +448,6 @@ export function useAnalyzePageOrchestrator({
     transcriptionSnapshotsRef.current = {};
     transcriptionSnapshotPromisesRef.current = {};
     cachedAudioPromisesRef.current = {};
-    lyricsCacheCheckPromisesRef.current = {};
     setPersistedSnapshotKeys({});
     setSnapshotUsageCounts({});
     audioExtractionAbortControllerRef.current?.abort();
@@ -718,6 +726,8 @@ export function useAnalyzePageOrchestrator({
       return true;
     };
 
+    let shouldExtractAudio = false;
+
     try {
       setInitialCacheCheckDone(true);
 
@@ -758,19 +768,24 @@ export function useAnalyzePageOrchestrator({
         return;
       }
 
-      const extractionResult = await extractAudioFromYouTube(false);
-      if (extractionResult?.title) {
-        setVideoTitle(extractionResult.title);
-      }
+      shouldExtractAudio = true;
     } catch (error) {
       console.error('Error checking cached audio:', error);
       if (await applyCachedTranscriptionIfAvailable()) {
         return;
       }
 
-      const extractionResult = await extractAudioFromYouTube(false);
-      if (extractionResult?.title) {
-        setVideoTitle(extractionResult.title);
+      shouldExtractAudio = true;
+    }
+
+    if (shouldExtractAudio) {
+      try {
+        const extractionResult = await extractAudioFromYouTube(false);
+        if (extractionResult?.title) {
+          setVideoTitle(extractionResult.title);
+        }
+      } catch {
+        // The extraction service already updates UI state and logs the concrete provider error.
       }
     }
   }, [
@@ -790,7 +805,6 @@ export function useAnalyzePageOrchestrator({
     titleFromSearch,
     videoId,
   ]);
-
   useEffect(() => {
     const checkAnalysisCache = async () => {
       if (
@@ -1099,65 +1113,37 @@ export function useAnalyzePageOrchestrator({
   ]);
 
   useEffect(() => {
-    const autoLoadCachedLyrics = async () => {
-      const audioUrl = audioProcessingState.audioUrl;
-      if ((lyrics?.lines?.length ?? 0) > 0 || !audioUrl) {
-        return;
-      }
-
-      const cacheKey = `${videoId}:${audioUrl}`;
-      const inFlightLyricsCheck = lyricsCacheCheckPromisesRef.current[cacheKey];
-      if (inFlightLyricsCheck) {
-        return inFlightLyricsCheck;
-      }
-
-      const lyricsCheckPromise = (async () => {
-        try {
-          const response = await fetch('/api/transcribe-lyrics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              videoId,
-              audioPath: audioUrl,
-              forceRefresh: false,
-              checkCacheOnly: true,
-            }),
-          });
-
-          const data = await response.json();
-          if (response.ok && data.success && data.lyrics?.lines?.length) {
-            setLyrics(data.lyrics);
-            setShowLyrics(true);
-            setHasCachedLyrics(false);
-            return;
-          }
-
-          setHasCachedLyrics(false);
-        } catch (error) {
-          console.log('Cache check failed:', error);
-          setHasCachedLyrics(false);
-        }
-      })();
-
-      lyricsCacheCheckPromisesRef.current[cacheKey] = lyricsCheckPromise;
-      try {
-        return await lyricsCheckPromise;
-      } finally {
-        delete lyricsCacheCheckPromisesRef.current[cacheKey];
-      }
-    };
-
-    if (audioProcessingState.isExtracted && audioProcessingState.audioUrl) {
-      void autoLoadCachedLyrics();
+    if (!shouldCheckCachedLyrics || !cachedLyricsQuery.isSuccess) {
+      return;
     }
+
+    if (cachedLyricsQuery.data?.lines?.length) {
+      setLyrics(cachedLyricsQuery.data);
+      setShowLyrics(true);
+    }
+
+    setHasCachedLyrics(false);
   }, [
-    audioProcessingState.audioUrl,
-    audioProcessingState.isExtracted,
-    lyrics?.lines?.length,
+    cachedLyricsQuery.data,
+    cachedLyricsQuery.isSuccess,
     setHasCachedLyrics,
     setLyrics,
     setShowLyrics,
-    videoId,
+    shouldCheckCachedLyrics,
+  ]);
+
+  useEffect(() => {
+    if (!shouldCheckCachedLyrics || !cachedLyricsQuery.isError) {
+      return;
+    }
+
+    console.log('Cache check failed:', cachedLyricsQuery.error);
+    setHasCachedLyrics(false);
+  }, [
+    cachedLyricsQuery.error,
+    cachedLyricsQuery.isError,
+    setHasCachedLyrics,
+    shouldCheckCachedLyrics,
   ]);
 
   return {

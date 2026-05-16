@@ -4,6 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { addToast } from '@heroui/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -53,6 +54,10 @@ import { usePlaybackStore } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
+import { useCachedSheetSageMelodyQuery } from '@/hooks/query/useSheetSageQueries';
+import { queryKeys } from '@/services/query/queryKeys';
+import { queryGcTimes, queryStaleTimes } from '@/services/query/queryOptions';
+import type { LyricsData } from '@/types/musicAiTypes';
 import type { AnalyzePageViewModel } from '../_types/analyzePageViewModel';
 import { useAnalyzePageStoreSync } from './useAnalyzePageStoreSync';
 import { useAnalyzePageLifecycleReset } from './useAnalyzePageLifecycleReset';
@@ -68,6 +73,7 @@ export function useAnalyzePageViewModel({
 }: UseAnalyzePageViewModelParams): AnalyzePageViewModel {
   const showSheetSage = true;
   useSheetSageBackendAvailability(showSheetSage);
+  const queryClient = useQueryClient();
   const router = useRouter();
   const titleFromSearch = routeParams.title;
   const durationFromSearch = routeParams.duration;
@@ -120,6 +126,10 @@ export function useAnalyzePageViewModel({
     initialAnalysisResults: initialAnalyzeHandoff?.analysisResults ?? null,
     initialVideoTitle: initialAnalyzeHandoff?.videoTitle ?? titleFromSearch,
   });
+  const cachedSheetSageMelodyQuery = useCachedSheetSageMelodyQuery(
+    videoId,
+    showSheetSage && !!videoId && audioProcessingState.isExtracted && !!audioProcessingState.audioUrl,
+  );
 
   const {
     state: audioPlayerState,
@@ -558,35 +568,27 @@ export function useAnalyzePageViewModel({
       return;
     }
 
-    let cancelled = false;
     const analysisActions = useAnalysisStore.getState();
+    const cachedResult = cachedSheetSageMelodyQuery.data;
 
-    const loadCachedMelody = async () => {
-      try {
-        const cachedResult = await getCachedSheetSageMelody(videoId);
-        if (cancelled || !cachedResult) {
-          return;
-        }
-
-        analysisActions.setSheetSageResult(cachedResult);
-        analysisActions.setSheetSageError(null);
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to load cached melody transcription:', error);
-        }
-      }
-    };
-
-    void loadCachedMelody();
-
-    return () => {
-      cancelled = true;
-    };
+    if (cachedResult) {
+      analysisActions.setSheetSageResult(cachedResult);
+      analysisActions.setSheetSageError(null);
+    }
   }, [
     audioProcessingState.audioUrl,
     audioProcessingState.isExtracted,
+    cachedSheetSageMelodyQuery.data,
     showSheetSage,
     videoId,
+  ]);
+
+  useEffect(() => {
+    if (cachedSheetSageMelodyQuery.error) {
+      console.error('Failed to load cached melody transcription:', cachedSheetSageMelodyQuery.error);
+    }
+  }, [
+    cachedSheetSageMelodyQuery.error,
   ]);
 
   const segmentationDisabledReason = !songContext.audioUrl
@@ -616,6 +618,15 @@ export function useAnalyzePageViewModel({
     }
     setIsLyricsPanelOpen(!isLyricsPanelOpen);
   }, [isChatbotOpen, isLyricsPanelOpen]);
+
+  const updateCachedLyricsQuery = useCallback((lyricsData: LyricsData) => {
+    const audioUrl = audioProcessingState.audioUrl || '';
+    if (!videoId || !audioUrl) {
+      return;
+    }
+
+    queryClient.setQueryData(queryKeys.lyrics.cached(videoId, audioUrl), lyricsData);
+  }, [audioProcessingState.audioUrl, queryClient, videoId]);
 
   const transcribeLyricsWithAI = useCallback(async () => {
     if (!isServiceAvailable('musicAi')) {
@@ -661,6 +672,7 @@ export function useAnalyzePageViewModel({
       chordDetector,
       progress: 0,
       lyrics,
+      onLyricsTranscribed: updateCachedLyricsQuery,
     };
 
     return await transcribeLyricsWithAIService(deps as any);
@@ -685,6 +697,7 @@ export function useAnalyzePageViewModel({
     setShowLyrics,
     thumbnailFromSearch,
     titleFromSearch,
+    updateCachedLyricsQuery,
     videoId,
   ]);
 
@@ -753,10 +766,16 @@ export function useAnalyzePageViewModel({
       analysisActions.setSheetSageError(null);
 
       try {
-        const cachedResult = await getCachedSheetSageMelody(videoId);
+        const cachedResult = cachedSheetSageMelodyQuery.data ?? await queryClient.fetchQuery({
+          queryKey: queryKeys.sheetSage.cachedMelody(videoId),
+          queryFn: () => getCachedSheetSageMelody(videoId),
+          staleTime: queryStaleTimes.cachedMelody,
+          gcTime: queryGcTimes.cachedMelody,
+        });
         const result = cachedResult ?? await requestSheetSageTranscription(null, audioProcessingState.audioUrl || null, videoId);
         analysisActions.setSheetSageResult(result);
         analysisActions.setSheetSageError(null);
+        queryClient.setQueryData(queryKeys.sheetSage.cachedMelody(videoId), result);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown Sheet Sage error';
         analysisActions.setSheetSageError(message);
@@ -771,11 +790,13 @@ export function useAnalyzePageViewModel({
     setIsMelodicTranscriptionPlaybackEnabled(true);
   }, [
     audioProcessingState.audioUrl,
+    cachedSheetSageMelodyQuery.data,
     hasReadySheetSageBackend,
     hasSheetSageAudioSource,
     hasSheetSageNotes,
     isComputingSheetSage,
     isMelodicTranscriptionPlaybackEnabled,
+    queryClient,
     setActiveTab,
     setIsMelodicTranscriptionPlaybackEnabled,
     sheetSageBackendError,

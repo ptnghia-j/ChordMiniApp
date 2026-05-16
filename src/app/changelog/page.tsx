@@ -308,7 +308,7 @@ export default function ChangelogPage() {
       ],
       technical: [
         "Firestore: orderBy(createdAt desc) with multi-page accumulation; audioFiles batched via where(documentId(), 'in', [...])",
-        'Caching: SWR-style stale-while-revalidate on list cache; recentVideosCache TTL 15 minutes'
+        'Caching: Recently Transcribed now uses TanStack Query infinite-query caching with a 15-minute stale window and longer garbage-collection window'
       ],
       breaking: []
     },

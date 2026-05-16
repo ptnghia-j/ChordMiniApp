@@ -11,7 +11,6 @@
 - [app.py](file://python_backend/app.py)
 - [serverBackend.ts](file://src/config/serverBackend.ts)
 - [Navigation.tsx](file://src/components/common/Navigation.tsx)
-- [README.md](file://docs/README.md)
 </cite>
 
 ## Table of Contents
@@ -49,8 +48,8 @@ BK_Config["python_backend/config.py"]
 BK_Extensions["python_backend/extensions.py"]
 BK_App["python_backend/app.py"]
 end
-subgraph "Static Docs"
-SD_Readme["docs/README.md"]
+subgraph "Wiki Docs"
+Wiki_Docs[".qoder/repowiki/en/content"]
 end
 FE_Docs_API --> BK_Docs_BP
 FE_Docs_Page --> FE_Docs_API
@@ -60,7 +59,7 @@ BK_App_Factory --> BK_Docs_BP
 BK_App --> BK_App_Factory
 BK_Config --> BK_Extensions
 BK_App --> BK_Config
-SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
+Wiki_Docs -. "Source of truth docs" .-> BK_Docs_BP
 ```
 
 **Diagram sources**
@@ -73,7 +72,6 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 - [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
-- [README.md:1-71](file://docs/README.md#L1-L71)
 
 **Section sources**
 - [page.tsx:1-616](file://src/app/docs/page.tsx#L1-L616)
@@ -85,7 +83,6 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 - [app.py:86-186](file://python_backend/app.py#L86-L186)
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 - [Navigation.tsx:50-56](file://src/components/common/Navigation.tsx#L50-L56)
-- [README.md:1-71](file://docs/README.md#L1-L71)
 
 ## Core Components
 - Backend documentation blueprint: Exposes two endpoints:
@@ -109,7 +106,7 @@ SD_Readme -. "Source of truth docs" .-> BK_Docs_BP
 
 ## Architecture Overview
 The documentation service follows a hybrid architecture:
-- Static documentation content is authored in docs/ and serves as the canonical source-of-truth for architecture and development topics.
+- Static wiki content is authored in `.qoder/repowiki/` and serves as the canonical source-of-truth for architecture and development topics.
 - Live API documentation is served via:
   - Backend Flask blueprint returning JSON
   - Frontend Next.js BFF route handler that fetches from the backend with a timeout and falls back to a static JSON document when the backend is unavailable
@@ -263,13 +260,10 @@ BFF --> DBP
 - [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
 - [route.ts:12-22](file://src/app/api/docs/route.ts#L12-L22)
 
-### Content Organization and Static Docs
-- The docs/ folder contains maintained architecture and development documentation
-- The maintained set of documents is authoritative for the current repository state
-- Static content is organized by topic (architecture, components, workflows, etc.)
-
-**Section sources**
-- [README.md:1-71](file://docs/README.md#L1-L71)
+### Content Organization and Static Wiki Docs
+- The `.qoder/repowiki/` tree contains maintained architecture and development documentation.
+- The wiki content is authoritative for the current repository state.
+- Static content is organized by topic (architecture, components, workflows, etc.).
 
 ## Dependency Analysis
 The documentation service depends on:

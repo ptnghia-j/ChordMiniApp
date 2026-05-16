@@ -41,6 +41,28 @@ function musicalSequence(chords: string[]): string[] {
   return chords.filter((chord) => chord && chord !== 'N' && chord !== 'N.C.' && chord !== 'N/C');
 }
 
+function musicalChordStarts(chords: string[]): Array<{ chord: string; index: number }> {
+  return chords
+    .map((chord, index) => ({ chord, index }))
+    .filter(({ chord, index }) => (
+      chord &&
+      chord !== 'N' &&
+      chord !== 'N.C.' &&
+      chord !== 'N/C' &&
+      (index === 0 || chords[index - 1] !== chord)
+    ));
+}
+
+function countStartModulos(chords: string[], timeSignature: number, rangeEnd: number): number[] {
+  const counts = Array(timeSignature).fill(0);
+  musicalChordStarts(chords)
+    .filter((start) => start.index < rangeEnd)
+    .forEach((start) => {
+      counts[start.index % timeSignature] += 1;
+    });
+  return counts;
+}
+
 describe('grid alignment edge behavior', () => {
   it('keeps combined padding and shift inside one non-4/4 measure', () => {
     const result = calculatePaddingAndShift(
@@ -140,6 +162,50 @@ describe('grid alignment edge behavior', () => {
       timestamp: 0,
       audioIndex: 1,
     }));
+  });
+
+  it('keeps a short 3/4 lead-in eligible for expansion before a later tempo change', () => {
+    const timeSignature = 3;
+    const leadingSilence = Array(4).fill('N/C');
+    const earlyPhrase = ['C', 'G', 'F', 'C', 'G', 'F', 'C', 'G']
+      .flatMap((chord) => Array(6).fill(chord));
+    const bridge = Array(10).fill('G');
+    const laterTempoPhrase = Array.from({ length: 40 }, (_, index) => (
+      Array(3).fill(index % 2 === 0 ? 'C' : 'F')
+    )).flat();
+    const chords = [
+      ...leadingSilence,
+      ...earlyPhrase,
+      ...bridge,
+      ...laterTempoPhrase,
+    ];
+    const beats = chords.map((_, index) => {
+      const duration = index < 60 ? 0.6 : 0.36;
+      const previousTime = index === 0 ? 0.48 : null;
+      return {
+        time: previousTime ?? (0.48 + (Math.min(index, 60) * 0.6) + (Math.max(0, index - 60) * 0.36)),
+      };
+    });
+
+    const result = getChordGridData(makeAnalysisResult({
+      beats,
+      synchronizedChords: chords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      beatDetectionResult: {
+        bpm: 166.66666666666666,
+        time_signature: timeSignature,
+      },
+      beatModel: 'madmom',
+      chordModel: 'chord-cnn-lstm',
+    }));
+    const starts = musicalChordStarts(result.chords);
+    const earlyStarts = starts.filter((start) => start.index < 60);
+    const laterStarts = starts.filter((start) => start.index >= 60);
+    const earlyDownbeatStarts = earlyStarts.filter((start) => start.index % timeSignature === 0);
+    const laterDownbeatStarts = laterStarts.filter((start) => start.index % timeSignature === 0);
+
+    expect(starts[0]).toEqual({ chord: 'C', index: 6 });
+    expect(earlyDownbeatStarts.length).toBeGreaterThan(earlyStarts.length / 2);
+    expect(laterDownbeatStarts.length).toBeGreaterThan(30);
   });
 });
 
@@ -305,6 +371,59 @@ describe('grid compaction edge behavior', () => {
 
     expect(suppressed.chords.length).toBeLessThanOrEqual(unsuppressed.chords.length);
     expect(suppressed.beats).toHaveLength(suppressed.chords.length);
+  });
+
+  it('corrects leading expansion when early starts would otherwise cluster on beat 2', () => {
+    const earlyPhrase = [
+      'C', 'C', 'C', 'C',
+      'Bm', 'Bm', 'Bm', 'Bm',
+      'Abmaj7',
+      'Dbmaj7', 'Dbmaj7',
+      'Gbmaj7',
+      'Dbmaj7',
+      'Csus4', 'Csus4',
+      'C7', 'C7',
+      ...Array(4).fill('F'),
+      ...Array(4).fill('C'),
+      ...Array(4).fill('Cm'),
+      ...Array(4).fill('Bb/D'),
+      ...Array(4).fill('Bbm/Db'),
+      ...Array(4).fill('F/C'),
+      ...Array(4).fill('G/B'),
+      ...Array(4).fill('C7'),
+      ...Array(4).fill('F'),
+      ...Array(4).fill('C/E'),
+      ...Array(4).fill('Eb'),
+      ...Array(4).fill('Bb/D'),
+      ...Array(4).fill('Bbm/Db'),
+    ];
+    const chords = [
+      'N/C',
+      ...earlyPhrase,
+      ...Array(4).fill('N/C'),
+      ...Array(16).fill('F'),
+    ];
+    const beats = chords.map((_, index) => index * 0.48);
+    const mapping = chords.map((chord, index) => ({
+      chord,
+      timestamp: beats[index],
+      visualIndex: index,
+      audioIndex: index,
+    }));
+
+    const result = runVisualCompactionPipeline({
+      chordGridData: makeGridData({ chords, beats, originalAudioMapping: mapping }),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.48,
+      enabled: true,
+    });
+    const earlyCounts = countStartModulos(result.chords, 4, 128);
+
+    expect(earlyCounts[0]).toBeGreaterThan(earlyCounts[1]);
+    expect(earlyCounts[0]).toBeGreaterThan(earlyCounts[2]);
+    expect(earlyCounts[0]).toBeGreaterThan(earlyCounts[3]);
   });
 
   it('strips full leading empty measures while preserving the remaining musical offset', () => {

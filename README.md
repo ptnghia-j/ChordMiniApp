@@ -1,6 +1,32 @@
 # ChordMini
 
-Open-source music analysis tool for chord recognition, beat tracking, piano visualizer, guitar diagrams, lyrics synchronization, and experimental melody transcription.
+Open-source music analysis tool for chord recognition, beat tracking, piano visualizer, guitar diagrams, lyrics synchronization, and experimental melody transcription. 
+
+## 🤝 Contributing
+
+We welcome and appreciate all contributions made to the project, whether it's code, documentation, testing, or feedback. Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get involved.
+
+---
+
+## Citation
+
+If you use or reference ChordMini in your work and find it useful, please cite:
+
+**BibTeX:**
+```bibtex
+@misc{phan2026enhancingautomaticchordrecognition,
+      title={Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation}, 
+      author={Nghia Phan and Rong Jin and Gang Liu and Xiao Dong},
+      year={2026},
+      eprint={2602.19778},
+      archivePrefix={arXiv},
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2602.19778}, 
+}
+```
+
+**Plain text (for non-LaTeX users):**
+> Nghia Phan, Rong Jin, Gang Liu, and Xiao Dong. "Enhancing Automatic Chord Recognition via Pseudo-Labeling and Knowledge Distillation." arXiv preprint arXiv:2602.19778, 2026. https://arxiv.org/abs/2602.19778
 
 
 ## Features Overview
@@ -195,6 +221,12 @@ Docker instructions live in [docker/README.md](docker/README.md), including Dock
 
 > [!NOTE]
 > If you are installing ChordMini with Docker Desktop, start with the Docker guide.
+
+---
+
+## 🗂️ Repository Layout Notes
+
+Some configuration files intentionally remain at the repository root because Next.js, npm, TypeScript, Jest, Tailwind/PostCSS, Vercel, Firebase, Docker, and GitHub Actions discover them there by default. Docker Compose and Firebase support files are grouped under [docker](docker) and [firebase](firebase), while obsolete duplicate config snapshots are kept in [config/legacy](config/legacy).
 
 ---
 
@@ -485,8 +517,3 @@ docker compose -f docker-compose.prod.yml up -d
 ### Traditional Deployment
 
 For custom deployments, see the [Local Setup](#-quick-setup) section above. -->
-
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.

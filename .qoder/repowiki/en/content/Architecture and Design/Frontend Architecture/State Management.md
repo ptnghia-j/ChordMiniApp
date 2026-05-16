@@ -28,9 +28,10 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the hybrid state management architecture used in the application. It combines Zustand stores for global state, React Context providers for UI and processing state, and custom hooks for data fetching, state updates, and side effects. The focus areas are:
+This document explains the hybrid state management architecture used in the application. It combines Zustand stores for global client/workflow state, React Context providers for UI and processing state, TanStack Query for remote/server-state reads, and custom hooks for orchestration, state updates, and side effects. The focus areas are:
 - Global state stores: analysis store, playback store, and UI store
 - Provider hierarchy and context integration
+- Server-state caching and query invalidation
 - State synchronization strategies across stores and services
 - Cross-component communication patterns
 - Service layer integration, API call patterns, and error handling
@@ -41,12 +42,14 @@ This document explains the hybrid state management architecture used in the appl
 The state management spans three primary layers:
 - Stores (Zustand): encapsulate global state and actions for analysis, playback, and UI
 - Context Providers: manage UI and processing state with React’s Context API
-- Hooks: orchestrate service calls, synchronize state, and coordinate cross-component updates
+- TanStack Query: caches and deduplicates model info, recent transcription pages, Sheet Sage availability/cache checks, and cached lyrics lookups
+- Hooks: orchestrate service calls, query reads, synchronize state, and coordinate cross-component updates
 
 ```mermaid
 graph TB
 subgraph "Providers"
 Providers["Providers (providers.tsx)"]
+QueryClientProvider["QueryClientProvider"]
 ProcessingProvider["ProcessingProvider (ProcessingContext.tsx)"]
 ThemeProvider["ThemeProvider (ThemeContext.tsx)"]
 end
@@ -57,6 +60,7 @@ UIStore["UIStore (uiStore.ts)"]
 end
 subgraph "Hooks"
 OrchestratorHook["useAnalyzePageOrchestrator (useAnalyzePageOrchestrator.ts)"]
+QueryHooks["Query hooks (hooks/query)"]
 ChordPlaybackHook["useChordPlayback (useChordPlayback.ts)"]
 end
 subgraph "Services"
@@ -65,10 +69,13 @@ AudioProcSvc["AudioProcessingService (audioProcessingService.ts)"]
 end
 Providers --> ProcessingProvider
 Providers --> ThemeProvider
+Providers --> QueryClientProvider
+QueryClientProvider --> QueryHooks
 Providers --> AnalysisStore
 Providers --> PlaybackStore
 Providers --> UIStore
 OrchestratorHook --> AudioProcSvc
+OrchestratorHook --> QueryHooks
 AudioProcSvc --> APIService
 OrchestratorHook --> AnalysisStore
 OrchestratorHook --> UIStore
@@ -77,7 +84,7 @@ ChordPlaybackHook --> UIStore
 ```
 
 **Diagram sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ProcessingContext.tsx:44-183](file://src/contexts/ProcessingContext.tsx#L44-L183)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 - [analysisStore.ts:101-295](file://src/stores/analysisStore.ts#L101-L295)
@@ -89,7 +96,7 @@ ChordPlaybackHook --> UIStore
 - [audioProcessingService.ts:43-468](file://src/services/audio/audioProcessingService.ts#L43-L468)
 
 **Section sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [ProcessingContext.tsx:44-183](file://src/contexts/ProcessingContext.tsx#L44-L183)
 - [ThemeContext.tsx:44-70](file://src/contexts/ThemeContext.tsx#L44-L70)
 

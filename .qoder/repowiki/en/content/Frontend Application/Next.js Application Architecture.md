@@ -66,7 +66,7 @@ A -.-> S2
 
 **Diagram sources**
 - [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [globals.css:1-657](file://src/app/globals.css#L1-L657)
 - [page.tsx:1-6](file://src/app/page.tsx#L1-L6)
 - [analyze/layout.tsx:1-17](file://src/app/analyze/layout.tsx#L1-L17)
@@ -177,6 +177,7 @@ Footer --> End(["Layout complete"])
 
 ### Provider System
 The Providers component composes:
+- TanStack Query client provider for remote/server-state caching, request deduplication, stale-while-revalidate reads, and infinite query pagination.
 - HeroUI provider for UI components.
 - Toast provider with placement and limits.
 - Processing provider for global processing state.
@@ -188,6 +189,9 @@ class Providers {
 +ReactNode children
 +render()
 }
+class QueryClientProvider {
++QueryClient client
+}
 class HeroUIProvider
 class ToastProvider {
 +placement
@@ -196,6 +200,7 @@ class ToastProvider {
 }
 class ProcessingProvider
 class ThemeProvider
+Providers --> QueryClientProvider : "wraps"
 Providers --> HeroUIProvider : "wraps"
 Providers --> ToastProvider : "wraps"
 Providers --> ProcessingProvider : "wraps"
@@ -203,10 +208,10 @@ Providers --> ThemeProvider : "wraps"
 ```
 
 **Diagram sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 
 **Section sources**
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 
 ### Global Styling and Tailwind Configuration
 - Tailwind base/components/utilities are imported in globals.css.

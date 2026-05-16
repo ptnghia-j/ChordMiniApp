@@ -249,9 +249,13 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   const adapter = getGridAssemblyAdapter(analysisResults.chordModel, safePaddingCount, safeShiftCount);
   const globalOffsetCount = safePaddingCount + safeShiftCount;
   const leadingSilentRunLength = countLeadingSilentChords(regularChords);
+  const naturalLeadingSilenceSuppressionThreshold =
+    timeSignature === 3
+      ? timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.minNaturalSilenceMeasuresForSuppression
+      : timeSignature;
   const hasLongLeadingSilenceWithGlobalOffset =
     globalOffsetCount > 0 &&
-    leadingSilentRunLength > globalOffsetCount + timeSignature;
+    leadingSilentRunLength >= globalOffsetCount + naturalLeadingSilenceSuppressionThreshold;
   const isLocalCompactionEnabled =
     GRID_ALIGNMENT_CONFIG.enableLocalCompaction &&
     analysisResults.beatModel === GRID_ALIGNMENT_CONFIG.localCompactionBeatModel;

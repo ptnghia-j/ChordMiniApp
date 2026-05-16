@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useSheetSageActions } from '@/stores/analysisStore';
+import { useSheetSageBackendAvailabilityQuery } from '@/hooks/query/useSheetSageQueries';
 
 export function useSheetSageBackendAvailability(enabled: boolean): void {
   const {
@@ -7,6 +8,7 @@ export function useSheetSageBackendAvailability(enabled: boolean): void {
     setIsSheetSageBackendAvailable,
     setSheetSageBackendError,
   } = useSheetSageActions();
+  const { data, error, isFetching } = useSheetSageBackendAvailabilityQuery(enabled);
 
   useEffect(() => {
     if (!enabled) {
@@ -16,43 +18,36 @@ export function useSheetSageBackendAvailability(enabled: boolean): void {
       return;
     }
 
-    let cancelled = false;
-
-    const checkBackend = async () => {
-      setIsCheckingSheetSageBackend(true);
-      setSheetSageBackendError(null);
-
-      try {
-        const response = await fetch('/api/transcribe-sheetsage?health=1', {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        const payload = await response.json().catch(() => null);
-        if (cancelled) return;
-
-        const available = Boolean(payload?.available);
-        setIsSheetSageBackendAvailable(available);
-        setSheetSageBackendError(available ? null : (payload?.error || 'Sheet Sage backend unavailable.'));
-      } catch (error: unknown) {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : 'Sheet Sage backend unavailable.';
-        setIsSheetSageBackendAvailable(false);
-        setSheetSageBackendError(message);
-      } finally {
-        if (!cancelled) {
-          setIsCheckingSheetSageBackend(false);
-        }
-      }
-    };
-
-    void checkBackend();
-
-    return () => {
-      cancelled = true;
-    };
+    setIsCheckingSheetSageBackend(isFetching);
+    setSheetSageBackendError(null);
   }, [
     enabled,
+    isFetching,
     setIsCheckingSheetSageBackend,
+    setIsSheetSageBackendAvailable,
+    setSheetSageBackendError,
+  ]);
+
+  useEffect(() => {
+    if (!enabled || !data) {
+      return;
+    }
+
+    setIsSheetSageBackendAvailable(data.available);
+    setSheetSageBackendError(data.error);
+  }, [data, enabled, setIsSheetSageBackendAvailable, setSheetSageBackendError]);
+
+  useEffect(() => {
+    if (!enabled || !error) {
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : 'Sheet Sage backend unavailable.';
+    setIsSheetSageBackendAvailable(false);
+    setSheetSageBackendError(message);
+  }, [
+    enabled,
+    error,
     setIsSheetSageBackendAvailable,
     setSheetSageBackendError,
   ]);

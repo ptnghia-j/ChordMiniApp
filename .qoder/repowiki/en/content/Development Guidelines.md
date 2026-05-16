@@ -40,7 +40,7 @@ ChordMiniApp is a full-stack application composed of:
 - A Python/Flask backend under python_backend/
 - An optional SongFormer segmentation service under SongFormer/
 - A Sheetsage melody service under sheetsage/
-- Shared documentation under docs/
+- Shared wiki documentation under .qoder/repowiki/
 - CI/CD under .github/workflows/
 - Docker configurations for local and production deployment
 
@@ -258,7 +258,7 @@ CI-->>Dev : Status checks and notifications
 - API Documentation
   - Document endpoints, request/response schemas, headers, and error codes in API docs.
 - User Documentation
-  - Maintain user guides, tutorials, and feature explanations in docs/.
+  - Maintain user guides, tutorials, and feature explanations in .qoder/repowiki/.
 - Developer Documentation
   - Keep architecture guides, contribution workflows, and setup instructions current.
 

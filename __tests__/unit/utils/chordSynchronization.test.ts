@@ -2,7 +2,7 @@
  * Unit Tests: chordSynchronization
  *
  * Verifies pure chord-to-beat alignment behavior for the current
- * 65%-late / 35%-early threshold rule, forward fill semantics,
+ * 50%-late / 50%-early midpoint rule, forward fill semantics,
  * and special chord normalization.
  */
 
@@ -14,11 +14,11 @@ describe('chordSynchronization', () => {
     expect(synchronizeChords([{ start: 0, end: 1, chord: 'C' }] as any, [])).toEqual([]);
   });
 
-  it('keeps an onset on beat 1 when it is before the next-beat 35% early-switch threshold', () => {
+  it('keeps an onset on beat 1 when it is before the next-beat 50% midpoint threshold', () => {
     const result = synchronizeChords(
       [
         { start: 0.2, end: 0.9, chord: 'C' },
-        { start: 1.64, end: 2.1, chord: 'G' },
+        { start: 1.49, end: 2.1, chord: 'G' },
       ] as any,
       [{ time: 0 }, { time: 1 }, { time: 2 }] as any
     );
@@ -30,9 +30,9 @@ describe('chordSynchronization', () => {
     ]);
   });
 
-  it('advances an onset to the next beat once it reaches the 35% early-switch threshold', () => {
+  it('advances an onset to the next beat once it reaches the 50% midpoint threshold', () => {
     const result = synchronizeChords(
-      [{ start: 1.65, end: 2.1, chord: 'Am' }] as any,
+      [{ start: 1.5, end: 2.1, chord: 'Am' }] as any,
       [{ time: 0 }, { time: 1 }, { time: 2 }] as any
     );
 

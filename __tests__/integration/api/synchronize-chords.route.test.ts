@@ -115,7 +115,7 @@ describe('POST /api/synchronize-chords', () => {
       synchronizedChords: [
         { chord: 'C', beatIndex: 0 },
         { chord: 'C', beatIndex: 1 },
-        { chord: 'N/C', beatIndex: 2 },
+        { chord: 'C', beatIndex: 2 },
         { chord: 'N/C', beatIndex: 3 },
       ],
       summary: {

@@ -330,7 +330,7 @@ jobs:
 
           - [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)
           - [Docker Quick Start](https://github.com/${{ github.repository }}/blob/main/DOCKER_QUICK_START.md)
-          - [Docker Publishing Guide](https://github.com/${{ github.repository }}/blob/main/docs/DOCKER_PUBLISHING_GUIDE.md)
+          - [Docker Configuration Wiki](https://github.com/${{ github.repository }}/blob/main/.qoder/repowiki/en/content/Deployment%20and%20Operations/Docker%20Configuration.md)
           EOF
 
           echo "Release notes generated"
@@ -422,4 +422,3 @@ jobs:
               - [Docker Hub](https://hub.docker.com/u/${process.env.DOCKER_USERNAME})`,
               labels: ['bug', 'docker', 'ci/cd', 'urgent']
             })
-

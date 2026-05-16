@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
+import { useModelInfoQuery } from '@/hooks/query/useModelInfoQuery';
 import {
   ChordDetectorType,
   getAvailableChordModels,
@@ -46,66 +47,13 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
   className = '',
   fallbackInfo = null
 }) => {
-  const [modelInfo, setModelInfo] = useState<Record<string, ChordModelOption>>({});
-  const [availableModels, setAvailableModels] = useState<ChordDetectorType[]>(getAvailableChordModels());
-  const [loading, setLoading] = useState(true);
+  const { data, isFetching, error } = useModelInfoQuery();
 
-  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
   useEffect(() => {
-    // Set immediate fallback data to unblock UI rendering
-    setAvailableModels(getAvailableChordModels());
-    setLoading(false); // Immediately show UI
-
-    const fetchModelInfo = async () => {
-      try {
-        // Fetch model info in background without blocking UI
-        const response = await fetch('/api/model-info', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.success && data.chord_model_info) {
-          const modelInfoMap: Record<string, ChordModelOption> = {};
-          const modelIds: ChordDetectorType[] = [];
-
-          Object.entries(data.chord_model_info).forEach(([key, value]) => {
-            const modelOption: ChordModelOption = {
-              id: key as ChordDetectorType,
-              name: (value as ModelInfoResponse).name || key,
-              description: (value as ModelInfoResponse).description || 'Chord recognition model',
-              performance: (value as ModelInfoResponse).performance || 'Unknown performance',
-              available_chord_dicts: (value as ModelInfoResponse).available_chord_dicts || [],
-              available: (value as ModelInfoResponse).available !== false
-            };
-
-            modelInfoMap[key] = modelOption;
-            if (modelOption.available) {
-              modelIds.push(key as ChordDetectorType);
-            }
-          });
-
-          // Update model info without blocking UI (already rendered with fallback)
-          setModelInfo(modelInfoMap);
-          const filteredModels = filterChordModels(modelIds.length > 0 ? modelIds : getAvailableChordModels());
-          setAvailableModels(filteredModels);
-        }
-      } catch (err) {
-        console.error('Error fetching model info (non-blocking):', err);
-        // Keep using fallback data on error - UI already rendered
-      }
-    };
-
-    // Fetch model info asynchronously without blocking UI
-    fetchModelInfo();
-  }, []);
+    if (error) {
+      console.error('Error fetching model info (non-blocking):', error);
+    }
+  }, [error]);
 
   const handleSelectionChange = (keys: 'all' | Set<React.Key>) => {
     if (keys !== 'all') {
@@ -140,8 +88,41 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
     }
   };
 
+  const { modelInfo, availableModels } = useMemo(() => {
+    if (!data?.success || !data.chord_model_info) {
+      return {
+        modelInfo: {} as Record<string, ChordModelOption>,
+        availableModels: getAvailableChordModels(),
+      };
+    }
+
+    const modelInfoMap: Record<string, ChordModelOption> = {};
+    const modelIds: ChordDetectorType[] = [];
+
+    Object.entries(data.chord_model_info).forEach(([key, value]) => {
+      const modelOption: ChordModelOption = {
+        id: key as ChordDetectorType,
+        name: (value as ModelInfoResponse).name || key,
+        description: (value as ModelInfoResponse).description || 'Chord recognition model',
+        performance: (value as ModelInfoResponse).performance || 'Unknown performance',
+        available_chord_dicts: (value as ModelInfoResponse).available_chord_dicts || [],
+        available: (value as ModelInfoResponse).available !== false,
+      };
+
+      modelInfoMap[key] = modelOption;
+      if (modelOption.available) {
+        modelIds.push(key as ChordDetectorType);
+      }
+    });
+
+    return {
+      modelInfo: modelInfoMap,
+      availableModels: filterChordModels(modelIds.length > 0 ? modelIds : getAvailableChordModels()),
+    };
+  }, [data]);
+
   const selectedModelOption = modelInfo[selectedModel] || defaultModelOptions[selectedModel];
-  const enhancedDescription = loading
+  const enhancedDescription = isFetching && !data
     ? `${selectedModelOption?.performance || "Choose the chord recognition model for audio analysis"} (Loading detailed info...)`
     : selectedModelOption?.performance || "Choose the chord recognition model for audio analysis";
 
@@ -190,7 +171,7 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
         className="w-full"
         variant="bordered"
         color="primary"
-        isLoading={loading}
+        isLoading={isFetching && !data}
         isDisabled={disabled}
         startContent={getModelIcon(selectedModel)}
         description={enhancedDescription}

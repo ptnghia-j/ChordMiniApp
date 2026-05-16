@@ -44,12 +44,11 @@ function alignChordsToBeatsDirectly(
         ? beats[beatIndex].time - beats[beatIndex - 1].time
         : 0;
 
-    // Instead of finding the closest beat, advance to the next beat only if
-    // the chord onset is within 35% of the beat duration before the next beat
-    // assuming more delay cases than early cases
+    // Instead of finding the closest beat, advance to the next beat only once
+    // the chord onset reaches the midpoint before that next beat.
     while (
       beatIndex < beats.length - 1 &&
-      beats[beatIndex + 1].time - beatDuration * 0.35 <= chordStart
+      beats[beatIndex + 1].time - beatDuration * 0.5 <= chordStart
     ) {
       beatIndex++;
     }

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
-import { getModelInfo, ModelInfoResult } from '@/services/audio/beatDetectionService';
+import { ModelInfoResult } from '@/services/audio/beatDetectionService';
+import { useModelInfoQuery } from '@/hooks/query/useModelInfoQuery';
+import { buildBeatModelInfoResult } from '@/services/query/modelInfo';
 import {
   filterBeatModels,
   getAvailableBeatModels,
@@ -33,26 +35,11 @@ const HeroUIBeatModelSelector = ({
   className = '',
   disabled = false,
 }: HeroUIBeatModelSelectorProps) => {
-  const [modelInfo, setModelInfo] = useState<ModelInfoResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelType>(getSafeBeatModel(defaultValue));
-  const [loading] = useState(false);
-
-  // PERFORMANCE FIX: Render immediately with fallback data, fetch model info asynchronously
-  useEffect(() => {
-    const fetchModelInfo = async () => {
-      try {
-        // Fetch model info in background without blocking UI
-        const info = await getModelInfo();
-        setModelInfo(info);
-      } catch (error) {
-        console.error('Error fetching model info (non-blocking):', error);
-        // Keep using fallback data on error - UI already rendered
-      }
-    };
-
-    // Fetch model info asynchronously without blocking UI
-    fetchModelInfo();
-  }, []);
+  const { data: queriedModelInfo, isFetching } = useModelInfoQuery({
+    select: buildBeatModelInfoResult,
+  });
+  const modelInfo: ModelInfoResult | null = queriedModelInfo ?? null;
 
   useEffect(() => {
     const safeDefault = getSafeBeatModel(defaultValue);
@@ -125,7 +112,7 @@ const HeroUIBeatModelSelector = ({
 
   const selectedModelObject = modelOptions.find(model => model.id === selectedModel);
   const baseDescription = selectedModelObject?.description || "Choose the beat detection model for audio analysis";
-  const selectedModelDescription = loading
+  const selectedModelDescription = isFetching && !modelInfo
     ? `${baseDescription} (Loading detailed info...)`
     : baseDescription;
 
@@ -173,7 +160,7 @@ const HeroUIBeatModelSelector = ({
         className="w-full"
         variant="bordered"
         color="primary"
-        isLoading={loading}
+        isLoading={isFetching && !modelInfo}
         isDisabled={disabled}
         startContent={getModelIcon(selectedModel)}
         description={selectedModelDescription}

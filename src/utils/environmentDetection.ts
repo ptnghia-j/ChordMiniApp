@@ -9,7 +9,7 @@
  * Runtime selection currently uses process/env and browser origin checks.
  */
 
-export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go' | 'ytdown-io';
+export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -54,14 +54,13 @@ export function detectEnvironment(): EnvironmentConfig {
 
   // Determine strategy based on manual override or URL detection
   // Priority: manual override > yt-mp3-go (production) > ytdlp (localhost)
-  // NOTE: ytdown-io is deprecated due to Cloudflare bot protection (403 errors)
   let strategy: AudioProcessingStrategy;
 
   // Check for manual strategy override
   const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY;
 
   if (manualStrategy && manualStrategy !== 'auto' &&
-      ['ytdlp', 'yt-mp3-go', 'ytdown-io'].includes(manualStrategy)) {
+      ['ytdlp', 'yt-mp3-go'].includes(manualStrategy)) {
     strategy = manualStrategy as AudioProcessingStrategy;
     console.log(`🔧 Using manual audio strategy override: ${strategy}`);
   } else if (isLocalhost) {
@@ -69,7 +68,6 @@ export function detectEnvironment(): EnvironmentConfig {
     strategy = 'ytdlp';
   } else {
     // Use yt-mp3-go for production (lukavukanovic.xyz service)
-    // This replaces ytdown-io which is now blocked by Cloudflare
     strategy = 'yt-mp3-go';
   }
 

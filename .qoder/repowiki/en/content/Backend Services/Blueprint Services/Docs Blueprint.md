@@ -11,7 +11,6 @@
 - [route.ts](file://src/app/api/docs/route.ts)
 - [page.tsx](file://src/app/docs/page.tsx)
 - [serverBackend.ts](file://src/config/serverBackend.ts)
-- [README.md](file://docs/README.md)
 </cite>
 
 ## Table of Contents
@@ -30,7 +29,7 @@ This document describes the Docs Blueprint service that powers the documentation
 - The documentation API endpoint that serves structured API reference data
 - The documentation route that renders the interactive developer guide
 - The serving mechanism and content delivery patterns
-- Integration with static documentation files and dynamic content generation
+- Integration with the `.qoder` wiki corpus and dynamic content generation
 - Examples of documentation access patterns and content structure
 - The role of documentation services in developer onboarding and API reference provision
 
@@ -242,13 +241,10 @@ Extensions --> DocsRoutes : "applies limits"
 - [route.ts:39-207](file://src/app/api/docs/route.ts#L39-L207)
 - [serverBackend.ts:23-25](file://src/config/serverBackend.ts#L23-L25)
 
-### Integration with Static Documentation Files and Dynamic Content Generation
-- Static documentation files exist under the `docs/` directory for long-form content
+### Integration with Static Wiki Files and Dynamic Content Generation
+- Static documentation lives under `.qoder/repowiki/` for long-form wiki content
 - Dynamic content generation occurs in the backend `/api/docs` endpoint
 - Frontend `/docs` page augments dynamic data with interactive UI elements and examples
-
-**Section sources**
-- [README.md](file://docs/README.md)
 
 ## Dependency Analysis
 The Docs Blueprint depends on:

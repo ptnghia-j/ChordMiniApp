@@ -327,16 +327,8 @@ export const transcriptionCache = new SmartFirebaseCache<Record<string, unknown>
   maxErrorCount: 3
 });
 
-// PERFORMANCE FIX #5: Cache for homepage recent videos list
-export const recentVideosCache = new SmartFirebaseCache<Record<string, unknown>[]>({
-  ttl: 6 * 60 * 60 * 1000, // 6 hours for homepage recent videos
-  incompleteRecordTtl: 60 * 60 * 1000, // 1 hour for incomplete lists
-  maxErrorCount: 3
-});
-
 // Cleanup interval
 setInterval(() => {
   audioMetadataCache.cleanup();
   transcriptionCache.cleanup();
-  recentVideosCache.cleanup();
 }, 15 * 60 * 1000); // Cleanup every 15 minutes

@@ -19,6 +19,13 @@ export const GRID_ALIGNMENT_CONFIG = {
     minBeat4Share: 0.5,
     minCompetitiveRatio: 0.6,
   },
+  leadingBeat2BiasCorrection: {
+    enabled: true,
+    minStarts: 12,
+    maxDownbeatShare: 0.25,
+    minBeat2Share: 0.5,
+    minCompetitiveRatio: 0.6,
+  },
   padding: {
     meaningfulPreBeatSeconds: 0.05,
     minGapRatioForSinglePadding: 0.2,
@@ -50,6 +57,7 @@ export const GRID_ALIGNMENT_CONFIG = {
     extraBeatPenalty: 0.25,
   },
   longIntroCompaction: {
+    minNaturalSilenceMeasuresForSuppression: 2,
     protectEarlyMusicMeasures: 2,
   },
 } as const;

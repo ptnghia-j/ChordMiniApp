@@ -11,7 +11,6 @@ import { detectEnvironment } from '@/utils/environmentDetection';
  * - Environment-aware service selection:
  *   - Production: yt-mp3-go (lukavukanovic.xyz - reliable, works from datacenter IPs)
  *   - Local Development: yt-dlp
- *   - Deprecated: ytdown-io (blocked by Cloudflare bot protection)
  * - Leverages existing search results for metadata
  */
 
@@ -89,9 +88,7 @@ export async function POST(request: NextRequest) {
 
       // Determine the method based on environment
       const env = detectEnvironment();
-      const method = env.strategy === 'ytdlp' ? 'yt-dlp' :
-                    env.strategy === 'ytdown-io' ? 'ytdown-io' :
-                    'yt-mp3-go';
+      const method = env.strategy === 'ytdlp' ? 'yt-dlp' : 'yt-mp3-go';
 
       return NextResponse.json({
         success: true,

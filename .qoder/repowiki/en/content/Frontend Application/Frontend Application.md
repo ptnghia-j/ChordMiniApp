@@ -83,8 +83,8 @@ I --> K["Performance & Layout Optimizers"]
 ## Architecture Overview
 The frontend uses a layered architecture:
 - Routing and Pages: Next.js App Router with metadata and layout composition.
-- State Management: Global stores (Zustand) for analysis, playback, and UI state; React Context for processing lifecycle.
-- Services: API orchestration via services and simplified Firebase helpers for caching and storage.
+- State Management: Global stores (Zustand) for analysis, playback, and UI state; React Context for processing lifecycle; TanStack Query for shared server-state reads.
+- Services: API orchestration via services, query-backed read fetchers, and simplified Firebase helpers for caching and storage.
 - UI Layer: HeroUI React components integrated with Tailwind-based theme.
 - Infrastructure: Firebase for anonymous auth, storage, and Firestore caching; runtime configuration for Docker compatibility.
 
@@ -125,7 +125,7 @@ FC --> FS
 
 **Diagram sources**
 - [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [providers.tsx:12-27](file://src/app/providers.tsx#L12-L27)
+- [providers.tsx:12-31](file://src/app/providers.tsx#L12-L31)
 - [analysisStore.ts:101-295](file://src/stores/analysisStore.ts#L101-L295)
 - [playbackStore.ts:101-451](file://src/stores/playbackStore.ts#L101-L451)
 - [uiStore.ts:127-433](file://src/stores/uiStore.ts#L127-L433)

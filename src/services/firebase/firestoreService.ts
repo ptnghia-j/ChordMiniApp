@@ -21,6 +21,11 @@ import { synchronizeChords } from '@/utils/chordSynchronization';
 import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
 import { BeatInfo } from '../audio/beatDetectionService';
 import { SmartFirebaseCache } from '@/services/cache/smartFirebaseCache';
+import {
+  invalidateRecentVideosQueries,
+  invalidateSheetSageMelodyQuery,
+  invalidateTranscriptionQueries,
+} from '@/services/query/queryInvalidation';
 
 // Extended interface for synchronized chords that may have additional properties
 interface ExtendedSynchronizedChord {
@@ -562,6 +567,7 @@ export async function saveMelodyTranscription(
 
     await setDoc(docRef, sanitizedData, { merge: true });
     melodyCache.set(docId, sanitizedData, true);
+    invalidateSheetSageMelodyQuery(videoId);
     return true;
   } catch (error) {
     console.error('❌ Failed to save melody transcription:', error);
@@ -671,6 +677,7 @@ export async function updateTranscriptionEnrichment(
       await syncHomepageVariantMetadataForVideo(videoId);
     }
 
+    invalidateTranscriptionQueries(videoId, beatModel, chordModel);
     return true;
   } catch (error) {
     console.error('❌ Failed to update transcription enrichment:', error);
@@ -723,6 +730,7 @@ export async function incrementTranscriptionUsage(
       transcriptionCache.invalidate(cacheKey);
     }
 
+    invalidateTranscriptionQueries(videoId, beatModel, chordModel);
     return true;
   } catch (error) {
     if (error instanceof Error) {
@@ -1064,6 +1072,12 @@ async function performFirestoreSave(
       true
     );
 
+    invalidateRecentVideosQueries();
+    invalidateTranscriptionQueries(
+      transcriptionData.videoId,
+      transcriptionData.beatModel,
+      transcriptionData.chordModel
+    );
     return true;
   } catch (error) {
     // Enhanced error logging for debugging

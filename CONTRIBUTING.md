@@ -176,5 +176,7 @@ Contributors will be recognized in:
 
 - **Repository**: https://github.com/ptnghia-j/ChordMiniApp
 - **Live Demo**: https://chordmini.me
+- **Maintainer**: Nghia Phan ([@ptnghia-j](https://github.com/ptnghia-j))
+- **Email**: phantrongnghia510@gmail.com
 
 Thank you for contributing to ChordMini! 🎵

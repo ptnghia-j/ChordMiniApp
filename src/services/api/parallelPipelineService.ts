@@ -2,7 +2,7 @@
  * Parallel Pipeline Service
  *
  * Optimizes the audio processing pipeline by running Google Cloud Run
- * computation in parallel with Firebase Storage upload, using ytdown.io
+ * computation in parallel with Firebase Storage upload, using
  * direct URLs to eliminate the upload bottleneck.
  */
 
@@ -153,7 +153,7 @@ const audioFileCache = new Map<string, {
 }>();
 
 /**
- * Download complete audio file from ytdown.io URL
+ * Download complete audio file from URL
  */
 async function downloadCompleteAudioFile(directUrl: string): Promise<Blob> {
   const response = await fetch(directUrl, {

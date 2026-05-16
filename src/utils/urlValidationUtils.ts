@@ -20,8 +20,6 @@ const DEFAULT_ALLOWED_AUDIO_DOMAINS = [
   'storage.googleapis.com',
   'firebasestorage.googleapis.com',
   'lukavukanovic.xyz',
-  'ytdown.io',
-  'ytcontent.net',
   'archive.org',
   'us.archive.org',
 ] as const;

@@ -3,6 +3,11 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getAudioDurationFromFile } from '@/utils/audioDurationUtils';
 import { offloadUploadService } from '../storage/offloadUploadService';
 import { getAppCheckTokenForApi } from '@/config/firebase';
+import {
+  buildBeatModelInfoResult,
+  fallbackBeatModelInfo,
+  fetchModelInfoPayload,
+} from '@/services/query/modelInfo';
 
 // Interface for Python backend beat detection response
 export interface BeatDetectionBackendResponse {
@@ -113,60 +118,13 @@ export interface ModelInfoResult {
  */
 export async function getModelInfo(): Promise<ModelInfoResult> {
   try {
-    // Use the frontend API proxy to avoid CORS issues
-    const response = await fetch('/api/model-info');
-
-    if (response.ok) {
-      const data = await response.json();
-      // console.log('🔍 Backend health check response:', data);
-
-      // PERFORMANCE FIX: Use backend model descriptions when available, fallback to detailed descriptions
-      const result = {
-        success: true,
-        default_model: data.beat_model || 'beat-transformer',
-        available_models: [data.beat_model, data.chord_model].filter(Boolean),
-        beat_transformer_available: data.beat_transformer_available || data.beat_model === 'Beat-Transformer',
-        madmom_available: data.madmom_available || true, // Available as fallback in the backend
-        model_info: {
-          'beat-transformer': {
-            name: data.beat_model_info?.['beat-transformer']?.name || 'Beat-Transformer',
-            description: data.beat_model_info?.['beat-transformer']?.description ||
-                        'DL model with 5-channel audio separation, flexible in time signatures, slow processing speed',
-            performance: data.beat_model_info?.['beat-transformer']?.performance || 'High accuracy, slower processing',
-            uses_spleeter: data.beat_model_info?.['beat-transformer']?.uses_spleeter ?? true
-          },
-          'madmom': {
-            name: data.beat_model_info?.['madmom']?.name || 'Madmom',
-            description: data.beat_model_info?.['madmom']?.description ||
-                        'Neural network with high accuracy and speed, best for common time signature',
-            performance: data.beat_model_info?.['madmom']?.performance || 'Medium accuracy, medium speed',
-            uses_spleeter: data.beat_model_info?.['madmom']?.uses_spleeter ?? false
-          },
-          'chord-cnn-lstm': {
-            name: data.chord_model_info?.['chord-cnn-lstm']?.name || 'Chord-CNN-LSTM',
-            description: data.chord_model_info?.['chord-cnn-lstm']?.description ||
-                        'Chord recognition using CNN-LSTM architecture',
-            performance: data.chord_model_info?.['chord-cnn-lstm']?.performance || 'High accuracy chord detection'
-          }
-        }
-      };
-
-      // console.log('🔍 Processed model info result:', result);
-      return result;
-    }
+    return buildBeatModelInfoResult(await fetchModelInfoPayload());
   } catch (error) {
     console.error('Backend service unavailable:', error);
   }
 
   // Fallback response if service is unavailable
-  return {
-    success: false,
-    default_model: 'madmom',
-    available_models: ['madmom'],
-    beat_transformer_available: false,
-    madmom_available: true,
-    error: 'Backend service unavailable'
-  };
+  return fallbackBeatModelInfo;
 }
 
 /**
