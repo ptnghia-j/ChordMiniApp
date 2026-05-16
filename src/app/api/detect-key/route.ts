@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ThinkingLevel } from '@google/genai';
-import { firestoreDb } from '@/services/firebase/firebaseService';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDocumentWithAdminAccess, setDocumentWithAdminAccess } from '@/services/firebase/firestoreAdminService';
 import crypto from 'crypto';
 import { createGeminiClient, GEMINI_MODEL_NAME } from '@/config/gemini';
 import { sanitizeLegacyCorrections, sanitizeSequenceCorrections } from '@/utils/keyDetectionCorrections';
@@ -151,13 +150,13 @@ function buildHeuristicKeyDetectionResult(params: {
 }
 
 // Helper function to check cache for key detection
+// Uses REST-based admin service instead of gRPC client SDK to avoid
+// stale connection errors in containerized environments (Railway).
 async function checkKeyDetectionCache(cacheKey: string): Promise<KeyDetectionCacheEntry | null> {
   try {
-    const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
-    const docSnap = await getDoc(docRef);
+    const data = await getDocumentWithAdminAccess<KeyDetectionCacheEntry>('keyDetections', cacheKey);
 
-    if (docSnap.exists()) {
-      const data = docSnap.data() as KeyDetectionCacheEntry;
+    if (data) {
       console.log('Found cached key detection');
       return data;
     }
@@ -170,10 +169,10 @@ async function checkKeyDetectionCache(cacheKey: string): Promise<KeyDetectionCac
 }
 
 // Helper function to save key detection to cache
+// Uses REST-based admin service instead of gRPC client SDK to avoid
+// stale connection errors in containerized environments (Railway).
 async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetectionResult): Promise<void> {
   try {
-    const docRef = doc(firestoreDb, 'keyDetections', cacheKey);
-
     const cacheData: KeyDetectionCacheEntry = {
       primaryKey: keyResult.primaryKey,
       modulation: keyResult.modulation ?? null,
@@ -192,10 +191,7 @@ async function saveKeyDetectionToCache(cacheKey: string, keyResult: KeyDetection
       } : null
     };
 
-    // Also log the full data structure for debugging
-    // console.log('🔍 FULL CACHE DATA STRUCTURE:', JSON.stringify(cacheData, null, 2));
-
-    await setDoc(docRef, removeUndefinedFields(cacheData));
+    await setDocumentWithAdminAccess('keyDetections', cacheKey, JSON.parse(JSON.stringify(removeUndefinedFields(cacheData))));
     console.log('✅ Key detection saved to cache successfully');
   } catch (error) {
     console.error('❌ Error saving key detection to cache:', error);

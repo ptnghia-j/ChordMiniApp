@@ -376,6 +376,11 @@ export class YtMp3GoService {
     }
   }
 
+  // Maximum number of file-availability retries after a job reports 'complete'.
+  // The yt-mp3-go server may need a moment to flush the file to disk.
+  private readonly FILE_AVAILABILITY_RETRIES = 3;
+  private readonly FILE_AVAILABILITY_DELAY_MS = 2000; // 2 seconds between retries
+
   private async handleJobTerminalStatus(
     jobStatus: YtMp3GoJobStatus,
     jobId: string,
@@ -390,29 +395,47 @@ export class YtMp3GoService {
       const relativePath = jobStatus.filePath.replace('downloads/', '');
       const downloadUrl = `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/downloads/${relativePath}`;
 
+      // Validate the file is accessible with retries.
+      // The yt-mp3-go server reports 'complete' before the file is fully flushed
+      // to disk, so the first HEAD request may fail. We retry with a short delay.
+      for (let attempt = 1; attempt <= this.FILE_AVAILABILITY_RETRIES; attempt++) {
+        const validation = await this.validateFileContentWithMetadata(downloadUrl);
+        if (validation.isValid) {
+          const finalDuration = validation.realDuration || duration || 0;
 
-      // Validate the file is accessible and extract metadata
-      const validation = await this.validateFileContentWithMetadata(downloadUrl);
-      if (validation.isValid) {
-        const finalDuration = validation.realDuration || duration || 0;
+          // Extract filename from filePath for compatibility
+          const filename = jobStatus.filePath.split('/').pop() || 'audio.mp3';
 
+          return {
+            success: true,
+            audioUrl: downloadUrl,
+            videoId,
+            title,
+            duration: finalDuration,
+            filename,
+            jobId
+          };
+        }
 
-        // Extract filename from filePath for compatibility
-        const filename = jobStatus.filePath.split('/').pop() || 'audio.mp3';
-
-        return {
-          success: true,
-          audioUrl: downloadUrl,
-          videoId,
-          title,
-          duration: finalDuration,
-          filename,
-          jobId
-        };
+        // If not the last attempt, wait before retrying
+        if (attempt < this.FILE_AVAILABILITY_RETRIES) {
+          console.log(`⏳ File not yet accessible (attempt ${attempt}/${this.FILE_AVAILABILITY_RETRIES}), retrying in ${this.FILE_AVAILABILITY_DELAY_MS}ms...`);
+          await new Promise(resolve => setTimeout(resolve, this.FILE_AVAILABILITY_DELAY_MS));
+        }
       }
 
-
-      return null;
+      // All validation retries exhausted — return explicit failure instead of null.
+      // Returning null here would cause the SSE loop to misinterpret this as
+      // "non-terminal, keep waiting" when the stream is actually done.
+      console.warn(`⚠️ File validation failed after ${this.FILE_AVAILABILITY_RETRIES} retries for job ${jobId}`);
+      return {
+        success: false,
+        error: `yt-mp3-go job completed but file is not accessible at ${downloadUrl}`,
+        videoId,
+        title,
+        duration: duration || 0,
+        jobId
+      };
     }
 
     if (jobStatus.status === 'failed') {

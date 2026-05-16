@@ -36,10 +36,8 @@ const mockGoogleGenAI = jest.fn().mockImplementation(() => ({
     generateContent: mockGenerateContent,
   },
 }));
-const mockDoc = jest.fn((...args: unknown[]) => ({ args }));
-const mockGetDoc = jest.fn();
-const mockSetDoc = jest.fn();
-const mockServerTimestamp = jest.fn(() => 'SERVER_TIMESTAMP');
+const mockGetDocumentWithAdminAccess = jest.fn();
+const mockSetDocumentWithAdminAccess = jest.fn();
 
 jest.mock('@google/genai', () => ({
   GoogleGenAI: mockGoogleGenAI,
@@ -48,23 +46,12 @@ jest.mock('@google/genai', () => ({
   },
 }));
 
-jest.mock('@/services/firebase/firebaseService', () => ({
-  firestoreDb: { __type: 'mock-firestore-db' },
-}));
-
-jest.mock('firebase/firestore', () => ({
-  doc: (...args: unknown[]) => mockDoc(...args),
-  getDoc: (...args: unknown[]) => mockGetDoc(...args),
-  setDoc: (...args: unknown[]) => mockSetDoc(...args),
-  serverTimestamp: (...args: unknown[]) => mockServerTimestamp(...args),
+jest.mock('@/services/firebase/firestoreAdminService', () => ({
+  getDocumentWithAdminAccess: (...args: unknown[]) => mockGetDocumentWithAdminAccess(...args),
+  setDocumentWithAdminAccess: (...args: unknown[]) => mockSetDocumentWithAdminAccess(...args),
 }));
 
 const makeRequest = (body: unknown) => ({ json: async () => body }) as any;
-
-const makeDocSnapshot = (exists: boolean, data?: unknown) => ({
-  exists: () => exists,
-  data: () => data,
-});
 
 const importRoute = async () => import('@/app/api/detect-key/route');
 
@@ -75,8 +62,8 @@ describe('POST /api/detect-key', () => {
     jest.resetModules();
     jest.clearAllMocks();
     process.env.GEMINI_API_KEY = 'server-gemini-key';
-    mockGetDoc.mockResolvedValue(makeDocSnapshot(false));
-    mockSetDoc.mockResolvedValue(undefined);
+    mockGetDocumentWithAdminAccess.mockResolvedValue(null);
+    mockSetDocumentWithAdminAccess.mockResolvedValue(undefined);
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -116,16 +103,14 @@ describe('POST /api/detect-key', () => {
       romanNumerals: null,
       rawResponse: undefined,
     });
-    expect(mockSetDoc).not.toHaveBeenCalled();
+    expect(mockSetDocumentWithAdminAccess).not.toHaveBeenCalled();
   });
 
   it('returns cached results and backfills expected enhanced fields', async () => {
-    mockGetDoc.mockResolvedValue(
-      makeDocSnapshot(true, {
-        primaryKey: 'G major',
-        modulation: null,
-      })
-    );
+    mockGetDocumentWithAdminAccess.mockResolvedValue({
+      primaryKey: 'G major',
+      modulation: null,
+    });
 
     const { POST } = await importRoute();
     const response = await POST(
@@ -148,17 +133,15 @@ describe('POST /api/detect-key', () => {
     });
     expect(mockGenerateContent).not.toHaveBeenCalled();
     expect(mockGoogleGenAI).not.toHaveBeenCalled();
-    expect(mockSetDoc).not.toHaveBeenCalled();
+    expect(mockSetDocumentWithAdminAccess).not.toHaveBeenCalled();
   });
 
   it('returns cached results before requiring Gemini configuration', async () => {
     delete process.env.GEMINI_API_KEY;
-    mockGetDoc.mockResolvedValue(
-      makeDocSnapshot(true, {
-        primaryKey: 'C major',
-        modulation: null,
-      })
-    );
+    mockGetDocumentWithAdminAccess.mockResolvedValue({
+      primaryKey: 'C major',
+      modulation: null,
+    });
 
     const { POST } = await importRoute();
     const response = await POST(
@@ -181,7 +164,7 @@ describe('POST /api/detect-key', () => {
     });
     expect(mockGoogleGenAI).not.toHaveBeenCalled();
     expect(mockGenerateContent).not.toHaveBeenCalled();
-    expect(mockSetDoc).not.toHaveBeenCalled();
+    expect(mockSetDocumentWithAdminAccess).not.toHaveBeenCalled();
   });
 
   it('parses enhanced JSON responses and saves a normalized cache entry', async () => {
@@ -210,8 +193,9 @@ describe('POST /api/detect-key', () => {
       sequenceCorrections: expect.objectContaining({ correctedSequence: ['C#', 'G#'] }),
       romanNumerals: expect.objectContaining({ analysis: ['I', 'V7|vi'] }),
     });
-    expect(mockSetDoc).toHaveBeenCalledWith(
-      expect.any(Object),
+    expect(mockSetDocumentWithAdminAccess).toHaveBeenCalledWith(
+      'keyDetections',
+      expect.any(String),
       expect.objectContaining({
         primaryKey: 'C major',
         modulation: 'A minor',
@@ -236,8 +220,8 @@ describe('POST /api/detect-key', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockSetDoc).toHaveBeenCalledTimes(1);
-    const savedPayload = mockSetDoc.mock.calls[0][1];
+    expect(mockSetDocumentWithAdminAccess).toHaveBeenCalledTimes(1);
+    const savedPayload = mockSetDocumentWithAdminAccess.mock.calls[0][2];
     expect(JSON.stringify(savedPayload)).not.toContain('undefined');
     expect(savedPayload.sequenceCorrections).toEqual({
       originalSequence: ['C', 'G'],
@@ -289,6 +273,6 @@ describe('POST /api/detect-key', () => {
       romanNumerals: null,
       rawResponse: undefined,
     });
-    expect(mockSetDoc).not.toHaveBeenCalled();
+    expect(mockSetDocumentWithAdminAccess).not.toHaveBeenCalled();
   });
 });

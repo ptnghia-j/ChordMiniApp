@@ -720,29 +720,42 @@ export class AudioExtractionServiceSimplified {
         }
       }
 
-      // Step 3: Extract using yt-mp3-go service with fallback strategy
+      // Step 3: Extract using yt-mp3-go service with automatic retry strategy
       const searchDuration = this.parseDuration(videoMetadata.duration);
       console.log('🎵 Using yt-mp3-go service for audio extraction with medium quality');
       let extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'medium');
 
-      // Fallback strategy if yt-mp3-go fails
+      // Automatic retry strategy for transient failures:
+      // 1. Retry same quality once after a short delay (handles file-availability races)
+      // 2. Then fall back to low quality (handles quality-specific failures)
       if (!extractionResult.success) {
         console.log(`⚠️ yt-mp3-go medium quality failed: ${extractionResult.error}`);
 
-        // Try yt-mp3-go with low quality (sometimes quality issues cause failures)
-        console.log('🔄 Retrying yt-mp3-go with low quality...');
-        extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'low');
+        // Retry 1: Same quality after a brief delay (handles transient file-availability issues)
+        console.log('🔄 Retrying yt-mp3-go with medium quality after delay...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'medium');
 
         if (!extractionResult.success) {
-          console.log(`⚠️ yt-mp3-go low quality also failed: ${extractionResult.error}`);
+          console.log(`⚠️ yt-mp3-go medium quality retry failed: ${extractionResult.error}`);
 
-          // All methods failed
-          return {
-            success: false,
-            error: `All extraction methods failed. yt-mp3-go: ${extractionResult.error}`
-          };
+          // Retry 2: Try with low quality (sometimes quality-specific issues cause failures)
+          console.log('🔄 Retrying yt-mp3-go with low quality...');
+          extractionResult = await ytMp3GoService.extractAudio(videoId, title, searchDuration, 'low');
+
+          if (!extractionResult.success) {
+            console.log(`⚠️ yt-mp3-go low quality also failed: ${extractionResult.error}`);
+
+            // All methods failed
+            return {
+              success: false,
+              error: `All extraction methods failed. yt-mp3-go: ${extractionResult.error}`
+            };
+          } else {
+            console.log('✅ yt-mp3-go low quality succeeded');
+          }
         } else {
-          console.log('✅ yt-mp3-go low quality succeeded');
+          console.log('✅ yt-mp3-go medium quality retry succeeded');
         }
       } else {
         console.log('✅ yt-mp3-go medium quality succeeded');
