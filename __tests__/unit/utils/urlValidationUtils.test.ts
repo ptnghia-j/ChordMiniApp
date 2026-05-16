@@ -14,15 +14,18 @@ import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 
 describe('urlValidationUtils', () => {
   const originalFetch = global.fetch;
+  const originalEnv = process.env;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    process.env = { ...originalEnv };
     global.fetch = jest.fn();
   });
 
   afterAll(() => {
     global.fetch = originalFetch;
+    process.env = originalEnv;
   });
 
   it('identifies Firebase Storage URLs and direct URLs', () => {
@@ -39,6 +42,13 @@ describe('urlValidationUtils', () => {
     expect(parseAndValidateAudioSourceUrl('https://quicktube.app/dl/[abc]').hostname).toBe('quicktube.app');
     expect(() => parseAndValidateAudioSourceUrl('https://quicktube.app.evil.test/dl/[abc]')).toThrow('URL domain not allowed');
     expect(() => parseAndValidateAudioSourceUrl('https://evilquicktube.app/dl/[abc]')).toThrow('URL domain not allowed');
+  });
+
+  it('accepts the private configured yt-mp3-go host without a hardcoded public endpoint', () => {
+    process.env.YT_MP3_GO_BASE_URL = 'https://yt-private.example.com/';
+
+    expect(parseAndValidateAudioSourceUrl('https://yt-private.example.com/yt-downloader/downloads/job/audio.mp3').hostname)
+      .toBe('yt-private.example.com');
   });
 
   it('rejects unsafe protocols, credentials, and unexpected ports', () => {

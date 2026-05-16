@@ -45,10 +45,17 @@ jest.mock('@/utils/youtubeMetadata', () => ({
   normalizeThumbnailUrl: (...args: unknown[]) => (mockNormalizeThumbnailUrl ||= jest.fn())(...args),
 }));
 
+jest.mock('@/config/serverBackend', () => ({
+  getYtMp3GoHostname: () => process.env.YT_MP3_GO_HOSTNAME_FOR_TEST || null,
+}));
+
 import { firebaseStorageSimplified } from '@/services/firebase/firebaseStorageSimplified';
 
 describe('firebaseStorageSimplified local fallback', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
+    process.env = { ...originalEnv };
     mockFindExistingAudioFile ||= jest.fn();
     mockFindExistingAudioFiles ||= jest.fn();
     mockFindExistingLocalAudioFile ||= jest.fn();
@@ -70,6 +77,10 @@ describe('firebaseStorageSimplified local fallback', () => {
     });
     mockFindExistingAudioFiles.mockResolvedValue(new Map());
     mockFindExistingLocalAudioFiles.mockResolvedValue(new Map());
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   it('returns cached local temp audio when Firebase storage is unavailable', async () => {
@@ -160,5 +171,24 @@ describe('firebaseStorageSimplified local fallback', () => {
       extractionService: 'local-temp-cache',
     }));
     expect(mockFindExistingLocalAudioFiles).toHaveBeenCalledWith(['abc123def45']);
+  });
+
+  it('infers configured yt-mp3-go URLs as stream URLs without a hardcoded host', async () => {
+    process.env.YT_MP3_GO_HOSTNAME_FOR_TEST = 'yt-private.example.com';
+
+    const saved = await firebaseStorageSimplified.saveAudioMetadata({
+      videoId: 'abc123def45',
+      audioUrl: 'https://yt-private.example.com/yt-downloader/downloads/job/audio.mp3',
+      title: 'My Song',
+    });
+
+    expect(saved).toBe(true);
+    expect(mockAudioMetadataCache.set).toHaveBeenCalledWith(
+      'audio_abc123def45',
+      expect.objectContaining({
+        isStreamUrl: true,
+      }),
+      true
+    );
   });
 });

@@ -3,7 +3,7 @@
  *
  * Simplified URL-based strategy detection:
  * - Localhost Development: Use yt-dlp when the frontend origin contains "localhost"
- * - Production: Use yt2mp3magic for all other environments
+ * - Production: Use the configured yt-mp3-go endpoint for all other environments
  * - Automatic fallback between strategies for reliability
  *
  * Runtime selection currently uses process/env and browser origin checks.
@@ -67,7 +67,7 @@ export function detectEnvironment(): EnvironmentConfig {
     // For local development, use yt-dlp (most reliable for localhost)
     strategy = 'ytdlp';
   } else {
-    // Use yt-mp3-go for production (lukavukanovic.xyz service)
+    // Use the configured yt-mp3-go endpoint for production
     strategy = 'yt-mp3-go';
   }
 

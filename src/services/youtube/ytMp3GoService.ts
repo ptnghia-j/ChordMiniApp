@@ -19,6 +19,7 @@
  */
 
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
+import { getYtMp3GoBaseUrl } from '@/config/serverBackend';
 
 export interface YtMp3GoResult {
   success: boolean;
@@ -50,8 +51,6 @@ interface YtMp3GoJobStatus {
 
 export class YtMp3GoService {
   private static instance: YtMp3GoService;
-  // Updated to new service URL (lukavukanovic.xyz)
-  private readonly YT_MP3_GO_BASE_URL = 'https://lukavukanovic.xyz';
   private readonly API_PATH = '/yt-downloader';
 
   // Quality options for the new API
@@ -70,6 +69,18 @@ export class YtMp3GoService {
 
   // Simple job tracking by video ID
   private readonly activeJobs = new Map<string, Promise<YtMp3GoResult>>();
+
+  private getBaseUrl(): string {
+    const baseUrl = getYtMp3GoBaseUrl();
+    if (!baseUrl) {
+      throw new Error('yt-mp3-go endpoint is not configured');
+    }
+    return baseUrl;
+  }
+
+  private getApiBaseUrl(): string {
+    return `${this.getBaseUrl()}${this.API_PATH}`;
+  }
 
   static getInstance(): YtMp3GoService {
     if (!YtMp3GoService.instance) {
@@ -154,11 +165,12 @@ export class YtMp3GoService {
       formData.append('url', youtubeUrl);
 
 
-      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/info`, {
+      const apiBaseUrl = this.getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/info`, {
         method: 'POST',
         headers: {
           'User-Agent': 'ChordMiniApp/1.0',
-          'Referer': `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/`
+          'Referer': `${apiBaseUrl}/`
         },
         body: formData,
         signal: createSafeTimeoutSignal(this.JOB_TIMEOUT)
@@ -204,12 +216,13 @@ export class YtMp3GoService {
       };
 
 
-      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/download`, {
+      const apiBaseUrl = this.getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/download`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'ChordMiniApp/1.0',
-          'Referer': `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/`
+          'Referer': `${apiBaseUrl}/`
         },
         body: JSON.stringify(requestBody),
         signal: createSafeTimeoutSignal(this.JOB_TIMEOUT)
@@ -256,7 +269,7 @@ export class YtMp3GoService {
     duration?: number
   ): Promise<YtMp3GoResult> {
 
-    const statusResponse = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/events?id=${jobId}`, {
+    const statusResponse = await fetch(`${this.getApiBaseUrl()}/events?id=${jobId}`, {
       headers: {
         'Accept': 'text/event-stream',
         'User-Agent': 'ChordMiniApp/1.0'
@@ -393,7 +406,7 @@ export class YtMp3GoService {
       // filePath is like: "downloads/jobID/filename.mp3"
       // We need to construct: /yt-downloader/downloads/jobID/filename.mp3
       const relativePath = jobStatus.filePath.replace('downloads/', '');
-      const downloadUrl = `${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/downloads/${relativePath}`;
+      const downloadUrl = `${this.getApiBaseUrl()}/downloads/${relativePath}`;
 
       // Validate the file is accessible with retries.
       // The yt-mp3-go server reports 'complete' before the file is fully flushed
@@ -470,7 +483,7 @@ export class YtMp3GoService {
   private async getJobErrorDetails(jobId: string): Promise<string> {
     try {
       // Try to get more detailed error information from the service
-      const response = await fetch(`${this.YT_MP3_GO_BASE_URL}${this.API_PATH}/events?id=${jobId}`, {
+      const response = await fetch(`${this.getApiBaseUrl()}/events?id=${jobId}`, {
         method: 'GET',
         headers: {
           'Accept': 'text/event-stream',

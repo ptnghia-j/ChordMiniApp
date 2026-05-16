@@ -19,7 +19,6 @@ const DEFAULT_ALLOWED_AUDIO_DOMAINS = [
   'dl.quicktube.app',
   'storage.googleapis.com',
   'firebasestorage.googleapis.com',
-  'lukavukanovic.xyz',
   'archive.org',
   'us.archive.org',
 ] as const;
@@ -41,6 +40,28 @@ function isDevelopmentLocalhost(url: URL): boolean {
   return ['localhost', '127.0.0.1'].includes(url.hostname);
 }
 
+function getPrivateConfiguredAudioDomains(): string[] {
+  const domains: string[] = [];
+  const configuredYtMp3GoBaseUrl = process.env.YT_MP3_GO_BASE_URL?.trim();
+
+  if (configuredYtMp3GoBaseUrl) {
+    try {
+      domains.push(new URL(configuredYtMp3GoBaseUrl).hostname);
+    } catch {
+      // Ignore malformed private config here; callers still get the safe default allowlist.
+    }
+  }
+
+  return domains;
+}
+
+function getDefaultAllowedAudioDomains(): string[] {
+  return [
+    ...DEFAULT_ALLOWED_AUDIO_DOMAINS,
+    ...getPrivateConfiguredAudioDomains(),
+  ];
+}
+
 /**
  * Parse and validate an audio source URL before any server-side fetch.
  */
@@ -50,7 +71,7 @@ export function parseAndValidateAudioSourceUrl(
 ): URL {
   const {
     allowDevelopmentLocalhost = false,
-    allowedDomains = DEFAULT_ALLOWED_AUDIO_DOMAINS,
+    allowedDomains = getDefaultAllowedAudioDomains(),
   } = options;
 
   let parsedUrl: URL;

@@ -37,8 +37,18 @@ type YtMp3GoPrivate = {
 };
 
 describe('YtMp3GoService SSE monitoring', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     jest.restoreAllMocks();
+    process.env = {
+      ...originalEnv,
+      YT_MP3_GO_BASE_URL: 'https://yt-private.example.com',
+    };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   it('handles chunked SSE boundaries without emitting partial messages', () => {
@@ -106,7 +116,7 @@ describe('YtMp3GoService SSE monitoring', () => {
 
     expect(result).toEqual({
       success: true,
-      audioUrl: 'https://lukavukanovic.xyz/yt-downloader/downloads/jobABC/song.mp3',
+      audioUrl: 'https://yt-private.example.com/yt-downloader/downloads/jobABC/song.mp3',
       videoId: 'abc123def45',
       title: 'Test Song',
       duration: 143,

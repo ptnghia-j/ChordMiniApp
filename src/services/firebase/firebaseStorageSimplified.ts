@@ -15,6 +15,7 @@ import {
   saveLocalAudioMetadata,
 } from '@/services/storage/localAudioStorageService';
 import { normalizeThumbnailUrl } from '@/utils/youtubeMetadata';
+import { getYtMp3GoHostname } from '@/config/serverBackend';
 
 export interface SimplifiedAudioData extends Record<string, unknown> {
   videoId: string;
@@ -53,10 +54,24 @@ type SaveAudioMetadataInput = {
   videoViewCount?: number;
 };
 
+function isConfiguredYtMp3GoUrl(audioUrl: string): boolean {
+  const configuredHostname = getYtMp3GoHostname();
+  if (!configuredHostname) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(audioUrl);
+    return parsedUrl.hostname === configuredHostname || parsedUrl.hostname.endsWith(`.${configuredHostname}`);
+  } catch {
+    return false;
+  }
+}
+
 function toSimplifiedAudioData(data: SaveAudioMetadataInput): SimplifiedAudioData {
   const isStreamUrl = data.isStreamUrl !== undefined
     ? data.isStreamUrl
-    : (data.audioUrl.includes('quicktube.app') || data.audioUrl.includes('lukavukanovic.xyz'));
+    : (data.audioUrl.includes('quicktube.app') || isConfiguredYtMp3GoUrl(data.audioUrl));
 
   return {
     videoId: data.videoId,

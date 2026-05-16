@@ -14,7 +14,7 @@
 
 ## Introduction
 The current YouTube extraction stack is environment-aware:
-- Production uses `ytMp3GoService` against `https://lukavukanovic.xyz/yt-downloader`.
+- Production uses `ytMp3GoService` against the private `YT_MP3_GO_BASE_URL` deployment.
 - Local development uses `ytDlpService` through the `/api/ytdlp/*` routes.
 - `/api/extract-audio` is the frontend-facing orchestration route.
 - Extracted audio is cached through Firebase Storage when possible, with Firestore metadata as a fallback.

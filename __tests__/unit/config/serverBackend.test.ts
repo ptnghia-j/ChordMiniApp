@@ -1,4 +1,4 @@
-import { getPythonApiUrl, getSheetSageApiUrl } from '@/config/serverBackend';
+import { getPythonApiUrl, getSheetSageApiUrl, getYtMp3GoBaseUrl, getYtMp3GoHostname } from '@/config/serverBackend';
 
 describe('serverBackend', () => {
   const originalEnv = process.env;
@@ -36,5 +36,14 @@ describe('serverBackend', () => {
     process.env.SHEETSAGE_API_URL = 'https://sheetsage.example.com';
 
     expect(getSheetSageApiUrl()).toBe('http://localhost:8082');
+  });
+
+  it('normalizes private yt-mp3-go base URL without exposing a public default', () => {
+    delete process.env.YT_MP3_GO_BASE_URL;
+    expect(getYtMp3GoBaseUrl()).toBeNull();
+
+    process.env.YT_MP3_GO_BASE_URL = 'https://yt-private.example.com///';
+    expect(getYtMp3GoBaseUrl()).toBe('https://yt-private.example.com');
+    expect(getYtMp3GoHostname()).toBe('yt-private.example.com');
   });
 });

@@ -50,6 +50,40 @@ export function getFrontendBaseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL || DEFAULT_FRONTEND_URL;
 }
 
+function normalizeBaseUrl(candidateUrl: string | undefined): string | null {
+  const trimmedUrl = candidateUrl?.trim();
+  if (!trimmedUrl) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedUrl);
+    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, '');
+    parsedUrl.search = '';
+    parsedUrl.hash = '';
+    return parsedUrl.toString().replace(/\/+$/, '');
+  } catch {
+    return trimmedUrl.replace(/\/+$/, '');
+  }
+}
+
+export function getYtMp3GoBaseUrl(): string | null {
+  return normalizeBaseUrl(process.env.YT_MP3_GO_BASE_URL);
+}
+
+export function getYtMp3GoHostname(): string | null {
+  const baseUrl = getYtMp3GoBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(baseUrl).hostname;
+  } catch {
+    return null;
+  }
+}
+
 export function isLocalPythonApi(): boolean {
   const backendUrl = getPythonApiUrl();
   return backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1');

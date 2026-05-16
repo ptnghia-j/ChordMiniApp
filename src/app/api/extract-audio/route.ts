@@ -9,7 +9,7 @@ import { detectEnvironment } from '@/utils/environmentDetection';
  * - Uses YouTube search metadata directly (no filename guessing)
  * - Video ID-based caching and storage
  * - Environment-aware service selection:
- *   - Production: yt-mp3-go (lukavukanovic.xyz - reliable, works from datacenter IPs)
+ *   - Production: configured yt-mp3-go endpoint
  *   - Local Development: yt-dlp
  * - Leverages existing search results for metadata
  */

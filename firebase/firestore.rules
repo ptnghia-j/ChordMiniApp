@@ -217,6 +217,12 @@ service cloud.firestore {
                        ];
     }
 
+    // Public status reports - sanitized BFF-written uptime and incident summaries
+    match /statusReports/{documentId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
     // Admin collection - restricted to trusted maintainers
     match /admin/{document=**} {
       // Only allow access to specific admin users

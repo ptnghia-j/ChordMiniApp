@@ -96,6 +96,11 @@ function getFirestoreDocumentUrl(collectionName: string, documentId: string): st
   return `https://firestore.googleapis.com/v1/${getDocumentName(collectionName, documentId)}`;
 }
 
+function getFirestoreCollectionUrl(collectionName: string): string {
+  const projectId = getFirestoreProjectId();
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionName}`;
+}
+
 function toTimestampString(value: unknown): string | null {
   if (value instanceof Date) {
     return value.toISOString();
@@ -279,6 +284,40 @@ export async function getDocumentWithAdminAccess<T>(
 
   const payload = await response.json() as { fields?: Record<string, Record<string, unknown>> };
   return decodeFirestoreFields(payload.fields) as T;
+}
+
+export async function listDocumentsWithAdminAccess<T>(
+  collectionName: string,
+  pageSize = 100,
+): Promise<Array<T & { id: string }>> {
+  const token = await getAccessToken();
+  const response = await fetch(`${getFirestoreCollectionUrl(collectionName)}?pageSize=${Math.max(1, Math.min(pageSize, 300))}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return [];
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firestore admin list failed (${response.status} ${response.statusText}): ${errorText}`);
+  }
+
+  const payload = await response.json() as {
+    documents?: Array<{
+      name?: string;
+      fields?: Record<string, Record<string, unknown>>;
+    }>;
+  };
+
+  return (payload.documents ?? []).map((document) => ({
+    id: document.name?.split('/').pop() || '',
+    ...(decodeFirestoreFields(document.fields) as T),
+  }));
 }
 
 export async function setDocumentWithAdminAccess(

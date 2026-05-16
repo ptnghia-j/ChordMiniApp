@@ -90,7 +90,7 @@ export class AudioExtractionServiceSimplified {
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
       case 'yt-mp3-go':
-        // Use yt-mp3-go service (lukavukanovic.xyz) - now the primary production service
+        // Use the configured yt-mp3-go endpoint as the primary production service
         return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
 
       case 'ytdlp':
