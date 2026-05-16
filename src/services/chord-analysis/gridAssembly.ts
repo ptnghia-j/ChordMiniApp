@@ -1,5 +1,5 @@
 import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
-import { runVisualCompactionPipeline } from './gridCompaction';
+import { runSegmentAlignmentSolver } from './alignmentSolver';
 import { getBeatTime } from './gridShared';
 import { calculatePaddingAndShift } from './gridShifting';
 import { AudioMappingItem, ChordGridData, GridAnalysisResult } from './gridTypes';
@@ -271,7 +271,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     synchronizedChords: analysisResults.synchronizedChords,
   });
 
-  const compactedGridData = runVisualCompactionPipeline({
+  const compactionParams = {
     chordGridData: initialGridData,
     chordIntervals: analysisResults.chords || [],
     beatTimes: regularBeats,
@@ -279,7 +279,10 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     beatDuration: bpm > 0 ? 60 / bpm : GRID_ALIGNMENT_CONFIG.padding.fallbackBeatDurationSeconds,
     enabled: isLocalCompactionEnabled,
     suppressLeadingSilenceExpansion: hasLongLeadingSilenceWithGlobalOffset,
-  });
+  };
+  // Production alignment path: the segment solver replaces the legacy
+  // runVisualCompactionPipeline sequence of local ad-hoc corrections.
+  const compactedGridData = runSegmentAlignmentSolver(compactionParams).gridData;
 
   if (hasLongLeadingSilenceWithGlobalOffset) {
     const firstChangedAudioIndex = findFirstChangedAudioIndex(

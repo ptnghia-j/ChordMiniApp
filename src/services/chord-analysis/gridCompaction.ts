@@ -2,6 +2,8 @@ import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
 import { average, getBeatDurationsAroundWindow, getConsecutiveBeatDurations, getCyclicShiftDistance, isSilentChord } from './gridShared';
 import { ChordGridData, VisualCompactionWindow } from './gridTypes';
 
+// Legacy ad-hoc visual compaction pipeline. Production grid assembly now uses
+// alignmentSolver.ts; this module remains for comparison tests and regressions.
 export function hasNaturalLeadingSilenceWithOffset(
   runEnd: number,
   existingLeadingOffset: number,
@@ -30,6 +32,80 @@ function isSteadyBeatMeasure(durations: number[]): boolean {
     (duration) =>
       Math.abs(duration - meanDuration) <= meanDuration * GRID_ALIGNMENT_CONFIG.tempo.steadyToleranceRatio
   );
+}
+
+function getTempoChangeDirection(
+  previousAverage: number,
+  nextDurations: number[]
+): 'faster' | 'slower' | null {
+  if (previousAverage <= 0 || nextDurations.length === 0) {
+    return null;
+  }
+
+  const changeThresholdRatio = GRID_ALIGNMENT_CONFIG.tempo.changeThresholdRatio;
+  const becameFaster = nextDurations.every((duration) => duration <= previousAverage / changeThresholdRatio);
+  const becameSlower = nextDurations.every((duration) => duration >= previousAverage * changeThresholdRatio);
+
+  if (becameFaster) {
+    return 'faster';
+  }
+  if (becameSlower) {
+    return 'slower';
+  }
+  return null;
+}
+
+function findRampedTempoBoundary(params: {
+  beats: (number | null)[];
+  index: number;
+  previousAverage: number;
+  confirmationBeats: number;
+  timeSignature: number;
+}): number | null {
+  const {
+    beats,
+    index,
+    previousAverage,
+    confirmationBeats,
+    timeSignature,
+  } = params;
+  const maxTransitionBeats = Math.max(
+    1,
+    Math.min(GRID_ALIGNMENT_CONFIG.tempo.maxTransitionBeats, timeSignature)
+  );
+  const changeThresholdRatio = GRID_ALIGNMENT_CONFIG.tempo.changeThresholdRatio;
+
+  for (let transitionBeats = 1; transitionBeats <= maxTransitionBeats; transitionBeats += 1) {
+    const candidateIndex = index + transitionBeats;
+    if (candidateIndex > beats.length - confirmationBeats - 1) {
+      break;
+    }
+
+    const nextDurations = getConsecutiveBeatDurations(beats, candidateIndex, confirmationBeats);
+    if (nextDurations.length !== confirmationBeats || !isSteadyBeatMeasure(nextDurations)) {
+      continue;
+    }
+
+    const direction = getTempoChangeDirection(previousAverage, nextDurations);
+    if (!direction) {
+      continue;
+    }
+
+    const transitionDurations = getConsecutiveBeatDurations(beats, index, transitionBeats);
+    if (transitionDurations.length !== transitionBeats) {
+      continue;
+    }
+
+    const hasCrossedTempoThreshold = direction === 'faster'
+      ? transitionDurations.some((duration) => duration <= previousAverage / changeThresholdRatio)
+      : transitionDurations.some((duration) => duration >= previousAverage * changeThresholdRatio);
+
+    if (hasCrossedTempoThreshold) {
+      return candidateIndex;
+    }
+  }
+
+  return null;
 }
 
 function buildExpandedLeadingSilenceTimestamps(
@@ -97,29 +173,34 @@ function findTempoChangeBoundaries(
       continue;
     }
 
-    if (!isSteadyBeatMeasure(previousDurations) || !isSteadyBeatMeasure(nextDurations)) {
+    if (!isSteadyBeatMeasure(previousDurations)) {
       continue;
     }
 
     const previousAverage = average(previousDurations);
-    const nextAverage = average(nextDurations);
-    if (previousAverage <= 0 || nextAverage <= 0) {
+    if (previousAverage <= 0) {
       continue;
     }
 
-    const changeThresholdRatio = GRID_ALIGNMENT_CONFIG.tempo.changeThresholdRatio;
-    const becameFaster = nextDurations.every((duration) => duration <= previousAverage / changeThresholdRatio);
-    const becameSlower = nextDurations.every((duration) => duration >= previousAverage * changeThresholdRatio);
+    const adjacentBoundary = isSteadyBeatMeasure(nextDurations) &&
+      getTempoChangeDirection(previousAverage, nextDurations)
+      ? index
+      : null;
+    const rampedBoundary = adjacentBoundary === null
+      ? findRampedTempoBoundary({
+          beats,
+          index,
+          previousAverage,
+          confirmationBeats,
+          timeSignature,
+        })
+      : null;
 
-    if (!becameFaster && !becameSlower) {
+    const boundaryIndex = adjacentBoundary ?? rampedBoundary;
+    if (boundaryIndex === null) {
       continue;
     }
 
-    // `index` is already the first beat in the new tempo segment because
-    // previousDurations cover [index-confirmationBeats, index) and
-    // nextDurations cover [index, index+confirmationBeats). Using index+1
-    // shifts compaction one beat late.
-    const boundaryIndex = index;
     const previousBoundary = boundaries[boundaries.length - 1];
     if (previousBoundary !== undefined && boundaryIndex - previousBoundary < timeSignature) {
       continue;

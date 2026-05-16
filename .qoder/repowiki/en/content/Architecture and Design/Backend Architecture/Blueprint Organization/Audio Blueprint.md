@@ -76,7 +76,7 @@ FE_SVC_PROC --> FE_SVC_BEAT
 - [beat_detection_service.py:1-348](file://python_backend/services/audio/beat_detection_service.py#L1-L348)
 - [chord_recognition_service.py:1-322](file://python_backend/services/audio/chord_recognition_service.py#L1-L322)
 - [route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
-- [route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [route.ts:1-140](file://src/app/api/serve-local-audio/route.ts#L1-L140)
 - [audioExtractionSimplified.ts:1-800](file://src/services/audio/audioExtractionSimplified.ts#L1-L800)
@@ -87,13 +87,13 @@ FE_SVC_PROC --> FE_SVC_BEAT
 **Section sources**
 - [audio/__init__.py:1-11](file://python_backend/blueprints/audio/__init__.py#L1-L11)
 - [route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
-- [route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [route.ts:1-140](file://src/app/api/serve-local-audio/route.ts#L1-L140)
 
 ## Core Components
 - Audio Extraction Blueprint (Flask): Provides YouTube audio extraction endpoints with validation and environment-aware strategies.
-- Audio Extraction Service (Frontend): Orchestrates extraction via yt-mp3-go, yt-dlp, and ytdown-io depending on environment; caches results and uploads to Firebase.
+- Audio Extraction Service (Frontend): Orchestrates extraction via yt-mp3-go and yt-dlp depending on environment; caches results and uploads to Firebase.
 - Audio Metadata Service (Frontend): Extracts duration and metadata from URLs or blobs with multiple fallback strategies.
 - Audio Proxy Route (Frontend): Proxies audio to avoid CORS issues, with retry logic and streaming support.
 - Audio Duration Route (Frontend): Detects duration via headers, metadata, or file-size estimation with prioritized cache lookups.
@@ -128,7 +128,7 @@ participant BK as "Backend Audio Blueprint"
 participant FB as "Firebase Storage"
 Client->>FE : POST /api/extract-audio
 FE->>SVC : extractAudio(videoMetadata, forceRedownload)
-SVC->>BK : Environment-aware extraction (yt-mp3-go/yt-dlp/ytdown-io)
+SVC->>BK : Environment-aware extraction (yt-mp3-go/yt-dlp/yt-mp3-go)
 BK-->>SVC : audioUrl, duration, title
 SVC->>FB : Upload to Firebase (optional)
 FB-->>SVC : storageUrl
@@ -168,7 +168,7 @@ ExtractParams --> |Invalid| ReturnErr
 - [audio/__init__.py:1-11](file://python_backend/blueprints/audio/__init__.py#L1-L11)
 
 ### Audio Extraction Service (Frontend)
-- Strategy selection: Chooses yt-mp3-go, yt-dlp, or ytdown-io based on environment.
+- Strategy selection: Chooses yt-mp3-go or yt-dlp based on environment.
 - Caching: Checks Firebase Storage and simplified cache before extraction.
 - Storage: Uploads extracted audio to Firebase and validates URL accessibility.
 - Fallbacks: Attempts multiple extraction methods and caches results.
@@ -391,7 +391,7 @@ FE_PROC --> FE_BEAT
 
 ## Performance Considerations
 - Extraction strategies:
-  - yt-mp3-go for production reliability; yt-dlp for development; ytdown-io as fallback.
+  - yt-mp3-go for production reliability; yt-dlp for development or explicit override.
   - Firebase Storage caching reduces repeated downloads; validation ensures accessibility.
 - Duration detection:
   - Header-first strategy for speed; metadata parsing as fallback; file-size estimation for large-scale processing.

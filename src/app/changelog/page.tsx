@@ -29,6 +29,30 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5.1',
+      date: 'May 16, 2026',
+      title: 'TanStack Query Migration, Segment Alignment Solver, Audio Extraction Hardening',
+      description: 'Migrates data-fetching to TanStack Query, replaces the legacy ad-hoc beat alignment pipeline with a unified segment alignment solver, and hardens audio extraction reliability.',
+      features: [
+        'NEW: Segment alignment solver — a dynamic-programming optimizer that replaces the sequential chain of leading-expansion, beat-4 bias, beat-2 bias, and tempo-change corrections with a single unified scoring pass over the chord grid.',
+        'IMPROVED: Chord-to-beat snap threshold changed from 35 % to 50 % of beat duration, reducing off-by-one alignment errors on syncopated tracks.',
+        'IMPROVED: Leading beat-2 bias correction prevents the legacy scorer from locking chord starts onto beat 2 when beat 1 would yield a higher downbeat share.',
+        'FIX: Audio extraction retry strategy now performs a same-quality retry with a 3 s delay before falling back to low quality, recovering from transient file-availability races in yt-mp3-go.',
+        'FIX: yt-mp3-go file-availability retries (3 attempts, 2 s apart) after the server reports job completion, preventing false failures from slow disk flushes.',
+      ],
+      technical: [
+        'NEW: TanStack Query integration — model info, recent videos pagination, cached lyrics, and Sheet Sage availability queries migrated from ad-hoc fetch/SWR to useQuery/useInfiniteQuery with centralized query keys and stale-time management.',
+        'NEW: Ramped tempo-change detection allows up to 4 transition beats before confirming a boundary, improving alignment on songs with gradual tempo shifts.',
+        'IMPROVED: Firestore key-detection cache writes migrated from gRPC client SDK to REST-based Admin SDK, eliminating stale connection errors in containerized environments (Railway).',
+        'IMPROVED: Leading silence suppression now requires at least 2 full measures of natural silence before skipping expansion, preventing premature suppression in 3/4 time.',
+        'REFACTOR: Removed ytdown.io extraction service and API route — audio extraction now uses yt-mp3-go exclusively.',
+        'REFACTOR: Legacy gridCompaction.ts retained only for comparison tests; production grid assembly calls alignmentSolver.ts.',
+      ],
+      breaking: [
+        'Segment alignment solver is in early experimental mode.',
+      ]
+    },
+    {
       version: 'v0.6.5',
       date: 'May 8, 2026',
       title: 'Logic Patches, Documentation, And Test Coverage',

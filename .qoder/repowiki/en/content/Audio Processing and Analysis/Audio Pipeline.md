@@ -8,7 +8,7 @@
 - [audioExtractionSimplified.ts](file://src/services/audio/audioExtractionSimplified.ts)
 - [route.ts](file://src/app/api/extract-audio/route.ts)
 - [audioProcessingService.ts](file://src/services/audio/audioProcessingService.ts)
-- [ytdownIoAudioService.ts](file://src/services/youtube/ytdownIoAudioService.ts)
+- [ytMp3GoService.ts](file://src/services/youtube/ytMp3GoService.ts)
 - [firebaseStorageSimplified.ts](file://src/services/firebase/firebaseStorageSimplified.ts)
 - [urlValidationUtils.ts](file://src/utils/urlValidationUtils.ts)
 - [grainPlayerPitchShiftService.ts](file://src/services/audio/grainPlayerPitchShiftService.ts)
@@ -51,7 +51,7 @@ BE_Temp["Python tempfiles.py"]
 BE_Firestore["firebaseStorageSimplified.ts"]
 end
 subgraph "External Services"
-YT_IO["ytdown.io service"]
+YT_IO["yt-mp3-go service"]
 YT_URL["URL Validation Utils"]
 end
 FE_API --> FE_Service
@@ -67,7 +67,7 @@ BE_Firestore --> BE_Utils
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:69-120](file://src/services/audio/audioExtractionSimplified.ts#L69-L120)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 - [tempfiles.py:15-136](file://python_backend/services/audio/tempfiles.py#L15-L136)
@@ -77,7 +77,7 @@ BE_Firestore --> BE_Utils
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:69-120](file://src/services/audio/audioExtractionSimplified.ts#L69-L120)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 - [tempfiles.py:15-136](file://python_backend/services/audio/tempfiles.py#L15-L136)
@@ -85,8 +85,8 @@ BE_Firestore --> BE_Utils
 
 ## Core Components
 - Audio extraction from YouTube:
-  - Production extraction via ytdown.io with M4A format
-  - Environment-aware selection among yt-dlp, ytdown.io, and yt-mp3-go
+  - Production extraction via yt-mp3-go with selectable quality
+  - Environment-aware selection among yt-dlp and yt-mp3-go
   - Caching and permanent storage via Firebase
 - Preprocessing utilities:
   - Silence trimming, duration calculation, resampling, and format validation
@@ -103,7 +103,7 @@ BE_Firestore --> BE_Utils
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 - [tempfiles.py:15-136](file://python_backend/services/audio/tempfiles.py#L15-L136)
 - [audioBufferUtils.ts:4-87](file://src/utils/audioBufferUtils.ts#L4-L87)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 
 ## Architecture Overview
@@ -120,12 +120,12 @@ participant Client as "Client"
 participant API as "Next.js API route"
 participant Service as "AudioProcessingService"
 participant Extractor as "AudioExtractionSimplified"
-participant YT as "ytdown.io"
+participant YT as "yt-mp3-go"
 participant Store as "Firebase Storage"
 Client->>API : POST /api/extract-audio
 API->>Service : extractAudioFromYouTube(videoId,...)
 Service->>Extractor : extractAudio(videoMetadata, forceRedownload)
-Extractor->>YT : Request M4A audio
+Extractor->>YT : Create quality-specific download job
 YT-->>Extractor : Audio URL(s)
 Extractor->>Store : Upload audio (parallel)
 Store-->>Extractor : Permanent URL
@@ -138,15 +138,15 @@ API-->>Client : {success, audioUrl, duration,...}
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:605-799](file://src/services/audio/audioExtractionSimplified.ts#L605-L799)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 
 ## Detailed Component Analysis
 
 ### Audio Extraction from YouTube
 - Strategy selection:
-  - Environment-aware routing among yt-dlp, ytdown.io, and yt-mp3-go
-  - Production preference for ytdown.io with M4A format
+  - Environment-aware routing among yt-dlp and yt-mp3-go
+  - Production preference for yt-mp3-go with selectable quality
 - Caching and storage:
   - Firebase Storage for permanent access; fallback to stream URLs with expiration
   - Simplified Firestore cache for metadata retrieval
@@ -157,7 +157,7 @@ API-->>Client : {success, audioUrl, duration,...}
 flowchart TD
 Start(["Start Extraction"]) --> DetectEnv["Detect Environment Strategy"]
 DetectEnv --> ChooseSvc{"Strategy"}
-ChooseSvc --> |ytdown.io| CallYT["Call ytdown.io API"]
+ChooseSvc --> |yt-mp3-go| CallYT["Call yt-mp3-go API"]
 ChooseSvc --> |yt-dlp| CallYTDL["Call yt-dlp"]
 ChooseSvc --> |yt-mp3-go| CallYTM["Call yt-mp3-go"]
 CallYT --> GotURLs["Receive Audio URLs"]
@@ -176,14 +176,14 @@ ReturnCache --> Done
 **Diagram sources**
 - [audioExtractionSimplified.ts:84-120](file://src/services/audio/audioExtractionSimplified.ts#L84-L120)
 - [audioExtractionSimplified.ts:605-799](file://src/services/audio/audioExtractionSimplified.ts#L605-L799)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
 
 **Section sources**
 - [audioExtractionSimplified.ts:84-120](file://src/services/audio/audioExtractionSimplified.ts#L84-L120)
 - [audioExtractionSimplified.ts:605-799](file://src/services/audio/audioExtractionSimplified.ts#L605-L799)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
 
@@ -295,19 +295,19 @@ Valid --> |No| Reject
 
 **Diagram sources**
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
-- [ytdownIoAudioService.ts:160-168](file://src/services/youtube/ytdownIoAudioService.ts#L160-L168)
+- [ytMp3GoService.ts:160-168](file://src/services/youtube/ytMp3GoService.ts#L160-L168)
 - [utils.py:267-329](file://sheetsage/src/sheetsage_upstream/sheetsage/utils.py#L267-L329)
 
 **Section sources**
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
-- [ytdownIoAudioService.ts:160-168](file://src/services/youtube/ytdownIoAudioService.ts#L160-L168)
+- [ytMp3GoService.ts:160-168](file://src/services/youtube/ytMp3GoService.ts#L160-L168)
 - [utils.py:267-329](file://sheetsage/src/sheetsage_upstream/sheetsage/utils.py#L267-L329)
 
 ### Practical Examples of Audio Processing Workflows
 - Extract audio from a YouTube video:
   - Use AudioProcessingService.extractAudioFromYouTube to trigger extraction
   - The API route handles request parsing and forwards to the simplified extractor
-  - The extractor chooses ytdown.io, validates URLs, caches metadata, and returns a usable audio URL
+  - The extractor chooses yt-mp3-go, validates URLs, caches metadata, and returns a usable audio URL
 - Preprocess audio:
   - Trim silence with trim_silence_from_audio
   - Validate format with validate_audio_file
@@ -326,12 +326,12 @@ Valid --> |No| Reject
 - Frontend dependencies:
   - Next.js API route depends on AudioProcessingService
   - AudioProcessingService depends on AudioExtractionSimplified
-  - AudioExtractionSimplified depends on ytdown.io service and Firebase utilities
+  - AudioExtractionSimplified depends on yt-mp3-go service and Firebase utilities
 - Backend dependencies:
   - Python audio utilities depend on librosa and soundfile
   - Temporary file management wraps Python’s tempfile and os
 - External dependencies:
-  - ytdown.io for audio extraction
+  - yt-mp3-go for audio extraction
   - Firebase for storage and caching
   - URL validation utilities for safe access
 
@@ -339,7 +339,7 @@ Valid --> |No| Reject
 graph LR
 Route["route.ts"] --> APS["audioProcessingService.ts"]
 APS --> AES["audioExtractionSimplified.ts"]
-AES --> YTIO["ytdownIoAudioService.ts"]
+AES --> YTMP3["ytMp3GoService.ts"]
 AES --> FSS["firebaseStorageSimplified.ts"]
 AES --> UVU["urlValidationUtils.ts"]
 PYA["audio_utils.py"] --> Librosa["librosa"]
@@ -351,7 +351,7 @@ PYT["tempfiles.py"] --> Tmp["tempfile/os"]
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:69-120](file://src/services/audio/audioExtractionSimplified.ts#L69-L120)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
@@ -361,7 +361,7 @@ PYT["tempfiles.py"] --> Tmp["tempfile/os"]
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:69-120](file://src/services/audio/audioExtractionSimplified.ts#L69-L120)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
@@ -386,7 +386,7 @@ PYT["tempfiles.py"] --> Tmp["tempfile/os"]
   - Use validate_audio_file to detect invalid formats
   - For librosa-dependent operations, catch exceptions and fall back to filesystem checks
 - Format compatibility issues:
-  - ytdown.io extracts M4A; ensure downstream processing supports it
+  - yt-mp3-go returns completed audio downloads; ensure downstream processing supports it
   - Use validate_file_content_with_metadata to verify real duration and accessibility
 - Network and timeout issues:
   - Apply URL validation with safe timeouts
@@ -397,7 +397,7 @@ PYT["tempfiles.py"] --> Tmp["tempfile/os"]
 
 **Section sources**
 - [audio_utils.py:111-131](file://python_backend/services/audio/audio_utils.py#L111-L131)
-- [ytdownIoAudioService.ts:499-535](file://src/services/youtube/ytMp3GoService.ts#L499-L535)
+- [ytMp3GoService.ts:499-535](file://src/services/youtube/ytMp3GoService.ts#L499-L535)
 - [urlValidationUtils.ts:49-104](file://src/utils/urlValidationUtils.ts#L49-L104)
 - [grainPlayerPitchShiftService.ts:385-422](file://src/services/audio/grainPlayerPitchShiftService.ts#L385-L422)
 
@@ -410,12 +410,12 @@ The ChordMiniApp audio pipeline combines robust extraction, preprocessing, and q
 
 ### Supported Formats and Extraction Details
 - MP3, WAV, FLAC, M4A:
-  - Extraction primarily produces M4A via ytdown.io
+  - Extraction primarily uses yt-mp3-go completed audio downloads
   - Python utilities support decoding/encoding with librosa and soundfile
   - Sheetsage upstream demonstrates decoding/encoding across formats and options like mono, normalization, and duration/offset
 
 **Section sources**
-- [ytdownIoAudioService.ts:97-126](file://src/services/youtube/ytdownIoAudioService.ts#L97-L126)
+- [ytMp3GoService.ts:97-126](file://src/services/youtube/ytMp3GoService.ts#L97-L126)
 - [utils.py:267-329](file://sheetsage/src/sheetsage_upstream/sheetsage/utils.py#L267-L329)
 - [utils_test.py:149-171](file://sheetsage/src/sheetsage_upstream/sheetsage/utils_test.py#L149-L171)
 

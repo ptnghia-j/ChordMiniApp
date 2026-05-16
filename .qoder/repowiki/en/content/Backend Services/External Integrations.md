@@ -2,7 +2,7 @@
 
 <cite>
 **Referenced Files in This Document**
-- [ytdownIoAudioService.ts](file://src/services/youtube/ytdownIoAudioService.ts)
+- [ytMp3GoService.ts](file://src/services/youtube/ytMp3GoService.ts)
 - [ytDlpService.ts](file://src/services/youtube/ytDlpService.ts)
 - [audioExtractionSimplified.ts](file://src/services/audio/audioExtractionSimplified.ts)
 - [youtubeUtils.ts](file://src/utils/youtubeUtils.ts)
@@ -51,7 +51,7 @@ The integration spans three primary areas:
 ```mermaid
 graph TB
 subgraph "Frontend"
-FE_YT["YTDown.io Service<br/>src/services/youtube/ytdownIoAudioService.ts"]
+FE_YT["yt-mp3-go Service<br/>src/services/youtube/ytMp3GoService.ts"]
 FE_YTDEV["yt-dlp Service (dev)<br/>src/services/youtube/ytDlpService.ts"]
 FE_AUDIO_EXTRACT["Audio Extraction Orchestrator<br/>src/services/audio/audioExtractionSimplified.ts"]
 FE_LYRICS["Lyrics Orchestrator<br/>src/services/lyrics/lyricsService.ts"]
@@ -78,7 +78,7 @@ BE_SPLEETER --> BE_DEMIX
 ```
 
 **Diagram sources**
-- [ytdownIoAudioService.ts:1-204](file://src/services/youtube/ytdownIoAudioService.ts#L1-L204)
+- [ytMp3GoService.ts:1-204](file://src/services/youtube/ytMp3GoService.ts#L1-L204)
 - [ytDlpService.ts:1-236](file://src/services/youtube/ytDlpService.ts#L1-L236)
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
 - [youtubeUtils.ts:1-65](file://src/utils/youtubeUtils.ts#L1-L65)
@@ -91,7 +91,7 @@ BE_SPLEETER --> BE_DEMIX
 - [error_handlers.py:1-161](file://python_backend/error_handlers.py#L1-L161)
 
 **Section sources**
-- [ytdownIoAudioService.ts:1-204](file://src/services/youtube/ytdownIoAudioService.ts#L1-L204)
+- [ytMp3GoService.ts:1-204](file://src/services/youtube/ytMp3GoService.ts#L1-L204)
 - [ytDlpService.ts:1-236](file://src/services/youtube/ytDlpService.ts#L1-L236)
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
 - [lyricsService.ts:1-197](file://src/services/lyrics/lyricsService.ts#L1-L197)
@@ -114,7 +114,7 @@ BE_SPLEETER --> BE_DEMIX
   - Secure browser-side encryption and storage, validation service, and UI settings.
 
 **Section sources**
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [ytDlpService.ts:38-235](file://src/services/youtube/ytDlpService.ts#L38-L235)
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
 - [genius_service.py:28-88](file://python_backend/services/lyrics/genius_service.py#L28-L88)
@@ -135,7 +135,7 @@ The system integrates external services through a layered approach:
 sequenceDiagram
 participant FE as "Frontend"
 participant AE as "Audio Extraction Orchestrator"
-participant YT as "YTDown.io Service"
+participant YT as "yt-mp3-go Service"
 participant PY as "Python Backend"
 participant LY as "Lyrics Orchestrator"
 participant LR as "LRClib"
@@ -157,7 +157,7 @@ LY-->>FE : Lyrics result
 
 **Diagram sources**
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
 - [route.ts:40-80](file://src/app/api/genius-lyrics/route.ts#L40-L80)
@@ -179,7 +179,7 @@ LY-->>FE : Lyrics result
 sequenceDiagram
 participant FE as "Frontend"
 participant AE as "Audio Extraction Orchestrator"
-participant YT as "YTDown.io Service"
+participant YT as "yt-mp3-go Service"
 participant FS as "Firestore Cache"
 FE->>AE : Extract audio(videoId)
 AE->>FS : Check cache
@@ -196,10 +196,10 @@ end
 
 **Diagram sources**
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 
 **Section sources**
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [ytDlpService.ts:38-235](file://src/services/youtube/ytDlpService.ts#L38-L235)
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
 - [youtubeUtils.ts:14-65](file://src/utils/youtubeUtils.ts#L14-L65)
@@ -326,13 +326,13 @@ ApiKeyValidationService --> ApiKeyStorageService : "reads/writes"
 - Frontend-to-backend dependencies:
   - Frontend lyrics orchestrator calls backend routes for Genius/LRClib; backend routes depend on specialized services.
 - YouTube extraction:
-  - Frontend extraction orchestrator depends on the YTDown.io service and optional yt-dlp fallback.
+  - Frontend extraction orchestrator depends on the yt-mp3-go service and optional yt-dlp fallback.
 - Spleeter:
   - Backend services depend on Spleeter and librosa; downstream models rely on demixing functions.
 
 ```mermaid
 graph TB
-FE_EX["audioExtractionSimplified.ts"] --> YTIO["ytdownIoAudioService.ts"]
+FE_EX["audioExtractionSimplified.ts"] --> YTMP3["ytMp3GoService.ts"]
 FE_EX --> YTDL["ytDlpService.ts"]
 FE_LY["lyricsService.ts"] --> LRCL["lrclibService.ts"]
 FE_LY --> BE_RT["routes.py"]
@@ -342,7 +342,7 @@ BE_SPL["spleeter_service.py"] --> DEM["demix_spectrogram.py"]
 
 **Diagram sources**
 - [audioExtractionSimplified.ts:657-799](file://src/services/audio/audioExtractionSimplified.ts#L657-L799)
-- [ytdownIoAudioService.ts:75-155](file://src/services/youtube/ytdownIoAudioService.ts#L75-L155)
+- [ytMp3GoService.ts:75-155](file://src/services/youtube/ytMp3GoService.ts#L75-L155)
 - [ytDlpService.ts:38-235](file://src/services/youtube/ytDlpService.ts#L38-L235)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
@@ -381,7 +381,7 @@ BE_SPL["spleeter_service.py"] --> DEM["demix_spectrogram.py"]
   - Confirm encryption support is available in the browser; check that keys are stored and retrievable; clear caches if validation results appear stale.
 
 **Section sources**
-- [ytdownIoAudioService.ts:103-155](file://src/services/youtube/ytdownIoAudioService.ts#L103-L155)
+- [ytMp3GoService.ts:103-155](file://src/services/youtube/ytMp3GoService.ts#L103-L155)
 - [ytDlpService.ts:178-214](file://src/services/youtube/ytDlpService.ts#L178-L214)
 - [route.ts:40-80](file://src/app/api/genius-lyrics/route.ts#L40-L80)
 - [genius_service.py:28-88](file://python_backend/services/lyrics/genius_service.py#L28-L88)

@@ -10,6 +10,7 @@
 - [useChordDataProcessing.ts](file://src/hooks/chord-analysis/useChordDataProcessing.ts)
 - [useChordInteractions.ts](file://src/hooks/chord-analysis/useChordInteractions.ts)
 - [gridAssembly.ts](file://src/services/chord-analysis/gridAssembly.ts)
+- [alignmentSolver.ts](file://src/services/chord-analysis/alignmentSolver.ts)
 - [chordGridSegmentationLayout.ts](file://src/utils/chordGridSegmentationLayout.ts)
 - [formatChord.ts](file://src/utils/chordFormatting/formatChord.ts)
 - [chordSimplification.ts](file://src/utils/chordSimplification.ts)
@@ -34,7 +35,7 @@ The chord analysis interface is composed of:
 - Presentation components: ChordGrid, ChordCell, BeatHighlighter, ChordGridHeader
 - Orchestration: ChordGridContainer
 - Hooks: useChordGridLayout, useChordDataProcessing, useChordInteractions
-- Services: gridAssembly (analysis pipeline integration)
+- Services: gridAssembly and alignmentSolver (analysis pipeline integration and visual beat alignment)
 - Utilities: chordGridSegmentationLayout, chordFormatting/formatChord, chordSimplification
 
 ```mermaid
@@ -54,6 +55,7 @@ UCI["useChordInteractions.ts"]
 end
 subgraph "Services"
 GA["gridAssembly.ts"]
+SOLVER["alignmentSolver.ts"]
 end
 subgraph "Utilities"
 SGL["chordGridSegmentationLayout.ts"]
@@ -69,6 +71,7 @@ CG --> UCI
 CG --> SGL
 CG --> FC
 CGC --> GA
+GA --> SOLVER
 CG --> CS
 ```
 
@@ -80,7 +83,8 @@ CG --> CS
 - [useChordGridLayout.ts:1-124](file://src/hooks/chord-analysis/useChordGridLayout.ts#L1-L124)
 - [useChordDataProcessing.ts:1-88](file://src/hooks/chord-analysis/useChordDataProcessing.ts#L1-L88)
 - [useChordInteractions.ts:1-64](file://src/hooks/chord-analysis/useChordInteractions.ts#L1-L64)
-- [gridAssembly.ts:1-237](file://src/services/chord-analysis/gridAssembly.ts#L1-L237)
+- [gridAssembly.ts:1-320](file://src/services/chord-analysis/gridAssembly.ts#L1-L320)
+- [alignmentSolver.ts:1-873](file://src/services/chord-analysis/alignmentSolver.ts#L1-L873)
 - [chordGridSegmentationLayout.ts:1-179](file://src/utils/chordGridSegmentationLayout.ts#L1-L179)
 - [formatChord.ts:1-327](file://src/utils/chordFormatting/formatChord.ts#L1-L327)
 - [chordSimplification.ts:1-201](file://src/utils/chordSimplification.ts#L1-L201)
@@ -108,7 +112,8 @@ CG --> CS
   - useChordDataProcessing: Applies chord shifting, occurrence mapping, and display logic with corrections.
   - useChordInteractions: Resolves timestamps and determines clickability for beat jumps.
 - Services and Utilities:
-  - gridAssembly: Builds aligned chord/beat sequences with padding, shift, and audio mapping.
+  - gridAssembly: Builds aligned chord/beat sequences with padding, shift, solver output, and audio mapping.
+  - alignmentSolver: Applies the production local visual-alignment optimization for gaps, silent runs, leading silence, and tempo transitions.
   - chordGridSegmentationLayout: Produces segmented blocks for color-coded sections.
   - formatChord: Formats chord labels with professional musical notation and symbols.
   - chordSimplification: Reduces chord labels to five basic types for display.
@@ -129,7 +134,7 @@ CG --> CS
 ## Architecture Overview
 The chord analysis interface follows a unidirectional data flow:
 - Analysis services produce synchronized chords and beats.
-- gridAssembly constructs aligned grid data with padding, shift, and audio mapping.
+- gridAssembly constructs aligned grid data with padding, shift, solver-based local alignment, and audio mapping.
 - ChordGridContainer merges analysis results, UI toggles, and stores into ChordGrid.
 - ChordGrid computes layout, renders rows/measures, and delegates cell rendering to ChordCell.
 - BeatHighlighter updates DOM classes for the current beat using a cached ref map.
@@ -139,6 +144,7 @@ The chord analysis interface follows a unidirectional data flow:
 sequenceDiagram
 participant Service as "Analysis Service"
 participant GA as "gridAssembly.ts"
+participant Solver as "alignmentSolver.ts"
 participant CGC as "ChordGridContainer.tsx"
 participant CG as "ChordGrid.tsx"
 participant Hook1 as "useChordGridLayout.ts"
@@ -147,6 +153,7 @@ participant Hook3 as "useChordInteractions.ts"
 participant CC as "ChordCell.tsx"
 participant BH as "BeatHighlighter.tsx"
 Service->>GA : "Provide synchronized chords and beats"
+GA->>Solver : "Optimize local visual alignment"
 GA-->>CGC : "Return aligned ChordGridData + mapping"
 CGC->>CG : "Pass props (chords, beats, keys, toggles)"
 CG->>Hook1 : "Compute layout (columns, cell size)"
@@ -355,10 +362,11 @@ E --> F["Render ChordGrid with props"]
 **Section sources**
 - [useChordInteractions.ts:26-57](file://src/hooks/chord-analysis/useChordInteractions.ts#L26-L57)
 
-### Analysis Pipeline Integration: gridAssembly
+### Analysis Pipeline Integration: gridAssembly and alignmentSolver
 - Assembles aligned grid data with padding and shift.
 - Builds original audio mapping for accurate beat click handling.
-- Supports visual compaction and long intro protection heuristics.
+- Uses the segment alignment solver for production local visual alignment.
+- Keeps the legacy visual compaction pipeline out of the UI path; it remains for comparison tests.
 
 **Section sources**
 - [gridAssembly.ts:157-237](file://src/services/chord-analysis/gridAssembly.ts#L157-L237)

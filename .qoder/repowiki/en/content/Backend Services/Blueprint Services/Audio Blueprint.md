@@ -65,7 +65,7 @@ AES --> AUTIL
 ```
 
 **Diagram sources**
-- [extract-audio/route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [extract-audio/route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [audio-duration/route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
 - [proxy-audio/route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [proxy-audio/[filename]/route.ts](file://src/app/api/proxy-audio/[filename]/route.ts#L1-L94)
@@ -78,7 +78,7 @@ AES --> AUTIL
 - [audio_utils.py:1-131](file://python_backend/services/audio/audio_utils.py#L1-L131)
 
 **Section sources**
-- [extract-audio/route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [extract-audio/route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [audio-duration/route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
 - [proxy-audio/route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [proxy-audio/[filename]/route.ts](file://src/app/api/proxy-audio/[filename]/route.ts#L1-L94)
@@ -93,7 +93,7 @@ AES --> AUTIL
 - Audio processing utilities: Provide silence trimming, duration calculation, resampling, and validation helpers.
 
 **Section sources**
-- [extract-audio/route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [extract-audio/route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [audio-duration/route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
 - [proxy-audio/route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [validators.py:13-72](file://python_backend/blueprints/audio/validators.py#L13-L72)
@@ -146,7 +146,7 @@ Response format:
 Supported extraction methods:
 - yt-mp3-go (primary production service).
 - yt-dlp (development or explicitly enabled).
-- Deprecated ytdown-io (fallback to yt-mp3-go).
+- Deprecated yt-mp3-go (fallback to yt-mp3-go).
 
 ```mermaid
 sequenceDiagram
@@ -341,7 +341,7 @@ AES --> AUTIL["audio_utils.py"]
 ```
 
 **Diagram sources**
-- [extract-audio/route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [extract-audio/route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [audio-duration/route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
 - [proxy-audio/route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [audioExtractionSimplified.ts:1-800](file://src/services/audio/audioExtractionSimplified.ts#L1-L800)
@@ -350,7 +350,7 @@ AES --> AUTIL["audio_utils.py"]
 - [audio_utils.py:1-131](file://python_backend/services/audio/audio_utils.py#L1-L131)
 
 **Section sources**
-- [extract-audio/route.ts:1-138](file://src/app/api/extract-audio/route.ts#L1-L138)
+- [extract-audio/route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L138)
 - [audio-duration/route.ts:1-301](file://src/app/api/audio-duration/route.ts#L1-L301)
 - [proxy-audio/route.ts:1-496](file://src/app/api/proxy-audio/route.ts#L1-L496)
 - [audioExtractionSimplified.ts:1-800](file://src/services/audio/audioExtractionSimplified.ts#L1-L800)

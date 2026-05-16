@@ -53,10 +53,15 @@ function musicalChordStarts(chords: string[]): Array<{ chord: string; index: num
     ));
 }
 
-function countStartModulos(chords: string[], timeSignature: number, rangeEnd: number): number[] {
+function countStartModulos(
+  chords: string[],
+  timeSignature: number,
+  rangeEnd: number,
+  rangeStart = 0
+): number[] {
   const counts = Array(timeSignature).fill(0);
   musicalChordStarts(chords)
-    .filter((start) => start.index < rangeEnd)
+    .filter((start) => start.index >= rangeStart && start.index < rangeEnd)
     .forEach((start) => {
       counts[start.index % timeSignature] += 1;
     });
@@ -267,6 +272,86 @@ describe('grid compaction edge behavior', () => {
     expect(result.chords.length).toBeLessThanOrEqual(chords.length);
     expect(result.originalAudioMapping).toHaveLength(mapping.length);
     expect(musicalSequence(result.chords)).toEqual(expect.arrayContaining(['C', 'G', 'Am']));
+  });
+
+  it('compacts a short ramped tempo change before the faster section drifts to beat 2', () => {
+    const rawChords = [
+      ...Array(9).fill('N/C'),
+      ...Array(20).fill('Db').map((_, index) => (Math.floor(index / 2) % 2 === 0 ? 'Db' : 'Gb/Db')),
+      ...Array(16).fill('Fm7').map((_, index) => (Math.floor(index / 2) % 2 === 0 ? 'Fm7' : 'Bbm7')),
+      ...Array(25).fill('Ebm7').map((_, index) => (Math.floor(index / 2) % 2 === 0 ? 'Ebm7' : 'Ab7')),
+      ...Array(4).fill('Db/F'),
+      ...Array(4).fill('Gb'),
+      ...Array(4).fill('Absus4'),
+      ...Array(4).fill('Db'),
+      ...Array(4).fill('Gb'),
+      ...Array(4).fill('Ab/C'),
+      ...Array(4).fill('Db'),
+      ...Array(4).fill('Db/F'),
+      ...Array(4).fill('Gb'),
+      ...Array(4).fill('Ebm7'),
+      ...Array(4).fill('Absus4'),
+      ...Array(4).fill('Db'),
+    ];
+    const beatDurations = [
+      ...Array(71).fill(0.97),
+      0.94,
+      0.8,
+      0.63,
+      0.5,
+      0.47,
+      ...Array(rawChords.length - 77).fill(0.49),
+    ];
+    const beatTimes = rawChords.map((_, index) => (
+      index === 0
+        ? 0.5
+        : 0.5 + beatDurations.slice(0, index).reduce((sum, duration) => sum + duration, 0)
+    ));
+    const visualOffset = 3;
+    const chords = [
+      '',
+      '',
+      'N.C.',
+      ...rawChords,
+    ];
+    const beats = [
+      null,
+      null,
+      0,
+      ...beatTimes,
+    ];
+    const mapping = rawChords.map((chord, index) => ({
+      chord,
+      timestamp: beatTimes[index],
+      visualIndex: visualOffset + index,
+      audioIndex: index,
+    }));
+
+    const result = runVisualCompactionPipeline({
+      chordGridData: makeGridData({
+        chords,
+        beats,
+        paddingCount: 1,
+        shiftCount: 2,
+        totalPaddingCount: visualOffset,
+        originalAudioMapping: mapping,
+      }),
+      chordIntervals: [],
+      beatTimes,
+      timeSignature: 4,
+      beatDuration: 60 / 122.44897959184156,
+      enabled: true,
+    });
+    const postRampCounts = countStartModulos(result.chords, 4, 140, 76);
+    const remappedByAudioIndex = new Map(
+      result.originalAudioMapping?.map((item) => [item.audioIndex, item.visualIndex]) ?? []
+    );
+
+    expect(result.chords.length).toBe(chords.length - 1);
+    expect(postRampCounts[0]).toBeGreaterThan(postRampCounts[1]);
+    expect(postRampCounts[0]).toBeGreaterThan(postRampCounts[2]);
+    expect(postRampCounts[0]).toBeGreaterThan(postRampCounts[3]);
+    expect(remappedByAudioIndex.get(78)).toBe(80);
   });
 
   it('does not spend global offset on a small steady timing drift', () => {

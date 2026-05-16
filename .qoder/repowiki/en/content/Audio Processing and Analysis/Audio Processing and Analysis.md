@@ -10,7 +10,7 @@
 - [chord_cnn_lstm_detector.py](file://python_backend/services/detectors/chord_cnn_lstm_detector.py)
 - [audioProcessingService.ts](file://src/services/audio/audioProcessingService.ts)
 - [ytDlpService.ts](file://src/services/youtube/ytDlpService.ts)
-- [ytdownIoAudioService.ts](file://src/services/youtube/ytdownIoAudioService.ts)
+- [ytMp3GoService.ts](file://src/services/youtube/ytMp3GoService.ts)
 - [audioContextManager.ts](file://src/services/audio/audioContextManager.ts)
 - [grainPlayerPitchShiftService.ts](file://src/services/audio/grainPlayerPitchShiftService.ts)
 - [metronomeService.ts](file://src/services/chord-playback/metronomeService.ts)
@@ -50,7 +50,7 @@ AMS["audioContextManager.ts"]
 MS["metronomeService.ts"]
 TS["timingSyncService.ts"]
 YTDLP["ytDlpService.ts"]
-YTDIO["ytdownIoAudioService.ts"]
+YTMP3["ytMp3GoService.ts"]
 end
 subgraph "Backend"
 BAU["audio_utils.py"]
@@ -61,7 +61,7 @@ BTD["beat_transformer_detector.py"]
 CCD["chord_cnn_lstm_detector.py"]
 end
 APS --> YTDLP
-APS --> YTDIO
+APS --> YTMP3
 APS --> BDS
 APS --> KDS
 BDS --> BDSrv
@@ -81,7 +81,7 @@ TS --> BDS
 - [metronomeService.ts:1-499](file://src/services/chord-playback/metronomeService.ts#L1-L499)
 - [timingSyncService.ts:1-198](file://src/services/audio/timingSyncService.ts#L1-L198)
 - [ytDlpService.ts:1-236](file://src/services/youtube/ytDlpService.ts#L1-L236)
-- [ytdownIoAudioService.ts:1-204](file://src/services/youtube/ytdownIoAudioService.ts#L1-L204)
+- [ytMp3GoService.ts:1-204](file://src/services/youtube/ytMp3GoService.ts#L1-L204)
 - [audio_utils.py:1-131](file://python_backend/services/audio/audio_utils.py#L1-L131)
 - [beat_detection_service.py:1-348](file://python_backend/services/audio/beat_detection_service.py#L1-L348)
 - [chord_recognition_service.py:1-322](file://python_backend/services/audio/chord_recognition_service.py#L1-L322)
@@ -96,7 +96,7 @@ TS --> BDS
 
 ## Core Components
 - Audio extraction and preprocessing:
-  - Frontend: YouTube extraction via yt-dlp and ytdown.io proxies; local file duration checks and caching.
+  - Frontend: YouTube extraction via yt-dlp and yt-mp3-go proxies; local file duration checks and caching.
   - Backend: Silence trimming, duration estimation, resampling, and validation utilities.
 - Detection services:
   - Beat detection: automatic model selection among Beat-Transformer, madmom, and librosa; fallback strategies and file-size-aware routing.
@@ -128,7 +128,7 @@ End-to-end flow from YouTube to analysis and playback:
 sequenceDiagram
 participant User as "User"
 participant FE as "AudioProcessingService.ts"
-participant YT as "ytDlpService.ts / ytdownIoAudioService.ts"
+participant YT as "ytDlpService.ts / ytMp3GoService.ts"
 participant API as "/api/extract-audio"
 participant BE as "Backend Services"
 participant ML as "Beat/Chord Detectors"
@@ -147,7 +147,7 @@ FE-->>User : "Display analysis + playback"
 **Diagram sources**
 - [audioProcessingService.ts:53-109](file://src/services/audio/audioProcessingService.ts#L53-L109)
 - [ytDlpService.ts:48-145](file://src/services/youtube/ytDlpService.ts#L48-L145)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [beatDetectionService.ts:179-291](file://src/services/audio/beatDetectionService.ts#L179-L291)
 
 ## Detailed Component Analysis
@@ -155,18 +155,18 @@ FE-->>User : "Display analysis + playback"
 ### Audio Extraction and Preprocessing
 - Frontend extraction:
   - yt-dlp service supports development-time extraction and filename generation compatible with backend expectations.
-  - ytdown.io service provides production-grade M4A extraction via a proxy API.
+  - yt-mp3-go service provides production-grade audio extraction via job creation and SSE monitoring.
   - AudioProcessingService coordinates extraction, caching, and metadata enrichment.
 - Backend preprocessing:
   - Silence trimming, duration estimation, resampling, and validation utilities ensure robustness and consistent input for ML models.
 
 ```mermaid
 flowchart TD
-Start(["Start Extraction"]) --> Choose["Choose extractor<br/>yt-dlp or ytdown.io"]
+Start(["Start Extraction"]) --> Choose["Choose extractor<br/>yt-dlp or yt-mp3-go"]
 Choose --> YTDL["yt-dlp: extract info + download"]
-Choose --> YTDIO["ytdown.io: extract audio formats"]
+Choose --> YTMP3["yt-mp3-go: extract audio formats"]
 YTDL --> GotURL["Got audioUrl"]
-YTDIO --> GotURL
+YTMP3 --> GotURL
 GotURL --> CacheCheck["Check Firestore cache"]
 CacheCheck --> |Found| UseCache["Use cached transcription"]
 CacheCheck --> |Not Found| Upload["Upload to storage / offload"]
@@ -177,12 +177,12 @@ Analyze --> Done(["Return AnalysisResult"])
 
 **Diagram sources**
 - [ytDlpService.ts:48-145](file://src/services/youtube/ytDlpService.ts#L48-L145)
-- [ytdownIoAudioService.ts:87-155](file://src/services/youtube/ytdownIoAudioService.ts#L87-L155)
+- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
 - [audioProcessingService.ts:111-234](file://src/services/audio/audioProcessingService.ts#L111-L234)
 
 **Section sources**
 - [ytDlpService.ts:38-236](file://src/services/youtube/ytDlpService.ts#L38-L236)
-- [ytdownIoAudioService.ts:75-204](file://src/services/youtube/ytdownIoAudioService.ts#L75-L204)
+- [ytMp3GoService.ts:75-204](file://src/services/youtube/ytMp3GoService.ts#L75-L204)
 - [audioProcessingService.ts:43-468](file://src/services/audio/audioProcessingService.ts#L43-L468)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 
@@ -258,8 +258,10 @@ API-->>FE : "ChordDetectionResult"
 
 ### Key Detection and Enharmonic Correction
 - Endpoint-driven detection:
-  - Sends chord sequences to backend for primary key/modulation inference.
+  - Sends chord sequences to `/api/detect-key` for Gemini-backed primary key/modulation inference.
   - Optional enharmonic corrections and Roman numeral analysis.
+  - Uses prompt-versioned cache keys and REST-based Firestore admin helpers for container-friendly cache reads/writes.
+  - Falls back to heuristic key estimation when the model response is unavailable or unusable.
 - Frontend integration:
   - Formats key info for display and extracts key names.
 
@@ -392,7 +394,7 @@ BE_CR --> BE_CU["chord_utils.py"]
 
 ## Troubleshooting Guide
 - Audio extraction failures:
-  - yt-dlp service availability and tests; fallback to ytdown.io when backend is unavailable.
+  - yt-dlp service availability and tests; fallback to yt-mp3-go when backend is unavailable.
   - Video info extraction via dedicated API or fallback path.
 - Backend detection errors:
   - 403 Forbidden indicates backend accessibility issues (e.g., port conflicts); 413 indicates oversized files; 500 indicates internal errors.

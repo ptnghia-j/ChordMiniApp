@@ -1,0 +1,875 @@
+import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
+// Legacy pipeline is imported only by compareAlignmentStrategies below so tests
+// can compare old and new behavior. Production calls runSegmentAlignmentSolver.
+import { runVisualCompactionPipeline } from './gridCompaction';
+import {
+  average,
+  getBeatDurationsAroundWindow,
+  getConsecutiveBeatDurations,
+  isSilentChord,
+} from './gridShared';
+import { AudioMappingItem, ChordGridData } from './gridTypes';
+
+type AlignmentWindowSource = 'gap' | 'silence' | 'tempo' | 'leading_silence';
+
+type AlignmentWindow = {
+  startIndex: number;
+  endIndex: number;
+  source: AlignmentWindowSource;
+  minAdjustment: number;
+  maxAdjustment: number;
+};
+
+type AlignmentDecision = AlignmentWindow & {
+  adjustment: number;
+};
+
+type SolverState = {
+  score: number;
+  delta: number;
+  decisions: AlignmentDecision[];
+};
+
+export type AlignmentQualityMetrics = {
+  chordStartCount: number;
+  downbeatStarts: number;
+  beatStartCounts: number[];
+  editDistance: number;
+  score: number;
+};
+
+export type AlignmentSolverResult = {
+  gridData: ChordGridData;
+  decisions: AlignmentDecision[];
+  metrics: AlignmentQualityMetrics;
+};
+
+export type AlignmentStrategyComparison = {
+  current: {
+    gridData: ChordGridData;
+    metrics: AlignmentQualityMetrics;
+  };
+  solver: AlignmentSolverResult;
+};
+
+function isSteadyBeatMeasure(durations: number[]): boolean {
+  if (durations.length === 0) {
+    return false;
+  }
+
+  const meanDuration = average(durations);
+  if (meanDuration <= 0) {
+    return false;
+  }
+
+  return durations.every(
+    (duration) =>
+      Math.abs(duration - meanDuration) <= meanDuration * GRID_ALIGNMENT_CONFIG.tempo.steadyToleranceRatio
+  );
+}
+
+function getTempoChangeDirection(
+  previousAverage: number,
+  nextDurations: number[]
+): 'faster' | 'slower' | null {
+  if (previousAverage <= 0 || nextDurations.length === 0) {
+    return null;
+  }
+
+  const changeThresholdRatio = GRID_ALIGNMENT_CONFIG.tempo.changeThresholdRatio;
+  const becameFaster = nextDurations.every((duration) => duration <= previousAverage / changeThresholdRatio);
+  const becameSlower = nextDurations.every((duration) => duration >= previousAverage * changeThresholdRatio);
+
+  if (becameFaster) {
+    return 'faster';
+  }
+  if (becameSlower) {
+    return 'slower';
+  }
+  return null;
+}
+
+function findRampedTempoBoundary(params: {
+  beats: (number | null)[];
+  index: number;
+  previousAverage: number;
+  confirmationBeats: number;
+  timeSignature: number;
+}): number | null {
+  const {
+    beats,
+    index,
+    previousAverage,
+    confirmationBeats,
+    timeSignature,
+  } = params;
+  const maxTransitionBeats = Math.max(
+    1,
+    Math.min(GRID_ALIGNMENT_CONFIG.tempo.maxTransitionBeats, timeSignature)
+  );
+  const changeThresholdRatio = GRID_ALIGNMENT_CONFIG.tempo.changeThresholdRatio;
+
+  for (let transitionBeats = 1; transitionBeats <= maxTransitionBeats; transitionBeats += 1) {
+    const candidateIndex = index + transitionBeats;
+    if (candidateIndex > beats.length - confirmationBeats - 1) {
+      break;
+    }
+
+    const nextDurations = getConsecutiveBeatDurations(beats, candidateIndex, confirmationBeats);
+    if (nextDurations.length !== confirmationBeats || !isSteadyBeatMeasure(nextDurations)) {
+      continue;
+    }
+
+    const direction = getTempoChangeDirection(previousAverage, nextDurations);
+    if (!direction) {
+      continue;
+    }
+
+    const transitionDurations = getConsecutiveBeatDurations(beats, index, transitionBeats);
+    if (transitionDurations.length !== transitionBeats) {
+      continue;
+    }
+
+    const hasCrossedTempoThreshold = direction === 'faster'
+      ? transitionDurations.some((duration) => duration <= previousAverage / changeThresholdRatio)
+      : transitionDurations.some((duration) => duration >= previousAverage * changeThresholdRatio);
+
+    if (hasCrossedTempoThreshold) {
+      return candidateIndex;
+    }
+  }
+
+  return null;
+}
+
+function findTempoChangeBoundaries(
+  beats: (number | null)[],
+  timeSignature: number
+): number[] {
+  const boundaries: number[] = [];
+  const confirmationBeats = Math.max(GRID_ALIGNMENT_CONFIG.tempo.minConfirmationBeats, timeSignature);
+
+  for (let index = confirmationBeats; index <= beats.length - confirmationBeats - 1; index += 1) {
+    const previousDurations = getConsecutiveBeatDurations(beats, index - confirmationBeats, confirmationBeats);
+    const nextDurations = getConsecutiveBeatDurations(beats, index, confirmationBeats);
+
+    if (previousDurations.length !== confirmationBeats || nextDurations.length !== confirmationBeats) {
+      continue;
+    }
+    if (!isSteadyBeatMeasure(previousDurations)) {
+      continue;
+    }
+
+    const previousAverage = average(previousDurations);
+    if (previousAverage <= 0) {
+      continue;
+    }
+
+    const adjacentBoundary = isSteadyBeatMeasure(nextDurations) &&
+      getTempoChangeDirection(previousAverage, nextDurations)
+      ? index
+      : null;
+    const rampedBoundary = adjacentBoundary === null
+      ? findRampedTempoBoundary({
+          beats,
+          index,
+          previousAverage,
+          confirmationBeats,
+          timeSignature,
+        })
+      : null;
+    const boundaryIndex = adjacentBoundary ?? rampedBoundary;
+
+    if (boundaryIndex === null) {
+      continue;
+    }
+
+    const previousBoundary = boundaries[boundaries.length - 1];
+    if (previousBoundary !== undefined && boundaryIndex - previousBoundary < timeSignature) {
+      continue;
+    }
+
+    boundaries.push(boundaryIndex);
+  }
+
+  return boundaries;
+}
+
+function findFirstBeatIndexAtOrAfter(beats: number[], time: number): number {
+  let left = 0;
+  let right = beats.length - 1;
+  let answer = beats.length;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (beats[mid] >= time) {
+      answer = mid;
+      right = mid - 1;
+    } else {
+      left = mid + 1;
+    }
+  }
+
+  return answer;
+}
+
+function getMusicalChordStartIndices(
+  chords: string[],
+  segmentStart: number,
+  segmentEnd: number
+): number[] {
+  const starts: number[] = [];
+
+  for (let index = segmentStart; index < segmentEnd; index += 1) {
+    const chord = chords[index];
+    if (isSilentChord(chord)) {
+      continue;
+    }
+
+    const previousChord = index > segmentStart ? chords[index - 1] : '';
+    if (index === segmentStart || isSilentChord(previousChord) || previousChord !== chord) {
+      starts.push(index);
+    }
+  }
+
+  return starts;
+}
+
+function getChordRunLength(chords: string[], startIndex: number, segmentEnd: number): number {
+  const chord = chords[startIndex];
+  let runEnd = startIndex + 1;
+  while (runEnd < segmentEnd && chords[runEnd] === chord) {
+    runEnd += 1;
+  }
+  return runEnd - startIndex;
+}
+
+function scoreStartModulo(
+  modulo: number,
+  timeSignature: number,
+  weight: number
+): number {
+  if (modulo === 0) {
+    return GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.downbeatReward * weight;
+  }
+
+  if (timeSignature === 4) {
+    const penalty = modulo === 1 || modulo === 3
+      ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.nearDownbeatPenalty
+      : GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.weakBeatPenalty;
+    return -penalty * weight;
+  }
+
+  const distance = Math.min(modulo, timeSignature - modulo);
+  return -distance * GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.weakBeatPenalty * weight;
+}
+
+function scoreSegment(
+  chords: string[],
+  segmentStart: number,
+  segmentEnd: number,
+  delta: number,
+  timeSignature: number
+): number {
+  const starts = getMusicalChordStartIndices(chords, segmentStart, segmentEnd);
+  if (starts.length === 0) {
+    return 0;
+  }
+
+  return starts.reduce((score, startIndex, order) => {
+    const modulo = (startIndex + delta + timeSignature * 1000) % timeSignature;
+    const runLength = getChordRunLength(chords, startIndex, segmentEnd);
+    const firstStartWeight = order === 0 ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.firstStartBonus : 0;
+    const longRunWeight = runLength >= timeSignature
+      ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.longRunStartBonus
+      : 0;
+    const weight = 1 + firstStartWeight + longRunWeight;
+
+    return score + scoreStartModulo(modulo, timeSignature, weight);
+  }, 0);
+}
+
+function scoreGrid(
+  chords: string[],
+  timeSignature: number,
+  editDistance = 0
+): AlignmentQualityMetrics {
+  const beatStartCounts = Array(timeSignature).fill(0);
+  const starts = getMusicalChordStartIndices(chords, 0, chords.length);
+
+  starts.forEach((startIndex) => {
+    beatStartCounts[startIndex % timeSignature] += 1;
+  });
+
+  const alignmentScore = starts.reduce((score, startIndex) => {
+    const modulo = startIndex % timeSignature;
+    return score + scoreStartModulo(modulo, timeSignature, 1);
+  }, 0);
+
+  return {
+    chordStartCount: starts.length,
+    downbeatStarts: beatStartCounts[0] ?? 0,
+    beatStartCounts,
+    editDistance,
+    score: alignmentScore - (editDistance * GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.editPenalty),
+  };
+}
+
+function addWindow(
+  windows: AlignmentWindow[],
+  candidate: AlignmentWindow
+): void {
+  if (candidate.endIndex <= candidate.startIndex) {
+    return;
+  }
+  if (candidate.minAdjustment === 0 && candidate.maxAdjustment === 0) {
+    return;
+  }
+
+  const overlapsExisting = windows.some((window) => (
+    candidate.startIndex < window.endIndex && candidate.endIndex > window.startIndex
+  ));
+  if (overlapsExisting) {
+    return;
+  }
+
+  windows.push(candidate);
+}
+
+function buildLeadingSilenceWindow(
+  chordGridData: ChordGridData,
+  timeSignature: number,
+  suppressLeadingSilenceExpansion: boolean
+): AlignmentWindow | null {
+  if (suppressLeadingSilenceExpansion || chordGridData.chords.length === 0) {
+    return null;
+  }
+
+  let runEnd = 0;
+  while (runEnd < chordGridData.chords.length && isSilentChord(chordGridData.chords[runEnd])) {
+    runEnd += 1;
+  }
+
+  if (runEnd === 0 || runEnd >= chordGridData.chords.length) {
+    return null;
+  }
+
+  const maxAdjustment = Math.min(
+    GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.maxLeadingExpansionBeats,
+    timeSignature - 1
+  );
+
+  return {
+    startIndex: 0,
+    endIndex: runEnd,
+    source: 'leading_silence',
+    minAdjustment: 0,
+    maxAdjustment,
+  };
+}
+
+function buildSilentRunWindows(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): AlignmentWindow[] {
+  const minSilentRunLength = Math.max(GRID_ALIGNMENT_CONFIG.silentRun.minLengthFloor, timeSignature - 1);
+  const windows: AlignmentWindow[] = [];
+  let index = 0;
+
+  while (index < chordGridData.chords.length) {
+    if (!isSilentChord(chordGridData.chords[index])) {
+      index += 1;
+      continue;
+    }
+
+    let runEnd = index;
+    while (runEnd < chordGridData.chords.length && isSilentChord(chordGridData.chords[runEnd])) {
+      runEnd += 1;
+    }
+
+    const previousChord = index > 0 ? chordGridData.chords[index - 1] : '';
+    const nextChord = runEnd < chordGridData.chords.length ? chordGridData.chords[runEnd] : '';
+    const precededByMusic = !isSilentChord(previousChord);
+    const followedByMusic = !isSilentChord(nextChord);
+    const windowLength = runEnd - index;
+
+    if (precededByMusic && followedByMusic && windowLength >= minSilentRunLength) {
+      windows.push({
+        startIndex: index,
+        endIndex: runEnd,
+        source: 'silence',
+        minAdjustment: -(windowLength - 1),
+        maxAdjustment: 0,
+      });
+    }
+
+    index = runEnd;
+  }
+
+  return windows;
+}
+
+function buildGapWindows(params: {
+  chordGridData: ChordGridData;
+  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
+  beatTimes: number[];
+  beatDuration: number;
+}): AlignmentWindow[] {
+  const {
+    chordGridData,
+    chordIntervals,
+    beatTimes,
+    beatDuration,
+  } = params;
+  if (beatTimes.length < 2 || chordIntervals.length < 2) {
+    return [];
+  }
+
+  const orderedChords = chordIntervals
+    .filter((chord) => typeof chord.start === 'number' && typeof chord.end === 'number' && chord.end > chord.start)
+    .sort((a, b) => (a.start as number) - (b.start as number));
+  const gapThreshold = Math.max(
+    beatDuration * GRID_ALIGNMENT_CONFIG.gap.thresholdBeatsMultiplier,
+    GRID_ALIGNMENT_CONFIG.gap.minGapSeconds
+  );
+  const onsetLeadIn = beatDuration * GRID_ALIGNMENT_CONFIG.gap.onsetLeadInBeatsMultiplier;
+  const releaseTail = Math.min(
+    beatDuration * GRID_ALIGNMENT_CONFIG.gap.releaseTailBeatsMultiplier,
+    GRID_ALIGNMENT_CONFIG.gap.maxReleaseTailSeconds
+  );
+  const visualOffset = chordGridData.paddingCount + chordGridData.shiftCount;
+  const windows: AlignmentWindow[] = [];
+
+  for (let index = 1; index < orderedChords.length; index += 1) {
+    const previousChord = orderedChords[index - 1];
+    const nextChord = orderedChords[index];
+    const gapDuration = (nextChord.start as number) - (previousChord.end as number);
+
+    if (!Number.isFinite(gapDuration) || gapDuration < gapThreshold) {
+      continue;
+    }
+
+    const gapStartBeatIndex = findFirstBeatIndexAtOrAfter(beatTimes, (previousChord.end as number) + releaseTail);
+    const resumeBeatIndex = findFirstBeatIndexAtOrAfter(beatTimes, (nextChord.start as number) - onsetLeadIn);
+    const startIndex = visualOffset + gapStartBeatIndex;
+    const endIndex = visualOffset + resumeBeatIndex;
+    const windowLength = endIndex - startIndex;
+
+    if (gapStartBeatIndex < beatTimes.length && resumeBeatIndex <= beatTimes.length && windowLength >= 2) {
+      windows.push({
+        startIndex,
+        endIndex,
+        source: 'gap',
+        minAdjustment: -(windowLength - 1),
+        maxAdjustment: 0,
+      });
+    }
+  }
+
+  return windows;
+}
+
+function buildTempoWindows(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): AlignmentWindow[] {
+  if (timeSignature <= 1 || chordGridData.chords.length < timeSignature * 3) {
+    return [];
+  }
+
+  const windows: AlignmentWindow[] = [];
+  const maxShrink = Math.min(GRID_ALIGNMENT_CONFIG.tempo.maxShrinkBeats, timeSignature - 1);
+
+  findTempoChangeBoundaries(chordGridData.beats, timeSignature).forEach((boundaryIndex) => {
+    if (boundaryIndex <= 1 || boundaryIndex > chordGridData.chords.length) {
+      return;
+    }
+
+    const trailingChord = chordGridData.chords[boundaryIndex - 1];
+    const leadingChord = chordGridData.chords[boundaryIndex];
+    let runStart = boundaryIndex;
+    let runEnd = boundaryIndex;
+
+    if (!isSilentChord(trailingChord)) {
+      runStart = boundaryIndex - 1;
+      while (runStart > 0 && chordGridData.chords[runStart - 1] === trailingChord) {
+        runStart -= 1;
+      }
+      runEnd = boundaryIndex;
+      while (runEnd < chordGridData.chords.length && chordGridData.chords[runEnd] === trailingChord) {
+        runEnd += 1;
+      }
+    } else if (!isSilentChord(leadingChord)) {
+      runStart = boundaryIndex;
+      runEnd = boundaryIndex + 1;
+      while (runEnd < chordGridData.chords.length && chordGridData.chords[runEnd] === leadingChord) {
+        runEnd += 1;
+      }
+    } else {
+      return;
+    }
+
+    const windowLength = runEnd - runStart;
+    if (windowLength < 2) {
+      return;
+    }
+
+    const maxWindowLength = Math.min(windowLength, maxShrink + 1);
+    const startIndex = Math.max(runStart, runEnd - maxWindowLength);
+    const effectiveLength = runEnd - startIndex;
+
+    windows.push({
+      startIndex,
+      endIndex: runEnd,
+      source: 'tempo',
+      minAdjustment: -Math.min(maxShrink, effectiveLength - 1),
+      maxAdjustment: 0,
+    });
+  });
+
+  return windows;
+}
+
+function buildAlignmentWindows(params: {
+  chordGridData: ChordGridData;
+  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
+  beatTimes: number[];
+  timeSignature: number;
+  beatDuration: number;
+  suppressLeadingSilenceExpansion: boolean;
+}): AlignmentWindow[] {
+  const {
+    chordGridData,
+    chordIntervals,
+    beatTimes,
+    timeSignature,
+    beatDuration,
+    suppressLeadingSilenceExpansion,
+  } = params;
+  const windows: AlignmentWindow[] = [];
+  const followupWindows = [
+    ...buildGapWindows({ chordGridData, chordIntervals, beatTimes, beatDuration }),
+    ...buildSilentRunWindows(chordGridData, timeSignature),
+    ...buildTempoWindows(chordGridData, timeSignature),
+  ].sort((a, b) => a.startIndex - b.startIndex);
+  const leadingWindow = buildLeadingSilenceWindow(
+    chordGridData,
+    timeSignature,
+    suppressLeadingSilenceExpansion
+  );
+
+  if (leadingWindow && followupWindows.length > 0) {
+    addWindow(windows, leadingWindow);
+  }
+
+  followupWindows.forEach((window) => addWindow(windows, window));
+
+  return windows.sort((a, b) => a.startIndex - b.startIndex);
+}
+
+function getAdjustmentCandidates(window: AlignmentWindow): number[] {
+  const candidates: number[] = [];
+  for (let adjustment = window.minAdjustment; adjustment <= window.maxAdjustment; adjustment += 1) {
+    candidates.push(adjustment);
+  }
+  return candidates;
+}
+
+function transitionPenalty(window: AlignmentWindow, adjustment: number): number {
+  if (adjustment === 0) {
+    return 0;
+  }
+
+  const basePenalty = window.source === 'leading_silence'
+    ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.leadingExpansionPenalty
+    : GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.editPenalty;
+  return Math.abs(adjustment) * basePenalty;
+}
+
+function chooseBestStates(states: SolverState[]): SolverState[] {
+  const bestByDelta = new Map<number, SolverState>();
+
+  states.forEach((state) => {
+    const currentBest = bestByDelta.get(state.delta);
+    if (!currentBest || state.score > currentBest.score) {
+      bestByDelta.set(state.delta, state);
+    }
+  });
+
+  return [...bestByDelta.values()];
+}
+
+function solveWindowAdjustments(
+  chordGridData: ChordGridData,
+  windows: AlignmentWindow[],
+  timeSignature: number
+): AlignmentDecision[] {
+  if (windows.length === 0) {
+    return [];
+  }
+
+  let previousEnd = 0;
+  let states: SolverState[] = [{ score: 0, delta: 0, decisions: [] }];
+
+  windows.forEach((window) => {
+    const nextStates: SolverState[] = [];
+
+    states.forEach((state) => {
+      const segmentScore = scoreSegment(
+        chordGridData.chords,
+        previousEnd,
+        window.startIndex,
+        state.delta,
+        timeSignature
+      );
+
+      getAdjustmentCandidates(window).forEach((adjustment) => {
+        nextStates.push({
+          score: state.score + segmentScore - transitionPenalty(window, adjustment),
+          delta: state.delta + adjustment,
+          decisions: [
+            ...state.decisions,
+            { ...window, adjustment },
+          ],
+        });
+      });
+    });
+
+    states = chooseBestStates(nextStates);
+    previousEnd = window.endIndex;
+  });
+
+  const scoredFinalStates = states.map((state) => ({
+    ...state,
+    score: state.score + scoreSegment(
+      chordGridData.chords,
+      previousEnd,
+      chordGridData.chords.length,
+      state.delta,
+      timeSignature
+    ),
+  }));
+
+  return scoredFinalStates.reduce((best, current) => (
+    current.score > best.score ? current : best
+  )).decisions;
+}
+
+function buildExpandedLeadingSilenceTimestamps(
+  beats: (number | null)[],
+  windowStart: number,
+  windowEnd: number,
+  extraCount: number
+): (number | null)[] {
+  if (extraCount <= 0) {
+    return [];
+  }
+
+  let previousNumericBeat: number | null = null;
+  for (let index = Math.min(windowEnd, beats.length) - 1; index >= Math.max(0, windowStart); index -= 1) {
+    const beat = beats[index];
+    if (typeof beat === 'number') {
+      previousNumericBeat = beat;
+      break;
+    }
+  }
+
+  let nextNumericBeat: number | null = null;
+  for (let index = Math.max(0, windowEnd); index < beats.length; index += 1) {
+    const beat = beats[index];
+    if (typeof beat === 'number') {
+      nextNumericBeat = beat;
+      break;
+    }
+  }
+
+  const nearbyDurations = getBeatDurationsAroundWindow(
+    beats,
+    Math.max(0, windowStart - 4),
+    Math.min(beats.length, windowEnd + 5)
+  );
+  const fallbackStep = nearbyDurations.length > 0
+    ? average(nearbyDurations)
+    : GRID_ALIGNMENT_CONFIG.padding.fallbackBeatDurationSeconds;
+  const startTime = previousNumericBeat ?? 0;
+  const endTime =
+    nextNumericBeat !== null && nextNumericBeat > startTime
+      ? nextNumericBeat
+      : startTime + (fallbackStep * (extraCount + 1));
+  const step = (endTime - startTime) / (extraCount + 1);
+
+  return Array.from({ length: extraCount }, (_, index) => {
+    const candidate = startTime + (step * (index + 1));
+    return Number.isFinite(candidate) ? candidate : null;
+  });
+}
+
+function applyAlignmentDecisions(
+  chordGridData: ChordGridData,
+  decisions: AlignmentDecision[]
+): ChordGridData {
+  const activeDecisions = decisions
+    .filter((decision) => decision.adjustment !== 0)
+    .sort((a, b) => a.startIndex - b.startIndex);
+
+  if (activeDecisions.length === 0) {
+    return chordGridData;
+  }
+
+  const nextChords: string[] = [];
+  const nextBeats: (number | null)[] = [];
+  const oldToNewVisualIndex = new Map<number, number>();
+  let oldIndex = 0;
+  let newIndex = 0;
+  let decisionIndex = 0;
+
+  while (oldIndex < chordGridData.chords.length) {
+    const activeDecision = activeDecisions[decisionIndex];
+
+    if (!activeDecision || oldIndex < activeDecision.startIndex || oldIndex >= activeDecision.endIndex) {
+      nextChords.push(chordGridData.chords[oldIndex]);
+      nextBeats.push(chordGridData.beats[oldIndex] ?? null);
+      oldToNewVisualIndex.set(oldIndex, newIndex);
+      oldIndex += 1;
+      newIndex += 1;
+
+      if (activeDecision && oldIndex >= activeDecision.endIndex) {
+        decisionIndex += 1;
+      }
+      continue;
+    }
+
+    const windowLength = activeDecision.endIndex - activeDecision.startIndex;
+    const targetWindowLength = Math.max(1, windowLength + activeDecision.adjustment);
+    const copiedCount = Math.min(windowLength, targetWindowLength);
+    const prependLeadingPadding =
+      activeDecision.source === 'leading_silence' &&
+      activeDecision.adjustment > 0;
+
+    if (prependLeadingPadding) {
+      const extraCount = targetWindowLength - windowLength;
+      const extraBeatTimestamps = buildExpandedLeadingSilenceTimestamps(
+        chordGridData.beats,
+        activeDecision.startIndex,
+        activeDecision.endIndex,
+        extraCount
+      );
+      for (let extra = 0; extra < extraCount; extra += 1) {
+        nextChords.push('');
+        nextBeats.push(extraBeatTimestamps[extra] ?? null);
+        newIndex += 1;
+      }
+    }
+
+    for (let offset = 0; offset < copiedCount; offset += 1) {
+      const sourceIndex = activeDecision.startIndex + offset;
+      nextChords.push(chordGridData.chords[sourceIndex]);
+      nextBeats.push(chordGridData.beats[sourceIndex] ?? null);
+      oldToNewVisualIndex.set(sourceIndex, newIndex);
+      newIndex += 1;
+    }
+
+    if (targetWindowLength > windowLength && !prependLeadingPadding) {
+      const fillerChord = copiedCount > 0
+        ? chordGridData.chords[activeDecision.startIndex + copiedCount - 1] || 'N.C.'
+        : 'N.C.';
+      for (let extra = 0; extra < targetWindowLength - windowLength; extra += 1) {
+        nextChords.push(fillerChord);
+        nextBeats.push(null);
+        newIndex += 1;
+      }
+    } else {
+      const collapsedTargetIndex = Math.max(0, newIndex - 1);
+      for (let offset = copiedCount; offset < windowLength; offset += 1) {
+        oldToNewVisualIndex.set(activeDecision.startIndex + offset, collapsedTargetIndex);
+      }
+    }
+
+    oldIndex = activeDecision.endIndex;
+    decisionIndex += 1;
+  }
+
+  return {
+    ...chordGridData,
+    chords: nextChords,
+    beats: nextBeats,
+    originalAudioMapping: chordGridData.originalAudioMapping?.map((item: AudioMappingItem) => ({
+      ...item,
+      visualIndex: oldToNewVisualIndex.get(item.visualIndex) ?? item.visualIndex,
+    })),
+  };
+}
+
+export function evaluateAlignmentQuality(
+  gridData: ChordGridData,
+  timeSignature: number
+): AlignmentQualityMetrics {
+  return scoreGrid(gridData.chords, timeSignature);
+}
+
+export function runSegmentAlignmentSolver(params: {
+  chordGridData: ChordGridData;
+  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
+  beatTimes: number[];
+  timeSignature: number;
+  beatDuration: number;
+  enabled: boolean;
+  suppressLeadingSilenceExpansion?: boolean;
+}): AlignmentSolverResult {
+  const {
+    chordGridData,
+    chordIntervals,
+    beatTimes,
+    timeSignature,
+    beatDuration,
+    enabled,
+    suppressLeadingSilenceExpansion = false,
+  } = params;
+
+  if (!enabled || timeSignature <= 1 || chordGridData.chords.length === 0) {
+    return {
+      gridData: chordGridData,
+      decisions: [],
+      metrics: evaluateAlignmentQuality(chordGridData, Math.max(1, timeSignature)),
+    };
+  }
+
+  const windows = buildAlignmentWindows({
+    chordGridData,
+    chordIntervals,
+    beatTimes,
+    timeSignature,
+    beatDuration,
+    suppressLeadingSilenceExpansion,
+  });
+  const decisions = solveWindowAdjustments(chordGridData, windows, timeSignature);
+  const gridData = applyAlignmentDecisions(chordGridData, decisions);
+  const editDistance = decisions.reduce((sum, decision) => sum + Math.abs(decision.adjustment), 0);
+
+  return {
+    gridData,
+    decisions,
+    metrics: scoreGrid(gridData.chords, timeSignature, editDistance),
+  };
+}
+
+export function compareAlignmentStrategies(params: {
+  chordGridData: ChordGridData;
+  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
+  beatTimes: number[];
+  timeSignature: number;
+  beatDuration: number;
+  enabled: boolean;
+  suppressLeadingSilenceExpansion?: boolean;
+}): AlignmentStrategyComparison {
+  const currentGridData = runVisualCompactionPipeline(params);
+  const solver = runSegmentAlignmentSolver(params);
+
+  return {
+    current: {
+      gridData: currentGridData,
+      metrics: evaluateAlignmentQuality(currentGridData, params.timeSignature),
+    },
+    solver,
+  };
+}
