@@ -40,6 +40,55 @@ describe('statusProbes', () => {
     process.env = originalEnv;
   });
 
+  it('aggregates standard endpoint probes into one result per service', async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+    }) as Response);
+
+    const probes = await runStandardStatusProbes();
+
+    expect(probes.map((probe) => probe.serviceId)).toEqual(['beat', 'chord', 'sheetsage', 'yt2mp3go']);
+    expect(probes.filter((probe) => probe.serviceId === 'beat')).toHaveLength(1);
+    expect(probes.filter((probe) => probe.serviceId === 'chord')).toHaveLength(1);
+    expect(probes.filter((probe) => probe.serviceId === 'sheetsage')).toHaveLength(1);
+    expect(probes.find((probe) => probe.serviceId === 'beat')).toMatchObject({
+      status: 'operational',
+      ok: true,
+    });
+  });
+
+  it('retries transient standard endpoint failures and reports operational recovery', async () => {
+    const attemptsByUrl = new Map<string, number>();
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const attempts = (attemptsByUrl.get(url) || 0) + 1;
+      attemptsByUrl.set(url, attempts);
+
+      if (url === 'https://python.private.test/api/chord-model-info' && attempts === 1) {
+        return {
+          ok: false,
+          status: 503,
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 200,
+      } as Response;
+    });
+
+    const probes = await runStandardStatusProbes();
+    const chordProbe = probes.find((probe) => probe.serviceId === 'chord');
+
+    expect(attemptsByUrl.get('https://python.private.test/api/chord-model-info')).toBe(2);
+    expect(chordProbe).toMatchObject({
+      serviceId: 'chord',
+      status: 'operational',
+      ok: true,
+    });
+  });
+
   it('retries transient yt2mp3go metadata failures before marking the service healthy', async () => {
     let ytInfoAttempts = 0;
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {

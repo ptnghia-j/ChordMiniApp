@@ -167,8 +167,9 @@ function sanitizeIncident(incident: PublicStatusIncident): PublicStatusIncident 
   };
 }
 
-function getIncidentId(date: string, serviceId: StatusServiceId): string {
-  return `${serviceId}-${date}`;
+function getIncidentId(date: string, serviceId: StatusServiceId, startedAt: string): string {
+  const timeKey = startedAt.slice(11, 16).replace(':', '');
+  return `${serviceId}-${date}-${timeKey || 'incident'}`;
 }
 
 function incidentSummary(serviceLabel: string, status: PublicServiceStatus): string {
@@ -179,17 +180,43 @@ function incidentSummary(serviceLabel: string, status: PublicServiceStatus): str
   return `${serviceLabel} did not pass one or more status probes.`;
 }
 
-function dedupeIncidents(date: string, incidents: PublicStatusIncident[]): PublicStatusIncident[] {
-  const incidentByService = new Map<StatusServiceId, PublicStatusIncident>();
+function severityRank(severity: PublicStatusIncident['severity']): number {
+  if (severity === 'critical') return 3;
+  if (severity === 'major') return 2;
+  return 1;
+}
 
-  for (const incident of incidents) {
-    const existing = incidentByService.get(incident.serviceId);
+function getDurationMinutes(startedAt: string, endedAt: string): number {
+  const startedMs = new Date(startedAt).getTime();
+  const endedMs = new Date(endedAt).getTime();
+  if (!Number.isFinite(startedMs) || !Number.isFinite(endedMs) || endedMs < startedMs) {
+    return 0;
+  }
+
+  return Math.round((endedMs - startedMs) / 60_000);
+}
+
+function isOpenIncident(incident: PublicStatusIncident): boolean {
+  return incident.status !== 'resolved' || !incident.endedAt;
+}
+
+function dedupeIncidents(date: string, incidents: PublicStatusIncident[]): PublicStatusIncident[] {
+  const incidentById = new Map<string, PublicStatusIncident>();
+
+  for (const rawIncident of incidents.sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
+    const id = rawIncident.id && !rawIncident.id.includes('-metadata-') && !rawIncident.id.includes('-extraction-')
+      ? rawIncident.id
+      : getIncidentId(date, rawIncident.serviceId, rawIncident.startedAt);
+    const incident: PublicStatusIncident = {
+      ...rawIncident,
+      id,
+      summary: rawIncident.status === 'resolved' && rawIncident.summary.includes('successful status probe confirmed')
+        ? rawIncident.summary
+        : incidentSummary(rawIncident.serviceLabel, rawIncident.title.toLowerCase().includes('degraded') ? 'degraded' : 'outage'),
+    };
+    const existing = incidentById.get(id);
     if (!existing) {
-      incidentByService.set(incident.serviceId, {
-        ...incident,
-        id: getIncidentId(date, incident.serviceId),
-        summary: incidentSummary(incident.serviceLabel, incident.title.toLowerCase().includes('degraded') ? 'degraded' : 'outage'),
-      });
+      incidentById.set(id, incident);
       continue;
     }
 
@@ -201,14 +228,14 @@ function dedupeIncidents(date: string, incidents: PublicStatusIncident[]): Publi
       existing.endedAt = incident.endedAt;
     }
 
-    if (incident.severity === 'critical' || existing.severity !== 'critical' && incident.severity === 'major') {
+    if (severityRank(incident.severity) > severityRank(existing.severity)) {
       existing.severity = incident.severity;
       existing.title = incident.title;
       existing.summary = incidentSummary(existing.serviceLabel, incident.title.toLowerCase().includes('degraded') ? 'degraded' : 'outage');
     }
   }
 
-  return Array.from(incidentByService.values()).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  return Array.from(incidentById.values()).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
 function incidentFromProbe(date: string, probe: StatusProbeResult): PublicStatusIncident | null {
@@ -218,21 +245,57 @@ function incidentFromProbe(date: string, probe: StatusProbeResult): PublicStatus
 
   const severity = probe.status === 'outage' ? 'major' : 'minor';
   const startedAt = probe.checkedAt;
-  const durationMinutes = 0;
 
   return {
-    id: getIncidentId(date, probe.serviceId),
+    id: getIncidentId(date, probe.serviceId, startedAt),
     serviceId: probe.serviceId,
     serviceLabel: probe.serviceLabel,
     severity,
-    status: 'resolved',
+    status: 'investigating',
     title: probe.status === 'outage' ? `${probe.serviceLabel} outage` : `${probe.serviceLabel} degraded`,
     summary: incidentSummary(probe.serviceLabel, probe.status),
     startedAt,
-    endedAt: probe.checkedAt,
-    durationMinutes,
+    endedAt: null,
+    durationMinutes: null,
     probeKind: probe.probeKind,
   };
+}
+
+function updateIncidentFromProbe(report: PublicStatusReport, date: string, probe: StatusProbeResult): void {
+  if (probe.status === 'operational') {
+    const openIncident = report.incidents
+      .filter((incident) => incident.serviceId === probe.serviceId && isOpenIncident(incident))
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+
+    if (openIncident) {
+      openIncident.status = 'resolved';
+      openIncident.endedAt = probe.checkedAt;
+      openIncident.durationMinutes = getDurationMinutes(openIncident.startedAt, probe.checkedAt);
+      openIncident.summary = `A later successful status probe confirmed ${openIncident.serviceLabel} was responding normally.`;
+    }
+    return;
+  }
+
+  const incident = incidentFromProbe(date, probe);
+  if (!incident) {
+    return;
+  }
+
+  const openIncident = report.incidents
+    .filter((entry) => entry.serviceId === probe.serviceId && isOpenIncident(entry))
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+
+  if (openIncident) {
+    if (severityRank(incident.severity) > severityRank(openIncident.severity)) {
+      openIncident.severity = incident.severity;
+      openIncident.title = incident.title;
+      openIncident.summary = incident.summary;
+      openIncident.probeKind = incident.probeKind;
+    }
+    return;
+  }
+
+  report.incidents.unshift(incident);
 }
 
 export async function getStatusReport(date = getStatusDateId()): Promise<PublicStatusReport | null> {
@@ -266,20 +329,7 @@ export async function recordStatusProbeResults(probes: StatusProbeResult[]): Pro
     current.uptimePct = current.totalChecks > 0 ? clampPct((current.successfulChecks / current.totalChecks) * 100) : 0;
     report.services[probe.serviceId] = current;
 
-    const incident = incidentFromProbe(date, probe);
-    if (incident) {
-      const existing = report.incidents.find((entry) => entry.id === incident.id || entry.serviceId === incident.serviceId);
-      if (existing) {
-        existing.id = incident.id;
-        existing.severity = incident.severity === 'major' || existing.severity === 'critical' ? existing.severity : incident.severity;
-        existing.title = incident.title;
-        existing.summary = incident.summary;
-        existing.endedAt = incident.endedAt;
-        existing.durationMinutes = incident.durationMinutes;
-      } else {
-        report.incidents.unshift(incident);
-      }
-    }
+    updateIncidentFromProbe(report, date, probe);
   }
 
   report.updatedAt = now.toISOString();

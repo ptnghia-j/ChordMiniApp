@@ -15,6 +15,14 @@ const YT_METADATA_MAX_ATTEMPTS = 3;
 const YT_EXTRACTION_MAX_ATTEMPTS = 2;
 const YT_RETRY_DELAY_MS = 1_000;
 const YT_QUICK_FAILURE_RETRY_WINDOW_MS = 30_000;
+const STANDARD_ENDPOINT_MAX_ATTEMPTS = 3;
+const STANDARD_RETRY_DELAY_MS = 1_000;
+const STANDARD_MIN_ATTEMPT_TIMEOUT_MS = 5_000;
+
+interface StandardEndpointProbe {
+  probeKind: StatusProbeKind;
+  url: string;
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,6 +37,17 @@ function safeSummary(serviceLabel: string, status: PublicServiceStatus, probeKin
   if (status === 'operational') return `${serviceLabel} responded normally.`;
   if (status === 'degraded') return `${serviceLabel} responded slowly during a ${probeKind} probe.`;
   return `${serviceLabel} did not pass a ${probeKind} probe.`;
+}
+
+function statusRank(status: PublicServiceStatus): number {
+  if (status === 'outage') return 3;
+  if (status === 'degraded') return 2;
+  if (status === 'operational') return 1;
+  return 0;
+}
+
+function worseStatus(left: PublicServiceStatus, right: PublicServiceStatus): PublicServiceStatus {
+  return statusRank(left) >= statusRank(right) ? left : right;
 }
 
 async function probeJsonEndpoint(
@@ -72,6 +91,95 @@ async function probeJsonEndpoint(
       sanitizedSummary: safeSummary(serviceLabel, 'outage', probeKind),
     };
   }
+}
+
+async function probeJsonEndpointWithRetries(
+  serviceId: StatusServiceId,
+  endpoint: StandardEndpointProbe,
+  timeoutMs: number,
+): Promise<StatusProbeResult> {
+  const startedAt = Date.now();
+  const attemptTimeoutMs = Math.max(
+    STANDARD_MIN_ATTEMPT_TIMEOUT_MS,
+    Math.floor(timeoutMs / STANDARD_ENDPOINT_MAX_ATTEMPTS),
+  );
+  let bestResult: StatusProbeResult | null = null;
+
+  for (let attempt = 1; attempt <= STANDARD_ENDPOINT_MAX_ATTEMPTS; attempt += 1) {
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = timeoutMs - elapsedMs;
+    if (remainingMs <= 0) {
+      break;
+    }
+
+    const result = await probeJsonEndpoint(
+      serviceId,
+      endpoint.probeKind,
+      endpoint.url,
+      Math.min(attemptTimeoutMs, remainingMs),
+    );
+
+    if (!bestResult || statusRank(result.status) < statusRank(bestResult.status)) {
+      bestResult = result;
+    }
+
+    if (result.status === 'operational') {
+      return result;
+    }
+
+    const hasAttemptsLeft = attempt < STANDARD_ENDPOINT_MAX_ATTEMPTS;
+    const hasRetryBudget = Date.now() - startedAt + STANDARD_RETRY_DELAY_MS < timeoutMs;
+    if (!hasAttemptsLeft || !hasRetryBudget) {
+      break;
+    }
+
+    await delay(STANDARD_RETRY_DELAY_MS);
+  }
+
+  return bestResult || {
+    serviceId,
+    serviceLabel: SERVICE_LABELS[serviceId],
+    probeKind: endpoint.probeKind,
+    status: 'outage',
+    ok: false,
+    latencyMs: Date.now() - startedAt,
+    checkedAt: new Date().toISOString(),
+    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], 'outage', endpoint.probeKind),
+  };
+}
+
+async function probeServiceWithAggregation(
+  serviceId: StatusServiceId,
+  endpoints: StandardEndpointProbe[],
+  timeoutMs: number,
+): Promise<StatusProbeResult> {
+  const checkedAt = new Date().toISOString();
+  const results = await Promise.all(
+    endpoints.map((endpoint) => probeJsonEndpointWithRetries(serviceId, endpoint, timeoutMs)),
+  );
+  const status = results.reduce<PublicServiceStatus>(
+    (current, result) => worseStatus(current, result.status),
+    'operational',
+  );
+  const failedOrSlowResult = results
+    .filter((result) => result.status !== 'operational')
+    .sort((left, right) => statusRank(right.status) - statusRank(left.status))[0];
+  const representative = failedOrSlowResult || results[0];
+  const latencyMs = results.reduce<number | null>((maxLatency, result) => {
+    if (result.latencyMs === null) return maxLatency;
+    return maxLatency === null ? result.latencyMs : Math.max(maxLatency, result.latencyMs);
+  }, null);
+
+  return {
+    serviceId,
+    serviceLabel: SERVICE_LABELS[serviceId],
+    probeKind: representative?.probeKind || endpoints[0]?.probeKind || 'health',
+    status,
+    ok: status !== 'outage',
+    latencyMs,
+    checkedAt,
+    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], status, representative?.probeKind || 'health'),
+  };
 }
 
 async function probeYtInfo(): Promise<StatusProbeResult> {
@@ -158,11 +266,17 @@ export async function runStandardStatusProbes(): Promise<StatusProbeResult[]> {
   const sheetSageBaseUrl = getSheetSageApiUrl();
 
   return Promise.all([
-    probeJsonEndpoint('beat', 'health', `${pythonBaseUrl}/health`, config.probeTimeoutMs),
-    probeJsonEndpoint('beat', 'metadata', `${pythonBaseUrl}/api/model-info`, config.probeTimeoutMs),
-    probeJsonEndpoint('chord', 'health', `${pythonBaseUrl}/health`, config.probeTimeoutMs),
-    probeJsonEndpoint('chord', 'metadata', `${pythonBaseUrl}/api/chord-model-info`, config.probeTimeoutMs),
-    probeJsonEndpoint('sheetsage', 'health', `${sheetSageBaseUrl}/health?warmup=true`, config.probeTimeoutMs),
+    probeServiceWithAggregation('beat', [
+      { probeKind: 'health', url: `${pythonBaseUrl}/health` },
+      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/model-info` },
+    ], config.probeTimeoutMs),
+    probeServiceWithAggregation('chord', [
+      { probeKind: 'health', url: `${pythonBaseUrl}/health` },
+      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/chord-model-info` },
+    ], config.probeTimeoutMs),
+    probeServiceWithAggregation('sheetsage', [
+      { probeKind: 'health', url: `${sheetSageBaseUrl}/health?warmup=true` },
+    ], config.probeTimeoutMs),
     probeYtInfo(),
   ]);
 }

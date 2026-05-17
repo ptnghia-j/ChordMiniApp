@@ -1,11 +1,26 @@
 'use client';
 
 import Navigation from '@/components/common/Navigation';
-import { Card, CardBody, Chip, Divider } from '@heroui/react';
+import { Accordion, AccordionItem, Card, CardBody, Chip, Tooltip } from '@heroui/react';
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiMinusCircle, FiXCircle } from 'react-icons/fi';
-import type { PublicOverallStatus, PublicStatusReport, PublicStatusServiceSummary, StatusServiceId } from '@/services/status/statusTypes';
+import type { PublicOverallStatus, PublicStatusIncident, PublicStatusReport, PublicStatusServiceSummary, StatusServiceId } from '@/services/status/statusTypes';
 
 const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'yt2mp3go'];
+const STATUS_TIMEZONE = 'America/Los_Angeles';
+const DATE_PART_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const TIME_PART_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: STATUS_TIMEZONE,
+});
 
 const OVERALL_LABELS: Record<PublicOverallStatus, string> = {
   operational: 'All Systems Operational',
@@ -38,29 +53,76 @@ function getServiceColor(status: PublicStatusServiceSummary['status']): 'success
   return 'default';
 }
 
+function getServiceStatusLabel(status: PublicStatusServiceSummary['status']): string {
+  if (status === 'operational') return 'Operational';
+  if (status === 'degraded') return 'Degraded';
+  if (status === 'outage') return 'Outage';
+  return 'Unknown';
+}
+
 function getBarClass(status: PublicStatusServiceSummary['status'] | undefined): string {
-  if (status === 'operational') return 'bg-emerald-600';
-  if (status === 'degraded') return 'bg-amber-500';
-  if (status === 'outage') return 'bg-red-600';
-  return 'bg-gray-300 dark:bg-gray-700';
+  if (status === 'operational') return 'bg-emerald-500 dark:bg-emerald-500';
+  if (status === 'degraded') return 'bg-amber-500 dark:bg-amber-500';
+  if (status === 'outage') return 'bg-red-600 dark:bg-red-500';
+  return 'bg-gray-300/80 dark:bg-gray-600/70';
+}
+
+function getServiceBorderClass(index: number, total: number): string {
+  const classes = ['border-gray-200', 'dark:border-gray-700'];
+  if (index < total - 1) classes.push('border-b');
+  if (index >= 2) classes.push('md:border-b-0');
+  if (index < 2) classes.push('md:border-b');
+  if (index % 2 === 0) classes.push('md:border-r');
+  return classes.join(' ');
 }
 
 function formatDate(date: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(`${date}T12:00:00Z`));
+  const parts = DATE_PART_FORMATTER.formatToParts(new Date(`${date}T12:00:00Z`));
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  return `${month} ${day}, ${year}`;
 }
 
 function formatTime(value: string | null): string {
   if (!value) return 'Not checked';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
+  const parts = TIME_PART_FORMATTER.formatToParts(new Date(value));
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+  const hour = parts.find((part) => part.type === 'hour')?.value || '';
+  const minute = parts.find((part) => part.type === 'minute')?.value || '';
+  const dayPeriod = parts.find((part) => part.type === 'dayPeriod')?.value || '';
+  return `${month} ${day}, ${hour}:${minute} ${dayPeriod}`.trim();
+}
+
+function formatIncidentWindow(incident: PublicStatusIncident): string {
+  const started = `Detected ${formatTime(incident.startedAt)}`;
+  if (incident.endedAt) {
+    return `${started} · Recovery confirmed ${formatTime(incident.endedAt)}`;
+  }
+
+  return `${started} · Awaiting a successful follow-up probe`;
+}
+
+function getDailyIncidentLabel(report: PublicStatusReport, latestDate?: string): string {
+  const incidentCount = report.incidents.length;
+  if (incidentCount === 0) {
+    return report.date === latestDate ? 'No incidents reported today.' : 'No incidents reported.';
+  }
+
+  return `${incidentCount} incident${incidentCount === 1 ? '' : 's'} recorded.`;
+}
+
+function getDailyIncidentColor(report: PublicStatusReport): 'success' | 'warning' | 'danger' | 'default' {
+  if (report.incidents.some((incident) => incident.severity === 'major' || incident.severity === 'critical')) {
+    return 'danger';
+  }
+
+  if (report.incidents.length > 0) {
+    return 'warning';
+  }
+
+  return 'success';
 }
 
 function StatusIcon({ status }: { status: PublicOverallStatus }) {
@@ -73,9 +135,11 @@ function StatusIcon({ status }: { status: PublicOverallStatus }) {
 function UptimeRow({
   service,
   reports,
+  className = '',
 }: {
   service: PublicStatusServiceSummary;
   reports: PublicStatusReport[];
+  className?: string;
 }) {
   const reportByDate = new Map(reports.map((report) => [report.date, report]));
   const days = getDayIds(90);
@@ -87,29 +151,66 @@ function UptimeRow({
     : service.uptimePct;
 
   return (
-    <div className="px-6 py-7">
+    <div className={`min-w-0 px-5 py-6 sm:px-6 ${className}`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{service.label}</h2>
-        <Chip color={getServiceColor(service.status)} variant="flat" size="sm">
-          {service.status === 'operational' ? 'Operational' : service.status === 'degraded' ? 'Degraded' : service.status === 'outage' ? 'Outage' : 'Unknown'}
-        </Chip>
+        <h2 className="text-lg font-semibold leading-tight text-gray-900 dark:text-gray-100">{service.label}</h2>
+        <Tooltip
+          showArrow
+          delay={0}
+          classNames={{
+            content: 'rounded-md border border-gray-200 bg-white px-4 py-3 text-left text-gray-800 shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100',
+          }}
+          content={
+            <div className="space-y-1 text-sm">
+              <div className="font-semibold">{service.label}</div>
+              <div>Status: {getServiceStatusLabel(service.status)}</div>
+              <div>Last checked: {formatTime(service.lastCheckedAt)}</div>
+              {service.latencyMs !== null && <div>Latency: {service.latencyMs} ms</div>}
+            </div>
+          }
+        >
+          <Chip color={getServiceColor(service.status)} variant="flat" size="sm" className="cursor-help font-medium">
+            {getServiceStatusLabel(service.status)}
+          </Chip>
+        </Tooltip>
       </div>
-      <div className="flex h-12 items-stretch gap-1">
+      <div className="flex h-12 items-stretch gap-px sm:gap-0.5 lg:gap-[3px]">
         {days.map((day) => {
           const dayService = reportByDate.get(day)?.services?.[service.id];
+          const dayStatus = getServiceStatusLabel(dayService?.status || 'unknown');
           return (
-            <div
+            <Tooltip
               key={`${service.id}-${day}`}
-              className={`min-w-1 flex-1 rounded-sm ${getBarClass(dayService?.status)}`}
-              title={`${day}: ${dayService?.status || 'unknown'}`}
-            />
+              showArrow
+              delay={0}
+              closeDelay={0}
+              classNames={{
+                content: 'rounded-md border border-gray-200 bg-white px-4 py-3 text-left text-gray-800 shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100',
+              }}
+              content={
+                <div className="space-y-1 text-sm">
+                  <div className="font-semibold">{formatDate(day)}</div>
+                  <div>{service.label}: {dayStatus}</div>
+                  {dayService?.lastCheckedAt && <div>Last checked: {formatTime(dayService.lastCheckedAt)}</div>}
+                  {dayService?.latencyMs !== null && dayService?.latencyMs !== undefined && (
+                    <div>Latency: {dayService.latencyMs} ms</div>
+                  )}
+                </div>
+              }
+            >
+              <button
+                type="button"
+                className={`min-w-0 flex-1 cursor-help rounded-[2px] border-0 p-0 transition duration-150 hover:-translate-y-0.5 hover:scale-y-110 hover:brightness-125 hover:ring-2 hover:ring-gray-900/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:hover:ring-white/40 ${getBarClass(dayService?.status)}`}
+                aria-label={`${service.label} on ${formatDate(day)}: ${dayStatus}`}
+              />
+            </Tooltip>
           );
         })}
       </div>
-      <div className="mt-3 grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+      <div className="mt-3 grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-3 text-sm font-medium text-gray-500 dark:text-gray-400 sm:gap-4">
         <span>90 days ago</span>
         <div className="h-px bg-gray-300 dark:bg-gray-700" />
-        <span className="font-medium">{uptime.toFixed(2)}% uptime</span>
+        <span className="font-semibold">{uptime.toFixed(2)}% uptime</span>
         <div className="h-px bg-gray-300 dark:bg-gray-700" />
         <span>Today</span>
       </div>
@@ -130,7 +231,7 @@ export default function StatusDashboard({
   const hasNoReportsYet = !unavailable && reports.length === 0;
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-dark-bg">
+    <div className="min-h-screen bg-background text-foreground [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif] dark:bg-dark-bg">
       <Navigation />
 
       <main className="mx-auto w-full max-w-7xl px-4 pb-20 pt-28 sm:px-6 lg:px-8">
@@ -139,7 +240,7 @@ export default function StatusDashboard({
             <div>
               <div className="flex items-center gap-3 text-gray-800 dark:text-gray-100">
                 <FiActivity className="h-7 w-7" />
-                <h1 className="text-3xl font-bold">ChordMini Status</h1>
+                <h1 className="text-3xl font-semibold">ChordMini Status</h1>
               </div>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 Public service health from sanitized server-side probes.
@@ -174,45 +275,26 @@ export default function StatusDashboard({
 
         {latest && (
           <section className="mb-14">
-            <div className="mb-4 flex justify-end text-sm font-medium text-gray-600 dark:text-gray-400">
+            <div className="mb-4 flex justify-end text-base font-medium text-gray-500 dark:text-gray-400">
               Uptime over the past 90 days.
             </div>
             <Card radius="sm" shadow="none" className="border border-gray-200 bg-white dark:border-gray-700 dark:bg-content-bg">
-              <CardBody className="divide-y divide-gray-200 p-0 dark:divide-gray-700">
-                {latestServices.map((service) => (
-                  <UptimeRow key={service.id} service={service} reports={reports} />
+              <CardBody className="grid p-0 md:grid-cols-2">
+                {latestServices.map((service, index) => (
+                  <UptimeRow
+                    key={service.id}
+                    service={service}
+                    reports={reports}
+                    className={getServiceBorderClass(index, latestServices.length)}
+                  />
                 ))}
               </CardBody>
             </Card>
           </section>
         )}
 
-        {latest && (
-          <section className="mb-14">
-            <h2 className="mb-5 text-2xl font-bold text-gray-900 dark:text-gray-100">Current Components</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {latestServices.map((service) => (
-                <Card key={service.id} radius="sm" shadow="none" className="border border-gray-200 bg-white dark:border-gray-700 dark:bg-content-bg">
-                  <CardBody className="flex flex-row items-center justify-between gap-4">
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-gray-100">{service.label}</div>
-                      <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                        Last checked {formatTime(service.lastCheckedAt)}
-                        {service.latencyMs !== null ? `, ${service.latencyMs} ms` : ''}
-                      </div>
-                    </div>
-                    <Chip color={getServiceColor(service.status)} variant="flat" size="sm">
-                      {service.status}
-                    </Chip>
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
-
         <section>
-          <h2 className="mb-8 text-4xl font-bold text-gray-900 dark:text-gray-100">Past Incidents</h2>
+          <h2 className="mb-8 text-3xl font-semibold text-gray-900 dark:text-gray-100">Past Incidents</h2>
           {reports.length === 0 && (
             <p className="text-gray-600 dark:text-gray-400">
               {hasNoReportsYet
@@ -221,34 +303,62 @@ export default function StatusDashboard({
             </p>
           )}
 
-          {reports.slice(0, 14).map((report) => {
-            const dayIncidents = report.incidents;
-            return (
-              <div key={report.date} className="mb-10">
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatDate(report.date)}</h3>
-                <Divider className="my-4" />
-                {dayIncidents.length === 0 ? (
-                  <p className="text-lg text-gray-600 dark:text-gray-400">
-                    {report.date === latest?.date ? 'No incidents reported today.' : 'No incidents reported.'}
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {dayIncidents.map((incident) => (
-                      <div key={incident.id}>
-                        <div className={incident.severity === 'major' || incident.severity === 'critical' ? 'text-xl font-bold text-red-600' : 'text-xl font-bold text-amber-500'}>
-                          {incident.title}
-                        </div>
-                        <p className="mt-2 text-gray-700 dark:text-gray-300">{incident.summary}</p>
+          {reports.length > 0 && (
+            <Accordion
+              variant="light"
+              selectionMode="multiple"
+              defaultExpandedKeys={latest ? [latest.date] : []}
+              className="border-t border-gray-200 px-0 dark:border-gray-700"
+              itemClasses={{
+                base: 'border-b border-gray-200 px-0 dark:border-gray-700',
+                title: 'text-xl font-semibold text-gray-900 dark:text-gray-100',
+                trigger: 'px-0 py-5 data-[hover=true]:bg-transparent',
+                content: 'px-0 pb-6 pt-0',
+              }}
+            >
+              {reports.slice(0, 14).map((report) => {
+                const dayIncidents = report.incidents;
+                return (
+                  <AccordionItem
+                    key={report.date}
+                    aria-label={`${formatDate(report.date)} status incidents`}
+                    title={formatDate(report.date)}
+                    subtitle={
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {getDailyIncidentLabel(report, latest?.date)}
+                      </span>
+                    }
+                    startContent={
+                      <Chip color={getDailyIncidentColor(report)} variant="flat" size="sm">
+                        {dayIncidents.length === 0 ? 'Clear' : dayIncidents.some((incident) => incident.status !== 'resolved') ? 'Investigating' : 'Recovery confirmed'}
+                      </Chip>
+                    }
+                  >
+                    {dayIncidents.length === 0 ? (
+                      <p className="text-lg text-gray-600 dark:text-gray-400">
+                        {report.date === latest?.date ? 'No incidents reported today.' : 'No incidents reported.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {dayIncidents.map((incident) => (
+                          <div key={incident.id}>
+                            <div className={incident.severity === 'major' || incident.severity === 'critical' ? 'text-lg font-semibold text-red-600' : 'text-lg font-semibold text-amber-500'}>
+                              {incident.title}
+                            </div>
+                            <p className="mt-2 text-gray-700 dark:text-gray-300">{incident.summary}</p>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{formatIncidentWindow(incident)}</p>
+                          </div>
+                        ))}
+                        {report.analysis.summary && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{report.analysis.summary}</p>
+                        )}
                       </div>
-                    ))}
-                    {report.analysis.summary && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{report.analysis.summary}</p>
                     )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          )}
         </section>
       </main>
     </div>
