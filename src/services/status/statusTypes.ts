@@ -64,5 +64,5 @@ export interface StatusProbeResult {
   latencyMs: number | null;
   checkedAt: string;
   sanitizedSummary: string;
+  failureReason?: 'http' | 'network' | 'timeout';
 }
-

@@ -32,6 +32,7 @@ describe('statusProbes', () => {
       STATUS_YT2MP3GO_INFO_TIMEOUT_MS: '30000',
       STATUS_YT2MP3GO_EXTRACTION_TIMEOUT_MS: '250000',
       STATUS_YT2MP3GO_TEST_VIDEO_ID: 'CizitNpshbM',
+      STATUS_YT2MP3GO_TEST_VIDEO_IDS: '',
       STATUS_YT2MP3GO_TEST_QUALITY: 'low',
     };
   });
@@ -89,6 +90,31 @@ describe('statusProbes', () => {
     });
   });
 
+  it('reports metadata timeouts as degraded when the shared backend health check passes', async () => {
+    process.env.STATUS_PROBE_TIMEOUT_MS = '1';
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === 'https://python.private.test/api/chord-model-info') {
+        throw Object.assign(new Error('probe timed out'), { name: 'AbortError' });
+      }
+
+      return {
+        ok: true,
+        status: 200,
+      } as Response;
+    });
+
+    const probes = await runStandardStatusProbes();
+    const chordProbe = probes.find((probe) => probe.serviceId === 'chord');
+
+    expect(chordProbe).toMatchObject({
+      serviceId: 'chord',
+      probeKind: 'metadata',
+      status: 'degraded',
+      ok: true,
+    });
+  });
+
   it('retries transient yt2mp3go metadata failures before marking the service healthy', async () => {
     let ytInfoAttempts = 0;
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
@@ -118,6 +144,33 @@ describe('statusProbes', () => {
     });
   });
 
+  it('treats persistent yt2mp3go metadata failure as degraded because extraction is probed separately', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/yt-downloader/info')) {
+        return {
+          ok: false,
+          status: 400,
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 200,
+      } as Response;
+    });
+
+    const probes = await runStandardStatusProbes();
+    const ytProbe = probes.find((probe) => probe.serviceId === 'yt2mp3go');
+
+    expect(ytProbe).toMatchObject({
+      probeKind: 'metadata',
+      status: 'degraded',
+      ok: true,
+    });
+    expect(ytProbe?.sanitizedSummary).toContain('extraction is verified by a separate extraction probe');
+  });
+
   it('retries quick yt2mp3go extraction failures before recording an outage', async () => {
     mockExtractAudio
       .mockResolvedValueOnce({ success: false, videoId: 'CizitNpshbM' })
@@ -126,6 +179,22 @@ describe('statusProbes', () => {
     const probe = await runYtExtractionStatusProbe();
 
     expect(mockExtractAudio).toHaveBeenCalledTimes(2);
+    expect(probe).toMatchObject({
+      serviceId: 'yt2mp3go',
+      probeKind: 'extraction',
+      status: 'operational',
+      ok: true,
+    });
+  });
+
+  it('uses a configured random list for yt2mp3go extraction probes', async () => {
+    process.env.STATUS_YT2MP3GO_TEST_VIDEO_IDS = 'invalid,el3E4MbxRqQ,_b-2C3KPAM0';
+    mockExtractAudio.mockResolvedValueOnce({ success: true, videoId: 'probe-video' });
+
+    const probe = await runYtExtractionStatusProbe();
+
+    const videoId = mockExtractAudio.mock.calls[0]?.[0];
+    expect(['el3E4MbxRqQ', '_b-2C3KPAM0']).toContain(videoId);
     expect(probe).toMatchObject({
       serviceId: 'yt2mp3go',
       probeKind: 'extraction',

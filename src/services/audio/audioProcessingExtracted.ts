@@ -439,7 +439,7 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
     try {
       const response = await apiPost('EXTRACT_AUDIO', {
         videoId,
-        forceRefresh,
+        forceRedownload: forceRefresh,
         videoMetadata,
         originalTitle: titleFromSearch
       }, {

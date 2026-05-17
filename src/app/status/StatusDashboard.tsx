@@ -125,11 +125,23 @@ function getDailyIncidentColor(report: PublicStatusReport): 'success' | 'warning
   return 'success';
 }
 
+function getDailyIncidentStatusLabel(report: PublicStatusReport): string {
+  if (report.incidents.length === 0) return 'Clear';
+  return report.incidents.some((incident) => incident.status !== 'resolved') ? 'Investigating' : 'Recovery confirmed';
+}
+
 function StatusIcon({ status }: { status: PublicOverallStatus }) {
   if (status === 'operational') return <FiCheckCircle className="h-5 w-5" />;
   if (status === 'degraded') return <FiAlertTriangle className="h-5 w-5" />;
   if (status === 'partial_outage' || status === 'major_outage') return <FiXCircle className="h-5 w-5" />;
   return <FiMinusCircle className="h-5 w-5" />;
+}
+
+function ServiceStatusIcon({ status }: { status: PublicStatusServiceSummary['status'] }) {
+  if (status === 'operational') return <FiCheckCircle aria-hidden="true" className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />;
+  if (status === 'degraded') return <FiAlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-600 dark:text-amber-400" />;
+  if (status === 'outage') return <FiXCircle aria-hidden="true" className="h-5 w-5 text-red-600 dark:text-red-400" />;
+  return <FiMinusCircle aria-hidden="true" className="h-5 w-5 text-gray-500 dark:text-gray-400" />;
 }
 
 function UptimeRow({
@@ -169,8 +181,15 @@ function UptimeRow({
             </div>
           }
         >
-          <Chip color={getServiceColor(service.status)} variant="flat" size="sm" className="cursor-help font-medium">
-            {getServiceStatusLabel(service.status)}
+          <Chip
+            aria-label={`${service.label} status: ${getServiceStatusLabel(service.status)}`}
+            color={getServiceColor(service.status)}
+            variant="flat"
+            size="sm"
+            className="h-8 min-w-8 cursor-help px-2"
+          >
+            <ServiceStatusIcon status={service.status} />
+            <span className="sr-only">{getServiceStatusLabel(service.status)}</span>
           </Chip>
         </Tooltip>
       </div>
@@ -318,20 +337,23 @@ export default function StatusDashboard({
             >
               {reports.slice(0, 14).map((report) => {
                 const dayIncidents = report.incidents;
+                const incidentStatusLabel = getDailyIncidentStatusLabel(report);
                 return (
                   <AccordionItem
                     key={report.date}
                     aria-label={`${formatDate(report.date)} status incidents`}
-                    title={formatDate(report.date)}
+                    title={
+                      <span className="flex flex-wrap items-center gap-3">
+                        <span>{formatDate(report.date)}</span>
+                        <Chip color={getDailyIncidentColor(report)} variant="flat" size="sm">
+                          {incidentStatusLabel}
+                        </Chip>
+                      </span>
+                    }
                     subtitle={
                       <span className="text-sm text-gray-600 dark:text-gray-400">
                         {getDailyIncidentLabel(report, latest?.date)}
                       </span>
-                    }
-                    startContent={
-                      <Chip color={getDailyIncidentColor(report)} variant="flat" size="sm">
-                        {dayIncidents.length === 0 ? 'Clear' : dayIncidents.some((incident) => incident.status !== 'resolved') ? 'Investigating' : 'Recovery confirmed'}
-                      </Chip>
                     }
                   >
                     {dayIncidents.length === 0 ? (

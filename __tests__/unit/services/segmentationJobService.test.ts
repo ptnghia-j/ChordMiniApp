@@ -1,50 +1,26 @@
-const mockCollection = jest.fn((...args: unknown[]) => ({ type: 'collection', args }));
-const mockDoc = jest.fn((...args: unknown[]) => ({ type: 'doc', args }));
-const mockDeleteDoc = jest.fn();
-const mockGetDoc = jest.fn();
-const mockGetDocs = jest.fn();
-const mockQuery = jest.fn((...args: unknown[]) => ({ type: 'query', args }));
-const mockServerTimestamp = jest.fn(() => 'SERVER_TIMESTAMP');
-const mockSetDoc = jest.fn();
-const mockWhere = jest.fn((...args: unknown[]) => ({ type: 'where', args }));
 const mockDeleteDocumentsWithAdminAccess = jest.fn();
-
-jest.mock('@/config/firebase', () => ({
-  SEGMENTATION_JOBS_COLLECTION: 'segmentationJobs',
-  getFirestoreInstance: jest.fn().mockResolvedValue({ __type: 'mock-firestore-db' }),
-}));
+const mockGetDocumentWithAdminAccess = jest.fn();
+const mockQueryDocumentsByFieldWithAdminAccess = jest.fn();
+const mockSetDocumentWithAdminAccess = jest.fn();
+const mockUpdateDocumentFieldsWithAdminAccess = jest.fn();
 
 jest.mock('@/services/firebase/firestoreAdminService', () => ({
   deleteDocumentsWithAdminAccess: (...args: unknown[]) => mockDeleteDocumentsWithAdminAccess(...args),
+  getDocumentWithAdminAccess: (...args: unknown[]) => mockGetDocumentWithAdminAccess(...args),
+  queryDocumentsByFieldWithAdminAccess: (...args: unknown[]) => mockQueryDocumentsByFieldWithAdminAccess(...args),
+  setDocumentWithAdminAccess: (...args: unknown[]) => mockSetDocumentWithAdminAccess(...args),
+  updateDocumentFieldsWithAdminAccess: (...args: unknown[]) => mockUpdateDocumentFieldsWithAdminAccess(...args),
 }));
-
-jest.mock('firebase/firestore', () => ({
-  collection: (...args: unknown[]) => mockCollection(...args),
-  deleteDoc: (...args: unknown[]) => mockDeleteDoc(...args),
-  doc: (...args: unknown[]) => mockDoc(...args),
-  getDoc: (...args: unknown[]) => mockGetDoc(...args),
-  getDocs: (...args: unknown[]) => mockGetDocs(...args),
-  query: (...args: unknown[]) => mockQuery(...args),
-  serverTimestamp: (...args: unknown[]) => mockServerTimestamp(...args),
-  setDoc: (...args: unknown[]) => mockSetDoc(...args),
-  where: (...args: unknown[]) => mockWhere(...args),
-}));
-
-function makeSnapshot(jobs: Array<Record<string, unknown>>) {
-  return {
-    forEach: (callback: (docSnap: { data: () => Record<string, unknown> }) => void) => {
-      jobs.forEach((job) => callback({ data: () => job }));
-    },
-    docs: jobs.map((job) => ({ data: () => job })),
-  };
-}
 
 describe('segmentationJobService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Date, 'now').mockReturnValue(1_773_114_835_172);
     mockDeleteDocumentsWithAdminAccess.mockResolvedValue(0);
-    mockSetDoc.mockResolvedValue(undefined);
+    mockGetDocumentWithAdminAccess.mockResolvedValue(null);
+    mockQueryDocumentsByFieldWithAdminAccess.mockResolvedValue([]);
+    mockSetDocumentWithAdminAccess.mockResolvedValue(undefined);
+    mockUpdateDocumentFieldsWithAdminAccess.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -65,21 +41,21 @@ describe('segmentationJobService', () => {
       model: 'songformer',
     });
 
-    expect(mockSetDoc).toHaveBeenCalledWith(
-      expect.any(Object),
+    expect(mockUpdateDocumentFieldsWithAdminAccess).toHaveBeenCalledWith(
+      'segmentationJobs',
+      'seg-job-1',
       expect.objectContaining({
         status: 'completed',
         error: null,
-        updatedAt: 'SERVER_TIMESTAMP',
-        completedAt: 'SERVER_TIMESTAMP',
+        updatedAt: new Date(1_773_114_835_172).toISOString(),
+        completedAt: new Date(1_773_114_835_172).toISOString(),
       }),
-      { merge: true },
     );
   });
 
   it('uses admin-backed deletion for stale cleanup on the server', async () => {
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([
+    mockQueryDocumentsByFieldWithAdminAccess
+      .mockResolvedValueOnce([
         {
           jobId: 'stale-created',
           status: 'created',
@@ -87,8 +63,8 @@ describe('segmentationJobService', () => {
           updatedAtMs: 100,
           staleAtMs: 200,
         },
-      ]))
-      .mockResolvedValueOnce(makeSnapshot([
+      ])
+      .mockResolvedValueOnce([
         {
           jobId: 'active-processing',
           status: 'processing',
@@ -103,7 +79,7 @@ describe('segmentationJobService', () => {
           updatedAtMs: 100,
           staleAtMs: 200,
         },
-      ]));
+      ]);
     mockDeleteDocumentsWithAdminAccess.mockResolvedValue(2);
 
     const { cleanupStaleSegmentationJobs } = await import('@/services/firebase/segmentationJobService');
@@ -118,6 +94,5 @@ describe('segmentationJobService', () => {
       deletedCount: 2,
       staleJobIds: ['stale-created', 'stale-processing'],
     });
-    expect(mockDeleteDoc).not.toHaveBeenCalled();
   });
 });

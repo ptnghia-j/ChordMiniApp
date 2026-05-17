@@ -1,19 +1,15 @@
 import crypto from 'crypto';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from 'firebase/firestore';
 
-import { getFirestoreInstance, SEGMENTATION_JOBS_COLLECTION } from '@/config/firebase';
-import { deleteDocumentsWithAdminAccess } from '@/services/firebase/firestoreAdminService';
+import {
+  deleteDocumentsWithAdminAccess,
+  getDocumentWithAdminAccess,
+  queryDocumentsByFieldWithAdminAccess,
+  setDocumentWithAdminAccess,
+  updateDocumentFieldsWithAdminAccess,
+} from '@/services/firebase/firestoreAdminService';
 import { SegmentationResult, SongContext } from '@/types/chatbotTypes';
+
+const SEGMENTATION_JOBS_COLLECTION = 'segmentationJobs';
 
 export type SegmentationJobStatus = 'created' | 'processing' | 'completed' | 'failed';
 
@@ -70,19 +66,7 @@ async function deleteSegmentationJobs(jobIds: string[]): Promise<number> {
     return 0;
   }
 
-  try {
-    return await deleteDocumentsWithAdminAccess(SEGMENTATION_JOBS_COLLECTION, jobIds);
-  } catch (error) {
-    if (process.env.NODE_ENV === 'production') {
-      throw error;
-    }
-  }
-
-  const firestore = await getFirestoreInstance();
-  await Promise.all(
-    jobIds.map((jobId) => deleteDoc(doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId))),
-  );
-  return jobIds.length;
+  return await deleteDocumentsWithAdminAccess(SEGMENTATION_JOBS_COLLECTION, jobIds);
 }
 
 function buildJobId(): string {
@@ -148,7 +132,6 @@ export async function createSegmentationJob(
   songContext: SongContext,
   audioUrl: string,
 ): Promise<SegmentationJobCreateResult> {
-  const firestore = await getFirestoreInstance();
   const jobId = buildJobId();
   const updateToken = crypto.randomUUID();
   const now = Date.now();
@@ -168,25 +151,17 @@ export async function createSegmentationJob(
     updatedAtMs: now,
   };
 
-  const jobRef = doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId);
-  await setDoc(jobRef, stripUndefinedFields({
+  await setDocumentWithAdminAccess(SEGMENTATION_JOBS_COLLECTION, jobId, stripUndefinedFields({
     ...job,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
   }));
 
   return { jobId, updateToken, job };
 }
 
 export async function getSegmentationJob(jobId: string): Promise<SegmentationJobDocument | null> {
-  const firestore = await getFirestoreInstance();
-  const jobRef = doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId);
-  const jobSnap = await getDoc(jobRef);
-  if (!jobSnap.exists()) {
-    return null;
-  }
-
-  return jobSnap.data() as SegmentationJobDocument;
+  return await getDocumentWithAdminAccess<SegmentationJobDocument>(SEGMENTATION_JOBS_COLLECTION, jobId);
 }
 
 export async function verifySegmentationJobUpdateToken(
@@ -205,36 +180,35 @@ export async function updateSegmentationJob(
   jobId: string,
   updates: Partial<SegmentationJobDocument>,
 ): Promise<void> {
-  const firestore = await getFirestoreInstance();
   const now = Date.now();
-  const jobRef = doc(collection(firestore, SEGMENTATION_JOBS_COLLECTION), jobId);
 
-  await setDoc(
-    jobRef,
+  await updateDocumentFieldsWithAdminAccess(
+    SEGMENTATION_JOBS_COLLECTION,
+    jobId,
     stripUndefinedFields({
       ...updates,
       ...(updates.status === 'completed' ? { error: null } : {}),
       ...(updates.status ? { staleAtMs: getSegmentationJobStaleAtMs(updates.status, now) } : {}),
-      updatedAt: serverTimestamp(),
+      updatedAt: new Date(now).toISOString(),
       updatedAtMs: now,
       ...(updates.status === 'completed' || updates.status === 'failed'
-        ? { completedAt: serverTimestamp(), completedAtMs: now }
+        ? { completedAt: new Date(now).toISOString(), completedAtMs: now }
         : {}),
     }),
-    { merge: true },
   );
 }
 
 export async function findCompletedSegmentationJobByRequestHash(
   requestHash: string,
 ): Promise<SegmentationJobDocument | null> {
-  const firestore = await getFirestoreInstance();
-  const jobsRef = collection(firestore, SEGMENTATION_JOBS_COLLECTION);
-  const snapshot = await getDocs(query(jobsRef, where('requestHash', '==', requestHash)));
+  const jobs = await queryDocumentsByFieldWithAdminAccess<SegmentationJobDocument>(
+    SEGMENTATION_JOBS_COLLECTION,
+    'requestHash',
+    requestHash,
+  );
 
   let bestMatch: SegmentationJobDocument | null = null;
-  snapshot.forEach((docSnap) => {
-    const job = docSnap.data() as SegmentationJobDocument;
+  jobs.forEach((job) => {
     if (job.status !== 'completed' || !job.result) {
       return;
     }
@@ -250,13 +224,14 @@ export async function findCompletedSegmentationJobByRequestHash(
 export async function findActiveSegmentationJobByRequestHash(
   requestHash: string,
 ): Promise<SegmentationJobDocument | null> {
-  const firestore = await getFirestoreInstance();
-  const jobsRef = collection(firestore, SEGMENTATION_JOBS_COLLECTION);
-  const snapshot = await getDocs(query(jobsRef, where('requestHash', '==', requestHash)));
+  const jobs = await queryDocumentsByFieldWithAdminAccess<SegmentationJobDocument>(
+    SEGMENTATION_JOBS_COLLECTION,
+    'requestHash',
+    requestHash,
+  );
 
   let bestMatch: SegmentationJobDocument | null = null;
-  snapshot.forEach((docSnap) => {
-    const job = docSnap.data() as SegmentationJobDocument;
+  jobs.forEach((job) => {
     if (!['created', 'processing'].includes(job.status)) {
       return;
     }
@@ -276,35 +251,32 @@ export async function findActiveSegmentationJobByRequestHash(
 export async function cleanupStaleSegmentationJobs(
   options?: { nowMs?: number; limit?: number },
 ): Promise<SegmentationJobCleanupResult> {
-  const firestore = await getFirestoreInstance();
   const nowMs = options?.nowMs ?? Date.now();
   const limit = options?.limit && options.limit > 0 ? options.limit : undefined;
-  const jobsRef = collection(firestore, SEGMENTATION_JOBS_COLLECTION);
 
-  const [createdSnapshot, processingSnapshot] = await Promise.all([
-    getDocs(query(jobsRef, where('status', '==', 'created'))),
-    getDocs(query(jobsRef, where('status', '==', 'processing'))),
+  const [createdJobs, processingJobs] = await Promise.all([
+    queryDocumentsByFieldWithAdminAccess<SegmentationJobDocument>(SEGMENTATION_JOBS_COLLECTION, 'status', 'created'),
+    queryDocumentsByFieldWithAdminAccess<SegmentationJobDocument>(SEGMENTATION_JOBS_COLLECTION, 'status', 'processing'),
   ]);
 
   const staleJobIds: string[] = [];
   let scannedCount = 0;
 
-  const collectStaleJobs = (snapshot: Awaited<ReturnType<typeof getDocs>>) => {
-    snapshot.forEach((docSnap) => {
+  const collectStaleJobs = (jobs: SegmentationJobDocument[]) => {
+    jobs.forEach((job) => {
       if (limit && staleJobIds.length >= limit) {
         return;
       }
 
       scannedCount += 1;
-      const job = docSnap.data() as SegmentationJobDocument;
       if (isSegmentationJobStale(job, nowMs)) {
         staleJobIds.push(job.jobId);
       }
     });
   };
 
-  collectStaleJobs(createdSnapshot);
-  collectStaleJobs(processingSnapshot);
+  collectStaleJobs(createdJobs);
+  collectStaleJobs(processingJobs);
 
   if (staleJobIds.length > 0) {
     await deleteSegmentationJobs(staleJobIds);
@@ -321,12 +293,13 @@ export async function deleteNonCompletedSegmentationJobsByRequestHash(
   requestHash: string,
   options?: { excludeJobId?: string },
 ): Promise<number> {
-  const firestore = await getFirestoreInstance();
-  const jobsRef = collection(firestore, SEGMENTATION_JOBS_COLLECTION);
-  const snapshot = await getDocs(query(jobsRef, where('requestHash', '==', requestHash)));
+  const jobs = await queryDocumentsByFieldWithAdminAccess<SegmentationJobDocument>(
+    SEGMENTATION_JOBS_COLLECTION,
+    'requestHash',
+    requestHash,
+  );
 
-  const jobIdsToDelete = snapshot.docs
-    .map((docSnap) => docSnap.data() as SegmentationJobDocument)
+  const jobIdsToDelete = jobs
     .filter((job) => job.status !== 'completed')
     .filter((job) => !(options?.excludeJobId && job.jobId === options.excludeJobId))
     .map((job) => job.jobId);

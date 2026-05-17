@@ -129,8 +129,23 @@ export class YtMp3GoService {
   private async performExtraction(videoId: string, title?: string, duration?: number, quality?: string): Promise<YtMp3GoResult> {
 
     try {
-      // Step 1: Get video info
-      const videoInfo = await this.getVideoInfo(videoId);
+      // Step 1: Try to enrich with video info, but do not make this metadata
+      // probe a hard dependency. The downloader can often create a job from the
+      // known video ID even when the info client is temporarily blocked by
+      // YouTube client/player changes.
+      let videoInfo: YtMp3GoInfoResponse = {
+        id: videoId,
+        title: title || videoId
+      };
+
+      try {
+        videoInfo = await this.getVideoInfo(videoId);
+      } catch (infoError) {
+        console.warn('⚠️ yt-mp3-go info request failed, continuing with provided video metadata', {
+          videoId,
+          error: infoError instanceof Error ? infoError.message : 'Unknown info error'
+        });
+      }
 
       // Step 2: Create extraction job with quality
       const jobData = await this.createJob(videoInfo.id, quality || this.DEFAULT_QUALITY, videoInfo.title);
@@ -391,8 +406,8 @@ export class YtMp3GoService {
 
   // Maximum number of file-availability retries after a job reports 'complete'.
   // The yt-mp3-go server may need a moment to flush the file to disk.
-  private readonly FILE_AVAILABILITY_RETRIES = 3;
-  private readonly FILE_AVAILABILITY_DELAY_MS = 2000; // 2 seconds between retries
+  private readonly FILE_AVAILABILITY_RETRIES = 8;
+  private readonly FILE_AVAILABILITY_DELAY_MS = 2500; // 2.5 seconds between retries
 
   private async handleJobTerminalStatus(
     jobStatus: YtMp3GoJobStatus,
@@ -534,13 +549,8 @@ export class YtMp3GoService {
    */
   private async validateFileContentWithMetadata(url: string): Promise<{ isValid: boolean; realDuration?: number }> {
     try {
-      // First, check if the file is accessible
-      const headResponse = await fetch(url, { 
-        method: 'HEAD',
-        signal: createSafeTimeoutSignal(10000)
-      });
-
-      if (!headResponse.ok) {
+      const isAccessible = await this.validateFileAccessible(url);
+      if (!isAccessible) {
         return { isValid: false };
       }
 
@@ -567,6 +577,40 @@ export class YtMp3GoService {
 
     } catch {
       return { isValid: false };
+    }
+  }
+
+  private async validateFileAccessible(url: string): Promise<boolean> {
+    try {
+      const headResponse = await fetch(url, {
+        method: 'HEAD',
+        signal: createSafeTimeoutSignal(10000)
+      });
+
+      if (headResponse.ok) {
+        return true;
+      }
+    } catch {
+      // Some servers/CDNs reject HEAD while the file is still becoming visible.
+    }
+
+    try {
+      const getResponse = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Range: 'bytes=0-1'
+        },
+        signal: createSafeTimeoutSignal(10000)
+      });
+
+      if (!getResponse.ok) {
+        return false;
+      }
+
+      await getResponse.body?.cancel();
+      return true;
+    } catch {
+      return false;
     }
   }
 

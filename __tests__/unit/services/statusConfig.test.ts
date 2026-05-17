@@ -1,4 +1,9 @@
-import { canRunStatusProbes, canRunYtExtractionProbe, getStatusConfig } from '@/services/status/statusConfig';
+import {
+  canRunStatusProbes,
+  canRunYtExtractionProbe,
+  getStatusConfig,
+  selectRandomYtTestVideoId,
+} from '@/services/status/statusConfig';
 
 describe('statusConfig', () => {
   const originalEnv = process.env;
@@ -16,6 +21,8 @@ describe('statusConfig', () => {
     delete process.env.GCLOUD_PROJECT;
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    delete process.env.STATUS_YT2MP3GO_TEST_VIDEO_ID;
+    delete process.env.STATUS_YT2MP3GO_TEST_VIDEO_IDS;
   });
 
   afterAll(() => {
@@ -27,6 +34,7 @@ describe('statusConfig', () => {
 
     expect(config.probesEnabled).toBe(false);
     expect(config.storageEnabled).toBe(false);
+    expect(config.probeTimeoutMs).toBe(45_000);
     expect(canRunStatusProbes(config)).toBe(false);
     expect(canRunYtExtractionProbe(config)).toBe(false);
   });
@@ -46,5 +54,38 @@ describe('statusConfig', () => {
     process.env.YT_MP3_GO_BASE_URL = 'https://yt.private.test';
     config = getStatusConfig();
     expect(canRunYtExtractionProbe(config)).toBe(true);
+  });
+
+  it('selects a random yt2mp3go probe video from the configured list', () => {
+    expect(selectRandomYtTestVideoId(['firstVideo1', 'secondVide2'], () => 0)).toBe('firstVideo1');
+    expect(selectRandomYtTestVideoId(['firstVideo1', 'secondVide2'], () => 0.75)).toBe('secondVide2');
+  });
+
+  it('uses the built-in short probe video list when no env list is configured', () => {
+    const config = getStatusConfig();
+
+    expect(config.ytTestVideoIds).toEqual([
+      'el3E4MbxRqQ',
+      '_b-2C3KPAM0',
+    ]);
+    expect(config.ytTestVideoIds).toContain(config.ytTestVideoId);
+  });
+
+  it('ignores the known-bad legacy single yt2mp3go probe video', () => {
+    process.env.STATUS_YT2MP3GO_TEST_VIDEO_ID = 'CizitNpshbM';
+
+    const config = getStatusConfig();
+
+    expect(config.ytTestVideoIds).not.toContain('CizitNpshbM');
+    expect(config.ytTestVideoIds).toContain(config.ytTestVideoId);
+  });
+
+  it('falls back to stable defaults when configured candidates fail live yt2mp3go extraction', () => {
+    process.env.STATUS_YT2MP3GO_TEST_VIDEO_IDS = 'jNQXAC9IVRw,2NUZ8W2llS4';
+
+    const config = getStatusConfig();
+
+    expect(config.ytTestVideoIds).toEqual(['el3E4MbxRqQ', '_b-2C3KPAM0']);
+    expect(config.ytTestVideoIds).toContain(config.ytTestVideoId);
   });
 });

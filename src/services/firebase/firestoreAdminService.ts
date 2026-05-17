@@ -101,6 +101,11 @@ function getFirestoreCollectionUrl(collectionName: string): string {
   return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionName}`;
 }
 
+function getFirestoreRunQueryUrl(): string {
+  const projectId = getFirestoreProjectId();
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`;
+}
+
 function toTimestampString(value: unknown): string | null {
   if (value instanceof Date) {
     return value.toISOString();
@@ -320,6 +325,52 @@ export async function listDocumentsWithAdminAccess<T>(
   }));
 }
 
+export async function queryDocumentsByFieldWithAdminAccess<T>(
+  collectionName: string,
+  fieldName: string,
+  value: unknown,
+): Promise<Array<T & { id: string }>> {
+  const token = await getAccessToken();
+  const response = await fetch(getFirestoreRunQueryUrl(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: collectionName }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: fieldName },
+            op: 'EQUAL',
+            value: encodeFirestoreValue(value),
+          },
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firestore admin query failed (${response.status} ${response.statusText}): ${errorText}`);
+  }
+
+  const payload = await response.json() as Array<{
+    document?: {
+      name?: string;
+      fields?: Record<string, Record<string, unknown>>;
+    };
+  }>;
+
+  return payload
+    .filter((entry) => entry.document)
+    .map((entry) => ({
+      id: entry.document?.name?.split('/').pop() || '',
+      ...(decodeFirestoreFields(entry.document?.fields) as T),
+    }));
+}
+
 export async function setDocumentWithAdminAccess(
   collectionName: string,
   documentId: string,
@@ -347,5 +398,43 @@ export async function setDocumentWithAdminAccess(
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Firestore admin set failed (${response.status} ${response.statusText}): ${errorText}`);
+  }
+}
+
+export async function updateDocumentFieldsWithAdminAccess(
+  collectionName: string,
+  documentId: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const fieldPaths = Object.keys(data).filter((key) => data[key] !== undefined);
+  if (fieldPaths.length === 0) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  const response = await fetch(getFirestoreCommitUrl(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      writes: [
+        {
+          update: {
+            name: getDocumentName(collectionName, documentId),
+            fields: encodeFirestoreFields(data),
+          },
+          updateMask: {
+            fieldPaths,
+          },
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firestore admin update failed (${response.status} ${response.statusText}): ${errorText}`);
   }
 }

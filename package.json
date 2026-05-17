@@ -90,6 +90,7 @@
   },
   "overrides": {
     "@tootallnate/once": "3.0.1",
+    "brace-expansion": "5.0.6",
     "google-gax": "5.0.6",
     "http-proxy-agent": "9.0.0",
     "postcss": "$postcss",

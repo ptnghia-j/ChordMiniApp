@@ -24,12 +24,14 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const {
       videoId,
-      forceRedownload = false,
+      forceRedownload: requestedForceRedownload = false,
+      forceRefresh: legacyForceRefresh = false,
       getInfoOnly = false,
       originalTitle,
       // New: Accept YouTube search metadata directly
       videoMetadata
     } = data;
+    const forceRedownload = requestedForceRedownload === true || legacyForceRefresh === true;
 
     if (!videoId) {
       return NextResponse.json(

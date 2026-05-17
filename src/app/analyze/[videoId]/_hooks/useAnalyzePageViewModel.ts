@@ -1310,7 +1310,7 @@ export function useAnalyzePageViewModel({
       error: audioProcessingState.error || null,
       suggestion: audioProcessingState.suggestion || undefined,
       onTryAnotherVideo: handleTryAnotherVideo,
-      onRetry: () => extractAudioFromYouTube(true),
+      onRetry: () => extractAudioFromYouTube(false),
     },
     melodyToastProps: {
       isComputing: isComputingSheetSage,

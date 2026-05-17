@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { db, TRANSLATIONS_COLLECTION } from '@/config/firebase';
-import { collection, doc, getDoc, setDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 import { createGeminiClient, GEMINI_MODEL_NAME } from '@/config/gemini';
+import {
+  getDocumentWithAdminAccess,
+  setDocumentWithAdminAccess,
+} from '@/services/firebase/firestoreAdminService';
 
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
+const TRANSLATIONS_COLLECTION = 'translations';
 
 // Track background updates in progress
 const backgroundUpdatesInProgress = new Set<string>();
@@ -53,31 +56,16 @@ function generateCacheKey(lyrics: string, sourceLanguage?: string, targetLanguag
  */
 async function checkCache(cacheKey: string): Promise<TranslationResponse | null> {
   try {
-    if (!db) {
-      console.warn('Firebase not initialized, skipping cache check');
-      return null;
-    }
-
-    try {
-      const translationsRef = collection(db as Firestore, TRANSLATIONS_COLLECTION);
-      const docRef = doc(translationsRef, cacheKey);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data() as TranslationResponse;
-        return {
+    const data = await getDocumentWithAdminAccess<TranslationResponse>(TRANSLATIONS_COLLECTION, cacheKey);
+    return data
+      ? {
           ...data,
           fromCache: true,
           timestamp: data.timestamp || Date.now()
-        };
-      }
-    } catch (firestoreError) {
-      console.warn('Firestore access error, proceeding without cache:', firestoreError);
-    }
-
-    return null;
+        }
+      : null;
   } catch (error) {
-    console.error('Error checking translation cache:', error);
+    console.warn('Firestore admin cache check failed, proceeding without cache:', error);
     return null;
   }
 }
@@ -87,27 +75,16 @@ async function checkCache(cacheKey: string): Promise<TranslationResponse | null>
  */
 async function cacheTranslation(cacheKey: string, data: TranslationResponse, videoId?: string): Promise<void> {
   try {
-    if (!db) {
-      console.warn('Firebase not initialized, skipping cache storage');
-      return;
-    }
-
-    try {
-      const translationsRef = collection(db as Firestore, TRANSLATIONS_COLLECTION);
-      const docRef = doc(translationsRef, cacheKey);
-      const dataWithTimestamp = {
-        ...data,
-        videoId: videoId || 'unknown', // Add videoId required by Firestore rules
-        createdAt: serverTimestamp(), // Use Firestore serverTimestamp instead of Date.now()
-        fromCache: false
-      };
-      await setDoc(docRef, dataWithTimestamp);
-      console.log('Successfully cached translation data');
-    } catch (firestoreError) {
-      console.warn('Firestore access error, unable to cache translation:', firestoreError);
-    }
+    const dataWithTimestamp = {
+      ...data,
+      videoId: videoId || 'unknown',
+      createdAt: new Date().toISOString(),
+      fromCache: false
+    };
+    await setDocumentWithAdminAccess(TRANSLATIONS_COLLECTION, cacheKey, dataWithTimestamp);
+    console.log('Successfully cached translation data');
   } catch (error) {
-    console.error('Error caching translation:', error);
+    console.warn('Firestore admin cache write failed, continuing without cached translation:', error);
   }
 }
 
