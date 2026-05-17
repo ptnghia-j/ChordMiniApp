@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { exportLeadSheetToMusicXml, exportPianoVisualizerScoreToMusicXml, type MusicXmlKeySection } from '@/utils/musicXmlExport';
 import { buildMelodyAbsoluteNoteEvents } from '@/utils/musicXmlExport/absoluteEvents';
 import { transposeKeySignature } from '@/utils/chordTransposition';
@@ -463,7 +463,7 @@ export function useSheetMusicModel({
 }: UseSheetMusicModelParams) {
   const targetSheetMusicPitchShiftSemitones = isPitchShiftActive ? pitchShiftSemitones : 0;
   const [sheetMusicPitchShiftSemitones, setSheetMusicPitchShiftSemitones] = useState(targetSheetMusicPitchShiftSemitones);
-  const sheetMusicCurrentTime = useDeferredValue(currentTime);
+  const sheetMusicCurrentTime = currentTime;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -666,6 +666,7 @@ export function useSheetMusicModel({
             chordEvents: sheetMusicChordEvents,
             melodyNoteEvents: hasLeadSheetData ? sheetMusicMelodyNoteEvents : undefined,
             melodyBeatTimes: hasLeadSheetData ? sheetMusicExportMelodyBeatTimes : undefined,
+            scoreBeatTimes: sheetMusicBeatTimes,
             pickupBeatCount: exportedSheetMusicPickupBeatCount,
             bpm: detectedBpm || undefined,
             timeSignature,

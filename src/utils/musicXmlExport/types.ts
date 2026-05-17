@@ -171,6 +171,7 @@ export interface PianoVisualizerScoreInput extends MusicXmlExportOptions {
   chordEvents: ChordEvent[];
   melodyNoteEvents?: SheetSageNoteEvent[];
   melodyBeatTimes?: Array<number | null>;
+  scoreBeatTimes?: Array<number | null>;
   pickupBeatCount?: number;
   keySections?: MusicXmlKeySection[];
   segmentationData?: SegmentationResult | null;

@@ -59,6 +59,22 @@ export const GRID_ALIGNMENT_CONFIG = {
     firstStartBonus: 10,
     longRunStartBonus: 5,
     maxLeadingExpansionBeats: 3,
+    phrasePhase: {
+      minBoundaryBeats: 16,
+      lookbehindBeats: 48,
+      lookaheadBeats: 64,
+      minStarts: 8,
+      minPreviousStarts: 4,
+      maxCurrentDownbeatShare: 0.35,
+      minCorrectedDownbeatShare: 0.55,
+      minPreviousDownbeatShare: 0.4,
+      minDownbeatGain: 4,
+      maxAdjustmentBeats: 1,
+      minWindowSpacingBeats: 16,
+      postTempoLookbehindBeats: 8,
+      postTempoLookaheadBeats: 64,
+      maxWindows: 8,
+    },
   },
   // Legacy leading-expansion scoring used only by gridCompaction.ts.
   leadingExpansion: {

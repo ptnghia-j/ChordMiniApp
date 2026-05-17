@@ -4,6 +4,7 @@ export { SheetMusicDisplay as default, SheetMusicDisplay } from './sheet-music-d
 export type { SheetMusicDisplayProps } from './sheet-music-display/SheetMusicDisplayRoot';
 export {
   countScoreMeasuresInMusicXml,
+  expandMeasureBoxesToMeasureSpans,
   extractSyncDataFromMusicXml,
   resolveMeasureScrollTop,
   stabilizeMeasureBoxAnchors,

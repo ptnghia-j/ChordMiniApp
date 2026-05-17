@@ -68,7 +68,7 @@ export function exportPianoVisualizerScoreToMusicXml(input: PianoVisualizerScore
     keySignature: input.keySignature,
     keySections: input.keySections,
     chordEvents: input.chordEvents,
-    beatTimes: input.melodyBeatTimes,
+    beatTimes: input.scoreBeatTimes ?? input.melodyBeatTimes,
     melodyNotes,
     pianoNotes,
     enableLeadingSilenceAnacrusisSearch: input.enableLeadingSilenceAnacrusisSearch ?? true,

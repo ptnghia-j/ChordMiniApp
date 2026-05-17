@@ -117,7 +117,7 @@ const UtilityBarMetronomeControl: React.FC<UtilityBarMetronomeControlProps> = ({
       : !isEnabled;
 
     if (!onToggleWithSync) {
-      await metronomeService.setEnabled(newEnabled, 0);
+      await metronomeService.setEnabled(newEnabled);
     }
 
     setIsEnabled(newEnabled);

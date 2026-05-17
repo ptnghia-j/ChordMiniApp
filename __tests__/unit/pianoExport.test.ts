@@ -49,4 +49,31 @@ describe('exportPianoVisualizerScoreToMusicXml', () => {
     expect(syncData.measureStartAudioTimes.slice(0, 2)).toEqual([0, 1]);
     expect(syncMetadata?.selectedAnacrusisDivisions).toBe(GENERIC_DIVISIONS_PER_QUARTER);
   });
+
+  it('uses score beat times for silent measure starts before later chord attacks', () => {
+    const musicXml = exportPianoVisualizerScoreToMusicXml({
+      bpm: 60,
+      timeSignature: 4,
+      pickupBeatCount: 0,
+      scoreBeatTimes: [0, 1, 2, 3, 4, 5, 6, 7],
+      chordEvents: [
+        {
+          chordName: 'C',
+          startTime: 6,
+          endTime: 7,
+          beatIndex: 6,
+          beatCount: 1,
+          notes: [
+            { name: 'C3', noteName: 'C', octave: 3, midi: 48 },
+            { name: 'E4', noteName: 'E', octave: 4, midi: 64 },
+            { name: 'G4', noteName: 'G', octave: 4, midi: 67 },
+          ],
+        },
+      ],
+    });
+
+    const syncData = extractSyncDataFromMusicXml(musicXml);
+
+    expect(syncData.measureStartAudioTimes.slice(0, 2)).toEqual([0, 4]);
+  });
 });

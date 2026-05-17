@@ -409,7 +409,7 @@ export default function LocalAudioAnalyzePage() {
       return;
     }
 
-    void metronomeService.setEnabled(false, 0);
+    void metronomeService.setEnabled(false);
   }, []);
 
   const toggleFollowMode = () => setIsFollowModeEnabled(prev => !prev);
@@ -1003,17 +1003,11 @@ const simplifiedChordGridData = useMemo(() => {
 
   // Metronome synchronization hook - use duration from audio element
   const { toggleMetronomeWithSync } = useMetronomeSync({
-    beats: analysisResults?.beats || [],
-    downbeats: analysisResults?.downbeats,
+    currentBeatIndex,
+    chordGridBeats: chordGridData.beats || [],
     currentTime,
     isPlaying,
     timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
-    bpm: analysisResults?.beatDetectionResult?.bpm || 120,
-    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
-    shiftCount: chordGridData.shiftCount || 0,
-    paddingCount: chordGridData.paddingCount || 0,
-    chordGridBeats: chordGridData.beats || [],
-    audioDuration: duration // Use duration from audio element instead of analysisResults
   });
 
   // Note: Beat click handling is managed internally by ChordGrid component via Zustand

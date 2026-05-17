@@ -889,7 +889,7 @@ export function useAnalyzePageViewModel({
       return;
     }
 
-    void metronomeService.setEnabled(false, 0);
+    void metronomeService.setEnabled(false);
   }, []);
 
   useAnalyzePageLifecycleReset({
@@ -942,17 +942,11 @@ export function useAnalyzePageViewModel({
   });
 
   const { toggleMetronomeWithSync } = useMetronomeSync({
-    beats: analysisResults?.beats || [],
-    downbeats: analysisResults?.downbeats,
+    currentBeatIndex,
+    chordGridBeats: chordGridData.beats || [],
     currentTime,
     isPlaying,
     timeSignature: analysisResults?.beatDetectionResult?.time_signature || 4,
-    bpm: analysisResults?.beatDetectionResult?.bpm || 120,
-    beatTimeRangeStart: analysisResults?.beatDetectionResult?.beat_time_range_start || 0,
-    shiftCount: chordGridData.shiftCount || 0,
-    paddingCount: chordGridData.paddingCount || 0,
-    chordGridBeats: chordGridData.beats || [],
-    audioDuration: analysisResults?.audioDuration || 0,
   });
 
   useEffect(() => {
@@ -1145,7 +1139,7 @@ export function useAnalyzePageViewModel({
       segmentationData,
       toggleVideoMinimization,
       toggleFollowMode,
-      toggleMetronomeWithSync: async () => false,
+      toggleMetronomeWithSync: handleMetronomeToggle,
       videoId,
       isPlaying,
       playbackRate,

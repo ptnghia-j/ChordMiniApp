@@ -26,11 +26,16 @@ function parseSyncDataFromMusicXml(musicXml: string): ScoreSyncData {
     const parsed = JSON.parse(syncMatch[1].trim()) as {
       measureStartScoreTimes?: unknown;
       measureStartAudioTimes?: unknown;
+      selectedAnacrusisSeconds?: unknown;
     };
+    const selectedAnacrusisSeconds = Number(parsed.selectedAnacrusisSeconds);
 
     return {
       measureStartScoreTimes: normalizeMeasureStartTimes(parsed.measureStartScoreTimes),
       measureStartAudioTimes: normalizeMeasureStartTimes(parsed.measureStartAudioTimes),
+      selectedAnacrusisSeconds: Number.isFinite(selectedAnacrusisSeconds)
+        ? selectedAnacrusisSeconds
+        : undefined,
     };
   } catch {
     return {
@@ -86,6 +91,34 @@ function isStrictlyIncreasing(values: number[]): boolean {
   return true;
 }
 
+function resolvePlaybackMeasureStarts(
+  syncData: ScoreSyncData,
+): number[] {
+  const audioStarts = syncData.measureStartAudioTimes;
+  const scoreStarts = syncData.measureStartScoreTimes;
+  if (!isStrictlyIncreasing(audioStarts)) {
+    return [];
+  }
+
+  if (!isStrictlyIncreasing(scoreStarts) || scoreStarts.length < 2 || audioStarts.length < 2) {
+    return audioStarts;
+  }
+
+  const firstScoreSpan = scoreStarts[1] - scoreStarts[0];
+  const firstAudioSpan = audioStarts[1] - audioStarts[0];
+  const selectedAnacrusisSeconds = syncData.selectedAnacrusisSeconds;
+  const hasPickupMeasure = (
+    firstScoreSpan > 0
+    && (
+      (Number.isFinite(selectedAnacrusisSeconds) && Math.abs(firstScoreSpan - Number(selectedAnacrusisSeconds)) <= 0.01)
+      || firstScoreSpan < ((scoreStarts[2] ?? (scoreStarts[1] + firstScoreSpan)) - scoreStarts[1]) - 0.01
+    )
+  );
+  const hasStretchedPickupAudio = firstAudioSpan > Math.max(firstScoreSpan + 0.25, firstScoreSpan * 1.35);
+
+  return hasPickupMeasure && hasStretchedPickupAudio ? scoreStarts : audioStarts;
+}
+
 export function resolveMeasureStartScoreTimes(
   syncData: ScoreSyncData,
   measureCount: number,
@@ -107,9 +140,9 @@ export function getActiveMeasureIndexFromAudioTime(
   timeSignature: number,
 ): number {
   const safeCurrentTime = Number.isFinite(currentTime) ? currentTime : 0;
-  const starts = syncData.measureStartAudioTimes;
+  const starts = resolvePlaybackMeasureStarts(syncData);
 
-  if (isStrictlyIncreasing(starts)) {
+  if (starts.length > 0) {
     let left = 0;
     let right = starts.length - 1;
     let answer = 0;
@@ -129,6 +162,37 @@ export function getActiveMeasureIndexFromAudioTime(
 
   const measureDurationSeconds = (timeSignature * 60) / bpm;
   return Math.max(0, Math.floor(safeCurrentTime / Math.max(measureDurationSeconds, 0.001)));
+}
+
+export function expandMeasureBoxesToMeasureSpans(
+  boxes: MeasureHighlightBox[],
+  contentWidth: number,
+): MeasureHighlightBox[] {
+  if (!Number.isFinite(contentWidth) || contentWidth <= 0) {
+    return boxes;
+  }
+
+  const MIN_VISIBLE_WIDTH = 24;
+
+  return boxes.map((box, index) => {
+    const nextOnSameSystem = boxes
+      .slice(index + 1)
+      .find((candidate) => (
+        Math.abs(candidate.top - box.top) < 8
+        && candidate.left > box.left + 1
+      ));
+    const availableWidth = nextOnSameSystem
+      ? nextOnSameSystem.left - box.left
+      : contentWidth - box.left;
+    const width = Number.isFinite(availableWidth) && availableWidth > 0
+      ? Math.max(MIN_VISIBLE_WIDTH, availableWidth)
+      : Math.max(MIN_VISIBLE_WIDTH, box.width);
+
+    return {
+      ...box,
+      width,
+    };
+  });
 }
 
 export function stabilizeMeasureBoxAnchors(

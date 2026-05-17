@@ -53,10 +53,6 @@ describe('MetronomeService', () => {
       expect(service.getTrackMode()).toBe('metronome');
     });
 
-    it('has no metronome track initially', () => {
-      expect(service.hasMetronomeTrack()).toBe(false);
-      expect(service.getMetronomeTrackDuration()).toBe(0);
-    });
   });
 
   describe('volume control', () => {
@@ -200,15 +196,10 @@ describe('MetronomeService', () => {
     it('cleans up state on dispose', () => {
       service.dispose();
       expect(service.isMetronomeEnabled()).toBe(false);
-      expect(service.hasMetronomeTrack()).toBe(false);
     });
   });
 
-  describe('stopMetronomeTrack', () => {
-    it('can be called safely when no track is playing', () => {
-      expect(() => service.stopMetronomeTrack()).not.toThrow();
-    });
-  });
+
 
   describe('clearScheduledClicks', () => {
     it('is a no-op that does not throw', () => {

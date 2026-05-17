@@ -6,6 +6,7 @@ import { loadOsmdConstructor } from './osmdLoader';
 import { appendImageToPdfPages, rasterizeScoreWithDedicatedCanvasBackend } from './pdfExport';
 import {
   countScoreMeasuresInMusicXml,
+  expandMeasureBoxesToMeasureSpans,
   extractSyncDataFromMusicXml,
   getActiveMeasureIndexFromAudioTime,
   resolveMeasureScrollTop,
@@ -299,12 +300,8 @@ export function useSheetMusicRenderer({
         };
       });
 
-      const visualBoxes = systemAlignedBoxes.map((box, index) => {
-        const next = systemAlignedBoxes[index + 1];
-        const estimatedWidth = next
-          ? Math.max(1, next.left - box.left)
-          : Math.max(1, contentWidth - box.left);
-        const width = box.width >= 8 ? box.width : Math.max(MIN_VISIBLE_WIDTH, estimatedWidth);
+      const visualBoxes = expandMeasureBoxesToMeasureSpans(systemAlignedBoxes, contentWidth).map((box) => {
+        const width = box.width >= 8 ? box.width : MIN_VISIBLE_WIDTH;
         const height = box.height >= 8 ? box.height : Math.max(MIN_VISIBLE_HEIGHT, box.height);
         const top = box.height >= 8 ? box.top : Math.max(0, box.top - ((height - box.height) / 2));
 

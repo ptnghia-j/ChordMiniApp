@@ -102,7 +102,7 @@ F --> E
 ## Core Components
 - Lightweight Chord Playback Service: Generates synthetic chord sounds using Web Audio API oscillators, filters, and envelopes. Designed for performance and simplicity.
 - Soundfont Chord Playback Service: Produces realistic instrument sounds using soundfonts via the smplr library. Supports multiple instruments, dynamic velocities, and looped playback.
-- Metronome Service: Provides precise rhythmic clicks synchronized with beat detection results using pre-generated audio tracks.
+- Metronome Service: Provides precise rhythmic clicks synchronized with the visual beat grid using `currentBeatIndex`.
 - Audio Mixer Service: Centralized volume management for YouTube, chord playback, and metronome across the application.
 - Audio Context Manager: Singleton wrapper around Web Audio API AudioContext with resume/suspend handling and lifecycle management.
 - Instrument Registry: Lazy loads and manages soundfont instruments, with automatic unloading to conserve memory.
@@ -139,10 +139,8 @@ Hook->>SF : playChord(chord, duration, bpm, options)
 SF->>AC : Access shared AudioContext
 SF->>SF : Generate notes for instruments
 SF->>SF : Start soundfont notes with envelopes
-Hook->>Metro : generateMetronomeTrack(duration, bpm, timeSignature)
-Metro->>AC : Create OfflineAudioContext for rendering
-Metro-->>Hook : Pre-rendered metronome track
-Hook->>Metro : startMetronomeTrack(currentTime)
+Hook->>Metro : scheduleClick(0, isDownbeat)
+Metro->>AC : Access shared AudioContext
 Hook->>Mix : updateOptions(volumes)
 Mix->>SF : Apply effective volumes
 Mix->>Metro : Set metronome volume
@@ -248,37 +246,36 @@ SF-->>Hook : Promise resolves when playback completes
 - [constants.ts:1-62](file://src/services/chord-playback/soundfont/constants.ts#L1-L62)
 
 ### Metronome Service
-- Purpose: Precise rhythmic clicks synchronized with beat detection results
-- Approach: Pre-generate complete metronome tracks for seamless playback
+- Purpose: Precise rhythmic clicks synchronized directly with the visual beat grid.
+- Approach: Event-driven synchronization based on `currentBeatIndex` in the foreground, with lookahead polling in the background.
 - Features:
   - Multiple sound styles and drum track modes
-  - Offline rendering using OfflineAudioContext
-  - Cached track generation keyed by parameters (bpm, time signature, duration)
-  - Start/stop/seek with proper gain automation and cleanup
+  - Exact 1:1 synchronization with visual beat grid highlighting
+  - Seamless background tab support using Web Audio lookahead
+  - Master gain node control for immediate termination on pause/stop
   - Volume boost for drum tracks and configurable click duration
 - Integration:
-  - Generated tracks are started in sync with audio playback
-  - Supports seeking and continuous playback during navigation
+  - Foreground playback listens to `currentBeatIndex` updates from `useAnalyzePageViewModel`
+  - Background playback uses a `setInterval` poller mapping against `chordGridBeats` when rAF stops
 
 ```mermaid
 flowchart TD
-Start(["Generate Metronome Track"]) --> Params["Compute cache key<br/>bpm, timeSignature, duration, style, mode"]
-Params --> Cached{"Track cached?"}
-Cached --> |Yes| UseCache["Use cached AudioBuffer"]
-Cached --> |No| Offline["Create OfflineAudioContext"]
-Offline --> Render["Render clicks/drums for each beat"]
-Render --> SaveCache["Store in cache"]
-SaveCache --> UseCache
-UseCache --> Play["Start buffer source at currentTime"]
-Play --> End(["Playback"])
+Start(["useMetronomeSync"]) --> Env{"Is Tab Hidden?"}
+Env --> |No| Foreground["Watch currentBeatIndex"]
+Foreground --> |Index Changes| ScheduleNow["Schedule Click Immediately (0s)"]
+Env --> |Yes| Background["Background Poller (1Hz)"]
+Background --> |Lookahead 1.5s| ScheduleFuture["Schedule Upcoming Clicks"]
+ScheduleNow --> Audio["Web Audio API"]
+ScheduleFuture --> Audio
+Audio --> MasterGain["Master Gain Node"]
 ```
 
 **Diagram sources**
-- [metronomeService.ts:131-215](file://src/services/chord-playback/metronomeService.ts#L131-L215)
+- [useMetronomeSync.ts:1-120](file://src/hooks/chord-playback/useMetronomeSync.ts#L1-L120)
 
 **Section sources**
-- [metronomeService.ts:34-498](file://src/services/chord-playback/metronomeService.ts#L34-L498)
-- [useMetronomeSync.ts:19-199](file://src/hooks/chord-playback/useMetronomeSync.ts#L19-L199)
+- [metronomeService.ts:1-350](file://src/services/chord-playback/metronomeService.ts#L1-L350)
+- [useMetronomeSync.ts:1-120](file://src/hooks/chord-playback/useMetronomeSync.ts#L1-L120)
 
 ### Audio Mixer Service
 - Purpose: Centralized volume management across all audio sources
@@ -409,8 +406,8 @@ MIX --> METRO
   - Avoids unnecessary preload overhead for rarely used instruments
 - Dynamic velocity and density compensation:
   - Reduces perceived loudness inconsistencies across instruments and voicings
-- Offline rendering for metronome:
-  - Pre-generated tracks eliminate real-time synthesis overhead during playback
+- Background tab handling for metronome and chords:
+  - Falls back to polling audio time to schedule upcoming beats using Web Audio lookahead when rAF is inactive
 - Background tab handling:
   - Falls back to polling audio time to maintain synchronization when rAF is inactive
 - Volume management:

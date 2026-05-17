@@ -300,4 +300,143 @@ describe('segment alignment solver comparison', () => {
 
     expect(comparison.solver.decisions.every((decision) => decision.adjustment === 0)).toBe(true);
   });
+
+  it('creates a phrase-phase window when a dense local cluster drifts off the downbeat without silence or tempo change', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+
+    [
+      'G:maj', 'D:maj', 'E:min', 'C:maj',
+      'G:maj/B', 'A:min', 'D:maj', 'G:maj',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+    appendRun(chords, 'D:sus4', 5);
+    [
+      'E:min', 'C:maj', 'G:maj', 'D:maj',
+      'A:min', 'E:min/G', 'C:maj', 'G:maj/B',
+      'D:maj', 'E:min',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+
+    const beats = chords.map((_, index) => index * 0.5);
+    const originalPostCounts = countStartModulos(chords, 4, 37);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+    const phraseDecision = result.decisions.find((decision) => (
+      decision.source === 'phrase_phase' && decision.adjustment !== 0
+    ));
+    const solvedPostCounts = countStartModulos(result.gridData.chords, 4, 36);
+
+    expect(originalPostCounts[0]).toBe(0);
+    expect(originalPostCounts[1]).toBeGreaterThanOrEqual(8);
+    expect(phraseDecision?.adjustment).toBe(-1);
+    expect(result.gridData.chords).toHaveLength(chords.length - 1);
+    expect(solvedPostCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
+  });
+
+  it('uses shrink-only phrase-phase edits when correction would otherwise require inserted filler cells', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+
+    [
+      'C:maj', 'G:maj', 'A:min', 'F:maj',
+      'D:min', 'G:maj/B', 'E:min',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+    appendRun(chords, 'D:sus4', 7);
+    [
+      'E:min', 'C:maj', 'G:maj', 'D:maj',
+      'A:min', 'E:min/G', 'F:maj', 'G:maj/B',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+
+    const beats = chords.map((_, index) => index * 0.5);
+    const originalPostCounts = countStartModulos(chords, 4, 35);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+    const phraseDecision = result.decisions.find((decision) => (
+      decision.source === 'phrase_phase' && decision.adjustment !== 0
+    ));
+    const solvedPostCounts = countStartModulos(result.gridData.chords, 4, 32);
+
+    expect(originalPostCounts[0]).toBe(0);
+    expect(originalPostCounts[3]).toBeGreaterThanOrEqual(8);
+    expect(phraseDecision?.adjustment).toBe(-3);
+    expect(phraseDecision?.adjustments).toBeUndefined();
+    expect(result.gridData.chords).toHaveLength(chords.length - 3);
+    expect(result.gridData.beats.every((beat) => typeof beat === 'number')).toBe(true);
+    expect(solvedPostCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
+  });
+
+  it('uses tempo-anchored phrase phase when a faster section clusters on beat 4 after the transition', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+
+    appendRun(chords, 'E:maj', 1);
+    [
+      'A:maj', 'B:maj', 'C#:min', 'D:maj',
+      'E:maj', 'G:maj', 'A:min', 'B:min',
+      'C:maj', 'D:min', 'E:min', 'G:min',
+    ].forEach((chord) => appendRun(chords, chord, 2));
+    appendRun(chords, 'F#:maj', 10);
+    appendRun(chords, 'F:7', 2);
+    appendRun(chords, 'Bb:7', 1);
+    appendRun(chords, 'C#:7', 5);
+    [
+      'F#:maj', 'B:maj', 'B:min', 'F#:maj',
+      'C:hdim7', 'B:maj', 'B:min', 'Bb:min7',
+    ].forEach((chord) => appendRun(chords, chord, 8));
+
+    const beatDurations = [
+      ...Array(35).fill(0.75),
+      0.65,
+      0.55,
+      ...Array(chords.length - 38).fill(0.37),
+    ];
+    const beats = chords.map((_, index) => (
+      index === 0
+        ? 0
+        : beatDurations.slice(0, index).reduce((sum, duration) => sum + duration, 0)
+    ));
+    const originalPostCounts = countStartModulos(chords, 4, 43);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.75,
+      enabled: true,
+    });
+    const postTempoDecision = result.decisions.find((decision) => (
+      decision.source === 'post_tempo_phase' && decision.adjustment !== 0
+    ));
+    const cumulativePostTempoAdjustment = result.decisions
+      .filter((decision) => postTempoDecision && decision.endIndex <= postTempoDecision.endIndex)
+      .reduce((total, decision) => total + decision.adjustment, 0);
+    const solvedPostCounts = countStartModulos(result.gridData.chords, 4, 40);
+
+    expect(originalPostCounts[3]).toBeGreaterThanOrEqual(8);
+    expect(originalPostCounts[0]).toBe(0);
+    expect(postTempoDecision?.adjustment).toBeLessThan(0);
+    expect(cumulativePostTempoAdjustment % 4).toBe(-3);
+    expect(solvedPostCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(solvedPostCounts[0]).toBeGreaterThan(solvedPostCounts[1]);
+    expect(result.gridData.beats.every((beat) => typeof beat === 'number')).toBe(true);
+  });
 });

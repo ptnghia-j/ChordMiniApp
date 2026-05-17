@@ -1,198 +1,135 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { metronomeService } from '@/services/chord-playback/metronomeService';
-import { BeatInfo } from '@/services/audio/beatDetectionService';
 
 interface UseMetronomeSyncProps {
-  beats: BeatInfo[];
-  downbeats?: number[];
+  currentBeatIndex: number;
+  chordGridBeats: (number | null)[];
   currentTime: number;
   isPlaying: boolean;
   timeSignature?: number;
-  bpm?: number;
-  beatTimeRangeStart?: number;
-  shiftCount?: number;
-  paddingCount?: number;
-  chordGridBeats?: (number | null)[];
-  audioDuration?: number; // Total duration of the audio for track generation
 }
 
-/**
- * PRE-GENERATED TRACK APPROACH: Hook for metronome synchronization using complete audio tracks
- * This approach generates a complete metronome track that plays alongside the main audio
- */
 export const useMetronomeSync = ({
-  beats: _beats,  
-  downbeats: _downbeats = [],  
+  currentBeatIndex,
+  chordGridBeats,
   currentTime,
   isPlaying,
   timeSignature = 4,
-  bpm = 120,
-  beatTimeRangeStart: _beatTimeRangeStart = 0,  
-  shiftCount: _shiftCount = 0,  
-  paddingCount: _paddingCount = 0,  
-  chordGridBeats: _chordGridBeats = [],  
-  audioDuration = 0
 }: UseMetronomeSyncProps) => {
-  const lastPlayState = useRef<boolean>(isPlaying);
-  const lastCurrentTime = useRef<number>(currentTime);
-  const trackGenerationParams = useRef<{ bpm: number; timeSignature: number; duration: number; soundStyle: string; trackMode: string } | null>(null);
-  const generationPromiseRef = useRef<Promise<void> | null>(null);
+  const lastTriggeredBeatIndexRef = useRef<number>(-1);
+  const isBackgroundRef = useRef<boolean>(false);
+  const backgroundIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /**
-   * PRE-GENERATED TRACK: Generate metronome track when parameters change
-   */
-  const generateMetronomeTrack = useCallback(async (forceRegenerate: boolean = false) => {
-    if (audioDuration <= 0 || bpm <= 0) {
-      return;
-    }
+  // Keep latest state in refs for background poller access without dependency cycles
+  const currentTimeRef = useRef<number>(currentTime);
+  const isPlayingRef = useRef<boolean>(isPlaying);
 
-    if (generationPromiseRef.current) {
-      await generationPromiseRef.current;
-    }
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
-    const currentParams = {
-      bpm,
-      timeSignature,
-      duration: audioDuration,
-      soundStyle: metronomeService.getSoundStyle(),
-      trackMode: metronomeService.getTrackMode(),
-    };
-    const lastParams = trackGenerationParams.current;
+  // Foreground playback - identical to useChordPlayback
+  // Watch `currentBeatIndex` directly. When it advances, play the metronome click immediately.
+  useEffect(() => {
+    if (!isPlaying || !metronomeService.isMetronomeEnabled() || isBackgroundRef.current) return;
 
-    if (!forceRegenerate &&
-      lastParams &&
-      lastParams.bpm === currentParams.bpm &&
-      lastParams.timeSignature === currentParams.timeSignature &&
-      lastParams.duration === currentParams.duration &&
-      lastParams.soundStyle === currentParams.soundStyle &&
-      lastParams.trackMode === currentParams.trackMode &&
-      metronomeService.hasMetronomeTrack()) {
-      return;
-    }
-
-    const generationTask = (async () => {
-      try {
-        const track = await metronomeService.generateMetronomeTrack(audioDuration, bpm, timeSignature);
-        if (track) {
-          trackGenerationParams.current = currentParams;
-        } else {
-          console.error('Failed to generate metronome track');
-        }
-      } catch (error) {
-        console.error('Error generating metronome track:', error);
-      }
-    })();
-
-    generationPromiseRef.current = generationTask;
-
-    try {
-      await generationTask;
-    } finally {
-      if (generationPromiseRef.current === generationTask) {
-        generationPromiseRef.current = null;
+    if (currentBeatIndex >= 0 && currentBeatIndex < chordGridBeats.length) {
+      if (currentBeatIndex > lastTriggeredBeatIndexRef.current) {
+        lastTriggeredBeatIndexRef.current = currentBeatIndex;
+        const isDownbeat = currentBeatIndex % Math.max(1, timeSignature) === 0;
+        
+        // Schedule immediately (relativeTime = 0)
+        metronomeService.scheduleClick(0, isDownbeat);
       }
     }
-  }, [audioDuration, bpm, timeSignature]);
+  }, [currentBeatIndex, isPlaying, timeSignature, chordGridBeats.length]);
 
-
-
-  /**
-   * PRE-GENERATED TRACK: Handle play/pause state changes
-   */
-  const handlePlayStateChange = useCallback(() => {
-    if (!metronomeService.hasMetronomeTrack()) {
-      return;
+  // Background poller
+  const stopBackgroundPoller = useCallback(() => {
+    if (backgroundIntervalRef.current !== null) {
+      clearInterval(backgroundIntervalRef.current);
+      backgroundIntervalRef.current = null;
     }
-
-    if (isPlaying && metronomeService.isMetronomeEnabled()) {
-      // Start metronome track playback from current position
-      metronomeService.startMetronomeTrack(currentTime);
-      // Track started
-    } else {
-      // Stop metronome track playback
-      metronomeService.stopMetronomeTrack();
-      // Track stopped
-    }
-  }, [isPlaying, currentTime]);
-
-  /**
-   * PRE-GENERATED TRACK: Handle seeking in the audio
-   */
-  const handleSeek = useCallback(() => {
-    if (!metronomeService.hasMetronomeTrack() || !metronomeService.isMetronomeEnabled()) {
-      return;
-    }
-
-    // Check if this is a significant seek (more than 1 second difference)
-    const timeDiff = Math.abs(currentTime - lastCurrentTime.current);
-    if (timeDiff > 1.0) {
-      // Seek detected
-
-      if (isPlaying) {
-        // Restart playback from new position
-        metronomeService.seekMetronomeTrack(currentTime);
-      }
-    }
-
-    lastCurrentTime.current = currentTime;
-  }, [currentTime, isPlaying]);
-
-  // Effect: Generate metronome track when parameters change
-  useEffect(() => {
-    if (audioDuration > 0 && bpm > 0) {
-      generateMetronomeTrack();
-    }
-  }, [generateMetronomeTrack, audioDuration, bpm]);
-
-  useEffect(() => {
-    const unsubscribe = metronomeService.addSettingsListener(() => {
-      void (async () => {
-        await generateMetronomeTrack(true);
-        if (isPlaying && metronomeService.isMetronomeEnabled()) {
-          metronomeService.startMetronomeTrack(currentTime);
-        }
-      })();
-    });
-
-    return unsubscribe;
-  }, [currentTime, generateMetronomeTrack, isPlaying]);
-
-  // Effect: Handle play/pause state changes
-  useEffect(() => {
-    const playStateChanged = isPlaying !== lastPlayState.current;
-    if (playStateChanged) {
-      lastPlayState.current = isPlaying;
-      handlePlayStateChange();
-    }
-  }, [isPlaying, handlePlayStateChange]);
-
-  // Effect: Handle seeking
-  useEffect(() => {
-    handleSeek();
-  }, [handleSeek]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      metronomeService.stopMetronomeTrack();
-    };
   }, []);
 
-  /**
-   * ENHANCED: Toggle metronome with current time synchronization
-   * This function has access to the current playback time for perfect sync
-   */
+  const startBackgroundPoller = useCallback(() => {
+    stopBackgroundPoller();
+    
+    // In background, intervals are throttled to 1000ms.
+    // So we run every 1000ms and look ahead 1.5 seconds to schedule upcoming beats.
+    backgroundIntervalRef.current = setInterval(() => {
+      if (!isPlayingRef.current || !metronomeService.isMetronomeEnabled()) return;
+      
+      // In background we don't have accurate currentBeatIndex, so we rely on currentTime
+      const songTime = currentTimeRef.current;
+      const lookaheadSeconds = 1.5; 
+      
+      for (let i = lastTriggeredBeatIndexRef.current + 1; i < chordGridBeats.length; i++) {
+        const beatTime = chordGridBeats[i];
+        if (beatTime === null) continue;
+        
+        if (beatTime < songTime - 0.1) {
+          lastTriggeredBeatIndexRef.current = i; // catch up if it's slightly past
+          continue;
+        }
+        
+        if (beatTime <= songTime + lookaheadSeconds) {
+          const relativeTime = beatTime - songTime;
+          const isDownbeat = i % Math.max(1, timeSignature) === 0;
+          metronomeService.scheduleClick(relativeTime, isDownbeat);
+          lastTriggeredBeatIndexRef.current = i;
+        } else {
+          break; // beats are ordered, if this one is too far in future, stop
+        }
+      }
+    }, 1000); 
+  }, [chordGridBeats, timeSignature, stopBackgroundPoller]);
+
+  // Handle browser tab visibility changes
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        isBackgroundRef.current = true;
+        if (isPlayingRef.current) startBackgroundPoller();
+      } else {
+        isBackgroundRef.current = false;
+        stopBackgroundPoller();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopBackgroundPoller();
+    };
+  }, [startBackgroundPoller, stopBackgroundPoller]);
+
+  // Clear clicks when stopped or paused
+  useEffect(() => {
+    if (!isPlaying) {
+      metronomeService.clearScheduledClicks();
+      // Reset index to just before current so it triggers immediately when resumed
+      lastTriggeredBeatIndexRef.current = currentBeatIndex - 1;
+    }
+    
+    if (!isBackgroundRef.current) return;
+    if (isPlaying) {
+      startBackgroundPoller();
+    } else {
+      stopBackgroundPoller();
+    }
+  }, [isPlaying, currentBeatIndex, startBackgroundPoller, stopBackgroundPoller]);
+
   const toggleMetronomeWithSync = useCallback(async (): Promise<boolean> => {
-    // Ensure track is generated before toggling
-    await generateMetronomeTrack();
+    const newEnabled = await metronomeService.toggleMetronome();
+    if (newEnabled && isPlayingRef.current) {
+      const isDownbeat = currentBeatIndex % Math.max(1, timeSignature) === 0;
+      metronomeService.scheduleClick(0, isDownbeat);
+      lastTriggeredBeatIndexRef.current = currentBeatIndex;
+    }
+    return newEnabled;
+  }, [currentBeatIndex, timeSignature]);
 
-    return await metronomeService.toggleMetronome(currentTime);
-  }, [currentTime, generateMetronomeTrack]);
-
-  return {
-    generateMetronomeTrack,
-    hasMetronomeTrack: () => metronomeService.hasMetronomeTrack(),
-    getTrackDuration: () => metronomeService.getMetronomeTrackDuration(),
-    toggleMetronomeWithSync // Expose the synchronized toggle function
-  };
+  return { toggleMetronomeWithSync };
 };

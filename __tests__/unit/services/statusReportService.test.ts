@@ -14,8 +14,14 @@ import { recordStatusProbeResults, STATUS_REPORTS_COLLECTION } from '@/services/
 
 describe('statusReportService', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-05-16T14:30:00.000Z'));
     jest.clearAllMocks();
     mockGetDocument.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('writes only sanitized status fields to Firestore', async () => {

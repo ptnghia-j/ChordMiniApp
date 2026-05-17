@@ -355,24 +355,21 @@ class MetronomeService {
 -number volume
 -string soundStyle
 -string trackMode
--AudioBuffer metronomeTrack
--AudioBufferSourceNode metronomeSource
+-GainNode metronomeMasterGain
 -Map~SoundStyle, BufferPair~ audioBuffers
-+generateMetronomeTrack(duration, bpm, timeSignature) AudioBuffer
 +scheduleClick(relativeTime, isDownbeat) void
-+setEnabled(enabled, currentTime) Promise<void>
++setEnabled(enabled) Promise<void>
++toggleMetronome() Promise<boolean>
++clearScheduledClicks() void
 +setVolume(volume) void
 +setSoundStyle(style) Promise<void>
 +setTrackMode(mode) Promise<void>
-+startMetronomeTrack(currentTime) void
-+stopMetronomeTrack() void
 +testClick(isDownbeat) Promise<void>
 }
 class DrumRenderer {
-+renderKick(context, time, volume, bpm) void
-+renderSnare(context, time, volume, bpm) void
-+renderHiHat(context, time, volume, bpm) void
-+renderDrumBeat(context, time, interval, isDownbeat, beatIndex, signature, volume) void
++renderKick(context, time, volume, bpm, destinationNode) void
++renderSnare(context, time, volume, bpm, destinationNode) void
++renderHiHat(context, time, volume, bpm, destinationNode) void
 }
 MetronomeService --> DrumRenderer : "uses"
 ```

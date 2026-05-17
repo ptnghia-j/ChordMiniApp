@@ -18,6 +18,7 @@ export function renderKick(
   time: number,
   volume: number,
   masterVolume: number,
+  destinationNode?: AudioNode,
 ): void {
   const osc = context.createOscillator();
   const gain = context.createGain();
@@ -32,7 +33,7 @@ export function renderKick(
   gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
 
   osc.connect(gain);
-  gain.connect(context.destination);
+  gain.connect(destinationNode || context.destination);
   osc.start(time);
   osc.stop(time + 0.18);
 }
@@ -42,6 +43,7 @@ export function renderSnare(
   time: number,
   volume: number,
   masterVolume: number,
+  destinationNode?: AudioNode,
 ): void {
   const noise = context.createBufferSource();
   const noiseHighpass = context.createBiquadFilter();
@@ -73,10 +75,10 @@ export function renderSnare(
   noise.connect(noiseHighpass);
   noiseHighpass.connect(noiseLowpass);
   noiseLowpass.connect(noiseGain);
-  noiseGain.connect(context.destination);
+  noiseGain.connect(destinationNode || context.destination);
 
   bodyOsc.connect(bodyGain);
-  bodyGain.connect(context.destination);
+  bodyGain.connect(destinationNode || context.destination);
 
   noise.start(time);
   noise.stop(time + 0.12);
@@ -89,6 +91,7 @@ export function renderHiHat(
   time: number,
   volume: number,
   masterVolume: number,
+  destinationNode?: AudioNode,
 ): void {
   const noise = context.createBufferSource();
   const highpass = context.createBiquadFilter();
@@ -110,7 +113,7 @@ export function renderHiHat(
   noise.connect(highpass);
   highpass.connect(bandpass);
   bandpass.connect(gain);
-  gain.connect(context.destination);
+  gain.connect(destinationNode || context.destination);
   noise.start(time);
   noise.stop(time + 0.045);
 }
@@ -123,20 +126,21 @@ export function renderDrumBeat(
   beatIndex: number,
   timeSignature: number,
   masterVolume: number,
+  destinationNode?: AudioNode,
 ): void {
   const beatInBar = beatIndex % timeSignature;
-  renderKick(offlineContext, beatTime, isDownbeat ? 0.28 : 0.2, masterVolume);
+  renderKick(offlineContext, beatTime, isDownbeat ? 0.28 : 0.2, masterVolume, destinationNode);
 
   const shouldAddSnare = timeSignature >= 4
     ? beatInBar === 1 || beatInBar === 3
     : beatInBar === Math.floor(timeSignature / 2);
   if (shouldAddSnare) {
-    renderSnare(offlineContext, beatTime, 0.38, masterVolume);
+    renderSnare(offlineContext, beatTime, 0.38, masterVolume, destinationNode);
   }
 
-  renderHiHat(offlineContext, beatTime, 0.18, masterVolume);
+  renderHiHat(offlineContext, beatTime, 0.18, masterVolume, destinationNode);
   const offbeatTime = beatTime + beatInterval * 0.5;
   if (offbeatTime < offlineContext.length / offlineContext.sampleRate) {
-    renderHiHat(offlineContext, offbeatTime, 0.14, masterVolume);
+    renderHiHat(offlineContext, offbeatTime, 0.14, masterVolume, destinationNode);
   }
 }

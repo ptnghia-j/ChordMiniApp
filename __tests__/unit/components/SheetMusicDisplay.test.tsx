@@ -3,10 +3,12 @@ import { render, screen } from '@testing-library/react';
 import {
   default as SheetMusicDisplay,
   countScoreMeasuresInMusicXml,
+  expandMeasureBoxesToMeasureSpans,
   extractSyncDataFromMusicXml,
   resolveMeasureScrollTop,
   stabilizeMeasureBoxAnchors,
 } from '@/components/piano-visualizer/SheetMusicDisplay';
+import { getActiveMeasureIndexFromAudioTime } from '@/components/piano-visualizer/sheet-music-display/sync';
 import { exportPianoVisualizerScoreToMusicXml } from '@/utils/musicXmlExport';
 
 describe('SheetMusicDisplay sync helpers', () => {
@@ -104,6 +106,30 @@ describe('SheetMusicDisplay sync helpers', () => {
     expect(stabilized).toHaveLength(3);
     expect(stabilized[1].left).toBeGreaterThan(stabilized[0].left);
     expect(stabilized[1].left).toBeLessThan(stabilized[2].left);
+  });
+
+  it('uses score-time starts when leading padding stretches an exported pickup measure', () => {
+    const syncData = {
+      selectedAnacrusisSeconds: 3,
+      measureStartScoreTimes: [0, 3, 7, 11],
+      measureStartAudioTimes: [0, 12, 16, 20],
+    };
+
+    expect(getActiveMeasureIndexFromAudioTime(2.99, syncData, 60, 4)).toBe(0);
+    expect(getActiveMeasureIndexFromAudioTime(3, syncData, 60, 4)).toBe(1);
+    expect(getActiveMeasureIndexFromAudioTime(7, syncData, 60, 4)).toBe(2);
+  });
+
+  it('expands measure highlight boxes to the next same-system measure boundary', () => {
+    const expanded = expandMeasureBoxesToMeasureSpans([
+      { top: 0, left: 100, width: 12, height: 80 },
+      { top: 0, left: 240, width: 120, height: 80 },
+      { top: 180, left: 90, width: 18, height: 80 },
+    ], 600);
+
+    expect(expanded[0].width).toBe(140);
+    expect(expanded[1].width).toBe(360);
+    expect(expanded[2].width).toBe(510);
   });
 
   it('scrolls farther down for tall grand-staff systems so the bass staff remains visible', () => {

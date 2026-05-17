@@ -37,6 +37,7 @@ export interface MeasureHighlightBox {
 export interface ScoreSyncData {
   measureStartScoreTimes: number[];
   measureStartAudioTimes: number[];
+  selectedAnacrusisSeconds?: number;
 }
 
 export interface RasterizedScorePage {
