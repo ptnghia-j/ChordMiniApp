@@ -104,6 +104,12 @@ export class AudioExtractionServiceSimplified {
           };
         }
 
+      case 'browser-ytdlp':
+        return {
+          success: false,
+          error: 'Browser yt-dlp extraction must be performed by the client after the cache check.'
+        };
+
       default:
         // Fallback to yt-mp3-go for unknown strategies
         console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to yt-mp3-go`);

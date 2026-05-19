@@ -3,13 +3,13 @@
  *
  * Simplified URL-based strategy detection:
  * - Localhost Development: Use yt-dlp when the frontend origin contains "localhost"
- * - Production: Use the configured yt-mp3-go endpoint for all other environments
+ * - Production: Use browser-side yt-dlp for all other environments
  * - Automatic fallback between strategies for reliability
  *
  * Runtime selection currently uses process/env and browser origin checks.
  */
 
-export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go';
+export type AudioProcessingStrategy = 'ytdlp' | 'yt-mp3-go' | 'browser-ytdlp';
 
 export interface EnvironmentConfig {
   strategy: AudioProcessingStrategy;
@@ -53,22 +53,22 @@ export function detectEnvironment(): EnvironmentConfig {
   }
 
   // Determine strategy based on manual override or URL detection
-  // Priority: manual override > yt-mp3-go (production) > ytdlp (localhost)
+  // Priority: manual override > browser-ytdlp (production) > ytdlp (localhost)
   let strategy: AudioProcessingStrategy;
 
   // Check for manual strategy override
   const manualStrategy = process.env.NEXT_PUBLIC_AUDIO_STRATEGY;
 
   if (manualStrategy && manualStrategy !== 'auto' &&
-      ['ytdlp', 'yt-mp3-go'].includes(manualStrategy)) {
+      ['ytdlp', 'yt-mp3-go', 'browser-ytdlp'].includes(manualStrategy)) {
     strategy = manualStrategy as AudioProcessingStrategy;
     console.log(`🔧 Using manual audio strategy override: ${strategy}`);
   } else if (isLocalhost) {
     // For local development, use yt-dlp (most reliable for localhost)
     strategy = 'ytdlp';
   } else {
-    // Use the configured yt-mp3-go endpoint for production
-    strategy = 'yt-mp3-go';
+    // In production, run extraction in the user's browser and only validate/promote server-side.
+    strategy = 'browser-ytdlp';
   }
 
   return {

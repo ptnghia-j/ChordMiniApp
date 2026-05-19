@@ -457,6 +457,47 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
         return;
       }
 
+      if (!data.success && data.requiresBrowserExtraction) {
+        const {
+          extractAudioWithBrowserYtDlp,
+          extractAudioWithNativeYtDlpFallback,
+          shouldUseNativeYtDlpFallback,
+        } = await import('@/services/audio/browserYtDlpExtractionService');
+        const browserMetadata = {
+          videoId,
+          ...videoMetadata,
+        };
+        const browserOptions = {
+          abortSignal,
+          onProgress: (_stage: string, message: string, progress?: number) => {
+            processingContext.setStatusMessage(message);
+            if (typeof progress === 'number') {
+              processingContext.setProgress(Math.min(95, Math.max(currentProgress, progress)));
+            }
+          }
+        };
+
+        let browserResult;
+        try {
+          browserResult = await extractAudioWithBrowserYtDlp(browserMetadata, browserOptions);
+        } catch (browserError) {
+          if (!shouldUseNativeYtDlpFallback(browserError)) {
+            throw browserError;
+          }
+
+          console.warn('Browser yt-dlp extraction hit a YouTube access challenge; retrying native fallback.');
+          browserResult = await extractAudioWithNativeYtDlpFallback(browserMetadata, browserOptions);
+        }
+
+        data.success = true;
+        data.audioUrl = browserResult.audioUrl;
+        data.title = browserResult.title;
+        data.duration = browserResult.duration;
+        data.fromCache = false;
+        data.isStreamUrl = false;
+        data.method = browserResult.method;
+      }
+
       if (data.success) {
         // console.log(`✅ Audio extraction successful: ${data.audioUrl}`);
         // console.log(`📊 Extraction metadata: fromCache=${data.fromCache}, title="${data.title}", duration=${data.duration}`);

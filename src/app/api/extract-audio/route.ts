@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { audioExtractionServiceSimplified, YouTubeVideoMetadata } from '@/services/audio/audioExtractionSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
+import { firebaseStorageSimplified } from '@/services/firebase/firebaseStorageSimplified';
 
 /**
  * Audio Extraction API Route - Environment-Aware Service Integration
@@ -17,6 +18,62 @@ import { detectEnvironment } from '@/utils/environmentDetection';
 // Configure Vercel function timeout - Use 300 seconds to match vercel.json
 // This allows time for audio extraction job creation + polling attempts
 export const maxDuration = 300;
+
+async function getCachedBrowserExtractionResult(videoMetadata: YouTubeVideoMetadata) {
+  const videoId = videoMetadata.id;
+
+  try {
+    const { ensureFirebaseInitialized } = await import('@/config/firebase');
+    await ensureFirebaseInitialized();
+  } catch (initError) {
+    console.warn('⚠️ Firebase initialization failed, continuing with browser extraction:', initError);
+  }
+
+  try {
+    const { findExistingAudioFile } = await import('@/services/firebase/firebaseStorageService');
+    const existingFile = await findExistingAudioFile(videoId);
+    if (existingFile) {
+      firebaseStorageSimplified.saveAudioMetadataBackground({
+        videoId,
+        audioUrl: existingFile.audioUrl,
+        title: videoMetadata.title,
+        thumbnail: videoMetadata.thumbnail,
+        channelTitle: videoMetadata.channelTitle,
+        duration: 0,
+        fileSize: existingFile.fileSize || 0,
+        extractionService: 'firebase-storage-cache',
+        extractionTimestamp: Date.now(),
+        videoDuration: videoMetadata.duration,
+      });
+
+      return {
+        success: true,
+        audioUrl: existingFile.audioUrl,
+        title: videoMetadata.title,
+        duration: 0,
+        fromCache: true,
+        isStreamUrl: false,
+      };
+    }
+  } catch (storageError) {
+    console.warn('⚠️ Firebase Storage cache check failed before browser extraction:', storageError);
+  }
+
+  const cached = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
+  if (cached) {
+    return {
+      success: true,
+      audioUrl: cached.audioUrl,
+      title: cached.title,
+      duration: cached.duration,
+      fromCache: true,
+      isStreamUrl: cached.isStreamUrl,
+      streamExpiresAt: cached.streamExpiresAt,
+    };
+  }
+
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +111,43 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      const env = detectEnvironment();
+      const resolvedMetadata: YouTubeVideoMetadata = videoMetadata || {
+        id: videoId,
+        title: typeof originalTitle === 'string' && originalTitle.length > 0 ? originalTitle : 'YouTube Video',
+        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+        channelTitle: 'Unknown Channel'
+      };
+
+      if (env.strategy === 'browser-ytdlp') {
+        if (!forceRedownload) {
+          const cachedResult = await getCachedBrowserExtractionResult(resolvedMetadata);
+          if (cachedResult) {
+            return NextResponse.json({
+              success: true,
+              audioUrl: cachedResult.audioUrl,
+              title: cachedResult.title,
+              duration: cachedResult.duration,
+              youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+              fromCache: cachedResult.fromCache,
+              isStreamUrl: cachedResult.isStreamUrl,
+              streamExpiresAt: cachedResult.streamExpiresAt,
+              method: 'browser-ytdlp-cache'
+            });
+          }
+        }
+
+        return NextResponse.json({
+          success: false,
+          requiresBrowserExtraction: true,
+          method: 'browser-ytdlp',
+          videoId,
+          title: resolvedMetadata.title,
+          duration: resolvedMetadata.duration,
+          youtubeEmbedUrl: `https://www.youtube.com/embed/${videoId}`,
+        }, { status: 202 });
+      }
+
       let result;
 
       // Use extraction with search metadata if available
@@ -89,7 +183,6 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Simplified extraction successful for ${videoId}`);
 
       // Determine the method based on environment
-      const env = detectEnvironment();
       const method = env.strategy === 'ytdlp' ? 'yt-dlp' : 'yt-mp3-go';
 
       return NextResponse.json({

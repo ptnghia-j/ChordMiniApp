@@ -77,6 +77,23 @@ export class AudioProcessingService {
       }
 
       if (!data.success) {
+        if (data.requiresBrowserExtraction) {
+          const { extractAudioWithBrowserYtDlp } = await import('@/services/audio/browserYtDlpExtractionService');
+          const browserResult = await extractAudioWithBrowserYtDlp({
+            videoId,
+            title: originalTitle || data.title,
+            duration: data.duration,
+          });
+
+          return {
+            audioUrl: browserResult.audioUrl,
+            fromCache: false,
+            isStreamUrl: false,
+            title: browserResult.title,
+            duration: browserResult.duration,
+          };
+        }
+
         throw new Error(data.error || 'Audio extraction failed');
       }
 

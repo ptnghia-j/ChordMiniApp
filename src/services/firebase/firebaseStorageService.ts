@@ -28,6 +28,84 @@ export interface AudioFileData {
   videoViewCount?: number; // View count at time of extraction
 }
 
+type UploadableFile = File | Blob | ArrayBuffer;
+
+async function uploadableToBuffer(file: UploadableFile): Promise<Buffer> {
+  if (file instanceof ArrayBuffer) {
+    return Buffer.from(file);
+  }
+
+  return Buffer.from(await file.arrayBuffer());
+}
+
+function buildFirebaseDownloadUrl(bucketName: string, objectPath: string, token: string): string {
+  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+}
+
+async function uploadAudioFileWithAdmin(
+  videoId: string,
+  audioFile: UploadableFile,
+  audioStoragePath: string,
+  videoFile?: UploadableFile,
+  videoStoragePath?: string
+): Promise<{
+  audioUrl: string;
+  videoUrl?: string;
+  storagePath: string;
+  videoStoragePath?: string;
+} | null> {
+  if (typeof window !== 'undefined') {
+    return null;
+  }
+
+  const [{ randomUUID }, { getFirebaseAdminStorageBucket }] = await Promise.all([
+    import('crypto'),
+    import('@/utils/firebaseAdmin'),
+  ]);
+  const bucket = await getFirebaseAdminStorageBucket();
+  const audioBuffer = await uploadableToBuffer(audioFile);
+  const audioDownloadToken = randomUUID();
+
+  await bucket.file(audioStoragePath).save(audioBuffer, {
+    resumable: false,
+    metadata: {
+      contentType: 'audio/mpeg',
+      cacheControl: 'public, max-age=31536000, immutable',
+      metadata: {
+        firebaseStorageDownloadTokens: audioDownloadToken,
+        source: 'server-extraction',
+        videoId,
+      },
+    },
+  });
+
+  let videoUrl: string | undefined;
+  if (videoFile && videoStoragePath) {
+    const videoBuffer = await uploadableToBuffer(videoFile);
+    const videoDownloadToken = randomUUID();
+    await bucket.file(videoStoragePath).save(videoBuffer, {
+      resumable: false,
+      metadata: {
+        contentType: 'video/mp4',
+        cacheControl: 'public, max-age=31536000, immutable',
+        metadata: {
+          firebaseStorageDownloadTokens: videoDownloadToken,
+          source: 'server-extraction',
+          videoId,
+        },
+      },
+    });
+    videoUrl = buildFirebaseDownloadUrl(bucket.name, videoStoragePath, videoDownloadToken);
+  }
+
+  return {
+    audioUrl: buildFirebaseDownloadUrl(bucket.name, audioStoragePath, audioDownloadToken),
+    videoUrl,
+    storagePath: audioStoragePath,
+    videoStoragePath,
+  };
+}
+
 /**
  * Find existing Firebase Storage audio file for a video ID
  * 
@@ -195,8 +273,8 @@ export async function findExistingAudioFiles(
  */
 export async function uploadAudioFile(
   videoId: string,
-  audioFile: File | Blob | ArrayBuffer,
-  videoFile?: File | Blob | ArrayBuffer
+  audioFile: UploadableFile,
+  videoFile?: UploadableFile
 ): Promise<{
   audioUrl: string;
   videoUrl?: string;
@@ -224,6 +302,18 @@ export async function uploadAudioFile(
     const timestamp = Date.now();
     const audioFileName = `audio_[${videoId}]_${timestamp}.mp3`;
     const audioStoragePath = `audio/${audioFileName}`;
+    const videoFileName = `video_[${videoId}]_${timestamp}.mp4`;
+    const videoStoragePath = videoFile ? `video/${videoFileName}` : undefined;
+
+    const adminUpload = await uploadAudioFileWithAdmin(videoId, audioFile, audioStoragePath, videoFile, videoStoragePath).catch((adminError) => {
+      console.warn('Firebase Admin upload unavailable, falling back to client SDK upload:', adminError);
+      return null;
+    });
+
+    if (adminUpload) {
+      console.log(`Audio file uploaded with Firebase Admin: ${adminUpload.audioUrl}`);
+      return adminUpload;
+    }
 
     // Create storage reference
     const audioStorageRef = ref(storage, audioStoragePath);
@@ -248,13 +338,12 @@ export async function uploadAudioFile(
       console.log(`Generated public download URL: ${audioUrl}`);
 
       let videoUrl: string | undefined;
-      let videoStoragePath: string | undefined;
+      let uploadedVideoStoragePath: string | undefined;
 
       // Upload video file if provided
       if (videoFile) {
-        const videoFileName = `video_[${videoId}]_${timestamp}.mp4`;
-        videoStoragePath = `video/${videoFileName}`;
-        const videoStorageRef = ref(storage, videoStoragePath);
+        uploadedVideoStoragePath = videoStoragePath;
+        const videoStorageRef = ref(storage, uploadedVideoStoragePath!);
 
         // Convert ArrayBuffer to Blob if needed
         let videoBlob: Blob;
@@ -277,7 +366,7 @@ export async function uploadAudioFile(
         audioUrl,
         videoUrl,
         storagePath: audioStoragePath,
-        videoStoragePath
+        videoStoragePath: uploadedVideoStoragePath
       };
     } catch (uploadError) {
       console.error('Error during Firebase Storage upload operation:', uploadError);

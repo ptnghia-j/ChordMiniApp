@@ -1,8 +1,8 @@
 rules_version = '2';
 
 // Firebase Storage Security Rules for ChordMiniApp
-// These rules allow anonymous users to upload and access audio files
-// while maintaining security and preventing abuse
+// Public cached audio is readable by clients, but writes are restricted to
+// quarantine paths and trusted server-side promotion.
 
 service firebase.storage {
   match /b/{bucket}/o {
@@ -39,19 +39,37 @@ service firebase.storage {
       return (resource != null && resource.name.matches('.*\\[.{11}\\].*')) ||
              (request.resource != null && request.resource.name.matches('.*\\[.{11}\\].*'));
     }
+
+    function isValidYouTubeVideoId(videoId) {
+      return videoId.matches('^[A-Za-z0-9_-]{11}$');
+    }
+
+    function isValidBrowserCandidateFileName(fileName) {
+      return fileName.matches('^[a-f0-9]{64}\\.mp3$');
+    }
     
     // Audio files storage - allow anonymous access for caching
     match /audio/{fileName} {
       // Allow read access to everyone (for serving cached audio)
       allow read: if true;
       
-      // Allow write access for anonymous users with validation
-      allow write: if isValidAudioFile() && 
-                      isValidFileSize() &&
-                      isValidFileName();
+      // Public cached audio is promoted by trusted server-side validation only.
+      allow write: if false;
       
       // Allow delete only for cleanup operations (optional)
       allow delete: if false; // Disable deletion for now
+    }
+
+    // Quarantine path for browser-side yt-dlp extraction candidates.
+    match /audio-candidates/{userId}/{videoId}/{fileName} {
+      allow read: if false;
+      allow create: if request.auth != null &&
+                      request.auth.uid == userId &&
+                      isValidYouTubeVideoId(videoId) &&
+                      isValidBrowserCandidateFileName(fileName) &&
+                      request.resource.contentType == 'audio/mpeg' &&
+                      isValidFileSize();
+      allow update, delete: if false;
     }
     
     // Video files storage (if needed in the future)
