@@ -132,7 +132,7 @@ Purpose: Extract audio from a YouTube video using environment-aware strategies a
 Key behaviors:
 - Parses JSON payload and validates presence of videoId.
 - Supports getInfoOnly mode to return basic metadata without extraction.
-- Uses environment detection to select extraction strategy (yt-mp3-go, yt-dlp, or fallback).
+- Uses environment detection to select extraction strategy (browser yt-dlp, local yt-dlp, or deprecated rollback).
 - Integrates with simplified extraction service to handle caching and storage.
 
 Request format:
@@ -144,9 +144,10 @@ Response format:
 - On failure: {success: false, error, details, suggestion}.
 
 Supported extraction methods:
-- yt-mp3-go (primary production service).
-- yt-dlp (development or explicitly enabled).
-- Deprecated yt-mp3-go (fallback to yt-mp3-go).
+- Browser yt-dlp with Pyodide, ffmpeg.wasm, and the YouTube media proxy (primary production path).
+- No automatic Railway/server yt-dlp fallback for YouTube access challenges; Cloudflare/browser failures return extraction errors.
+- yt-dlp development endpoints (development or explicitly enabled).
+- Deprecated yt-mp3-go rollback via `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
 
 ```mermaid
 sequenceDiagram

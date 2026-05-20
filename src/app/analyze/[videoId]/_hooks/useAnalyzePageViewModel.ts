@@ -4,6 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { addToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProcessing } from '@/contexts/ProcessingContext';
@@ -276,10 +277,13 @@ export function useAnalyzePageViewModel({
       addToast({
         title: 'Audio is too long for analysis',
         description: `Audio duration should be less than ${MAX_ANALYSIS_DURATION_MINUTES} minutes.`,
-        color: 'warning',
-        variant: 'flat',
+        color: 'default',
         timeout: 5000,
         shouldShowTimeoutProgress: true,
+        classNames: mergeToastClassNames({
+          icon: 'text-warning-500',
+          title: 'text-warning-600 dark:text-warning-400',
+        }),
       });
       return;
     }

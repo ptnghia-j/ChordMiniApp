@@ -28,9 +28,11 @@ const connectSrcValues = Array.from(new Set([
   'https://*.vercel.com',
   'https://api.vercel.com',
   'https://gleitz.github.io',
+  'https://goldst.dev',
   'https://cdn.jsdelivr.net',
   'https://unpkg.com',
   'https://*.vocalremover.org',
+  'https://*.workers.dev',
 ]));
 
 const contentSecurityPolicy = [
@@ -41,9 +43,45 @@ const contentSecurityPolicy = [
   "script-src 'self' blob: 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.youtube-nocookie.com https://*.googleapis.com https://*.google.com https://www.gstatic.com https://www.recaptcha.net https://*.doubleclick.net https://*.googlesyndication.com https://gleitz.github.io https://cdn.jsdelivr.net https://unpkg.com",
 ].join('; ');
 
+const broadFilesystemTraceExcludes = [
+  './SongFormer/**/*',
+  './python_backend/**/*',
+  './sheetsage/**/*',
+  './scripts/**/*',
+  './yt-dlp-server/**/*',
+  './docker/**/*',
+  './firebase/**/*',
+  './__tests__/**/*',
+  './src/**/*',
+  './public/**/*',
+  './*.md',
+  './*.yml',
+  './*.yaml',
+  './*.tsbuildinfo',
+  './Dockerfile',
+  './docker-compose*.yml',
+  './eslint.config.mjs',
+  './next.config.js',
+  './tailwind.config.js',
+  './tsconfig*.json',
+  './vercel.json',
+];
+
+const broadFilesystemTraceRoutes = [
+  '/api/extract-audio',
+  '/api/jobs/extract-audio',
+  '/api/transcribe-lyrics',
+  '/api/youtube-media-proxy',
+  '/api/ytdlp/download',
+];
+
 const nextConfig = {
   // Enable standalone output for Docker deployments
   output: 'standalone',
+
+  outputFileTracingExcludes: Object.fromEntries(
+    broadFilesystemTraceRoutes.map((route) => [route, broadFilesystemTraceExcludes])
+  ),
 
   // Server external packages - packages that should not be bundled
   // @music.ai/sdk has a broken import for ../build.json that fails with Turbopack

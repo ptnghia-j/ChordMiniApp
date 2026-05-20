@@ -1,10 +1,10 @@
-export type StatusServiceId = 'beat' | 'chord' | 'sheetsage' | 'yt2mp3go';
+export type StatusServiceId = 'beat' | 'chord' | 'sheetsage' | 'gemini';
 
 export type PublicServiceStatus = 'operational' | 'degraded' | 'outage' | 'unknown';
 
 export type PublicOverallStatus = 'operational' | 'degraded' | 'partial_outage' | 'major_outage' | 'unknown';
 
-export type StatusProbeKind = 'health' | 'metadata' | 'extraction';
+export type StatusProbeKind = 'health' | 'metadata' | 'generation';
 
 export type IncidentSeverity = 'minor' | 'major' | 'critical';
 
@@ -23,7 +23,7 @@ export interface PublicStatusServiceSummary {
 
 export interface PublicStatusIncident {
   id: string;
-  serviceId: StatusServiceId;
+  serviceId: string;
   serviceLabel: string;
   severity: IncidentSeverity;
   status: 'investigating' | 'resolved';

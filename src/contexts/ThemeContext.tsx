@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useCallback, useEffect, useSyncExternalStore, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useRef, useSyncExternalStore, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -45,13 +45,26 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // Read theme from the DOM class (set by blocking script) via useSyncExternalStore.
   // Server snapshot is 'light'; client snapshot reads the actual DOM state.
   const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot);
+  const themeSwitchTimerRef = useRef<number | null>(null);
 
   // Reveal the page once hydrated
   useEffect(() => {
     document.body.classList.add('theme-ready');
+
+    return () => {
+      if (themeSwitchTimerRef.current !== null) {
+        window.clearTimeout(themeSwitchTimerRef.current);
+      }
+    };
   }, []);
 
   const toggleTheme = useCallback(() => {
+    if (themeSwitchTimerRef.current !== null) {
+      window.clearTimeout(themeSwitchTimerRef.current);
+    }
+
+    document.documentElement.classList.add('theme-switching');
+
     const isDark = document.documentElement.classList.contains('dark');
     if (isDark) {
       document.documentElement.classList.remove('dark');
@@ -60,6 +73,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     }
+
+    themeSwitchTimerRef.current = window.setTimeout(() => {
+      document.documentElement.classList.remove('theme-switching');
+      themeSwitchTimerRef.current = null;
+    }, 180);
   }, []);
 
   return (

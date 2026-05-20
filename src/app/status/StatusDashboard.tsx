@@ -5,7 +5,7 @@ import { Accordion, AccordionItem, Card, CardBody, Chip, Tooltip } from '@heroui
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiMinusCircle, FiXCircle } from 'react-icons/fi';
 import type { PublicOverallStatus, PublicStatusIncident, PublicStatusReport, PublicStatusServiceSummary, StatusServiceId } from '@/services/status/statusTypes';
 
-const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'yt2mp3go'];
+const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'gemini'];
 const STATUS_TIMEZONE = 'America/Los_Angeles';
 const DATE_PART_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -100,6 +100,9 @@ function formatIncidentWindow(incident: PublicStatusIncident): string {
   if (incident.endedAt) {
     return `${started} · Recovery confirmed ${formatTime(incident.endedAt)}`;
   }
+  if (incident.status === 'resolved') {
+    return `${started} · Recovery confirmed`;
+  }
 
   return `${started} · Awaiting a successful follow-up probe`;
 }
@@ -157,7 +160,7 @@ function UptimeRow({
   const days = getDayIds(90);
   const knownDays = days
     .map((day) => reportByDate.get(day)?.services?.[service.id])
-    .filter((entry): entry is PublicStatusServiceSummary => Boolean(entry));
+    .filter((entry): entry is PublicStatusServiceSummary => entry !== undefined && entry.totalChecks > 0);
   const uptime = knownDays.length > 0
     ? knownDays.reduce((total, entry) => total + entry.uptimePct, 0) / knownDays.length
     : service.uptimePct;

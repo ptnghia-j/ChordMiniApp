@@ -1,6 +1,6 @@
-import { getPythonApiUrl, getSheetSageApiUrl, getYtMp3GoBaseUrl } from '@/config/serverBackend';
+import { GEMINI_MODEL_NAME, createGeminiClient } from '@/config/gemini';
+import { getPythonApiUrl, getSheetSageApiUrl } from '@/config/serverBackend';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
-import { ytMp3GoService } from '@/services/youtube/ytMp3GoService';
 import { getStatusConfig } from '@/services/status/statusConfig';
 import type { PublicServiceStatus, StatusProbeKind, StatusProbeResult, StatusServiceId } from '@/services/status/statusTypes';
 
@@ -8,17 +8,14 @@ const SERVICE_LABELS: Record<StatusServiceId, string> = {
   beat: 'Beat Detection',
   chord: 'Chord Recognition',
   sheetsage: 'Sheet Sage',
-  yt2mp3go: 'YouTube Extraction',
+  gemini: 'Gemini API',
 };
 
-const YT_METADATA_MAX_ATTEMPTS = 3;
-const YT_EXTRACTION_MAX_ATTEMPTS = 2;
-const YT_RETRY_DELAY_MS = 1_000;
-const YT_QUICK_FAILURE_RETRY_WINDOW_MS = 30_000;
 const STANDARD_ENDPOINT_MAX_ATTEMPTS = 3;
 const STANDARD_RETRY_DELAY_MS = 1_000;
 const STANDARD_FIRST_ATTEMPT_TIMEOUT_MS = 30_000;
 const STANDARD_MIN_ATTEMPT_TIMEOUT_MS = 5_000;
+const GEMINI_SLOW_RESPONSE_MS = 15_000;
 
 interface StandardEndpointProbe {
   probeKind: StatusProbeKind;
@@ -42,6 +39,11 @@ function safeSummary(serviceLabel: string, status: PublicServiceStatus, probeKin
 
 function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
+}
+
+function isGeminiOverloadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /\b(429|503|quota|rate limit|resource exhausted|overload|overloaded|unavailable)\b/i.test(message);
 }
 
 function statusRank(status: PublicServiceStatus): number {
@@ -221,82 +223,80 @@ async function probeServiceWithAggregation(
   };
 }
 
-async function probeYtInfo(): Promise<StatusProbeResult> {
+export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
   const config = getStatusConfig();
-  const serviceId: StatusServiceId = 'yt2mp3go';
+  const serviceId: StatusServiceId = 'gemini';
   const serviceLabel = SERVICE_LABELS[serviceId];
   const checkedAt = new Date().toISOString();
   const startedAt = Date.now();
-  const baseUrl = getYtMp3GoBaseUrl();
 
-  if (!baseUrl) {
+  if (!config.geminiConfigured) {
     return {
       serviceId,
       serviceLabel,
-      probeKind: 'metadata',
+      probeKind: 'generation',
       status: 'unknown',
       ok: false,
       latencyMs: null,
       checkedAt,
-      sanitizedSummary: 'YouTube extraction probe is not configured.',
+      sanitizedSummary: 'Gemini API probe is not configured.',
     };
   }
 
-  for (let attempt = 1; attempt <= YT_METADATA_MAX_ATTEMPTS; attempt += 1) {
-    const remainingMs = Math.max(1, config.ytInfoTimeoutMs - (Date.now() - startedAt));
-
-    try {
-      const formData = new FormData();
-      formData.append('url', `https://www.youtube.com/watch?v=${config.ytTestVideoId}`);
-      const response = await fetch(`${baseUrl}/yt-downloader/info`, {
-        method: 'POST',
-        headers: {
-          'User-Agent': 'ChordMiniApp/1.0',
-          Referer: `${baseUrl}/yt-downloader/`,
-        },
-        body: formData,
-        signal: createSafeTimeoutSignal(remainingMs),
-      });
-      const latencyMs = Date.now() - startedAt;
-
-      if (response.ok) {
-        const status = classify(true, latencyMs, Math.max(10_000, config.ytInfoTimeoutMs * 0.75));
-
-        return {
-          serviceId,
-          serviceLabel,
-          probeKind: 'metadata',
-          status,
-          ok: true,
-          latencyMs,
-          checkedAt,
-          sanitizedSummary: safeSummary(serviceLabel, status, 'metadata'),
-        };
-      }
-    } catch {
-      // Retry transient yt2mp3go/YouTube metadata failures within the public probe window.
-    }
-
-    const hasAttemptsLeft = attempt < YT_METADATA_MAX_ATTEMPTS;
-    const hasTimeForRetry = Date.now() - startedAt + YT_RETRY_DELAY_MS < config.ytInfoTimeoutMs;
-    if (!hasAttemptsLeft || !hasTimeForRetry) {
-      break;
-    }
-
-    await delay(YT_RETRY_DELAY_MS);
+  const gemini = createGeminiClient({ timeoutMs: config.probeTimeoutMs });
+  if (!gemini) {
+    return {
+      serviceId,
+      serviceLabel,
+      probeKind: 'generation',
+      status: 'unknown',
+      ok: false,
+      latencyMs: null,
+      checkedAt,
+      sanitizedSummary: 'Gemini API probe is not configured.',
+    };
   }
 
-  const latencyMs = Date.now() - startedAt;
-  return {
-    serviceId,
-    serviceLabel,
-    probeKind: 'metadata',
-    status: 'degraded',
-    ok: true,
-    latencyMs,
-    checkedAt,
-    sanitizedSummary: `${serviceLabel} metadata probe failed, but extraction is verified by a separate extraction probe.`,
-  };
+  try {
+    await gemini.models.generateContent({
+      model: GEMINI_MODEL_NAME,
+      contents: 'Reply with exactly: ok',
+      config: {
+        maxOutputTokens: 4,
+        temperature: 0,
+      },
+    });
+
+    const latencyMs = Date.now() - startedAt;
+    const status = classify(true, latencyMs, GEMINI_SLOW_RESPONSE_MS);
+    return {
+      serviceId,
+      serviceLabel,
+      probeKind: 'generation',
+      status,
+      ok: true,
+      latencyMs,
+      checkedAt,
+      sanitizedSummary: safeSummary(serviceLabel, status, 'generation'),
+    };
+  } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+    const overloaded = isGeminiOverloadError(error);
+    const status: PublicServiceStatus = overloaded ? 'degraded' : 'outage';
+    return {
+      serviceId,
+      serviceLabel,
+      probeKind: 'generation',
+      status,
+      ok: overloaded,
+      latencyMs,
+      checkedAt,
+      sanitizedSummary: overloaded
+        ? 'Gemini API reported overload or rate limiting during a generation probe.'
+        : safeSummary(serviceLabel, 'outage', 'generation'),
+      failureReason: overloaded ? 'http' : isTimeoutError(error) ? 'timeout' : 'network',
+    };
+  }
 }
 
 export async function runStandardStatusProbes(): Promise<StatusProbeResult[]> {
@@ -316,68 +316,6 @@ export async function runStandardStatusProbes(): Promise<StatusProbeResult[]> {
     probeServiceWithAggregation('sheetsage', [
       { probeKind: 'health', url: `${sheetSageBaseUrl}/health?warmup=true` },
     ], config.probeTimeoutMs),
-    probeYtInfo(),
+    probeGeminiGeneration(),
   ]);
-}
-
-export async function runYtExtractionStatusProbe(): Promise<StatusProbeResult> {
-  const config = getStatusConfig();
-  const serviceId: StatusServiceId = 'yt2mp3go';
-  const serviceLabel = SERVICE_LABELS[serviceId];
-  const checkedAt = new Date().toISOString();
-  const startedAt = Date.now();
-
-  for (let attempt = 1; attempt <= YT_EXTRACTION_MAX_ATTEMPTS; attempt += 1) {
-    let ok = false;
-
-    try {
-      const result = await ytMp3GoService.extractAudio(
-        config.ytTestVideoId,
-        'Status Probe',
-        0,
-        config.ytTestQuality,
-      );
-      ok = result.success === true;
-      const latencyMs = Date.now() - startedAt;
-
-      if (ok) {
-        const status = classify(true, latencyMs, Math.max(30_000, config.ytExtractionTimeoutMs * 0.8));
-
-        return {
-          serviceId,
-          serviceLabel,
-          probeKind: 'extraction',
-          status,
-          ok: true,
-          latencyMs,
-          checkedAt,
-          sanitizedSummary: safeSummary(serviceLabel, status, 'extraction'),
-        };
-      }
-    } catch {
-      ok = false;
-    }
-
-    const latencyMs = Date.now() - startedAt;
-    const failedQuickly = latencyMs < YT_QUICK_FAILURE_RETRY_WINDOW_MS;
-    const hasAttemptsLeft = attempt < YT_EXTRACTION_MAX_ATTEMPTS;
-    const hasTimeForRetry = latencyMs + YT_RETRY_DELAY_MS + YT_QUICK_FAILURE_RETRY_WINDOW_MS < config.ytExtractionTimeoutMs;
-    if (ok || !failedQuickly || !hasAttemptsLeft || !hasTimeForRetry) {
-      break;
-    }
-
-    await delay(YT_RETRY_DELAY_MS);
-  }
-
-  const latencyMs = Date.now() - startedAt;
-  return {
-    serviceId,
-    serviceLabel,
-    probeKind: 'extraction',
-    status: 'outage',
-    ok: false,
-    latencyMs,
-    checkedAt,
-    sanitizedSummary: safeSummary(serviceLabel, 'outage', 'extraction'),
-  };
 }

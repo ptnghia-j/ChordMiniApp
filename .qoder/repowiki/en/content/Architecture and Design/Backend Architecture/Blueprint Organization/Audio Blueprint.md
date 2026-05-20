@@ -391,7 +391,9 @@ FE_PROC --> FE_BEAT
 
 ## Performance Considerations
 - Extraction strategies:
-  - yt-mp3-go for production reliability; yt-dlp for development or explicit override.
+  - Browser yt-dlp with Pyodide, ffmpeg.wasm, and the YouTube media proxy is the production path.
+  - Railway/server yt-dlp is not used as an automatic production fallback; local yt-dlp remains useful in development.
+  - yt-mp3-go is deprecated rollback code via `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
   - Firebase Storage caching reduces repeated downloads; validation ensures accessibility.
 - Duration detection:
   - Header-first strategy for speed; metadata parsing as fallback; file-size estimation for large-scale processing.

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { addToast, closeToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 
 /** Delay (ms) before showing the "press play" prompt. */
 const PROMPT_DELAY_MS = 5_000;
@@ -58,8 +59,11 @@ const PlaybackPromptToast: React.FC<PlaybackPromptToastProps> = ({
         title: '▶ Press Play to Start',
         description:
           'Click the play button on the YouTube video to begin playback. You can then click any chord cell to jump to that position.',
-        color: 'primary',
-        variant: 'flat',
+        color: 'default',
+        classNames: mergeToastClassNames({
+          icon: 'text-primary-500',
+          title: 'text-primary-600 dark:text-blue-400',
+        }),
         timeout: 0, // persistent until manually closed
         shouldShowTimeoutProgress: false,
       });

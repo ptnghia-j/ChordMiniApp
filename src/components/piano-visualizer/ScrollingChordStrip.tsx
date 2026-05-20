@@ -3,7 +3,6 @@
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import type { ChordEvent } from '@/utils/chordToMidi';
 import { ChordCell, type ChordCellProps } from '@/components/chord-analysis/ChordCell';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeatIndex } from '@/utils/chordFormatting';
@@ -180,10 +179,6 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
 
   // Time-to-normalized-X mapping ref (updated by useMemo, read by RAF)
   const timeToNormalizedXRef = useRef<(time: number) => number>((t) => t * pixelsPerSecond);
-
-  // Use shared theme context (replaces manual dark mode detection)
-  const { theme } = useTheme();
-  const isDarkMode = theme === 'dark';
 
   // Read roman numeral toggle from UI store
   const { showRomanNumerals } = useRomanNumerals();
@@ -539,7 +534,6 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                   isEmpty={isEmpty}
                   wasCorrected={wasCorrected}
                   cellSize={height - 2}
-                  isDarkMode={isDarkMode}
                   showChordLabel={box.showLabel && box.width > 20}
                   isClickable={false}
                   onBeatClick={noopBeatClick}

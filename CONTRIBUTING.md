@@ -4,8 +4,8 @@ Thank you for your interest in contributing to ChordMini! This guide will help y
 
 Note: We especially welcome contribution from the research and ML community to help improve our core music analysis algorithms and models.
 
-> [!IMPORTANT]
-> The full test suites and documentations will be released in upcoming updates. 
+> [!NOTE]
+> The full test suites and documentations are gradually being built out. We encourage contributions in these areas as well, and will update this guide with more specific testing and documentation guidelines as the project evolves.
 
 
 ## 📝 Code Style Guidelines
@@ -25,7 +25,7 @@ Note: We especially welcome contribution from the research and ML community to h
 - **Props**: Define explicit interfaces for all component props
 
 ### Styling Guidelines
-- **HeroUI + Tailwind CSS**: Prefer HeroUI components with Tailwind utility class overrides; avoid custom CSS when possible
+- **HeroUI + Tailwind CSS**: Prefer HeroUI components with Tailwind utility class overrides; other utility or components libraries are welcomed but should be used consistently and justified enough to be added as a project dependency
 - **Responsive Design**: Mobile-first approach with proper breakpoints
 - **Dark Mode**: Support both light and dark themes consistently
 - **Accessibility**: Include proper ARIA labels and keyboard navigation
@@ -96,6 +96,76 @@ Current test suites primarily live under:
 - ✅ No merge conflicts
 - ✅ Documentation updated
 - ✅ Performance impact assessed when applicable
+
+### Handling Diverged Git History
+
+> [!IMPORTANT]
+> This codebase has changed quickly and may continue to need cleanup as the project evolves. If you see a Git divergence message, pause before pulling, rebasing, or resetting. This can happen when a shared branch history was rewritten with commands such as `git commit --amend`, `git rebase`, and `git push --force-with-lease`. The code may look similar, but Git sees amended or rebased commits as different commits because their commit hashes changed.
+
+You may see a message such as:
+
+```bash
+Your branch and 'origin/main' have diverged
+```
+
+or:
+
+```bash
+fatal: Need to specify how to reconcile divergent branches
+```
+
+Before taking any destructive action:
+
+```bash
+git status
+git branch backup-before-divergence
+git fetch origin
+```
+
+If you have no local changes and no local commits you need to keep, you can align your branch to the remote:
+
+```bash
+git reset --hard origin/main
+```
+
+For another branch, replace `main` with the branch name:
+
+```bash
+git reset --hard origin/branch-name
+```
+
+Warning: `git reset --hard` discards uncommitted local changes. If you have local edits, stash them first:
+
+```bash
+git stash
+git fetch origin
+git reset --hard origin/main
+git stash pop
+```
+
+If you have local commits on top of the old history, rebase them onto the updated remote branch instead:
+
+```bash
+git fetch origin
+git rebase origin/main
+```
+
+If conflicts appear, resolve them, then continue:
+
+```bash
+git add .
+git rebase --continue
+```
+
+If the rebase gets confusing or risky, stop and ask for help:
+
+```bash
+git rebase --abort
+```
+
+For shared branches such as `main`, `dev`, `staging`, `production`, or shared feature branches, avoid rewriting history unless the team explicitly agrees. Prefer a normal follow-up commit or `git revert <commit>` over amending and force-pushing. Rewriting history on a personal feature branch is usually acceptable before others depend on it, but use `git push --force-with-lease` instead of plain `git push --force`.
+
+If you rewrite a branch that others may have pulled, notify the team immediately with the branch name, what changed, and the recovery commands they should use.
 
 ## 🐛 Issue Reporting
 

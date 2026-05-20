@@ -35,6 +35,7 @@ export const GRID_ALIGNMENT_CONFIG = {
   },
   silentRun: {
     minLengthFloor: 2,
+    maxExpansionBeats: 3,
   },
   gap: {
     thresholdBeatsMultiplier: 2.5,
@@ -67,9 +68,13 @@ export const GRID_ALIGNMENT_CONFIG = {
       minPreviousStarts: 4,
       maxCurrentDownbeatShare: 0.35,
       minCorrectedDownbeatShare: 0.55,
+      postTempoMinCorrectedDownbeatShare: 0.45,
       minPreviousDownbeatShare: 0.4,
       minDownbeatGain: 4,
       maxAdjustmentBeats: 1,
+      minAnchorDownbeatShare: 0.55,
+      maxAnchorShrinkBeats: 3,
+      maxAnchorWindows: 8,
       minWindowSpacingBeats: 16,
       postTempoLookbehindBeats: 8,
       postTempoLookaheadBeats: 64,

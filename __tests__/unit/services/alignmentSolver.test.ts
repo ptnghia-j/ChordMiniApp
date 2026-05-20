@@ -212,6 +212,43 @@ describe('segment alignment solver comparison', () => {
     expect(counts[0]).toBeGreaterThanOrEqual(14);
   });
 
+  it('expands a short rest when the following sounding phrase is one beat early', () => {
+    const appendChordRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+
+    appendChordRun(chords, 'C:maj', 16);
+    appendChordRun(chords, 'N/C', 3);
+    [
+      'D:min', 'G:7', 'C:maj', 'F:maj',
+      'B:min7b5', 'E:7', 'A:min', 'D:7',
+    ].forEach((chord) => appendChordRun(chords, chord, 4));
+
+    const beats = chords.map((_, index) => index * 0.5);
+    const originalPostRestCounts = countStartModulos(chords, 4, 19);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+    const silenceDecision = result.decisions.find((decision) => (
+      decision.source === 'silence' && decision.startIndex === 16
+    ));
+    const firstPostRestIndex = result.gridData.chords.indexOf('D:min');
+    const solvedPostRestCounts = countStartModulos(result.gridData.chords, 4, firstPostRestIndex);
+
+    expect(originalPostRestCounts[3]).toBeGreaterThanOrEqual(8);
+    expect(originalPostRestCounts[0]).toBe(0);
+    expect(silenceDecision?.adjustment).toBe(1);
+    expect(firstPostRestIndex).toBe(20);
+    expect(solvedPostRestCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
+  });
+
   it('solves a ramped tempo-change section without a beat-2 special case', () => {
     const rawChords = [
       ...Array(9).fill('N/C'),
@@ -438,5 +475,166 @@ describe('segment alignment solver comparison', () => {
     expect(solvedPostCounts[0]).toBeGreaterThanOrEqual(8);
     expect(solvedPostCounts[0]).toBeGreaterThan(solvedPostCounts[1]);
     expect(result.gridData.beats.every((beat) => typeof beat === 'number')).toBe(true);
+  });
+
+  it('accepts post-tempo half-measure phrases where beat 3 remains a common chord-start position', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+
+    [
+      'A:maj', 'D:maj', 'E:maj', 'F#:min',
+      'B:min', 'E:7', 'A:maj', 'D:maj',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+    appendRun(chords, 'A:maj/E', 6);
+    appendRun(chords, 'D:maj', 1);
+    [
+      'E:7', 'C#:min7', 'F#:min7', 'B:min7',
+      'E:7', 'F#:min7', 'E:min7', 'A:7',
+      'Eb:hdim7', 'D:hdim7', 'C#:min7', 'F#:min7',
+      'G:maj', 'D:maj/F#', 'E:maj', 'A:maj/E',
+      'C#:min7',
+    ].forEach((chord) => appendRun(chords, chord, 2));
+
+    const beatDurations = [
+      ...Array(38).fill(0.5),
+      ...Array(chords.length - 38).fill(0.9),
+    ];
+    const beats = chords.map((_, index) => (
+      index === 0
+        ? 0
+        : beatDurations.slice(0, index).reduce((sum, duration) => sum + duration, 0)
+    ));
+    const originalPostCounts = countStartModulos(chords, 4, 39);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+    const postTempoDecision = result.decisions.find((decision) => (
+      decision.source === 'post_tempo_phase' && decision.adjustment !== 0
+    ));
+    const cumulativePostTempoAdjustment = result.decisions
+      .filter((decision) => postTempoDecision && decision.endIndex <= postTempoDecision.endIndex)
+      .reduce((total, decision) => total + decision.adjustment, 0);
+    const firstPostTempoIndex = result.gridData.chords.findIndex((chord, index) => (
+      index >= 30 &&
+      chord === 'E:7' &&
+      result.gridData.chords[index - 1] === 'D:maj'
+    ));
+    const solvedPostCounts = countStartModulos(result.gridData.chords, 4, firstPostTempoIndex);
+
+    expect(originalPostCounts[0]).toBe(0);
+    expect(originalPostCounts[1] + originalPostCounts[3]).toBeGreaterThanOrEqual(14);
+    expect(postTempoDecision?.adjustment).toBeLessThan(0);
+    expect(cumulativePostTempoAdjustment % 4).toBe(-3);
+    expect(firstPostTempoIndex % 4).toBe(0);
+    expect(solvedPostCounts[0]).toBeGreaterThan(solvedPostCounts[2]);
+    expect(solvedPostCounts[0]).toBeGreaterThan(solvedPostCounts[1]);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
+  });
+
+  it('can repair an opening phase drift and restore a later raw-aligned phrase', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = ['N/C'];
+
+    [
+      'A:maj/F#', 'E:maj/F#', 'B:min7', 'A:maj',
+      'B:min7/A', 'C#:7', 'G:maj/E',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+    appendRun(chords, 'E:sus4', 7);
+    [
+      'D:maj', 'B:min7', 'F#:min7', 'E:7',
+      'A:maj/C#', 'G:maj', 'E:maj/G#', 'F#:min',
+    ].forEach((chord) => appendRun(chords, chord, 4));
+
+    const beats = chords.map((_, index) => index * 0.5);
+    const originalOpeningCounts = countStartModulos(chords, 4, 1, 36);
+    const originalLaterCounts = countStartModulos(chords, 4, 36);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+    const leadingDecision = result.decisions.find((decision) => decision.source === 'leading_silence');
+    const anchorDecision = result.decisions.find((decision) => decision.source === 'phase_anchor');
+    const firstOpeningIndex = result.gridData.chords.indexOf('A:maj/F#');
+    const laterStartIndex = result.gridData.chords.indexOf('D:maj');
+    const solvedOpeningCounts = countStartModulos(result.gridData.chords, 4, firstOpeningIndex, laterStartIndex);
+    const solvedLaterCounts = countStartModulos(result.gridData.chords, 4, laterStartIndex);
+
+    expect(originalOpeningCounts[1]).toBeGreaterThanOrEqual(8);
+    expect(originalOpeningCounts[0]).toBe(0);
+    expect(originalLaterCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(leadingDecision?.adjustment).toBe(3);
+    expect(anchorDecision?.adjustment).toBe(-3);
+    expect(solvedOpeningCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(solvedLaterCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
+  });
+
+  it('uses long leading silence shrink plus contextual phrase shrink for a delayed opening phrase', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = ['', '', 'N.C.', ...Array(51).fill('N/C')];
+
+    [
+      ['A:maj', 7],
+      ['C#:maj', 4],
+      ['F#:min', 4],
+      ['B:sus4', 2],
+      ['B:min', 2],
+      ['A:maj/3', 5],
+      ['A:maj/5', 3],
+      ['E:sus4', 4],
+      ['A:maj', 16],
+      ['E:maj', 3],
+      ['A:maj/E', 5],
+      ['A:7', 8],
+    ].forEach(([chord, beats]) => appendRun(chords, chord as string, beats as number));
+
+    const beats = chords.map((_, index) => index * 0.5);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats, {
+        paddingCount: 1,
+        shiftCount: 2,
+        totalPaddingCount: 3,
+      }),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+      suppressLeadingSilenceExpansion: true,
+    });
+    const leadingDecision = result.decisions.find((decision) => decision.source === 'leading_silence');
+    const phraseDecision = result.decisions.find((decision) => decision.source === 'phrase_phase');
+    const firstStarts = result.gridData.chords
+      .map((chord, index) => ({ chord, index }))
+      .filter(({ chord, index }) => (
+        chord &&
+        chord !== 'N.C.' &&
+        chord !== 'N/C' &&
+        (index === 0 || result.gridData.chords[index - 1] !== chord)
+      ))
+      .slice(0, 6)
+      .map(({ index }) => index);
+    const firstPhraseCounts = countStartModulos(result.gridData.chords, 4, 52, 112);
+
+    expect(leadingDecision?.adjustment).toBe(-2);
+    expect(phraseDecision?.adjustment).toBe(-3);
+    expect(firstStarts).toEqual([52, 56, 60, 64, 66, 68]);
+    expect(firstPhraseCounts[0]).toBeGreaterThan(firstPhraseCounts[1]);
+    expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
   });
 });

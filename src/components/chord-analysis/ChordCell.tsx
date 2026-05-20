@@ -12,7 +12,6 @@ export interface ChordCellProps {
 
   isClickable: boolean;
   cellSize: number;
-  isDarkMode: boolean;
   showChordLabel: boolean;
   isEmpty: boolean;
   displayChord: string;
@@ -67,7 +66,6 @@ const areChordCellPropsEqual = (
 
   // Layout and styling props
   if (prevProps.cellSize !== nextProps.cellSize) return false;
-  if (prevProps.isDarkMode !== nextProps.isDarkMode) return false;
   if (prevProps.showChordLabel !== nextProps.showChordLabel) return false;
   if (prevProps.isEmpty !== nextProps.isEmpty) return false;
   if (prevProps.wasCorrected !== nextProps.wasCorrected) return false;
@@ -117,7 +115,6 @@ export const ChordCell = React.memo<ChordCellProps>(({
   globalIndex,
   isClickable,
   cellSize,
-  isDarkMode,
   showChordLabel,
   isEmpty,
   displayChord,
@@ -254,7 +251,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
       dangerouslySetInnerHTML={{
         __html: editedChord
           ? editedChord // Show raw edited value without formatting
-          : formatChordWithMusicalSymbols(displayChord, isDarkMode, wasCorrected ? undefined : accidentalPreference)
+          : formatChordWithMusicalSymbols(displayChord, false, wasCorrected ? undefined : accidentalPreference)
       }}
     />
   );

@@ -21,6 +21,19 @@ export interface UserFriendlyError {
 export function createUserFriendlyError(error: string): UserFriendlyError {
   const errorLower = error.toLowerCase();
 
+  if (errorLower.includes('youtube_proxy_rate_limited') ||
+      errorLower.includes('youtube extraction proxy is temporarily rate-limited') ||
+      errorLower.includes('temporarily rate-limited the extraction proxy') ||
+      errorLower.includes('http 429/captcha')) {
+    return {
+      title: 'Extraction Temporarily Limited',
+      message: 'YouTube temporarily rate-limited the audio extraction proxy.',
+      suggestion: 'Please wait a few minutes before trying again, or search for another version of this song.',
+      showTryAnotherButton: true,
+      isQuickTubeError: true
+    };
+  }
+
   // QuickTube service unavailable
   if (errorLower.includes('quicktube service is currently unavailable') ||
       errorLower.includes('quicktube service appears to be overloaded') ||

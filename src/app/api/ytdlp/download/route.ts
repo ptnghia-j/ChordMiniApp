@@ -213,12 +213,15 @@ async function downloadAudio(
               console.error(`📁 Available files: ${(await fs.readdir(tempDir)).join(', ')}`);
               console.error(`📝 yt-dlp stdout: ${stdout}`);
 
-              // Run debugging utilities
-              try {
-                const { troubleshootYtdlp } = await import('@/utils/ytdlpDebugger');
-                await troubleshootYtdlp(url, targetFilename, stdout);
-              } catch (debugError) {
-                console.error(`❌ Debug utilities failed: ${debugError}`);
+              // Run local debugging utilities only in development. Keeping this
+              // out of production builds prevents broad filesystem tracing.
+              if (isDevelopment) {
+                try {
+                  const { troubleshootYtdlp } = await import('@/utils/ytdlpDebugger');
+                  await troubleshootYtdlp(url, targetFilename, stdout);
+                } catch (debugError) {
+                  console.error(`❌ Debug utilities failed: ${debugError}`);
+                }
               }
 
               resolve({

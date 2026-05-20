@@ -1,7 +1,7 @@
 const PYODIDE_VERSION = '0.26.2';
 const YTDLP_VERSION = '2026.3.17';
 const PACKAGE_PROXY_URL = `${self.location.origin}/api/pyodide-package-proxy/yt_dlp-2026.3.17-py3-none-any.whl`;
-const PROXY_URL = '/api/youtube-media-proxy';
+let PROXY_URL = '/api/youtube-media-proxy';
 
 let pyodide = null;
 let ready = false;
@@ -131,6 +131,18 @@ def _pyodide_urlopen(req):
         status=status,
     )
     if status >= 400:
+        if status in (429, 503):
+            detail = content[:2048].decode('utf-8', 'ignore').lower()
+            if (
+                'youtube_proxy_rate_limited' in detail
+                or 'youtube_proxy_client_rate_limited' in detail
+                or 'retryafterseconds' in detail
+                or 'captcha' in detail
+                or 'unusual traffic' in detail
+            ):
+                raise TransportError(cause=Exception(
+                    f"YouTube extraction proxy is temporarily rate-limited (HTTP {status}). Please retry after the cooldown."
+                ))
         raise HTTPError(response)
     return response
     `);
@@ -159,43 +171,125 @@ async function extract(url) {
 
   const resultJson = await pyodide.runPythonAsync(`
 import json
+
 from yt_dlp import YoutubeDL
 
-UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+class QuietYtDlpLogger:
+    def debug(self, msg):
+        pass
 
-ydl_opts = {
-    'format': 'best/bestaudio',
-    'quiet': True,
-    'no_warnings': True,
-    'noplaylist': True,
-    'socket_timeout': 30,
-    'http_headers': {
-        'User-Agent': UA,
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android'],
-            'player_skip': ['webpage', 'configs'],
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        pass
+
+def run_extraction(use_ua_override):
+    return run_extraction_with_options(use_ua_override, ['webpage', 'configs'])
+
+def run_extraction_with_options(use_ua_override, player_skip):
+    ydl_opts = {
+        'format': 'best/bestaudio',
+        'quiet': True,
+        'no_warnings': True,
+        'logger': QuietYtDlpLogger(),
+        'noplaylist': True,
+        'socket_timeout': 30,
+        'http_headers': {
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
-    },
-}
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android'],
+                'player_skip': player_skip,
+                'skip': ['dash', 'hls', 'translated_subs'],
+            },
+        },
+    }
+    if use_ua_override:
+        ydl_opts['http_headers']['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+    
+    with YoutubeDL(ydl_opts) as ydl:
+        ydl.urlopen = _pyodide_urlopen
+        return ydl.extract_info(_url, download=False)
 
-with YoutubeDL(ydl_opts) as ydl:
-    ydl.urlopen = _pyodide_urlopen
-    info = ydl.extract_info(_url, download=False)
+def is_access_challenge(error):
+    err_str = str(error).lower()
+    return any(keyword in err_str for keyword in [
+        'confirm you',
+        'not a bot',
+        'sign in',
+        '403',
+        '401',
+        'forbidden',
+        'login_required',
+        'failed to extract any player response',
+    ])
 
-formats = info.get('requested_formats') or []
+def is_rate_limited(error):
+    err_str = str(error).lower()
+    return any(keyword in err_str for keyword in [
+        '429',
+        'too many requests',
+        'unusual traffic',
+        'captcha',
+        'rate limit',
+        'rate-limited',
+        'proxy is temporarily rate-limited',
+        'youtube_proxy_rate_limited',
+        'youtube_proxy_client_rate_limited',
+    ])
+
+def choose_media(info):
+    formats = info.get('requested_formats') or []
+    if formats:
+        chosen_format = next((fmt for fmt in formats if fmt.get('acodec') != 'none' and fmt.get('url')), None)
+        if chosen_format:
+            return chosen_format
+    if info.get('url'):
+        return info
+    if info.get('formats'):
+        chosen_format = next((fmt for fmt in reversed(info['formats']) if fmt.get('acodec') != 'none' and fmt.get('url')), None)
+        if chosen_format:
+            return chosen_format
+    if info.get('formats'):
+        return next((fmt for fmt in reversed(info['formats']) if fmt.get('url')), None)
+    return None
+
+attempts = [
+    # Fast path. This avoids web player signature work and is the most reliable
+    # path for many lyric videos. Avoid webpage retries by default because a
+    # flagged Cloudflare egress IP receives Google's CAPTCHA/429 page and each
+    # retry increases the soft block.
+    {'use_ua_override': False, 'player_skip': ['webpage', 'configs']},
+    # Desktop UA retry for access challenges seen on official music videos.
+    {'use_ua_override': True, 'player_skip': ['webpage', 'configs']},
+]
+
+info = None
 chosen = None
-if formats:
-    chosen = next((fmt for fmt in formats if fmt.get('acodec') != 'none' and fmt.get('url')), None)
-if chosen is None and info.get('url'):
-    chosen = info
-if chosen is None and info.get('formats'):
-    chosen = next((fmt for fmt in reversed(info['formats']) if fmt.get('acodec') != 'none' and fmt.get('url')), None)
-if chosen is None and info.get('formats'):
-    chosen = next((fmt for fmt in reversed(info['formats']) if fmt.get('url')), None)
+last_error = None
+for attempt in attempts:
+    try:
+        candidate_info = run_extraction_with_options(attempt['use_ua_override'], attempt['player_skip'])
+        candidate_media = choose_media(candidate_info)
+        if candidate_media and candidate_media.get('url'):
+            info = candidate_info
+            chosen = candidate_media
+            break
+        last_error = RuntimeError('yt-dlp returned no downloadable media stream for this attempt.')
+    except Exception as attempt_error:
+        last_error = attempt_error
+        if is_rate_limited(attempt_error):
+            raise RuntimeError('YouTube temporarily rate-limited the extraction proxy (HTTP 429/CAPTCHA). Please retry later or use another video.')
+        if not is_access_challenge(attempt_error):
+            raise attempt_error
+
+if chosen is None:
+    if last_error:
+        raise last_error
+    raise RuntimeError('yt-dlp returned no downloadable media stream.')
 
 if chosen is None or not chosen.get('url'):
     raise RuntimeError('yt-dlp returned no downloadable media stream.')
@@ -217,17 +311,24 @@ json.dumps({
 })
   `);
 
+
   self.postMessage({ type: 'extracted', data: JSON.parse(resultJson) });
 }
 
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
+      if (data.proxyUrl) {
+        PROXY_URL = data.proxyUrl;
+      }
       await init();
       return;
     }
 
     if (data.type === 'extract') {
+      if (data.proxyUrl) {
+        PROXY_URL = data.proxyUrl;
+      }
       await extract(data.url);
     }
   } catch (error) {

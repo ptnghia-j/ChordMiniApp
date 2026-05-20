@@ -10,7 +10,14 @@ import {
 } from './gridShared';
 import { AudioMappingItem, ChordGridData } from './gridTypes';
 
-type AlignmentWindowSource = 'gap' | 'silence' | 'tempo' | 'leading_silence' | 'phrase_phase' | 'post_tempo_phase';
+type AlignmentWindowSource =
+  | 'gap'
+  | 'silence'
+  | 'tempo'
+  | 'leading_silence'
+  | 'phrase_phase'
+  | 'post_tempo_phase'
+  | 'phase_anchor';
 
 type AlignmentWindow = {
   startIndex: number;
@@ -358,7 +365,7 @@ function buildLeadingSilenceWindow(
   timeSignature: number,
   suppressLeadingSilenceExpansion: boolean
 ): AlignmentWindow | null {
-  if (suppressLeadingSilenceExpansion || chordGridData.chords.length === 0) {
+  if (chordGridData.chords.length === 0) {
     return null;
   }
 
@@ -375,13 +382,14 @@ function buildLeadingSilenceWindow(
     GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.maxLeadingExpansionBeats,
     timeSignature - 1
   );
+  const maxShrink = Math.min(maxAdjustment, runEnd - 1);
 
   return {
     startIndex: 0,
     endIndex: runEnd,
     source: 'leading_silence',
-    minAdjustment: 0,
-    maxAdjustment,
+    minAdjustment: suppressLeadingSilenceExpansion ? -maxShrink : 0,
+    maxAdjustment: suppressLeadingSilenceExpansion ? 0 : maxAdjustment,
   };
 }
 
@@ -390,6 +398,7 @@ function buildSilentRunWindows(
   timeSignature: number
 ): AlignmentWindow[] {
   const minSilentRunLength = Math.max(GRID_ALIGNMENT_CONFIG.silentRun.minLengthFloor, timeSignature - 1);
+  const maxExpansion = Math.min(GRID_ALIGNMENT_CONFIG.silentRun.maxExpansionBeats, timeSignature - 1);
   const windows: AlignmentWindow[] = [];
   let index = 0;
 
@@ -416,7 +425,7 @@ function buildSilentRunWindows(
         endIndex: runEnd,
         source: 'silence',
         minAdjustment: -(windowLength - 1),
-        maxAdjustment: 0,
+        maxAdjustment: maxExpansion,
       });
     }
 
@@ -575,13 +584,18 @@ function scorePhrasePhaseCandidate(params: {
   const correctedCounts = countStartModulos(starts, timeSignature, adjustment);
   const currentDownbeats = currentCounts[0] ?? 0;
   const correctedDownbeats = correctedCounts[0] ?? 0;
+  const strongestCorrectedOffDownbeat = Math.max(0, ...correctedCounts.slice(1));
   const currentDownbeatShare = currentDownbeats / starts.length;
   const correctedDownbeatShare = correctedDownbeats / starts.length;
   const downbeatGain = correctedDownbeats - currentDownbeats;
+  const minCorrectedDownbeatShare = source === 'post_tempo_phase'
+    ? config.postTempoMinCorrectedDownbeatShare
+    : config.minCorrectedDownbeatShare;
 
   if (
     currentDownbeatShare > config.maxCurrentDownbeatShare ||
-    correctedDownbeatShare < config.minCorrectedDownbeatShare ||
+    correctedDownbeatShare < minCorrectedDownbeatShare ||
+    correctedDownbeats <= strongestCorrectedOffDownbeat ||
     downbeatGain < config.minDownbeatGain
   ) {
     return null;
@@ -626,14 +640,18 @@ function scorePhrasePhaseCandidate(params: {
     return null;
   }
 
-  const startIndex = boundaryIndex - editWindowLength;
+  const maxContextualShrink = Math.min(timeSignature - 1, runLength - 1);
+  const startIndex = boundaryIndex - (maxContextualShrink + 1);
 
   const candidate: PhrasePhaseCandidate = {
     startIndex,
     endIndex: boundaryIndex,
     source,
-    minAdjustment: Math.min(0, visualAdjustment),
+    minAdjustment: Math.min(visualAdjustment, -maxContextualShrink),
     maxAdjustment: Math.max(0, visualAdjustment),
+    adjustments: source === 'post_tempo_phase'
+      ? [visualAdjustment, 0]
+      : undefined,
     downbeatGain,
     correctedDownbeatShare,
   };
@@ -800,6 +818,97 @@ function buildPostTempoPhrasePhaseWindows(
     .sort((a, b) => a.startIndex - b.startIndex);
 }
 
+function buildPhaseAnchorWindows(
+  chordGridData: ChordGridData,
+  timeSignature: number
+): AlignmentWindow[] {
+  if (timeSignature <= 1 || chordGridData.chords.length < timeSignature * 8) {
+    return [];
+  }
+
+  const config = GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.phrasePhase;
+  const candidates: AlignmentWindow[] = [];
+  const maxShrink = Math.min(config.maxAnchorShrinkBeats, timeSignature - 1);
+
+  for (
+    let index = Math.max(config.minBoundaryBeats, 1);
+    index < chordGridData.chords.length - timeSignature;
+    index += 1
+  ) {
+    const previousChord = chordGridData.chords[index - 1];
+    const nextChord = chordGridData.chords[index];
+    const isBoundary =
+      !isSilentChord(previousChord) &&
+      !isSilentChord(nextChord) &&
+      previousChord !== nextChord;
+
+    if (!isBoundary) {
+      continue;
+    }
+    if (index % timeSignature !== 0) {
+      continue;
+    }
+
+    const starts = getMusicalChordStartIndices(
+      chordGridData.chords,
+      index,
+      Math.min(chordGridData.chords.length, index + config.lookaheadBeats)
+    );
+    if (starts.length < config.minStarts) {
+      continue;
+    }
+
+    const counts = countStartModulos(starts, timeSignature);
+    const downbeatShare = (counts[0] ?? 0) / starts.length;
+    if (downbeatShare < config.minAnchorDownbeatShare) {
+      continue;
+    }
+
+    let runStart = index - 1;
+    const anchorChord = chordGridData.chords[runStart];
+    if (runStart < 0 || isSilentChord(anchorChord)) {
+      continue;
+    }
+
+    while (runStart > 0 && chordGridData.chords[runStart - 1] === anchorChord) {
+      runStart -= 1;
+    }
+
+    const runLength = index - runStart;
+    const usableShrink = Math.min(maxShrink, runLength - 1);
+    if (usableShrink <= 0) {
+      continue;
+    }
+
+    const endIndex = index;
+    const startIndex = index - (usableShrink + 1);
+    candidates.push({
+      startIndex,
+      endIndex,
+      source: 'phase_anchor',
+      minAdjustment: -usableShrink,
+      maxAdjustment: 0,
+    });
+  }
+
+  return candidates
+    .sort((a, b) => a.startIndex - b.startIndex)
+    .reduce<AlignmentWindow[]>((selected, candidate) => {
+      if (selected.length >= config.maxAnchorWindows) {
+        return selected;
+      }
+
+      const tooCloseToExisting = selected.some((window) => (
+        candidate.startIndex < window.endIndex + config.minWindowSpacingBeats &&
+        candidate.endIndex > window.startIndex - config.minWindowSpacingBeats
+      ));
+      if (!tooCloseToExisting) {
+        selected.push(candidate);
+      }
+      return selected;
+    }, []);
+}
+
 function buildAlignmentWindows(params: {
   chordGridData: ChordGridData;
   chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
@@ -807,6 +916,7 @@ function buildAlignmentWindows(params: {
   timeSignature: number;
   beatDuration: number;
   suppressLeadingSilenceExpansion: boolean;
+  disableLeadingSilenceWindow: boolean;
 }): AlignmentWindow[] {
   const {
     chordGridData,
@@ -815,6 +925,7 @@ function buildAlignmentWindows(params: {
     timeSignature,
     beatDuration,
     suppressLeadingSilenceExpansion,
+    disableLeadingSilenceWindow,
   } = params;
   const windows: AlignmentWindow[] = [];
   const followupWindows = [
@@ -823,6 +934,7 @@ function buildAlignmentWindows(params: {
     ...buildTempoWindows(chordGridData, timeSignature),
     ...buildPostTempoPhrasePhaseWindows(chordGridData, timeSignature),
     ...buildPhrasePhaseWindows(chordGridData, timeSignature),
+    ...buildPhaseAnchorWindows(chordGridData, timeSignature),
   ].sort((a, b) => a.startIndex - b.startIndex);
   const leadingWindow = buildLeadingSilenceWindow(
     chordGridData,
@@ -830,7 +942,7 @@ function buildAlignmentWindows(params: {
     suppressLeadingSilenceExpansion
   );
 
-  if (leadingWindow && followupWindows.length > 0) {
+  if (!disableLeadingSilenceWindow && leadingWindow && followupWindows.length > 0) {
     addWindow(windows, leadingWindow);
   }
 
@@ -1091,6 +1203,7 @@ export function runSegmentAlignmentSolver(params: {
   beatDuration: number;
   enabled: boolean;
   suppressLeadingSilenceExpansion?: boolean;
+  disableLeadingSilenceWindow?: boolean;
 }): AlignmentSolverResult {
   const {
     chordGridData,
@@ -1100,6 +1213,7 @@ export function runSegmentAlignmentSolver(params: {
     beatDuration,
     enabled,
     suppressLeadingSilenceExpansion = false,
+    disableLeadingSilenceWindow = false,
   } = params;
 
   if (!enabled || timeSignature <= 1 || chordGridData.chords.length === 0) {
@@ -1117,6 +1231,7 @@ export function runSegmentAlignmentSolver(params: {
     timeSignature,
     beatDuration,
     suppressLeadingSilenceExpansion,
+    disableLeadingSilenceWindow,
   });
   const decisions = solveWindowAdjustments(chordGridData, windows, timeSignature);
   const gridData = applyAlignmentDecisions(chordGridData, decisions);
@@ -1137,6 +1252,7 @@ export function compareAlignmentStrategies(params: {
   beatDuration: number;
   enabled: boolean;
   suppressLeadingSilenceExpansion?: boolean;
+  disableLeadingSilenceWindow?: boolean;
 }): AlignmentStrategyComparison {
   const currentGridData = runVisualCompactionPipeline(params);
   const solver = runSegmentAlignmentSolver(params);

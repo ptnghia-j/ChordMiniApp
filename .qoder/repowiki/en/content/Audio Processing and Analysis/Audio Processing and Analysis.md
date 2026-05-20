@@ -147,27 +147,33 @@ FE-->>User : "Display analysis + playback"
 **Diagram sources**
 - [audioProcessingService.ts:53-109](file://src/services/audio/audioProcessingService.ts#L53-L109)
 - [ytDlpService.ts:48-145](file://src/services/youtube/ytDlpService.ts#L48-L145)
-- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
+- [browserYtDlpExtractionService.ts:1-430](file://src/services/audio/browserYtDlpExtractionService.ts#L1-L430)
+- [browser-ytdlp-worker.js:1-260](file://public/browser-ytdlp-worker.js#L1-L260)
 - [beatDetectionService.ts:179-291](file://src/services/audio/beatDetectionService.ts#L179-L291)
 
 ## Detailed Component Analysis
 
 ### Audio Extraction and Preprocessing
 - Frontend extraction:
+  - Production extraction runs in the browser through Pyodide, yt-dlp, ffmpeg.wasm, and the YouTube media proxy.
+  - Cloudflare Worker routing is configured with `NEXT_PUBLIC_YOUTUBE_PROXY_URL`; the in-repo proxy remains the local/default contract.
+  - If Cloudflare/browser extraction fails, production stops and reports an extraction error rather than falling back to Railway/server yt-dlp.
   - yt-dlp service supports development-time extraction and filename generation compatible with backend expectations.
-  - yt-mp3-go service provides production-grade audio extraction via job creation and SSE monitoring.
+  - yt-mp3-go is deprecated rollback code behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
   - AudioProcessingService coordinates extraction, caching, and metadata enrichment.
 - Backend preprocessing:
   - Silence trimming, duration estimation, resampling, and validation utilities ensure robustness and consistent input for ML models.
 
 ```mermaid
 flowchart TD
-Start(["Start Extraction"]) --> Choose["Choose extractor<br/>yt-dlp or yt-mp3-go"]
-Choose --> YTDL["yt-dlp: extract info + download"]
-Choose --> YTMP3["yt-mp3-go: extract audio formats"]
-YTDL --> GotURL["Got audioUrl"]
-YTMP3 --> GotURL
-GotURL --> CacheCheck["Check Firestore cache"]
+Start(["Start Extraction"]) --> Choose["Choose extractor<br/>browser-ytdlp, local ytdlp, or rollback"]
+Choose --> Browser["browser-ytdlp: Pyodide extract + ffmpeg.wasm 192k MP3"]
+Choose --> YTDL["local yt-dlp: development extract + download"]
+Choose --> YTMP3["yt-mp3-go: deprecated rollback"]
+Browser --> Candidate["Firebase candidate validation"]
+YTDL --> Candidate
+YTMP3 --> Candidate
+Candidate --> CacheCheck["Check Firestore cache"]
 CacheCheck --> |Found| UseCache["Use cached transcription"]
 CacheCheck --> |Not Found| Upload["Upload to storage / offload"]
 Upload --> Analyze["Call backend detection"]
@@ -177,12 +183,13 @@ Analyze --> Done(["Return AnalysisResult"])
 
 **Diagram sources**
 - [ytDlpService.ts:48-145](file://src/services/youtube/ytDlpService.ts#L48-L145)
-- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
+- [browserYtDlpExtractionService.ts:1-430](file://src/services/audio/browserYtDlpExtractionService.ts#L1-L430)
 - [audioProcessingService.ts:111-234](file://src/services/audio/audioProcessingService.ts#L111-L234)
 
 **Section sources**
 - [ytDlpService.ts:38-236](file://src/services/youtube/ytDlpService.ts#L38-L236)
-- [ytMp3GoService.ts:75-204](file://src/services/youtube/ytMp3GoService.ts#L75-L204)
+- [browserYtDlpExtractionService.ts:1-430](file://src/services/audio/browserYtDlpExtractionService.ts#L1-L430)
+- [browser-ytdlp-worker.js:1-260](file://public/browser-ytdlp-worker.js#L1-L260)
 - [audioProcessingService.ts:43-468](file://src/services/audio/audioProcessingService.ts#L43-L468)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 

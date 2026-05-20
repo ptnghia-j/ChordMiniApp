@@ -153,7 +153,7 @@ const IntegratedSearchContainer: React.FC<IntegratedSearchContainerProps> = ({
             >
               <Link
               href="/analyze"
-              className="font-medium py-3 px-4 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
+              className="font-medium py-3 px-4 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 bg-default-100 dark:bg-gray-800/40 border border-default-300 dark:border-gray-700 text-foreground hover:bg-default-200 dark:hover:bg-gray-700/50"
               aria-label="Upload audio file"
               >
                 <HiUpload className="w-4 h-4" />

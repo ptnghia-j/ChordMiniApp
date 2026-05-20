@@ -304,3 +304,5 @@ __tests__/*
 !__tests__/unit/utils/*.edge.test.ts
 # !__tests__/chordSynchronization.test.ts
 __test-results__/
+
+cloudflare/

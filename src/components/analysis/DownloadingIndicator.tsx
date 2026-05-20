@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, createElement } from 'react';
 import { addToast, closeToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 import { useProcessing } from '@/contexts/ProcessingContext';
 
 const EXTRACTION_ESTIMATE_SECONDS = 25;
@@ -82,12 +83,15 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
       const key = addToast({
         title: stage === 'downloading' ? 'Downloading YouTube Video...' : 'Extracting Audio...',
         description: <ExtractionCountdownDescription estimateSeconds={EXTRACTION_ESTIMATE_SECONDS} />,
-        color: 'warning',
-        variant: 'flat',
+        color: 'default',
         timeout: 0, // Don't auto-dismiss - wait until extraction completes
         hideCloseButton: true,
         endContent: createCountdownProgressBar(estimateMs, 'youtube-extraction'),
-        classNames: { base: 'relative overflow-hidden' },
+        classNames: mergeToastClassNames({
+          base: 'relative overflow-hidden',
+          icon: 'text-warning-500',
+          title: 'text-warning-600 dark:text-warning-400',
+        }),
       });
       toastKeyRef.current = key;
     } else if (!isVisible && wasVisibleRef.current) {

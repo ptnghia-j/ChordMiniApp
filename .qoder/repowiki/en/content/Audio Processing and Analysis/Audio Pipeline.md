@@ -85,9 +85,11 @@ BE_Firestore --> BE_Utils
 
 ## Core Components
 - Audio extraction from YouTube:
-  - Production extraction via yt-mp3-go with selectable quality
-  - Environment-aware selection among yt-dlp and yt-mp3-go
-  - Caching and permanent storage via Firebase
+  - Production extraction via browser yt-dlp, Pyodide, ffmpeg.wasm, and a YouTube media proxy
+  - Cloudflare Worker proxy support through `NEXT_PUBLIC_YOUTUBE_PROXY_URL`
+  - No automatic Railway/server yt-dlp fallback when Cloudflare/browser extraction fails
+  - Deprecated `yt-mp3-go` rollback via `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`
+  - Candidate validation and permanent storage via Firebase
 - Preprocessing utilities:
   - Silence trimming, duration calculation, resampling, and format validation
   - Temporary file management for safe cleanup
@@ -100,6 +102,8 @@ BE_Firestore --> BE_Utils
 
 **Section sources**
 - [audioExtractionSimplified.ts:69-120](file://src/services/audio/audioExtractionSimplified.ts#L69-L120)
+- [browserYtDlpExtractionService.ts:1-430](file://src/services/audio/browserYtDlpExtractionService.ts#L1-L430)
+- [browser-ytdlp-worker.js:1-260](file://public/browser-ytdlp-worker.js#L1-L260)
 - [audio_utils.py:12-131](file://python_backend/services/audio/audio_utils.py#L12-L131)
 - [tempfiles.py:15-136](file://python_backend/services/audio/tempfiles.py#L15-L136)
 - [audioBufferUtils.ts:4-87](file://src/utils/audioBufferUtils.ts#L4-L87)
@@ -120,15 +124,21 @@ participant Client as "Client"
 participant API as "Next.js API route"
 participant Service as "AudioProcessingService"
 participant Extractor as "AudioExtractionSimplified"
-participant YT as "yt-mp3-go"
+participant Browser as "Browser yt-dlp"
+participant Proxy as "Cloudflare or local media proxy"
+participant Finalizer as "Firebase finalizer"
 participant Store as "Firebase Storage"
 Client->>API : POST /api/extract-audio
 API->>Service : extractAudioFromYouTube(videoId,...)
 Service->>Extractor : extractAudio(videoMetadata, forceRedownload)
-Extractor->>YT : Create quality-specific download job
-YT-->>Extractor : Audio URL(s)
-Extractor->>Store : Upload audio (parallel)
-Store-->>Extractor : Permanent URL
+Extractor-->>Client : browser extraction required
+Client->>Browser : Pyodide + yt-dlp extract URL
+Browser->>Proxy : YouTube player/media requests
+Browser->>Browser : ffmpeg.wasm 192k MP3 conversion
+Browser->>Store : Upload private candidate
+Browser->>Finalizer : Validate candidate
+Finalizer->>Store : Promote public MP3
+Store-->>Browser : Permanent URL
 Extractor-->>Service : {audioUrl, fromCache, isStreamUrl, duration}
 Service-->>API : Response
 API-->>Client : {success, audioUrl, duration,...}
@@ -138,37 +148,45 @@ API-->>Client : {success, audioUrl, duration,...}
 - [route.ts:35-73](file://src/app/api/extract-audio/route.ts#L35-L73)
 - [audioProcessingService.ts:43-109](file://src/services/audio/audioProcessingService.ts#L43-L109)
 - [audioExtractionSimplified.ts:605-799](file://src/services/audio/audioExtractionSimplified.ts#L605-L799)
-- [ytMp3GoService.ts:87-155](file://src/services/youtube/ytMp3GoService.ts#L87-L155)
+- [browserYtDlpExtractionService.ts:1-430](file://src/services/audio/browserYtDlpExtractionService.ts#L1-L430)
+- [browser-ytdlp-worker.js:1-260](file://public/browser-ytdlp-worker.js#L1-L260)
+- [route.ts:1-260](file://src/app/api/audio/finalize-browser-extraction/route.ts#L1-L260)
 - [firebaseStorageSimplified.ts:169-216](file://src/services/firebase/firebaseStorageSimplified.ts#L169-L216)
 
 ## Detailed Component Analysis
 
 ### Audio Extraction from YouTube
 - Strategy selection:
-  - Environment-aware routing among yt-dlp and yt-mp3-go
-  - Production preference for yt-mp3-go with selectable quality
+  - Production routes cache misses to browser yt-dlp extraction.
+  - Local development can continue using server-side yt-dlp.
+  - Cloudflare/browser failures surface as extraction errors; production does not silently fall back to Railway/server yt-dlp.
+  - `yt-mp3-go` remains deprecated rollback code, not the normal production path.
 - Caching and storage:
-  - Firebase Storage for permanent access; fallback to stream URLs with expiration
+  - Browser extraction uploads to private `audio-candidates/{uid}/{videoId}/{sha}.mp3`
+  - Finalizer validates MP3 bytes, auth, path, size, duration, MIME, and hash before promoting to public `audio/`
   - Simplified Firestore cache for metadata retrieval
 - URL validation:
-  - Pre-validate and test accessibility to avoid downstream failures
+  - Browser extraction downloads through the same YouTube media proxy used by yt-dlp for player/media requests
+  - Cloudflare Worker proxy is configured with `NEXT_PUBLIC_YOUTUBE_PROXY_URL`
+  - See [YouTube Integration](file://.qoder/repowiki/en/content/Audio Processing and Analysis/YouTube Integration.md) for the complete Cloudflare Worker contract and troubleshooting table
 
 ```mermaid
 flowchart TD
 Start(["Start Extraction"]) --> DetectEnv["Detect Environment Strategy"]
 DetectEnv --> ChooseSvc{"Strategy"}
-ChooseSvc --> |yt-mp3-go| CallYT["Call yt-mp3-go API"]
-ChooseSvc --> |yt-dlp| CallYTDL["Call yt-dlp"]
-ChooseSvc --> |yt-mp3-go| CallYTM["Call yt-mp3-go"]
-CallYT --> GotURLs["Receive Audio URLs"]
-CallYTDL --> GotURLs
-CallYTM --> GotURLs
-GotURLs --> ValidateURL["Validate URL Accessibility"]
-ValidateURL --> CacheCheck["Check Firebase & Firestore Cache"]
+ChooseSvc --> |browser-ytdlp| BrowserDlp["Pyodide yt-dlp extract URL"]
+ChooseSvc --> |local ytdlp| CallYTDL["Call local server yt-dlp"]
+ChooseSvc --> |deprecated rollback| CallYTM["Call yt-mp3-go"]
+BrowserDlp --> Proxy["Cloudflare/local YouTube proxy"]
+Proxy --> Convert["ffmpeg.wasm 192k MP3"]
+Convert --> Candidate["Upload candidate MP3"]
+Candidate --> Finalize["Validate and promote"]
+CallYTDL --> Finalize
+CallYTM --> Finalize
+Finalize --> CacheCheck["Check Firebase & Firestore Cache"]
 CacheCheck --> CacheHit{"Cache Hit?"}
 CacheHit --> |Yes| ReturnCache["Return Cached Result"]
-CacheHit --> |No| Upload["Upload to Firebase Storage"]
-Upload --> FinalURL["Final Accessible URL"]
+CacheHit --> |No| FinalURL["Final Accessible URL"]
 FinalURL --> Done(["Done"])
 ReturnCache --> Done
 ```

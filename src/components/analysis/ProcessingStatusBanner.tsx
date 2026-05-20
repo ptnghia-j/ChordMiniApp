@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, createElement } from 'react';
 import { addToast, closeToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { getAudioDurationFromUrl } from '@/utils/audioDurationUtils';
@@ -101,12 +102,15 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       const key = addToast({
         title: 'Recognizing Chords',
         description: statusMessage || 'Recognizing chords and synchronizing with beats...',
-        color: 'primary',
-        variant: 'flat',
+        color: 'default',
         timeout: 0, // Disable HeroUI's default 6s auto-dismiss; we manage lifetime ourselves
         hideCloseButton: true,
         endContent: createNonPausingProgressBar(chordTimeoutMs, 'chord'),
-        classNames: { base: 'relative overflow-hidden' },
+        classNames: mergeToastClassNames({
+          base: 'relative overflow-hidden',
+          icon: 'text-primary-500',
+          title: 'text-primary-600 dark:text-blue-400',
+        }),
       });
       chordToastKeyRef.current = key;
       // Manually close after duration (not paused by hover)
@@ -128,12 +132,15 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       const key = addToast({
         title: 'Detecting Beats',
         description: statusMessage || 'Analyzing beat patterns and timing...',
-        color: 'primary',
-        variant: 'flat',
+        color: 'default',
         timeout: 0, // Disable HeroUI's default 6s auto-dismiss; we manage lifetime ourselves
         hideCloseButton: true,
         endContent: createNonPausingProgressBar(beatTimeoutMs, 'beat'),
-        classNames: { base: 'relative overflow-hidden' },
+        classNames: mergeToastClassNames({
+          base: 'relative overflow-hidden',
+          icon: 'text-primary-500',
+          title: 'text-primary-600 dark:text-blue-400',
+        }),
       });
       beatToastKeyRef.current = key;
       // Manually close after duration (not paused by hover)
@@ -171,16 +178,19 @@ const ProcessingStatusBanner: React.FC<ProcessingStatusBannerProps> = React.memo
       addToast({
         title: 'Analysis Complete',
         description,
-        color: 'success',
-        variant: 'flat',
+        color: 'default',
         timeout: 5000,
         shouldShowTimeoutProgress: true,
+        classNames: mergeToastClassNames({
+          icon: 'text-success-500',
+          title: 'text-success-600 dark:text-success-400',
+        }),
       });
     }
 
-    // Handle error — close processing toasts but do NOT fire an error toast.
-    // The inline UserFriendlyErrorDisplay already shows the error; adding a toast
-    // produced the duplicate / excessive-popup problem.
+    // Handle error — close processing toasts. AnalysisErrorToast owns the
+    // user-facing extraction/analysis error toast so this component only
+    // cleans up in-flight progress notifications.
     if (stage === 'error') {
       if (chordTimerRef.current) { clearTimeout(chordTimerRef.current); chordTimerRef.current = null; }
       if (beatTimerRef.current) { clearTimeout(beatTimerRef.current); beatTimerRef.current = null; }

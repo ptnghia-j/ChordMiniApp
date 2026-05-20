@@ -1,4 +1,5 @@
 import { getAppCheckTokenForApi, getCurrentAuthUser, ensureAuthReady, getStorageInstance } from '@/config/firebase';
+import { loadPublicConfig } from '@/config/publicConfig';
 import {
   BROWSER_YTDLP_MAX_FINAL_BYTES,
   BROWSER_YTDLP_OUTPUT_FORMAT,
@@ -42,6 +43,18 @@ interface BrowserYtDlpOptions {
 
 let ffmpegInstancePromise: Promise<import('@ffmpeg/ffmpeg').FFmpeg> | null = null;
 
+const PROXY_HEADER_SKIP = new Set([
+  'host',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'te',
+  'trailer',
+  'upgrade',
+  'accept-encoding',
+  'cookie',
+]);
+
 function assertBrowserRuntime(): void {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') {
     throw new Error('Browser yt-dlp extraction can only run in a browser.');
@@ -53,11 +66,91 @@ function sanitizeInputExtension(ext: string | undefined): string {
   return normalized || 'm4a';
 }
 
+function isExternalProxyUrl(proxyUrl: string): boolean {
+  return /^https?:\/\//i.test(proxyUrl);
+}
+
+function buildProxyUrl(proxyUrl: string, targetUrl: string): string {
+  return `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}url=${encodeURIComponent(targetUrl)}`;
+}
+
+function buildProxyRequestHeaders(headers: Record<string, string> | undefined): HeadersInit {
+  const proxyHeaders = new Headers();
+
+  for (const [key, value] of Object.entries(headers || {})) {
+    const lower = key.toLowerCase();
+    if (!value || PROXY_HEADER_SKIP.has(lower)) {
+      continue;
+    }
+
+    if (lower === 'referer') {
+      proxyHeaders.set('X-Override-Referer', value);
+    } else if (lower === 'origin') {
+      proxyHeaders.set('X-Override-Origin', value);
+    } else if (lower === 'user-agent') {
+      proxyHeaders.set('X-Override-User-Agent', value);
+    } else if (lower === 'range') {
+      proxyHeaders.set('X-Override-Range', value);
+    } else {
+      proxyHeaders.set(key, value);
+    }
+  }
+
+  proxyHeaders.set('X-Skip-YouTube-Auth', '1');
+  return proxyHeaders;
+}
+
+function buildMinimalProxyRequestHeaders(): HeadersInit {
+  return {
+    'X-Skip-YouTube-Auth': '1',
+  };
+}
+
+async function getProxyErrorDetail(response: Response): Promise<string> {
+  const retryAfter = response.headers.get('Retry-After') || response.headers.get('X-YouTube-Proxy-Retry-After');
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    const data = await response.json().catch(() => null) as {
+      error?: string;
+      message?: string;
+      retryAfterSeconds?: number;
+    } | null;
+
+    if (data?.error === 'youtube_proxy_rate_limited') {
+      const waitSeconds = data.retryAfterSeconds || Number(retryAfter || 0) || undefined;
+      return waitSeconds
+        ? `YouTube temporarily rate-limited the extraction proxy. Please retry in about ${Math.ceil(waitSeconds / 60)} minute(s).`
+        : 'YouTube temporarily rate-limited the extraction proxy. Please retry later.';
+    }
+
+    if (data?.error === 'youtube_proxy_client_rate_limited') {
+      return data.message || 'Too many extraction attempts. Please wait a moment and try again.';
+    }
+
+    if (data?.message || data?.error) {
+      return data.message || data.error || response.statusText;
+    }
+  }
+
+  const detail = await response.text().catch(() => '');
+  if (response.status === 429) {
+    return retryAfter
+      ? `YouTube temporarily rate-limited the extraction proxy. Please retry in about ${Math.ceil(Number(retryAfter) / 60)} minute(s).`
+      : 'YouTube temporarily rate-limited the extraction proxy. Please retry later.';
+  }
+
+  return detail || response.statusText;
+}
+
 async function waitForWorkerExtraction(
   videoUrl: string,
   options: BrowserYtDlpOptions
 ): Promise<WorkerExtractedData> {
   assertBrowserRuntime();
+
+  const config = await loadPublicConfig();
+  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
 
   return new Promise((resolve, reject) => {
     const worker = new Worker(BROWSER_YTDLP_WORKER_PATH);
@@ -103,7 +196,7 @@ async function waitForWorkerExtraction(
       fail(new Error(event.message || 'Browser yt-dlp worker failed'));
     };
 
-    worker.postMessage({ type: 'extract', url: videoUrl });
+    worker.postMessage({ type: 'extract', url: videoUrl, proxyUrl });
   });
 }
 
@@ -112,15 +205,41 @@ async function fetchAudioBytesViaProxy(
   headers: Record<string, string> | undefined,
   abortSignal?: AbortSignal
 ): Promise<Uint8Array> {
-  const response = await fetch('/api/youtube-media-proxy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: streamUrl, headers: headers || {} }),
-    signal: abortSignal,
-  });
+  const config = await loadPublicConfig();
+  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
+  const proxyHeaders = buildProxyRequestHeaders(headers);
+
+  const response = isExternalProxyUrl(proxyUrl)
+    ? await (async () => {
+      const url = buildProxyUrl(proxyUrl, streamUrl);
+      const firstResponse = await fetch(url, {
+        method: 'GET',
+        headers: proxyHeaders,
+        signal: abortSignal,
+      });
+
+      if (firstResponse.ok || ![400, 403].includes(firstResponse.status)) {
+        return firstResponse;
+      }
+
+      // Some Cloudflare proxy workers only understand the target URL and reject
+      // replayed override headers. Retry with the minimum header set before
+      // surfacing the failure to the user.
+      return fetch(url, {
+        method: 'GET',
+        headers: buildMinimalProxyRequestHeaders(),
+        signal: abortSignal,
+      });
+    })()
+    : await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: streamUrl, headers: headers || {}, method: 'GET' }),
+        signal: abortSignal,
+      });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
+    const detail = await getProxyErrorDetail(response);
     throw new Error(`Could not download YouTube audio stream (${response.status}): ${detail || response.statusText}`);
   }
 
@@ -271,7 +390,7 @@ async function finalizeCandidate(params: {
 
 function isYouTubeAccessChallenge(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
-  return /sign in to confirm|not a bot|failed to extract any player response|login_required|forbidden|youtube audio stream \(403\)/i.test(message);
+  return /sign in to confirm|not a bot|failed to extract any player response|login_required|forbidden|too many requests|rate-limited|rate limited|captcha|youtube audio stream \((403|429)\)/i.test(message);
 }
 
 export function shouldUseNativeYtDlpFallback(error: unknown): boolean {

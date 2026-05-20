@@ -77,8 +77,28 @@ function toNetscapeCookieFile(rawCookie: string): string {
   return `${lines.join('\n')}\n`;
 }
 
+async function getConfiguredYouTubeCookie(): Promise<string | null> {
+  const envCookie = process.env.YOUTUBE_COOKIE?.trim();
+  if (envCookie) {
+    return envCookie;
+  }
+
+  const cookiePath = process.env.YOUTUBE_COOKIE_FILE?.trim();
+  if (!cookiePath) {
+    return null;
+  }
+
+  try {
+    const fileCookie = await fs.readFile(path.resolve(cookiePath), 'utf8');
+    return fileCookie.trim() || null;
+  } catch (error) {
+    console.warn('[native-ytdlp-fallback] Failed to load YOUTUBE_COOKIE_FILE:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 function getPlayerClients(): string[] {
-  const configured = process.env.YTDLP_PLAYER_CLIENTS || 'android_vr,tv,web';
+  const configured = process.env.YTDLP_PLAYER_CLIENTS || 'android,android_vr,ios,tv,web';
   return configured
     .split(',')
     .map((value) => value.trim())
@@ -163,9 +183,9 @@ async function downloadSourceAudio(params: {
         '--no-playlist',
         '--no-progress',
         '--extractor-args',
-        `youtube:player_client=${playerClient}`,
+        `youtube:player_client=${playerClient};player_skip=webpage,configs`,
         '-f',
-        'bestaudio[ext=m4a]/bestaudio',
+        'best/bestaudio',
         '--output',
         outputTemplate,
         '--print',
@@ -191,7 +211,10 @@ async function downloadSourceAudio(params: {
     }
   }
 
-  throw new Error(`Native yt-dlp source download failed. ${errors.join(' | ')}`);
+  const authHint = !params.cookieFile && errors.some(error => /sign in to confirm|not a bot|cookies/i.test(error))
+    ? ' No YOUTUBE_COOKIE or YOUTUBE_COOKIE_FILE is configured for the native fallback, so only no-cookie attempts were possible.'
+    : '';
+  throw new Error(`Native yt-dlp source download failed.${authHint} ${errors.join(' | ')}`);
 }
 
 async function convertToMediumMp3(sourcePath: string, outputPath: string): Promise<void> {
@@ -236,7 +259,17 @@ export async function POST(request: NextRequest) {
     await auth.verifyIdToken(token);
 
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `chordmini-ytdlp-${videoId}-`));
-    const cookie = process.env.YOUTUBE_COOKIE?.trim();
+    const cookie = await getConfiguredYouTubeCookie();
+    if (!cookie) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Native yt-dlp fallback is disabled because no YOUTUBE_COOKIE or YOUTUBE_COOKIE_FILE is configured.',
+        },
+        { status: 503 }
+      );
+    }
+
     const cookieFile = cookie ? path.join(tempDir, 'youtube-cookies.txt') : undefined;
     const outputPath = path.join(tempDir, `${videoId}.mp3`);
     if (cookieFile && cookie) {

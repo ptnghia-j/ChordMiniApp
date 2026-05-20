@@ -15,11 +15,13 @@
 </cite>
 
 ## Introduction
-The YouTube blueprint combines search, metadata, and audio extraction. The current frontend extraction stack has two active services:
-- `ytMp3GoService` for production audio extraction.
+The YouTube blueprint combines search, metadata, and audio extraction. The current frontend extraction stack has these active paths:
+- Browser yt-dlp production extraction through `browserYtDlpExtractionService`, `public/browser-ytdlp-worker.js`, Pyodide, ffmpeg.wasm, and the YouTube media proxy.
+- No automatic Railway/server yt-dlp fallback for YouTube access challenges; Cloudflare/browser failures surface as extraction errors.
 - `ytDlpService` for local development extraction.
+- `ytMp3GoService` as deprecated rollback code behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
 
-The legacy ytdown.io compatibility service has been removed. Wiki pages should describe `/api/extract-audio` as the stable frontend API and `ytMp3GoService` as the production backend integration.
+The legacy ytdown.io compatibility service has been removed. Wiki pages should describe `/api/extract-audio` as the stable frontend API and browser yt-dlp as the production extraction integration. See [YouTube Integration](file://.qoder/repowiki/en/content/Audio Processing and Analysis/YouTube Integration.md) for the Cloudflare Worker proxy contract and troubleshooting notes.
 
 ## Project Structure
 ```mermaid
@@ -53,7 +55,9 @@ AES --> DLP
 - `/api/youtube/info`: metadata fallback endpoint.
 - `/api/extract-audio`: environment-aware extraction entry point.
 - `AudioExtractionServiceSimplified`: cache-first orchestration with Firebase Storage and Firestore metadata.
-- `YtMp3GoService`: production extraction through yt-mp3-go `/info`, `/download`, and `/events`.
+- `browserYtDlpExtractionService`: production browser extraction, Firebase candidate upload, and finalization.
+- `public/browser-ytdlp-worker.js`: Pyodide and yt-dlp runtime that extracts YouTube media URLs through the proxy.
+- `YtMp3GoService`: deprecated rollback extraction through yt-mp3-go `/info`, `/download`, and `/events`.
 - `YtDlpService`: development extraction through `/api/ytdlp/extract`, `/api/ytdlp/download`, and `/api/ytdlp/health`.
 
 ## Audio Extraction Workflow

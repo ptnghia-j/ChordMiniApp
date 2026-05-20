@@ -76,4 +76,38 @@ describe('status cron routes', () => {
     expect(mockRunStandardStatusProbes).not.toHaveBeenCalled();
     expect(mockRecordStatusProbeResults).not.toHaveBeenCalled();
   });
+
+  it('records beat, chord, Sheet Sage, and Gemini standard probes', async () => {
+    process.env.CRON_SECRET = 'secret';
+    process.env.STATUS_PROBES_ENABLED = '1';
+    process.env.STATUS_PROBE_ALLOW_LOCAL = '1';
+    process.env.PYTHON_API_URL = 'https://python.private.test';
+    process.env.SHEETSAGE_API_URL = 'https://sheetsage.private.test';
+    process.env.FIREBASE_PROJECT_ID = 'project';
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{"project_id":"project"}';
+
+    const probes = [
+      { serviceId: 'beat', serviceLabel: 'Beat Detection', probeKind: 'health', status: 'operational', ok: true, latencyMs: 10, checkedAt: '2026-05-16T14:00:00.000Z', sanitizedSummary: 'Beat Detection responded normally.' },
+      { serviceId: 'chord', serviceLabel: 'Chord Recognition', probeKind: 'metadata', status: 'operational', ok: true, latencyMs: 11, checkedAt: '2026-05-16T14:00:00.000Z', sanitizedSummary: 'Chord Recognition responded normally.' },
+      { serviceId: 'sheetsage', serviceLabel: 'Sheet Sage', probeKind: 'health', status: 'operational', ok: true, latencyMs: 12, checkedAt: '2026-05-16T14:00:00.000Z', sanitizedSummary: 'Sheet Sage responded normally.' },
+      { serviceId: 'gemini', serviceLabel: 'Gemini API', probeKind: 'generation', status: 'operational', ok: true, latencyMs: 13, checkedAt: '2026-05-16T14:00:00.000Z', sanitizedSummary: 'Gemini API responded normally.' },
+    ];
+    mockRunStandardStatusProbes.mockResolvedValueOnce(probes);
+    mockRecordStatusProbeResults.mockResolvedValueOnce({
+      date: '2026-05-16',
+      overallStatus: 'operational',
+    });
+
+    const response = await statusProbeGet(makeCronRequest('Bearer secret') as any);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      checked: 4,
+      date: '2026-05-16',
+      overallStatus: 'operational',
+    });
+    expect(mockRunStandardStatusProbes).toHaveBeenCalledTimes(1);
+    expect(mockRecordStatusProbeResults).toHaveBeenCalledWith(probes);
+  });
 });

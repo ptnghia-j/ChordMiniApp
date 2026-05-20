@@ -388,6 +388,19 @@ function buildHomepageVariantAssignments(candidates: HomepageVariantCandidate[])
 // Flag to disable Firestore if CORS errors persist
 let firestoreDisabled = false;
 
+async function ensureFirestoreReadyForRead(operation: string): Promise<void> {
+  if (db || firestoreDisabled) {
+    return;
+  }
+
+  try {
+    const { ensureFirebaseInitialized } = await import('@/config/firebase');
+    await ensureFirebaseInitialized();
+  } catch (error) {
+    console.debug(`Firebase initialization was not ready before ${operation}:`, error);
+  }
+}
+
 export interface TranscriptionEnrichmentUpdate {
   title?: string | null;
   channelTitle?: string | null;
@@ -415,12 +428,14 @@ export async function getTranscription(
 ): Promise<TranscriptionData | null> {
   const cacheKey = getTranscriptionCacheKey(videoId, beatModel, chordModel);
 
+  await ensureFirestoreReadyForRead('transcription retrieval');
+
   // Check if Firebase is initialized or disabled due to CORS issues
   if (!db || firestoreDisabled) {
     if (firestoreDisabled) {
       console.warn('Firestore disabled due to CORS issues, skipping transcription retrieval');
     } else {
-      console.warn('Firebase not initialized, skipping transcription retrieval');
+      console.debug('Firebase not initialized, skipping transcription retrieval');
     }
     return null;
   }
@@ -479,20 +494,13 @@ export async function getMelodyTranscription(
 ): Promise<MelodyTranscriptionData | null> {
   const cacheKey = getMelodyCacheKey(videoId);
 
-  if (!db && !firestoreDisabled) {
-    try {
-      const { ensureFirebaseInitialized } = await import('@/config/firebase');
-      await ensureFirebaseInitialized();
-    } catch (error) {
-      console.warn('Failed to initialize Firebase before melody retrieval:', error);
-    }
-  }
+  await ensureFirestoreReadyForRead('melody retrieval');
 
   if (!db || firestoreDisabled) {
     if (firestoreDisabled) {
       console.warn('Firestore disabled due to CORS issues, skipping melody retrieval');
     } else {
-      console.warn('Firebase not initialized, skipping melody retrieval');
+      console.debug('Firebase not initialized, skipping melody retrieval');
     }
     return null;
   }
@@ -1150,9 +1158,11 @@ async function performFirestoreSave(
 export async function getVideoTranscriptions(
   videoId: string
 ): Promise<TranscriptionData[]> {
+  await ensureFirestoreReadyForRead('video transcriptions retrieval');
+
   // Check if Firebase is initialized
   if (!db) {
-    console.warn('Firebase not initialized, skipping video transcriptions retrieval');
+    console.debug('Firebase not initialized, skipping video transcriptions retrieval');
     return [];
   }
 

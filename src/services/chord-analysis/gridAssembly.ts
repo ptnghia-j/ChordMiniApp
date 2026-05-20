@@ -159,7 +159,8 @@ export function trimLeadingEmptyMeasures(
 
 function findFirstChangedAudioIndex(
   baselineMapping: AudioMappingItem[] | undefined,
-  remapped: AudioMappingItem[] | undefined
+  remapped: AudioMappingItem[] | undefined,
+  minAudioIndex = 0
 ): number | null {
   if (!Array.isArray(baselineMapping) || !Array.isArray(remapped) || baselineMapping.length === 0 || remapped.length === 0) {
     return null;
@@ -171,6 +172,9 @@ function findFirstChangedAudioIndex(
   });
 
   for (const baselineItem of baselineMapping) {
+    if (baselineItem.audioIndex < minAudioIndex) {
+      continue;
+    }
     const remappedVisualIndex = remappedVisualByAudioIndex.get(baselineItem.audioIndex);
     if (typeof remappedVisualIndex === 'number' && remappedVisualIndex !== baselineItem.visualIndex) {
       return baselineItem.audioIndex;
@@ -178,6 +182,92 @@ function findFirstChangedAudioIndex(
   }
 
   return null;
+}
+
+function getPositiveModulo(value: number, modulo: number): number {
+  return ((value % modulo) + modulo) % modulo;
+}
+
+function scoreMappedProtectedStarts(params: {
+  mapping: AudioMappingItem[] | undefined;
+  startAudioIndex: number;
+  endAudioIndex: number;
+  timeSignature: number;
+}): { startCount: number; downbeatStarts: number; beatStartCounts: number[] } {
+  const {
+    mapping,
+    startAudioIndex,
+    endAudioIndex,
+    timeSignature,
+  } = params;
+
+  const beatStartCounts = Array(timeSignature).fill(0);
+  if (!Array.isArray(mapping) || timeSignature <= 1) {
+    return { startCount: 0, downbeatStarts: 0, beatStartCounts };
+  }
+
+  const orderedMapping = [...mapping].sort((a, b) => a.audioIndex - b.audioIndex);
+  let startCount = 0;
+
+  orderedMapping.forEach((item, index) => {
+    if (item.audioIndex < startAudioIndex || item.audioIndex >= endAudioIndex || isSilentGridChord(item.chord)) {
+      return;
+    }
+
+    const previousItem = index > 0 ? orderedMapping[index - 1] : null;
+    const isChordStart =
+      !previousItem ||
+      isSilentGridChord(previousItem.chord) ||
+      previousItem.chord !== item.chord;
+
+    if (!isChordStart) {
+      return;
+    }
+
+    const beatPosition = getPositiveModulo(item.visualIndex, timeSignature);
+    beatStartCounts[beatPosition] += 1;
+    startCount += 1;
+  });
+
+  return {
+    startCount,
+    downbeatStarts: beatStartCounts[0] ?? 0,
+    beatStartCounts,
+  };
+}
+
+function hasProtectedStartAlignmentImproved(params: {
+  baselineMapping: AudioMappingItem[] | undefined;
+  remapped: AudioMappingItem[] | undefined;
+  startAudioIndex: number;
+  endAudioIndex: number;
+  timeSignature: number;
+}): boolean {
+  const {
+    baselineMapping,
+    remapped,
+    startAudioIndex,
+    endAudioIndex,
+    timeSignature,
+  } = params;
+  const baselineScore = scoreMappedProtectedStarts({
+    mapping: baselineMapping,
+    startAudioIndex,
+    endAudioIndex,
+    timeSignature,
+  });
+  const remappedScore = scoreMappedProtectedStarts({
+    mapping: remapped,
+    startAudioIndex,
+    endAudioIndex,
+    timeSignature,
+  });
+
+  if (baselineScore.startCount === 0 || remappedScore.startCount !== baselineScore.startCount) {
+    return false;
+  }
+
+  return remappedScore.downbeatStarts > baselineScore.downbeatStarts;
 }
 
 function buildInitialGridData(params: {
@@ -282,23 +372,57 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   };
   // Production alignment path: the segment solver replaces the legacy
   // runVisualCompactionPipeline sequence of local ad-hoc corrections.
-  const compactedGridData = runSegmentAlignmentSolver(compactionParams).gridData;
+  let solverResult = runSegmentAlignmentSolver(compactionParams);
+  let compactedGridData = solverResult.gridData;
 
   if (hasLongLeadingSilenceWithGlobalOffset) {
+    const firstProtectedMusicAudioIndex = leadingSilentRunLength;
     const firstChangedAudioIndex = findFirstChangedAudioIndex(
       initialGridData.originalAudioMapping,
-      compactedGridData.originalAudioMapping
+      compactedGridData.originalAudioMapping,
+      firstProtectedMusicAudioIndex
     );
     const protectedEarlyBeatCount =
       timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.protectEarlyMusicMeasures;
-    const firstProtectedMusicAudioIndex = leadingSilentRunLength;
     const protectedAudioBoundary = firstProtectedMusicAudioIndex + protectedEarlyBeatCount;
     const compactionStartsTooEarly =
       firstChangedAudioIndex !== null &&
       firstChangedAudioIndex < protectedAudioBoundary;
 
-    if (compactionStartsTooEarly) {
-      return initialGridData;
+    const protectedAlignmentImproved = hasProtectedStartAlignmentImproved({
+      baselineMapping: initialGridData.originalAudioMapping,
+      remapped: compactedGridData.originalAudioMapping,
+      startAudioIndex: firstProtectedMusicAudioIndex,
+      endAudioIndex: protectedAudioBoundary,
+      timeSignature,
+    });
+
+    if (compactionStartsTooEarly && !protectedAlignmentImproved) {
+      solverResult = runSegmentAlignmentSolver({
+        ...compactionParams,
+        disableLeadingSilenceWindow: true,
+      });
+      compactedGridData = solverResult.gridData;
+
+      const retryFirstChangedAudioIndex = findFirstChangedAudioIndex(
+        initialGridData.originalAudioMapping,
+        compactedGridData.originalAudioMapping,
+        firstProtectedMusicAudioIndex
+      );
+      const retryCompactionStartsTooEarly =
+        retryFirstChangedAudioIndex !== null &&
+        retryFirstChangedAudioIndex < protectedAudioBoundary;
+      const retryProtectedAlignmentImproved = hasProtectedStartAlignmentImproved({
+        baselineMapping: initialGridData.originalAudioMapping,
+        remapped: compactedGridData.originalAudioMapping,
+        startAudioIndex: firstProtectedMusicAudioIndex,
+        endAudioIndex: protectedAudioBoundary,
+        timeSignature,
+      });
+
+      if (retryCompactionStartsTooEarly && !retryProtectedAlignmentImproved) {
+        return initialGridData;
+      }
     }
   }
 

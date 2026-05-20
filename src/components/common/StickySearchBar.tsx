@@ -93,7 +93,7 @@ const StickySearchBar: React.FC<StickySearchBarProps> = ({
         {showUpload && (
           <Link
             href="/analyze"
-            className="font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2 bg-default-100 dark:bg-default-200/20 border border-default-300 dark:border-default-400 text-foreground hover:bg-default-200 dark:hover:bg-default-300/30"
+            className="font-medium py-1 xl:py-1.5 px-2 xl:px-3 rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-1 text-xs xl:text-sm xl:gap-2 bg-default-100 dark:bg-gray-800/40 border border-default-300 dark:border-gray-700 text-foreground hover:bg-default-200 dark:hover:bg-gray-700/50"
             aria-label="Upload audio file"
           >
             <HiUpload className="w-3 h-3 xl:w-4 xl:h-4" />

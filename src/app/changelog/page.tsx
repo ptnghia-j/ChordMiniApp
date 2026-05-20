@@ -29,6 +29,27 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5.2',
+      date: 'May 19, 2026',
+      title: 'Client-Side Extraction Migration, Status Refresh, UI Polish',
+      description: 'Moves production YouTube audio extraction into the browser, refreshes public status monitoring, and ships focused UI polish.',
+      features: [
+        'IMPROVED: Production YouTube audio extraction now runs in the browser with Pyodide, yt-dlp, ffmpeg.wasm, and fixed 192 kbps MP3 output before Firebase finalization.',
+        'IMPROVED: Status page now monitors Gemini API availability instead of deprecated server-side YouTube extraction probes.',
+        'UI: Extraction errors now show as toasts to avoid analyze-page layout shifts.',
+        'UI: Current beat cells now use a softer blue border highlight with blue active text.'
+      ],
+      technical: [
+        'NEW: Browser extraction uploads private Firebase audio candidates and promotes only validated MP3 files through the finalizer route.',
+        'REFACTOR: yt-mp3-go remains available only as a rollback strategy via NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go.',
+        'IMPROVED: Removed temporary extraction probe scripts and updated documentation for the browser extraction pipeline.',
+        'IMPROVED: Optimized beat animation and theme switching transition in CSS for smoother performance.'
+      ],
+      breaking: [
+        'BREAKING: Production YouTube audio extraction migrated from server-side/external extraction to client-side browser extraction.'
+      ]
+    },
+    {
       version: 'v0.6.5.1',
       date: 'May 16, 2026',
       title: 'TanStack Query Migration, Segment Alignment Solver, Audio Extraction Hardening',

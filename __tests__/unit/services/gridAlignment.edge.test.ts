@@ -212,6 +212,179 @@ describe('grid alignment edge behavior', () => {
     expect(earlyDownbeatStarts.length).toBeGreaterThan(earlyStarts.length / 2);
     expect(laterDownbeatStarts.length).toBeGreaterThan(30);
   });
+
+  it('keeps a solver-improved long-intro opening instead of falling back to the raw grid', () => {
+    const timeSignature = 4;
+    const beatDuration = 60 / 109.09090909091248;
+    const rawChords = Array(190).fill('N/C');
+    const runs: Array<[number, string]> = [
+      [51, 'A:maj'],
+      [58, 'C#:maj'],
+      [62, 'F#:min'],
+      [66, 'B:sus4'],
+      [68, 'B:min'],
+      [70, 'A:maj/3'],
+      [75, 'A:maj/5'],
+      [78, 'E:sus4'],
+      [82, 'A:maj'],
+      [98, 'A:maj/6'],
+      [101, 'E:maj/2'],
+      [106, 'B:min7'],
+      [114, 'E:7'],
+      [117, 'E:maj'],
+      [121, 'A:maj/5'],
+      [122, 'A:maj7'],
+      [131, 'F#:min'],
+      [138, 'B:min7'],
+      [142, 'B:min9'],
+      [146, 'E:7'],
+      [150, 'E:maj'],
+      [158, 'A:maj'],
+      [167, 'C#:aug(b7)'],
+      [170, 'F#:min7'],
+      [174, 'B:min7'],
+      [178, 'B:min7/b7'],
+      [182, 'G:maj'],
+      [186, 'E:sus4'],
+      [188, 'A:maj/5'],
+    ];
+
+    runs.forEach(([start, chord], runIndex) => {
+      const nextStart = runs[runIndex + 1]?.[0] ?? rawChords.length;
+      for (let index = start; index < nextStart; index += 1) {
+        rawChords[index] = chord;
+      }
+    });
+
+    const result = getChordGridData(makeAnalysisResult({
+      beats: rawChords.map((_, index) => ({
+        time: 0.37 + (index * beatDuration),
+        beatNum: (index % timeSignature) + 1,
+      })),
+      synchronizedChords: rawChords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      beatDetectionResult: {
+        bpm: 109.09090909091248,
+        time_signature: timeSignature,
+      },
+      beatModel: 'madmom',
+      chordModel: 'chord-cnn-lstm',
+    }));
+    const starts = musicalChordStarts(result.chords).slice(0, 10);
+    const openingCounts = countStartModulos(result.chords, timeSignature, 84, 52);
+
+    expect(starts.slice(0, 4).map((start) => start.index)).toEqual([52, 56, 60, 64]);
+    expect(openingCounts[0]).toBeGreaterThan(openingCounts[1]);
+    expect(openingCounts[0]).toBeGreaterThan(openingCounts[2]);
+    expect(result.originalAudioMapping).toHaveLength(rawChords.length);
+  });
+
+  it('keeps protected intro alignment while repairing a post-rest ending phrase', () => {
+    const timeSignature = 4;
+    const bpm = 127.65957446808541;
+    const beatDuration = 60 / bpm;
+    const rawChords = Array(527).fill('N/C');
+    const runs: Array<[number, string]> = [
+      [6, 'C:maj'],
+      [32, 'C:min'],
+      [35, 'Ab:maj'],
+      [41, 'Ab:maj7'],
+      [47, 'C:min'],
+      [58, 'F:7'],
+      [61, 'F:maj'],
+      [70, 'C:min'],
+      [78, 'Ab:maj7'],
+      [88, 'F:maj'],
+      [92, 'F:7'],
+      [98, 'D:min7'],
+      [116, 'C:maj'],
+      [128, 'C:min'],
+      [151, 'G:min'],
+      [167, 'C:min/5'],
+      [169, 'C:min'],
+      [184, 'F:maj'],
+      [188, 'C:min'],
+      [192, 'Eb:maj'],
+      [200, 'C:min'],
+      [204, 'G:min'],
+      [220, 'N/C'],
+      [256, 'C:min'],
+      [268, 'F:min'],
+      [276, 'Bb:maj'],
+      [279, 'C:min'],
+      [285, 'F:maj'],
+      [292, 'C:min'],
+      [294, 'G:min'],
+      [302, 'Bb:maj'],
+      [306, 'G:min'],
+      [310, 'C:min'],
+      [328, 'F:maj'],
+      [332, 'Bb:maj'],
+      [336, 'C:min/b7'],
+      [339, 'C:min'],
+      [344, 'F:maj'],
+      [352, 'C:min'],
+      [354, 'G:min'],
+      [362, 'Bb:maj'],
+      [366, 'G:min'],
+      [370, 'C:min'],
+      [388, 'F:maj'],
+      [392, 'Bb:maj'],
+      [396, 'Eb:maj'],
+      [400, 'C:min'],
+      [404, 'F:maj'],
+      [408, 'Bb:maj'],
+      [412, 'Eb:maj'],
+      [414, 'G:min'],
+      [422, 'Bb:maj'],
+      [426, 'G:min'],
+      [430, 'C:min'],
+      [466, 'N/C'],
+      [469, 'C:min'],
+      [479, 'C:maj'],
+      [481, 'F:min'],
+      [489, 'Bb:maj'],
+      [492, 'C:maj'],
+      [497, 'F:min'],
+      [505, 'C:min'],
+      [507, 'G:min'],
+      [523, 'C:min'],
+      [525, 'C:maj'],
+    ];
+
+    runs.forEach(([start, chord], runIndex) => {
+      const nextStart = runs[runIndex + 1]?.[0] ?? rawChords.length;
+      for (let index = start; index < nextStart; index += 1) {
+        rawChords[index] = chord;
+      }
+    });
+
+    const result = getChordGridData(makeAnalysisResult({
+      beats: rawChords.map((_, index) => ({
+        time: 0.75 + (index * beatDuration),
+        beatNum: (index % timeSignature) + 1,
+      })),
+      synchronizedChords: rawChords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      beatDetectionResult: {
+        bpm,
+        time_signature: timeSignature,
+      },
+      beatModel: 'madmom',
+      chordModel: 'chord-cnn-lstm',
+    }));
+    const starts = musicalChordStarts(result.chords);
+    const endingStarts = starts.filter((start) => start.index >= 460);
+
+    expect(starts[0]).toEqual({ chord: 'C:maj', index: 8 });
+    expect(endingStarts.slice(0, 4)).toEqual([
+      { chord: 'C:min', index: 468 },
+      { chord: 'C:maj', index: 476 },
+      { chord: 'F:min', index: 478 },
+      { chord: 'Bb:maj', index: 486 },
+    ]);
+    expect(endingStarts[0].index % timeSignature).toBe(0);
+    expect(endingStarts[1].index % timeSignature).toBe(0);
+    expect(result.originalAudioMapping).toHaveLength(rawChords.length);
+  });
 });
 
 describe('grid compaction edge behavior', () => {

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@heroui/react';
 import { addToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 import Navigation from '@/components/common/Navigation';
 import { analyzeAudioWithRateLimit, AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import { ProcessingStatusSkeleton } from '@/components/common/SkeletonLoaders';
@@ -127,10 +128,13 @@ export default function LocalAudioAnalyzePage() {
       addToast({
         title: 'Audio is too long for analysis',
         description: `Audio duration should be less than ${MAX_ANALYSIS_DURATION_MINUTES} minutes.`,
-        color: 'warning',
-        variant: 'flat',
+        color: 'default',
         timeout: 5000,
         shouldShowTimeoutProgress: true,
+        classNames: mergeToastClassNames({
+          icon: 'text-warning-500',
+          title: 'text-warning-600 dark:text-warning-400',
+        }),
       });
       return;
     }

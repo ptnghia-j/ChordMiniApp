@@ -460,8 +460,6 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
       if (!data.success && data.requiresBrowserExtraction) {
         const {
           extractAudioWithBrowserYtDlp,
-          extractAudioWithNativeYtDlpFallback,
-          shouldUseNativeYtDlpFallback,
         } = await import('@/services/audio/browserYtDlpExtractionService');
         const browserMetadata = {
           videoId,
@@ -481,12 +479,8 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
         try {
           browserResult = await extractAudioWithBrowserYtDlp(browserMetadata, browserOptions);
         } catch (browserError) {
-          if (!shouldUseNativeYtDlpFallback(browserError)) {
-            throw browserError;
-          }
-
-          console.warn('Browser yt-dlp extraction hit a YouTube access challenge; retrying native fallback.');
-          browserResult = await extractAudioWithNativeYtDlpFallback(browserMetadata, browserOptions);
+          console.info('Browser yt-dlp extraction failed; skipping native yt-dlp fallback in production.');
+          throw browserError;
         }
 
         data.success = true;
@@ -564,16 +558,22 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
     console.error('Audio extraction failed:', error);
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const normalizedErrorMessage = errorMessage.toLowerCase();
     let suggestion: string | undefined;
 
     // Determine suggestion based on error type
-    if (errorMessage.includes('YouTube Short')) {
+    if (normalizedErrorMessage.includes('youtube short')) {
       suggestion = 'YouTube Shorts cannot be processed. Please try a regular YouTube video.';
-    } else if (errorMessage.includes('restricted') || errorMessage.includes('unavailable')) {
+    } else if (normalizedErrorMessage.includes('restricted') || normalizedErrorMessage.includes('unavailable')) {
       suggestion = 'This video may be restricted or unavailable for download. Try a different video.';
-    } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+    } else if (normalizedErrorMessage.includes('network') || normalizedErrorMessage.includes('timeout')) {
       suggestion = 'Check your internet connection and try again.';
-    } else if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+    } else if (
+      normalizedErrorMessage.includes('rate limit') ||
+      normalizedErrorMessage.includes('rate-limited') ||
+      normalizedErrorMessage.includes('quota') ||
+      normalizedErrorMessage.includes('captcha')
+    ) {
       suggestion = 'Service temporarily unavailable. Please try again in a few minutes.';
     }
 

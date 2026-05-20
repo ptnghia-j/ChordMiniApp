@@ -1,39 +1,44 @@
 const mockGetPythonApiUrl = jest.fn(() => 'https://python.private.test');
 const mockGetSheetSageApiUrl = jest.fn(() => 'https://sheetsage.private.test');
-const mockGetYtMp3GoBaseUrl = jest.fn(() => 'https://yt.private.test');
 const mockCreateSafeTimeoutSignal = jest.fn(() => new AbortController().signal);
-const mockExtractAudio = jest.fn();
+const mockGenerateContent = jest.fn();
+const mockCreateGeminiClient = jest.fn(() => ({
+  models: {
+    generateContent: mockGenerateContent,
+  },
+}));
 
 jest.mock('@/config/serverBackend', () => ({
   getPythonApiUrl: () => mockGetPythonApiUrl(),
   getSheetSageApiUrl: () => mockGetSheetSageApiUrl(),
-  getYtMp3GoBaseUrl: () => mockGetYtMp3GoBaseUrl(),
+}));
+
+jest.mock('@/config/gemini', () => ({
+  GEMINI_MODEL_NAME: 'gemini-test-model',
+  createGeminiClient: (...args: unknown[]) => mockCreateGeminiClient(...args),
 }));
 
 jest.mock('@/utils/environmentUtils', () => ({
   createSafeTimeoutSignal: (timeoutMs: number) => mockCreateSafeTimeoutSignal(timeoutMs),
 }));
 
-jest.mock('@/services/youtube/ytMp3GoService', () => ({
-  ytMp3GoService: {
-    extractAudio: (...args: unknown[]) => mockExtractAudio(...args),
-  },
-}));
-
-import { runStandardStatusProbes, runYtExtractionStatusProbe } from '@/services/status/statusProbes';
+import { probeGeminiGeneration, runStandardStatusProbes } from '@/services/status/statusProbes';
 
 describe('statusProbes', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreateGeminiClient.mockReturnValue({
+      models: {
+        generateContent: mockGenerateContent,
+      },
+    });
+    mockGenerateContent.mockResolvedValue({ text: 'ok' });
     process.env = {
       ...originalEnv,
-      STATUS_YT2MP3GO_INFO_TIMEOUT_MS: '30000',
-      STATUS_YT2MP3GO_EXTRACTION_TIMEOUT_MS: '250000',
-      STATUS_YT2MP3GO_TEST_VIDEO_ID: 'CizitNpshbM',
-      STATUS_YT2MP3GO_TEST_VIDEO_IDS: '',
-      STATUS_YT2MP3GO_TEST_QUALITY: 'low',
+      STATUS_PROBE_TIMEOUT_MS: '30000',
+      GEMINI_API_KEY: 'gemini-key',
     };
   });
 
@@ -41,7 +46,7 @@ describe('statusProbes', () => {
     process.env = originalEnv;
   });
 
-  it('aggregates standard endpoint probes into one result per service', async () => {
+  it('aggregates standard endpoint probes and Gemini into one result per service', async () => {
     global.fetch = jest.fn(async () => ({
       ok: true,
       status: 200,
@@ -49,14 +54,19 @@ describe('statusProbes', () => {
 
     const probes = await runStandardStatusProbes();
 
-    expect(probes.map((probe) => probe.serviceId)).toEqual(['beat', 'chord', 'sheetsage', 'yt2mp3go']);
+    expect(probes.map((probe) => probe.serviceId)).toEqual(['beat', 'chord', 'sheetsage', 'gemini']);
     expect(probes.filter((probe) => probe.serviceId === 'beat')).toHaveLength(1);
     expect(probes.filter((probe) => probe.serviceId === 'chord')).toHaveLength(1);
     expect(probes.filter((probe) => probe.serviceId === 'sheetsage')).toHaveLength(1);
-    expect(probes.find((probe) => probe.serviceId === 'beat')).toMatchObject({
+    expect(probes.find((probe) => probe.serviceId === 'gemini')).toMatchObject({
+      probeKind: 'generation',
       status: 'operational',
       ok: true,
     });
+    expect(mockGenerateContent).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gemini-test-model',
+      contents: 'Reply with exactly: ok',
+    }));
   });
 
   it('retries transient standard endpoint failures and reports operational recovery', async () => {
@@ -115,91 +125,47 @@ describe('statusProbes', () => {
     });
   });
 
-  it('retries transient yt2mp3go metadata failures before marking the service healthy', async () => {
-    let ytInfoAttempts = 0;
-    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/yt-downloader/info')) {
-        ytInfoAttempts += 1;
-        return {
-          ok: ytInfoAttempts > 1,
-          status: ytInfoAttempts > 1 ? 200 : 400,
-        } as Response;
-      }
+  it('marks Gemini overload and rate limiting as degraded', async () => {
+    mockGenerateContent.mockRejectedValueOnce(new Error('429 RESOURCE_EXHAUSTED: quota exceeded'));
 
-      return {
-        ok: true,
-        status: 200,
-      } as Response;
-    });
+    const probe = await probeGeminiGeneration();
 
-    const probes = await runStandardStatusProbes();
-    const ytProbe = probes.find((probe) => probe.serviceId === 'yt2mp3go');
-
-    expect(ytInfoAttempts).toBe(2);
-    expect(ytProbe).toMatchObject({
-      probeKind: 'metadata',
-      status: 'operational',
-      ok: true,
-    });
-  });
-
-  it('treats persistent yt2mp3go metadata failure as degraded because extraction is probed separately', async () => {
-    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes('/yt-downloader/info')) {
-        return {
-          ok: false,
-          status: 400,
-        } as Response;
-      }
-
-      return {
-        ok: true,
-        status: 200,
-      } as Response;
-    });
-
-    const probes = await runStandardStatusProbes();
-    const ytProbe = probes.find((probe) => probe.serviceId === 'yt2mp3go');
-
-    expect(ytProbe).toMatchObject({
-      probeKind: 'metadata',
+    expect(probe).toMatchObject({
+      serviceId: 'gemini',
+      probeKind: 'generation',
       status: 'degraded',
       ok: true,
-    });
-    expect(ytProbe?.sanitizedSummary).toContain('extraction is verified by a separate extraction probe');
-  });
-
-  it('retries quick yt2mp3go extraction failures before recording an outage', async () => {
-    mockExtractAudio
-      .mockResolvedValueOnce({ success: false, videoId: 'CizitNpshbM' })
-      .mockResolvedValueOnce({ success: true, videoId: 'CizitNpshbM' });
-
-    const probe = await runYtExtractionStatusProbe();
-
-    expect(mockExtractAudio).toHaveBeenCalledTimes(2);
-    expect(probe).toMatchObject({
-      serviceId: 'yt2mp3go',
-      probeKind: 'extraction',
-      status: 'operational',
-      ok: true,
+      failureReason: 'http',
     });
   });
 
-  it('uses a configured random list for yt2mp3go extraction probes', async () => {
-    process.env.STATUS_YT2MP3GO_TEST_VIDEO_IDS = 'invalid,el3E4MbxRqQ,_b-2C3KPAM0';
-    mockExtractAudio.mockResolvedValueOnce({ success: true, videoId: 'probe-video' });
+  it('marks Gemini timeout failures as an outage', async () => {
+    const timeoutError = Object.assign(new Error('request timed out'), { name: 'TimeoutError' });
+    mockGenerateContent.mockRejectedValueOnce(timeoutError);
 
-    const probe = await runYtExtractionStatusProbe();
+    const probe = await probeGeminiGeneration();
 
-    const videoId = mockExtractAudio.mock.calls[0]?.[0];
-    expect(['el3E4MbxRqQ', '_b-2C3KPAM0']).toContain(videoId);
     expect(probe).toMatchObject({
-      serviceId: 'yt2mp3go',
-      probeKind: 'extraction',
-      status: 'operational',
-      ok: true,
+      serviceId: 'gemini',
+      probeKind: 'generation',
+      status: 'outage',
+      ok: false,
+      failureReason: 'timeout',
+    });
+  });
+
+  it('reports missing Gemini API key as unknown', async () => {
+    delete process.env.GEMINI_API_KEY;
+
+    const probe = await probeGeminiGeneration();
+
+    expect(mockCreateGeminiClient).not.toHaveBeenCalled();
+    expect(probe).toMatchObject({
+      serviceId: 'gemini',
+      probeKind: 'generation',
+      status: 'unknown',
+      ok: false,
+      latencyMs: null,
     });
   });
 });

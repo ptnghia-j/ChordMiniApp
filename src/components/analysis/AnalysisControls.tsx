@@ -97,7 +97,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
       ? 'border-warning-200/80 bg-warning-50/80 dark:border-warning-700/40 dark:bg-warning-900/10'
       : statusTone === 'primary'
         ? 'border-primary-200/80 bg-primary-50/80 dark:border-primary-700/40 dark:bg-primary-900/10'
-        : 'border-default-200/80 bg-default-50/80 dark:border-default-700/40 dark:bg-default-900/10';
+        : 'border-default-200/80 bg-default-50/80 dark:border-gray-800/40 dark:bg-gray-900/10';
 
   const statusDotStyles = statusTone === 'success'
     ? 'bg-success-500'
@@ -131,7 +131,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
 
   return (
     <Card
-      className="w-full overflow-visible border border-default-200/80 dark:border-default-100/10 bg-content1/90 shadow-sm"
+      className="w-full overflow-visible border border-default-200/80 dark:border-gray-800/20 bg-content1/90 shadow-sm"
       shadow="sm"
       radius="lg"
     >
@@ -139,7 +139,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
         <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-foreground">Analysis setup</h3>
-            <p className="text-sm text-default-500 dark:text-default-300">
+            <p className="text-sm text-default-500 dark:text-gray-400">
               Choose your detection models. The selected combination is preserved when this page reloads.
             </p>
           </div>
@@ -193,7 +193,7 @@ export const AnalysisControls: React.FC<AnalysisControlsProps> = ({
             <span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${statusDotStyles}`} />
             <div>
               <p className="text-sm font-semibold text-foreground">{statusTitle}</p>
-              <p className="text-sm text-default-600 dark:text-default-300">{statusDescription}</p>
+              <p className="text-sm text-default-600 dark:text-gray-300">{statusDescription}</p>
             </div>
           </div>
 

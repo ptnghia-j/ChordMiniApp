@@ -15,7 +15,6 @@ import { useChordGridLayout } from '@/hooks/chord-analysis/useChordGridLayout';
 import { useChordDataProcessing } from '@/hooks/chord-analysis/useChordDataProcessing';
 import { useChordInteractions } from '@/hooks/chord-analysis/useChordInteractions';
 import { useLoopBeatSelection } from '@/hooks/chord-analysis/useLoopBeatSelection';
-import { useTheme } from '@/contexts/ThemeContext';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
@@ -222,11 +221,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   romanNumeralData = null,
   originalChordsForRomanNumerals // CRITICAL FIX: Original chords for Roman numeral mapping
 }) => {
-
-  // Get theme for dark mode detection
-  const { theme } = useTheme();
-  const isDarkMode = theme === 'dark';
-
   const gridElementRef = useRef<HTMLDivElement | null>(null);
   // Cache: map beatIndex -> HTMLElement to eliminate per-beat querySelector
   const cellRefsMapRef = useRef<Map<number, HTMLElement>>(new Map());
@@ -598,7 +592,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         globalIndex={globalIndex}
         isClickable={isClickableCell}
         cellSize={cellSize}
-        isDarkMode={isDarkMode}
         showChordLabel={showChordLabel}
         isEmpty={isEmpty}
         displayChord={displayChord}
@@ -633,7 +626,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     handleBeatClick,
     handleLoopBeatClick,
     isClickable,
-    isDarkMode,
     isEditMode,
     isInLoopRange,
     isLoopEnabled,
@@ -719,7 +711,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       style={{ maxWidth: "99%" }}
     >
       {/* Beat highlighter side-effect component (no UI) */}
-      <BeatHighlighter cellRefsMap={cellRefsMapRef} theme={theme} isLoopEnabled={isLoopEnabled} />
+      <BeatHighlighter cellRefsMap={cellRefsMapRef} />
 
       {/* Clean card container with minimal styling */}
       <div className="overflow-hidden rounded-xl border border-stone-300 bg-stone-50/90 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] transition-colors duration-300 sm:rounded-2xl dark:border-gray-600 dark:bg-gray-800/50 dark:shadow-[0_18px_45px_-32px_rgba(15,23,42,0.75)]">
@@ -752,9 +744,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                     >
                       <AppTooltip content={section.label} placement="right">
                         <div
-                          className={`w-full h-full rounded-sm border text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center ${
-                            isDarkMode ? 'text-gray-100 border-white/15' : 'text-gray-700 border-black/10'
-                          }`}
+                          className="w-full h-full rounded-sm border border-black/10 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-gray-700 dark:border-white/15 dark:text-gray-100"
                           style={{
                             writingMode: 'vertical-rl',
                             transform: 'rotate(180deg)',

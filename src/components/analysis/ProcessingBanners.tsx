@@ -3,7 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
-import UserFriendlyErrorDisplay from '@/components/common/UserFriendlyErrorDisplay';
+import AnalysisErrorToast from '@/components/analysis/AnalysisErrorToast';
 
 // Dynamic imports for heavy components
 const ProcessingStatusBanner = dynamic(() => import('@/components/analysis/ProcessingStatusBanner'), {
@@ -83,18 +83,13 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
         beatDetector={beatDetector}
       />
 
-      {/* Error message */}
-      {error && (
-        <div className="mb-2 px-4 pt-2 pb-1">
-          <UserFriendlyErrorDisplay
-            error={error}
-            suggestion={suggestion}
-            onTryAnotherVideo={onTryAnotherVideo}
-            onRetry={onRetry}
-            className="mb-2"
-          />
-        </div>
-      )}
+      {/* Extraction and analysis errors are surfaced as toasts to avoid layout shift. */}
+      <AnalysisErrorToast
+        error={error}
+        suggestion={suggestion}
+        onTryAnotherVideo={onTryAnotherVideo}
+        onRetry={onRetry}
+      />
     </>
   );
 };

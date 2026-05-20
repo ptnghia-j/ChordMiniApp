@@ -24,34 +24,126 @@
 
 /* Current beat highlighting - Light mode */
 .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
-  background-color: rgb(219, 234, 254) !important; /* bg-blue-100 */
-  border-color: rgb(37, 99, 235) !important; /* border-blue-600 */
-  box-shadow: inset 0 0 0 1px rgb(37, 99, 235) !important;
+  border-color: transparent !important;
+  border-radius: 8px;
+  box-shadow: none !important;
   color: rgb(30, 58, 138) !important; /* text-blue-900 */
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 /* Current beat highlighting - Dark mode */
 .dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
-  background-color: rgb(30, 64, 175) !important; /* bg-blue-800 */
-  border-color: rgb(96, 165, 250) !important; /* border-blue-400 */
-  box-shadow: inset 0 0 0 1px rgb(96, 165, 250) !important;
+  background-color: rgb(27, 38, 51) !important;
+  border-color: transparent !important;
+  border-radius: 8px;
+  box-shadow: none !important;
   color: rgb(219, 234, 254) !important; /* text-blue-100 */
 }
 
 /* Current beat highlighting for empty cells - Light mode */
 .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
-  background-color: rgb(229, 231, 235) !important; /* bg-gray-200 */
-  border-color: rgb(37, 99, 235) !important; /* border-blue-600 */
-  box-shadow: inset 0 0 0 1px rgb(37, 99, 235) !important;
+  border-color: transparent !important;
+  border-radius: 8px;
+  box-shadow: none !important;
   color: rgb(75, 85, 99) !important; /* text-gray-600 */
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 /* Current beat highlighting for empty cells - Dark mode */
 .dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
-  background-color: rgb(75, 85, 99) !important; /* bg-gray-600 */
-  border-color: rgb(96, 165, 250) !important; /* border-blue-400 */
-  box-shadow: inset 0 0 0 1px rgb(96, 165, 250) !important;
+  background-color: rgb(27, 38, 51) !important;
+  border-color: transparent !important;
+  border-radius: 8px;
+  box-shadow: none !important;
   color: rgb(209, 213, 219) !important; /* text-gray-300 */
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::before,
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::after,
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::before,
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+  transition: opacity 1024ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::before,
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::before {
+  inset: 0;
+  border: 2px solid rgba(96, 165, 250, 0.88);
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 254, 0.44),
+    inset 0 0 0 3px rgba(219, 234, 254, 0.12),
+    inset 0 0 10px 4px rgba(186, 230, 253, 0.12);
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::after,
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::after {
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(125, 211, 252, 0.14), rgba(191, 219, 254, 0.07) 8px, transparent 20px) top / 100% 38% no-repeat,
+    linear-gradient(to top, rgba(125, 211, 252, 0.1), rgba(191, 219, 254, 0.06) 8px, transparent 20px) bottom / 100% 38% no-repeat,
+    linear-gradient(to right, rgba(125, 211, 252, 0.1), rgba(191, 219, 254, 0.06) 8px, transparent 20px) left / 38% 100% no-repeat,
+    linear-gradient(to left, rgba(125, 211, 252, 0.08), rgba(191, 219, 254, 0.04) 8px, transparent 20px) right / 38% 100% no-repeat;
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::before,
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::after {
+  opacity: 1;
+  transition-duration: 120ms;
+}
+
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::before,
+.chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::after {
+  opacity: 0;
+}
+
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::before,
+.dark .chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::before {
+  border-color: rgba(147, 197, 253, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 254, 0.14),
+    inset 0 0 0 3px rgba(96, 165, 250, 0.05),
+    inset 0 0 8px 3px rgba(147, 197, 253, 0.08);
+}
+
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::after,
+.dark .chord-grid-container .chord-cell[data-beat-index].beat-highlight-releasing::after {
+  background:
+    linear-gradient(to bottom, rgba(147, 197, 253, 0.1), rgba(147, 197, 253, 0.04) 7px, transparent 18px) top / 100% 34% no-repeat,
+    linear-gradient(to top, rgba(147, 197, 253, 0.08), rgba(147, 197, 253, 0.035) 7px, transparent 18px) bottom / 100% 34% no-repeat,
+    linear-gradient(to right, rgba(147, 197, 253, 0.08), rgba(147, 197, 253, 0.035) 7px, transparent 18px) left / 34% 100% no-repeat,
+    linear-gradient(to left, rgba(147, 197, 253, 0.06), rgba(147, 197, 253, 0.025) 7px, transparent 18px) right / 34% 100% no-repeat;
+}
+
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::before {
+  opacity: 1;
+}
+
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight::after {
+  opacity: 0.95;
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight > * {
+  position: relative;
+  z-index: 2;
+}
+
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight,
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight * {
+  color: rgb(37, 99, 235) !important; /* blue-600 */
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.65);
+}
+
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight,
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight * {
+  color: rgb(147, 197, 253) !important; /* blue-300 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* 
@@ -68,8 +160,25 @@
 /* Ensure smooth transitions */
 .chord-cell {
   box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(209, 213, 219, 0.9);
-  transition: background-color 150ms ease-in-out, border-color 150ms ease-in-out, color 150ms ease-in-out;
+  transition:
+    background-color 1024ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 1024ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 1024ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 1024ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 1024ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-switching .chord-grid-container .chord-cell {
+  transition: none !important;
+}
+
+.chord-cell > * {
+  position: relative;
+  z-index: 1;
 }
 
 .dark .chord-cell {
@@ -88,4 +197,3 @@
  * - GPU-accelerated transitions for smooth visual feedback
  * - Estimated 80% reduction in CPU usage during playback
  */
-

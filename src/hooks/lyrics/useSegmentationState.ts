@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { addToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 import { requestSongSegmentation } from '@/services/api/chatbotService';
 import { SegmentationResult, SongContext } from '@/types/chatbotTypes';
 import { useUIStore } from '@/stores/uiStore';
@@ -72,7 +73,11 @@ export const useSegmentationState = () => {
         addToast({
           title: 'Song segmentation needs an access code',
           description: `This song hasn’t been segmented yet. Add your access code in Settings or request one via ${SEGMENTATION_ACCESS_REQUEST_EMAIL}.`,
-          color: 'warning',
+          color: 'default',
+          classNames: mergeToastClassNames({
+            icon: 'text-warning-500',
+            title: 'text-warning-600 dark:text-warning-400',
+          }),
         });
       }
       throw error;

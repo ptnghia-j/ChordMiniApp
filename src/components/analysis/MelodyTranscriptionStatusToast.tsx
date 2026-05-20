@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, createElement } from 'react';
+import React, { useEffect, useRef, useState, createElement } from 'react';
 import { addToast, closeToast } from '@heroui/react';
+import { mergeToastClassNames } from '@/utils/toastStyles';
 
 const DEFAULT_REFERENCE_DURATION_SECONDS = 240;
 const DEFAULT_ESTIMATED_MELODY_SECONDS = 100;
@@ -42,6 +43,35 @@ function estimateMelodyWaitSeconds(durationSeconds: number | null | undefined): 
   );
 }
 
+interface MelodyCountdownDescriptionProps {
+  estimateSeconds: number;
+}
+
+const MelodyCountdownDescription: React.FC<MelodyCountdownDescriptionProps> = ({
+  estimateSeconds,
+}) => {
+  const [remainingSeconds, setRemainingSeconds] = useState(estimateSeconds);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const estimateMs = estimateSeconds * 1000;
+
+    const interval = setInterval(() => {
+      const elapsedMs = Date.now() - startedAt;
+      const nextRemainingSeconds = Math.max(0, Math.ceil((estimateMs - elapsedMs) / 1000));
+      setRemainingSeconds(nextRemainingSeconds);
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [estimateSeconds]);
+
+  if (remainingSeconds === 0) {
+    return <span>Estimate elapsed. Waiting for Sheet Sage to return the melody...</span>;
+  }
+
+  return <span>Estimated wait: about {remainingSeconds}s for this song.</span>;
+};
+
 interface MelodyTranscriptionStatusToastProps {
   isComputing: boolean;
   durationSeconds?: number | null;
@@ -56,7 +86,6 @@ const MelodyTranscriptionStatusToast: React.FC<MelodyTranscriptionStatusToastPro
   errorMessage = null,
 }) => {
   const toastKeyRef = useRef<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevComputingRef = useRef(false);
 
   useEffect(() => {
@@ -68,30 +97,22 @@ const MelodyTranscriptionStatusToast: React.FC<MelodyTranscriptionStatusToastPro
       const durationMs = estimateSeconds * 1000;
       const key = addToast({
         title: 'Transcribing Melody',
-        description: `Estimated wait: about ${estimateSeconds}s for this song.`,
-        color: 'primary',
-        variant: 'flat',
+        description: <MelodyCountdownDescription estimateSeconds={estimateSeconds} />,
+        color: 'default',
         timeout: 0,
         hideCloseButton: true,
         endContent: createNonPausingProgressBar(durationMs, 'melody'),
-        classNames: { base: 'relative overflow-hidden' },
+        classNames: mergeToastClassNames({
+          base: 'relative overflow-hidden',
+          icon: 'text-primary-500',
+          title: 'text-primary-600 dark:text-blue-400',
+        }),
       });
       toastKeyRef.current = key;
-      timerRef.current = setTimeout(() => {
-        if (toastKeyRef.current) {
-          closeToast(toastKeyRef.current);
-          toastKeyRef.current = null;
-        }
-        timerRef.current = null;
-      }, durationMs);
       return;
     }
 
     if (!isComputing && wasComputing) {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
       if (toastKeyRef.current) {
         closeToast(toastKeyRef.current);
         toastKeyRef.current = null;
@@ -101,20 +122,19 @@ const MelodyTranscriptionStatusToast: React.FC<MelodyTranscriptionStatusToastPro
         addToast({
           title: 'Melody Ready',
           description: 'Melody transcription finished and is ready in Piano Visualizer.',
-          color: 'success',
-          variant: 'flat',
+          color: 'default',
           timeout: 4000,
           shouldShowTimeoutProgress: true,
+          classNames: mergeToastClassNames({
+            icon: 'text-success-500',
+            title: 'text-success-600 dark:text-success-400',
+          }),
         });
       }
     }
   }, [durationSeconds, errorMessage, hasResult, isComputing]);
 
   useEffect(() => () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
     if (toastKeyRef.current) {
       closeToast(toastKeyRef.current);
       toastKeyRef.current = null;

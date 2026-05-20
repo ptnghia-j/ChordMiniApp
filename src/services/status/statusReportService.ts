@@ -22,10 +22,10 @@ const SERVICE_LABELS: Record<StatusServiceId, string> = {
   beat: 'Beat Detection',
   chord: 'Chord Recognition',
   sheetsage: 'Sheet Sage',
-  yt2mp3go: 'YouTube Extraction',
+  gemini: 'Gemini API',
 };
 
-const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'yt2mp3go'];
+const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'gemini'];
 
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Number(value.toFixed(2))));
@@ -149,15 +149,15 @@ function sanitizeReport(report: PublicStatusReport): PublicStatusReport {
   };
 }
 
-function sanitizeIncident(incident: PublicStatusIncident): PublicStatusIncident {
-  const serviceId = SERVICE_IDS.includes(incident.serviceId) ? incident.serviceId : 'beat';
+function sanitizeIncident(incident: Omit<PublicStatusIncident, 'status'> & { status?: string }): PublicStatusIncident {
+  const serviceId = incident.serviceId || 'beat';
 
   return {
     id: String(incident.id || `incident-${serviceId}-${incident.startedAt}`),
     serviceId,
-    serviceLabel: SERVICE_LABELS[serviceId] || incident.serviceLabel || 'Service',
+    serviceLabel: incident.serviceLabel || SERVICE_LABELS[serviceId as StatusServiceId] || 'Service',
     severity: incident.severity === 'critical' || incident.severity === 'major' ? incident.severity : 'minor',
-    status: incident.status === 'resolved' ? 'resolved' : 'investigating',
+    status: (incident.status === 'resolved' || incident.status === 'recovered') ? 'resolved' : 'investigating',
     title: String(incident.title || 'Service disruption').slice(0, 120),
     summary: String(incident.summary || 'A status probe reported degraded service.').slice(0, 240),
     startedAt: String(incident.startedAt),
@@ -167,7 +167,7 @@ function sanitizeIncident(incident: PublicStatusIncident): PublicStatusIncident 
   };
 }
 
-function getIncidentId(date: string, serviceId: StatusServiceId, startedAt: string): string {
+function getIncidentId(date: string, serviceId: string, startedAt: string): string {
   const timeKey = startedAt.slice(11, 16).replace(':', '');
   return `${serviceId}-${date}-${timeKey || 'incident'}`;
 }
@@ -204,13 +204,13 @@ function dedupeIncidents(date: string, incidents: PublicStatusIncident[]): Publi
   const incidentById = new Map<string, PublicStatusIncident>();
 
   for (const rawIncident of incidents.sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
-    const id = rawIncident.id && !rawIncident.id.includes('-metadata-') && !rawIncident.id.includes('-extraction-')
+    const id = rawIncident.id && !rawIncident.id.includes('-metadata-') && !rawIncident.id.includes('-generation-')
       ? rawIncident.id
       : getIncidentId(date, rawIncident.serviceId, rawIncident.startedAt);
     const incident: PublicStatusIncident = {
       ...rawIncident,
       id,
-      summary: rawIncident.status === 'resolved' && rawIncident.summary.includes('successful status probe confirmed')
+      summary: rawIncident.status === 'resolved'
         ? rawIncident.summary
         : incidentSummary(rawIncident.serviceLabel, rawIncident.title.toLowerCase().includes('degraded') ? 'degraded' : 'outage'),
     };
