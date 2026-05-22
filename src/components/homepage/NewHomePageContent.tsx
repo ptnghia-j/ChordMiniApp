@@ -15,11 +15,12 @@ import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
 import { useSearchBoxVisibility } from '@/hooks/ui/useSearchBoxVisibility';
 import { useSharedSearchState } from '@/hooks/search/useSharedSearchState';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { Chip } from '@heroui/react';
+import { Chip, Alert } from '@heroui/react';
 import { HiSparkles } from 'react-icons/hi2';
 // import { WarningBanner } from '@/components/WarningBanner';
 import SupportChordMini from '@/components/homepage/SupportChordMini'
 import FeaturesTabSection from '@/components/homepage/FeaturesTabSection';
+import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 
 // Dynamic imports for heavy components
 const RecentVideos = dynamic(() => import('@/components/homepage/LazyRecentVideos'), {
@@ -154,52 +155,70 @@ function NewHomePageContentInner() {
         {/* Split-Screen Layout */}
         <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-24 pb-20 lg:pb-24">
           {/* Left Side: Hero Content (60%) */}
-          <div className="lg:col-span-3 space-y-8">
-            {/* Title - Centered */}
-            <div ref={titleRef} className="text-center">
-              <AnimatedTitle text="Chord Mini" className="mb-3" />
-              <div className="min-h-[2rem] flex items-center justify-center mt-2">
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{
-                    delay: 0.3,
-                    duration: 0.8,
-                    ease: "easeOut",
-                  }}
-                  className="text-base md:text-lg text-slate-600 dark:text-gray-200 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
-                >
-                  Open source chord & beat detection application. Get your favorite songs transcribed!
-                </motion.p>
-              </div>
-            </div>
-
-            {/* Search Container - Above guitar chord animation */}
-            <IntegratedSearchContainer
-              searchQuery={searchQuery}
-              setSearchQuery={updateSearchQuery}
-              handleSearch={handleSearch}
-              isSearching={isSearching}
-              searchError={searchError}
-              error={error}
-              setError={setError}
-              setSearchError={setSearchError}
-              searchResults={searchResults}
-              handleVideoSelect={handleVideoSelect}
-              containerRef={searchBoxRef}
-            />
-
-            {/* Hide the marquee while the search panel is active to prevent hero layout shift. */}
-            {!shouldHideHeroMarquee && (
+          <div className="lg:col-span-3 lg:self-start lg:pt-4 flex flex-col">
+            {mounted && !isDevelopmentEnvironment() && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.05, duration: 0.6 }}
-                className="flex justify-center"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="w-full mb-6"
               >
-                <HeroScrollingChordAnimation className="w-full max-w-6xl" />
+                <Alert
+                  color="warning"
+                  variant="flat"
+                  title="YouTube Extraction Pipeline Degradation"
+                  description="We are experiencing degradation in our cloud-based YouTube extraction pipeline for this online demo of the app. Extraction may be intermittent or temporarily unavailable. Note: Local audio file extraction and uploads remain fully stable."
+                />
               </motion.div>
             )}
+
+            <div className="space-y-8 flex flex-col">
+              {/* Title - Centered */}
+              <div ref={titleRef} className="text-center">
+                <AnimatedTitle text="Chord Mini" className="mb-3" />
+                <div className="min-h-[2rem] flex items-center justify-center mt-2">
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{
+                      delay: 0.3,
+                      duration: 0.8,
+                      ease: "easeOut",
+                    }}
+                    className="text-base md:text-lg text-slate-600 dark:text-gray-200 font-normal tracking-wide text-center leading-relaxed max-w-lg mx-auto"
+                  >
+                    Open source chord & beat detection application. Get your favorite songs transcribed!
+                  </motion.p>
+                </div>
+              </div>
+
+              {/* Search Container - Above guitar chord animation */}
+              <IntegratedSearchContainer
+                searchQuery={searchQuery}
+                setSearchQuery={updateSearchQuery}
+                handleSearch={handleSearch}
+                isSearching={isSearching}
+                searchError={searchError}
+                error={error}
+                setError={setError}
+                setSearchError={setSearchError}
+                searchResults={searchResults}
+                handleVideoSelect={handleVideoSelect}
+                containerRef={searchBoxRef}
+              />
+
+              {/* Hide the marquee while the search panel is active to prevent hero layout shift. */}
+              {!shouldHideHeroMarquee && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.05, duration: 0.6 }}
+                  className="flex justify-center"
+                >
+                  <HeroScrollingChordAnimation className="w-full max-w-6xl" />
+                </motion.div>
+              )}
+            </div>
           </div>
 
           {/* Right Side: Demo Images (40%) */}

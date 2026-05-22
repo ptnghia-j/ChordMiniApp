@@ -269,6 +269,51 @@ describe('getChordGridData — edge cases', () => {
     expect(result.chords.length).toBeGreaterThanOrEqual(6);
   });
 
+  it('attaches local metric segments for mixed 3/4 and 4/4 material', () => {
+    const chords: string[] = [];
+    ['A', 'Bm', 'C#', 'F#m', 'D', 'E', 'A', 'D'].forEach((chord) => {
+      chords.push(...Array(3).fill(chord));
+    });
+    ['D', 'E', 'F#m', 'A', 'Bm', 'E', 'A', 'F#m'].forEach((chord) => {
+      chords.push(...Array(4).fill(chord));
+    });
+
+    const result = getChordGridData(
+      makeAnalysisResult({
+        beatDetectionResult: { time_signature: 3, bpm: 120 },
+        beats: chords.map((_, index) => index * 0.5),
+        synchronizedChords: chords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      })
+    );
+
+    expect(result.metricSegments?.map((segment) => segment.beatsPerMeasure)).toEqual([3, 4]);
+    expect(result.metricSegments?.[0]).toEqual(expect.objectContaining({ startIndex: 0, endIndex: 24 }));
+  });
+
+  it('uses a detected whole-song 5/4 meter for alignment and metric rendering metadata', () => {
+    const chords: string[] = [];
+    ['C', 'Em', 'F', 'G', 'Am', 'F', 'Dm', 'G'].forEach((chord) => {
+      chords.push(...Array(5).fill(chord));
+    });
+
+    const result = getChordGridData(
+      makeAnalysisResult({
+        beatDetectionResult: { time_signature: 4, bpm: 120 },
+        beats: chords.map((_, index) => index * 0.5),
+        synchronizedChords: chords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      })
+    );
+
+    expect(result.shiftCount).toBe(0);
+    expect(result.metricSegments).toEqual([
+      expect.objectContaining({
+        startIndex: 0,
+        endIndex: chords.length,
+        beatsPerMeasure: 5,
+      }),
+    ]);
+  });
+
   it('local compaction is enabled only for madmom beat model', () => {
     const withMadmom = getChordGridData(
       makeAnalysisResult({ beatModel: 'madmom' })

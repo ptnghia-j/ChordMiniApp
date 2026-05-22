@@ -2,6 +2,7 @@ import React from 'react';
 
 export interface ChordGridHeaderProps {
   timeSignature: number;
+  timeSignatureLabel?: string;
   keySignature?: string;
   isDetectingKey?: boolean;
   hasPickupBeats?: boolean;
@@ -15,6 +16,7 @@ export interface ChordGridHeaderProps {
  */
 export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
   timeSignature,
+  timeSignatureLabel,
   keySignature,
   isDetectingKey = false,
   hasPickupBeats = false,
@@ -38,6 +40,7 @@ export const ChordGridHeader: React.FC<ChordGridHeaderProps> = ({
         <div className="rounded-lg border border-blue-300/60 bg-blue-500/10 px-2 py-0.5 sm:px-3 sm:py-1 dark:border-blue-400/35 dark:bg-blue-800/40">
           <span className="text-xs font-medium text-blue-800 dark:text-blue-50 sm:text-sm">
             Time: {timeSignature === 6 ? '6/8' : `${timeSignature}/4`}
+            {timeSignatureLabel ? ` (${timeSignatureLabel})` : ''}
           </span>
         </div>
 

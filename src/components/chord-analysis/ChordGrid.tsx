@@ -8,7 +8,8 @@ import {
 } from '@/utils/chordFormatting';
 
 import {
-  getChordStyle
+  getChordStyle,
+  getGridColumnsClass as getGridColumnsClassForBeats
 } from '@/utils/chordStyling';
 import { createShiftedChords } from '@/utils/chordProcessing';
 import { useChordGridLayout } from '@/hooks/chord-analysis/useChordGridLayout';
@@ -22,6 +23,7 @@ import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
 import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
 import AppTooltip from '@/components/common/AppTooltip';
+import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 
 /**
  * PERFORMANCE OPTIMIZATION: Memoized ChordCell Component
@@ -46,12 +48,21 @@ interface GroupedMeasure {
   beats: number[];
   isPickupMeasure?: boolean;
   visualStartIndex: number;
+  beatsPerMeasure?: number;
 }
 
 interface SectionBlock {
   label: string;
   accentColor: string;
   rows: SegmentedSectionRow[];
+}
+
+interface MetricSectionBlock {
+  label: string;
+  accentColor: string;
+  beatsPerMeasure: number;
+  measuresPerRow: number;
+  rows: GroupedMeasure[][];
 }
 
 interface ChordGridProps {
@@ -70,6 +81,7 @@ interface ChordGridProps {
   shiftCount?: number; // Number of shift beats (for visual distinction)
   beatTimeRangeStart?: number; // Start time of beat detection range (for padding timestamp calculation)
   originalAudioMapping?: AudioMappingItem[]; // NEW: Original timestamp-to-chord mapping for audio sync
+  metricSegments?: MetricSegment[];
   onBeatClick?: (beatIndex: number, timestamp: number) => void; // Callback for beat cell clicks
   isUploadPage?: boolean; // Whether this is the upload audio file page (for different layout)
   // Visual indicator for corrected chords
@@ -183,6 +195,7 @@ const areChordGridPropsEqual = (
 
   // Audio mapping
   if (prevProps.originalAudioMapping !== nextProps.originalAudioMapping) return false;
+  if (prevProps.metricSegments !== nextProps.metricSegments) return false;
 
   // Ignore callback props (onBeatClick, onChordEdit)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
@@ -207,6 +220,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   shiftCount = 0,
 
   originalAudioMapping,
+  metricSegments = [],
   onBeatClick,
   isUploadPage = false,
   showCorrectedChords = false,
@@ -252,6 +266,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
 
   // Use simple time signature - no complex beat source logic
   const actualBeatsPerMeasure = timeSignature;
+  const hasMetricSegments = metricSegments.length > 0;
+  const detectedSingleMeter = metricSegments.length === 1 ? metricSegments[0].beatsPerMeasure : null;
+  const displayedTimeSignature = detectedSingleMeter ?? timeSignature;
+  const timeSignatureLabel = metricSegments.length >= 2
+    ? Array.from(new Set(metricSegments.map((segment) => `${segment.beatsPerMeasure}/4`))).join(' + ')
+    : undefined;
 
   // Use custom hook for chord data processing
   const {
@@ -401,6 +421,104 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return measures;
   }, [shiftedChords, beats, actualBeatsPerMeasure, chords.length]);
 
+  const normalizedMetricSegments = useMemo<MetricSegment[]>(() => {
+    if (!hasMetricSegments || shiftedChords.length === 0) {
+      return [];
+    }
+
+    const sortedSegments = [...metricSegments]
+      .filter((segment) => (
+        segment.beatsPerMeasure > 1 &&
+        segment.endIndex > segment.startIndex
+      ))
+      .sort((left, right) => left.startIndex - right.startIndex);
+
+    if (sortedSegments.length === 0) {
+      return [];
+    }
+
+    const normalized: MetricSegment[] = [];
+    let cursor = 0;
+
+    sortedSegments.forEach((segment) => {
+      const startIndex = Math.max(cursor, Math.min(shiftedChords.length, segment.startIndex));
+      const endIndex = Math.max(startIndex, Math.min(shiftedChords.length, segment.endIndex));
+
+      if (startIndex > cursor) {
+        normalized.push({
+          startIndex: cursor,
+          endIndex: startIndex,
+          beatsPerMeasure: actualBeatsPerMeasure === 3 ? 3 : 4,
+        });
+      }
+
+      if (endIndex > startIndex) {
+        normalized.push({
+          ...segment,
+          startIndex,
+          endIndex,
+        });
+      }
+
+      cursor = endIndex;
+    });
+
+    if (cursor < shiftedChords.length) {
+      normalized.push({
+        startIndex: cursor,
+        endIndex: shiftedChords.length,
+        beatsPerMeasure: actualBeatsPerMeasure === 3 ? 3 : 4,
+      });
+    }
+
+    return normalized.filter((segment) => segment.endIndex > segment.startIndex);
+  }, [actualBeatsPerMeasure, hasMetricSegments, metricSegments, shiftedChords.length]);
+
+  const metricGroupedByMeasure = useMemo<GroupedMeasure[]>(() => {
+    if (normalizedMetricSegments.length === 0) {
+      return [];
+    }
+
+    const measures: GroupedMeasure[] = [];
+    let measureNumber = 0;
+
+    normalizedMetricSegments.forEach((segment) => {
+      let currentIndex = segment.startIndex;
+
+      while (currentIndex < segment.endIndex) {
+        const measure: GroupedMeasure = {
+          measureNumber,
+          chords: [],
+          beats: [],
+          isPickupMeasure: false,
+          visualStartIndex: currentIndex,
+          beatsPerMeasure: segment.beatsPerMeasure,
+        };
+
+        for (
+          let beat = 0;
+          beat < segment.beatsPerMeasure && currentIndex < segment.endIndex;
+          beat += 1
+        ) {
+          measure.chords.push(shiftedChords[currentIndex]);
+          const beatTime = beats[currentIndex];
+          measure.beats.push(typeof beatTime === 'number' ? beatTime : -1);
+          currentIndex += 1;
+        }
+
+        while (measure.chords.length < segment.beatsPerMeasure) {
+          measure.chords.push('');
+          measure.beats.push(-1);
+        }
+
+        measures.push(measure);
+        measureNumber += 1;
+      }
+    });
+
+    return measures;
+  }, [beats, normalizedMetricSegments, shiftedChords]);
+
   // PERFORMANCE OPTIMIZATION: Memoized rows calculation
   // Group measures into rows using the dynamic measures per row
   const rows = useMemo<GroupedMeasure[][]>(() => {
@@ -412,7 +530,12 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   }, [groupedByMeasure, dynamicMeasuresPerRow]);
 
   const sectionBlocks = useMemo<SectionBlock[] | null>(() => {
-    if (!showSegmentation || !segmentationData?.segments?.length || groupedByMeasure.length === 0) {
+    if (
+      normalizedMetricSegments.length > 0 ||
+      !showSegmentation ||
+      !segmentationData?.segments?.length ||
+      groupedByMeasure.length === 0
+    ) {
       return null;
     }
 
@@ -425,7 +548,44 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       ...block,
       accentColor: getSegmentationColor(block.label),
     }));
-  }, [showSegmentation, segmentationData, groupedByMeasure, dynamicMeasuresPerRow, actualBeatsPerMeasure]);
+  }, [showSegmentation, segmentationData, groupedByMeasure, dynamicMeasuresPerRow, actualBeatsPerMeasure, normalizedMetricSegments.length]);
+
+  const metricSectionBlocks = useMemo<MetricSectionBlock[] | null>(() => {
+    if (normalizedMetricSegments.length === 0 || metricGroupedByMeasure.length === 0) {
+      return null;
+    }
+
+    const cellsPerRowTarget = Math.max(
+      actualBeatsPerMeasure,
+      dynamicMeasuresPerRow * actualBeatsPerMeasure,
+    );
+
+    return normalizedMetricSegments.map((segment, segmentIndex) => {
+      const segmentMeasures = metricGroupedByMeasure.filter((measure) => (
+        measure.visualStartIndex >= segment.startIndex &&
+        measure.visualStartIndex < segment.endIndex
+      ));
+      const measuresPerRow = Math.max(1, Math.floor(cellsPerRowTarget / segment.beatsPerMeasure));
+      const rowsForSegment: GroupedMeasure[][] = [];
+
+      for (let index = 0; index < segmentMeasures.length; index += measuresPerRow) {
+        rowsForSegment.push(segmentMeasures.slice(index, index + measuresPerRow));
+      }
+
+      return {
+        label: `${segment.beatsPerMeasure}/4`,
+        accentColor: segmentIndex % 2 === 0 ? '#2563eb' : '#1d4ed8',
+        beatsPerMeasure: segment.beatsPerMeasure,
+        measuresPerRow,
+        rows: rowsForSegment,
+      };
+    }).filter((block) => block.rows.length > 0);
+  }, [
+    actualBeatsPerMeasure,
+    dynamicMeasuresPerRow,
+    metricGroupedByMeasure,
+    normalizedMetricSegments,
+  ]);
 
   const labelOverflowMap = useMemo(() => {
     const map = new Map<number, { cells: number; gapPx: number }>();
@@ -463,6 +623,35 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         map.set(entry.globalIndex, { cells, gapPx });
       });
     };
+
+    if (metricSectionBlocks) {
+      metricSectionBlocks.forEach((block) => block.rows.forEach((row) => {
+        const rowEntries: Array<{
+          globalIndex: number | null;
+          measureIdx: number;
+          chord: string;
+          showChordLabel: boolean;
+        }> = [];
+
+        row.forEach((measure, measureIdx) => {
+          measure.chords.forEach((rowChord, beatIdx) => {
+            const globalIndex = measure.visualStartIndex + beatIdx;
+            rowEntries.push({
+              globalIndex: globalIndex < shiftedChords.length ? globalIndex : null,
+              measureIdx,
+              chord: rowChord,
+              showChordLabel: globalIndex < shiftedChords.length
+                ? shouldShowChordLabelLocal(globalIndex)
+                : false,
+            });
+          });
+        });
+
+        populateRowOverflows(rowEntries);
+      }));
+
+      return map;
+    }
 
     if (sectionBlocks) {
       sectionBlocks.forEach((block) => block.rows.forEach((row) => {
@@ -521,7 +710,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     });
 
     return map;
-  }, [rows, sectionBlocks, shouldShowChordLabelLocal]);
+  }, [rows, sectionBlocks, metricSectionBlocks, shiftedChords.length, shouldShowChordLabelLocal]);
 
   // CRITICAL FIX: Use original chords for Roman numeral mapping to prevent misalignment during pitch shift
   // Roman numerals are key-relative and should remain constant regardless of transposition
@@ -663,6 +852,35 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     renderChordGridCell,
   ]);
 
+  const renderMetricMeasureRow = useCallback((
+    row: GroupedMeasure[],
+    rowKey: string,
+    beatsPerMeasure: number,
+    measuresPerRow: number,
+  ) => (
+    <div key={rowKey} className="measure-row min-w-0">
+      <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(measuresPerRow)}`}>
+        {row.map((measure, measureIdx) => (
+          <div
+            key={`${rowKey}-metric-measure-${measure.measureNumber}-${measureIdx}`}
+            className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
+            style={{ paddingLeft: '2px' }}
+          >
+            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClassForBeats(beatsPerMeasure)}`}>
+              {measure.chords.map((chord, beatIdx) => {
+                const globalIndex = measure.visualStartIndex + beatIdx;
+                if (globalIndex >= shiftedChords.length) {
+                  return null;
+                }
+                return renderChordGridCell(chord, globalIndex, `metric-chord-${rowKey}-${globalIndex}`);
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ), [renderChordGridCell, shiftedChords.length]);
+
   const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string) => (
     <div key={rowKey} className="measure-row min-w-0">
       <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
@@ -719,7 +937,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         {/* Header section using extracted component */}
         <div className="border-b border-stone-200/80 bg-stone-50/95 px-2.5 py-1.5 sm:px-3 sm:py-2 dark:border-white/10 dark:bg-gray-800/50">
           <ChordGridHeader
-            timeSignature={timeSignature}
+            timeSignature={displayedTimeSignature}
+            timeSignatureLabel={timeSignatureLabel}
             keySignature={keySignature}
             isDetectingKey={isDetectingKey}
             hasPickupBeats={hasPickupBeats}
@@ -731,7 +950,44 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         {/* Clean grid area with minimal background */}
         <div className="bg-gray-100/70 px-0 dark:bg-gray-800/45">
           <div className="overflow-x-auto">
-            {sectionBlocks ? (
+            {metricSectionBlocks ? (
+              <div className="space-y-3">
+                {metricSectionBlocks.map((section, sectionIdx) => {
+                  const stripMetrics = sectionStripMetrics(section.rows.length);
+
+                  return (
+                  <div key={`metric-section-${sectionIdx}-${section.label}`} className="flex items-start gap-2 sm:gap-3">
+                    <div
+                      className="w-7 sm:w-8 flex-shrink-0 flex"
+                      style={{ height: `${stripMetrics.heightPx}px` }}
+                    >
+                      <AppTooltip content={section.label} placement="right">
+                        <div
+                          className="w-full h-full rounded-sm border border-blue-100/45 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-white shadow-inner shadow-white/10 dark:border-blue-100/35"
+                          style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            backgroundColor: section.accentColor,
+                            padding: '0.5rem 0.2rem',
+                          }}
+                        >
+                          {section.label}
+                        </div>
+                      </AppTooltip>
+                    </div>
+
+                    <div className="flex-1 space-y-0.5 min-w-0">
+                      {section.rows.map((row, rowIdx) => renderMetricMeasureRow(
+                        row,
+                        `metric-section-${sectionIdx}-row-${rowIdx}`,
+                        section.beatsPerMeasure,
+                        section.measuresPerRow,
+                      ))}
+                    </div>
+                  </div>
+                )})}
+              </div>
+            ) : sectionBlocks ? (
               <div className="space-y-3">
                 {sectionBlocks.map((section, sectionIdx) => {
                   const stripMetrics = sectionStripMetrics(section.rows.length);

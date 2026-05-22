@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react';
 import { useIsPitchShiftEnabled, usePitchShiftSemitones, useTargetKey } from '@/stores/uiStore';
+import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 import { transposeChord } from '@/utils/chordTransposition';
 
 export interface ChordGridData {
@@ -24,6 +25,7 @@ export interface ChordGridData {
     visualIndex: number;
     audioIndex: number;
   }>;
+  metricSegments?: MetricSegment[];
 }
 
 export interface UseTransposedChordDataProps {

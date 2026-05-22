@@ -7,6 +7,7 @@ import { useBeatHandlers } from '@/stores/playbackStore';
 import { useRomanNumerals, useShowSegmentation, useIsPitchShiftEnabled, useTargetKey } from '@/stores/uiStore';
 import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedChordDisplayData';
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
+import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 import { SegmentationResult } from '@/types/chatbotTypes';
 
 interface AudioMappingItem {
@@ -26,6 +27,7 @@ interface ChordGridData {
   hasPickupBeats?: boolean;
   pickupBeatsCount?: number;
   originalAudioMapping?: AudioMappingItem[]; // NEW: Original timestamp-to-chord mapping for audio sync
+  metricSegments?: MetricSegment[];
 }
 
 interface ChordGridContainerProps {
@@ -153,6 +155,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
       shiftCount: effectiveChordGridData.shiftCount,
       beatTimeRangeStart: mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start || 0,
       originalAudioMapping: effectiveChordGridData.originalAudioMapping,
+      metricSegments: effectiveChordGridData.metricSegments,
       isUploadPage,
       showCorrectedChords: effectiveShowCorrectedChords,
       chordCorrections: effectiveChordCorrections,
@@ -171,6 +174,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     effectiveChordGridData.paddingCount,
     effectiveChordGridData.shiftCount,
     effectiveChordGridData.originalAudioMapping,
+    effectiveChordGridData.metricSegments,
     chordGridData.chords, // Add original chords to dependencies
     mergedAnalysisResults?.beatDetectionResult?.time_signature,
     mergedAnalysisResults?.beatDetectionResult?.beat_time_range_start,

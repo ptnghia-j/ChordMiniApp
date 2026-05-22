@@ -15,6 +15,7 @@ export interface ChordGridData {
   shiftCount: number;
   totalPaddingCount: number;
   originalAudioMapping?: AudioMappingItem[];
+  metricSegments?: MetricSegment[];
 }
 
 export interface VisualCompactionWindow {
@@ -23,6 +24,13 @@ export interface VisualCompactionWindow {
   targetModulo?: number;
   mode?: 'shrink_only' | 'expand_only';
   source?: 'gap' | 'silence' | 'tempo' | 'leading_silence';
+}
+
+export interface MetricSegment {
+  startIndex: number;
+  endIndex: number;
+  beatsPerMeasure: number;
+  score?: number;
 }
 
 export type GridAnalysisResult = ChordRecognitionAnalysisResult | {

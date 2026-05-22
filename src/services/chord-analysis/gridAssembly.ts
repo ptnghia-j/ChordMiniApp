@@ -2,6 +2,7 @@ import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
 import { runSegmentAlignmentSolver } from './alignmentSolver';
 import { getBeatTime } from './gridShared';
 import { calculatePaddingAndShift } from './gridShifting';
+import { detectLocalMeterSegments } from './localMeterDetection';
 import { AudioMappingItem, ChordGridData, GridAnalysisResult } from './gridTypes';
 
 type GridAssemblyAdapter = {
@@ -318,6 +319,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
       shiftCount: 0,
       totalPaddingCount: 0,
       originalAudioMapping: [],
+      metricSegments: [],
     };
   }
 
@@ -326,11 +328,16 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   const firstDetectedBeat = extractFirstDetectedBeat(analysisResults);
   const regularChords = analysisResults.synchronizedChords.map((item) => item.chord);
   const regularBeats = extractBeatTimesFromSynchronizedChords(analysisResults);
+  const preliminaryMetricSegments = detectLocalMeterSegments(regularChords, timeSignature);
+  const singleDetectedMeter = preliminaryMetricSegments.length === 1
+    ? preliminaryMetricSegments[0].beatsPerMeasure
+    : null;
+  const alignmentTimeSignature = singleDetectedMeter ?? timeSignature;
 
   const { paddingCount, shiftCount } = calculatePaddingAndShift(
     firstDetectedBeat,
     bpm,
-    timeSignature,
+    alignmentTimeSignature,
     regularChords
   );
 
@@ -340,9 +347,9 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   const globalOffsetCount = safePaddingCount + safeShiftCount;
   const leadingSilentRunLength = countLeadingSilentChords(regularChords);
   const naturalLeadingSilenceSuppressionThreshold =
-    timeSignature === 3
-      ? timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.minNaturalSilenceMeasuresForSuppression
-      : timeSignature;
+    alignmentTimeSignature === 3
+      ? alignmentTimeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.minNaturalSilenceMeasuresForSuppression
+      : alignmentTimeSignature;
   const hasLongLeadingSilenceWithGlobalOffset =
     globalOffsetCount > 0 &&
     leadingSilentRunLength >= globalOffsetCount + naturalLeadingSilenceSuppressionThreshold;
@@ -365,7 +372,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     chordGridData: initialGridData,
     chordIntervals: analysisResults.chords || [],
     beatTimes: regularBeats,
-    timeSignature,
+    timeSignature: alignmentTimeSignature,
     beatDuration: bpm > 0 ? 60 / bpm : GRID_ALIGNMENT_CONFIG.padding.fallbackBeatDurationSeconds,
     enabled: isLocalCompactionEnabled,
     suppressLeadingSilenceExpansion: hasLongLeadingSilenceWithGlobalOffset,
@@ -383,7 +390,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
       firstProtectedMusicAudioIndex
     );
     const protectedEarlyBeatCount =
-      timeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.protectEarlyMusicMeasures;
+      alignmentTimeSignature * GRID_ALIGNMENT_CONFIG.longIntroCompaction.protectEarlyMusicMeasures;
     const protectedAudioBoundary = firstProtectedMusicAudioIndex + protectedEarlyBeatCount;
     const compactionStartsTooEarly =
       firstChangedAudioIndex !== null &&
@@ -394,7 +401,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
       remapped: compactedGridData.originalAudioMapping,
       startAudioIndex: firstProtectedMusicAudioIndex,
       endAudioIndex: protectedAudioBoundary,
-      timeSignature,
+      timeSignature: alignmentTimeSignature,
     });
 
     if (compactionStartsTooEarly && !protectedAlignmentImproved) {
@@ -417,7 +424,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
         remapped: compactedGridData.originalAudioMapping,
         startAudioIndex: firstProtectedMusicAudioIndex,
         endAudioIndex: protectedAudioBoundary,
-        timeSignature,
+        timeSignature: alignmentTimeSignature,
       });
 
       if (retryCompactionStartsTooEarly && !retryProtectedAlignmentImproved) {
@@ -426,5 +433,17 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
     }
   }
 
-  return trimLeadingEmptyMeasures(compactedGridData, timeSignature);
+  const finalGridData = trimLeadingEmptyMeasures(compactedGridData, alignmentTimeSignature);
+  const metricSegments = singleDetectedMeter
+    ? [{
+        startIndex: 0,
+        endIndex: finalGridData.chords.length,
+        beatsPerMeasure: singleDetectedMeter,
+      }]
+    : detectLocalMeterSegments(finalGridData.chords, timeSignature);
+
+  return {
+    ...finalGridData,
+    metricSegments,
+  };
 }
