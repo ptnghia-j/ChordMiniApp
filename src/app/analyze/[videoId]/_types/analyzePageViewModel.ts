@@ -12,6 +12,8 @@ import type { TabKey } from '@/components/homepage/ResultsTabs';
 export interface AnalyzePageChromeProps {
   analyzeBackdropUrl: string | null;
   showFooterTransition: boolean;
+  videoTitle?: string;
+  showSnow?: boolean;
   processingBannersProps: {
     isDownloading: boolean;
     fromCache: boolean;
@@ -102,6 +104,9 @@ export interface AnalyzeResultsPaneProps {
   duration: number;
   activeTranscriptionUsageCount: number;
   currentDownbeatIndex: number;
+  isSnowEligible?: boolean;
+  snowEnabled?: boolean;
+  onToggleSnow?: () => void;
 }
 
 export interface AnalyzeSidePanelsProps {

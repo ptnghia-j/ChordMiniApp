@@ -62,6 +62,7 @@ import type { LyricsData } from '@/types/musicAiTypes';
 import type { AnalyzePageViewModel } from '../_types/analyzePageViewModel';
 import { useAnalyzePageStoreSync } from './useAnalyzePageStoreSync';
 import { useAnalyzePageLifecycleReset } from './useAnalyzePageLifecycleReset';
+import { shouldShowSnowEffect } from '@/utils/seasonalEffects';
 
 interface UseAnalyzePageViewModelParams {
   videoId: string;
@@ -127,6 +128,34 @@ export function useAnalyzePageViewModel({
     initialAnalysisResults: initialAnalyzeHandoff?.analysisResults ?? null,
     initialVideoTitle: initialAnalyzeHandoff?.videoTitle ?? titleFromSearch,
   });
+
+  const [snowEnabled, setSnowEnabled] = useState(true);
+
+  // Determine eligibility based on video title or search title
+  const isSnowEligible = useMemo(() => {
+    return shouldShowSnowEffect(videoTitle || titleFromSearch || undefined);
+  }, [videoTitle, titleFromSearch]);
+
+  // Load snow toggle preference on client-side mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('snow-animation-enabled');
+      if (stored !== null) {
+        setSnowEnabled(stored === 'true');
+      }
+    }
+  }, []);
+
+  const handleToggleSnow = useCallback(() => {
+    setSnowEnabled(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('snow-animation-enabled', String(next));
+      }
+      return next;
+    });
+  }, []);
+
   const cachedSheetSageMelodyQuery = useCachedSheetSageMelodyQuery(
     videoId,
     showSheetSage && !!videoId && audioProcessingState.isExtracted && !!audioProcessingState.audioUrl,
@@ -1114,6 +1143,9 @@ export function useAnalyzePageViewModel({
     duration,
     activeTranscriptionUsageCount,
     currentDownbeatIndex,
+    isSnowEligible,
+    snowEnabled,
+    onToggleSnow: handleToggleSnow,
   };
 
   const sidePanelsProps = {
@@ -1299,6 +1331,8 @@ export function useAnalyzePageViewModel({
   const chromeProps = {
     analyzeBackdropUrl,
     showFooterTransition: Boolean(analysisResults),
+    videoTitle: videoTitle || undefined,
+    showSnow: isSnowEligible && snowEnabled,
     processingBannersProps: {
       isDownloading: audioProcessingState.isDownloading,
       fromCache: audioProcessingState.fromCache,

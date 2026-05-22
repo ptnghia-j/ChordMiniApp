@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { HiPencil, HiCheck, HiXMark } from 'react-icons/hi2';
+import { BsSnow } from 'react-icons/bs';
 import AppTooltip from '@/components/common/AppTooltip';
 
 interface AnalysisHeaderProps {
@@ -20,6 +21,9 @@ interface AnalysisHeaderProps {
   canTranscribe: boolean;
   transcribeLyricsWithAI: () => void;
   lyricsError: string | null;
+  isSnowEligible?: boolean;
+  snowEnabled?: boolean;
+  onToggleSnow?: () => void;
 }
 
 const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
@@ -38,6 +42,9 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
   canTranscribe,
   transcribeLyricsWithAI,
   lyricsError,
+  isSnowEligible = false,
+  snowEnabled = true,
+  onToggleSnow,
 }) => {
   const enharmonicTooltip = showCorrectedChords
     ? 'Show original chord spellings'
@@ -107,6 +114,22 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
           </div>
 
           <div className="flex gap-2 flex-shrink-0 md:hidden">
+            {isSnowEligible && (
+              <AppTooltip content={snowEnabled ? 'Disable snow animation' : 'Enable snow animation'}>
+                <button
+                  onClick={onToggleSnow}
+                  className={`flex items-center justify-center p-1.5 rounded-lg border font-medium transition-colors duration-200 ${
+                    snowEnabled
+                      ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
+                      : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
+                  }`}
+                  aria-label="Toggle snow animation"
+                >
+                  <BsSnow className={`w-4 h-4 ${snowEnabled ? 'animate-[spin_8s_linear_infinite]' : ''}`} />
+                </button>
+              </AppTooltip>
+            )}
+
             {hasCorrections && (
               <AppTooltip content={enharmonicTooltip}>
                 <button
@@ -145,6 +168,22 @@ const AnalysisHeader: React.FC<AnalysisHeaderProps> = ({
         </div>
 
         <div className="hidden md:flex gap-2 flex-shrink-0">
+          {isSnowEligible && (
+            <AppTooltip content={snowEnabled ? 'Disable snow animation' : 'Enable snow animation'}>
+              <button
+                onClick={onToggleSnow}
+                className={`flex items-center justify-center p-1.5 rounded-lg border font-medium transition-colors duration-200 ${
+                  snowEnabled
+                    ? 'bg-blue-100 dark:bg-blue-200 border-blue-300 dark:border-blue-400 text-blue-800 dark:text-blue-900 hover:bg-blue-200 dark:hover:bg-blue-300'
+                    : 'bg-gray-50 dark:bg-gray-200 border-gray-200 dark:border-gray-300 text-gray-600 dark:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-300'
+                }`}
+                aria-label="Toggle snow animation"
+              >
+                <BsSnow className={`w-4.5 h-4.5 text-current ${snowEnabled ? 'animate-[spin_8s_linear_infinite]' : ''}`} />
+              </button>
+            </AppTooltip>
+          )}
+
           {hasCorrections && (
             <AppTooltip content={enharmonicTooltip}>
               <button

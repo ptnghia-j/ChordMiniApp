@@ -73,6 +73,9 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
         canTranscribe={props.canTranscribe}
         transcribeLyricsWithAI={props.transcribeLyricsWithAI}
         lyricsError={props.lyricsError}
+        isSnowEligible={props.isSnowEligible}
+        snowEnabled={props.snowEnabled}
+        onToggleSnow={props.onToggleSnow}
       />
 
       <ResultsTabs

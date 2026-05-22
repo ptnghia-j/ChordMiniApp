@@ -19,7 +19,7 @@ const SupportChordMini: React.FC = () => {
     <div className="w-full space-y-4">
       {/* Collapsible Action Buttons Section */}
       <AnimatedBorderText>
-        <div className="p-3 w-full rounded-lg bg-white dark:bg-content-bg">
+        <div className="p-3 w-full rounded-lg bg-transparent dark:bg-transparent">
           {/* Collapsible Header */}
           <button
             className="flex justify-between items-center cursor-pointer w-full text-left"
@@ -35,7 +35,7 @@ const SupportChordMini: React.FC = () => {
               <HiChevronDown className="w-5 h-5 text-gray-700 dark:text-gray-300" />
             )}
           </button>
-
+ 
           {/* Collapsible Content */}
           {isExpanded && (
             <div id="support-actions-content" className="mt-4 space-y-3">
@@ -89,13 +89,13 @@ const SupportChordMini: React.FC = () => {
           )}
         </div>
       </AnimatedBorderText>
-
+ 
       {/* Research / Fact Component */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+      <div className="bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200/80 dark:border-amber-900/30">
         <div className="flex items-start gap-3">
-          <HiSparkles className="w-5 h-5 text-blue-600 dark:text-blue-300 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-blue-700 dark:text-blue-200">
-            <p className="font-medium text-blue-800 dark:text-blue-100 mb-1">Research Project</p>
+          <HiSparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-amber-700 dark:text-amber-200">
+            <p className="font-medium text-amber-800 dark:text-amber-100 mb-1">Research Project</p>
             <p>ChordMini is part of research at California State University, Fullerton. Your support helps advance music technology research.</p>
           </div>
         </div>

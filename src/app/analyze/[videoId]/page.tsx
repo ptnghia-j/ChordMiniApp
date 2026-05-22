@@ -70,7 +70,7 @@ export default function YouTubeVideoAnalyzePage() {
               <div className="relative z-10 flex min-h-screen flex-col">
                 <AnalyzePageChrome {...viewModel.chromeProps} />
 
-                <div className="flex-1 min-h-0">
+                <div className="relative z-20 flex-1 min-h-0">
                   <div className="px-4 pt-2 pb-1">
                     <div suppressHydrationWarning>
                       {/* suppressHydrationWarning keeps the shell stable while dynamic controls hydrate */}

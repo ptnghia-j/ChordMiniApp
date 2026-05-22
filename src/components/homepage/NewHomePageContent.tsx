@@ -14,13 +14,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { IoMusicalNotes, IoMusicalNote } from 'react-icons/io5';
 import { useSearchBoxVisibility } from '@/hooks/ui/useSearchBoxVisibility';
 import { useSharedSearchState } from '@/hooks/search/useSharedSearchState';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import { Chip, Alert } from '@heroui/react';
-import { HiSparkles } from 'react-icons/hi2';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import { Chip } from '@heroui/react';
+import { HiSparkles, HiExclamationTriangle, HiXMark } from 'react-icons/hi2';
 // import { WarningBanner } from '@/components/WarningBanner';
 import SupportChordMini from '@/components/homepage/SupportChordMini'
 import FeaturesTabSection from '@/components/homepage/FeaturesTabSection';
 import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
+
+// Dynamic import for LightRays WebGL background
+const LightRays = dynamic(() => import('@/components/ui/LightRays'), { ssr: false });
 
 // Dynamic imports for heavy components
 const RecentVideos = dynamic(() => import('@/components/homepage/LazyRecentVideos'), {
@@ -58,12 +61,24 @@ function NewHomePageContentInner() {
   const searchParams = useSearchParams();
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   // Track when component has mounted to prevent hydration mismatch
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    
+    // Delay the warning toast by 2 seconds after page load/mount
+    const timer = setTimeout(() => {
+      setShowToast(true);
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, []);
+
+  const handleDismissToast = () => {
+    setShowToast(false);
+  };
 
   // Scroll-based animations
   const { scrollYProgress } = useScroll();
@@ -96,34 +111,40 @@ function NewHomePageContentInner() {
 
   return (
     <div className="relative flex flex-col min-h-screen transition-colors duration-300">
-      <div className="fixed inset-0 z-0 h-screen pointer-events-none">
+      <div className="fixed inset-0 z-0 h-screen pointer-events-none overflow-hidden">
         {theme === 'dark' ? (
           <div className="h-full w-full bg-black relative">
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(70% 55% at 50% 50%, #2a5d77 0%, #184058 18%, #0f2a43 34%, #0a1b30 50%, #071226 66%, #040d1c 80%, #020814 92%, #01040d 97%, #000309 100%), radial-gradient(160% 130% at 10% 10%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%), radial-gradient(160% 130% at 90% 90%, rgba(0,0,0,0) 38%, #000309 76%, #000208 100%)"
-              }}
-            />
+            {mounted && (
+              <div className="absolute inset-0 z-0">
+                <LightRays
+                  lightSpread={0.1}
+                  saturation={0}
+                  mouseInfluence={0}
+                  pulsating={true}
+                  noiseAmount={0.1}
+                  raysColor="#f1ebe6"
+                  raysSpeed={0.5}
+                  fadeDistance={2}
+                />
+              </div>
+            )}
           </div>
         ) : (
-          <div className="h-full w-full relative bg-background overflow-hidden">
-            <div
-              className="absolute inset-0 z-0"
-              style={{
-                background: "#faf6ee",
-                backgroundImage: `
-                  radial-gradient(
-                    circle at top center,
-                    rgba(70, 130, 180, 0.5),
-                    transparent 70%
-                  )
-                `,
-                filter: "blur(80px)",
-                backgroundRepeat: "no-repeat",
-              }}
-            />
+          <div className="h-full w-full relative bg-[#faf6ee] overflow-hidden">
+            {mounted && (
+              <div className="absolute inset-0 z-0">
+                <LightRays
+                  lightSpread={0.1}
+                  saturation={0}
+                  mouseInfluence={0}
+                  pulsating={true}
+                  noiseAmount={0.1}
+                  raysColor="#ffe082"
+                  raysSpeed={0.5}
+                  fadeDistance={2}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -142,7 +163,7 @@ function NewHomePageContentInner() {
           // scale: heroScale,
           minHeight: 'calc(100vh - 20px)',
         }}
-        className="relative z-10 flex items-start justify-center overflow-hidden bg-transparent"
+        className="relative z-10 flex items-center justify-center overflow-hidden bg-transparent"
       >
         {/* Decorative Music Notes - Only show after hydration to prevent mismatch */}
         {mounted && (
@@ -155,23 +176,7 @@ function NewHomePageContentInner() {
         {/* Split-Screen Layout */}
         <div className="relative z-10 w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center pt-24 pb-20 lg:pb-24">
           {/* Left Side: Hero Content (60%) */}
-          <div className="lg:col-span-3 lg:self-start lg:pt-4 flex flex-col">
-            {mounted && !isDevelopmentEnvironment() && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="w-full mb-6"
-              >
-                <Alert
-                  color="warning"
-                  variant="flat"
-                  title="YouTube Extraction Pipeline Degradation"
-                  description="We are experiencing degradation in our cloud-based YouTube extraction pipeline for this online demo of the app. Extraction may be intermittent or temporarily unavailable. Note: Local audio file extraction and uploads remain fully stable."
-                />
-              </motion.div>
-            )}
-
+          <div className="lg:col-span-3 lg:self-center flex flex-col">
             <div className="space-y-8 flex flex-col">
               {/* Title - Centered */}
               <div ref={titleRef} className="text-center">
@@ -255,11 +260,11 @@ function NewHomePageContentInner() {
       </motion.section>
 
       {/* Recent Videos Section - Light source in the center */}
-      <section className="relative z-20 -mt-10 w-full overflow-hidden rounded-[36px] border border-slate-200/80 bg-gray-50 py-16 shadow-[0_-24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-900 min-h-[33vh]">
+      <section className="relative z-20 -mt-10 w-full overflow-hidden rounded-[36px] border border-divider/60 bg-[#faf6ee] py-16 shadow-[0_-24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/5 dark:bg-[#050b18] min-h-[33vh]">
         {/* Background Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {theme === 'dark' ? (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 60%)` }} />
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.12) 0%, transparent 60%)` }} />
           ) : (
             <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(255, 235, 59, 0.2) 0%, transparent 70%)` }} />
           )}
@@ -295,11 +300,11 @@ function NewHomePageContentInner() {
       <FeaturesTabSection />
 
       {/* Animated Support Section - Diffuse glow */}
-      <section className="relative z-20 mx-0 w-full overflow-hidden rounded-t-[36px] border border-slate-200/80 bg-gray-50 py-20 shadow-[0_24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/10 dark:bg-slate-900">
+      <section className="relative z-20 mx-0 w-full overflow-hidden rounded-t-[36px] border border-divider/60 bg-[#faf6ee] py-20 shadow-[0_24px_80px_rgba(15,23,42,0.08)] transition-colors duration-300 dark:border-white/5 dark:bg-[#050b18]">
         {/* Background Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {theme === 'dark' ? (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 0%, rgba(70, 85, 110, 0.2) 0%, transparent 70%)` }} />
+            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 70%)` }} />
           ) : (
             <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(255, 167, 38, 0.1) 0%, transparent 50%)` }} />
           )}
@@ -348,7 +353,40 @@ function NewHomePageContentInner() {
           </div>
         </div>
       </section>
+
+      <AnimatePresence>
+        {showToast && !isDevelopmentEnvironment() && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="fixed bottom-6 right-6 z-50 max-w-md w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-gray-200/80 dark:border-white/10 rounded-xl shadow-2xl p-4 flex gap-3 pointer-events-auto"
+            id="production-warning-toast"
+          >
+            <div className="text-amber-500 mt-0.5 flex-shrink-0">
+              <HiExclamationTriangle className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                YouTube Extraction Pipeline Degradation
+              </h4>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                We are experiencing degradation in our cloud-based YouTube extraction pipeline for this online demo. Note: Local audio file extraction and uploads remain fully stable.
+              </p>
+            </div>
+            <button
+              onClick={handleDismissToast}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 self-start rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Close warning"
+            >
+              <HiXMark className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+
   );
 }
 
