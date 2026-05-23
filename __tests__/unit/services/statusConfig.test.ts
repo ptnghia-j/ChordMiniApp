@@ -32,7 +32,7 @@ describe('statusConfig', () => {
     expect(config.probesEnabled).toBe(false);
     expect(config.storageEnabled).toBe(false);
     expect(config.geminiConfigured).toBe(false);
-    expect(config.probeTimeoutMs).toBe(45_000);
+    expect(config.probeTimeoutMs).toBe(55_000);
     expect(config.endpointsConfigured).toEqual({
       python: false,
       sheetsage: false,

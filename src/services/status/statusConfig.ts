@@ -1,6 +1,6 @@
 const DEFAULT_STATUS_TIMEZONE = 'America/Los_Angeles';
 const DEFAULT_RETENTION_DAYS = 90;
-const DEFAULT_PROBE_TIMEOUT_MS = 45_000;
+const DEFAULT_PROBE_TIMEOUT_MS = 55_000;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);

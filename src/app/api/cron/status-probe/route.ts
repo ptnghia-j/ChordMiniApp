@@ -6,7 +6,7 @@ import { runStandardStatusProbes } from '@/services/status/statusProbes';
 import { recordStatusProbeResults } from '@/services/status/statusReportService';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   const authorization = authorizeStatusCron(request);

@@ -12,9 +12,9 @@ const SERVICE_LABELS: Record<StatusServiceId, string> = {
 };
 
 const STANDARD_ENDPOINT_MAX_ATTEMPTS = 3;
-const STANDARD_RETRY_DELAY_MS = 1_000;
-const STANDARD_FIRST_ATTEMPT_TIMEOUT_MS = 30_000;
-const STANDARD_MIN_ATTEMPT_TIMEOUT_MS = 5_000;
+const STANDARD_RETRY_BASE_DELAY_MS = 4_000;
+const STANDARD_FIRST_ATTEMPT_TIMEOUT_MS = 45_000;
+const STANDARD_MIN_ATTEMPT_TIMEOUT_MS = 8_000;
 const GEMINI_SLOW_RESPONSE_MS = 15_000;
 
 interface StandardEndpointProbe {
@@ -142,12 +142,13 @@ async function probeJsonEndpointWithRetries(
     }
 
     const hasAttemptsLeft = attempt < STANDARD_ENDPOINT_MAX_ATTEMPTS;
-    const hasRetryBudget = Date.now() - startedAt + STANDARD_RETRY_DELAY_MS < timeoutMs;
+    const retryDelayMs = STANDARD_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+    const hasRetryBudget = Date.now() - startedAt + retryDelayMs < timeoutMs;
     if (!hasAttemptsLeft || !hasRetryBudget) {
       break;
     }
 
-    await delay(STANDARD_RETRY_DELAY_MS);
+    await delay(retryDelayMs);
   }
 
   return bestResult || {
@@ -163,7 +164,7 @@ async function probeJsonEndpointWithRetries(
   };
 }
 
-function softenTimeoutOutagesBehindHealthyLiveness(
+function softenOutagesBehindHealthyLiveness(
   serviceId: StatusServiceId,
   results: StatusProbeResult[],
 ): StatusProbeResult[] {
@@ -174,13 +175,15 @@ function softenTimeoutOutagesBehindHealthyLiveness(
 
   const serviceLabel = SERVICE_LABELS[serviceId];
   return results.map((result) => {
-    if (result.probeKind === 'health' || result.failureReason !== 'timeout') {
+    if (result.probeKind === 'health' || result.status === 'operational') {
       return result;
     }
 
+    // Health is operational, so the container is alive.
+    // Downgrade any non-health probe failures to 'degraded' instead of 'outage'.
     return {
       ...result,
-      status: 'degraded',
+      status: 'degraded' as PublicServiceStatus,
       ok: true,
       sanitizedSummary: safeSummary(serviceLabel, 'degraded', result.probeKind),
     };
@@ -192,11 +195,43 @@ async function probeServiceWithAggregation(
   endpoints: StandardEndpointProbe[],
   timeoutMs: number,
 ): Promise<StatusProbeResult> {
+  const startedAt = Date.now();
   const checkedAt = new Date().toISOString();
-  const results = await Promise.all(
-    endpoints.map((endpoint) => probeJsonEndpointWithRetries(serviceId, endpoint, timeoutMs)),
-  );
-  const normalizedResults = softenTimeoutOutagesBehindHealthyLiveness(serviceId, results);
+
+  // Separate health (liveness) probes from heavier metadata probes.
+  const healthEndpoints = endpoints.filter((ep) => ep.probeKind === 'health');
+  const metadataEndpoints = endpoints.filter((ep) => ep.probeKind !== 'health');
+
+  const results: StatusProbeResult[] = [];
+
+  // Phase 1: Probe health endpoint(s) first. This wakes up cold containers.
+  if (healthEndpoints.length > 0) {
+    const healthResults = await Promise.all(
+      healthEndpoints.map((ep) => probeJsonEndpointWithRetries(serviceId, ep, timeoutMs)),
+    );
+    results.push(...healthResults);
+
+    const healthPassed = healthResults.some((r) => r.status === 'operational');
+
+    // Phase 2: Only probe metadata if the container is confirmed alive.
+    // This avoids wasting budget on endpoints that will definitely fail during cold starts.
+    if (healthPassed && metadataEndpoints.length > 0) {
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = Math.max(STANDARD_MIN_ATTEMPT_TIMEOUT_MS, timeoutMs - elapsedMs);
+      const metadataResults = await Promise.all(
+        metadataEndpoints.map((ep) => probeJsonEndpointWithRetries(serviceId, ep, remainingMs)),
+      );
+      results.push(...metadataResults);
+    }
+  } else {
+    // No health endpoint — probe all endpoints in parallel (fallback for services like Gemini).
+    const allResults = await Promise.all(
+      endpoints.map((ep) => probeJsonEndpointWithRetries(serviceId, ep, timeoutMs)),
+    );
+    results.push(...allResults);
+  }
+
+  const normalizedResults = softenOutagesBehindHealthyLiveness(serviceId, results);
   const normalizedStatus = normalizedResults.reduce<PublicServiceStatus>(
     (current, result) => worseStatus(current, result.status),
     'operational',
