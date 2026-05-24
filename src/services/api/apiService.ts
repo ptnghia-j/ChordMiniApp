@@ -378,29 +378,6 @@ class ApiService {
   }
 
   /**
-   * Get lyrics from Genius
-   */
-  async getGeniusLyrics(artist: string, title: string, searchQuery?: string): Promise<ApiResponse> {
-    const payload: { artist?: string; title?: string; search_query?: string } = {};
-
-    // If we have both artist and title, use them
-    if (artist && title) {
-      payload.artist = artist;
-      payload.title = title;
-    } else if (searchQuery) {
-      // Otherwise use search query
-      payload.search_query = searchQuery;
-    } else {
-      // Fallback: combine artist and title as search query
-      payload.search_query = `${artist} ${title}`.trim();
-    }
-
-    return this.post('/api/genius-lyrics', payload, {
-      timeout: 30000,
-    });
-  }
-
-  /**
    * Get synchronized lyrics from LRClib
    */
   async getLrcLibLyrics(

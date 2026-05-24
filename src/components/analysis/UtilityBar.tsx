@@ -3,9 +3,10 @@
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent, Tooltip } from '@heroui/react';
 import { motion } from 'framer-motion';
-import { HiOutlineChatBubbleLeftRight, HiChevronDoubleDown, HiOutlineChevronDoubleDown } from 'react-icons/hi2';
-import { FaRegFileLines } from 'react-icons/fa6';
+import { HiChevronDoubleDown, HiOutlineChevronDoubleDown } from 'react-icons/hi2';
 import { PiMetronomeBold, PiMetronome } from 'react-icons/pi';
+import { GiMicrophone } from 'react-icons/gi';
+import { VscRobot } from 'react-icons/vsc';
 import SegmentationToggleButton from '@/components/analysis/SegmentationToggleButton';
 import RomanNumeralToggle from '@/components/analysis/RomanNumeralToggle';
 import MelodicTranscriptionToggle from '@/components/analysis/MelodicTranscriptionToggle';
@@ -13,8 +14,12 @@ import ChordPlaybackToggle from '@/components/chord-playback/ChordPlaybackToggle
 import ChordSimplificationToggle from '@/components/analysis/ChordSimplificationToggle';
 import PitchShiftPopover from '@/components/chord-playback/PitchShiftPopover';
 import LoopPlaybackToggle from '@/components/analysis/LoopPlaybackToggle';
+import LyricsSearchDialog from '@/components/analysis/LyricsSearchDialog';
+import UtilityPopoverPanel from '@/components/analysis/UtilityPopoverPanel';
 import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useToggleSimplifyChords } from '@/stores/uiStore';
 import { metronomeService } from '@/services/chord-playback/metronomeService';
+import type { LyricsServiceResponse } from '@/services/lyrics/lyricsService';
+import type { LRCLibCandidate } from '@/services/lyrics/lrclibService';
 
 interface UtilityBarProps {
   // States
@@ -61,6 +66,17 @@ interface UtilityBarProps {
   isLyricsPanelOpen: boolean;
   toggleChatbot: () => void;
   toggleLyricsPanel: () => void;
+  lyricsSearchPopover?: {
+    isOpen: boolean;
+    query: string;
+    isLoading: boolean;
+    error: string | null;
+    result: LyricsServiceResponse | null;
+    onQueryChange: (query: string) => void;
+    onClose: () => void;
+    onSearch: () => void;
+    onApplyCandidate: (candidate: LRCLibCandidate) => void;
+  };
   segmentation: {
     isVisible: boolean;
     hasData: boolean;
@@ -231,6 +247,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   isLyricsPanelOpen,
   toggleChatbot,
   toggleLyricsPanel,
+  lyricsSearchPopover,
   segmentation,
   metronome,
   totalBeats = 0,
@@ -371,21 +388,60 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
 
             {!isUploadPage && (
               <>
-                <Tooltip
-                  content={isLyricsPanelOpen ? 'Hide lyrics' : 'Show lyrics'}
+                <Popover
                   placement="top"
+                  offset={10}
+                  isOpen={lyricsSearchPopover?.isOpen ?? false}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      lyricsSearchPopover?.onClose();
+                    }
+                  }}
                   classNames={{
-                    content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                    content: 'p-0 border-none bg-transparent shadow-none'
                   }}
                 >
-                  <button
-                    onClick={toggleLyricsPanel}
-                    className={`${utilityCircleButtonClass} ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                    aria-label="Toggle lyrics panel"
-                  >
-                    <FaRegFileLines className="h-4 w-4"/>
-                  </button>
-                </Tooltip>
+                  <PopoverTrigger>
+                    <div className="relative inline-block">
+                      <Tooltip
+                        content={isLyricsPanelOpen ? 'Hide lyrics in grid' : 'Show lyrics in grid'}
+                        placement="top"
+                        classNames={{
+                          content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                        }}
+                      >
+                        <button
+                          onClick={toggleLyricsPanel}
+                          className={`${utilityCircleButtonClass} ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                          aria-label="Toggle beat grid lyrics"
+                        >
+                          {isLyricsPanelOpen ? (
+                            <GiMicrophone className="h-4 w-4" />
+                          ) : (
+                            <GiMicrophone className="h-4 w-4 opacity-70" />
+                          )}
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <UtilityPopoverPanel bodyClassName="p-0">
+                      {lyricsSearchPopover && (
+                        <LyricsSearchDialog
+                          isOpen={lyricsSearchPopover.isOpen}
+                          query={lyricsSearchPopover.query}
+                          isLoading={lyricsSearchPopover.isLoading}
+                          error={lyricsSearchPopover.error}
+                          result={lyricsSearchPopover.result}
+                          onQueryChange={lyricsSearchPopover.onQueryChange}
+                          onClose={lyricsSearchPopover.onClose}
+                          onSearch={lyricsSearchPopover.onSearch}
+                          onApplyCandidate={lyricsSearchPopover.onApplyCandidate}
+                        />
+                      )}
+                    </UtilityPopoverPanel>
+                  </PopoverContent>
+                </Popover>
 
                 <Tooltip
                   content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
@@ -399,7 +455,11 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
                     className={`${utilityCircleButtonClass} ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
                     aria-label="Toggle AI chat"
                   >
-                    <HiOutlineChatBubbleLeftRight className="h-4 w-4"/>
+                    {isChatbotOpen ? (
+                      <VscRobot className="h-4 w-4" />
+                    ) : (
+                      <VscRobot className="h-4 w-4 opacity-70" />
+                    )}
                   </button>
                 </Tooltip>
               </>

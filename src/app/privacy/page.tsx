@@ -113,7 +113,7 @@ const PrivacyPage: React.FC = () => {
             <ul className="space-y-3">
               <li>• <strong>YouTube API:</strong> For video metadata and audio extraction</li>
               <li>• <strong>Firebase:</strong> For caching and data storage</li>
-              <li>• <strong>Genius API:</strong> For lyrics retrieval</li>
+              <li>• <strong>LRCLIB API:</strong> For lyrics retrieval and synchronization</li>
               <li>• <strong>LRClib:</strong> For synchronized lyrics</li>
               <li>• <strong>Google Cloud:</strong> For machine learning model hosting</li>
             </ul>

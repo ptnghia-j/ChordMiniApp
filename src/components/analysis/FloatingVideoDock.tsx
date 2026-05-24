@@ -205,8 +205,8 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
       bottom: positionMode === 'sticky' ? undefined : '88px',
       top: positionMode === 'sticky' ? '8px' : undefined,
       right: isChatbotOpen || isLyricsPanelOpen ? '392px' : '4px',
-      maxWidth: isVideoMinimized ? '250px' : '500px',
-      minWidth: isVideoMinimized ? '200px' : '300px',
+      maxWidth: isVideoMinimized ? '180px' : '500px',
+      minWidth: isVideoMinimized ? '140px' : '300px',
       pointerEvents: 'auto' as const,
       zIndex: 55
     };
@@ -219,7 +219,7 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
       className={`transition-all duration-300 shadow-xl ${
         positionMode === 'relative'
           ? 'w-full' // Remove z-index for inline positioning
-          : `z-50 ${isVideoMinimized ? 'w-1/4 md:w-1/5' : 'w-2/3 md:w-1/3'}` // Keep z-index for fixed positioning
+          : `z-50 ${isVideoMinimized ? 'w-1/5 md:w-[12%]' : 'w-2/3 md:w-1/3'}` // Keep z-index for fixed positioning
       }`}
       style={containerStyles}
     >

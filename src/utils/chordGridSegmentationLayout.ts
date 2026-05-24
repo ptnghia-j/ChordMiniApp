@@ -23,6 +23,7 @@ export interface SegmentedSectionRow {
 export interface SegmentedSectionBlockLayout {
   label: string;
   rows: SegmentedSectionRow[];
+  measuresPerRow: number;
 }
 
 export interface SegmentedSlotRenderCell {
@@ -55,7 +56,6 @@ export function buildSegmentedSectionBlocks(
     return [];
   }
 
-  const rowWidth = measuresPerRow * beatsPerMeasure;
   const flattenedCells: Array<Omit<SegmentedBeatCell, 'segmentLabel'> & { rawSegmentLabel: string | null }> = [];
 
   measures.forEach((measure) => {
@@ -114,15 +114,20 @@ export function buildSegmentedSectionBlocks(
   });
 
   return contiguousBlocks.map((block) => {
-    const firstColumn = block.cells[0]?.globalIndex % rowWidth;
+    // Keep rows aligned to the global measuresPerRow to avoid oversized cells
+    const blockMeasuresPerRow = Math.max(1, measuresPerRow);
+    const blockRowWidth = blockMeasuresPerRow * beatsPerMeasure;
+    const firstColumn = block.cells.length > 0
+      ? block.cells[0].globalIndex % blockRowWidth
+      : 0;
     const flatRows: Array<Array<SegmentedBeatCell | null>> = [];
-    let currentRow = Array<SegmentedBeatCell | null>(rowWidth).fill(null);
+    let currentRow = Array<SegmentedBeatCell | null>(blockRowWidth).fill(null);
     let currentColumn = firstColumn;
 
     block.cells.forEach((cell) => {
-      if (currentColumn >= rowWidth) {
+      if (currentColumn >= blockRowWidth) {
         flatRows.push(currentRow);
-        currentRow = Array<SegmentedBeatCell | null>(rowWidth).fill(null);
+        currentRow = Array<SegmentedBeatCell | null>(blockRowWidth).fill(null);
         currentColumn = 0;
       }
 
@@ -136,8 +141,9 @@ export function buildSegmentedSectionBlocks(
 
     return {
       label: block.label,
+      measuresPerRow: blockMeasuresPerRow,
       rows: flatRows.map((row) => ({
-        slots: Array.from({ length: measuresPerRow }, (_, slotIndex) => ({
+        slots: Array.from({ length: blockMeasuresPerRow }, (_, slotIndex) => ({
           slotIndex,
           cells: row.slice(slotIndex * beatsPerMeasure, (slotIndex + 1) * beatsPerMeasure),
         })),

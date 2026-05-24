@@ -354,10 +354,10 @@ export default function DocsPage() {
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Synchronized lyrics with timestamps</td>
                       </tr>
                       <tr className="bg-white dark:bg-slate-900">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">/api/genius-lyrics</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100">LRCLIB direct search</td>
                         <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">POST</span></td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-gray-100">10/minute</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Genius.com lyrics fetching</td>
+                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Lyrics lookup and synchronization</td>
                       </tr>
                     </tbody>
                   </table>

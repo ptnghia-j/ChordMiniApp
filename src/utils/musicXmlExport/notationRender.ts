@@ -7,9 +7,11 @@ import { buildMeasureEventsWithMeterGeneric } from './notationScore';
 import {
   escapeXml,
   getGenericBeatGroupSize,
+  getWordsWithTimes,
   pitchToMusicXml,
   renderMusicXmlHarmony,
 } from './shared';
+import type { LyricsData } from '@/types/musicAiTypes';
 import type {
   GenericMeasureEvent,
   NotationChord,
@@ -469,10 +471,12 @@ function renderGenericMeasureEvent(
     stemOverrideMap?: Map<string, 'up' | 'down'>;
     stemDirectionContexts?: StemDirectionContext[];
     forceStemDirection?: 'up' | 'down';
+    lyricText?: string;
   },
 ): string {
   const voice = options?.voice ?? 1;
   const staff = options?.staff ?? 1;
+  const lyricText = options?.lyricText;
   const dotXml = '<dot/>'.repeat(event.dots);
 
   if (event.kind === 'rest') {
@@ -506,6 +510,8 @@ function renderGenericMeasureEvent(
     );
   const stemXml = stemDirection ? `<stem>${stemDirection}</stem>` : '';
 
+  const lyricXml = lyricText ? `<lyric><syllabic>single</syllabic><text>${escapeXml(lyricText)}</text></lyric>` : '';
+
   return event.pitches.map((pitchValue, pitchIndex) => {
     const pitch = pitchToMusicXml(pitchValue, accidentalPreference, event.chordName);
     const alterXml = pitch.alter !== undefined ? `<alter>${pitch.alter}</alter>` : '';
@@ -530,6 +536,7 @@ function renderGenericMeasureEvent(
       + `${pitchIndex === 0 ? beamXml : ''}`
       + `<staff>${staff}</staff>`
       + `${notationXml}`
+      + `${pitchIndex === 0 ? lyricXml : ''}`
       + `</note>`
     );
   }).join('');
@@ -543,6 +550,7 @@ function renderMeasureStreams(
   accidentalPreference: 'sharp' | 'flat' | null | undefined,
   divisionsPerQuarter: number,
   multiLineStaffMeasureKeys: Set<string>,
+  matchedLyrics?: Map<string, string>,
 ): string {
   const sharedPitchVoiceMap = new Map<string, Set<number>>();
   const multiVoiceStaffs = new Set<number>();
@@ -615,24 +623,31 @@ function renderMeasureStreams(
           divisionsPerQuarter,
         );
 
-        return events.map((event, index) => renderGenericMeasureEvent(
-          event,
-          events,
-          index,
-          timeSignature,
-          accidentalPreference,
-          divisionsPerQuarter,
-          {
-            voice: voice.voice,
-            staff: staff.staff,
-            hideRests: false,
-            stemOverrideMap,
-            stemDirectionContexts,
-            forceStemDirection: hasMultiLineContext
-              ? (voice.voice === 1 ? 'up' : 'down')
-              : undefined,
-          },
-        )).join('');
+        return events.map((event, index) => {
+          const lyricText = (event.kind === 'chord' && !event.tieStop && staff.staff === 1 && voice.voice === 1)
+            ? matchedLyrics?.get(`${measure.measureIndex}:${event.startInMeasure}`)
+            : undefined;
+
+          return renderGenericMeasureEvent(
+            event,
+            events,
+            index,
+            timeSignature,
+            accidentalPreference,
+            divisionsPerQuarter,
+            {
+              voice: voice.voice,
+              staff: staff.staff,
+              hideRests: false,
+              stemOverrideMap,
+              stemDirectionContexts,
+              forceStemDirection: hasMultiLineContext
+                ? (voice.voice === 1 ? 'up' : 'down')
+                : undefined,
+              lyricText,
+            },
+          );
+        }).join('');
       });
   });
 
@@ -648,12 +663,14 @@ function buildPartMeasureXmlGeneric(params: {
   partId: NotationPartId;
   includeTempoDirection: boolean;
   includeChordDirections: boolean;
+  matchedLyrics?: Map<string, string>;
 }): string {
   const {
     score,
     partId,
     includeTempoDirection,
     includeChordDirections,
+    matchedLyrics,
   } = params;
   const systemBreakIndexes = buildChordAwareSystemBreakIndexes(score.measures, includeChordDirections);
   const multiLineStaffMeasureKeys = buildMultiLineStaffMeasureKeys(score.measures, partId);
@@ -713,14 +730,14 @@ function buildPartMeasureXmlGeneric(params: {
       + `${printXml}`
       + `${attributesXml}`
       + `${chordDirectionXml}`
-      + `${renderMeasureStreams(staves, measure, partId, score.timeSignature, measure.keyContext.accidentalPreference, score.divisionsPerQuarter, multiLineStaffMeasureKeys)}`
+      + `${renderMeasureStreams(staves, measure, partId, score.timeSignature, measure.keyContext.accidentalPreference, score.divisionsPerQuarter, multiLineStaffMeasureKeys, matchedLyrics)}`
       + `${isLastMeasure ? '<barline location="right"><bar-style>light-heavy</bar-style></barline>' : ''}`
       + `</measure>`
     );
   }).join('');
 }
 
-export function renderNotationScoreToMusicXml(score: NotationScore): string {
+export function renderNotationScoreToMusicXml(score: NotationScore, lyrics?: LyricsData | null): string {
   const melodyPartListXml = score.includeMelody
     ? (
       `<score-part id="PMelody">`
@@ -738,11 +755,70 @@ export function renderNotationScoreToMusicXml(score: NotationScore): string {
     + `<midi-instrument id="PPiano-I1"><midi-channel>${score.includeMelody ? 2 : 1}</midi-channel><midi-program>1</midi-program></midi-instrument>`
     + `</score-part>`
   );
+  const primaryPartId = score.includeMelody ? 'PMelody' : 'PPiano';
+  const primaryChords: Array<{ measureIndex: number; startInMeasure: number; audioTime: number }> = [];
+  const secondsPerBeat = 60 / score.bpm;
+
+  score.measures.forEach((measure) => {
+    const measureStart = score.measureStartAudioTimes[measure.measureIndex] ?? 0;
+    const staves = getMeasureStavesForPart(measure, primaryPartId);
+    const staff1 = staves.find((s) => s.staff === 1);
+    if (!staff1) return;
+    const voice1 = staff1.voices.find((v) => v.voice === 1);
+    if (!voice1) return;
+
+    voice1.chords.forEach((chord) => {
+      if (chord.tieStop) return;
+      const beatOffset = chord.startDivision / score.divisionsPerQuarter;
+      const audioTime = measureStart + beatOffset * secondsPerBeat;
+      primaryChords.push({
+        measureIndex: measure.measureIndex,
+        startInMeasure: chord.startDivision,
+        audioTime,
+      });
+    });
+  });
+
+  primaryChords.sort((a, b) => a.audioTime - b.audioTime);
+
+  const matchedLyrics = new Map<string, string>();
+  if (lyrics) {
+    const words = getWordsWithTimes(lyrics);
+    let chordIdx = 0;
+
+    for (const word of words) {
+      while (chordIdx < primaryChords.length && primaryChords[chordIdx].audioTime < word.startTime - 1.0) {
+        chordIdx++;
+      }
+
+      let bestChordIdx = -1;
+      let bestDiff = 1.0;
+      let searchIdx = chordIdx;
+
+      while (searchIdx < primaryChords.length && primaryChords[searchIdx].audioTime <= word.startTime + 1.0) {
+        const diff = Math.abs(primaryChords[searchIdx].audioTime - word.startTime);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestChordIdx = searchIdx;
+        }
+        searchIdx++;
+      }
+
+      if (bestChordIdx !== -1) {
+        const chord = primaryChords[bestChordIdx];
+        const key = `${chord.measureIndex}:${chord.startInMeasure}`;
+        const existing = matchedLyrics.get(key);
+        matchedLyrics.set(key, existing ? `${existing} ${word.text}` : word.text);
+        chordIdx = Math.max(chordIdx, bestChordIdx + 1);
+      }
+    }
+  }
+
   const partsXml = [
     score.includeMelody
-      ? `<part id="PMelody">${buildPartMeasureXmlGeneric({ score, partId: 'PMelody', includeTempoDirection: true, includeChordDirections: true })}</part>`
+      ? `<part id="PMelody">${buildPartMeasureXmlGeneric({ score, partId: 'PMelody', includeTempoDirection: true, includeChordDirections: true, matchedLyrics })}</part>`
       : '',
-    `<part id="PPiano">${buildPartMeasureXmlGeneric({ score, partId: 'PPiano', includeTempoDirection: !score.includeMelody, includeChordDirections: !score.includeMelody })}</part>`,
+    `<part id="PPiano">${buildPartMeasureXmlGeneric({ score, partId: 'PPiano', includeTempoDirection: !score.includeMelody, includeChordDirections: !score.includeMelody, matchedLyrics: score.includeMelody ? undefined : matchedLyrics })}</part>`,
   ].join('');
   const syncMetadata = JSON.stringify({
     version: 2,

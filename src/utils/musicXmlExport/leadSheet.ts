@@ -17,6 +17,7 @@ import {
   getMeasureIndexForDivision,
   getMeasureLengthDivisions,
   getMeasureStartDivision,
+  getWordsWithTimes,
   isCompoundTime,
   pitchToMusicXml,
   quantizeDivision,
@@ -53,7 +54,7 @@ const DURATION_MAPPINGS: DurationMapping[] = [
 
 function quantizeNotes(notes: SheetSageNoteEvent[], bpm: number): QuantizedNoteEvent[] {
   return notes
-    .map((note) => {
+    .map((note, index) => {
       const startDivision = quantizeDivision(secondsToDivisions(note.onset, bpm));
       const rawEndDivision = Math.max(startDivision + MIN_DIVISION, secondsToDivisions(note.offset, bpm));
       const endDivision = Math.max(startDivision + MIN_DIVISION, quantizeDivision(rawEndDivision));
@@ -62,6 +63,7 @@ function quantizeNotes(notes: SheetSageNoteEvent[], bpm: number): QuantizedNoteE
         pitch: Math.max(0, Math.min(127, Math.round(note.pitch))),
         startDivision,
         endDivision,
+        originalIndex: index,
       };
     })
     .filter((note) => note.endDivision > note.startDivision)
@@ -96,6 +98,7 @@ function splitNoteAcrossMeasureLayout(
       tieStart: segmentEnd < note.endDivision,
       tieStop: cursor > note.startDivision,
       beatCarryDuration,
+      originalIndex: note.originalIndex,
     });
 
     cursor = segmentEnd;
@@ -474,6 +477,7 @@ function expandSegmentForMetricStructure(
       startInMeasure: cursor,
       tieStop: !isFirstFragment || segment.tieStop,
       tieStart: !isLastFragment || segment.tieStart,
+      originalIndex: segment.originalIndex,
     };
 
     cursor += value;
@@ -628,10 +632,11 @@ function renderMeasureEvent(
   index: number,
   timeSignature: number,
   accidentalPreference: 'sharp' | 'flat' | null | undefined,
-  options?: { voice?: number; staff?: number },
+  options?: { voice?: number; staff?: number; lyricText?: string },
 ): string {
   const voice = options?.voice ?? 1;
   const staff = options?.staff ?? 1;
+  const lyricText = options?.lyricText;
   const { type, dots } = getTypeInfo(event.duration);
   const dotXml = '<dot/>'.repeat(dots);
 
@@ -642,6 +647,7 @@ function renderMeasureEvent(
   const pitch = pitchToMusicXml(event.pitch, accidentalPreference);
   const alterXml = pitch.alter !== undefined ? `<alter>${pitch.alter}</alter>` : '';
   const beamXml = `${getBeamTag(events, index, 1, timeSignature)}${getBeamTag(events, index, 2, timeSignature)}`;
+  const lyricXml = lyricText ? `<lyric><syllabic>single</syllabic><text>${escapeXml(lyricText)}</text></lyric>` : '';
 
   return (
     `<note>`
@@ -653,6 +659,7 @@ function renderMeasureEvent(
     + `${beamXml}`
     + `<staff>${staff}</staff>`
     + `${renderTieNotation(event.tieStart, event.tieStop)}`
+    + `${lyricXml}`
     + `</note>`
   );
 }
@@ -733,6 +740,7 @@ function buildPartMeasureXml(params: {
   includeTempoDirection: boolean;
   includeChordDirections: boolean;
   chordMeasureMap: Map<number, string[]>;
+  matchedLyrics?: Map<number, string>;
 }): string {
   const {
     measureCount,
@@ -748,6 +756,7 @@ function buildPartMeasureXml(params: {
     includeTempoDirection,
     includeChordDirections,
     chordMeasureMap,
+    matchedLyrics,
   } = params;
 
   return Array.from({ length: measureCount }, (_, measureIndex) => {
@@ -791,7 +800,12 @@ function buildPartMeasureXml(params: {
       `<measure number="${measureIndex + 1}"${implicitMeasureAttribute}>`
       + `${attributesXml}`
       + `${chordDirectionXml}`
-      + `${events.map((event, index) => renderMeasureEvent(event, events, index, timeSignature, accidentalPreference)).join('')}`
+      + `${events.map((event, index) => {
+          const lyricText = (event.kind === 'note' && !event.tieStop && typeof event.originalIndex === 'number')
+            ? matchedLyrics?.get(event.originalIndex)
+            : undefined;
+          return renderMeasureEvent(event, events, index, timeSignature, accidentalPreference, { voice: 1, staff: 1, lyricText });
+        }).join('')}`
       + `</measure>`
     );
   }).join('');
@@ -847,6 +861,39 @@ export function exportLeadSheetToMusicXml(
     Number(divisionsToSeconds(getMeasureStartDivision(measureIndex, layout), bpm).toFixed(6))
   ));
   const measureStartAudioTimes = [...measureStartScoreTimes];
+
+  const matchedLyrics = new Map<number, string>();
+  if (options?.lyrics) {
+    const words = getWordsWithTimes(options.lyrics);
+    const sortedNotes = [...noteEvents]
+      .map((note, index) => ({ note, index }))
+      .sort((a, b) => a.note.onset - b.note.onset);
+
+    let noteIdx = 0;
+    for (const word of words) {
+      while (noteIdx < sortedNotes.length && sortedNotes[noteIdx].note.onset < word.startTime - 1.0) {
+        noteIdx++;
+      }
+      let bestNoteIdx = -1;
+      let bestDiff = 1.0;
+      let searchIdx = noteIdx;
+      while (searchIdx < sortedNotes.length && sortedNotes[searchIdx].note.onset <= word.startTime + 1.0) {
+        const diff = Math.abs(sortedNotes[searchIdx].note.onset - word.startTime);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestNoteIdx = searchIdx;
+        }
+        searchIdx++;
+      }
+      if (bestNoteIdx !== -1) {
+        const targetOriginalIndex = sortedNotes[bestNoteIdx].index;
+        const existing = matchedLyrics.get(targetOriginalIndex);
+        matchedLyrics.set(targetOriginalIndex, existing ? `${existing} ${word.text}` : word.text);
+        noteIdx = Math.max(noteIdx, bestNoteIdx + 1);
+      }
+    }
+  }
+
   const syncMetadata = JSON.stringify({
     version: 1,
     selectedAnacrusisDivisions: anacrusisDivisions,
@@ -869,6 +916,7 @@ export function exportLeadSheetToMusicXml(
     includeTempoDirection: true,
     includeChordDirections: true,
     chordMeasureMap,
+    matchedLyrics,
   });
 
   const partListXml = (

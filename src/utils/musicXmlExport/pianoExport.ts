@@ -80,5 +80,5 @@ export function exportPianoVisualizerScoreToMusicXml(input: PianoVisualizerScore
       : undefined),
   });
 
-  return renderNotationScoreToMusicXml(score);
+  return renderNotationScoreToMusicXml(score, input.lyrics);
 }

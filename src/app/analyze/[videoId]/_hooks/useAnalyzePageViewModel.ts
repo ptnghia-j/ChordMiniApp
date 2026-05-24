@@ -63,6 +63,10 @@ import type { AnalyzePageViewModel } from '../_types/analyzePageViewModel';
 import { useAnalyzePageStoreSync } from './useAnalyzePageStoreSync';
 import { useAnalyzePageLifecycleReset } from './useAnalyzePageLifecycleReset';
 import { shouldShowSnowEffect } from '@/utils/seasonalEffects';
+import { searchLyricsWithFallback, type LyricsServiceResponse } from '@/services/lyrics/lyricsService';
+import { resolveLyricsForChatbotContext } from '@/utils/chatbotLyrics';
+import type { LRCLibCandidate } from '@/services/lyrics/lrclibService';
+import type { BeatGridTimedLyrics } from '@/components/chord-analysis/GridLyricsRow';
 
 interface UseAnalyzePageViewModelParams {
   videoId: string;
@@ -516,15 +520,29 @@ export function useAnalyzePageViewModel({
   const setIsMelodicTranscriptionPlaybackEnabled = useUIStore((state) => state.setIsMelodicTranscriptionPlaybackEnabled);
 
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-  const [isLyricsPanelOpen, setIsLyricsPanelOpen] = useState(false);
+  const [isGridLyricsVisible, setIsGridLyricsVisible] = useState(false);
+  const [isLyricsSearchOpen, setIsLyricsSearchOpen] = useState(false);
+  const [lyricsSearchQuery, setLyricsSearchQuery] = useState(titleFromSearch || videoTitle || '');
+  const [lyricsSearchResult, setLyricsSearchResult] = useState<LyricsServiceResponse | null>(null);
+  const [isGridLyricsSearching, setIsGridLyricsSearching] = useState(false);
+  const [gridLyricsError, setGridLyricsError] = useState<string | null>(null);
+  const [appliedGridLyrics, setAppliedGridLyrics] = useState<{
+    timedLyrics?: BeatGridTimedLyrics;
+    plainLyrics?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!lyricsSearchQuery && (videoTitle || titleFromSearch)) {
+      setLyricsSearchQuery(videoTitle || titleFromSearch || '');
+    }
+  }, [lyricsSearchQuery, titleFromSearch, videoTitle]);
 
   useEffect(() => {
     const shouldMinimize = isChatbotOpen
-      || isLyricsPanelOpen
       || activeTab === 'guitarChords'
       || activeTab === 'pianoVisualizer';
     setIsVideoMinimized(shouldMinimize);
-  }, [isChatbotOpen, isLyricsPanelOpen, activeTab]);
+  }, [isChatbotOpen, activeTab]);
 
   const hasSheetSageNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const hasSheetSageAudioSource = Boolean(audioProcessingState.audioUrl);
@@ -538,7 +556,7 @@ export function useAnalyzePageViewModel({
         : undefined;
 
   const splitLayoutHeight = useMemo(() => {
-    if (!isLyricsPanelOpen && !isChatbotOpen) {
+    if (!isChatbotOpen) {
       return 'calc(100vh - 180px)';
     }
 
@@ -547,7 +565,7 @@ export function useAnalyzePageViewModel({
     }
 
     return 'calc(100vh - 180px - var(--mobile-video-dock-height, 0px))';
-  }, [isChatbotOpen, isCompactViewport, isLyricsPanelOpen]);
+  }, [isChatbotOpen, isCompactViewport]);
 
   const handleTitleSave = useCallback(() => {
     if (editedTitle.trim()) {
@@ -563,6 +581,14 @@ export function useAnalyzePageViewModel({
 
   useYouTubeSetup(videoId, setAudioProcessingState);
 
+  const visibleGridLyrics = isGridLyricsVisible ? appliedGridLyrics?.timedLyrics ?? null : null;
+  const visiblePlainLyrics = isGridLyricsVisible ? appliedGridLyrics?.plainLyrics ?? null : null;
+
+  const chatbotLyrics = useMemo(() => resolveLyricsForChatbotContext(
+    lyrics,
+    visibleGridLyrics?.lyrics,
+  ), [lyrics, visibleGridLyrics]);
+
   const songContext = useMemo(() => ({
     videoId,
     title: videoTitle,
@@ -577,10 +603,10 @@ export function useAnalyzePageViewModel({
     chords: analysisResults?.chords,
     synchronizedChords: analysisResults?.synchronizedChords,
     chordModel: analysisResults?.chordModel,
-    lyrics: lyrics || undefined,
+    lyrics: chatbotLyrics,
     translatedLyrics,
     audioUrl: audioProcessingState.audioUrl || undefined,
-  }), [videoId, videoTitle, duration, analysisResults, lyrics, translatedLyrics, audioProcessingState.audioUrl]);
+  }), [videoId, videoTitle, duration, analysisResults, chatbotLyrics, translatedLyrics, audioProcessingState.audioUrl]);
 
   useEffect(() => {
     resetSegmentation();
@@ -639,18 +665,119 @@ export function useAnalyzePageViewModel({
   }, [toggleSegmentation, songContext]);
 
   const toggleChatbot = useCallback(() => {
-    if (!isChatbotOpen && isLyricsPanelOpen) {
-      setIsLyricsPanelOpen(false);
-    }
     setIsChatbotOpen(!isChatbotOpen);
-  }, [isChatbotOpen, isLyricsPanelOpen]);
+  }, [isChatbotOpen]);
+
+  const applyLRCLibCandidate = useCallback((candidate: LRCLibCandidate) => {
+    if ((candidate.lyric_mode === 'word' || candidate.lyric_mode === 'line') && candidate.lyrics) {
+      setAppliedGridLyrics({
+        timedLyrics: {
+          mode: candidate.lyric_mode,
+          lyrics: candidate.lyrics,
+        },
+      });
+      setIsGridLyricsVisible(true);
+      setIsLyricsSearchOpen(false);
+      return;
+    }
+
+    if (candidate.plain_lyrics) {
+      setAppliedGridLyrics({ plainLyrics: candidate.plain_lyrics });
+      setIsGridLyricsVisible(true);
+      setIsLyricsSearchOpen(false);
+    }
+  }, []);
+
+  const runLRCLibLyricsSearch = useCallback(async (queryOverride?: string) => {
+    const query = (queryOverride ?? lyricsSearchQuery).trim() || (videoTitle || titleFromSearch || '').trim();
+    if (!query) return;
+
+    setLyricsSearchQuery(query);
+    setIsLyricsSearchOpen(true);
+    setIsGridLyricsSearching(true);
+    setGridLyricsError(null);
+
+    const expectedDuration = duration > 0
+      ? duration
+      : parseAnalysisDurationSeconds(durationFromSearch);
+
+    try {
+      const result = await searchLyricsWithFallback({
+        search_query: query,
+        duration: expectedDuration || undefined,
+        prefer_synchronized: true,
+      });
+
+      setLyricsSearchResult(result);
+      if (!result.success) {
+        setGridLyricsError(result.error || 'No lyrics found on LRCLIB.');
+        return;
+      }
+
+      if (
+        result.confidence === 'high'
+        && (result.lyric_mode === 'word' || result.lyric_mode === 'line')
+        && result.lyrics
+      ) {
+        setAppliedGridLyrics({
+          timedLyrics: {
+            mode: result.lyric_mode,
+            lyrics: result.lyrics,
+          },
+        });
+        setIsGridLyricsVisible(true);
+      }
+    } catch (error) {
+      setGridLyricsError(error instanceof Error ? error.message : 'Failed to search LRCLIB.');
+    } finally {
+      setIsGridLyricsSearching(false);
+    }
+  }, [duration, durationFromSearch, lyricsSearchQuery, titleFromSearch, videoTitle]);
 
   const toggleLyricsPanel = useCallback(() => {
-    if (!isLyricsPanelOpen && isChatbotOpen) {
-      setIsChatbotOpen(false);
+    if (isGridLyricsVisible) {
+      setIsGridLyricsVisible(false);
+      setIsLyricsSearchOpen(false);
+      return;
     }
-    setIsLyricsPanelOpen(!isLyricsPanelOpen);
-  }, [isChatbotOpen, isLyricsPanelOpen]);
+
+    if (isLyricsSearchOpen) {
+      setIsLyricsSearchOpen(false);
+      return;
+    }
+
+    setIsGridLyricsVisible(Boolean(appliedGridLyrics));
+    setIsLyricsSearchOpen(true);
+    if (!lyricsSearchResult && !isGridLyricsSearching) {
+      void runLRCLibLyricsSearch(videoTitle || titleFromSearch || lyricsSearchQuery);
+    }
+  }, [
+    appliedGridLyrics,
+    isGridLyricsSearching,
+    isGridLyricsVisible,
+    isLyricsSearchOpen,
+    lyricsSearchQuery,
+    lyricsSearchResult,
+    runLRCLibLyricsSearch,
+    titleFromSearch,
+    videoTitle,
+  ]);
+
+  useEffect(() => {
+    if (appliedGridLyrics?.timedLyrics?.mode === 'line') {
+      addToast({
+        title: 'Line-Synced Lyrics Loaded',
+        description: 'Word highlight is estimated because word-level timings are unavailable.',
+        color: 'default',
+        timeout: 18000,
+        shouldShowTimeoutProgress: true,
+        classNames: mergeToastClassNames({
+          icon: 'text-blue-500',
+          title: 'text-blue-600 dark:text-blue-400',
+        }),
+      });
+    }
+  }, [appliedGridLyrics]);
 
   const updateCachedLyricsQuery = useCallback((lyricsData: LyricsData) => {
     const audioUrl = audioProcessingState.audioUrl || '';
@@ -1056,7 +1183,7 @@ export function useAnalyzePageViewModel({
     videoTitle,
     showSegmentation,
     isChatbotOpen,
-    isLyricsPanelOpen,
+    isLyricsPanelOpen: false,
     isPlaying,
     currentTime,
     duration,
@@ -1130,7 +1257,9 @@ export function useAnalyzePageViewModel({
     sequenceCorrections: simplifiedSequenceCorrections,
     chordGridData: simplifiedChordGridData,
     isChatbotOpen,
-    isLyricsPanelOpen,
+    isLyricsPanelOpen: false,
+    gridLyrics: visibleGridLyrics,
+    plainLyrics: visiblePlainLyrics,
     editedChords,
     onChordEdit: handleChordEditWrapper,
     keySignature,
@@ -1149,12 +1278,8 @@ export function useAnalyzePageViewModel({
   };
 
   const sidePanelsProps = {
-    isLyricsPanelOpen,
     isChatbotOpen,
-    closeLyricsPanel: () => setIsLyricsPanelOpen(false),
     closeChatbot: () => setIsChatbotOpen(false),
-    videoTitle,
-    currentTime,
     songContext,
   };
 
@@ -1162,10 +1287,10 @@ export function useAnalyzePageViewModel({
     analysisResults,
     isVideoMinimized,
     isChatbotOpen,
-    isLyricsPanelOpen,
+    isLyricsPanelOpen: false,
     videoPlayerProps: {
       isChatbotOpen,
-      isLyricsPanelOpen,
+      isLyricsPanelOpen: false,
       isVideoMinimized,
       isFollowModeEnabled,
       analysisResults: analysisResults as any,
@@ -1309,9 +1434,20 @@ export function useAnalyzePageViewModel({
     countdownDisplay,
     toggleCountdown,
     isChatbotOpen,
-    isLyricsPanelOpen,
+    isLyricsPanelOpen: isGridLyricsVisible || isLyricsSearchOpen || isGridLyricsSearching,
     toggleChatbot,
     toggleLyricsPanel,
+    lyricsSearchPopover: {
+      isOpen: isLyricsSearchOpen,
+      query: lyricsSearchQuery,
+      isLoading: isGridLyricsSearching,
+      error: gridLyricsError,
+      result: lyricsSearchResult,
+      onQueryChange: setLyricsSearchQuery,
+      onClose: () => setIsLyricsSearchOpen(false),
+      onSearch: () => void runLRCLibLyricsSearch(),
+      onApplyCandidate: applyLRCLibCandidate,
+    },
     segmentation: {
       isVisible: showSegmentation && !!segmentationData,
       hasData: !!segmentationData,

@@ -55,8 +55,7 @@ export async function GET() {
                 status: "healthy",
                 message: "Audio analysis API is running",
                 beat_model: "Beat-Transformer",
-                chord_model: "Chord-CNN-LSTM",
-                genius_available: true
+                chord_model: "Chord-CNN-LSTM"
               }
             }
           }

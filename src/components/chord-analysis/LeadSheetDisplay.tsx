@@ -144,26 +144,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
     };
   }, []);
 
-  // PERFORMANCE OPTIMIZATION: Memoized character array creation
-  // This prevents expensive array creation and color calculations on every render
-  const memoizedCharacterArrays = useMemo(() => {
-    const cache = new Map<string, string[]>();
-    return {
-      getCharArray: (text: string) => {
-        if (!cache.has(text)) {
-          cache.set(text, text.split(''));
-        }
-        return cache.get(text)!;
-      },
-      clear: () => cache.clear()
-    };
-  }, []);
-
-  // Clear character array cache when lyrics change to prevent memory leaks
-  useEffect(() => {
-    memoizedCharacterArrays.clear();
-  }, [processedAndMergedLyrics, memoizedCharacterArrays]);
-
   // If no lyrics are available, show a message
   if (!processedAndMergedLyrics || processedAndMergedLyrics.length === 0) {
     return (
@@ -224,7 +204,6 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
             translatedLyrics={translatedLyrics}
             processedLines={processedAndMergedLyrics}
             segmentationData={segmentationData}
-            memoizedCharacterArrays={memoizedCharacterArrays}
             accidentalPreference={accidentalPreference}
           />
         ))}

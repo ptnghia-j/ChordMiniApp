@@ -86,6 +86,7 @@
     "tone": "^15.1.22",
     "uuid": "14.0.0",
     "web-vitals": "^5.0.3",
+    "yaml": "^2.9.0",
     "youtube-search-api": "^2.0.0",
     "ytdl-core": "^4.11.5",
     "zustand": "^4.5.2"

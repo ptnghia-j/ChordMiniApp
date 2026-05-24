@@ -83,7 +83,7 @@ export default function YouTubeVideoAnalyzePage() {
                     style={{ height: viewModel.splitLayoutHeight }}
                   >
                     <AnalysisSplitLayout
-                      isSplit={viewModel.sidePanelsProps.isLyricsPanelOpen || viewModel.sidePanelsProps.isChatbotOpen}
+                      isSplit={viewModel.sidePanelsProps.isChatbotOpen}
                       storageKey="analysis-split-layout-sidepanels-v3"
                       defaultDesktopLayout={[60, 40]}
                       defaultMobileLayout={[66, 34]}

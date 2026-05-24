@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
 import {
   formatChordWithMusicalSymbols,
   getResponsiveChordFontSize,
@@ -63,10 +62,6 @@ interface LyricLineProps {
     isCondensed?: boolean;
   })[];
   segmentationData?: SegmentationResult | null;
-  memoizedCharacterArrays: {
-    getCharArray: (text: string) => string[];
-    clear: () => void;
-  };
   accidentalPreference?: 'sharp' | 'flat'; // Enharmonic spelling preference for chord labels
 }
 
@@ -256,7 +251,6 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
   translatedLyrics,
   processedLines,
   segmentationData,
-  memoizedCharacterArrays,
   accidentalPreference
 }) => {
   // Check if this is an instrumental placeholder or chord-only section
@@ -444,11 +438,6 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
     };
   }, [index, line.startTime, processedLines, segmentationData]);
 
-  const parsedTextColors = useMemo(() => ({
-    played: parseHexColor(textColors.played),
-    unplayed: parseHexColor(textColors.unplayed),
-  }), [textColors.played, textColors.unplayed]);
-
   return (
     <div key={index}>
       {/* Section Label - only show at the beginning of each section */}
@@ -539,144 +528,75 @@ const LyricLineComponent: React.FC<LyricLineProps> = ({
                 className={segment.chords.length > 0 ? "font-medium" : ""}
               >
                 {isActive ? (
-                  // For active lines, render each character with its own animation
-                  <span>
-                    {/* Calculate the overall line progress with character-level timing */}
-                    {(() => {
-                      const totalLineLength = line.text.length;
-                      const { colorChangePosition, lineProgress } = getLyricColorChangePosition({
-                        currentTime,
-                        lineStartTime: line.startTime,
-                        lineEndTime: line.endTime,
-                        textLength: totalLineLength,
-                        characterTimings: line.characterTimings,
-                      });
+                  // For active lines, render with dynamic gradient sweep
+                  (() => {
+                    const totalLineLength = line.text.length;
+                    const { colorChangePosition, lineProgress } = getLyricColorChangePosition({
+                      currentTime,
+                      lineStartTime: line.startTime,
+                      lineEndTime: line.endTime,
+                      textLength: totalLineLength,
+                      characterTimings: line.characterTimings,
+                    });
 
-                      // Calculate the absolute position of this segment in the line
-                      // Use indexOf with a start position to handle repeated segments correctly
-                      const segmentStartPos = segment.startPos;
+                    const segmentStartPos = segment.startPos;
+                    const segmentEndPos = segmentStartPos + segment.text.length - 1;
 
-                      const segmentEndPos = segmentStartPos + segment.text.length - 1;
-
-                      // Determine if this segment is before, after, or contains the color change
-                      if (segmentEndPos < colorChangePosition) {
-                        // Segment is completely before the color change - all colored
-                        return (
-                          <span style={{ color: textColors.played }}>
-                            {segment.text}
-                          </span>
-                        );
-                      } else if (segmentStartPos > colorChangePosition) {
-                        // Segment is completely after the color change - no color
-                        return (
-                          <span style={{ color: textColors.unplayed }}>
-                            {segment.text}
-                          </span>
-                        );
+                    if (segmentEndPos < colorChangePosition) {
+                      // Segment is completely before the color change - all colored
+                      return (
+                        <span style={{ color: textColors.played }}>
+                          {segment.text}
+                        </span>
+                      );
+                    } else if (segmentStartPos > colorChangePosition) {
+                      // Segment is completely after the color change - no color
+                      return (
+                        <span style={{ color: textColors.unplayed }}>
+                          {segment.text}
+                        </span>
+                      );
+                    } else {
+                      // Segment contains the color change. Calculate progress.
+                      let charProgress = 0;
+                      if (line.characterTimings && line.characterTimings.length > colorChangePosition) {
+                        const charTiming = line.characterTimings[colorChangePosition];
+                        const charDuration = charTiming.endTime - charTiming.startTime;
+                        if (charDuration > 0) {
+                          charProgress = Math.max(0, Math.min(1, (currentTime - charTiming.startTime) / charDuration));
+                        } else {
+                          charProgress = ((lineProgress * totalLineLength) % 1);
+                        }
                       } else {
-                        // Segment contains the color change - split into characters
-                        const segmentWords = getSegmentWordRanges(segment.text);
-
-                        // PERFORMANCE OPTIMIZATION: Use memoized character array instead of split() on every render
-                        const characters = memoizedCharacterArrays.getCharArray(segment.text);
-                        return characters.map((char, charIndex) => {
-                          const absoluteCharPos = segmentStartPos + charIndex;
-
-                          // Determine which word this character belongs to
-                          const wordIndex = segmentWords.findIndex(
-                            word => charIndex >= word.start && charIndex <= word.end
-                          );
-
-                          // If character is part of a word, ensure left-to-right coloring within the word
-                          if (wordIndex >= 0) {
-                            const word = segmentWords[wordIndex];
-                            const wordAbsoluteStart = segmentStartPos + word.start;
-
-                            // If the color change is within this word
-                            if (colorChangePosition >= wordAbsoluteStart &&
-                                colorChangePosition <= segmentStartPos + word.end) {
-
-                              // Color all characters to the left of the color change position
-                              const isColored = absoluteCharPos <= colorChangePosition;
-
-                              // Apply gradient effect only to the character at the transition point
-                              if (absoluteCharPos === colorChangePosition) {
-                                // Calculate fractional progress within this character
-                                let fractionalProgress = 0;
-
-                                // Use character-level timing if available
-                                if (line.characterTimings && line.characterTimings.length > absoluteCharPos) {
-                                  const charTiming = line.characterTimings[absoluteCharPos];
-                                  const charDuration = charTiming.endTime - charTiming.startTime;
-
-                                  if (charDuration > 0) {
-                                    // Calculate progress within this specific character
-                                    fractionalProgress = (currentTime - charTiming.startTime) / charDuration;
-                                    fractionalProgress = Math.max(0, Math.min(1, fractionalProgress));
-                                  } else {
-                                    // Fallback if character has no duration
-                                    fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
-                                  }
-                                } else {
-                                  // Fallback to traditional calculation
-                                  fractionalProgress = (lineProgress * totalLineLength) - Math.floor(lineProgress * totalLineLength);
-                                }
-
-                                return (
-                                  <span
-                                    key={charIndex}
-                                    style={{
-                                      color: interpolateRgbColor(
-                                        parsedTextColors.unplayed,
-                                        parsedTextColors.played,
-                                        fractionalProgress,
-                                        textColors.played,
-                                      ),
-                                    }}
-                                  >
-                                    {char}
-                                  </span>
-                                );
-                              }
-
-                              return (
-                                <span key={charIndex} style={{ color: isColored ? textColors.played : textColors.unplayed }}>
-                                  {char}
-                                </span>
-                              );
-                            } else {
-                              // Word is either completely before or after the color change
-                              const isWordColored = wordAbsoluteStart < colorChangePosition;
-                              return (
-                                <span key={charIndex} style={{ color: isWordColored ? textColors.played : textColors.unplayed }}>
-                                  {char}
-                                </span>
-                              );
-                            }
-                          } else {
-                            // Character is not part of a word (e.g., space)
-                            const isColored = absoluteCharPos < colorChangePosition;
-                            return (
-                              <span key={charIndex} style={{ color: isColored ? textColors.played : textColors.unplayed }}>
-                                {char}
-                              </span>
-                            );
-                          }
-                        });
+                        charProgress = ((lineProgress * totalLineLength) % 1);
                       }
-                    })()}
-                  </span>
+
+                      const progressInSegment = (colorChangePosition + charProgress) - segmentStartPos;
+                      const segmentProgressPercent = Math.max(0, Math.min(1, progressInSegment / segment.text.length)) * 100;
+
+                      const gradientStyle: React.CSSProperties = {
+                        backgroundImage: `linear-gradient(to right, ${textColors.played} 0%, ${textColors.played} ${segmentProgressPercent}%, ${textColors.unplayed} ${segmentProgressPercent}%, ${textColors.unplayed} 100%)`,
+                        backgroundSize: '100% 100%',
+                        WebkitBackgroundClip: 'text',
+                        backgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      };
+
+                      return (
+                        <span style={gradientStyle}>
+                          {segment.text}
+                        </span>
+                      );
+                    }
+                  })()
                 ) : (
-                  // For non-active lines, use a simple motion animation
-                  <motion.span
-                    initial={{ color: textColors.unplayed }}
-                    animate={{
-                      color: isPast ? textColors.played : textColors.unplayed
-                    }}
-                    transition={{ duration: 0.5 }}
+                  // For non-active lines, use native CSS transitions to prevent Framer Motion overhead
+                  <span
+                    className="transition-colors duration-500 ease-out"
+                    style={{ color: isPast ? textColors.played : textColors.unplayed }}
                   >
                     {segment.text}
-                  </motion.span>
+                  </span>
                 )}
               </div>
             </div>
@@ -728,7 +648,6 @@ const areLyricLinePropsEqual = (prevProps: LyricLineProps, nextProps: LyricLineP
   if (prevProps.translatedLyrics !== nextProps.translatedLyrics) return false;
   if (prevProps.processedLines !== nextProps.processedLines) return false;
   if (prevProps.segmentationData !== nextProps.segmentationData) return false;
-  if (prevProps.memoizedCharacterArrays !== nextProps.memoizedCharacterArrays) return false;
   return true;
 };
 

@@ -1,6 +1,7 @@
 import type { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { SheetSageResult } from '@/types/sheetSage';
+import type { BeatGridTimedLyrics } from '@/components/chord-analysis/GridLyricsRow';
 
 export interface ChordGridData {
   chords: string[];
@@ -60,6 +61,7 @@ export interface PianoVisualizerTabProps {
   audioUrl?: string | null;
   sheetSageResult?: SheetSageResult | null;
   showMelodicOverlay?: boolean;
+  gridLyrics?: BeatGridTimedLyrics | null;
 }
 
 export type VisualizerDisplayMode = 'piano-roll' | 'sheet-music';

@@ -7,6 +7,8 @@ import { useRomanNumerals, useShowSegmentation } from '@/stores/uiStore';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import { getSegmentationColorForBeatIndex } from '@/utils/chordFormatting';
 
+import { GridLyricText, type BeatGridTimedLyrics } from '@/components/chord-analysis/GridLyricsRow';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ScrollingChordStripProps {
@@ -35,6 +37,8 @@ interface ScrollingChordStripProps {
   uncorrectedChords?: string[];
   /** Optional segmentation result used for section coloring */
   segmentationData?: SegmentationResult | null;
+  /** Timed lyrics synced with the chord grid */
+  gridLyrics?: BeatGridTimedLyrics | null;
 }
 
 // Sweep line position as fraction of container width from left edge
@@ -165,6 +169,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
   beatModulations,
   uncorrectedChords,
   segmentationData,
+  gridLyrics = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stripInnerRef = useRef<HTMLDivElement>(null);
@@ -408,6 +413,35 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     [chordBoxes, visibleRange],
   );
 
+  const hasLyrics = Boolean(gridLyrics?.lyrics?.lines?.length);
+
+  const lyricPlacements = useMemo(() => {
+    if (!gridLyrics?.lyrics?.lines?.length || chordBoxes.length === 0) return [];
+    return gridLyrics.lyrics.lines.map((line) => {
+      let closestBox = chordBoxes[0];
+      let minDelta = Math.abs(chordBoxes[0].startTime - line.startTime);
+      for (let i = 1; i < chordBoxes.length; i++) {
+        const box = chordBoxes[i];
+        const delta = Math.abs(box.startTime - line.startTime);
+        if (delta < minDelta) {
+          minDelta = delta;
+          closestBox = box;
+        }
+      }
+      const x = closestBox ? closestBox.x : timeToNormalizedX(line.startTime);
+      return {
+        line,
+        x,
+        startTime: line.startTime,
+        endTime: line.endTime,
+      };
+    });
+  }, [gridLyrics, chordBoxes, timeToNormalizedX]);
+
+  const visiblePlacements = useMemo(() => {
+    return lyricPlacements.filter((p) => p.x + 300 >= visibleRange.startX && p.x <= visibleRange.endX);
+  }, [lyricPlacements, visibleRange]);
+
   // ── Stable ChordCell callbacks (memoized to avoid re-renders) ─────────────
 
   /** ChordCell's getChordStyle — returns transparent layout-only classes so the
@@ -432,7 +466,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
       <div
         ref={containerRef}
         className="relative overflow-hidden rounded-sm flex items-center justify-center"
-        style={{ height }}
+        style={{ height: hasLyrics ? height + 24 : height }}
       >
         <span className="font-varela text-xs text-gray-500">No chord events</span>
       </div>
@@ -443,7 +477,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
     <div
       ref={containerRef}
       className="relative overflow-hidden rounded-sm"
-      style={{ height }}
+      style={{ height: hasLyrics ? height + 24 : height }}
     >
       {/* Scrolling chord strip – transform is driven by RAF/effect, not inline */}
       <div
@@ -458,8 +492,8 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
         {visibleMeasureSeparators.map((x) => (
           <div
             key={`sep-${x}`}
-            className="absolute top-0 bottom-0 border-l-[3px] border-gray-600 dark:border-gray-400 z-[1]"
-            style={{ left: x }}
+            className="absolute top-0 border-l-[3px] border-gray-600 dark:border-gray-400 z-[1]"
+            style={{ left: x, height }}
           />
         ))}
 
@@ -503,23 +537,22 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                   ? 'border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'
                   : 'bg-white dark:bg-content-bg border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100'}`;
 
-          const containerStyle = {
-            left: box.x,
-            width: box.width,
-          };
-
           return (
             <div
               key={box.index}
-              className={`absolute top-[1px] bottom-[1px] rounded-sm border ${shouldAllowLabelOverflow ? 'overflow-visible' : 'overflow-hidden'} ${containerClass}`}
-              style={containerStyle}
+              className={`absolute top-[1px] rounded-sm border ${shouldAllowLabelOverflow ? 'overflow-visible' : 'overflow-hidden'} ${containerClass}`}
+              style={{
+                left: box.x,
+                width: box.width,
+                height: height - 2,
+              }}
             >
               {hasSegmentationOverlay && (
                 <>
                   <div className="absolute inset-0 pointer-events-none bg-slate-950/50 dark:bg-black/60" />
                   <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{ backgroundColor: segmentationColor }}
+                     className="absolute inset-0 pointer-events-none"
+                     style={{ backgroundColor: segmentationColor }}
                   />
                   <div className="absolute inset-0 pointer-events-none ring-1 ring-inset ring-black/20 dark:ring-white/10" />
                 </>
@@ -551,6 +584,23 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
             </div>
           );
         })}
+
+        {/* Sync timeline lyrics rendered underneath the cells */}
+        {hasLyrics && visiblePlacements.map(({ line, x, startTime }) => (
+          <div
+            key={`${startTime}-${x}`}
+            className="absolute font-varela font-semibold whitespace-nowrap text-left"
+            style={{
+              left: x + 2,
+              top: height + 2,
+              height: 22,
+              fontSize: '15px',
+              lineHeight: '1.2',
+            }}
+          >
+            <GridLyricText line={line} mode={gridLyrics!.mode} />
+          </div>
+        ))}
       </div>
 
       {/* Sweep line (stationary) */}

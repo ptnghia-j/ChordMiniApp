@@ -10,6 +10,7 @@ import type { AudioDynamicsAnalysisResult } from '@/services/audio/audioDynamics
 import type { SheetSageNoteEvent, SheetSageResult } from '@/types/sheetSage';
 import { countLeadingNullBeatSlots, findClosestTimedBeatIndex } from './helpers';
 import type { ChordGridData, SequenceCorrections, VisualizerDisplayMode } from './types';
+import type { BeatGridTimedLyrics } from '@/components/chord-analysis/GridLyricsRow';
 
 const SHEET_MUSIC_PITCH_SHIFT_DEBOUNCE_MS = 180;
 
@@ -438,6 +439,7 @@ interface UseSheetMusicModelParams {
   signalAnalysis: AudioDynamicsAnalysisResult | null;
   simplePianoBlockChords: boolean;
   includeMelodyInSheetMusic: boolean;
+  gridLyrics?: BeatGridTimedLyrics | null;
 }
 
 export function useSheetMusicModel({
@@ -460,6 +462,7 @@ export function useSheetMusicModel({
   signalAnalysis,
   simplePianoBlockChords,
   includeMelodyInSheetMusic,
+  gridLyrics = null,
 }: UseSheetMusicModelParams) {
   const targetSheetMusicPitchShiftSemitones = isPitchShiftActive ? pitchShiftSemitones : 0;
   const [sheetMusicPitchShiftSemitones, setSheetMusicPitchShiftSemitones] = useState(targetSheetMusicPitchShiftSemitones);
@@ -515,7 +518,8 @@ export function useSheetMusicModel({
     timeSignature,
     title: 'ChordMini Lead Sheet',
     keySignature: sheetMusicDisplayKeySignature,
-  }), [detectedBpm, sheetMusicDisplayKeySignature, timeSignature]);
+    lyrics: gridLyrics?.lyrics,
+  }), [detectedBpm, sheetMusicDisplayKeySignature, timeSignature, gridLyrics]);
 
   const sheetMusicBeatTimes = useMemo<Array<number | null> | undefined>(() => {
     const beatTimes = resolvedChordGridData?.beats;
@@ -676,6 +680,7 @@ export function useSheetMusicModel({
             segmentationData,
             signalAnalysis,
             simplePianoBlockChords,
+            lyrics: gridLyrics?.lyrics,
           })
         : (hasLeadSheetData && sheetSageResult
           ? exportLeadSheetToMusicXml(sheetMusicMelodyNoteEvents, mergedPlayableChordEvents, musicXmlOptions)
@@ -710,6 +715,7 @@ export function useSheetMusicModel({
     detectedBpm,
     effectiveDisplayMode,
     exportedSheetMusicPickupBeatCount,
+    gridLyrics?.lyrics,
     hasLeadSheetData,
     hasPianoSheetData,
     hasSheetMusicData,

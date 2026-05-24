@@ -11,6 +11,7 @@ import {
   MIN_DIVISION,
 } from './constants';
 import type { MeasureLayoutConfig } from './types';
+import type { LyricsData } from '@/types/musicAiTypes';
 
 type MusicStep = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 
@@ -806,4 +807,38 @@ export function fitsWithinGroup(start: number, duration: number, groupSize: numb
 
   const groupStart = Math.floor(start / groupSize) * groupSize;
   return start + duration <= groupStart + groupSize;
+}
+
+export interface WordWithTime {
+  text: string;
+  startTime: number;
+}
+
+export function getWordsWithTimes(lyrics: LyricsData | null | undefined): WordWithTime[] {
+  if (!lyrics?.lines?.length) return [];
+  const words: WordWithTime[] = [];
+
+  lyrics.lines.forEach((line) => {
+    if (line.wordTimings?.length) {
+      line.wordTimings.forEach((wt) => {
+        words.push({
+          text: wt.text.trim(),
+          startTime: wt.startTime,
+        });
+      });
+    } else {
+      const splitWords = line.text.split(/\s+/).filter(Boolean);
+      if (splitWords.length === 0) return;
+      const duration = line.endTime - line.startTime;
+      const step = duration / splitWords.length;
+      splitWords.forEach((word, idx) => {
+        words.push({
+          text: word,
+          startTime: line.startTime + idx * step,
+        });
+      });
+    }
+  });
+
+  return words.sort((a, b) => a.startTime - b.startTime);
 }

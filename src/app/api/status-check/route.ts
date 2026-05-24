@@ -38,20 +38,6 @@ export async function POST(request: NextRequest) {
       // These endpoints should return 400 when no file is provided - this indicates they're working
       expectedError = response.status === 400;
       
-    } else if (endpoint === '/api/genius-lyrics') {
-      // For genius lyrics, test with POST request (should return error for missing data)
-      response = await fetch(`${backendUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ artist: 'test', title: 'test' }),
-        signal: createSafeTimeoutSignal(25000) // 25 second timeout
-      });
-      
-      // Genius endpoint may return 500 for API key issues, but that means it's responsive
-      expectedError = response.status === 500 || response.status === 400;
-      
     } else {
       // For other endpoints, use GET request
       response = await fetch(`${backendUrl}${endpoint}`, {

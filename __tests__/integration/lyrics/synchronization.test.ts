@@ -2,7 +2,7 @@
  * Integration Tests: Lyrics Synchronization
  *
  * Tests the complete lyrics synchronization workflow including:
- * - Lyrics fetching and display (LRClib → Genius fallback)
+ * - Lyrics fetching and display (LRCLIB only)
  * - Character-level lyrics timing utilities
  * - Service health checks and fallback behavior
  * - Edge cases in timing calculations
@@ -10,7 +10,6 @@
 
 import { searchLyricsWithFallback, checkLyricsServicesHealth } from '@/services/lyrics/lyricsService';
 import * as lrclibService from '@/services/lyrics/lrclibService';
-import { apiService } from '@/services/api/apiService';
 import {
   enhanceLyricsWithCharacterTiming,
   getActiveCharacterIndex,
@@ -23,9 +22,7 @@ jest.mock('@/config/firebase', () => ({
   getAppCheckTokenForApi: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('@/services/api/apiService', () => ({
-  apiService: {
-    getGeniusLyrics: jest.fn(),
-  },
+  apiService: {},
 }));
 
 // Mock global fetch
@@ -83,23 +80,11 @@ describe('Lyrics Synchronization Integration Tests', () => {
       expect(result.metadata.source).toBe('lrclib');
     });
 
-    it('should fallback to Genius when LRClib fails', async () => {
+    it('should not fallback to another provider when LRCLIB fails', async () => {
       // Mock LRClib returning no results (success: false)
       (lrclibService.searchLRCLibLyrics as jest.Mock).mockResolvedValue({
         success: false,
         error: 'No lyrics found',
-      });
-
-      // Mock Genius success
-      (apiService.getGeniusLyrics as jest.Mock).mockResolvedValue({
-        success: true,
-        data: {
-          lyrics: 'Verse 1\nChorus\nVerse 2',
-          song_info: {
-            title: 'Test Song',
-            artist: 'Test Artist'
-          }
-        }
       });
 
       const result = await searchLyricsWithFallback({
@@ -108,18 +93,14 @@ describe('Lyrics Synchronization Integration Tests', () => {
         prefer_synchronized: true
       });
 
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.has_synchronized).toBe(false);
-      expect(result.metadata.source).toBe('genius');
-      expect(result.fallback_used).toBe(true);
+      expect(result.metadata.source).toBe('fallback');
     });
 
     it('should handle complete service failure gracefully', async () => {
       // Mock LRClib throwing an error
       (lrclibService.searchLRCLibLyrics as jest.Mock).mockRejectedValue(new Error('Service down'));
-
-      // Mock Genius also failing
-      (apiService.getGeniusLyrics as jest.Mock).mockRejectedValue(new Error('API error'));
 
       const result = await searchLyricsWithFallback({
         artist: 'Test Artist',
@@ -219,37 +200,31 @@ describe('Lyrics Synchronization Integration Tests', () => {
   describe('Service Health Checks', () => {
     it('should check service health correctly', async () => {
       (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true })
         .mockResolvedValueOnce({ ok: true });
 
       const health = await checkLyricsServicesHealth();
 
       expect(health.lrclib).toBe(true);
-      expect(health.genius).toBe(true);
       expect(health.overall).toBe(true);
     });
 
     it('should report partial service availability', async () => {
       (global.fetch as jest.Mock)
-        .mockRejectedValueOnce(new Error('LRClib down'))
-        .mockResolvedValueOnce({ ok: true });
+        .mockRejectedValueOnce(new Error('LRClib down'));
 
       const health = await checkLyricsServicesHealth();
 
       expect(health.lrclib).toBe(false);
-      expect(health.genius).toBe(true);
-      expect(health.overall).toBe(true);
+      expect(health.overall).toBe(false);
     });
 
     it('should report complete service outage', async () => {
       (global.fetch as jest.Mock)
-        .mockRejectedValueOnce(new Error('LRClib down'))
-        .mockRejectedValueOnce(new Error('Genius down'));
+        .mockRejectedValueOnce(new Error('LRClib down'));
 
       const health = await checkLyricsServicesHealth();
 
       expect(health.lrclib).toBe(false);
-      expect(health.genius).toBe(false);
       expect(health.overall).toBe(false);
     });
   });

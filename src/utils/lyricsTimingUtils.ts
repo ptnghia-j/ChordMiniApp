@@ -44,6 +44,10 @@ export function enhanceLyricsWithCharacterTiming(lyrics: LyricsData): EnhancedLy
       return line as EnhancedLyricLine;
     }
 
+    if ((line as EnhancedLyricLine).characterTimings) {
+      return line as EnhancedLyricLine;
+    }
+
     const lineDuration = line.endTime - line.startTime;
     const charCount = line.text.length;
 
@@ -52,12 +56,9 @@ export function enhanceLyricsWithCharacterTiming(lyrics: LyricsData): EnhancedLy
       return line as EnhancedLyricLine;
     }
 
-    // Create timing information for each character using natural speech patterns
-    const characterTimings: CharacterTiming[] = calculateNaturalCharacterTiming(
-      line.text,
-      line.startTime,
-      line.endTime
-    );
+    const characterTimings: CharacterTiming[] = line.wordTimings?.length
+      ? calculateCharacterTimingFromWords(line.text, line.startTime, line.endTime, line.wordTimings)
+      : calculateNaturalCharacterTiming(line.text, line.startTime, line.endTime);
 
     return {
       ...line,
@@ -69,6 +70,37 @@ export function enhanceLyricsWithCharacterTiming(lyrics: LyricsData): EnhancedLy
     ...lyrics,
     lines: enhancedLines
   };
+}
+
+function calculateCharacterTimingFromWords(
+  text: string,
+  lineStartTime: number,
+  lineEndTime: number,
+  wordTimings: LyricLine['wordTimings']
+): CharacterTiming[] {
+  const fallback = calculateNaturalCharacterTiming(text, lineStartTime, lineEndTime);
+  if (!wordTimings?.length) return fallback;
+
+  const timings = [...fallback];
+
+  wordTimings.forEach((wordTiming) => {
+    const startChar = Math.max(0, Math.min(text.length - 1, wordTiming.startChar));
+    const endChar = Math.max(startChar, Math.min(text.length - 1, wordTiming.endChar));
+    const duration = Math.max(0.001, wordTiming.endTime - wordTiming.startTime);
+    const charCount = Math.max(1, endChar - startChar + 1);
+
+    for (let index = startChar; index <= endChar; index += 1) {
+      const progressStart = (index - startChar) / charCount;
+      const progressEnd = (index - startChar + 1) / charCount;
+      timings[index] = {
+        char: text[index],
+        startTime: wordTiming.startTime + (duration * progressStart),
+        endTime: wordTiming.startTime + (duration * progressEnd),
+      };
+    }
+  });
+
+  return timings;
 }
 
 /**

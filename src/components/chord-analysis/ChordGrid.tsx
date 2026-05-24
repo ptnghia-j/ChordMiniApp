@@ -19,6 +19,8 @@ import { useLoopBeatSelection } from '@/hooks/chord-analysis/useLoopBeatSelectio
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
+import GridLyricsRow, { type BeatGridTimedLyrics } from './GridLyricsRow';
+import { enhanceLyricsWithCharacterTiming, type EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
 import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
@@ -55,6 +57,7 @@ interface SectionBlock {
   label: string;
   accentColor: string;
   rows: SegmentedSectionRow[];
+  measuresPerRow: number;
 }
 
 interface MetricSectionBlock {
@@ -63,6 +66,16 @@ interface MetricSectionBlock {
   beatsPerMeasure: number;
   measuresPerRow: number;
   rows: GroupedMeasure[][];
+}
+
+interface GridLyricPlacement {
+  line: NonNullable<BeatGridTimedLyrics['lyrics']['lines']>[number];
+  columnStart: number;
+}
+
+interface GridLyricRowPlacement {
+  placements: GridLyricPlacement[];
+  columnCount: number;
 }
 
 interface ChordGridProps {
@@ -126,6 +139,7 @@ interface ChordGridProps {
   } | null;
   // CRITICAL FIX: Original chords for Roman numeral mapping (not transposed)
   originalChordsForRomanNumerals?: string[]; // Original chords before transposition for Roman numeral alignment
+  gridLyrics?: BeatGridTimedLyrics | null;
 }
 
 const MEASURES_PER_ROW_GRID_CLASS: Record<number, string> = {
@@ -196,6 +210,7 @@ const areChordGridPropsEqual = (
   // Audio mapping
   if (prevProps.originalAudioMapping !== nextProps.originalAudioMapping) return false;
   if (prevProps.metricSegments !== nextProps.metricSegments) return false;
+  if (prevProps.gridLyrics !== nextProps.gridLyrics) return false;
 
   // Ignore callback props (onBeatClick, onChordEdit)
   // These are functions and shouldn't trigger re-renders if they're functionally equivalent
@@ -233,7 +248,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   onChordEdit,
   showRomanNumerals = false,
   romanNumeralData = null,
-  originalChordsForRomanNumerals // CRITICAL FIX: Original chords for Roman numeral mapping
+  originalChordsForRomanNumerals, // CRITICAL FIX: Original chords for Roman numeral mapping
+  gridLyrics = null
 }) => {
   const gridElementRef = useRef<HTMLDivElement | null>(null);
   // Cache: map beatIndex -> HTMLElement to eliminate per-beat querySelector
@@ -300,6 +316,11 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     });
   }, [keySignature, sequenceCorrections, shiftedChords]);
 
+  const enhancedGridLyrics = useMemo(() => {
+    if (!gridLyrics?.lyrics) return null;
+    return enhanceLyricsWithCharacterTiming(gridLyrics.lyrics);
+  }, [gridLyrics]);
+
   // Use utility function for grid columns class (already imported)
 
   // Use utility function for dynamic font sizing (already imported)
@@ -334,6 +355,40 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     isLyricsPanelOpen
   );
 
+  const segmentationRowHeightPx = useMemo(() => {
+    const isSmUp = screenWidth >= 640;
+    const minRowHeight = showRomanNumerals
+      ? (isSmUp ? 4.2 * 16 : 3.3 * 16)
+      : (isSmUp ? 3.5 * 16 : 2.75 * 16);
+    return Math.max(cellSize, minRowHeight);
+  }, [cellSize, screenWidth, showRomanNumerals]);
+
+  const segmentationRowGapPx = 2;
+  const lyricsRowGapPx = 4;
+  const lyricsRowPaddingPx = 12;
+
+  const lyricsLineHeightPx = useMemo(() => {
+    const minFontSize = showRomanNumerals ? 14 : 15;
+    const maxFontSize = showRomanNumerals ? 17 : 19;
+    const scale = showRomanNumerals ? 0.18 : 0.2;
+    const baseChordSize = Math.max(
+      minFontSize,
+      Math.min(maxFontSize, Math.round(cellSize * scale))
+    );
+    const minLyricsSize = showRomanNumerals ? 15 : 17;
+    const lyricsFontSize = Math.max(
+      minLyricsSize,
+      Math.round(baseChordSize * 1.2 * 100) / 100
+    );
+    return Math.round(lyricsFontSize * 1.25);
+  }, [cellSize, showRomanNumerals]);
+
+  const getLyricsBlockHeight = useCallback((lineCount: number) => {
+    if (!gridLyrics || lineCount <= 0) return 0;
+    const lineGap = Math.max(0, lineCount - 1) * lyricsRowGapPx;
+    return Math.round(lineCount * lyricsLineHeightPx + lineGap + lyricsRowPaddingPx);
+  }, [gridLyrics, lyricsLineHeightPx, lyricsRowGapPx, lyricsRowPaddingPx]);
+
   // Merged ref callback to handle both layout hook ref and our element ref
   const mergedGridRef = useCallback((node: HTMLDivElement | null) => {
     // Store in our ref for CSS class updates
@@ -352,19 +407,6 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     () => getMeasuresPerRowGridClass(dynamicMeasuresPerRow),
     [dynamicMeasuresPerRow],
   );
-
-  const sectionStripMetrics = useCallback((rowCount: number) => {
-    const rowGapPx = 2; // matches section content wrapper space-y-0.5
-    const isDesktopLayout = screenWidth >= 640;
-    const minCellHeightPx = showRomanNumerals
-      ? (isDesktopLayout ? 4.2 * 16 : 3.3 * 16)
-      : (isDesktopLayout ? 3.5 * 16 : 2.75 * 16);
-    const effectiveRowHeightPx = Math.max(cellSize, minCellHeightPx);
-
-    return {
-      heightPx: (Math.max(1, rowCount) * effectiveRowHeightPx) + (Math.max(0, rowCount - 1) * rowGapPx),
-    };
-  }, [cellSize, screenWidth, showRomanNumerals]);
 
   // Use utility function for chord styling
   const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
@@ -662,7 +704,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
           showChordLabel: boolean;
         }> = [];
 
-        row.slots.forEach((slot, measureIdx) => {
+        const activeSlots = row.slots.filter((slot) => slot.cells.some((cell) => cell !== null));
+        activeSlots.forEach((slot, measureIdx) => {
           slot.cells.forEach((cell) => {
             rowEntries.push(cell
               ? {
@@ -759,6 +802,160 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return map;
   }, [sequenceCorrections?.keyAnalysis?.modulations]);
 
+  const findClosestBeatIndex = useCallback((time: number): number => {
+    let bestIndex = -1;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < beats.length; index += 1) {
+      const beatTime = beats[index];
+      if (typeof beatTime !== 'number' || beatTime < 0) continue;
+      const delta = Math.abs(beatTime - time);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIndex = index;
+      }
+    }
+    return bestIndex;
+  }, [beats]);
+
+  const getLyricsForIndexRange = useCallback((startIndex: number, endIndex: number): GridLyricRowPlacement => {
+    const columnCount = Math.max(1, endIndex - startIndex + 1);
+    if (!enhancedGridLyrics?.lines?.length) return { placements: [], columnCount };
+
+    const placements: GridLyricPlacement[] = [];
+
+    enhancedGridLyrics.lines.forEach((line) => {
+      const characterTimings = line.characterTimings;
+      if (!line.text) return;
+
+      // Tokenize by words and spaces
+      const tokens = line.text.match(/\s+|\S+/g) || [];
+      let charOffset = 0;
+
+      const tokensWithBeatIndex = tokens.map((tokenText) => {
+        const startChar = charOffset;
+        const endChar = charOffset + tokenText.length - 1;
+        charOffset += tokenText.length;
+
+        // Determine startTime and endTime of this token using characterTimings
+        let tokenStartTime = line.startTime;
+        let tokenEndTime = line.endTime;
+        if (characterTimings && characterTimings.length > 0) {
+          const startCharTiming = characterTimings[Math.min(startChar, characterTimings.length - 1)];
+          const endCharTiming = characterTimings[Math.min(endChar, characterTimings.length - 1)];
+          if (startCharTiming) tokenStartTime = startCharTiming.startTime;
+          if (endCharTiming) tokenEndTime = endCharTiming.endTime;
+        }
+
+        const beatIndex = findClosestBeatIndex(tokenStartTime);
+
+        return {
+          text: tokenText,
+          startTime: tokenStartTime,
+          endTime: tokenEndTime,
+          beatIndex,
+          startChar,
+          endChar,
+          isWhitespace: /^\s+$/.test(tokenText),
+        };
+      });
+
+      // Filter tokens belonging to this row range [startIndex, endIndex]
+      const rowTokens = tokensWithBeatIndex.filter(
+        (t) => t.beatIndex >= startIndex && t.beatIndex <= endIndex
+      );
+
+      // Find first and last non-whitespace tokens to trim edge whitespace
+      let startTokenIdx = 0;
+      while (startTokenIdx < rowTokens.length && rowTokens[startTokenIdx].isWhitespace) {
+        startTokenIdx++;
+      }
+      let endTokenIdx = rowTokens.length - 1;
+      while (endTokenIdx >= startTokenIdx && rowTokens[endTokenIdx].isWhitespace) {
+        endTokenIdx--;
+      }
+
+      if (startTokenIdx <= endTokenIdx) {
+        const trimmedRowTokens = rowTokens.slice(startTokenIdx, endTokenIdx + 1);
+        const subText = trimmedRowTokens.map((t) => t.text).join('');
+        const subStartTime = trimmedRowTokens[0].startTime;
+        const subEndTime = trimmedRowTokens[trimmedRowTokens.length - 1].endTime;
+        const subBeatIndex = trimmedRowTokens[0].beatIndex;
+        const columnStart = subBeatIndex - startIndex + 1;
+
+        const firstChar = trimmedRowTokens[0].startChar;
+        const lastChar = trimmedRowTokens[trimmedRowTokens.length - 1].endChar;
+
+        // Slice character timings
+        const subCharacterTimings = characterTimings
+          ? characterTimings.slice(firstChar, lastChar + 1)
+          : undefined;
+
+        // Slice word timings if they exist
+        const subWordTimings = line.wordTimings
+          ? line.wordTimings
+              .filter((wt) => wt.startChar >= firstChar && wt.endChar <= lastChar)
+              .map((wt) => ({
+                ...wt,
+                startChar: wt.startChar - firstChar,
+                endChar: wt.endChar - firstChar,
+              }))
+          : undefined;
+
+        placements.push({
+          line: {
+            text: subText,
+            startTime: subStartTime,
+            endTime: subEndTime,
+            wordTimings: subWordTimings,
+            characterTimings: subCharacterTimings,
+          } as EnhancedLyricLine,
+          columnStart,
+        });
+      }
+    });
+
+    return { placements, columnCount };
+  }, [findClosestBeatIndex, enhancedGridLyrics]);
+
+  const getLyricsForGroupedRow = useCallback((row: GroupedMeasure[]): GridLyricRowPlacement => {
+    if (!row.length) return { placements: [], columnCount: 1 };
+    const startIndex = Math.min(...row.map((measure) => measure.visualStartIndex));
+    const endIndex = Math.max(...row.map((measure) => measure.visualStartIndex + (measure.beatsPerMeasure ?? actualBeatsPerMeasure) - 1));
+    return getLyricsForIndexRange(startIndex, endIndex);
+  }, [actualBeatsPerMeasure, getLyricsForIndexRange]);
+
+  const getLyricsForSegmentedRow = useCallback((row: SegmentedSectionRow): GridLyricRowPlacement => {
+    const indexes = row.slots.flatMap((slot) => slot.cells.map((cell) => cell?.globalIndex).filter((index): index is number => typeof index === 'number'));
+    if (!indexes.length) return { placements: [], columnCount: 1 };
+    return getLyricsForIndexRange(Math.min(...indexes), Math.max(...indexes));
+  }, [getLyricsForIndexRange]);
+
+  const renderLyricsRow = useCallback((lines: ReturnType<typeof getLyricsForGroupedRow>, key: string) => {
+    if (!gridLyrics || lines.placements.length === 0) return null;
+
+    // Calculate typical chord label font size from ChordCell and scale it for lyrics
+    const minFontSize = showRomanNumerals ? 14 : 15;
+    const maxFontSize = showRomanNumerals ? 17 : 19;
+    const scale = showRomanNumerals ? 0.18 : 0.2;
+    const baseChordSize = Math.max(
+      minFontSize,
+      Math.min(maxFontSize, Math.round(cellSize * scale))
+    );
+    // Scale to 120% of chord labels, enforcing a minimum readability floor of 17px (15px with Roman numerals)
+    const minLyricsSize = showRomanNumerals ? 15 : 17;
+    const lyricsFontSize = `${Math.max(minLyricsSize, Math.round(baseChordSize * 1.2 * 100) / 100)}px`;
+
+    return (
+      <GridLyricsRow
+        key={`${key}-lyrics`}
+        placements={lines.placements}
+        columnCount={lines.columnCount}
+        mode={gridLyrics.mode}
+        fontSize={lyricsFontSize}
+      />
+    );
+  }, [gridLyrics, showRomanNumerals, cellSize]);
+
   const renderChordGridCell = useCallback((chord: string, globalIndex: number, cellKey: string) => {
     const showChordLabel = shouldShowChordLabelLocal(globalIndex);
     const isEmpty = chord === '';
@@ -827,29 +1024,36 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     showRomanNumerals,
   ]);
 
-  const renderMeasureRow = useCallback((row: GroupedMeasure[], rowKey: string) => (
-    <div key={rowKey} className="measure-row min-w-0">
-      <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
-        {row.map((measure, measureIdx) => (
-          <div
-            key={`${rowKey}-measure-${measure.measureNumber}-${measureIdx}`}
-            className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
-            style={{ paddingLeft: '2px' }}
-          >
-            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
-              {measure.chords.map((chord, beatIdx) => {
-                const globalIndex = measure.visualStartIndex + beatIdx;
-                return renderChordGridCell(chord, globalIndex, `chord-${globalIndex}`);
-              })}
+  const renderMeasureRow = useCallback((row: GroupedMeasure[], rowKey: string) => {
+    const lyricLines = getLyricsForGroupedRow(row);
+
+    return (
+      <div key={rowKey} className="measure-row min-w-0">
+        <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
+          {row.map((measure, measureIdx) => (
+            <div
+              key={`${rowKey}-measure-${measure.measureNumber}-${measureIdx}`}
+              className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
+              style={{ paddingLeft: '2px' }}
+            >
+              <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
+                {measure.chords.map((chord, beatIdx) => {
+                  const globalIndex = measure.visualStartIndex + beatIdx;
+                  return renderChordGridCell(chord, globalIndex, `chord-${globalIndex}`);
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        {renderLyricsRow(lyricLines, rowKey)}
       </div>
-    </div>
-  ), [
+    );
+  }, [
+    getLyricsForGroupedRow,
     getGridColumnsClass,
     measuresPerRowGridClass,
     renderChordGridCell,
+    renderLyricsRow,
   ]);
 
   const renderMetricMeasureRow = useCallback((
@@ -857,59 +1061,84 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     rowKey: string,
     beatsPerMeasure: number,
     measuresPerRow: number,
-  ) => (
-    <div key={rowKey} className="measure-row min-w-0">
-      <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(measuresPerRow)}`}>
-        {row.map((measure, measureIdx) => (
-          <div
-            key={`${rowKey}-metric-measure-${measure.measureNumber}-${measureIdx}`}
-            className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
-            style={{ paddingLeft: '2px' }}
-          >
-            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClassForBeats(beatsPerMeasure)}`}>
-              {measure.chords.map((chord, beatIdx) => {
-                const globalIndex = measure.visualStartIndex + beatIdx;
-                if (globalIndex >= shiftedChords.length) {
-                  return null;
-                }
-                return renderChordGridCell(chord, globalIndex, `metric-chord-${rowKey}-${globalIndex}`);
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  ), [renderChordGridCell, shiftedChords.length]);
+  ) => {
+    const lyricLines = getLyricsForGroupedRow(row);
+    const activeCount = row.length;
+    const rowWidthPercent = (activeCount / measuresPerRow) * 100;
 
-  const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string) => (
-    <div key={rowKey} className="measure-row min-w-0">
-      <div className={`grid gap-1 sm:gap-1 w-full ${measuresPerRowGridClass}`}>
-        {row.slots.map((slot, measureIdx) => {
-          const visibleCells = getVisibleCellsForSegmentedSlot(slot.cells);
-          const showMeasureBar = shouldRenderSegmentedSlotMeasureBar(slot.cells);
-
-          return (
-          <div
-            key={`${rowKey}-slot-${slot.slotIndex}-${measureIdx}`}
-            className={`${showMeasureBar ? 'border-l-[3px] border-gray-600 dark:border-gray-400' : ''} min-w-0 flex-shrink-0`}
-            style={showMeasureBar ? { paddingLeft: '2px' } : undefined}
-          >
-            <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
-              {visibleCells.map(({ cell, gridColumnStart }) => (
-                <div
-                  key={`segmented-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`}
-                  style={gridColumnStart ? { gridColumnStart } : undefined}
-                >
-                  {renderChordGridCell(cell.chord, cell.globalIndex, `segmented-cell-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`)}
-                </div>
-              ))}
+    return (
+      <div 
+        key={rowKey} 
+        className="measure-row min-w-0"
+        style={{ width: `${rowWidthPercent}%` }}
+      >
+        <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(activeCount)}`}>
+          {row.map((measure, measureIdx) => (
+            <div
+              key={`${rowKey}-metric-measure-${measure.measureNumber}-${measureIdx}`}
+              className="border-l-[3px] border-gray-600 dark:border-gray-400 min-w-0 flex-shrink-0"
+              style={{ paddingLeft: '2px' }}
+            >
+              <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClassForBeats(beatsPerMeasure)}`}>
+                {measure.chords.map((chord, beatIdx) => {
+                  const globalIndex = measure.visualStartIndex + beatIdx;
+                  if (globalIndex >= shiftedChords.length) {
+                    return null;
+                  }
+                  return renderChordGridCell(chord, globalIndex, `metric-chord-${rowKey}-${globalIndex}`);
+                })}
+              </div>
             </div>
-          </div>
-          );
-        })}
+          ))}
+        </div>
+        {renderLyricsRow(lyricLines, rowKey)}
       </div>
-    </div>
-  ), [getGridColumnsClass, measuresPerRowGridClass, renderChordGridCell]);
+    );
+  }, [getLyricsForGroupedRow, renderChordGridCell, renderLyricsRow, shiftedChords.length]);
+
+  const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string, widthMeasuresPerRow: number) => {
+    const lyricLines = getLyricsForSegmentedRow(row);
+
+    const activeSlots = row.slots.filter((slot) => slot.cells.some((cell) => cell !== null));
+    const activeCount = activeSlots.length;
+    const normalizedMeasuresPerRow = Math.max(1, widthMeasuresPerRow);
+    const rowWidthPercent = Math.min(100, (activeCount / normalizedMeasuresPerRow) * 100);
+
+    return (
+      <div 
+        key={rowKey} 
+        className="measure-row min-w-0"
+        style={{ width: `${rowWidthPercent}%` }}
+      >
+        <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(activeCount)}`}>
+          {activeSlots.map((slot, measureIdx) => {
+            const visibleCells = getVisibleCellsForSegmentedSlot(slot.cells);
+            const showMeasureBar = shouldRenderSegmentedSlotMeasureBar(slot.cells);
+
+            return (
+            <div
+              key={`${rowKey}-slot-${slot.slotIndex}-${measureIdx}`}
+              className={`${showMeasureBar ? 'border-l-[3px] border-gray-600 dark:border-gray-400' : ''} min-w-0 flex-shrink-0`}
+              style={showMeasureBar ? { paddingLeft: '2px' } : undefined}
+            >
+              <div className={`grid gap-0.5 auto-rows-fr ${getGridColumnsClass()}`}>
+                {visibleCells.map(({ cell, gridColumnStart }) => (
+                  <div
+                    key={`segmented-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`}
+                    style={gridColumnStart ? { gridColumnStart } : undefined}
+                  >
+                    {renderChordGridCell(cell.chord, cell.globalIndex, `segmented-cell-${rowKey}-${slot.slotIndex}-${cell.globalIndex}`)}
+                  </div>
+                ))}
+              </div>
+            </div>
+            );
+          })}
+        </div>
+        {renderLyricsRow(lyricLines, rowKey)}
+      </div>
+    );
+  }, [getGridColumnsClass, getLyricsForSegmentedRow, renderChordGridCell, renderLyricsRow]);
 
   // Early return if no chords available
   if (chords.length === 0) {
@@ -953,22 +1182,31 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
             {metricSectionBlocks ? (
               <div className="space-y-3">
                 {metricSectionBlocks.map((section, sectionIdx) => {
-                  const stripMetrics = sectionStripMetrics(section.rows.length);
+                  const rowsHeight = section.rows.reduce((sum, row) => {
+                    const lyricLines = getLyricsForGroupedRow(row);
+                    const lineCount = lyricLines.placements.length;
+                    return sum + segmentationRowHeightPx + getLyricsBlockHeight(lineCount);
+                  }, 0);
+
+                  const stripHeight = Math.max(
+                    segmentationRowHeightPx,
+                    rowsHeight + Math.max(0, section.rows.length - 1) * segmentationRowGapPx,
+                  );
 
                   return (
-                  <div key={`metric-section-${sectionIdx}-${section.label}`} className="flex items-start gap-2 sm:gap-3">
+                  <div key={`metric-section-${sectionIdx}-${section.label}`} className="flex items-stretch gap-2 sm:gap-3">
                     <div
-                      className="w-7 sm:w-8 flex-shrink-0 flex"
-                      style={{ height: `${stripMetrics.heightPx}px` }}
+                      className="w-7 sm:w-8 flex-shrink-0 flex self-start"
                     >
                       <AppTooltip content={section.label} placement="right">
                         <div
-                          className="w-full h-full rounded-sm border border-blue-100/45 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-white shadow-inner shadow-white/10 dark:border-blue-100/35"
+                          className="w-full rounded-sm border border-blue-100/45 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-white shadow-inner shadow-white/10 dark:border-blue-100/35"
                           style={{
                             writingMode: 'vertical-rl',
                             transform: 'rotate(180deg)',
                             backgroundColor: section.accentColor,
                             padding: '0.5rem 0.2rem',
+                            height: `${stripHeight}px`,
                           }}
                         >
                           {section.label}
@@ -985,27 +1223,37 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                       ))}
                     </div>
                   </div>
-                )})}
+                );
+                })}
               </div>
             ) : sectionBlocks ? (
               <div className="space-y-3">
                 {sectionBlocks.map((section, sectionIdx) => {
-                  const stripMetrics = sectionStripMetrics(section.rows.length);
+                  const rowsHeight = section.rows.reduce((sum, row) => {
+                    const lyricLines = getLyricsForSegmentedRow(row);
+                    const lineCount = lyricLines.placements.length;
+                    return sum + segmentationRowHeightPx + getLyricsBlockHeight(lineCount);
+                  }, 0);
+
+                  const stripHeight = Math.max(
+                    segmentationRowHeightPx,
+                    rowsHeight + Math.max(0, section.rows.length - 1) * segmentationRowGapPx,
+                  );
 
                   return (
-                  <div key={`section-${sectionIdx}-${section.label}`} className="flex items-start gap-2 sm:gap-3">
+                  <div key={`section-${sectionIdx}-${section.label}`} className="flex items-stretch gap-2 sm:gap-3">
                     <div
-                      className="w-7 sm:w-8 flex-shrink-0 flex"
-                      style={{ height: `${stripMetrics.heightPx}px` }}
+                      className="w-7 sm:w-8 flex-shrink-0 flex self-start"
                     >
                       <AppTooltip content={section.label} placement="right">
                         <div
-                          className="w-full h-full rounded-sm border border-black/10 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-gray-700 dark:border-white/15 dark:text-gray-100"
+                          className="w-full rounded-sm border border-black/10 text-[10px] sm:text-xs font-semibold tracking-[0.18em] uppercase flex items-center justify-center text-gray-700 dark:border-white/15 dark:text-gray-100"
                           style={{
                             writingMode: 'vertical-rl',
                             transform: 'rotate(180deg)',
                             backgroundColor: section.accentColor,
                             padding: '0.5rem 0.2rem',
+                            height: `${stripHeight}px`,
                           }}
                         >
                           {section.label}
@@ -1014,10 +1262,15 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                     </div>
 
                     <div className="flex-1 space-y-0.5 min-w-0">
-                      {section.rows.map((row, rowIdx) => renderSegmentedRow(row, `section-${sectionIdx}-row-${rowIdx}`))}
+                      {section.rows.map((row, rowIdx) => renderSegmentedRow(
+                        row,
+                        `section-${sectionIdx}-row-${rowIdx}`,
+                        dynamicMeasuresPerRow,
+                      ))}
                     </div>
                   </div>
-                )})}
+                );
+                })}
               </div>
             ) : (
               <div className="space-y-0.5">

@@ -42,6 +42,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
   audioUrl,
   sheetSageResult = null,
   showMelodicOverlay = false,
+  gridLyrics = null,
 }) => {
   const storeAnalysisResults = useAnalysisResults();
   const storeShowCorrectedChords = useShowCorrectedChords();
@@ -178,6 +179,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
     signalAnalysis: timelineModel.signalAnalysis,
     simplePianoBlockChords,
     includeMelodyInSheetMusic: showMelodicOverlay,
+    gridLyrics,
   });
 
   const effectiveActiveInstruments = useMemo(() => {
@@ -291,6 +293,7 @@ export const PianoVisualizerTab: React.FC<PianoVisualizerTabProps> = ({
         beatModulations={timelineModel.beatModulations}
         uncorrectedChords={resolvedChordGridData?.chords}
         segmentationData={segmentationData}
+        gridLyrics={gridLyrics}
       />
 
       {sheetMusicModel.effectiveDisplayMode === 'sheet-music' ? (

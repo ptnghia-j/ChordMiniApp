@@ -20,6 +20,7 @@ import {
 } from '@/components/piano-visualizer/ScrollingChordStrip';
 import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { ChordCellProps } from '@/components/chord-analysis/ChordCell';
+import type { BeatGridTimedLyrics } from '@/components/chord-analysis/GridLyricsRow';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ interface GuitarTablatureProps {
   beatModulations?: Map<number, ChordCellProps['modulationInfo']>;
   uncorrectedChords?: string[];
   segmentationData?: SegmentationResult | null;
+  gridLyrics?: BeatGridTimedLyrics | null;
   className?: string;
 }
 
@@ -467,6 +469,7 @@ export const GuitarTablature = React.memo<GuitarTablatureProps>(({
   beatModulations,
   uncorrectedChords,
   segmentationData,
+  gridLyrics = null,
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -703,6 +706,7 @@ export const GuitarTablature = React.memo<GuitarTablatureProps>(({
         beatModulations={beatModulations}
         uncorrectedChords={uncorrectedChords}
         segmentationData={segmentationData}
+        gridLyrics={gridLyrics}
       />
 
       {/* Scrolling 6-string tab staff */}

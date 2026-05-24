@@ -29,6 +29,24 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5.3',
+      date: 'May 24, 2026',
+      title: 'UI improvements',
+      description: 'UI improvements across the app: homepage, analysis page, guitar and piano tabs',
+      features: [
+        'Homepage background now features Light Rays theme',
+        'Pixel Snow theme is used for songs with words: [snow, snowflakes, winter] and by default during the winter time period (December-February)',
+        'Lyrics Panel has been removed and now lyrics is embedded directly into the Beat Chord grid'
+      ],
+      technical: [
+        'React Bit\'s components are used for homepage and analysis page (for special effects)',
+        'Embedded lyrics now used as context to AI chatbot'
+      ],
+      breaking: [
+        'Embedded lyrics inside beat chord grid'
+      ]
+    },
+    {
       version: 'v0.6.5.2',
       date: 'May 19, 2026',
       title: 'Client-Side Extraction Migration, Status Refresh, UI Polish',

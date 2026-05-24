@@ -500,11 +500,13 @@ describe('ChordGrid Component', () => {
       );
 
       const sectionLabel = screen.getByText('Verse');
-      const stripContainer = sectionLabel.parentElement;
-      const sectionRow = stripContainer?.parentElement;
+      const stripContainer = sectionLabel as HTMLElement | null;
+      const sectionRow = stripContainer?.parentElement?.parentElement;
+      const heightValue = stripContainer?.style.height ?? '';
 
-      expect(stripContainer?.getAttribute('style') ?? '').toContain('height: 136.4px');
-      expect(sectionRow).toHaveClass('items-start');
+      expect(heightValue).not.toBe('');
+      expect(parseFloat(heightValue)).toBeGreaterThan(0);
+      expect(sectionRow).toHaveClass('items-stretch');
     });
   });
 
@@ -564,6 +566,35 @@ describe('ChordGrid Component', () => {
       );
 
       expect(screen.getByText('C')).toBeInTheDocument();
+    });
+  });
+
+  describe('Grid Lyrics', () => {
+    it('renders timed lyrics directly under the matching beat row', () => {
+      const chords = ['C', 'Am', 'F', 'G'];
+      const beats = [0, 1, 2, 3];
+
+      renderWithTheme(
+        <ChordGrid
+          chords={chords}
+          beats={beats}
+          gridLyrics={{
+            mode: 'line',
+            lyrics: {
+              lines: [
+                {
+                  startTime: 1.2,
+                  endTime: 2.5,
+                  text: 'Grid lyric line',
+                  chords: [],
+                },
+              ],
+            },
+          }}
+        />,
+      );
+
+      expect(screen.getByText('Grid lyric line')).toBeInTheDocument();
     });
   });
 });

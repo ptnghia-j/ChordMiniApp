@@ -9,6 +9,7 @@ import { useResolvedChordDisplayData } from '@/hooks/chord-analysis/useResolvedC
 import { AnalysisResult } from '@/services/chord-analysis/chordRecognitionService';
 import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 import { SegmentationResult } from '@/types/chatbotTypes';
+import type { BeatGridTimedLyrics } from './GridLyricsRow';
 
 interface AudioMappingItem {
   chord: string;
@@ -67,6 +68,8 @@ interface ChordGridContainerProps {
   isEditMode?: boolean;
   editedChords?: Record<number, string>;
   onChordEdit?: (index: number, newChord: string) => void;
+  gridLyrics?: BeatGridTimedLyrics | null;
+  plainLyrics?: string | null;
 }
 
 export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(({
@@ -85,6 +88,8 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   isEditMode = false,
   editedChords = {},
   onChordEdit,
+  gridLyrics = null,
+  plainLyrics = null,
 }) => {
   // PERFORMANCE OPTIMIZATION: Memoize stable props to prevent unnecessary re-renders
   // Only recalculate when the actual data changes, not on every render
@@ -201,20 +206,40 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
     effectiveOnBeatClick(beatIndex, timestamp);
   }, [effectiveOnBeatClick]);
 
-  // Render ChordGrid with optimized props
+  const grid = (
+    <ChordGrid
+      // PERFORMANCE OPTIMIZATION: Use memoized stable props
+      {...stableProps}
+      // Click handler from Zustand store
+      isChatbotOpen={isChatbotOpen}
+      isLyricsPanelOpen={isLyricsPanelOpen}
+      onBeatClick={memoizedOnBeatClick}
+      isEditMode={isEditMode}
+      editedChords={editedChords}
+      onChordEdit={onChordEdit}
+      gridLyrics={gridLyrics}
+    />
+  );
+
+  if (!plainLyrics) {
+    return <div>{grid}</div>;
+  }
+
   return (
-    <div>
-      <ChordGrid
-        // PERFORMANCE OPTIMIZATION: Use memoized stable props
-        {...stableProps}
-        // Click handler from Zustand store
-        isChatbotOpen={isChatbotOpen}
-        isLyricsPanelOpen={isLyricsPanelOpen}
-        onBeatClick={memoizedOnBeatClick}
-        isEditMode={isEditMode}
-        editedChords={editedChords}
-        onChordEdit={onChordEdit}
-      />
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(230px,28%)]">
+      <div className="min-w-0">{grid}</div>
+      <aside className="min-w-0 rounded-xl border border-stone-300 bg-stone-50/95 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] dark:border-gray-600 dark:bg-gray-800/50">
+        <div className="border-b border-stone-200/80 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:text-slate-100">
+          Plain Lyrics
+        </div>
+        <div className="max-h-[520px] overflow-y-auto overscroll-contain px-3 py-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          {plainLyrics.split('\n').map((line, index) => (
+            <p key={index} className={line.trim() ? 'mb-2' : 'mb-4'}>
+              {line.trim() || '\u00A0'}
+            </p>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 });

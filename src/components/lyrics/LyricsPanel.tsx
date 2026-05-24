@@ -69,6 +69,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
         if (enhancedResponse.metadata.source === 'lrclib') {
           const legacyResponse: LRCLibResponse = {
             success: true, has_synchronized: enhancedResponse.has_synchronized,
+            has_word_synced: enhancedResponse.has_word_synced,
             synchronized_lyrics: enhancedResponse.synchronized_lyrics,
             plain_lyrics: enhancedResponse.plain_lyrics,
             metadata: {
@@ -151,7 +152,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
 
   const songTitle = enhancedLyricsData?.metadata?.title || lrclibData?.metadata?.title;
   const songArtist = enhancedLyricsData?.metadata?.artist || lrclibData?.metadata?.artist;
-  const geniusUrl = enhancedLyricsData?.metadata?.genius_url;
 
   const hasAnyData = !!(lyricsData || lrclibData || enhancedLyricsData);
 
@@ -307,11 +307,6 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                   <div className="px-4 pt-2 pb-1.5">
                     <h4 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">{songTitle}</h4>
                     {songArtist && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">by {songArtist}</p>}
-                    {geniusUrl && (
-                      <a href={geniusUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline">
-                        View on Genius
-                      </a>
-                    )}
                   </div>
                 </div>
               )}
@@ -332,7 +327,7 @@ const LyricsPanel: React.FC<LyricsPanelProps> = React.memo(({
                   </div>
                 )}
 
-                {/* Genius / non-lrclib plain lyrics */}
+                {/* Plain lyrics */}
                 {enhancedLyricsData && enhancedLyricsData.metadata.source !== 'lrclib' && (
                   <div className="text-gray-800 dark:text-gray-200 text-sm">
                     {enhancedLyricsData.plain_lyrics

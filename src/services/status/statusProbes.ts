@@ -57,6 +57,16 @@ function worseStatus(left: PublicServiceStatus, right: PublicServiceStatus): Pub
   return statusRank(left) >= statusRank(right) ? left : right;
 }
 
+function cloneProbeResultForService(result: StatusProbeResult, serviceId: StatusServiceId): StatusProbeResult {
+  const serviceLabel = SERVICE_LABELS[serviceId];
+  return {
+    ...result,
+    serviceId,
+    serviceLabel,
+    sanitizedSummary: safeSummary(serviceLabel, result.status, result.probeKind),
+  };
+}
+
 async function probeJsonEndpoint(
   serviceId: StatusServiceId,
   probeKind: StatusProbeKind,
@@ -164,6 +174,51 @@ async function probeJsonEndpointWithRetries(
   };
 }
 
+async function probeServiceBehindKnownHealth(
+  serviceId: StatusServiceId,
+  healthResult: StatusProbeResult,
+  endpoints: StandardEndpointProbe[],
+  timeoutMs: number,
+): Promise<StatusProbeResult> {
+  const checkedAt = new Date().toISOString();
+  const serviceHealthResult = cloneProbeResultForService(healthResult, serviceId);
+  const metadataEndpoints = endpoints.filter((ep) => ep.probeKind !== 'health');
+  const results: StatusProbeResult[] = [serviceHealthResult];
+
+  if (serviceHealthResult.status === 'operational' && metadataEndpoints.length > 0) {
+    const metadataResults = await Promise.all(
+      metadataEndpoints.map((ep) => probeJsonEndpointWithRetries(serviceId, ep, timeoutMs)),
+    );
+    results.push(...metadataResults);
+  }
+
+  const normalizedResults = softenOutagesBehindHealthyLiveness(serviceId, results);
+  const normalizedStatus = normalizedResults.reduce<PublicServiceStatus>(
+    (current, result) => worseStatus(current, result.status),
+    'operational',
+  );
+  const failedOrSlowResult = normalizedResults
+    .filter((result) => result.status !== 'operational')
+    .sort((left, right) => statusRank(right.status) - statusRank(left.status))[0];
+  const representative = failedOrSlowResult || normalizedResults[0];
+  const latencyMs = normalizedResults.reduce<number | null>((maxLatency, result) => {
+    if (result.latencyMs === null) return maxLatency;
+    return maxLatency === null ? result.latencyMs : Math.max(maxLatency, result.latencyMs);
+  }, null);
+
+  return {
+    serviceId,
+    serviceLabel: SERVICE_LABELS[serviceId],
+    probeKind: representative?.probeKind || endpoints[0]?.probeKind || 'health',
+    status: normalizedStatus,
+    ok: normalizedStatus !== 'outage',
+    latencyMs,
+    checkedAt,
+    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], normalizedStatus, representative?.probeKind || 'health'),
+    failureReason: representative?.failureReason,
+  };
+}
+
 function softenOutagesBehindHealthyLiveness(
   serviceId: StatusServiceId,
   results: StatusProbeResult[],
@@ -258,6 +313,25 @@ async function probeServiceWithAggregation(
   };
 }
 
+async function probePythonModelServices(pythonBaseUrl: string, timeoutMs: number): Promise<[StatusProbeResult, StatusProbeResult]> {
+  const startedAt = Date.now();
+  const sharedHealthResult = await probeJsonEndpointWithRetries('beat', {
+    probeKind: 'health',
+    url: `${pythonBaseUrl}/health`,
+  }, timeoutMs);
+  const elapsedMs = Date.now() - startedAt;
+  const remainingMs = Math.max(STANDARD_MIN_ATTEMPT_TIMEOUT_MS, timeoutMs - elapsedMs);
+
+  return Promise.all([
+    probeServiceBehindKnownHealth('beat', sharedHealthResult, [
+      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/model-info` },
+    ], remainingMs),
+    probeServiceBehindKnownHealth('chord', sharedHealthResult, [
+      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/chord-model-info` },
+    ], remainingMs),
+  ]);
+}
+
 export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
   const config = getStatusConfig();
   const serviceId: StatusServiceId = 'gemini';
@@ -339,18 +413,17 @@ export async function runStandardStatusProbes(): Promise<StatusProbeResult[]> {
   const pythonBaseUrl = getPythonApiUrl();
   const sheetSageBaseUrl = getSheetSageApiUrl();
 
-  return Promise.all([
-    probeServiceWithAggregation('beat', [
-      { probeKind: 'health', url: `${pythonBaseUrl}/health` },
-      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/model-info` },
-    ], config.probeTimeoutMs),
-    probeServiceWithAggregation('chord', [
-      { probeKind: 'health', url: `${pythonBaseUrl}/health` },
-      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/chord-model-info` },
-    ], config.probeTimeoutMs),
+  const [pythonResults, sheetSageProbe, geminiProbe] = await Promise.all([
+    probePythonModelServices(pythonBaseUrl, config.probeTimeoutMs),
     probeServiceWithAggregation('sheetsage', [
       { probeKind: 'health', url: `${sheetSageBaseUrl}/health?warmup=true` },
     ], config.probeTimeoutMs),
     probeGeminiGeneration(),
   ]);
+
+  return [
+    ...pythonResults,
+    sheetSageProbe,
+    geminiProbe,
+  ];
 }

@@ -126,10 +126,6 @@ export function useRateLimiting(options: UseRateLimitingOptions = {}) {
       apiCall(() => apiService.recognizeChords(file, options)), [apiCall]
     ),
 
-    getGeniusLyrics: useCallback((artist: string, title: string) =>
-      apiCall(() => apiService.getGeniusLyrics(artist, title)), [apiCall]
-    ),
-
     getLrcLibLyrics: useCallback((artist: string, title: string, duration?: number) =>
       apiCall(() => apiService.getLrcLibLyrics(artist, title, duration)), [apiCall]
     ),
@@ -180,9 +176,6 @@ export function useStatusMonitoring() {
       } else if (endpoint === '/api/model-info') {
         // Use existing model-info API route
         response = await api.getModelInfo();
-      } else if (endpoint === '/api/genius-lyrics') {
-        // POST endpoint with JSON body
-        response = await api.getGeniusLyrics('test', 'test');
       } else {
         // FIXED: Use frontend status-check route to avoid CORS issues
         // This route acts as a proxy and can make server-to-server requests
@@ -232,31 +225,6 @@ export function useStatusMonitoring() {
         } else {
           status = 'offline';
         }
-      } else if (endpoint === '/api/genius-lyrics') {
-        // Genius endpoint returns 500 when API key is not configured, but endpoint is responsive
-        // Also check for service availability errors and API key issues
-        const isApiKeyIssue = response.error?.includes('API key') ||
-                             response.error?.includes('not configured') ||
-                             response.error?.includes('GENIUS_API_KEY') ||
-                             response.error?.includes('expired') ||
-                             response.error?.includes('revoked') ||
-                             response.error?.includes('malformed') ||
-                             response.error?.includes('invalid') ||
-                             response.error?.includes('Unauthorized');
-
-        const isServiceIssue = response.error?.includes('service is not available') ||
-                              response.error?.includes('lyricsgenius library');
-
-        // If it's an API key issue or service issue, the endpoint is still "online" but misconfigured
-        if (!response.success && (isApiKeyIssue || isServiceIssue)) {
-          status = 'online';
-        } else if (response.success) {
-          status = 'online';
-        } else if (isColdStart) {
-          status = 'checking';
-        } else {
-          status = 'offline';
-        }
       } else {
         // Other endpoints should return success
         if (response.success) {
@@ -299,8 +267,7 @@ export function useStatusMonitoring() {
         '/',
         '/api/model-info',
         '/api/detect-beats',
-        '/api/recognize-chords',
-        '/api/genius-lyrics'
+        '/api/recognize-chords'
       ];
       
       const promises = endpointsToCheck.map(endpoint => checkEndpoint(endpoint));

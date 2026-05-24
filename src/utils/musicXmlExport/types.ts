@@ -4,6 +4,8 @@ import type { SegmentationResult } from '@/types/chatbotTypes';
 import type { SheetSageNoteEvent } from '@/types/sheetSage';
 import type { HandHint, NotationPartId, RenderNoteType } from './constants';
 
+import type { LyricsData } from '@/types/musicAiTypes';
+
 export interface LeadSheetChordEvent {
   chordName: string;
   displayChordName?: string;
@@ -24,6 +26,7 @@ export interface MusicXmlExportOptions {
   title?: string;
   keySignature?: string | null;
   enableLeadingSilenceAnacrusisSearch?: boolean;
+  lyrics?: LyricsData | null;
 }
 
 export interface MusicXmlKeySection {
@@ -40,6 +43,7 @@ export interface QuantizedNoteEvent {
   pitch: number;
   startDivision: number;
   endDivision: number;
+  originalIndex?: number;
 }
 
 export interface AnacrusisSelectionResult {
@@ -56,6 +60,7 @@ export interface MeasureNoteSegment {
   tieStart: boolean;
   tieStop: boolean;
   beatCarryDuration: number;
+  originalIndex?: number;
 }
 
 export type MeasureEvent =
@@ -67,6 +72,7 @@ export type MeasureEvent =
       startInMeasure: number;
       tieStart: boolean;
       tieStop: boolean;
+      originalIndex?: number;
     };
 
 export interface AbsoluteNoteEvent {

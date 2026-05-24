@@ -100,6 +100,70 @@ describe('statusProbes', () => {
     });
   });
 
+  it('reuses one shared Python health probe for beat and chord model checks', async () => {
+    const attemptsByUrl = new Map<string, number>();
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      attemptsByUrl.set(url, (attemptsByUrl.get(url) || 0) + 1);
+
+      return {
+        ok: true,
+        status: 200,
+      } as Response;
+    });
+
+    const probes = await runStandardStatusProbes();
+
+    expect(attemptsByUrl.get('https://python.private.test/health')).toBe(1);
+    expect(attemptsByUrl.get('https://python.private.test/api/model-info')).toBe(1);
+    expect(attemptsByUrl.get('https://python.private.test/api/chord-model-info')).toBe(1);
+    expect(probes.find((probe) => probe.serviceId === 'beat')).toMatchObject({
+      serviceId: 'beat',
+      status: 'operational',
+    });
+    expect(probes.find((probe) => probe.serviceId === 'chord')).toMatchObject({
+      serviceId: 'chord',
+      status: 'operational',
+    });
+  });
+
+  it('does not probe Python model metadata when shared health fails', async () => {
+    process.env.STATUS_PROBE_TIMEOUT_MS = '1000';
+    const attemptsByUrl = new Map<string, number>();
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      attemptsByUrl.set(url, (attemptsByUrl.get(url) || 0) + 1);
+
+      if (url === 'https://python.private.test/health') {
+        return {
+          ok: false,
+          status: 503,
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 200,
+      } as Response;
+    });
+
+    const probes = await runStandardStatusProbes();
+
+    expect(attemptsByUrl.get('https://python.private.test/health')).toBe(1);
+    expect(attemptsByUrl.get('https://python.private.test/api/model-info')).toBeUndefined();
+    expect(attemptsByUrl.get('https://python.private.test/api/chord-model-info')).toBeUndefined();
+    expect(probes.find((probe) => probe.serviceId === 'beat')).toMatchObject({
+      serviceId: 'beat',
+      probeKind: 'health',
+      status: 'outage',
+    });
+    expect(probes.find((probe) => probe.serviceId === 'chord')).toMatchObject({
+      serviceId: 'chord',
+      probeKind: 'health',
+      status: 'outage',
+    });
+  });
+
   it('reports metadata timeouts as degraded when the shared backend health check passes', async () => {
     process.env.STATUS_PROBE_TIMEOUT_MS = '1';
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {

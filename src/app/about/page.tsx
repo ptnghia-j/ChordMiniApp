@@ -187,13 +187,13 @@ const AboutPage: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Genius API */}
+                {/* LRCLIB API */}
                 <div className="border-l-4 border-yellow-500 pl-4">
                   <h4 className="font-medium text-gray-900 dark:text-white">
-                    <a href="https://docs.genius.com/"
+                    <a href="https://lrclib.net/docs"
                        className="text-blue-600 dark:text-blue-400 hover:underline"
                        target="_blank" rel="noopener noreferrer">
-                      Genius API
+                      LRCLIB API
                     </a>
                   </h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">

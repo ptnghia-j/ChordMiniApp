@@ -91,13 +91,15 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
             <ChordGridContainer
               chordGridData={chordGridData}
               isChatbotOpen={props.isChatbotOpen}
-              isLyricsPanelOpen={props.isLyricsPanelOpen}
+              isLyricsPanelOpen={false}
               segmentationData={segmentationData}
               isEditMode={props.isEditMode}
               editedChords={props.editedChords}
               onChordEdit={props.onChordEdit}
               showCorrectedChords={props.showCorrectedChords}
               sequenceCorrections={sequenceCorrections}
+              gridLyrics={props.gridLyrics}
+              plainLyrics={props.plainLyrics}
             />
 
             <AnalysisSummary
@@ -128,6 +130,8 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
             segmentationData={segmentationData}
             isChordPlaybackEnabled={props.isChordPlaybackEnabled}
             audioUrl={props.audioUrl}
+            gridLyrics={props.gridLyrics}
+            plainLyrics={props.plainLyrics}
           />
         )}
 
@@ -145,6 +149,7 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
             audioUrl={props.audioUrl}
             sheetSageResult={sheetSageResult}
             showMelodicOverlay={props.showMelodicOverlay}
+            gridLyrics={props.gridLyrics}
           />
         )}
       </div>
@@ -163,6 +168,7 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
           sequenceCorrections={sequenceCorrections}
         />
       )}
+
     </div>
   );
 }
