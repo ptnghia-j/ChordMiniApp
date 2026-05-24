@@ -13,6 +13,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ChordGrid from '@/components/chord-analysis/ChordGrid';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { groupPlacementsIntoRows } from '@/components/chord-analysis/GridLyricsRow';
 
 jest.mock('@/components/chord-analysis/BeatHighlighter', () => ({
   __esModule: true,
@@ -595,6 +596,22 @@ describe('ChordGrid Component', () => {
       );
 
       expect(screen.getByText('Grid lyric line')).toBeInTheDocument();
+    });
+
+    it('groups non-overlapping lyric lines onto the same visual row using groupPlacementsIntoRows', () => {
+      const placements = [
+        { line: { text: 'First line', startTime: 0, endTime: 2, chords: [] }, columnStart: 1, columnEnd: 4 },
+        { line: { text: 'Second line', startTime: 2, endTime: 4, chords: [] }, columnStart: 5, columnEnd: 8 },
+        { line: { text: 'Third overlapping line', startTime: 1, endTime: 3, chords: [] }, columnStart: 3, columnEnd: 6 },
+      ];
+
+      const grouped = groupPlacementsIntoRows(placements);
+      expect(grouped).toHaveLength(2);
+      expect(grouped[0]).toHaveLength(2);
+      expect(grouped[0][0].line.text).toBe('First line');
+      expect(grouped[0][1].line.text).toBe('Second line');
+      expect(grouped[1]).toHaveLength(1);
+      expect(grouped[1][0].line.text).toBe('Third overlapping line');
     });
   });
 });

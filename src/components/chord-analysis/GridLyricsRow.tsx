@@ -10,15 +10,37 @@ export interface BeatGridTimedLyrics {
   lyrics: LyricsData;
 }
 
+export function groupPlacementsIntoRows<T extends { columnStart: number; columnEnd: number }>(
+  placements: T[]
+): T[][] {
+  if (placements.length === 0) return [];
+  const sorted = [...placements].sort((a, b) => a.columnStart - b.columnStart);
+  const rows: T[][] = [];
+  sorted.forEach((p) => {
+    const suitableRow = rows.find((row) => {
+      const lastP = row[row.length - 1];
+      return p.columnStart > lastP.columnEnd;
+    });
+    if (suitableRow) {
+      suitableRow.push(p);
+    } else {
+      rows.push([p]);
+    }
+  });
+  return rows;
+}
+
 interface GridLyricsRowProps {
   placements: Array<{
     line: LyricLine;
     columnStart: number;
+    columnEnd: number;
   }>;
   columnCount: number;
   mode: 'word' | 'line';
   fontSize?: string;
 }
+
 
 function ActiveLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 'line' }) {
   const currentTime = useCurrentTime();
@@ -91,6 +113,8 @@ export function GridLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 
 }
 
 export default function GridLyricsRow({ placements, columnCount, mode, fontSize }: GridLyricsRowProps) {
+  const rows = useMemo(() => groupPlacementsIntoRows(placements), [placements]);
+
   if (placements.length === 0) return null;
 
   return (
@@ -101,16 +125,25 @@ export default function GridLyricsRow({ placements, columnCount, mode, fontSize 
         fontSize: fontSize || undefined,
       }}
     >
-      {placements.map(({ line, columnStart }, index) => (
-        <div
-          key={`${line.startTime}-${index}`}
-          className="min-w-0 whitespace-normal text-left"
-          style={{
-            gridColumn: `${Math.max(1, Math.min(columnStart, columnCount))} / -1`,
-          }}
-        >
-          <GridLyricText line={line} mode={mode} />
-        </div>
+      {rows.map((row, rowIndex) => (
+        row.map((placement, itemIndex) => {
+          const nextPlacement = row[itemIndex + 1];
+          const gridColumnEnd = nextPlacement
+            ? nextPlacement.columnStart
+            : '-1';
+          return (
+            <div
+              key={`${placement.line.startTime}-${itemIndex}`}
+              className="min-w-0 whitespace-normal text-left"
+              style={{
+                gridColumn: `${Math.max(1, Math.min(placement.columnStart, columnCount))} / ${gridColumnEnd}`,
+                gridRow: `${rowIndex + 1}`,
+              }}
+            >
+              <GridLyricText line={placement.line} mode={mode} />
+            </div>
+          );
+        })
       ))}
     </div>
   );

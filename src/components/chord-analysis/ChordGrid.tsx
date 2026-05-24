@@ -19,7 +19,7 @@ import { useLoopBeatSelection } from '@/hooks/chord-analysis/useLoopBeatSelectio
 import { SegmentationResult } from '@/types/chatbotTypes';
 import { ChordGridHeader } from './ChordGridHeader';
 import { ChordCell } from './ChordCell';
-import GridLyricsRow, { type BeatGridTimedLyrics } from './GridLyricsRow';
+import GridLyricsRow, { type BeatGridTimedLyrics, groupPlacementsIntoRows } from './GridLyricsRow';
 import { enhanceLyricsWithCharacterTiming, type EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
@@ -71,6 +71,7 @@ interface MetricSectionBlock {
 interface GridLyricPlacement {
   line: NonNullable<BeatGridTimedLyrics['lyrics']['lines']>[number];
   columnStart: number;
+  columnEnd: number;
 }
 
 interface GridLyricRowPlacement {
@@ -880,7 +881,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         const subStartTime = trimmedRowTokens[0].startTime;
         const subEndTime = trimmedRowTokens[trimmedRowTokens.length - 1].endTime;
         const subBeatIndex = trimmedRowTokens[0].beatIndex;
+        const subBeatEndIndex = trimmedRowTokens[trimmedRowTokens.length - 1].beatIndex;
         const columnStart = subBeatIndex - startIndex + 1;
+        const columnEnd = subBeatEndIndex - startIndex + 1;
 
         const firstChar = trimmedRowTokens[0].startChar;
         const lastChar = trimmedRowTokens[trimmedRowTokens.length - 1].endChar;
@@ -910,6 +913,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
             characterTimings: subCharacterTimings,
           } as EnhancedLyricLine,
           columnStart,
+          columnEnd,
         });
       }
     });
@@ -1184,7 +1188,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                 {metricSectionBlocks.map((section, sectionIdx) => {
                   const rowsHeight = section.rows.reduce((sum, row) => {
                     const lyricLines = getLyricsForGroupedRow(row);
-                    const lineCount = lyricLines.placements.length;
+                    const visualRows = groupPlacementsIntoRows(lyricLines.placements);
+                    const lineCount = visualRows.length;
                     return sum + segmentationRowHeightPx + getLyricsBlockHeight(lineCount);
                   }, 0);
 
@@ -1231,7 +1236,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
                 {sectionBlocks.map((section, sectionIdx) => {
                   const rowsHeight = section.rows.reduce((sum, row) => {
                     const lyricLines = getLyricsForSegmentedRow(row);
-                    const lineCount = lyricLines.placements.length;
+                    const visualRows = groupPlacementsIntoRows(lyricLines.placements);
+                    const lineCount = visualRows.length;
                     return sum + segmentationRowHeightPx + getLyricsBlockHeight(lineCount);
                   }, 0);
 

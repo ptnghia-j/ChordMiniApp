@@ -635,4 +635,55 @@ describe('segment alignment solver comparison', () => {
     expect(firstPhraseCounts[0]).toBeGreaterThan(firstPhraseCounts[1]);
     expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
   });
+
+  it('corrects local phrase-phase drift on a pop/classical sequence with alternating 2-beat chord changes', () => {
+    const appendRun = (target: string[], chord: string, beats: number) => {
+      target.push(...Array(beats).fill(chord));
+    };
+    const chords: string[] = [];
+    [
+      ['E:maj', 2],
+      ['A:maj', 2],
+      ['F#:min', 2],
+      ['A:maj', 4],
+      ['D:maj', 4],
+      ['A:maj', 4],
+      ['E:maj', 4],
+      ['A:maj', 4],
+      ['F#:min', 4],
+      ['B:min7', 4],
+      ['E:maj', 4],
+      ['A:maj', 4],
+      ['F#:min', 4],
+      ['B:min7', 4],
+      ['E:maj', 4],
+      ['A:maj', 4],
+      ['F#:min', 4],
+      ['B:min7', 4],
+    ].forEach(([chord, beats]) => appendRun(chords, chord as string, beats as number));
+
+    const prepend: string[] = [];
+    Array.from({ length: 2 }, (_, i) => (i % 2 === 0 ? 'A:maj' : 'E:maj'))
+      .forEach((chord) => appendRun(prepend, chord, 4));
+
+    const testChords = [
+      ...prepend,
+      'A:maj', 'A:maj', 'A:maj',
+      ...chords,
+    ];
+
+    const beats = testChords.map((_, index) => index * 0.5);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(testChords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+
+    const decision = result.decisions.find(d => d.source === 'phrase_phase');
+    expect(decision).toBeDefined();
+    expect(decision?.adjustment).toBe(-1);
+  });
 });

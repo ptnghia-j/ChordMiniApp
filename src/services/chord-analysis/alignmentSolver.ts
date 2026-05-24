@@ -296,11 +296,17 @@ function scoreSegment(
   return starts.reduce((score, startIndex, order) => {
     const modulo = (startIndex + delta + timeSignature * 1000) % timeSignature;
     const runLength = getChordRunLength(chords, startIndex, segmentEnd);
-    const firstStartWeight = order === 0 ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.firstStartBonus : 0;
+    const isSongEnd = startIndex + runLength === chords.length;
+    const firstStartWeight = order === 0
+      ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.firstStartBonus
+      : 0;
+    const finalChordBonus = (isSongEnd && runLength >= timeSignature)
+      ? 12
+      : 0;
     const longRunWeight = runLength >= timeSignature
       ? GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.longRunStartBonus
       : 0;
-    const weight = 1 + firstStartWeight + longRunWeight;
+    const weight = 1 + firstStartWeight + finalChordBonus + longRunWeight;
 
     return score + scoreStartModulo(modulo, timeSignature, weight);
   }, 0);
@@ -545,6 +551,25 @@ function buildTempoWindows(
   return windows;
 }
 
+function findNextSilentRun(chords: string[], startIndex: number, endIndex: number): number {
+  const minLength = 2;
+  let index = startIndex;
+  while (index < endIndex - minLength + 1) {
+    let isRun = true;
+    for (let i = 0; i < minLength; i++) {
+      if (!isSilentChord(chords[index + i])) {
+        isRun = false;
+        break;
+      }
+    }
+    if (isRun) {
+      return index;
+    }
+    index += 1;
+  }
+  return endIndex;
+}
+
 function scorePhrasePhaseCandidate(params: {
   chords: string[];
   boundaryIndex: number;
@@ -562,7 +587,8 @@ function scorePhrasePhaseCandidate(params: {
     source = 'phrase_phase',
   } = params;
   const config = GRID_ALIGNMENT_CONFIG.segmentAlignmentSolver.phrasePhase;
-  const segmentEnd = Math.min(chords.length, boundaryIndex + config.lookaheadBeats);
+  const rawSegmentEnd = Math.min(chords.length, boundaryIndex + config.lookaheadBeats);
+  const segmentEnd = Math.min(chords.length, findNextSilentRun(chords, boundaryIndex, rawSegmentEnd));
   const starts = getMusicalChordStartIndices(chords, boundaryIndex, segmentEnd);
 
   if (starts.length < config.minStarts) {
@@ -573,7 +599,9 @@ function scorePhrasePhaseCandidate(params: {
   const correctedCounts = countStartModulos(starts, timeSignature, adjustment);
   const currentDownbeats = currentCounts[0] ?? 0;
   const correctedDownbeats = correctedCounts[0] ?? 0;
-  const strongestCorrectedOffDownbeat = Math.max(0, ...correctedCounts.slice(1));
+  const strongestCorrectedOffDownbeat = timeSignature === 4
+    ? Math.max(correctedCounts[1] ?? 0, correctedCounts[3] ?? 0)
+    : Math.max(0, ...correctedCounts.slice(1));
   const currentDownbeatShare = currentDownbeats / starts.length;
   const correctedDownbeatShare = correctedDownbeats / starts.length;
   const downbeatGain = correctedDownbeats - currentDownbeats;
@@ -595,8 +623,16 @@ function scorePhrasePhaseCandidate(params: {
     const previousStarts = getMusicalChordStartIndices(chords, previousStart, boundaryIndex);
     if (previousStarts.length >= config.minPreviousStarts) {
       const previousCounts = countStartModulos(previousStarts, timeSignature);
-      const previousDownbeatShare = (previousCounts[0] ?? 0) / previousStarts.length;
-      if (previousDownbeatShare < config.minPreviousDownbeatShare) {
+      let isStable = false;
+      if (timeSignature === 4) {
+        const phase02Share = ((previousCounts[0] ?? 0) + (previousCounts[2] ?? 0)) / previousStarts.length;
+        const phase13Share = ((previousCounts[1] ?? 0) + (previousCounts[3] ?? 0)) / previousStarts.length;
+        isStable = Math.max(phase02Share, phase13Share) >= 0.70;
+      } else {
+        const maxShare = Math.max(...previousCounts) / previousStarts.length;
+        isStable = maxShare >= config.minPreviousDownbeatShare;
+      }
+      if (!isStable) {
         return null;
       }
     }
@@ -648,7 +684,7 @@ function scorePhrasePhaseCandidate(params: {
   return candidate;
 }
 
-function buildPhrasePhaseCandidateForBoundary(params: {
+export function buildPhrasePhaseCandidateForBoundary(params: {
   chords: string[];
   boundaryIndex: number;
   timeSignature: number;

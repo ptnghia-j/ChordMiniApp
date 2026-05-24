@@ -1,0 +1,65 @@
+starts length: 10 starts: [
+  51,
+  53,
+  55,
+  57,
+  60,
+  66,
+  70,
+  74,
+  78,
+  82
+]
+Scoring details: {
+  "currentCounts": [
+    1,
+    2,
+    5,
+    2
+  ],
+  "correctedCounts": [
+    2,
+    5,
+    2,
+    1
+  ],
+  "currentDownbeats": 1,
+  "correctedDownbeats": 2,
+  "strongestCorrectedOffDownbeat": 5,
+  "currentDownbeatShare": 0.1,
+  "correctedDownbeatShare": 0.2,
+  "downbeatGain": 1
+}
+previousStarts: [
+  3,
+  4,
+  8,
+  12,
+  16,
+  20,
+  24,
+  28,
+  32,
+  36,
+  40,
+  44,
+  48
+]
+previousCounts: [
+  12,
+  0,
+  0,
+  1
+]
+previousDownbeatShare: 0.9230769230769231
+anchorChord: A:maj runLength: 3
+Result Decisions: [
+  {
+    "startIndex": 12,
+    "endIndex": 16,
+    "source": "phase_anchor",
+    "minAdjustment": -3,
+    "maxAdjustment": 0,
+    "adjustment": 0
+  }
+]
