@@ -112,7 +112,7 @@ async function fetchAudioWithRetry(
  * Audio Proxy API Route
  *
  * This route proxies audio requests to avoid CORS issues when fetching
- * audio files from external sources like QuickTube.
+ * audio files from external sources and legacy cached stream URLs.
  */
 
 // Configure Vercel function timeout (up to 800 seconds for Pro plan)
@@ -210,27 +210,25 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔄 Proxying audio request: ${audioUrl}`);
 
-    // CRITICAL FIX: QuickTube URLs require unencoded square brackets
-    // Do NOT encode square brackets for QuickTube URLs as they expect [videoId] format
+    // Legacy extraction URLs require unencoded square brackets.
     let fetchUrl = validatedAudioUrl.toString();
     try {
-      const isQuickTubeUrl = audioUrl.includes('quicktube.app/dl/');
+      const isLegacyExtractionUrl = audioUrl.includes('quicktube.app/dl/');
 
-      if (isQuickTubeUrl) {
-        // For QuickTube URLs, ensure square brackets are NOT encoded
+      if (isLegacyExtractionUrl) {
+        // For legacy URLs, ensure square brackets are not encoded.
         if (audioUrl.includes('%5B') || audioUrl.includes('%5D')) {
-          // Decode any encoded square brackets for QuickTube
           fetchUrl = audioUrl.replace(/%5B/g, '[').replace(/%5D/g, ']');
-          console.log(`🔧 QuickTube URL decoded for fetch: ${fetchUrl}`);
+          console.log(`🔧 Legacy extraction URL decoded for fetch: ${fetchUrl}`);
         } else {
-          console.log(`🔧 QuickTube URL already has unencoded brackets: ${fetchUrl}`);
+          console.log(`🔧 Legacy extraction URL already has unencoded brackets: ${fetchUrl}`);
         }
       } else {
-        // For non-QuickTube URLs, apply standard encoding if needed
+        // For other URLs, apply standard encoding if needed.
         const isAlreadyEncoded = audioUrl.includes('%5B') || audioUrl.includes('%5D');
         if (!isAlreadyEncoded && (audioUrl.includes('[') || audioUrl.includes(']'))) {
           fetchUrl = audioUrl.replace(/\[/g, '%5B').replace(/\]/g, '%5D');
-          console.log(`🔧 Non-QuickTube URL encoded for fetch: ${fetchUrl}`);
+          console.log(`🔧 Non-legacy URL encoded for fetch: ${fetchUrl}`);
         }
       }
     } catch (urlError) {

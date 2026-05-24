@@ -5,8 +5,14 @@ import {
   setDocumentWithAdminAccess,
 } from '@/services/firebase/firestoreAdminService';
 import { getStatusConfig } from '@/services/status/statusConfig';
+import {
+  STATUS_DEPENDENCY_GROUPS,
+  STATUS_SERVICE_IDS,
+  STATUS_SERVICE_LABELS,
+} from '@/services/status/statusConstants';
 import type {
   PublicOverallStatus,
+  PublicStatusProbeDetail,
   PublicStatusAnalysis,
   PublicStatusIncident,
   PublicStatusReport,
@@ -18,14 +24,7 @@ import type {
 
 export const STATUS_REPORTS_COLLECTION = 'statusReports';
 
-const SERVICE_LABELS: Record<StatusServiceId, string> = {
-  beat: 'Beat Detection',
-  chord: 'Chord Recognition',
-  sheetsage: 'Sheet Sage',
-  gemini: 'Gemini API',
-};
-
-const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'gemini'];
+const RECENT_PROBE_DETAIL_LIMIT = 12;
 
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Number(value.toFixed(2))));
@@ -59,22 +58,25 @@ function emptyAnalysis(): PublicStatusAnalysis {
 function emptyService(id: StatusServiceId): PublicStatusServiceSummary {
   return {
     id,
-    label: SERVICE_LABELS[id],
+    label: STATUS_SERVICE_LABELS[id],
     status: 'unknown',
     uptimePct: 0,
     totalChecks: 0,
     successfulChecks: 0,
     degradedChecks: 0,
     failedChecks: 0,
+    consecutiveFailedChecks: 0,
     lastCheckedAt: null,
     latencyMs: null,
+    lastProbe: null,
+    recentProbes: [],
   };
 }
 
 function createEmptyReport(date: string, now = new Date()): PublicStatusReport {
   const config = getStatusConfig();
   const services = Object.fromEntries(
-    SERVICE_IDS.map((id) => [id, emptyService(id)]),
+    STATUS_SERVICE_IDS.map((id) => [id, emptyService(id)]),
   ) as Record<StatusServiceId, PublicStatusServiceSummary>;
 
   return {
@@ -94,6 +96,62 @@ function normalizeStatus(status: unknown): PublicServiceStatus {
     : 'unknown';
 }
 
+function sanitizeProbeDetail(detail: Partial<PublicStatusProbeDetail> | undefined, depth = 0): PublicStatusProbeDetail | null {
+  if (!detail) {
+    return null;
+  }
+
+  const serviceId = STATUS_SERVICE_IDS.includes(detail.serviceId as StatusServiceId) ? detail.serviceId as StatusServiceId : 'beat';
+  const serviceLabel = STATUS_SERVICE_LABELS[serviceId];
+  const probeKind = detail.probeKind === 'metadata' || detail.probeKind === 'generation' ? detail.probeKind : 'health';
+  const latencyMs = typeof detail.latencyMs === 'number' && Number.isFinite(detail.latencyMs)
+    ? Math.max(0, Math.round(detail.latencyMs))
+    : null;
+  const checkedAt = typeof detail.checkedAt === 'string' ? detail.checkedAt : new Date(0).toISOString();
+  const sanitized: PublicStatusProbeDetail = {
+    serviceId,
+    serviceLabel,
+    probeKind,
+    endpointId: typeof detail.endpointId === 'string' ? detail.endpointId.slice(0, 80) : undefined,
+    status: normalizeStatus(detail.status),
+    ok: Boolean(detail.ok),
+    latencyMs,
+    checkedAt,
+    failureReason: detail.failureReason === 'http' || detail.failureReason === 'network' || detail.failureReason === 'timeout'
+      ? detail.failureReason
+      : undefined,
+    httpStatus: typeof detail.httpStatus === 'number' && Number.isFinite(detail.httpStatus)
+      ? Math.round(detail.httpStatus)
+      : undefined,
+    attempts: typeof detail.attempts === 'number' && Number.isFinite(detail.attempts)
+      ? Math.max(0, Math.round(detail.attempts))
+      : undefined,
+    timeoutMs: typeof detail.timeoutMs === 'number' && Number.isFinite(detail.timeoutMs)
+      ? Math.max(0, Math.round(detail.timeoutMs))
+      : undefined,
+  };
+
+  if (depth === 0 && Array.isArray(detail.componentResults)) {
+    sanitized.componentResults = detail.componentResults
+      .map((component) => sanitizeProbeDetail(component, depth + 1))
+      .filter((component): component is PublicStatusProbeDetail => component !== null)
+      .slice(0, 6);
+  }
+
+  return sanitized;
+}
+
+function sanitizeProbeDetails(details: unknown): PublicStatusProbeDetail[] {
+  if (!Array.isArray(details)) {
+    return [];
+  }
+
+  return details
+    .map((detail) => sanitizeProbeDetail(detail as Partial<PublicStatusProbeDetail>))
+    .filter((detail): detail is PublicStatusProbeDetail => detail !== null)
+    .slice(0, RECENT_PROBE_DETAIL_LIMIT);
+}
+
 function normalizeService(id: StatusServiceId, service: Partial<PublicStatusServiceSummary> | undefined): PublicStatusServiceSummary {
   const totalChecks = Number(service?.totalChecks || 0);
   const successfulChecks = Number(service?.successfulChecks || 0);
@@ -102,31 +160,52 @@ function normalizeService(id: StatusServiceId, service: Partial<PublicStatusServ
     ...emptyService(id),
     ...service,
     id,
-    label: SERVICE_LABELS[id],
+    label: STATUS_SERVICE_LABELS[id],
     status: normalizeStatus(service?.status),
     totalChecks,
     successfulChecks,
     degradedChecks: Number(service?.degradedChecks || 0),
     failedChecks: Number(service?.failedChecks || 0),
+    consecutiveFailedChecks: Number(service?.consecutiveFailedChecks || 0),
     uptimePct: totalChecks > 0 ? clampPct((successfulChecks / totalChecks) * 100) : 0,
     lastCheckedAt: typeof service?.lastCheckedAt === 'string' ? service.lastCheckedAt : null,
     latencyMs: typeof service?.latencyMs === 'number' ? Math.round(service.latencyMs) : null,
+    lastProbe: sanitizeProbeDetail(service?.lastProbe || undefined),
+    recentProbes: sanitizeProbeDetails(service?.recentProbes),
   };
 }
 
-function computeOverallStatus(services: Record<StatusServiceId, PublicStatusServiceSummary>): PublicOverallStatus {
-  const statuses = Object.values(services).map((service) => service.status);
-  if (statuses.every((status) => status === 'unknown')) return 'unknown';
-  if (statuses.some((status) => status === 'outage')) {
-    return statuses.filter((status) => status === 'outage').length > 1 ? 'major_outage' : 'partial_outage';
-  }
+function worstStatus(statuses: PublicServiceStatus[]): PublicServiceStatus {
+  if (statuses.some((status) => status === 'outage')) return 'outage';
   if (statuses.some((status) => status === 'degraded')) return 'degraded';
+  if (statuses.some((status) => status === 'operational')) return 'operational';
+  return 'unknown';
+}
+
+function computeOverallStatus(services: Record<StatusServiceId, PublicStatusServiceSummary>): PublicOverallStatus {
+  const dependencyStatuses = STATUS_DEPENDENCY_GROUPS.map((group) => (
+    worstStatus(group.map((serviceId) => services[serviceId]?.status || 'unknown'))
+  ));
+
+  if (dependencyStatuses.every((status) => status === 'unknown')) return 'unknown';
+  if (dependencyStatuses.some((status) => status === 'outage')) {
+    return dependencyStatuses.filter((status) => status === 'outage').length > 1 ? 'major_outage' : 'partial_outage';
+  }
+  if (dependencyStatuses.some((status) => status === 'degraded')) return 'degraded';
   return 'operational';
+}
+
+function getPublishedProbeStatus(probeStatus: PublicServiceStatus, consecutiveFailedChecks: number): PublicServiceStatus {
+  if (probeStatus !== 'outage') {
+    return probeStatus;
+  }
+
+  return consecutiveFailedChecks >= getStatusConfig().outageConfirmationChecks ? 'outage' : 'degraded';
 }
 
 function sanitizeReport(report: PublicStatusReport): PublicStatusReport {
   const services = Object.fromEntries(
-    SERVICE_IDS.map((id) => [id, normalizeService(id, report.services?.[id])]),
+    STATUS_SERVICE_IDS.map((id) => [id, normalizeService(id, report.services?.[id])]),
   ) as Record<StatusServiceId, PublicStatusServiceSummary>;
   const incidents = Array.isArray(report.incidents) ? dedupeIncidents(report.date, report.incidents.map(sanitizeIncident)) : [];
 
@@ -155,7 +234,7 @@ function sanitizeIncident(incident: Omit<PublicStatusIncident, 'status'> & { sta
   return {
     id: String(incident.id || `incident-${serviceId}-${incident.startedAt}`),
     serviceId,
-    serviceLabel: incident.serviceLabel || SERVICE_LABELS[serviceId as StatusServiceId] || 'Service',
+    serviceLabel: incident.serviceLabel || STATUS_SERVICE_LABELS[serviceId as StatusServiceId] || 'Service',
     severity: incident.severity === 'critical' || incident.severity === 'major' ? incident.severity : 'minor',
     status: (incident.status === 'resolved' || incident.status === 'recovered') ? 'resolved' : 'investigating',
     title: String(incident.title || 'Service disruption').slice(0, 120),
@@ -323,13 +402,29 @@ export async function recordStatusProbeResults(probes: StatusProbeResult[]): Pro
     if (probe.status === 'operational') current.successfulChecks += 1;
     if (probe.status === 'degraded') current.degradedChecks += 1;
     if (probe.status === 'outage') current.failedChecks += 1;
-    current.status = probe.status;
+    current.consecutiveFailedChecks = probe.status === 'outage' ? current.consecutiveFailedChecks + 1 : 0;
+    current.status = getPublishedProbeStatus(probe.status, current.consecutiveFailedChecks);
     current.lastCheckedAt = probe.checkedAt;
     current.latencyMs = probe.latencyMs === null ? null : Math.round(probe.latencyMs);
+    const lastProbe = sanitizeProbeDetail({
+      ...probe,
+      status: current.status,
+      ok: current.status !== 'outage',
+      componentResults: probe.componentResults,
+    });
+    current.lastProbe = lastProbe;
+    current.recentProbes = [
+      ...(lastProbe ? [lastProbe] : []),
+      ...sanitizeProbeDetails(current.recentProbes),
+    ].slice(0, RECENT_PROBE_DETAIL_LIMIT);
     current.uptimePct = current.totalChecks > 0 ? clampPct((current.successfulChecks / current.totalChecks) * 100) : 0;
     report.services[probe.serviceId] = current;
 
-    updateIncidentFromProbe(report, date, probe);
+    updateIncidentFromProbe(report, date, {
+      ...probe,
+      status: current.status,
+      ok: current.status !== 'outage',
+    });
   }
 
   report.updatedAt = now.toISOString();

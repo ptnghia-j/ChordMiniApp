@@ -13,18 +13,26 @@ jest.mock('@/services/firebase/firestoreAdminService', () => ({
 import { recordStatusProbeResults, STATUS_REPORTS_COLLECTION } from '@/services/status/statusReportService';
 
 describe('statusReportService', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-05-16T14:30:00.000Z'));
     jest.clearAllMocks();
     mockGetDocument.mockResolvedValue(null);
+    process.env = { ...originalEnv };
+    delete process.env.STATUS_OUTAGE_CONFIRMATION_CHECKS;
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  it('writes only sanitized status fields to Firestore', async () => {
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('writes only sanitized status fields to Firestore and softens a first outage probe', async () => {
     await recordStatusProbeResults([
       {
         serviceId: 'gemini',
@@ -35,6 +43,10 @@ describe('statusReportService', () => {
         latencyMs: 1234.56,
         checkedAt: '2026-05-16T14:00:00.000Z',
         sanitizedSummary: 'Gemini API did not pass a generation probe.',
+        failureReason: 'timeout',
+        endpointId: 'gemini-generation',
+        attempts: 1,
+        timeoutMs: 30000,
       },
     ]);
 
@@ -45,32 +57,48 @@ describe('statusReportService', () => {
     expect(JSON.stringify(payload)).not.toContain('stack');
     expect(JSON.stringify(payload)).not.toContain('Authorization');
     expect(payload.services.gemini).toEqual(expect.objectContaining({
-      status: 'outage',
+      status: 'degraded',
       totalChecks: 1,
       failedChecks: 1,
+      consecutiveFailedChecks: 1,
       latencyMs: 1235,
+      lastProbe: expect.objectContaining({
+        serviceId: 'gemini',
+        endpointId: 'gemini-generation',
+        status: 'degraded',
+        failureReason: 'timeout',
+        attempts: 1,
+        timeoutMs: 30000,
+      }),
+      recentProbes: [
+        expect.objectContaining({
+          serviceId: 'gemini',
+          endpointId: 'gemini-generation',
+          status: 'degraded',
+        }),
+      ],
     }));
     expect(payload.incidents[0]).toEqual(expect.objectContaining({
       id: 'gemini-2026-05-16-1400',
       serviceId: 'gemini',
-      severity: 'major',
+      severity: 'minor',
       status: 'investigating',
       endedAt: null,
-      summary: 'Gemini API did not pass one or more status probes.',
+      summary: 'Gemini API showed degraded performance during status probing.',
     }));
   });
 
-  it('keeps repeated failures for the same service in one open public incident', async () => {
+  it('confirms consecutive failures and keeps them in one open public incident', async () => {
     await recordStatusProbeResults([
       {
         serviceId: 'gemini',
         serviceLabel: 'Gemini API',
         probeKind: 'generation',
-        status: 'degraded',
-        ok: true,
+        status: 'outage',
+        ok: false,
         latencyMs: 4000,
         checkedAt: '2026-05-16T14:00:00.000Z',
-        sanitizedSummary: 'Gemini API reported overload or rate limiting during a generation probe.',
+        sanitizedSummary: 'Gemini API did not pass a generation probe.',
       },
       {
         serviceId: 'gemini',
@@ -86,6 +114,11 @@ describe('statusReportService', () => {
 
     const [, , payload] = mockSetDocument.mock.calls[0];
     expect(payload.incidents.filter((incident: { serviceId: string }) => incident.serviceId === 'gemini')).toHaveLength(1);
+    expect(payload.services.gemini).toEqual(expect.objectContaining({
+      status: 'outage',
+      failedChecks: 2,
+      consecutiveFailedChecks: 2,
+    }));
     expect(payload.incidents[0]).toEqual(expect.objectContaining({
       id: 'gemini-2026-05-16-1400',
       title: 'Gemini API outage',
@@ -94,6 +127,56 @@ describe('statusReportService', () => {
       status: 'investigating',
       summary: 'Gemini API did not pass one or more status probes.',
     }));
+  });
+
+  it('does not count shared beat and chord backend failures as a major outage by themselves', async () => {
+    process.env.STATUS_OUTAGE_CONFIRMATION_CHECKS = '1';
+
+    await recordStatusProbeResults([
+      {
+        serviceId: 'beat',
+        serviceLabel: 'Beat Detection',
+        probeKind: 'health',
+        status: 'outage',
+        ok: false,
+        latencyMs: 1000,
+        checkedAt: '2026-05-16T14:00:00.000Z',
+        sanitizedSummary: 'Beat Detection did not pass a health probe.',
+      },
+      {
+        serviceId: 'chord',
+        serviceLabel: 'Chord Recognition',
+        probeKind: 'health',
+        status: 'outage',
+        ok: false,
+        latencyMs: 1000,
+        checkedAt: '2026-05-16T14:00:00.000Z',
+        sanitizedSummary: 'Chord Recognition did not pass a health probe.',
+      },
+      {
+        serviceId: 'sheetsage',
+        serviceLabel: 'Sheet Sage',
+        probeKind: 'health',
+        status: 'operational',
+        ok: true,
+        latencyMs: 10,
+        checkedAt: '2026-05-16T14:00:00.000Z',
+        sanitizedSummary: 'Sheet Sage responded normally.',
+      },
+      {
+        serviceId: 'gemini',
+        serviceLabel: 'Gemini API',
+        probeKind: 'generation',
+        status: 'operational',
+        ok: true,
+        latencyMs: 10,
+        checkedAt: '2026-05-16T14:00:00.000Z',
+        sanitizedSummary: 'Gemini API responded normally.',
+      },
+    ]);
+
+    const [, , payload] = mockSetDocument.mock.calls[0];
+    expect(payload.overallStatus).toBe('partial_outage');
   });
 
   it('resolves an open incident when a later probe succeeds', async () => {

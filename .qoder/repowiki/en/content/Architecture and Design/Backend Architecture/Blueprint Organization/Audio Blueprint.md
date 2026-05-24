@@ -93,7 +93,7 @@ FE_SVC_PROC --> FE_SVC_BEAT
 
 ## Core Components
 - Audio Extraction Blueprint (Flask): Provides YouTube audio extraction endpoints with validation and environment-aware strategies.
-- Audio Extraction Service (Frontend): Orchestrates extraction via yt-mp3-go and yt-dlp depending on environment; caches results and uploads to Firebase.
+- Audio Extraction Service (Frontend): Orchestrates browser yt-dlp production extraction, local yt-dlp development extraction, and explicit yt-mp3-go rollback; caches results and uploads to Firebase.
 - Audio Metadata Service (Frontend): Extracts duration and metadata from URLs or blobs with multiple fallback strategies.
 - Audio Proxy Route (Frontend): Proxies audio to avoid CORS issues, with retry logic and streaming support.
 - Audio Duration Route (Frontend): Detects duration via headers, metadata, or file-size estimation with prioritized cache lookups.
@@ -128,7 +128,7 @@ participant BK as "Backend Audio Blueprint"
 participant FB as "Firebase Storage"
 Client->>FE : POST /api/extract-audio
 FE->>SVC : extractAudio(videoMetadata, forceRedownload)
-SVC->>BK : Environment-aware extraction (yt-mp3-go/yt-dlp/yt-mp3-go)
+SVC->>BK : Environment-aware extraction (browser yt-dlp/local yt-dlp/rollback)
 BK-->>SVC : audioUrl, duration, title
 SVC->>FB : Upload to Firebase (optional)
 FB-->>SVC : storageUrl
@@ -168,7 +168,7 @@ ExtractParams --> |Invalid| ReturnErr
 - [audio/__init__.py:1-11](file://python_backend/blueprints/audio/__init__.py#L1-L11)
 
 ### Audio Extraction Service (Frontend)
-- Strategy selection: Chooses yt-mp3-go or yt-dlp based on environment.
+- Strategy selection: Chooses browser yt-dlp, local yt-dlp, or explicit rollback based on environment.
 - Caching: Checks Firebase Storage and simplified cache before extraction.
 - Storage: Uploads extracted audio to Firebase and validates URL accessibility.
 - Fallbacks: Attempts multiple extraction methods and caches results.

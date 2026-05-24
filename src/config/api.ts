@@ -4,7 +4,8 @@
  * This file centralizes API endpoint configuration and routing logic.
  * ML services (chord recognition, beat detection) are routed to the Python backend (Google Cloud Run)
  * while other endpoints remain on the Vercel frontend.
- * Audio extraction uses QuickTube directly from the frontend.
+ * Audio extraction stays on the frontend service layer: production uses browser yt-dlp
+ * with server finalization, localhost uses local yt-dlp, and yt-mp3-go is rollback-only.
  *
  * Server-side backend routing configuration.
  * Backend service URLs are intentionally resolved from server-only environment variables.
@@ -26,7 +27,7 @@ export const BACKEND_URLS = {
 
 // Endpoint routing configuration
 export const API_ROUTES = {
-  // Audio extraction - uses QuickTube directly (no backend)
+  // Audio extraction - browser/local strategy with server-side cache/finalization.
   EXTRACT_AUDIO: '/api/extract-audio',
 
   // YouTube search - client-side only (no backend)

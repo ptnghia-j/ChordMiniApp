@@ -165,7 +165,7 @@ export const useUIStore = create<UIStore>()(
             const newChatbotOpen = !state.isChatbotOpen;
             return {
               isChatbotOpen: newChatbotOpen,
-              // Close lyrics panel when opening chatbot
+              // Close the embedded lyrics grid when opening chatbot.
               isLyricsPanelOpen: newChatbotOpen ? false : state.isLyricsPanelOpen,
             };
           },
@@ -179,7 +179,7 @@ export const useUIStore = create<UIStore>()(
             const newLyricsPanelOpen = !state.isLyricsPanelOpen;
             return {
               isLyricsPanelOpen: newLyricsPanelOpen,
-              // Close chatbot when opening lyrics panel
+              // Close chatbot when opening the embedded lyrics grid.
               isChatbotOpen: newLyricsPanelOpen ? false : state.isChatbotOpen,
             };
           },

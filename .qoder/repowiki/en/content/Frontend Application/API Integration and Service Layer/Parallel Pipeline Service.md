@@ -3,10 +3,10 @@
 <cite>
 **Referenced Files in This Document**
 - [parallelPipelineService.ts](file://src/services/api/parallelPipelineService.ts)
-- [asyncJobService.ts](file://src/services/api/asyncJobService.ts)
 - [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
-- [routes.ts](file://src/app/api/jobs/status/[jobId]/route.ts)
-- [routes.ts](file://src/app/api/jobs/extract-audio/route.ts)
+- [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
+- [routes.ts](file://src/app/api/segmentation/jobs/[jobId]/route.ts)
+- [routes.ts](file://src/app/api/extract-audio/route.ts)
 - [routes.py](file://python_backend/blueprints/beats/routes.py)
 - [routes.py](file://python_backend/blueprints/chords/routes.py)
 - [beat_detection_service.py](file://python_backend/services/audio/beat_detection_service.py)
@@ -37,12 +37,12 @@ The system spans three main areas:
 graph TB
 subgraph "Frontend Services"
 PPS["ParallelPipelineService<br/>parallelPipelineService.ts"]
-AJS["AsyncJobService<br/>asyncJobService.ts"]
+AJS["SegmentationAsyncService<br/>segmentationAsyncService.ts"]
 SAS["SegmentationAsyncService<br/>segmentationAsyncService.ts"]
 end
 subgraph "Next.js API Routes"
-JSC["Job Status Controller<br/>/api/jobs/status/[jobId]"]
-JEC["Job Extract Controller<br/>/api/jobs/extract-audio"]
+JSC["Job Status Controller<br/>/api/segmentation/jobs/[jobId]"]
+JEC["Job Extract Controller<br/>/api/extract-audio"]
 end
 subgraph "Python Backend"
 BR["Beats Routes<br/>/api/detect-beats"]
@@ -63,35 +63,35 @@ CR --> CRS
 
 **Diagram sources**
 - [parallelPipelineService.ts:1-350](file://src/services/api/parallelPipelineService.ts#L1-L350)
-- [asyncJobService.ts:1-211](file://src/services/api/asyncJobService.ts#L1-L211)
+- [segmentationAsyncService.ts:1-211](file://src/services/api/segmentationAsyncService.ts#L1-L211)
 - [segmentationAsyncService.ts:1-261](file://src/services/api/segmentationAsyncService.ts#L1-L261)
-- [routes.ts:1-115](file://src/app/api/jobs/status/[jobId]/route.ts#L1-L115)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
+- [routes.ts:1-115](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L1-L115)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
 - [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
 - [routes.py:43-144](file://python_backend/blueprints/chords/routes.py#L43-L144)
 
 **Section sources**
 - [parallelPipelineService.ts:1-350](file://src/services/api/parallelPipelineService.ts#L1-L350)
-- [asyncJobService.ts:1-211](file://src/services/api/asyncJobService.ts#L1-L211)
+- [segmentationAsyncService.ts:1-211](file://src/services/api/segmentationAsyncService.ts#L1-L211)
 - [segmentationAsyncService.ts:1-261](file://src/services/api/segmentationAsyncService.ts#L1-L261)
-- [routes.ts:1-115](file://src/app/api/jobs/status/[jobId]/route.ts#L1-L115)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
+- [routes.ts:1-115](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L1-L115)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
 - [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
 - [routes.py:43-144](file://python_backend/blueprints/chords/routes.py#L43-L144)
 
 ## Core Components
 - ParallelPipelineService: Orchestrates parallel processing by downloading complete audio files and starting both Google Cloud Run processing and Firebase uploads concurrently. It maintains caches and background results for efficient reuse and fallbacks.
-- AsyncJobService: Manages long-running jobs that exceed platform timeouts. It creates jobs, polls for completion, and provides progress callbacks with status, progress percentage, elapsed time, and estimated remaining time.
+- SegmentationAsyncService: Manages long-running jobs that exceed platform timeouts. It creates jobs, polls for completion, and provides progress callbacks with status, progress percentage, elapsed time, and estimated remaining time.
 - SegmentationAsyncService: Handles SongFormer segmentation jobs with adaptive polling strategies based on song duration and caching behavior. It supports browser-side worker execution and job patching.
 
 **Section sources**
 - [parallelPipelineService.ts:34-98](file://src/services/api/parallelPipelineService.ts#L34-L98)
-- [asyncJobService.ts:30-101](file://src/services/api/asyncJobService.ts#L30-L101)
+- [segmentationAsyncService.ts:30-101](file://src/services/api/segmentationAsyncService.ts#L30-L101)
 - [segmentationAsyncService.ts:101-162](file://src/services/api/segmentationAsyncService.ts#L101-L162)
 
 ## Architecture Overview
 The system separates concerns across layers:
-- Frontend orchestration: Uses ParallelPipelineService to coordinate parallel operations and AsyncJobService for long-running tasks.
+- Frontend orchestration: Uses ParallelPipelineService to coordinate parallel operations and SegmentationAsyncService for long-running tasks.
 - Job management: Next.js API routes maintain job state and expose status endpoints for polling.
 - Backend inference: Python Flask routes implement beat detection and chord recognition with model selection and size-aware fallbacks.
 
@@ -105,10 +105,10 @@ participant BR as "Beats Routes"
 participant CR as "Chords Routes"
 Client->>PPS : startParallelPipeline(options)
 PPS->>PPS : downloadCompleteAudioFile()
-PPS->>JEC : POST /api/jobs/extract-audio (videoId, title)
+PPS->>JEC : POST /api/extract-audio (videoId, title)
 JEC-->>Client : {jobId}
 loop Polling
-Client->>JSC : GET /api/jobs/status/{jobId}
+Client->>JSC : GET /api/segmentation/jobs/{jobId}
 JSC-->>Client : {status, progress, audioUrl}
 end
 Client->>BR : POST /api/detect-beats (audio_url or file)
@@ -119,8 +119,8 @@ CR-->>Client : Chord results
 
 **Diagram sources**
 - [parallelPipelineService.ts:34-98](file://src/services/api/parallelPipelineService.ts#L34-L98)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
 - [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
 - [routes.py:43-144](file://python_backend/blueprints/chords/routes.py#L43-L144)
 
@@ -173,14 +173,14 @@ The async job service manages long-running operations that exceed platform timeo
 ```mermaid
 sequenceDiagram
 participant Client as "Client"
-participant AJS as "AsyncJobService"
+participant AJS as "SegmentationAsyncService"
 participant JEC as "Job Extract Controller"
 participant JSC as "Job Status Controller"
 Client->>AJS : extractAudio(videoId, onProgress)
-AJS->>JEC : POST /api/jobs/extract-audio
+AJS->>JEC : POST /api/extract-audio
 JEC-->>AJS : {jobId}
 loop Polling
-AJS->>JSC : GET /api/jobs/status/{jobId}
+AJS->>JSC : GET /api/segmentation/jobs/{jobId}
 JSC-->>AJS : {status, progress, elapsedTime, estimatedRemainingTime}
 AJS-->>Client : onProgress(status)
 end
@@ -188,16 +188,16 @@ AJS-->>Client : AsyncJobResult
 ```
 
 **Diagram sources**
-- [asyncJobService.ts:52-101](file://src/services/api/asyncJobService.ts#L52-L101)
-- [asyncJobService.ts:106-177](file://src/services/api/asyncJobService.ts#L106-L177)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
+- [segmentationAsyncService.ts:52-101](file://src/services/api/segmentationAsyncService.ts#L52-L101)
+- [segmentationAsyncService.ts:106-177](file://src/services/api/segmentationAsyncService.ts#L106-L177)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
 
 **Section sources**
-- [asyncJobService.ts:8-28](file://src/services/api/asyncJobService.ts#L8-L28)
-- [asyncJobService.ts:30-101](file://src/services/api/asyncJobService.ts#L30-L101)
-- [asyncJobService.ts:106-177](file://src/services/api/asyncJobService.ts#L106-L177)
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
+- [segmentationAsyncService.ts:8-28](file://src/services/api/segmentationAsyncService.ts#L8-L28)
+- [segmentationAsyncService.ts:30-101](file://src/services/api/segmentationAsyncService.ts#L30-L101)
+- [segmentationAsyncService.ts:106-177](file://src/services/api/segmentationAsyncService.ts#L106-L177)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
 
 ### Segmentation Async Service
 Handles SongFormer segmentation jobs with dynamic polling strategies:
@@ -273,7 +273,7 @@ The services depend on each other in a layered manner:
 graph LR
 PPS["ParallelPipelineService"] --> JEC["Job Extract Controller"]
 PPS --> JSC["Job Status Controller"]
-AJS["AsyncJobService"] --> JSC
+AJS["SegmentationAsyncService"] --> JSC
 SAS["SegmentationAsyncService"] --> JEC
 JEC --> BR["Beats Routes"]
 JEC --> CR["Chords Routes"]
@@ -283,19 +283,19 @@ CR --> CRS["ChordRecognitionService"]
 
 **Diagram sources**
 - [parallelPipelineService.ts:34-98](file://src/services/api/parallelPipelineService.ts#L34-L98)
-- [asyncJobService.ts:52-101](file://src/services/api/asyncJobService.ts#L52-L101)
+- [segmentationAsyncService.ts:52-101](file://src/services/api/segmentationAsyncService.ts#L52-L101)
 - [segmentationAsyncService.ts:120-162](file://src/services/api/segmentationAsyncService.ts#L120-L162)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
 - [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
 - [routes.py:43-144](file://python_backend/blueprints/chords/routes.py#L43-L144)
 
 **Section sources**
 - [parallelPipelineService.ts:34-98](file://src/services/api/parallelPipelineService.ts#L34-L98)
-- [asyncJobService.ts:30-101](file://src/services/api/asyncJobService.ts#L30-L101)
+- [segmentationAsyncService.ts:30-101](file://src/services/api/segmentationAsyncService.ts#L30-L101)
 - [segmentationAsyncService.ts:101-162](file://src/services/api/segmentationAsyncService.ts#L101-L162)
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
-- [routes.ts:96-193](file://src/app/api/jobs/extract-audio/route.ts#L96-L193)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
+- [routes.ts:96-193](file://src/app/api/extract-audio/route.ts#L96-L193)
 - [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
 - [routes.py:43-144](file://python_backend/blueprints/chords/routes.py#L43-L144)
 
@@ -317,7 +317,7 @@ Common issues and resolutions:
 - Resource cleanup: Ensure temporary files and cached blobs are cleaned up according to TTL policies to prevent memory leaks.
 
 **Section sources**
-- [routes.ts:36-101](file://src/app/api/jobs/status/[jobId]/route.ts#L36-L101)
+- [routes.ts:36-101](file://src/app/api/segmentation/jobs/[jobId]/route.ts#L36-L101)
 - [parallelPipelineService.ts:289-308](file://src/services/api/parallelPipelineService.ts#L289-L308)
 - [routes.py:252-380](file://python_backend/blueprints/beats/routes.py#L252-L380)
 - [routes.py:377-440](file://python_backend/blueprints/chords/routes.py#L377-L440)

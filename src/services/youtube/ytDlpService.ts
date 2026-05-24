@@ -9,7 +9,7 @@
  * - Supports high-quality audio extraction
  */
 
-// Removed QuickTubeFilenameGenerator import - service has been removed
+// Removed legacy filename generator import - service has been removed
 
 export interface YtDlpDownloadResult {
   success: boolean;
@@ -79,7 +79,7 @@ class YtDlpService {
   }
 
   /**
-   * Download audio using yt-dlp with QuickTube-compatible filename
+   * Download audio using yt-dlp with the legacy-compatible filename shape
    */
   async downloadAudio(videoUrl: string, videoId?: string): Promise<YtDlpDownloadResult> {
     try {
@@ -221,7 +221,7 @@ class YtDlpService {
       service: 'yt-dlp',
       environment: 'development',
       baseUrl: this.baseUrl,
-      filenameCompatibility: 'QuickTube-compatible',
+      filenameCompatibility: 'legacy-compatible',
       features: [
         'Video info extraction',
         'Audio download',

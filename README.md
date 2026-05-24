@@ -466,7 +466,8 @@ npm run dev
 
 #### **Environment-Aware Processing**
 - **Development**: localhost:5001 Python backend with yt-dlp (avoiding macOS AirTunes port conflict)
-- **Production**: Google Cloud Run backend with yt-mp3-go
+- **Production**: browser yt-dlp extraction with server-side cache checks and finalization
+- **Rollback**: yt-mp3-go only when explicitly selected through audio strategy configuration
 
 #### **Caching after computation**
 - **Firebase Cache**: audio metadata, lyrics, transcriptions, key detections, segmentation results
@@ -483,8 +484,8 @@ We sincerely thank the following APIs and services for their support and contrib
 - **ISMIR2019-Large-Vocabulary-Chord-Recognition** - [github.com/music-x-lab/ISMIR2019-Large-Vocabulary-Chord-Recognition](https://github.com/music-x-lab/ISMIR2019-Large-Vocabulary-Chord-Recognition) - Chord-CNN-LSTM model for chord recognition
 - **Google Gemini API** - AI language model for roman numeral analysis, enharmonic corrections, and lyrics translation
 - **YouTube Search API** - [github.com/damonwonghv/youtube-search-api](https://github.com/damonwonghv/youtube-search-api) - YouTube search and video information
-- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - YouTube audio extraction (local)
-- **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Alternative audio extraction (production)
+- **yt-dlp** - [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) - Browser production extraction and local development extraction
+- **yt-mp3-go** - [github.com/vukan322/yt-mp3-go](https://github.com/vukan322/yt-mp3-go) - Rollback-only audio extraction service when explicitly configured
 - **chord-db** - [github.com/tombatossals/chords-db](https://github.com/tombatossals/chords-db) - Comprehensive chord database for accurate guitar diagram generation
 - **LRClib** - [github.com/tranxuanthang/lrclib](https://github.com/tranxuanthang/lrclib) - Lyrics synchronization
 - **Sheetsage** -[github.com/chrisdonahue/sheetsage](https://github.com/chrisdonahue/sheetsage) - Experimental melody transcription model

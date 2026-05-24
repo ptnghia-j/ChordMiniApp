@@ -3,7 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [EnhancedLyricsDisplay.tsx](file://src/components/lyrics/EnhancedLyricsDisplay.tsx)
-- [LyricsPanel.tsx](file://src/components/lyrics/LyricsPanel.tsx)
+- [GridLyricsRow.tsx](file://src/components/lyrics/GridLyricsRow.tsx)
 - [LyricsPlayer.tsx](file://src/components/lyrics/LyricsPlayer.tsx)
 - [LyricLine.tsx](file://src/components/lyrics/LyricLine.tsx)
 - [LyricsSection.tsx](file://src/components/lyrics/LyricsSection.tsx)
@@ -80,7 +80,7 @@ UAL --> LS
 
 **Diagram sources**
 - [EnhancedLyricsDisplay.tsx:1-231](file://src/components/lyrics/EnhancedLyricsDisplay.tsx#L1-L231)
-- [LyricsPanel.tsx:1-376](file://src/components/lyrics/LyricsPanel.tsx#L1-L376)
+- [GridLyricsRow.tsx:1-376](file://src/components/lyrics/GridLyricsRow.tsx#L1-L376)
 - [LyricsPlayer.tsx:1-203](file://src/components/lyrics/LyricsPlayer.tsx#L1-L203)
 - [lyricsService.ts:1-197](file://src/services/lyrics/lyricsService.ts#L1-L197)
 - [lrclibService.ts:1-266](file://src/services/lyrics/lrclibService.ts#L1-L266)
@@ -88,7 +88,7 @@ UAL --> LS
 
 **Section sources**
 - [EnhancedLyricsDisplay.tsx:1-231](file://src/components/lyrics/EnhancedLyricsDisplay.tsx#L1-L231)
-- [LyricsPanel.tsx:1-376](file://src/components/lyrics/LyricsPanel.tsx#L1-L376)
+- [GridLyricsRow.tsx:1-376](file://src/components/lyrics/GridLyricsRow.tsx#L1-L376)
 - [LyricsPlayer.tsx:1-203](file://src/components/lyrics/LyricsPlayer.tsx#L1-L203)
 
 ## Core Components
@@ -128,7 +128,7 @@ The panel supports:
 - Clear and close functionality
 
 **Section sources**
-- [LyricsPanel.tsx:23-376](file://src/components/lyrics/LyricsPanel.tsx#L23-L376)
+- [GridLyricsRow.tsx:23-376](file://src/components/lyrics/GridLyricsRow.tsx#L23-L376)
 
 ### LyricsPlayer
 The LyricsPlayer combines YouTube video playback with synchronized lyrics display:
@@ -225,7 +225,7 @@ ELD->>User : Highlight active line
 ```
 
 **Diagram sources**
-- [LyricsPanel.tsx:54-94](file://src/components/lyrics/LyricsPanel.tsx#L54-L94)
+- [GridLyricsRow.tsx:54-94](file://src/components/lyrics/GridLyricsRow.tsx#L54-L94)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
 - [LyricsSection.tsx:142-224](file://src/components/lyrics/LyricsSection.tsx#L142-L224)
@@ -307,12 +307,12 @@ LRClibSuccess --> |No| Genius
 Genius --> GeniusSuccess{"Found Lyrics?"}
 GeniusSuccess --> |Yes| Success
 GeniusSuccess --> |No| Fallback["Fallback Response"]
-Success --> Display["Render Lyrics Panel"]
+Success --> Display["Render Embedded Lyrics Grid"]
 Fallback --> Error["Show Error Message"]
 ```
 
 **Diagram sources**
-- [LyricsPanel.tsx:54-94](file://src/components/lyrics/LyricsPanel.tsx#L54-L94)
+- [GridLyricsRow.tsx:54-94](file://src/components/lyrics/GridLyricsRow.tsx#L54-L94)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 
 Service integration features:
@@ -322,7 +322,7 @@ Service integration features:
 - **Real-time Synchronization**: Live updating during playback
 
 **Section sources**
-- [LyricsPanel.tsx:54-150](file://src/components/lyrics/LyricsPanel.tsx#L54-L150)
+- [GridLyricsRow.tsx:54-150](file://src/components/lyrics/GridLyricsRow.tsx#L54-L150)
 
 ### LyricLine: Advanced Timing and Animation
 The LyricLine component implements sophisticated timing algorithms:
@@ -428,7 +428,7 @@ LP --> RA
 ```
 
 **Diagram sources**
-- [LyricsPanel.tsx:1-11](file://src/components/lyrics/LyricsPanel.tsx#L1-L11)
+- [GridLyricsRow.tsx:1-11](file://src/components/lyrics/GridLyricsRow.tsx#L1-L11)
 - [LyricsPlayer.tsx:1-5](file://src/components/lyrics/LyricsPlayer.tsx#L1-L5)
 - [LyricLine.tsx:1-11](file://src/components/lyrics/LyricLine.tsx#L1-L11)
 

@@ -8,6 +8,22 @@ export type StatusProbeKind = 'health' | 'metadata' | 'generation';
 
 export type IncidentSeverity = 'minor' | 'major' | 'critical';
 
+export interface PublicStatusProbeDetail {
+  serviceId: StatusServiceId;
+  serviceLabel: string;
+  probeKind: StatusProbeKind;
+  endpointId?: string;
+  status: PublicServiceStatus;
+  ok: boolean;
+  latencyMs: number | null;
+  checkedAt: string;
+  failureReason?: 'http' | 'network' | 'timeout';
+  httpStatus?: number;
+  attempts?: number;
+  timeoutMs?: number;
+  componentResults?: PublicStatusProbeDetail[];
+}
+
 export interface PublicStatusServiceSummary {
   id: StatusServiceId;
   label: string;
@@ -17,8 +33,11 @@ export interface PublicStatusServiceSummary {
   successfulChecks: number;
   degradedChecks: number;
   failedChecks: number;
+  consecutiveFailedChecks: number;
   lastCheckedAt: string | null;
   latencyMs: number | null;
+  lastProbe: PublicStatusProbeDetail | null;
+  recentProbes: PublicStatusProbeDetail[];
 }
 
 export interface PublicStatusIncident {
@@ -55,7 +74,7 @@ export interface PublicStatusReport {
   expiresAtMs: number;
 }
 
-export interface StatusProbeResult {
+export interface StatusProbeResult extends PublicStatusProbeDetail {
   serviceId: StatusServiceId;
   serviceLabel: string;
   probeKind: StatusProbeKind;
@@ -64,5 +83,5 @@ export interface StatusProbeResult {
   latencyMs: number | null;
   checkedAt: string;
   sanitizedSummary: string;
-  failureReason?: 'http' | 'network' | 'timeout';
+  componentResults?: PublicStatusProbeDetail[];
 }

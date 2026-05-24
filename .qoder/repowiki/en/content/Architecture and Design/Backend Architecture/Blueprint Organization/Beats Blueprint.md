@@ -15,7 +15,7 @@
 - [route.ts (detect-beats)](file://src/app/api/detect-beats/route.ts)
 - [route.ts (model-info)](file://src/app/api/model-info/route.ts)
 - [HeroUIBeatModelSelector.tsx](file://src/components/analysis/HeroUIBeatModelSelector.tsx)
-- [asyncJobService.ts](file://src/services/api/asyncJobService.ts)
+- [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 </cite>
 
 ## Table of Contents
@@ -444,7 +444,7 @@ end
 - [route.ts (detect-beats):1-235](file://src/app/api/detect-beats/route.ts#L1-L235)
 - [route.ts (model-info):1-127](file://src/app/api/model-info/route.ts#L1-L127)
 - [HeroUIBeatModelSelector.tsx:1-209](file://src/components/analysis/HeroUIBeatModelSelector.tsx#L1-L209)
-- [asyncJobService.ts:1-211](file://src/services/api/asyncJobService.ts#L1-L211)
+- [segmentationAsyncService.ts:1-211](file://src/services/api/segmentationAsyncService.ts#L1-L211)
 
 ## Dependency Analysis
 - Coupling:

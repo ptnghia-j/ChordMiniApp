@@ -3,9 +3,9 @@
 import Navigation from '@/components/common/Navigation';
 import { Accordion, AccordionItem, Card, CardBody, Chip, Tooltip } from '@heroui/react';
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiMinusCircle, FiXCircle } from 'react-icons/fi';
-import type { PublicOverallStatus, PublicStatusIncident, PublicStatusReport, PublicStatusServiceSummary, StatusServiceId } from '@/services/status/statusTypes';
+import type { PublicOverallStatus, PublicStatusIncident, PublicStatusReport, PublicStatusServiceSummary } from '@/services/status/statusTypes';
+import { STATUS_SERVICE_IDS } from '@/services/status/statusConstants';
 
-const SERVICE_IDS: StatusServiceId[] = ['beat', 'chord', 'sheetsage', 'gemini'];
 const STATUS_TIMEZONE = 'America/Los_Angeles';
 const DATE_PART_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -248,7 +248,7 @@ export default function StatusDashboard({
   unavailable: boolean;
 }) {
   const latest = reports[0] || null;
-  const latestServices = latest ? SERVICE_IDS.map((id) => latest.services[id]) : [];
+  const latestServices = latest ? STATUS_SERVICE_IDS.map((id) => latest.services[id]) : [];
   const overallStatus = latest?.overallStatus || 'unknown';
   const hasNoReportsYet = !unavailable && reports.length === 0;
 

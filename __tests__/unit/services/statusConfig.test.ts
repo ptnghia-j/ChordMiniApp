@@ -11,6 +11,7 @@ describe('statusConfig', () => {
     delete process.env.STATUS_PROBES_ENABLED;
     delete process.env.STATUS_PROBE_ALLOW_LOCAL;
     delete process.env.STATUS_PROBE_TIMEOUT_MS;
+    delete process.env.STATUS_OUTAGE_CONFIRMATION_CHECKS;
     delete process.env.PYTHON_API_URL;
     delete process.env.SHEETSAGE_API_URL;
     delete process.env.FIREBASE_PROJECT_ID;
@@ -33,6 +34,7 @@ describe('statusConfig', () => {
     expect(config.storageEnabled).toBe(false);
     expect(config.geminiConfigured).toBe(false);
     expect(config.probeTimeoutMs).toBe(55_000);
+    expect(config.outageConfirmationChecks).toBe(2);
     expect(config.endpointsConfigured).toEqual({
       python: false,
       sheetsage: false,

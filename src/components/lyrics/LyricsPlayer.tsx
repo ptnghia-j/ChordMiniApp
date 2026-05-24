@@ -28,10 +28,8 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
 
   const playerRef = useRef<ReactPlayer>(null);
 
-  // YouTube video URL
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // Update current time and find current lyric line
   const handleProgress = (state: { playedSeconds: number }) => {
     try {
       const newTime = state.playedSeconds;
@@ -41,9 +39,7 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
         onTimeUpdate(newTime);
       }
 
-      // Make sure lyrics.lines exists and is an array
       if (lyrics && lyrics.lines && Array.isArray(lyrics.lines)) {
-        // Find the current line based on time
         const newCurrentLine = lyrics.lines.find(
           line => newTime >= (line.startTime || 0) && newTime <= (line.endTime || 0)
         ) || null;
@@ -57,17 +53,12 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
     }
   };
 
-  // We don't need this effect anymore since we're using EnhancedLyricsDisplay
-  // which handles auto-scrolling internally
-
-  // Format time as MM:SS
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  // Handle seeking in the video
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const seekTime = parseFloat(e.target.value);
     setCurrentTime(seekTime);
@@ -76,7 +67,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
     }
   };
 
-  // Handle clicking on a lyric line to seek to that time
   const handleLyricClick = (line: LyricLine) => {
     try {
       if (playerRef.current && line && typeof line.startTime === 'number') {
@@ -89,7 +79,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
 
   return (
     <div className="flex flex-col lg:flex-row gap-4">
-      {/* YouTube Player */}
       <div className="w-full lg:w-1/2">
         <div className="relative pt-[56.25%]">
           <ReactPlayer
@@ -109,7 +98,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
           />
         </div>
 
-        {/* Custom Controls */}
         <div className="mt-4 bg-gray-100 p-4 rounded-lg">
           <div className="flex items-center mb-2">
             <button
@@ -127,7 +115,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
               )}
             </button>
 
-            {/* YouTube-style progress bar with blue color */}
             <div className="flex-1 mx-2 relative h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
@@ -165,7 +152,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
               )}
             </button>
 
-            {/* YouTube-style volume slider with blue color */}
             <div className="flex-1 mx-2 relative h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
@@ -186,7 +172,6 @@ const LyricsPlayer: React.FC<LyricsPlayerProps> = ({
         </div>
       </div>
 
-      {/* Enhanced Lyrics Display */}
       <div className="w-full lg:w-1/2">
         <EnhancedLyricsDisplay
           lyrics={lyrics}

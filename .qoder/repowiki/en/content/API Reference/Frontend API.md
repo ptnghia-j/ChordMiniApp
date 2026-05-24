@@ -3,7 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [apiService.ts](file://src/services/api/apiService.ts)
-- [asyncJobService.ts](file://src/services/api/asyncJobService.ts)
+- [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [chatbotService.ts](file://src/services/api/chatbotService.ts)
 - [customMusicAiClient.ts](file://src/services/api/customMusicAiClient.ts)
@@ -30,7 +30,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive frontend API documentation for ChordMiniApp’s React services and client interfaces. It covers the service layer architecture, including ApiService for generic HTTP requests, AsyncJobService for long-running operations, SegmentationAsyncService for batch processing, and specialized services such as ChatbotService and CustomMusicAiClient. It also documents TypeScript interfaces, request/response types, error handling patterns, hook-based consumption patterns, caching strategies, and state management integration. Practical examples illustrate how components interact with services, handle loading states, and manage errors. The API client configuration, authentication token handling, and rate limiting implementation are explained, along with the parallel pipeline service for concurrent operations and the segmentation access service for job tracking.
+This document provides comprehensive frontend API documentation for ChordMiniApp’s React services and client interfaces. It covers the service layer architecture, including ApiService for generic HTTP requests, SegmentationAsyncService for long-running operations, SegmentationAsyncService for batch processing, and specialized services such as ChatbotService and CustomMusicAiClient. It also documents TypeScript interfaces, request/response types, error handling patterns, hook-based consumption patterns, caching strategies, and state management integration. Practical examples illustrate how components interact with services, handle loading states, and manage errors. The API client configuration, authentication token handling, and rate limiting implementation are explained, along with the parallel pipeline service for concurrent operations and the segmentation access service for job tracking.
 
 ## Project Structure
 The frontend API layer is organized around cohesive service modules under src/services/api, supporting utilities in src/utils, configuration in src/config, and state management via zustand stores. Components consume these services through React hooks and store selectors.
@@ -39,7 +39,7 @@ The frontend API layer is organized around cohesive service modules under src/se
 graph TB
 subgraph "Services"
 A["ApiService<br/>Generic HTTP + Rate Limiting"]
-B["AsyncJobService<br/>Long-running Jobs"]
+B["SegmentationAsyncService<br/>Long-running Jobs"]
 C["SegmentationAsyncService<br/>Batch Processing"]
 D["ChatbotService<br/>AI Chat + Lyrics"]
 E["CustomMusicAiClient<br/>Music.ai Client"]
@@ -76,7 +76,7 @@ S1 --> A
 
 **Diagram sources**
 - [apiService.ts:1-407](file://src/services/api/apiService.ts#L1-L407)
-- [asyncJobService.ts:1-211](file://src/services/api/asyncJobService.ts#L1-L211)
+- [segmentationAsyncService.ts:1-211](file://src/services/api/segmentationAsyncService.ts#L1-L211)
 - [segmentationAsyncService.ts:1-261](file://src/services/api/segmentationAsyncService.ts#L1-L261)
 - [chatbotService.ts:1-285](file://src/services/api/chatbotService.ts#L1-L285)
 - [customMusicAiClient.ts:1-711](file://src/services/api/customMusicAiClient.ts#L1-L711)
@@ -95,7 +95,7 @@ S1 --> A
 
 ## Core Components
 - ApiService: Centralized HTTP client with built-in rate limiting, timeouts, retries, and App Check token injection. Provides convenience methods for GET/POST/FormData requests and domain-specific operations (beats, chords, lyrics).
-- AsyncJobService: Manages long-running jobs exceeding platform timeouts, including job creation, polling, and progress callbacks.
+- SegmentationAsyncService: Manages long-running jobs exceeding platform timeouts, including job creation, polling, and progress callbacks.
 - SegmentationAsyncService: Orchestrates SongFormer segmentation jobs with dynamic polling strategies, browser worker execution, and access code validation.
 - ChatbotService: Handles chatbot messaging, song context formatting, lyrics retrieval, and segmentation requests.
 - CustomMusicAiClient: Robust client for Music.ai API with fallback endpoints, authentication variations, and file upload utilities.
@@ -108,7 +108,7 @@ S1 --> A
 
 **Section sources**
 - [apiService.ts:13-407](file://src/services/api/apiService.ts#L13-L407)
-- [asyncJobService.ts:8-211](file://src/services/api/asyncJobService.ts#L8-L211)
+- [segmentationAsyncService.ts:8-211](file://src/services/api/segmentationAsyncService.ts#L8-L211)
 - [segmentationAsyncService.ts:7-261](file://src/services/api/segmentationAsyncService.ts#L7-L261)
 - [chatbotService.ts:8-285](file://src/services/api/chatbotService.ts#L8-L285)
 - [customMusicAiClient.ts:77-711](file://src/services/api/customMusicAiClient.ts#L77-L711)
@@ -189,9 +189,9 @@ Error handling:
 - [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
 - [rateLimiting.ts:12-54](file://src/utils/rateLimiting.ts#L12-L54)
 
-### AsyncJobService
-AsyncJobService manages long-running jobs:
-- Creates jobs via POST to /api/jobs/{operation}.
+### SegmentationAsyncService
+SegmentationAsyncService manages long-running jobs:
+- Creates segmentation jobs via POST to /api/segmentation/jobs.
 - Polls status with configurable attempts and interval.
 - Emits progress callbacks with status, progress percentage, and ETA.
 - Supports one-time status checks and availability probing.
@@ -205,8 +205,8 @@ Operational flow:
 - extractAudio(videoId, title?, force?, onProgress?): creates job, polls until completion or failure, returns AsyncJobResult.
 
 **Section sources**
-- [asyncJobService.ts:8-28](file://src/services/api/asyncJobService.ts#L8-L28)
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:8-28](file://src/services/api/segmentationAsyncService.ts#L8-L28)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 
 ### SegmentationAsyncService
 SegmentationAsyncService coordinates SongFormer segmentation:
@@ -355,7 +355,7 @@ graph TB
 API["ApiService"]
 RL["ClientRateLimiter"]
 FR["fetchWithRetry"]
-AJ["AsyncJobService"]
+AJ["SegmentationAsyncService"]
 SA["SegmentationAsyncService"]
 CS["ChatbotService"]
 CMAC["CustomMusicAiClient"]
@@ -377,7 +377,7 @@ PP --> API
 - [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
 - [rateLimiting.ts:210-265](file://src/utils/rateLimiting.ts#L210-L265)
 - [rateLimiting.ts:120-187](file://src/utils/rateLimiting.ts#L120-L187)
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 - [segmentationAsyncService.ts:101-261](file://src/services/api/segmentationAsyncService.ts#L101-L261)
 - [segmentationAccessService.ts:9-64](file://src/services/api/segmentationAccessService.ts#L9-L64)
 - [chatbotService.ts:12-285](file://src/services/api/chatbotService.ts#L12-L285)
@@ -387,7 +387,7 @@ PP --> API
 **Section sources**
 - [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
 - [rateLimiting.ts:210-265](file://src/utils/rateLimiting.ts#L210-L265)
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 - [segmentationAsyncService.ts:101-261](file://src/services/api/segmentationAsyncService.ts#L101-L261)
 - [segmentationAccessService.ts:9-64](file://src/services/api/segmentationAccessService.ts#L9-L64)
 - [chatbotService.ts:12-285](file://src/services/api/chatbotService.ts#L12-L285)
@@ -424,7 +424,7 @@ Common scenarios and resolutions:
 - [segmentationAccessService.ts:26-63](file://src/services/api/segmentationAccessService.ts#L26-L63)
 
 ## Conclusion
-ChordMiniApp’s frontend API layer combines robust HTTP utilities, intelligent rate limiting, and specialized services for long-running jobs and AI integrations. The architecture emphasizes reliability, performance, and developer ergonomics through typed contracts, hook-based consumption, and state management. Services like ApiService, AsyncJobService, SegmentationAsyncService, ChatbotService, and CustomMusicAiClient provide a cohesive foundation for building responsive and resilient audio analysis experiences.
+ChordMiniApp’s frontend API layer combines robust HTTP utilities, intelligent rate limiting, and specialized services for long-running jobs and AI integrations. The architecture emphasizes reliability, performance, and developer ergonomics through typed contracts, hook-based consumption, and state management. Services like ApiService, SegmentationAsyncService, SegmentationAsyncService, ChatbotService, and CustomMusicAiClient provide a cohesive foundation for building responsive and resilient audio analysis experiences.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -435,7 +435,7 @@ ChordMiniApp’s frontend API layer combines robust HTTP utilities, intelligent 
   - Components call useRateLimiting.api.detectBeats(file) and render loading states while isAnalyzing is true.
   - On ApiResponse.success=false, components display error messages and optionally retry.
 - Progress tracking:
-  - AsyncJobService.onProgress callback updates UI with progress percentage and ETA.
+  - SegmentationAsyncService.onProgress callback updates UI with progress percentage and ETA.
 - Lyrics and segmentation:
   - ChatbotService.sendChatMessageWithLyricsRetrieval enhances context automatically when lyrics are missing.
   - SegmentationAsyncService returns SegmentationResult for UI rendering of song structure.

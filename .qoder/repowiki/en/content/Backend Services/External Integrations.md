@@ -326,7 +326,7 @@ ApiKeyValidationService --> ApiKeyStorageService : "reads/writes"
 - Frontend-to-backend dependencies:
   - Frontend lyrics orchestrator calls backend routes for Genius/LRClib; backend routes depend on specialized services.
 - YouTube extraction:
-  - Frontend extraction orchestrator depends on the yt-mp3-go service and optional yt-dlp fallback.
+  - Frontend extraction orchestrator defaults to browser yt-dlp with server finalization; local yt-dlp is used in development and yt-mp3-go is rollback-only.
 - Spleeter:
   - Backend services depend on Spleeter and librosa; downstream models rely on demixing functions.
 

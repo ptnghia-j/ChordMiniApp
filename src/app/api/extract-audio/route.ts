@@ -10,8 +10,9 @@ import { firebaseStorageSimplified } from '@/services/firebase/firebaseStorageSi
  * - Uses YouTube search metadata directly (no filename guessing)
  * - Video ID-based caching and storage
  * - Environment-aware service selection:
- *   - Production: configured yt-mp3-go endpoint
- *   - Local Development: yt-dlp
+ *   - Production: browser-side yt-dlp, finalized through /api/audio/finalize-browser-extraction
+ *   - Local development: local yt-dlp
+ *   - Rollback only: configured yt-mp3-go endpoint via explicit strategy override
  * - Leverages existing search results for metadata
  */
 

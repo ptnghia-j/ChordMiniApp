@@ -116,7 +116,6 @@ export const backendConfig = {
     modelInfo: '/api/model-info',
     docs: '/api/docs',
     youtubeInfo: '/api/youtube/info',
-    extractAndAnalyze: '/api/extract-and-analyze',
   } as const
 };
 

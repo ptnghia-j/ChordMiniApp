@@ -262,7 +262,7 @@ Note --> Verify["Drift correction loop sees new seekToken<br/>and skips stale wo
 
 #### UIStore
 - Responsibilities: tab management, panel toggles, editing modes, feature toggles (roman numerals, segmentation, simplification), loop playback, pitch shift state, and shared guitar voicing.
-- Notable behaviors: mutual exclusivity of chatbot and lyrics panels; target key recalculation on pitch shift changes; initialization helpers.
+- Notable behaviors: mutual exclusivity of chatbot and embedded lyrics grid; target key recalculation on pitch shift changes; initialization helpers.
 
 ```mermaid
 classDiagram

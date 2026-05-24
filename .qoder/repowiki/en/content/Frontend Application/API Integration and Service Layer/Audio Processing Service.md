@@ -278,7 +278,7 @@ Responsibilities:
 
 ### Audio Extraction Service (Frontend)
 Responsibilities:
-- Environment-aware extraction: yt-mp3-go or yt-dlp with enhanced validation.
+- Environment-aware extraction: browser yt-dlp in production, local yt-dlp in development, and explicit yt-mp3-go rollback with enhanced validation.
 - Firebase Storage caching and validation with security checks.
 - Metadata caching and fallback strategies with comprehensive error handling.
 

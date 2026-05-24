@@ -7,15 +7,9 @@ import {
 import { normalizeChordForDedup } from '@/utils/chordNormalization';
 import { EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { SegmentationResult } from '@/types/chatbotTypes';
+import type { LyricTextColors } from '@/components/lyrics/lyricsTheme';
 
 // Types
-
-interface TextColors {
-  unplayed: string;
-  played: string;
-  chord: string;
-  background: string;
-}
 
 interface TranslatedLyrics {
   translatedLyrics: string;
@@ -52,7 +46,7 @@ interface LyricLineProps {
   isPast: boolean;
   currentTime: number;
   fontSize: number;
-  textColors: TextColors;
+  textColors: LyricTextColors;
   darkMode: boolean;
   selectedLanguages: string[];
   translatedLyrics: { [language: string]: TranslatedLyrics };
@@ -627,7 +621,7 @@ const areSelectedLanguagesEqual = (prev: string[], next: string[]): boolean => (
   prev.length === next.length && prev.every((language, index) => language === next[index])
 );
 
-const areTextColorsEqual = (prev: TextColors, next: TextColors): boolean => (
+const areTextColorsEqual = (prev: LyricTextColors, next: LyricTextColors): boolean => (
   prev.unplayed === next.unplayed
   && prev.played === next.played
   && prev.chord === next.chord

@@ -2,20 +2,18 @@
  * Audio Extraction Service - Environment-Aware Integration
  *
  * This service provides environment-aware audio extraction:
- * 1. Uses yt-mp3-go for production (reliable, works from datacenter IPs)
- * 2. Uses yt-dlp for localhost/development (more reliable, no API limits)
- * 3. Video ID-based caching and storage
- * 4. Leverages existing search results for metadata
+ * 1. Uses browser-side yt-dlp for production extraction after server cache checks
+ * 2. Uses local yt-dlp for localhost/development
+ * 3. Keeps yt-mp3-go available only through explicit rollback configuration
+ * 4. Uses video ID-based caching and storage with existing search metadata
  */
 
 
 
-// PRESERVED FOR REFERENCE: import { quickTubeServiceSimplified } from './quickTubeServiceSimplified';
 import { ytMp3GoService } from '@/services/youtube/ytMp3GoService';
 import { firebaseStorageSimplified, SimplifiedAudioData } from '@/services/firebase/firebaseStorageSimplified';
 import { detectEnvironment } from '@/utils/environmentDetection';
 import { ytDlpService } from '@/services/youtube/ytDlpService';
-import { asyncJobService } from '@/services/api/asyncJobService';
 import { validateFirebaseStorageUrl } from '@/utils/urlValidationUtils';
 
 /**
@@ -90,7 +88,7 @@ export class AudioExtractionServiceSimplified {
     // Route to appropriate service based on environment strategy
     switch (env.strategy) {
       case 'yt-mp3-go':
-        // Use the configured yt-mp3-go endpoint as the primary production service
+        // Explicit rollback path for configured yt-mp3-go deployments.
         return await this.extractAudioWithYtMp3Go(videoMetadata, forceRedownload);
 
       case 'ytdlp':
@@ -378,219 +376,6 @@ export class AudioExtractionServiceSimplified {
       };
     }
   }
-
-  /**
-   * PRESERVED FOR REFERENCE - Extract audio using QuickTube (production/fallback)
-   * This method has been replaced by YT2MP3 Magic service
-   */
-  /*
-  private async extractAudioWithQuickTube(
-    videoMetadata: YouTubeVideoMetadata,
-    forceRedownload: boolean = false
-  ): Promise<AudioExtractionResult> {
-    const { id: videoId, title, thumbnail, channelTitle } = videoMetadata;
-
-    console.log(`🎵 QuickTube extraction request for ${videoId}: "${title}"`);
-
-    try {
-      // Step 1: Check Firebase Storage first for permanent audio files (unless forced redownload)
-      if (!forceRedownload) {
-        // CRITICAL FIX: Ensure Firebase is initialized before cache check
-        try {
-          const { ensureFirebaseInitialized } = await import('@/config/firebase');
-          await ensureFirebaseInitialized();
-        } catch (initError) {
-          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
-        }
-
-        // Firebase Storage check logging removed for production
-        try {
-          const { findExistingAudioFile } = await import('@/services/firebase/firebaseStorageService');
-          const existingFile = await findExistingAudioFile(videoId);
-
-          if (existingFile) {
-            console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
-            console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
-
-            // Check if metadata already exists in simplified cache to avoid redundant writes
-            const existingMetadata = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-            if (!existingMetadata) {
-              console.log(`💾 Saving metadata to simplified cache for faster future access`);
-              // Save to simplified cache for faster future access
-              await firebaseStorageSimplified.saveAudioMetadata({
-                videoId,
-                audioUrl: existingFile.audioUrl,
-                title: videoMetadata.title,
-                duration: this.parseDuration(videoMetadata.duration),
-                fileSize: existingFile.fileSize || 0
-              });
-            } else {
-              console.log(`⚡ Metadata already exists in simplified cache, skipping redundant write`);
-            }
-
-            return {
-              success: true,
-              audioUrl: existingFile.audioUrl,
-              title: videoMetadata.title,
-              duration: this.parseDuration(videoMetadata.duration),
-              fromCache: true,
-              isStreamUrl: false // Firebase Storage URLs are permanent
-            };
-          }
-        } catch (storageError) {
-          console.warn(`⚠️ Firebase Storage check failed for ${videoId}:`, storageError);
-        }
-
-        // Step 2: Check simplified Firestore cache as fallback
-        const cached = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-        if (cached) {
-          console.log(`✅ Using cached audio metadata for ${videoId}: "${cached.title}"`);
-          console.log(`📈 Firestore Cache Hit: videoId=${videoId}, source=metadata_cache`);
-          return {
-            success: true,
-            audioUrl: cached.audioUrl,
-            title: cached.title,
-            duration: cached.duration,
-            fromCache: true,
-            isStreamUrl: cached.isStreamUrl,
-            streamExpiresAt: cached.streamExpiresAt
-          };
-        }
-      }
-
-      // Step 2: Extract using QuickTube service (this method is QuickTube-only)
-      const searchDuration = this.parseDuration(videoMetadata.duration);
-      console.log('🎵 Using QuickTube service for audio extraction');
-      const extractionResult = await quickTubeServiceSimplified.extractAudio(videoId, title, searchDuration);
-
-      if (!extractionResult.success) {
-        return {
-          success: false,
-          error: extractionResult.error || 'QuickTube extraction failed'
-        };
-      }
-
-      // Step 3: Attempt to store audio file in Firebase Storage for permanent access
-      let finalAudioUrl = extractionResult.audioUrl!;
-      let isStorageUrl = false;
-      let actualFileSize = 0;
-      const finalDuration = extractionResult.duration || this.parseDuration(videoMetadata.duration);
-
-      try {
-        // Ensure we have a valid audio URL before proceeding
-        if (!extractionResult.audioUrl) {
-          throw new Error('No audio URL available for storage');
-        }
-
-        // Download audio data from QuickTube URL with progress tracking
-        console.log(`📥 Downloading audio data for Firebase Storage: ${extractionResult.audioUrl}`);
-        const downloadStartTime = Date.now();
-
-        const audioResponse = await fetch(extractionResult.audioUrl);
-
-        if (audioResponse.ok) {
-          const audioData = await audioResponse.arrayBuffer();
-          actualFileSize = audioData.byteLength;
-          const downloadTime = Date.now() - downloadStartTime;
-
-          console.log(`📥 Downloaded ${(actualFileSize / 1024 / 1024).toFixed(2)}MB in ${downloadTime}ms for storage`);
-
-          // Upload to Firebase Storage with monitoring
-          const uploadStartTime = Date.now();
-          const { uploadAudioFile, saveAudioFileMetadata } = await import('@/services/firebase/firebaseStorageService');
-          const uploadResult = await uploadAudioFile(videoId, audioData);
-
-          if (uploadResult) {
-            const uploadTime = Date.now() - uploadStartTime;
-
-            // Validate Firebase Storage URL accessibility before using it
-            const { url: validatedUrl, isStorageUrl: validatedIsStorageUrl } = await validateAndReturnUrl(
-              uploadResult.audioUrl,
-              finalAudioUrl, // Fall back to current URL
-              videoId
-            );
-
-            finalAudioUrl = validatedUrl;
-            isStorageUrl = validatedIsStorageUrl;
-
-            console.log(`✅ Audio stored in Firebase Storage in ${uploadTime}ms: ${uploadResult.audioUrl}`);
-            console.log(`📊 Storage metrics: ${(actualFileSize / 1024 / 1024).toFixed(2)}MB uploaded`);
-            console.log(`🔍 Using ${isStorageUrl ? 'validated Firebase Storage' : 'fallback'} URL: ${finalAudioUrl}`);
-
-            // Save detailed metadata to Firestore with enhanced video information
-            await saveAudioFileMetadata({
-              videoId,
-              audioUrl: finalAudioUrl,
-              title,
-              storagePath: uploadResult.storagePath,
-              fileSize: actualFileSize,
-              duration: finalDuration,
-              isStreamUrl: false,
-              streamExpiresAt: undefined,
-
-              // Enhanced metadata from video search results
-              channelTitle: videoMetadata.channelTitle,
-              thumbnail: videoMetadata.thumbnail,
-              extractionService: 'quicktube',
-              extractionTimestamp: Date.now(),
-              videoDuration: videoMetadata.duration
-            });
-
-            // Log storage success metrics
-            console.log(`📈 Firebase Storage Success: videoId=${videoId}, size=${(actualFileSize / 1024 / 1024).toFixed(2)}MB, uploadTime=${uploadTime}ms`);
-          }
-        }
-      } catch (storageError) {
-        console.warn(`⚠️ Firebase Storage upload failed, using stream URL fallback: ${storageError}`);
-        console.log(`📈 Firebase Storage Failure: videoId=${videoId}, error=${storageError instanceof Error ? storageError.message : 'Unknown'}`);
-      }
-
-      // Step 4: Save to cache with final URL (storage or stream) - only if not already saved to full metadata
-      console.log(`💾 Saving with duration: ${finalDuration}s (source: ${extractionResult.duration ? 'audio metadata' : 'search metadata'})`);
-
-      if (!isStorageUrl) {
-        // NON-BLOCKING: Save to simplified cache in background (won't block audio extraction)
-        firebaseStorageSimplified.saveAudioMetadataBackground({
-          videoId,
-          audioUrl: finalAudioUrl,
-          title,
-          thumbnail,
-          channelTitle,
-          duration: finalDuration,
-          fileSize: actualFileSize || 0
-        });
-
-        console.log(`🔄 Background cache save initiated for ${videoId} (fallback)`);
-        console.log(`📈 Stream URL Fallback: videoId=${videoId}, reason=storage_upload_failed`);
-      } else {
-        console.log(`💾 Audio metadata already saved to Firebase Storage for ${videoId}`);
-      }
-
-      // Step 4: Return result with final duration
-      return {
-        success: true,
-        audioUrl: finalAudioUrl, // Use finalAudioUrl (Firebase Storage) instead of extractionResult.audioUrl (QuickTube)
-        title,
-        duration: finalDuration,
-        fromCache: false,
-        isStreamUrl: !isStorageUrl, // Firebase Storage URLs are permanent, QuickTube URLs are temporary
-        streamExpiresAt: isStorageUrl ? undefined : Date.now() + (24 * 60 * 60 * 1000) // Only set expiry for QuickTube URLs
-      };
-
-    } catch (error) {
-      console.error(`❌ Audio extraction failed for ${videoId}:`, error);
-      
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown extraction error'
-      };
-    }
-  }
-  */
-
-
-
-
 
   /**
    * Download audio file from URL with redirect handling
@@ -972,12 +757,6 @@ export class AudioExtractionServiceSimplified {
         //   extractionResult = await ytMp3GoService.extractAudio(videoId, undefined, undefined, 'medium');
         //   break;
 
-        // PRESERVED FOR REFERENCE - QuickTube integration
-        // case 'quicktube':
-        //   console.log('🎵 Using QuickTube service for audio extraction (by ID)');
-        //   extractionResult = await quickTubeServiceSimplified.extractAudio(videoId);
-        //   break;
-
         default:
           // Fallback to yt-mp3-go for unknown strategies
           console.log(`⚠️ Unknown strategy ${env.strategy}, falling back to yt-mp3-go`);
@@ -1219,9 +998,6 @@ export class AudioExtractionServiceSimplified {
       // PRESERVED FOR REFERENCE - service availability checks
       // case 'ytmp3go':
       //   return await ytMp3GoService.isAvailable();
-      // case 'quicktube':
-      //   return await quickTubeServiceSimplified.isAvailable();
-
       default:
         // Fallback: yt-mp3-go is generally available
         return true;
@@ -1256,8 +1032,7 @@ export class AudioExtractionServiceSimplified {
    * Clear service caches
    */
   clearCaches(): void {
-    // YT2MP3 Magic service manages its own cache internally
-    // PRESERVED FOR REFERENCE: quickTubeServiceSimplified.clearActiveJobs();
+    // Current extraction strategies manage their own cache internally.
     console.log('🧹 Cleared audio extraction service caches');
   }
 
@@ -1281,128 +1056,6 @@ export class AudioExtractionServiceSimplified {
       quickTubeAvailable,
       cacheStats
     };
-  }
-
-  /**
-   * Extract audio using async job processing (for long-running tasks)
-   * This method is designed to work within Vercel's timeout constraints
-   */
-  async extractAudioAsync(
-    videoId: string,
-    forceRefresh = false,
-    title?: string,
-    onProgress?: (status: { progress?: number; status: string; elapsedTime?: number }) => void
-  ): Promise<AudioExtractionResult> {
-    console.log(`🎵 Async audio extraction: ${videoId}${title ? ` ("${title}")` : ''}`);
-
-    try {
-      // Check Firebase Storage first for permanent audio files (unless force refresh)
-      if (!forceRefresh) {
-        // CRITICAL FIX: Ensure Firebase is initialized before cache check
-        try {
-          const { ensureFirebaseInitialized } = await import('@/config/firebase');
-          await ensureFirebaseInitialized();
-        } catch (initError) {
-          console.warn('⚠️ Firebase initialization failed, skipping cache check:', initError);
-        }
-
-        const env = detectEnvironment();
-        console.log(`🔍 [${env.isProduction ? 'PROD' : 'DEV'}] Checking Firebase Storage for existing audio file: ${videoId}`);
-        try {
-          const { findExistingAudioFile } = await import('@/services/firebase/firebaseStorageService');
-          const existingFile = await findExistingAudioFile(videoId);
-
-          if (existingFile) {
-            console.log(`✅ Found existing audio in Firebase Storage for ${videoId}`);
-            console.log(`📈 Firebase Storage Cache Hit: videoId=${videoId}, source=permanent_storage`);
-
-            // PERFORMANCE P1-C: Non-blocking background save eliminates redundant getCachedAudioMetadata() read
-            firebaseStorageSimplified.saveAudioMetadataBackground({
-              videoId,
-              audioUrl: existingFile.audioUrl,
-              title: title || `Video ${videoId}`,
-              duration: 0,
-              fileSize: existingFile.fileSize || 0
-            });
-
-            return {
-              success: true,
-              audioUrl: existingFile.audioUrl,
-              title: title || `Video ${videoId}`,
-              duration: 0,
-              fromCache: true,
-              isStreamUrl: false // Firebase Storage URLs are permanent
-            };
-          }
-        } catch (storageError) {
-          const errorMessage = storageError instanceof Error ? storageError.message : String(storageError);
-
-          if (errorMessage.includes('Could not load the default credentials')) {
-            console.warn(`⚠️ Firebase Storage unavailable (no credentials configured): ${videoId}`);
-            console.warn('💡 To enable Firebase Storage caching, configure FIREBASE_SERVICE_ACCOUNT_KEY in Vercel');
-          } else if (errorMessage.includes('XMLHttpRequest is not defined')) {
-            console.warn(`⚠️ Firebase Client SDK cannot run in server environment: ${videoId}`);
-          } else {
-            console.warn(`⚠️ Firebase Storage check failed for ${videoId}:`, storageError);
-          }
-        }
-
-        // Check simplified Firestore cache as fallback
-        const cachedData = await firebaseStorageSimplified.getCachedAudioMetadata(videoId);
-        if (cachedData) {
-          console.log(`✅ Found cached audio metadata for ${videoId}`);
-          console.log(`📈 Firestore Cache Hit: videoId=${videoId}, source=metadata_cache`);
-          return {
-            success: true,
-            audioUrl: cachedData.audioUrl,
-            title: cachedData.title || title,
-            duration: cachedData.duration,
-            fromCache: true,
-            isStreamUrl: cachedData.isStreamUrl,
-            streamExpiresAt: cachedData.streamExpiresAt
-          };
-        }
-      }
-
-      // Use async job service for extraction
-      const result = await asyncJobService.extractAudio(videoId, title, forceRefresh, onProgress);
-
-      if (result.success && result.audioUrl) {
-        // Cache the result
-        const audioData: SimplifiedAudioData = {
-          videoId,
-          audioUrl: result.audioUrl,
-          title: title || `Video ${videoId}`,
-          duration: 0, // Duration will be detected later
-          isStreamUrl: false,
-          streamExpiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours from now
-          createdAt: Date.now()
-        };
-
-        await firebaseStorageSimplified.saveAudioMetadata(audioData);
-        console.log(`💾 Cached async extraction result for ${videoId}`);
-
-        return {
-          success: true,
-          audioUrl: result.audioUrl,
-          title: audioData.title,
-          duration: audioData.duration,
-          fromCache: false
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || 'Async extraction failed'
-        };
-      }
-
-    } catch (error) {
-      console.error(`❌ Async audio extraction failed for ${videoId}:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown async extraction error'
-      };
-    }
   }
 
   /**

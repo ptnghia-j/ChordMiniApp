@@ -3,6 +3,7 @@ import { useCurrentTime, usePlaybackStore } from '@/stores/playbackStore';
 import { enhanceLyricsWithCharacterTiming } from '@/utils/lyricsTimingUtils';
 import type { LyricLine, LyricsData } from '@/types/musicAiTypes';
 import { getLyricColorChangePosition } from '@/components/lyrics/LyricLine';
+import { LYRIC_GRID_COLOR_VARIABLE_CLASSES } from '@/components/lyrics/lyricsTheme';
 
 export interface BeatGridTimedLyrics {
   mode: 'word' | 'line';
@@ -56,7 +57,7 @@ function ActiveLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 'line
   return (
     <span
       style={gradientStyle}
-      className="font-semibold inline-block [--swept-color:#3B82F6] dark:[--swept-color:#60A5FA]"
+      className="font-semibold inline-block"
     >
       {line.text}
     </span>
@@ -72,7 +73,7 @@ export function GridLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 
 
   if (status === 'past') {
     return (
-      <span className="text-blue-500 dark:text-blue-400 font-semibold transition-colors duration-300">
+      <span className="font-semibold transition-colors duration-300" style={{ color: 'var(--lyric-played)' }}>
         {line.text}
       </span>
     );
@@ -80,7 +81,7 @@ export function GridLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 
 
   if (status === 'future') {
     return (
-      <span className="text-slate-500 dark:text-slate-400 transition-colors duration-300">
+      <span className="transition-colors duration-300" style={{ color: 'var(--lyric-unplayed)' }}>
         {line.text}
       </span>
     );
@@ -94,7 +95,7 @@ export default function GridLyricsRow({ placements, columnCount, mode, fontSize 
 
   return (
     <div
-      className="font-varela grid gap-y-1 px-0.5 pb-2 pt-1 font-medium leading-tight text-slate-500 dark:text-slate-400"
+      className={`font-varela grid gap-y-1 px-0.5 pb-2 pt-1 font-medium leading-tight text-slate-500 dark:text-slate-400 ${LYRIC_GRID_COLOR_VARIABLE_CLASSES}`}
       style={{
         gridTemplateColumns: `repeat(${Math.max(1, columnCount)}, minmax(0, 1fr))`,
         fontSize: fontSize || undefined,

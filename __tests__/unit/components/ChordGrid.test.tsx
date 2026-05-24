@@ -553,7 +553,7 @@ describe('ChordGrid Component', () => {
       expect(screen.getByText('C')).toBeInTheDocument();
     });
 
-    it('should adjust layout when lyrics panel is open', () => {
+    it('should adjust layout when embedded lyrics grid is open', () => {
       const chords = ['C', 'Am', 'F', 'G'];
       const beats = [0, 0.5, 1.0, 1.5];
 

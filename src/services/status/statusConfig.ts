@@ -1,6 +1,7 @@
 const DEFAULT_STATUS_TIMEZONE = 'America/Los_Angeles';
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_PROBE_TIMEOUT_MS = 55_000;
+const DEFAULT_OUTAGE_CONFIRMATION_CHECKS = 2;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -26,6 +27,7 @@ export interface StatusConfig {
   timezone: string;
   retentionDays: number;
   probeTimeoutMs: number;
+  outageConfirmationChecks: number;
   cronSecretConfigured: boolean;
   geminiConfigured: boolean;
   endpointsConfigured: {
@@ -49,6 +51,10 @@ export function getStatusConfig(): StatusConfig {
     timezone: process.env.STATUS_REPORT_TIMEZONE || DEFAULT_STATUS_TIMEZONE,
     retentionDays: parsePositiveInt(process.env.STATUS_REPORT_RETENTION_DAYS, DEFAULT_RETENTION_DAYS),
     probeTimeoutMs: parsePositiveInt(process.env.STATUS_PROBE_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS),
+    outageConfirmationChecks: parsePositiveInt(
+      process.env.STATUS_OUTAGE_CONFIRMATION_CHECKS,
+      DEFAULT_OUTAGE_CONFIRMATION_CHECKS,
+    ),
     cronSecretConfigured: Boolean(process.env.CRON_SECRET),
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     endpointsConfigured,

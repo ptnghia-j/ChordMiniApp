@@ -2,7 +2,7 @@
  * yt-dlp Audio Download API (Development Only)
  * 
  * This endpoint provides audio download using yt-dlp for local development.
- * It uses the same filename generation algorithm as QuickTube for compatibility.
+ * It uses the legacy filename generation algorithm for cache compatibility.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

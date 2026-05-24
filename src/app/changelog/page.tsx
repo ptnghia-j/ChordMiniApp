@@ -84,8 +84,8 @@ export default function ChangelogPage() {
         'NEW: Ramped tempo-change detection allows up to 4 transition beats before confirming a boundary, improving alignment on songs with gradual tempo shifts.',
         'IMPROVED: Firestore key-detection cache writes migrated from gRPC client SDK to REST-based Admin SDK, eliminating stale connection errors in containerized environments (Railway).',
         'IMPROVED: Leading silence suppression now requires at least 2 full measures of natural silence before skipping expansion, preventing premature suppression in 3/4 time.',
-        'REFACTOR: Removed ytdown.io extraction service and API route — audio extraction now uses yt-mp3-go exclusively.',
-        'REFACTOR: Legacy gridCompaction.ts retained only for comparison tests; production grid assembly calls alignmentSolver.ts.',
+        'REFACTOR: Removed the legacy external extraction service and API route; audio extraction now defaults to browser yt-dlp with server finalization, while yt-mp3-go remains rollback-only.',
+        'REFACTOR: Legacy gridCompaction.ts is isolated for comparison tests; production grid assembly calls alignmentSolver.ts.',
       ],
       breaking: [
         'Segment alignment solver is in early experimental mode.',
@@ -650,7 +650,7 @@ export default function ChangelogPage() {
       features: [
         'NEW: Chord simplification toggle that converts complex chord progressions into 5 basic chord types (Major, Minor, Augmented, Diminished, Suspended)',
         'IMPROVED: Synchronized lyrics toggle converted from checkbox to modern toggle button design',
-        'IMPROVED: Moved synchronized toggle to lyrics panel header for better space utilization',
+        'IMPROVED: Moved synchronized toggle into the lyrics controls for better space utilization',
         'IMPROVED: Enhanced responsive layout for toggle buttons above YouTube frame',
         'IMPROVED: Mobile experience with horizontal scrollable button container that prevents UI overflow'
       ],

@@ -10,7 +10,7 @@ export interface UserFriendlyError {
   message: string;
   suggestion: string;
   showTryAnotherButton: boolean;
-  isQuickTubeError: boolean;
+  isVideoExtractionError: boolean;
 }
 
 /**
@@ -30,20 +30,20 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'YouTube temporarily rate-limited the audio extraction proxy.',
       suggestion: 'Please wait a few minutes before trying again, or search for another version of this song.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
-  // QuickTube service unavailable
-  if (errorLower.includes('quicktube service is currently unavailable') ||
-      errorLower.includes('quicktube service appears to be overloaded') ||
-      errorLower.includes('unable to connect to quicktube')) {
+  // Extraction service unavailable
+  if (errorLower.includes('extraction service is currently unavailable') ||
+      errorLower.includes('video processing service appears to be overloaded') ||
+      errorLower.includes('unable to connect to extraction service')) {
     return {
       title: 'Video Processing Unavailable',
       message: 'Unable to extract audio from this video. The video processing service is temporarily unavailable.',
       suggestion: 'Please try searching for another version of this song or use a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -57,7 +57,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video. The video may be restricted, private, or unavailable.',
       suggestion: 'Please try searching for another version of this song or use a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -69,7 +69,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'YouTube Shorts cannot be processed due to their special format.',
       suggestion: 'Please try searching for a regular YouTube video of this song instead.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -82,7 +82,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video. The video may be too long or the service is busy.',
       suggestion: 'Please try searching for a shorter version of this song or use a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -95,7 +95,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video. The video is too long to process.',
       suggestion: 'Please try searching for a shorter version of this song (under 10 minutes).',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -108,7 +108,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'This file exceeds the processing size limit and the temporary storage service is unavailable.',
       suggestion: 'Try a shorter audio file or try again later.',
       showTryAnotherButton: false,
-      isQuickTubeError: false
+      isVideoExtractionError: false
     };
   }
 
@@ -121,7 +121,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video due to a network issue.',
       suggestion: 'Please check your internet connection and try again, or search for a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -134,7 +134,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video due to a browser compatibility issue.',
       suggestion: 'Please refresh the page and try again, or try using a different browser.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -147,7 +147,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video. Our service is experiencing temporary issues.',
       suggestion: 'Please try again in a few minutes, or search for a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -160,20 +160,19 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to extract audio from this video due to YouTube restrictions.',
       suggestion: 'Please try searching for another version of this song or use a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
-  // Generic QuickTube errors
-  if (errorLower.includes('quicktube') ||
-      errorLower.includes('extraction failed') ||
+  // Generic extraction errors
+  if (errorLower.includes('extraction failed') ||
       errorLower.includes('download failed')) {
     return {
       title: 'Video Processing Failed',
       message: 'Unable to extract audio from this video. The video processing failed.',
       suggestion: 'Please try searching for another version of this song or use a different video.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -187,11 +186,11 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'The analysis service is currently experiencing high load or is starting up.',
       suggestion: 'Please wait a few minutes and try again, or use the "Upload Audio File" option for immediate processing.',
       showTryAnotherButton: false,
-      isQuickTubeError: false
+      isVideoExtractionError: false
     };
   }
 
-  // Audio processing errors (not QuickTube related)
+  // Audio processing errors after extraction has succeeded.
   if (errorLower.includes('audio processing') ||
       errorLower.includes('beat detection') ||
       errorLower.includes('chord recognition')) {
@@ -200,7 +199,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'The audio was extracted successfully, but analysis failed.',
       suggestion: 'Please try again with different analysis settings, or try a different audio file.',
       showTryAnotherButton: false,
-      isQuickTubeError: false
+      isVideoExtractionError: false
     };
   }
 
@@ -213,7 +212,7 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
       message: 'Unable to process this video due to an unsupported format.',
       suggestion: 'Please try searching for a different version of this song.',
       showTryAnotherButton: true,
-      isQuickTubeError: true
+      isVideoExtractionError: true
     };
   }
 
@@ -223,20 +222,19 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
     message: 'Unable to extract audio from this video.',
     suggestion: 'Please try searching for another version of this song or use a different video.',
     showTryAnotherButton: true,
-    isQuickTubeError: true
+    isVideoExtractionError: true
   };
 }
 
 /**
- * Check if an error is related to QuickTube/video extraction
+ * Check if an error is related to video extraction.
  * @param error The error message
- * @returns True if it's a QuickTube error
+ * @returns True if it is an extraction error
  */
-export function isQuickTubeError(error: string): boolean {
+export function isVideoExtractionError(error: string): boolean {
   const errorLower = error.toLowerCase();
   
-  const quickTubeKeywords = [
-    'quicktube',
+  const extractionKeywords = [
     'extraction failed',
     'video is not available',
     'youtube',
@@ -245,7 +243,7 @@ export function isQuickTubeError(error: string): boolean {
     'audio extraction'
   ];
 
-  return quickTubeKeywords.some(keyword => errorLower.includes(keyword));
+  return extractionKeywords.some(keyword => errorLower.includes(keyword));
 }
 
 /**

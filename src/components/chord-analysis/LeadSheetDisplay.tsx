@@ -15,6 +15,7 @@ import { useTranslation } from '@/hooks/lyrics/useTranslation';
 import LyricsControls from '@/components/lyrics/LyricsControls';
 import NoLyricsMessage from '@/components/lyrics/NoLyricsMessage';
 import LyricLine from '@/components/lyrics/LyricLine';
+import { getLyricTextColors } from '@/components/lyrics/lyricsTheme';
 import { SegmentationResult } from '@/types/chatbotTypes';
 import type { LyricWordTiming } from '@/types/musicAiTypes';
 interface ChordData {
@@ -77,13 +78,7 @@ const LeadSheetDisplay: React.FC<LeadSheetProps> = React.memo(({
   // Memoize chords array to prevent unnecessary re-renders
   const memoizedChords = useMemo(() => chords || [], [chords]);
 
-  // Colors based on dark/light mode
-  const textColors = useMemo(() => ({
-    unplayed: darkMode ? '#9CA3AF' : '#6B7280', // Gray
-    played: darkMode ? '#60A5FA' : '#3B82F6',   // Blue (keeping blue instead of purple)
-    chord: darkMode ? '#93C5FD' : '#2563EB',    // Chord color
-    background: darkMode ? '#1F2937' : '#FFFFFF' // Background
-  }), [darkMode]);
+  const textColors = useMemo(() => getLyricTextColors(darkMode), [darkMode]);
 
   // Use the extracted hook for processing lyrics
   const processedAndMergedLyrics = useProcessedLyrics({

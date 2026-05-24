@@ -7,8 +7,7 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 /**
  * YouTube Video Info API Route - Proxy to Python Backend
  *
- * This route proxies YouTube video info requests to the Python backend
- * which handles QuickTube audio extraction in a serverless-compatible environment.
+ * This route proxies YouTube video info requests to the Python backend.
  */
 export async function GET(request: NextRequest) {
   try {

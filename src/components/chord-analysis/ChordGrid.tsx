@@ -86,7 +86,7 @@ interface ChordGridProps {
   keySignature?: string; // Key signature (e.g., 'C Major')
   isDetectingKey?: boolean; // Whether key detection is in progress
   isChatbotOpen?: boolean; // Whether the chatbot panel is open
-  isLyricsPanelOpen?: boolean; // Whether the lyrics panel is open
+  isLyricsPanelOpen?: boolean; // Whether the embedded lyrics grid is open
   hasPickupBeats?: boolean; // Whether the grid includes pickup beats
   pickupBeatsCount?: number; // Number of pickup beats
   hasPadding?: boolean; // Whether the chords array already includes padding/shifting

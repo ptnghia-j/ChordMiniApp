@@ -1,16 +1,9 @@
 import React from 'react';
-
-// Types
-interface TextColors {
-  unplayed: string;
-  played: string;
-  chord: string;
-  background: string;
-}
+import type { LyricTextColors } from '@/components/lyrics/lyricsTheme';
 
 interface NoLyricsMessageProps {
   error?: string;
-  textColors: TextColors;
+  textColors: LyricTextColors;
 }
 
 /**

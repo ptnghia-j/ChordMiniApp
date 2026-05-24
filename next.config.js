@@ -69,7 +69,6 @@ const broadFilesystemTraceExcludes = [
 
 const broadFilesystemTraceRoutes = [
   '/api/extract-audio',
-  '/api/jobs/extract-audio',
   '/api/transcribe-lyrics',
   '/api/youtube-media-proxy',
   '/api/ytdlp/download',

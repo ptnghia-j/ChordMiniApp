@@ -5,7 +5,7 @@
 - [apiService.ts](file://src/services/api/apiService.ts)
 - [rateLimiting.ts](file://src/utils/rateLimiting.ts)
 - [parallelPipelineService.ts](file://src/services/api/parallelPipelineService.ts)
-- [asyncJobService.ts](file://src/services/api/asyncJobService.ts)
+- [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [lyricsService.ts](file://src/services/lyrics/lyricsService.ts)
 - [lrclibService.ts](file://src/services/lyrics/lrclibService.ts)
@@ -46,7 +46,7 @@ subgraph "Frontend"
 A["apiService.ts<br/>Enhanced API client"]
 B["rateLimiting.ts<br/>Client-side rate limiter"]
 C["parallelPipelineService.ts<br/>Parallel audio processing"]
-D["asyncJobService.ts<br/>Long-running job polling"]
+D["segmentationAsyncService.ts<br/>Long-running job polling"]
 E["lyricsService.ts<br/>Lyrics orchestration"]
 F["lrclibService.ts<br/>LRClib client"]
 G["customMusicAiClient.ts<br/>Music.ai client"]
@@ -79,7 +79,7 @@ K --> L
 - [apiService.ts:1-407](file://src/services/api/apiService.ts#L1-L407)
 - [rateLimiting.ts:1-266](file://src/utils/rateLimiting.ts#L1-L266)
 - [parallelPipelineService.ts:1-350](file://src/services/api/parallelPipelineService.ts#L1-L350)
-- [asyncJobService.ts:1-211](file://src/services/api/asyncJobService.ts#L1-L211)
+- [segmentationAsyncService.ts:1-211](file://src/services/api/segmentationAsyncService.ts#L1-L211)
 - [lyricsService.ts:1-197](file://src/services/lyrics/lyricsService.ts#L1-L197)
 - [lrclibService.ts:1-266](file://src/services/lyrics/lrclibService.ts#L1-L266)
 - [customMusicAiClient.ts:1-711](file://src/services/api/customMusicAiClient.ts#L1-L711)
@@ -109,7 +109,7 @@ K --> L
 - [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
 - [rateLimiting.ts:210-266](file://src/utils/rateLimiting.ts#L210-L266)
 - [parallelPipelineService.ts:34-350](file://src/services/api/parallelPipelineService.ts#L34-L350)
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 - [lyricsService.ts:72-197](file://src/services/lyrics/lyricsService.ts#L72-L197)
 - [firebase.ts:475-537](file://src/config/firebase.ts#L475-L537)
 - [streamingFirebaseUpload.ts:273-431](file://src/services/firebase/streamingFirebaseUpload.ts#L273-L431)
@@ -252,13 +252,13 @@ Manages long-running jobs that exceed platform timeouts. Creates jobs, polls for
 ```mermaid
 sequenceDiagram
 participant Client as "Client"
-participant AJS as "asyncJobService.ts"
+participant AJS as "segmentationAsyncService.ts"
 participant BE as "Backend Jobs API"
 Client->>AJS : "extractAudio(videoId, onProgress)"
-AJS->>BE : "POST /api/jobs/extract-audio"
+AJS->>BE : "POST /api/extract-audio"
 BE-->>AJS : "{jobId}"
 loop Polling
-AJS->>BE : "GET /api/jobs/status/{jobId}"
+AJS->>BE : "GET /api/segmentation/jobs/{jobId}"
 BE-->>AJS : "{status, progress, audioUrl}"
 AJS-->>Client : "onProgress(status)"
 end
@@ -266,11 +266,11 @@ AJS-->>Client : "AsyncJobResult"
 ```
 
 **Diagram sources**
-- [asyncJobService.ts:52-101](file://src/services/api/asyncJobService.ts#L52-L101)
-- [asyncJobService.ts:106-177](file://src/services/api/asyncJobService.ts#L106-L177)
+- [segmentationAsyncService.ts:52-101](file://src/services/api/segmentationAsyncService.ts#L52-L101)
+- [segmentationAsyncService.ts:106-177](file://src/services/api/segmentationAsyncService.ts#L106-L177)
 
 **Section sources**
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 
 ### Lyrics Orchestration and Providers
 The frontend lyrics service coordinates LRClib and Genius fallback strategies. The backend orchestrator composes provider services and normalizes responses.

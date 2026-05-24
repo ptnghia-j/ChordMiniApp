@@ -3,7 +3,7 @@
  *
  * Monitors the critical fixes deployed:
  * 1. Firebase query count reduction (target: 60-80% decrease)
- * 2. QuickTube filename pattern matching accuracy
+ * 2. Audio filename pattern matching accuracy
  * 3. Smart caching system performance
  * 4. Error frequency and warning reduction
  */

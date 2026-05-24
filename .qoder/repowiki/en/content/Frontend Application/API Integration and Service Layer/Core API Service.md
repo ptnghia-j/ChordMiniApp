@@ -8,7 +8,7 @@
 - [firebase.ts](file://src/config/firebase.ts)
 - [serverAppCheck.ts](file://src/utils/serverAppCheck.ts)
 - [api.ts](file://src/config/api.ts)
-- [asyncJobService.ts](file://src/services/api/asyncJobService.ts)
+- [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [segmentationAsyncService.ts](file://src/services/api/segmentationAsyncService.ts)
 - [parallelPipelineService.ts](file://src/services/api/parallelPipelineService.ts)
 - [chatbotService.ts](file://src/services/api/chatbotService.ts)
@@ -278,13 +278,13 @@ Fetch options:
 - [api.ts:96-157](file://src/config/api.ts#L96-L157)
 
 ### Supporting Services
-- AsyncJobService: Manages long-running jobs exceeding platform timeouts with polling and progress callbacks
+- SegmentationAsyncService: Manages long-running jobs exceeding platform timeouts with polling and progress callbacks
 - SegmentationAsyncService: Orchestrates SongFormer segmentation with dynamic polling strategies based on song duration
 - ParallelPipelineService: Optimizes audio processing by downloading complete files and uploading to Firebase in parallel
 - ChatbotService: Integrates with chatbot APIs, formats song context, and retrieves lyrics for enhanced conversations
 
 **Section sources**
-- [asyncJobService.ts:30-211](file://src/services/api/asyncJobService.ts#L30-L211)
+- [segmentationAsyncService.ts:30-211](file://src/services/api/segmentationAsyncService.ts#L30-L211)
 - [segmentationAsyncService.ts:101-261](file://src/services/api/segmentationAsyncService.ts#L101-L261)
 - [parallelPipelineService.ts:34-350](file://src/services/api/parallelPipelineService.ts#L34-L350)
 - [chatbotService.ts:17-285](file://src/services/api/chatbotService.ts#L17-L285)
@@ -302,7 +302,7 @@ ApiService["ApiService"] --> RL["Rate Limiting Utils"]
 ApiService --> FB["Firebase App Check"]
 Hook["useRateLimiting"] --> ApiService
 APIRoutes["API Routing Config"] --> ApiService
-AsyncJob["AsyncJobService"] --> ApiService
+AsyncJob["SegmentationAsyncService"] --> ApiService
 SegAsync["SegmentationAsyncService"] --> ApiService
 Parallel["ParallelPipelineService"] --> ApiService
 Chatbot["ChatbotService"] --> ApiService
@@ -313,7 +313,7 @@ Chatbot["ChatbotService"] --> ApiService
 - [firebase.ts:517-536](file://src/config/firebase.ts#L517-L536)
 - [useRateLimiting.ts:6-6](file://src/hooks/api/useRateLimiting.ts#L6-L6)
 - [api.ts:13-13](file://src/config/api.ts#L13-L13)
-- [asyncJobService.ts:32-40](file://src/services/api/asyncJobService.ts#L32-L40)
+- [segmentationAsyncService.ts:32-40](file://src/services/api/segmentationAsyncService.ts#L32-L40)
 - [segmentationAsyncService.ts:103-110](file://src/services/api/segmentationAsyncService.ts#L103-L110)
 - [parallelPipelineService.ts:34-38](file://src/services/api/parallelPipelineService.ts#L34-L38)
 - [chatbotService.ts:8-12](file://src/services/api/chatbotService.ts#L8-L12)
@@ -328,7 +328,7 @@ Chatbot["ChatbotService"] --> ApiService
 - Timeout tuning: Default 2 minutes; ML endpoints use longer timeouts (up to 13+ minutes) to accommodate processing durations
 - Retry strategy: Exponential backoff with jitter reduces thundering herd effects and improves resilience
 - Parallel processing: ParallelPipelineService downloads complete files and uploads to Firebase concurrently to reduce bottlenecks
-- Async job handling: AsyncJobService and SegmentationAsyncService manage long-running tasks with polling strategies optimized by song duration
+- Async job handling: SegmentationAsyncService and SegmentationAsyncService manage long-running tasks with polling strategies optimized by song duration
 
 ## Troubleshooting Guide
 Common issues and resolutions:

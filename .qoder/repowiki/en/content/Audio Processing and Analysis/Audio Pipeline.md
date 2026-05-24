@@ -325,7 +325,7 @@ Valid --> |No| Reject
 - Extract audio from a YouTube video:
   - Use AudioProcessingService.extractAudioFromYouTube to trigger extraction
   - The API route handles request parsing and forwards to the simplified extractor
-  - The extractor chooses yt-mp3-go, validates URLs, caches metadata, and returns a usable audio URL
+  - The extractor checks caches, requests browser extraction on production cache misses, finalizes browser output, caches metadata, and returns a usable audio URL
 - Preprocess audio:
   - Trim silence with trim_silence_from_audio
   - Validate format with validate_audio_file
@@ -344,12 +344,12 @@ Valid --> |No| Reject
 - Frontend dependencies:
   - Next.js API route depends on AudioProcessingService
   - AudioProcessingService depends on AudioExtractionSimplified
-  - AudioExtractionSimplified depends on yt-mp3-go service and Firebase utilities
+  - AudioExtractionSimplified depends on environment detection, local yt-dlp or rollback yt-mp3-go services, and Firebase utilities
 - Backend dependencies:
   - Python audio utilities depend on librosa and soundfile
   - Temporary file management wraps Python’s tempfile and os
 - External dependencies:
-  - yt-mp3-go for audio extraction
+  - browser yt-dlp for production extraction, local yt-dlp for development, and yt-mp3-go for rollback
   - Firebase for storage and caching
   - URL validation utilities for safe access
 
@@ -404,7 +404,7 @@ PYT["tempfiles.py"] --> Tmp["tempfile/os"]
   - Use validate_audio_file to detect invalid formats
   - For librosa-dependent operations, catch exceptions and fall back to filesystem checks
 - Format compatibility issues:
-  - yt-mp3-go returns completed audio downloads; ensure downstream processing supports it
+  - Browser extraction finalization returns completed audio downloads; rollback yt-mp3-go responses remain supported
   - Use validate_file_content_with_metadata to verify real duration and accessibility
 - Network and timeout issues:
   - Apply URL validation with safe timeouts
@@ -428,7 +428,7 @@ The ChordMiniApp audio pipeline combines robust extraction, preprocessing, and q
 
 ### Supported Formats and Extraction Details
 - MP3, WAV, FLAC, M4A:
-  - Extraction primarily uses yt-mp3-go completed audio downloads
+  - Extraction primarily uses browser yt-dlp completed audio downloads with server finalization
   - Python utilities support decoding/encoding with librosa and soundfile
   - Sheetsage upstream demonstrates decoding/encoding across formats and options like mono, normalization, and duration/offset
 

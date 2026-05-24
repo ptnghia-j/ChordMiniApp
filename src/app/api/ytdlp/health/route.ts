@@ -79,7 +79,7 @@ async function checkYtDlpHealth(): Promise<HealthResult> {
           features: [
             'Video info extraction',
             'Audio download',
-            'QuickTube-compatible filenames'
+            'legacy-compatible filenames'
           ]
         });
       } else {

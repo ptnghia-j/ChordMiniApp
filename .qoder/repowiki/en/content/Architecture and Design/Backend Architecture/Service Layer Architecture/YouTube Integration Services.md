@@ -19,7 +19,7 @@ The current YouTube extraction stack is environment-aware:
 - `/api/extract-audio` is the frontend-facing orchestration route.
 - Extracted audio is cached through Firebase Storage when possible, with Firestore metadata as a fallback.
 
-The older ytdown.io service and compatibility wrapper have been removed from the source tree and should not be treated as active integration points.
+The older deleted legacy extraction service and compatibility wrapper have been removed from the source tree and should not be treated as active integration points.
 
 ## Architecture
 ```mermaid
@@ -44,7 +44,7 @@ AES --> Storage["Firebase Storage + Firestore metadata"]
 - [route.ts:1-116](file://src/app/api/extract-audio/route.ts#L1-L116)
 
 ## Core Components
-- `AudioExtractionServiceSimplified`: selects the extraction strategy, checks Firebase Storage and Firestore cache, retries yt-mp3-go failures, and stores successful output.
+- `AudioExtractionServiceSimplified`: selects the extraction strategy, checks Firebase Storage and Firestore cache, delegates production misses to browser extraction finalization, and stores successful output.
 - `YtMp3GoService`: validates video IDs, requests video info, creates a quality-specific download job, monitors SSE status, and returns the finished audio URL.
 - `YtDlpService`: development-only path for local yt-dlp metadata extraction and audio download.
 - `/api/extract-audio`: accepts video metadata from search results, supports `getInfoOnly`, and returns the normalized audio URL plus extraction method.
@@ -73,7 +73,7 @@ Route-->>Client : audioUrl, duration, method
 ```
 
 ## Operational Notes
-- Production defaults to yt-mp3-go because it is more reliable from hosted/datacenter environments.
+- Production defaults to browser-side yt-dlp with server-side cache checks and finalization; yt-mp3-go remains rollback-only behind explicit strategy configuration.
 - The service retries medium quality once and then falls back to low quality before returning failure.
 - yt-dlp remains available for local development and for explicit `NEXT_PUBLIC_AUDIO_STRATEGY=ytdlp`.
 - Temporary external URLs are treated as stream URLs; Firebase Storage URLs are treated as permanent.

@@ -67,7 +67,6 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
       // If line doesn't have chords property or it's empty, return sample chord
       if (!line.chords || !Array.isArray(line.chords) || line.chords.length === 0) {
         // For testing, create a sample chord at the beginning of the line
-        // This ensures we see chords even when the API doesn't return them
         return [{
           time: line.startTime,
           chord: "C",
@@ -126,7 +125,6 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
       });
     } catch (error) {
       console.error('Error in getChordPositions:', error);
-      // Return a fallback chord
       return [{
         time: line.startTime,
         chord: "C",
@@ -157,10 +155,7 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
       >
         {lyrics.lines.map((line, lineIndex) => {
           try {
-            // Get chord positions for this line
             const chordPositions = getChordPositions(line);
-
-            // Split the line text into words
             const words = line.text ? line.text.split(' ') : [''];
 
             return (
@@ -172,21 +167,17 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
                 }`}
                 onClick={() => onLineClick && onLineClick(line)}
               >
-                {/* Time indicator */}
                 <span className="text-xs text-gray-500 absolute right-2 top-1">
                   {formatTime(line.startTime || 0)}
                 </span>
 
-                {/* Render the lyrics text with chords above specific words */}
                 <div className="text-lg leading-loose relative pt-6">
                   {words.map((word, wordIndex) => {
                     try {
-                      // Find chords that should be positioned above this word
                       const wordChords = chordPositions.filter(chord => chord.wordIndex === wordIndex);
 
                       return (
                         <span key={wordIndex} className="relative inline-block">
-                          {/* Render chords above the word */}
                           {wordChords.map((chord, chordIndex) => (
                             <span
                               key={chordIndex}
@@ -197,12 +188,10 @@ const EnhancedLyricsDisplay: React.FC<EnhancedLyricsDisplayProps> = ({
                             </span>
                           ))}
 
-                          {/* Render the word */}
                           <span className={line === currentLine ? 'text-blue-600 font-semibold' : 'text-gray-700'}>
                             {word}
                           </span>
 
-                          {/* Add space after word (except for the last word) */}
                           {wordIndex < words.length - 1 && ' '}
                         </span>
                       );

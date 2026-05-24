@@ -152,7 +152,7 @@ function UIStoreHarness() {
         {activeTab}|chatbot:{String(isChatbotOpen)}|lyrics:{String(isLyricsPanelOpen)}|roman:{String(showRomanNumerals)}|seg:{String(showSegmentation)}|simple:{String(simplifyChords)}|loop:{String(isLoopEnabled)}|pitch:{pitchShiftSemitones}|target:{targetKey}|ready:{String(isPitchShiftReady)}|capo:{guitarCapoFret}|positions:{Object.keys(guitarSelectedPositions).join(',') || 'none'}
       </div>
       <button type="button" onClick={() => useUIStore.getState().setActiveTab('lyricsChords')}>Set tab</button>
-      <button type="button" onClick={() => useUIStore.getState().toggleLyricsPanel()}>Toggle lyrics panel</button>
+      <button type="button" onClick={() => useUIStore.getState().toggleLyricsPanel()}>Toggle lyrics grid</button>
       <button type="button" onClick={() => useUIStore.getState().toggleChatbot()}>Toggle chatbot</button>
       <button type="button" onClick={() => toggleRomanNumerals()}>Toggle roman numerals</button>
       <button type="button" onClick={() => toggleSegmentation()}>Toggle segmentation</button>
@@ -243,7 +243,7 @@ describe('Zustand store behavior', () => {
     fireEvent.click(screen.getByRole('button', { name: /set tab/i }));
     expect(screen.getByTestId('ui-state')).toHaveTextContent('lyricsChords');
 
-    fireEvent.click(screen.getByRole('button', { name: /toggle lyrics panel/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle lyrics grid/i }));
     expect(screen.getByTestId('ui-state')).toHaveTextContent('chatbot:false|lyrics:true');
 
     fireEvent.click(screen.getByRole('button', { name: /toggle chatbot/i }));

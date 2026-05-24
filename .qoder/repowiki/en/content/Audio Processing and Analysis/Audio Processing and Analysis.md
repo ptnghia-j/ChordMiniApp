@@ -96,7 +96,7 @@ TS --> BDS
 
 ## Core Components
 - Audio extraction and preprocessing:
-  - Frontend: YouTube extraction via yt-dlp and yt-mp3-go proxies; local file duration checks and caching.
+  - Frontend: YouTube extraction via browser yt-dlp in production, local yt-dlp in development, server finalization, local file duration checks, and caching.
   - Backend: Silence trimming, duration estimation, resampling, and validation utilities.
 - Detection services:
   - Beat detection: automatic model selection among Beat-Transformer, madmom, and librosa; fallback strategies and file-size-aware routing.
@@ -401,7 +401,7 @@ BE_CR --> BE_CU["chord_utils.py"]
 
 ## Troubleshooting Guide
 - Audio extraction failures:
-  - yt-dlp service availability and tests; fallback to yt-mp3-go when backend is unavailable.
+  - yt-dlp service availability and tests; yt-mp3-go remains available only as an explicitly configured rollback.
   - Video info extraction via dedicated API or fallback path.
 - Backend detection errors:
   - 403 Forbidden indicates backend accessibility issues (e.g., port conflicts); 413 indicates oversized files; 500 indicates internal errors.

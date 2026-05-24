@@ -1,7 +1,5 @@
-import {
-  compareAlignmentStrategies,
-  runSegmentAlignmentSolver,
-} from '@/services/chord-analysis/alignmentSolver';
+import { compareAlignmentStrategies } from '@/services/chord-analysis/alignmentComparison';
+import { runSegmentAlignmentSolver } from '@/services/chord-analysis/alignmentSolver';
 import type { ChordGridData } from '@/services/chord-analysis/gridTypes';
 
 function makeGridData(overrides: Partial<ChordGridData> = {}): ChordGridData {

@@ -380,7 +380,7 @@ class UIStore {
 - [uiStore.ts:30-125](file://src/stores/uiStore.ts#L30-L125)
 
 Integration patterns:
-- Mutual exclusivity for chatbot and lyrics panels.
+- Mutual exclusivity for chatbot and embedded lyrics grid.
 - Derived targetKey calculation based on originalKey and pitchShiftSemitones.
 - Utility bar reset consolidates feature flags and loop state.
 

@@ -2,7 +2,7 @@
  * Audio Duration Detection Utilities
  * 
  * This file contains utility functions for detecting audio duration from various sources,
- * including handling CORS restrictions for external URLs like QuickTube.
+ * including handling CORS restrictions for external stream URLs.
  */
 
 import { buildAudioProxyUrl } from '@/utils/audioProxyUrl';

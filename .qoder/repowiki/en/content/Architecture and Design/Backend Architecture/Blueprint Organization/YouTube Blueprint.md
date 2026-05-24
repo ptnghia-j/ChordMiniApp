@@ -21,7 +21,7 @@ The YouTube blueprint combines search, metadata, and audio extraction. The curre
 - `ytDlpService` for local development extraction.
 - `ytMp3GoService` as deprecated rollback code behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
 
-The legacy ytdown.io compatibility service has been removed. Wiki pages should describe `/api/extract-audio` as the stable frontend API and browser yt-dlp as the production extraction integration. See [YouTube Integration](file://.qoder/repowiki/en/content/Audio Processing and Analysis/YouTube Integration.md) for the Cloudflare Worker proxy contract and troubleshooting notes.
+The legacy deleted legacy extraction compatibility service has been removed. Wiki pages should describe `/api/extract-audio` as the stable frontend API and browser yt-dlp as the production extraction integration. See [YouTube Integration](file://.qoder/repowiki/en/content/Audio Processing and Analysis/YouTube Integration.md) for the Cloudflare Worker proxy contract and troubleshooting notes.
 
 ## Project Structure
 ```mermaid
@@ -110,7 +110,7 @@ YtMp3GoService --> YtMp3GoResult : "returns"
 - Production uses medium quality first, retries once, then falls back to low quality.
 - Firebase Storage URLs are permanent; external service URLs are marked as stream URLs with expiration metadata.
 - yt-dlp is development-oriented and blocked in production unless explicitly enabled.
-- The deleted ytdown.io files and routes should not appear in active architecture diagrams.
+- The deleted deleted legacy extraction files and routes should not appear in active architecture diagrams.
 
 ## Section Sources
 - [validators.py:1-171](file://python_backend/blueprints/youtube/validators.py#L1-L171)

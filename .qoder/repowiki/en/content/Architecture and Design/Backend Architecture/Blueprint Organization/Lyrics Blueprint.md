@@ -10,7 +10,7 @@
 - [route.ts](file://src/app/api/genius-lyrics/route.ts)
 - [lyricsService.ts](file://src/services/lyrics/lyricsService.ts)
 - [lrclibService.ts](file://src/services/lyrics/lrclibService.ts)
-- [LyricsPanel.tsx](file://src/components/lyrics/LyricsPanel.tsx)
+- [GridLyricsRow.tsx](file://src/components/lyrics/GridLyricsRow.tsx)
 - [useLyricsState.ts](file://src/hooks/lyrics/useLyricsState.ts)
 - [translationService.ts](file://src/services/lyrics/translationService.ts)
 </cite>
@@ -50,7 +50,7 @@ subgraph "Frontend (Next.js)"
 FE_Proxy["Next.js Route<br/>src/app/api/genius-lyrics/route.ts"]
 FE_Svc["Lyrics Service<br/>src/services/lyrics/lyricsService.ts"]
 FE_LRCLib["LRCLib Service<br/>src/services/lyrics/lrclibService.ts"]
-FE_Panel["Lyrics Panel<br/>src/components/lyrics/LyricsPanel.tsx"]
+FE_Panel["Embedded Lyrics Grid<br/>src/components/lyrics/GridLyricsRow.tsx"]
 FE_State["Lyrics State Hook<br/>src/hooks/lyrics/useLyricsState.ts"]
 FE_Trans["Translation Service<br/>src/services/lyrics/translationService.ts"]
 end
@@ -82,7 +82,7 @@ BE_Orchestrator --> BE_LRClib
 - [route.ts:11-148](file://src/app/api/genius-lyrics/route.ts#L11-L148)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
-- [LyricsPanel.tsx:23-376](file://src/components/lyrics/LyricsPanel.tsx#L23-L376)
+- [GridLyricsRow.tsx:23-376](file://src/components/lyrics/GridLyricsRow.tsx#L23-L376)
 - [useLyricsState.ts:8-91](file://src/hooks/lyrics/useLyricsState.ts#L8-L91)
 - [translationService.ts:38-244](file://src/services/lyrics/translationService.ts#L38-L244)
 
@@ -116,7 +116,7 @@ BE_Orchestrator --> BE_LRClib
 - [lrclib_service.py:14-172](file://python_backend/services/lyrics/lrclib_service.py#L14-L172)
 - [lyricsService.ts:72-172](file://src/services/lyrics/lyricsService.ts#L72-L172)
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
-- [LyricsPanel.tsx:23-376](file://src/components/lyrics/LyricsPanel.tsx#L23-L376)
+- [GridLyricsRow.tsx:23-376](file://src/components/lyrics/GridLyricsRow.tsx#L23-L376)
 - [useLyricsState.ts:8-91](file://src/hooks/lyrics/useLyricsState.ts#L8-L91)
 - [translationService.ts:38-244](file://src/services/lyrics/translationService.ts#L38-L244)
 
@@ -264,7 +264,7 @@ LyricsOrchestrator --> LRCLibService : "uses"
 - [lrclibService.ts:32-145](file://src/services/lyrics/lrclibService.ts#L32-L145)
 - [lrclibService.ts:185-223](file://src/services/lyrics/lrclibService.ts#L185-L223)
 
-### Frontend Lyrics Panel
+### Frontend Embedded Lyrics Grid
 - Features:
   - Search input with auto-focus and Enter support.
   - Toggle between synchronized and plain lyrics.
@@ -274,7 +274,7 @@ LyricsOrchestrator --> LRCLibService : "uses"
   - Integrates with useLyricsState for UI lifecycle and error handling.
 
 **Section sources**
-- [LyricsPanel.tsx:23-376](file://src/components/lyrics/LyricsPanel.tsx#L23-L376)
+- [GridLyricsRow.tsx:23-376](file://src/components/lyrics/GridLyricsRow.tsx#L23-L376)
 - [useLyricsState.ts:8-91](file://src/hooks/lyrics/useLyricsState.ts#L8-L91)
 
 ### Translation Service
@@ -310,7 +310,7 @@ Orchestrator --> LRClib["lrclib_service.py"]
 NextRoute["route.ts"] --> Routes
 LyricsSvc["lyricsService.ts"] --> NextRoute
 LyricsSvc --> LRCLibSvc["lrclibService.ts"]
-Panel["LyricsPanel.tsx"] --> LyricsSvc
+Panel["GridLyricsRow.tsx"] --> LyricsSvc
 Panel --> StateHook["useLyricsState.ts"]
 Panel --> Trans["translationService.ts"]
 ```
@@ -324,7 +324,7 @@ Panel --> Trans["translationService.ts"]
 - [route.ts:1-148](file://src/app/api/genius-lyrics/route.ts#L1-L148)
 - [lyricsService.ts:1-197](file://src/services/lyrics/lyricsService.ts#L1-L197)
 - [lrclibService.ts:1-266](file://src/services/lyrics/lrclibService.ts#L1-L266)
-- [LyricsPanel.tsx:1-376](file://src/components/lyrics/LyricsPanel.tsx#L1-L376)
+- [GridLyricsRow.tsx:1-376](file://src/components/lyrics/GridLyricsRow.tsx#L1-L376)
 - [useLyricsState.ts:1-91](file://src/hooks/lyrics/useLyricsState.ts#L1-L91)
 - [translationService.ts:1-255](file://src/services/lyrics/translationService.ts#L1-L255)
 
@@ -336,7 +336,7 @@ Panel --> Trans["translationService.ts"]
 - [route.ts:1-148](file://src/app/api/genius-lyrics/route.ts#L1-L148)
 - [lyricsService.ts:1-197](file://src/services/lyrics/lyricsService.ts#L1-L197)
 - [lrclibService.ts:1-266](file://src/services/lyrics/lrclibService.ts#L1-L266)
-- [LyricsPanel.tsx:1-376](file://src/components/lyrics/LyricsPanel.tsx#L1-L376)
+- [GridLyricsRow.tsx:1-376](file://src/components/lyrics/GridLyricsRow.tsx#L1-L376)
 - [useLyricsState.ts:1-91](file://src/hooks/lyrics/useLyricsState.ts#L1-L91)
 - [translationService.ts:1-255](file://src/services/lyrics/translationService.ts#L1-L255)
 
@@ -414,5 +414,5 @@ The lyrics blueprint integrates multiple providers with robust validation, error
   - TranslationService enhances accessibility by providing cached translations with background refresh.
 
 **Section sources**
-- [LyricsPanel.tsx:23-376](file://src/components/lyrics/LyricsPanel.tsx#L23-L376)
+- [GridLyricsRow.tsx:23-376](file://src/components/lyrics/GridLyricsRow.tsx#L23-L376)
 - [translationService.ts:38-244](file://src/services/lyrics/translationService.ts#L38-L244)

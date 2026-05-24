@@ -1,7 +1,4 @@
 import { GRID_ALIGNMENT_CONFIG } from './gridConfig';
-// Legacy pipeline is imported only by compareAlignmentStrategies below so tests
-// can compare old and new behavior. Production calls runSegmentAlignmentSolver.
-import { runVisualCompactionPipeline } from './gridCompaction';
 import {
   average,
   getBeatDurationsAroundWindow,
@@ -55,14 +52,6 @@ export type AlignmentSolverResult = {
   gridData: ChordGridData;
   decisions: AlignmentDecision[];
   metrics: AlignmentQualityMetrics;
-};
-
-export type AlignmentStrategyComparison = {
-  current: {
-    gridData: ChordGridData;
-    metrics: AlignmentQualityMetrics;
-  };
-  solver: AlignmentSolverResult;
 };
 
 function isSteadyBeatMeasure(durations: number[]): boolean {
@@ -1241,27 +1230,5 @@ export function runSegmentAlignmentSolver(params: {
     gridData,
     decisions,
     metrics: scoreGrid(gridData.chords, timeSignature, editDistance),
-  };
-}
-
-export function compareAlignmentStrategies(params: {
-  chordGridData: ChordGridData;
-  chordIntervals: Array<{ start?: number; end?: number; chord?: string }>;
-  beatTimes: number[];
-  timeSignature: number;
-  beatDuration: number;
-  enabled: boolean;
-  suppressLeadingSilenceExpansion?: boolean;
-  disableLeadingSilenceWindow?: boolean;
-}): AlignmentStrategyComparison {
-  const currentGridData = runVisualCompactionPipeline(params);
-  const solver = runSegmentAlignmentSolver(params);
-
-  return {
-    current: {
-      gridData: currentGridData,
-      metrics: evaluateAlignmentQuality(currentGridData, params.timeSignature),
-    },
-    solver,
   };
 }

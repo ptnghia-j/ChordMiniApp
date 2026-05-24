@@ -1,14 +1,14 @@
 import {
   createUserFriendlyError,
   getTroubleshootingSteps,
-  isQuickTubeError,
+  isVideoExtractionError,
 } from '@/utils/errorMessageUtils';
 
 describe('errorMessageUtils', () => {
   describe('createUserFriendlyError', () => {
     it.each([
       [
-        'QuickTube service is currently unavailable',
+        'Extraction service is currently unavailable',
         'Video Processing Unavailable',
         true,
         true,
@@ -69,11 +69,11 @@ describe('errorMessageUtils', () => {
       ],
     ])(
       'maps "%s" to the expected user-facing category',
-      (error, title, showTryAnotherButton, quickTube) => {
+      (error, title, showTryAnotherButton, extractionError) => {
         expect(createUserFriendlyError(error)).toMatchObject({
           title,
           showTryAnotherButton,
-          isQuickTubeError: quickTube,
+          isVideoExtractionError: extractionError,
         });
       }
     );
@@ -81,20 +81,20 @@ describe('errorMessageUtils', () => {
     it('falls back to a generic extraction failure for unknown errors', () => {
       expect(createUserFriendlyError('Unexpected failure')).toMatchObject({
         title: 'Processing Failed',
-        isQuickTubeError: true,
+        isVideoExtractionError: true,
         showTryAnotherButton: true,
       });
     });
   });
 
-  describe('isQuickTubeError', () => {
+  describe('isVideoExtractionError', () => {
     it('detects common extraction keywords', () => {
-      expect(isQuickTubeError('QuickTube download failed')).toBe(true);
-      expect(isQuickTubeError('YouTube audio extraction error')).toBe(true);
+      expect(isVideoExtractionError('Audio download failed')).toBe(true);
+      expect(isVideoExtractionError('YouTube audio extraction error')).toBe(true);
     });
 
     it('does not flag unrelated backend errors', () => {
-      expect(isQuickTubeError('Firestore write failed')).toBe(false);
+      expect(isVideoExtractionError('Firestore write failed')).toBe(false);
     });
   });
 

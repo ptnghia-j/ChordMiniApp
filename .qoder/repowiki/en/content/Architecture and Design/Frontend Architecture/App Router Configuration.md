@@ -303,7 +303,7 @@ Globals["Tailwind Layers & Tokens"] --> Responsive["Responsive & Dark Mode Style
 - Dynamic routes:
   - src/app/analyze/[videoId]/... for video-specific analysis.
   - src/app/lyrics/[videoId]/page.tsx for lyrics per video.
-  - src/app/api/jobs/status/[jobId]/route.ts for job status retrieval.
+  - src/app/api/segmentation/jobs/[jobId]/route.ts for job status retrieval.
   - src/app/api/proxy-audio/[filename]/route.ts for proxied audio serving.
 
 ```mermaid
@@ -312,7 +312,7 @@ Root["src/app/page.tsx"] --> Analyze["src/app/analyze/layout.tsx"]
 Analyze --> VideoId["src/app/analyze/[videoId]/..."]
 Root --> Lyrics["src/app/lyrics/[videoId]/page.tsx"]
 Root --> API["src/app/api/..."]
-API --> Jobs["src/app/api/jobs/status/[jobId]/route.ts"]
+API --> Jobs["src/app/api/segmentation/jobs/[jobId]/route.ts"]
 API --> Proxy["src/app/api/proxy-audio/[filename]/route.ts"]
 ```
 

@@ -2,14 +2,8 @@ import { GEMINI_MODEL_NAME, createGeminiClient } from '@/config/gemini';
 import { getPythonApiUrl, getSheetSageApiUrl } from '@/config/serverBackend';
 import { createSafeTimeoutSignal } from '@/utils/environmentUtils';
 import { getStatusConfig } from '@/services/status/statusConfig';
-import type { PublicServiceStatus, StatusProbeKind, StatusProbeResult, StatusServiceId } from '@/services/status/statusTypes';
-
-const SERVICE_LABELS: Record<StatusServiceId, string> = {
-  beat: 'Beat Detection',
-  chord: 'Chord Recognition',
-  sheetsage: 'Sheet Sage',
-  gemini: 'Gemini API',
-};
+import { STATUS_SERVICE_LABELS } from '@/services/status/statusConstants';
+import type { PublicServiceStatus, PublicStatusProbeDetail, StatusProbeKind, StatusProbeResult, StatusServiceId } from '@/services/status/statusTypes';
 
 const STANDARD_ENDPOINT_MAX_ATTEMPTS = 3;
 const STANDARD_RETRY_BASE_DELAY_MS = 4_000;
@@ -19,6 +13,7 @@ const GEMINI_SLOW_RESPONSE_MS = 15_000;
 
 interface StandardEndpointProbe {
   probeKind: StatusProbeKind;
+  endpointId: string;
   url: string;
 }
 
@@ -58,7 +53,7 @@ function worseStatus(left: PublicServiceStatus, right: PublicServiceStatus): Pub
 }
 
 function cloneProbeResultForService(result: StatusProbeResult, serviceId: StatusServiceId): StatusProbeResult {
-  const serviceLabel = SERVICE_LABELS[serviceId];
+  const serviceLabel = STATUS_SERVICE_LABELS[serviceId];
   return {
     ...result,
     serviceId,
@@ -67,18 +62,34 @@ function cloneProbeResultForService(result: StatusProbeResult, serviceId: Status
   };
 }
 
+function toProbeDetail(result: StatusProbeResult): PublicStatusProbeDetail {
+  return {
+    serviceId: result.serviceId,
+    serviceLabel: result.serviceLabel,
+    probeKind: result.probeKind,
+    endpointId: result.endpointId,
+    status: result.status,
+    ok: result.ok,
+    latencyMs: result.latencyMs,
+    checkedAt: result.checkedAt,
+    failureReason: result.failureReason,
+    httpStatus: result.httpStatus,
+    attempts: result.attempts,
+    timeoutMs: result.timeoutMs,
+  };
+}
+
 async function probeJsonEndpoint(
   serviceId: StatusServiceId,
-  probeKind: StatusProbeKind,
-  url: string,
+  endpoint: StandardEndpointProbe,
   timeoutMs: number,
 ): Promise<StatusProbeResult> {
-  const serviceLabel = SERVICE_LABELS[serviceId];
+  const serviceLabel = STATUS_SERVICE_LABELS[serviceId];
   const startedAt = Date.now();
   const checkedAt = new Date().toISOString();
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(endpoint.url, {
       method: 'GET',
       signal: createSafeTimeoutSignal(timeoutMs),
     });
@@ -88,26 +99,31 @@ async function probeJsonEndpoint(
     return {
       serviceId,
       serviceLabel,
-      probeKind,
+      probeKind: endpoint.probeKind,
+      endpointId: endpoint.endpointId,
       status,
       ok: response.ok,
       latencyMs,
       checkedAt,
-      sanitizedSummary: safeSummary(serviceLabel, status, probeKind),
+      sanitizedSummary: safeSummary(serviceLabel, status, endpoint.probeKind),
       failureReason: response.ok ? undefined : 'http',
+      httpStatus: response.status,
+      timeoutMs,
     };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
     return {
       serviceId,
       serviceLabel,
-      probeKind,
+      probeKind: endpoint.probeKind,
+      endpointId: endpoint.endpointId,
       status: 'outage',
       ok: false,
       latencyMs,
       checkedAt,
-      sanitizedSummary: safeSummary(serviceLabel, 'outage', probeKind),
+      sanitizedSummary: safeSummary(serviceLabel, 'outage', endpoint.probeKind),
       failureReason: isTimeoutError(error) ? 'timeout' : 'network',
+      timeoutMs,
     };
   }
 }
@@ -138,10 +154,10 @@ async function probeJsonEndpointWithRetries(
 
     const result = await probeJsonEndpoint(
       serviceId,
-      endpoint.probeKind,
-      endpoint.url,
+      endpoint,
       Math.min(attemptTimeoutMs, remainingMs),
     );
+    result.attempts = attempt;
 
     if (!bestResult || statusRank(result.status) < statusRank(bestResult.status)) {
       bestResult = result;
@@ -163,14 +179,17 @@ async function probeJsonEndpointWithRetries(
 
   return bestResult || {
     serviceId,
-    serviceLabel: SERVICE_LABELS[serviceId],
+    serviceLabel: STATUS_SERVICE_LABELS[serviceId],
     probeKind: endpoint.probeKind,
+    endpointId: endpoint.endpointId,
     status: 'outage',
     ok: false,
     latencyMs: Date.now() - startedAt,
     checkedAt: new Date().toISOString(),
-    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], 'outage', endpoint.probeKind),
+    sanitizedSummary: safeSummary(STATUS_SERVICE_LABELS[serviceId], 'outage', endpoint.probeKind),
     failureReason: 'timeout',
+    attempts: 0,
+    timeoutMs,
   };
 }
 
@@ -208,14 +227,19 @@ async function probeServiceBehindKnownHealth(
 
   return {
     serviceId,
-    serviceLabel: SERVICE_LABELS[serviceId],
+    serviceLabel: STATUS_SERVICE_LABELS[serviceId],
     probeKind: representative?.probeKind || endpoints[0]?.probeKind || 'health',
     status: normalizedStatus,
     ok: normalizedStatus !== 'outage',
     latencyMs,
     checkedAt,
-    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], normalizedStatus, representative?.probeKind || 'health'),
+    sanitizedSummary: safeSummary(STATUS_SERVICE_LABELS[serviceId], normalizedStatus, representative?.probeKind || 'health'),
     failureReason: representative?.failureReason,
+    endpointId: representative?.endpointId,
+    httpStatus: representative?.httpStatus,
+    attempts: representative?.attempts,
+    timeoutMs: representative?.timeoutMs,
+    componentResults: normalizedResults.map(toProbeDetail),
   };
 }
 
@@ -228,7 +252,7 @@ function softenOutagesBehindHealthyLiveness(
     return results;
   }
 
-  const serviceLabel = SERVICE_LABELS[serviceId];
+  const serviceLabel = STATUS_SERVICE_LABELS[serviceId];
   return results.map((result) => {
     if (result.probeKind === 'health' || result.status === 'operational') {
       return result;
@@ -302,14 +326,19 @@ async function probeServiceWithAggregation(
 
   return {
     serviceId,
-    serviceLabel: SERVICE_LABELS[serviceId],
+    serviceLabel: STATUS_SERVICE_LABELS[serviceId],
     probeKind: representative?.probeKind || endpoints[0]?.probeKind || 'health',
     status: normalizedStatus,
     ok: normalizedStatus !== 'outage',
     latencyMs,
     checkedAt,
-    sanitizedSummary: safeSummary(SERVICE_LABELS[serviceId], normalizedStatus, representative?.probeKind || 'health'),
+    sanitizedSummary: safeSummary(STATUS_SERVICE_LABELS[serviceId], normalizedStatus, representative?.probeKind || 'health'),
     failureReason: representative?.failureReason,
+    endpointId: representative?.endpointId,
+    httpStatus: representative?.httpStatus,
+    attempts: representative?.attempts,
+    timeoutMs: representative?.timeoutMs,
+    componentResults: normalizedResults.map(toProbeDetail),
   };
 }
 
@@ -317,6 +346,7 @@ async function probePythonModelServices(pythonBaseUrl: string, timeoutMs: number
   const startedAt = Date.now();
   const sharedHealthResult = await probeJsonEndpointWithRetries('beat', {
     probeKind: 'health',
+    endpointId: 'python-health',
     url: `${pythonBaseUrl}/health`,
   }, timeoutMs);
   const elapsedMs = Date.now() - startedAt;
@@ -324,10 +354,10 @@ async function probePythonModelServices(pythonBaseUrl: string, timeoutMs: number
 
   return Promise.all([
     probeServiceBehindKnownHealth('beat', sharedHealthResult, [
-      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/model-info` },
+      { probeKind: 'metadata', endpointId: 'python-beat-model-info', url: `${pythonBaseUrl}/api/model-info` },
     ], remainingMs),
     probeServiceBehindKnownHealth('chord', sharedHealthResult, [
-      { probeKind: 'metadata', url: `${pythonBaseUrl}/api/chord-model-info` },
+      { probeKind: 'metadata', endpointId: 'python-chord-model-info', url: `${pythonBaseUrl}/api/chord-model-info` },
     ], remainingMs),
   ]);
 }
@@ -335,7 +365,7 @@ async function probePythonModelServices(pythonBaseUrl: string, timeoutMs: number
 export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
   const config = getStatusConfig();
   const serviceId: StatusServiceId = 'gemini';
-  const serviceLabel = SERVICE_LABELS[serviceId];
+  const serviceLabel = STATUS_SERVICE_LABELS[serviceId];
   const checkedAt = new Date().toISOString();
   const startedAt = Date.now();
 
@@ -349,6 +379,7 @@ export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
       latencyMs: null,
       checkedAt,
       sanitizedSummary: 'Gemini API probe is not configured.',
+      endpointId: 'gemini-generation',
     };
   }
 
@@ -363,6 +394,7 @@ export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
       latencyMs: null,
       checkedAt,
       sanitizedSummary: 'Gemini API probe is not configured.',
+      endpointId: 'gemini-generation',
     };
   }
 
@@ -387,6 +419,9 @@ export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
       latencyMs,
       checkedAt,
       sanitizedSummary: safeSummary(serviceLabel, status, 'generation'),
+      endpointId: 'gemini-generation',
+      attempts: 1,
+      timeoutMs: config.probeTimeoutMs,
     };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
@@ -404,6 +439,9 @@ export async function probeGeminiGeneration(): Promise<StatusProbeResult> {
         ? 'Gemini API reported overload or rate limiting during a generation probe.'
         : safeSummary(serviceLabel, 'outage', 'generation'),
       failureReason: overloaded ? 'http' : isTimeoutError(error) ? 'timeout' : 'network',
+      endpointId: 'gemini-generation',
+      attempts: 1,
+      timeoutMs: config.probeTimeoutMs,
     };
   }
 }
@@ -416,7 +454,7 @@ export async function runStandardStatusProbes(): Promise<StatusProbeResult[]> {
   const [pythonResults, sheetSageProbe, geminiProbe] = await Promise.all([
     probePythonModelServices(pythonBaseUrl, config.probeTimeoutMs),
     probeServiceWithAggregation('sheetsage', [
-      { probeKind: 'health', url: `${sheetSageBaseUrl}/health?warmup=true` },
+      { probeKind: 'health', endpointId: 'sheetsage-health-warmup', url: `${sheetSageBaseUrl}/health?warmup=true` },
     ], config.probeTimeoutMs),
     probeGeminiGeneration(),
   ]);
