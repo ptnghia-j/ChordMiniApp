@@ -28,6 +28,10 @@ export interface AudioProcessingState {
   fromFirestoreCache: boolean;
   isStreamUrl?: boolean;
   streamExpiresAt?: number;
+  queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
+  queuePosition?: number | null;
+  estimatedWaitSeconds?: number | null;
+  leaseId?: string | null;
 }
 
 export interface AnalyzeAudioFileOptions {
@@ -404,7 +408,11 @@ export class AudioProcessingService {
       isAnalyzing: false,
       isAnalyzed: false,
       error: undefined,
-      suggestion: undefined
+      suggestion: undefined,
+      queueStatus: null,
+      queuePosition: null,
+      estimatedWaitSeconds: null,
+      leaseId: null
     };
   }
 
@@ -425,7 +433,11 @@ export class AudioProcessingService {
       isStreamUrl,
       streamExpiresAt,
       error: undefined,
-      suggestion: undefined
+      suggestion: undefined,
+      queueStatus: null,
+      queuePosition: null,
+      estimatedWaitSeconds: null,
+      leaseId: null
     };
   }
 
@@ -440,7 +452,11 @@ export class AudioProcessingService {
       isExtracting: false,
       isExtracted: false,
       error,
-      suggestion
+      suggestion,
+      queueStatus: null,
+      queuePosition: null,
+      estimatedWaitSeconds: null,
+      leaseId: null
     };
   }
 

@@ -20,6 +20,9 @@ export interface AnalyzePageChromeProps {
   processingBannersProps: {
     isDownloading: boolean;
     fromCache: boolean;
+    queueStatus?: AudioProcessingState['queueStatus'];
+    queuePosition?: number | null;
+    estimatedWaitSeconds?: number | null;
     showExtractionNotification: boolean;
     onDismissExtraction: () => void;
     onRefreshExtraction: () => void;
@@ -67,6 +70,13 @@ export interface AnalyzeControlsPropsGroup {
 export interface AnalyzeResultsPaneProps {
   analysisResults: AnalysisResult | null;
   isAnalyzed: boolean;
+  isExtracting: boolean;
+  isDownloading: boolean;
+  fromCache: boolean;
+  queueStatus?: AudioProcessingState['queueStatus'];
+  queuePosition?: number | null;
+  estimatedWaitSeconds?: number | null;
+  statusMessage?: string;
   videoTitle: string;
   isEditMode: boolean;
   editedTitle: string;

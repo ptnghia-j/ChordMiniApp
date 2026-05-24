@@ -2,6 +2,8 @@ const PYODIDE_VERSION = '0.26.2';
 const YTDLP_VERSION = '2026.3.17';
 const PACKAGE_PROXY_URL = `${self.location.origin}/api/pyodide-package-proxy/yt_dlp-2026.3.17-py3-none-any.whl`;
 let PROXY_URL = '/api/youtube-media-proxy';
+let PROXY_LEASE = null;
+self.PROXY_LEASE = null;
 
 let pyodide = null;
 let ready = false;
@@ -92,6 +94,9 @@ def _do_xhr(method, url, headers, body):
                 pass
 
     xhr.setRequestHeader('X-Skip-YouTube-Auth', '1')
+    proxy_lease = getattr(js, 'PROXY_LEASE', None)
+    if proxy_lease:
+        xhr.setRequestHeader('X-YouTube-Proxy-Lease', str(proxy_lease))
     xhr.responseType = 'arraybuffer'
     if body is not None:
         if isinstance(body, (bytes, bytearray, memoryview)):
@@ -321,6 +326,8 @@ self.onmessage = async ({ data }) => {
       if (data.proxyUrl) {
         PROXY_URL = data.proxyUrl;
       }
+      PROXY_LEASE = data.proxyLease || null;
+      self.PROXY_LEASE = PROXY_LEASE;
       await init();
       return;
     }
@@ -329,6 +336,8 @@ self.onmessage = async ({ data }) => {
       if (data.proxyUrl) {
         PROXY_URL = data.proxyUrl;
       }
+      PROXY_LEASE = data.proxyLease || null;
+      self.PROXY_LEASE = PROXY_LEASE;
       await extract(data.url);
     }
   } catch (error) {

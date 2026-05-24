@@ -67,6 +67,12 @@ describe('errorMessageUtils', () => {
         true,
         true,
       ],
+      [
+        'youtube_proxy_lease_not_ready extraction queue',
+        'Extraction Queue Busy',
+        false,
+        true,
+      ],
     ])(
       'maps "%s" to the expected user-facing category',
       (error, title, showTryAnotherButton, extractionError) => {

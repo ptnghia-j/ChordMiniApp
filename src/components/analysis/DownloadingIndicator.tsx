@@ -9,14 +9,21 @@ const EXTRACTION_ESTIMATE_SECONDS = 25;
 
 interface DownloadingIndicatorProps {
   isVisible: boolean;
+  queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
+  queuePosition?: number | null;
+  estimatedWaitSeconds?: number | null;
 }
 
 interface ExtractionCountdownDescriptionProps {
   estimateSeconds: number;
+  queueStatus?: DownloadingIndicatorProps['queueStatus'];
+  queuePosition?: number | null;
 }
 
 const ExtractionCountdownDescription: React.FC<ExtractionCountdownDescriptionProps> = ({
   estimateSeconds,
+  queueStatus,
+  queuePosition,
 }) => {
   const [remainingSeconds, setRemainingSeconds] = useState(estimateSeconds);
 
@@ -32,6 +39,11 @@ const ExtractionCountdownDescription: React.FC<ExtractionCountdownDescriptionPro
 
     return () => clearInterval(interval);
   }, [estimateSeconds]);
+
+  if (queueStatus === 'queued') {
+    const positionText = queuePosition && queuePosition > 0 ? ` Queue position: ${queuePosition}.` : '';
+    return <span>{positionText} Estimated wait: about {remainingSeconds}s.</span>;
+  }
 
   if (remainingSeconds === 0) {
     return <span>Almost done. Finalizing the extracted audio...</span>;
@@ -68,21 +80,43 @@ function createCountdownProgressBar(durationMs: number, id: string) {
 }
 
 const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
-  isVisible
+  isVisible,
+  queueStatus,
+  queuePosition,
+  estimatedWaitSeconds,
 }) => {
   // Get stage from the ProcessingContext
   const { stage } = useProcessing();
   const toastKeyRef = useRef<string | null>(null);
   const wasVisibleRef = useRef(false);
+  const toastSignatureRef = useRef<string>('');
 
   useEffect(() => {
-    if (isVisible && !wasVisibleRef.current) {
+    const effectiveEstimateSeconds = queueStatus === 'queued'
+      ? Math.max(1, Math.ceil(estimatedWaitSeconds || EXTRACTION_ESTIMATE_SECONDS))
+      : EXTRACTION_ESTIMATE_SECONDS;
+    const signature = `${stage}:${queueStatus || 'none'}:${queuePosition || 0}:${Math.ceil(effectiveEstimateSeconds / 5)}`;
+
+    if (isVisible && (!wasVisibleRef.current || toastSignatureRef.current !== signature)) {
+      if (toastKeyRef.current) {
+        closeToast(toastKeyRef.current);
+        toastKeyRef.current = null;
+      }
       // Show toast when becoming visible
       wasVisibleRef.current = true;
-      const estimateMs = EXTRACTION_ESTIMATE_SECONDS * 1000;
+      toastSignatureRef.current = signature;
+      const estimateMs = effectiveEstimateSeconds * 1000;
       const key = addToast({
-        title: stage === 'downloading' ? 'Downloading YouTube Video...' : 'Extracting Audio...',
-        description: <ExtractionCountdownDescription estimateSeconds={EXTRACTION_ESTIMATE_SECONDS} />,
+        title: queueStatus === 'queued'
+          ? 'Waiting for Extraction Queue'
+          : (stage === 'downloading' ? 'Downloading YouTube Video...' : 'Extracting Audio...'),
+        description: (
+          <ExtractionCountdownDescription
+            estimateSeconds={effectiveEstimateSeconds}
+            queueStatus={queueStatus}
+            queuePosition={queuePosition}
+          />
+        ),
         color: 'default',
         timeout: 0, // Don't auto-dismiss - wait until extraction completes
         hideCloseButton: true,
@@ -97,12 +131,13 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
     } else if (!isVisible && wasVisibleRef.current) {
       // Close toast when becoming hidden
       wasVisibleRef.current = false;
+      toastSignatureRef.current = '';
       if (toastKeyRef.current) {
         closeToast(toastKeyRef.current);
         toastKeyRef.current = null;
       }
     }
-  }, [isVisible, stage]);
+  }, [isVisible, stage, queueStatus, queuePosition, estimatedWaitSeconds]);
 
   // Cleanup on unmount
   useEffect(() => {

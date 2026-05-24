@@ -22,6 +22,9 @@ interface ProcessingBannersProps {
   // Downloading indicator
   isDownloading: boolean;
   fromCache: boolean;
+  queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
+  queuePosition?: number | null;
+  estimatedWaitSeconds?: number | null;
 
   // Extraction notification
   showExtractionNotification: boolean;
@@ -46,6 +49,9 @@ interface ProcessingBannersProps {
 const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
   isDownloading,
   fromCache,
+  queueStatus,
+  queuePosition,
+  estimatedWaitSeconds,
   showExtractionNotification,
   onDismissExtraction,
   onRefreshExtraction,
@@ -64,6 +70,9 @@ const ProcessingBanners: React.FC<ProcessingBannersProps> = ({
       {/* Downloading Indicator - shown during initial download */}
       <DownloadingIndicator
         isVisible={isDownloading && !fromCache}
+        queueStatus={queueStatus}
+        queuePosition={queuePosition}
+        estimatedWaitSeconds={estimatedWaitSeconds}
       />
 
       {/* Extraction Notification Banner - shown after download completes */}

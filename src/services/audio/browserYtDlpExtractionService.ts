@@ -35,10 +35,21 @@ interface WorkerExtractedData {
 }
 
 type ProgressStage = 'initializing' | 'extracting' | 'downloading' | 'converting' | 'uploading' | 'finalizing';
+export type BrowserYtDlpQueueStatus = 'queued' | 'active' | 'released' | 'cancelled' | 'expired';
+
+export interface BrowserYtDlpQueueState {
+  status: BrowserYtDlpQueueStatus;
+  leaseId: string;
+  queuePosition: number;
+  estimatedWaitSeconds: number;
+  retryAfterSeconds?: number;
+  leaseExpiresAt?: number | null;
+}
 
 interface BrowserYtDlpOptions {
   abortSignal?: AbortSignal;
   onProgress?: (stage: ProgressStage, message: string, progress?: number) => void;
+  onQueueState?: (state: BrowserYtDlpQueueState) => void;
 }
 
 let ffmpegInstancePromise: Promise<import('@ffmpeg/ffmpeg').FFmpeg> | null = null;
@@ -74,7 +85,7 @@ function buildProxyUrl(proxyUrl: string, targetUrl: string): string {
   return `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}url=${encodeURIComponent(targetUrl)}`;
 }
 
-function buildProxyRequestHeaders(headers: Record<string, string> | undefined): HeadersInit {
+function buildProxyRequestHeaders(headers: Record<string, string> | undefined, leaseId?: string | null): HeadersInit {
   const proxyHeaders = new Headers();
 
   for (const [key, value] of Object.entries(headers || {})) {
@@ -97,13 +108,19 @@ function buildProxyRequestHeaders(headers: Record<string, string> | undefined): 
   }
 
   proxyHeaders.set('X-Skip-YouTube-Auth', '1');
+  if (leaseId) {
+    proxyHeaders.set('X-YouTube-Proxy-Lease', leaseId);
+  }
   return proxyHeaders;
 }
 
-function buildMinimalProxyRequestHeaders(): HeadersInit {
-  return {
-    'X-Skip-YouTube-Auth': '1',
-  };
+function buildMinimalProxyRequestHeaders(leaseId?: string | null): HeadersInit {
+  const headers = new Headers();
+  headers.set('X-Skip-YouTube-Auth', '1');
+  if (leaseId) {
+    headers.set('X-YouTube-Proxy-Lease', leaseId);
+  }
+  return headers;
 }
 
 async function getProxyErrorDetail(response: Response): Promise<string> {
@@ -143,9 +160,130 @@ async function getProxyErrorDetail(response: Response): Promise<string> {
   return detail || response.statusText;
 }
 
+function createClientRequestId(videoId: string): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${videoId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeQueueState(data: unknown): BrowserYtDlpQueueState {
+  const record = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  return {
+    status: typeof record.status === 'string' ? record.status as BrowserYtDlpQueueStatus : 'expired',
+    leaseId: String(record.leaseId || ''),
+    queuePosition: Number(record.queuePosition || 0),
+    estimatedWaitSeconds: Number(record.estimatedWaitSeconds || 0),
+    retryAfterSeconds: record.retryAfterSeconds ? Number(record.retryAfterSeconds) : undefined,
+    leaseExpiresAt: typeof record.leaseExpiresAt === 'number' ? record.leaseExpiresAt : null,
+  };
+}
+
+function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (abortSignal?.aborted) {
+    return Promise.reject(new DOMException('Browser extraction aborted', 'AbortError'));
+  }
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => abortSignal?.removeEventListener('abort', abortHandler);
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const abortHandler = () => {
+      window.clearTimeout(timeout);
+      cleanup();
+      reject(new DOMException('Browser extraction aborted', 'AbortError'));
+    };
+    abortSignal?.addEventListener('abort', abortHandler, { once: true });
+  });
+}
+
+async function fetchQueueJson(
+  proxyUrl: string,
+  path: string,
+  init: RequestInit,
+): Promise<BrowserYtDlpQueueState> {
+  const response = await fetch(`${proxyUrl}${path}`, init);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || `YouTube extraction queue request failed (${response.status})`);
+  }
+  return normalizeQueueState(data);
+}
+
+async function acquireProxyLease(
+  videoId: string,
+  proxyUrl: string,
+  options: BrowserYtDlpOptions,
+): Promise<BrowserYtDlpQueueState> {
+  if (!isExternalProxyUrl(proxyUrl)) {
+    return {
+      status: 'active',
+      leaseId: '',
+      queuePosition: 0,
+      estimatedWaitSeconds: 0,
+      retryAfterSeconds: 0,
+      leaseExpiresAt: null,
+    };
+  }
+
+  const clientRequestId = createClientRequestId(videoId);
+  let state: BrowserYtDlpQueueState | null = null;
+
+  try {
+    state = await fetchQueueJson(proxyUrl, '/queue/acquire', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId, clientRequestId }),
+      signal: options.abortSignal,
+    });
+    options.onQueueState?.(state);
+
+    while (state.status === 'queued') {
+      const waitSeconds = Math.min(10, Math.max(1, state.retryAfterSeconds || state.estimatedWaitSeconds || 3));
+      options.onProgress?.(
+        'initializing',
+        state.queuePosition > 0
+          ? `Waiting for extraction queue slot ${state.queuePosition}. Estimated wait: ${Math.ceil((state.estimatedWaitSeconds || waitSeconds) / 60)} minute(s).`
+          : 'Waiting for the extraction queue...',
+      );
+      await delay(waitSeconds * 1000, options.abortSignal);
+      state = await fetchQueueJson(proxyUrl, `/queue/status?leaseId=${encodeURIComponent(state.leaseId)}`, {
+        method: 'GET',
+        signal: options.abortSignal,
+      });
+      options.onQueueState?.(state);
+    }
+
+    if (state.status !== 'active') {
+      throw new Error('The YouTube extraction queue lease expired before extraction could start.');
+    }
+
+    return state;
+  } catch (error) {
+    await releaseProxyLease(proxyUrl, state?.leaseId);
+    throw error;
+  }
+}
+
+async function releaseProxyLease(proxyUrl: string, leaseId?: string | null): Promise<void> {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl)) {
+    return;
+  }
+
+  await fetch(`${proxyUrl}/queue/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ leaseId }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 async function waitForWorkerExtraction(
   videoUrl: string,
-  options: BrowserYtDlpOptions
+  options: BrowserYtDlpOptions,
+  leaseId?: string | null,
 ): Promise<WorkerExtractedData> {
   assertBrowserRuntime();
 
@@ -196,18 +334,19 @@ async function waitForWorkerExtraction(
       fail(new Error(event.message || 'Browser yt-dlp worker failed'));
     };
 
-    worker.postMessage({ type: 'extract', url: videoUrl, proxyUrl });
+    worker.postMessage({ type: 'extract', url: videoUrl, proxyUrl, proxyLease: leaseId || null });
   });
 }
 
 async function fetchAudioBytesViaProxy(
   streamUrl: string,
   headers: Record<string, string> | undefined,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  leaseId?: string | null,
 ): Promise<Uint8Array> {
   const config = await loadPublicConfig();
   const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
-  const proxyHeaders = buildProxyRequestHeaders(headers);
+  const proxyHeaders = buildProxyRequestHeaders(headers, leaseId);
 
   const response = isExternalProxyUrl(proxyUrl)
     ? await (async () => {
@@ -227,7 +366,7 @@ async function fetchAudioBytesViaProxy(
       // surfacing the failure to the user.
       return fetch(url, {
         method: 'GET',
-        headers: buildMinimalProxyRequestHeaders(),
+        headers: buildMinimalProxyRequestHeaders(leaseId),
         signal: abortSignal,
       });
     })()
@@ -467,32 +606,48 @@ export async function extractAudioWithBrowserYtDlp(
   }
 
   const videoUrl = `https://www.youtube.com/watch?v=${metadata.videoId}`;
+  const config = await loadPublicConfig();
+  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
+  let leaseId: string | null = null;
 
-  options.onProgress?.('initializing', 'Preparing browser audio extraction...');
-  const extracted = await waitForWorkerExtraction(videoUrl, options);
+  try {
+    options.onProgress?.('initializing', 'Preparing browser audio extraction...');
+    const lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
+    leaseId = lease.leaseId || null;
+    options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
+    const extracted = await waitForWorkerExtraction(videoUrl, options, leaseId);
 
-  options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
-  const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal);
+    options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
+    const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseId);
 
-  const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
-  if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
-    throw new Error('Extracted MP3 is larger than the 50MB Firebase cache limit.');
+    const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
+    if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
+      throw new Error('Extracted MP3 is larger than the 50MB Firebase cache limit.');
+    }
+
+    options.onProgress?.('uploading', 'Uploading extracted audio for validation...');
+    const hash = await sha256Hex(mp3Bytes);
+    const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
+
+    options.onProgress?.('finalizing', 'Validating audio before caching...');
+    return await finalizeCandidate({
+      metadata: {
+        ...metadata,
+        title: metadata.title || extracted.title,
+        duration: metadata.duration || extracted.duration,
+      },
+      candidatePath,
+      sha256: hash,
+      fileSize: mp3Bytes.byteLength,
+      idToken,
+    });
+  } finally {
+    await releaseProxyLease(proxyUrl, leaseId);
   }
-
-  options.onProgress?.('uploading', 'Uploading extracted audio for validation...');
-  const hash = await sha256Hex(mp3Bytes);
-  const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
-
-  options.onProgress?.('finalizing', 'Validating audio before caching...');
-  return finalizeCandidate({
-    metadata: {
-      ...metadata,
-      title: metadata.title || extracted.title,
-      duration: metadata.duration || extracted.duration,
-    },
-    candidatePath,
-    sha256: hash,
-    fileSize: mp3Bytes.byteLength,
-    idToken,
-  });
 }
+
+export const __browserYtDlpTestUtils = {
+  buildProxyRequestHeaders,
+  buildMinimalProxyRequestHeaders,
+  normalizeQueueState,
+};

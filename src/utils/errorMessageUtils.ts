@@ -34,6 +34,19 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
     };
   }
 
+  if (errorLower.includes('youtube_proxy_lease_required') ||
+      errorLower.includes('youtube_proxy_lease_not_ready') ||
+      errorLower.includes('youtube_proxy_gate_unavailable') ||
+      errorLower.includes('extraction queue')) {
+    return {
+      title: 'Extraction Queue Busy',
+      message: 'YouTube audio extraction is waiting for an available queue slot.',
+      suggestion: 'Please keep this page open. The extraction will start automatically when your turn is ready.',
+      showTryAnotherButton: false,
+      isVideoExtractionError: true
+    };
+  }
+
   // Extraction service unavailable
   if (errorLower.includes('extraction service is currently unavailable') ||
       errorLower.includes('video processing service appears to be overloaded') ||

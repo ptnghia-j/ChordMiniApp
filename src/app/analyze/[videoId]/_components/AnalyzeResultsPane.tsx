@@ -52,7 +52,17 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
   const hasAnalysis = Boolean(props.analysisResults && props.isAnalyzed);
 
   if (!hasAnalysis) {
-    return <AnalyzeEmptyState />;
+    return (
+      <AnalyzeEmptyState
+        isExtracting={props.isExtracting}
+        isDownloading={props.isDownloading}
+        fromCache={props.fromCache}
+        queueStatus={props.queueStatus}
+        queuePosition={props.queuePosition}
+        estimatedWaitSeconds={props.estimatedWaitSeconds}
+        statusMessage={props.statusMessage}
+      />
+    );
   }
 
   return (

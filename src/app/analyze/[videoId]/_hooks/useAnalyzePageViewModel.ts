@@ -109,6 +109,7 @@ export function useAnalyzePageViewModel({
   const {
     stage,
     progress: _progress,
+    statusMessage,
     setStage,
     setProgress,
     setStatusMessage,
@@ -1230,6 +1231,13 @@ export function useAnalyzePageViewModel({
   const resultsPaneProps = {
     analysisResults,
     isAnalyzed: audioProcessingState.isAnalyzed,
+    isExtracting: audioProcessingState.isExtracting,
+    isDownloading: audioProcessingState.isDownloading,
+    fromCache: audioProcessingState.fromCache,
+    queueStatus: audioProcessingState.queueStatus,
+    queuePosition: audioProcessingState.queuePosition,
+    estimatedWaitSeconds: audioProcessingState.estimatedWaitSeconds,
+    statusMessage,
     videoTitle,
     isEditMode,
     editedTitle,
@@ -1472,6 +1480,9 @@ export function useAnalyzePageViewModel({
     processingBannersProps: {
       isDownloading: audioProcessingState.isDownloading,
       fromCache: audioProcessingState.fromCache,
+      queueStatus: audioProcessingState.queueStatus,
+      queuePosition: audioProcessingState.queuePosition,
+      estimatedWaitSeconds: audioProcessingState.estimatedWaitSeconds,
       showExtractionNotification,
       onDismissExtraction: handleDismissExtraction,
       onRefreshExtraction: handleRefreshExtraction,

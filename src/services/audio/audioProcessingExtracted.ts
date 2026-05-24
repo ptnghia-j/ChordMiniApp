@@ -2,6 +2,7 @@ import { AnalyzeAudioFileOptions } from '@/services/audio/audioProcessingService
 import { getTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
 import { apiPost } from '@/config/api';
 import { LyricsData } from '@/types/musicAiTypes';
+import type { BrowserYtDlpQueueState } from '@/services/audio/browserYtDlpExtractionService';
 
 // Types for the service
 interface ErrorWithSuggestion extends Error {
@@ -40,6 +41,10 @@ interface AudioProcessingState {
   fromFirestoreCache: boolean;
   error: string | null;
   suggestion?: string | null;
+  queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
+  queuePosition?: number | null;
+  estimatedWaitSeconds?: number | null;
+  leaseId?: string | null;
 }
 
 interface ProcessingContextType {
@@ -410,7 +415,11 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
       isDownloading: true, // Set the downloading flag to true
       isExtracted: false,
       error: null,
-      suggestion: null
+      suggestion: null,
+      queueStatus: null,
+      queuePosition: null,
+      estimatedWaitSeconds: null,
+      leaseId: null
     }));
 
     // Start processing context
@@ -472,6 +481,22 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
             if (typeof progress === 'number') {
               processingContext.setProgress(Math.min(95, Math.max(currentProgress, progress)));
             }
+          },
+          onQueueState: (queueState: BrowserYtDlpQueueState) => {
+            setAudioProcessingState(prev => ({
+              ...prev,
+              queueStatus: queueState.status,
+              queuePosition: queueState.queuePosition,
+              estimatedWaitSeconds: queueState.estimatedWaitSeconds,
+              leaseId: queueState.leaseId,
+            }));
+            if (queueState.status === 'queued') {
+              processingContext.setStatusMessage(
+                queueState.queuePosition > 0
+                  ? `Waiting for extraction queue slot ${queueState.queuePosition}. Estimated wait: ${Math.ceil((queueState.estimatedWaitSeconds || 1) / 60)} minute(s).`
+                  : 'Waiting for the extraction queue...'
+              );
+            }
           }
         };
 
@@ -505,7 +530,11 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
           audioUrl: data.audioUrl,
           fromCache: data.fromCache || false,
           error: null,
-          suggestion: null
+          suggestion: null,
+          queueStatus: null,
+          queuePosition: null,
+          estimatedWaitSeconds: null,
+          leaseId: null
         }));
 
         // Update duration if available from extraction
@@ -584,7 +613,11 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
       isDownloading: false, // Reset the downloading flag on error
       isExtracted: false,
       error: errorMessage,
-      suggestion
+      suggestion,
+      queueStatus: null,
+      queuePosition: null,
+      estimatedWaitSeconds: null,
+      leaseId: null
     }));
 
     // Update processing context for error
