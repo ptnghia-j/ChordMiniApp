@@ -51,6 +51,7 @@ subgraph "Frontend"
 FE_Next["Next.js 16.1.6<br/>React 19.0.0<br/>TypeScript"]
 FE_UI["Tailwind CSS + Heroui"]
 FE_Firebase["Firebase SDKs"]
+FE_BROWSER_AUDIO["Pyodide 0.26.2<br/>yt-dlp wheel 2026.3.17<br/>ffmpeg.wasm 0.12.10"]
 end
 subgraph "Backend"
 BE_Flask["Flask 3.0.3"]
@@ -67,6 +68,7 @@ FB["Firebase<br/>Firestore/Storage/Rules"]
 end
 FE_Next --> FE_UI
 FE_Next --> FE_Firebase
+FE_Next --> FE_BROWSER_AUDIO
 FE_Next --> BE_Flask
 BE_Flask --> BE_ML
 SF --> BE_Flask
@@ -105,6 +107,7 @@ FB --> FE_Firebase
   - Next.js 16.1.6, React 19.0.0, TypeScript 5.x, Tailwind CSS 3.3.3
   - Bundler: Turbopack (Next 16+ default)
   - Build-time analyzer and performance tuning
+  - Browser extraction runtime: Pyodide 0.26.2, yt-dlp wheel 2026.3.17, and ffmpeg.wasm core 0.12.10
 - Backend framework and ML stack
   - Flask 3.0.3 with CORS, rate limiting, Gunicorn
   - TensorFlow 2.15.1, PyTorch 2.6.0, librosa 0.10.1, Spleeter 2.3.2
@@ -248,8 +251,9 @@ API-->>Client : Analysis results
   - 5-stems separation pipeline; pre-downloaded model cache in container
 - madmom
   - DBN beat tracking; patched for Python 3.10+ compatibility
-- yt-dlp 2025.4.30
-  - Audio extraction and metadata retrieval
+- yt-dlp
+  - Browser extraction uses the pinned Pyodide wheel `2026.3.17`
+  - Backend/development utilities use `yt-dlp==2025.4.30` from `python_backend/requirements.txt`
 - External services
   - Genius/Lyrics, Google GenAI, Music.AI SDK
 
@@ -420,7 +424,7 @@ ChordMiniApp combines a modern, performance-focused frontend (Next.js 16.1.6, Re
   - TensorFlow: 2.15.1
   - librosa: 0.10.1
   - Spleeter: 2.3.2
-  - yt-dlp: 2025.4.30
+  - yt-dlp: 2025.4.30 for backend/development routes; 2026.3.17 in the browser Pyodide worker
 - Standalone Services
   - SongFormer: Flask 3.1.0, PyTorch 2.2.2
   - Sheetsage: Flask 2.0.3, madmom 0.16.1, librosa 0.7.2

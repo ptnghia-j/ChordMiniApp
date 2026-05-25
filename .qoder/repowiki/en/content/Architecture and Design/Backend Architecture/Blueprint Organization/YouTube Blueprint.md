@@ -17,6 +17,7 @@
 ## Introduction
 The YouTube blueprint combines search, metadata, and audio extraction. The current frontend extraction stack has these active paths:
 - Browser yt-dlp production extraction through `browserYtDlpExtractionService`, `public/browser-ytdlp-worker.js`, Pyodide, ffmpeg.wasm, and the YouTube media proxy.
+- Cloudflare proxy queue coordination through `/queue/acquire`, `/queue/status`, `/queue/heartbeat`, and `/queue/release` when `NEXT_PUBLIC_YOUTUBE_PROXY_URL` points at an external Worker.
 - No automatic Railway/server yt-dlp fallback for YouTube access challenges; Cloudflare/browser failures surface as extraction errors.
 - `ytDlpService` for local development extraction.
 - `ytMp3GoService` as deprecated rollback code behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
@@ -33,9 +34,14 @@ EXTRACT["/api/extract-audio"]
 end
 subgraph "Frontend Services"
 AES["audioExtractionSimplified.ts"]
+BYT["browserYtDlpExtractionService.ts"]
 DLP["ytDlpService.ts"]
 MP3["ytMp3GoService.ts"]
 UTILS["youtubeMetadata.ts / youtubeUtils.ts"]
+end
+subgraph "External Proxy Contract"
+CF["Cloudflare Worker media proxy"]
+Q["Queue lease endpoints"]
 end
 subgraph "Python Backend"
 PY["blueprints/youtube"]
@@ -45,6 +51,9 @@ SEARCH --> PY
 PY --> VAL
 INFO --> UTILS
 EXTRACT --> AES
+AES --> BYT
+BYT --> CF
+BYT --> Q
 AES --> MP3
 AES --> DLP
 ```
@@ -67,6 +76,10 @@ participant Client
 participant Extract as "/api/extract-audio"
 participant Audio as "AudioExtractionServiceSimplified"
 participant Env as "environmentDetection"
+participant Browser as "browserYtDlpExtractionService"
+participant Queue as "Cloudflare queue"
+participant Proxy as "Cloudflare/local media proxy"
+participant Finalizer as "finalize-browser-extraction"
 participant MP3 as "ytMp3GoService"
 participant DLP as "ytDlpService"
 participant Store as "Firebase"
@@ -75,9 +88,17 @@ Extract->>Audio : extractAudio(videoMetadata)
 Audio->>Store : Check existing audio
 Audio->>Env : detectEnvironment()
 alt production
-Audio->>MP3 : yt-mp3-go extraction
+Audio-->>Client : browser extraction required
+Client->>Browser : extractAudioWithBrowserYtDlp(video)
+Browser->>Queue : acquire/status/heartbeat when external proxy
+Browser->>Proxy : yt-dlp and media download requests
+Browser->>Store : upload private candidate MP3
+Browser->>Finalizer : validate and promote candidate
+Browser->>Queue : release lease when present
 else development or explicit ytdlp
 Audio->>DLP : yt-dlp extraction
+else explicit rollback
+Audio->>MP3 : yt-mp3-go extraction
 end
 Audio->>Store : Persist successful audio/metadata
 Audio-->>Extract : AudioExtractionResult
@@ -107,9 +128,10 @@ YtMp3GoService --> YtMp3GoResult : "returns"
 ```
 
 ## Operational Notes
-- Production uses medium quality first, retries once, then falls back to low quality.
-- Firebase Storage URLs are permanent; external service URLs are marked as stream URLs with expiration metadata.
-- yt-dlp is development-oriented and blocked in production unless explicitly enabled.
+- Production cache misses use browser yt-dlp and fixed 192 kbps MP3 finalization. It does not use `yt-mp3-go` unless the rollback strategy is explicitly configured.
+- Firebase Storage URLs are permanent after candidate validation and promotion; browser extraction never writes directly to public `audio/` storage.
+- yt-dlp server routes are development-oriented and blocked in production unless explicitly enabled.
+- The Cloudflare Worker source may be managed outside the tracked repository, but its public contract must remain aligned with the queue and media proxy behavior documented in YouTube Integration.
 - The deleted deleted legacy extraction files and routes should not appear in active architecture diagrams.
 
 ## Section Sources

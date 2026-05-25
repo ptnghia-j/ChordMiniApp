@@ -27,9 +27,11 @@ export function translateScaleDegreeInversion(root: string, quality: string, inv
 
   if (rootIndex === -1) return inversion; // Fallback if root not found
 
-  // Determine if chord is minor for scale degree calculation
+  // Determine if chord is minor, diminished, or half-diminished for scale degree calculation
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
   const isMinor = quality === 'min' || quality === 'minor' || quality === 'm' ||
+                  quality.startsWith('dim') || quality.includes('°') ||
+                  quality.startsWith('hdim') || quality.includes('ø') ||
                   (quality.startsWith('min') && quality !== 'maj' && quality !== 'minor') ||
                   (quality.startsWith('m') && !quality.startsWith('maj'));
 
@@ -151,9 +153,11 @@ export function getBassNoteFromInversion(root: string, quality: string, inversio
   // Determine if the root uses sharps or flats
   const usesFlats = root.includes('b') || root.includes('♭');
 
-  // Determine if chord is minor for special case handling
+  // Determine if chord is minor, diminished, or half-diminished for special case handling
   // FIXED: Prevent 'maj' from being detected as minor due to startsWith('m')
   const isMinor = quality === 'min' || quality === 'minor' || quality === 'm' ||
+                  quality.startsWith('dim') || quality.includes('°') ||
+                  quality.startsWith('hdim') || quality.includes('ø') ||
                   (quality.startsWith('min') && quality !== 'maj' && quality !== 'minor') ||
                   (quality.startsWith('m') && !quality.startsWith('maj'));
 

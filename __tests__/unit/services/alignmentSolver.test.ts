@@ -210,7 +210,7 @@ describe('segment alignment solver comparison', () => {
     expect(counts[0]).toBeGreaterThanOrEqual(14);
   });
 
-  it('expands a short rest when the following sounding phrase is one beat early', () => {
+  it('shrinks a short rest when the following sounding phrase is one beat early (shrink-only)', () => {
     const appendChordRun = (target: string[], chord: string, beats: number) => {
       target.push(...Array(beats).fill(chord));
     };
@@ -241,9 +241,9 @@ describe('segment alignment solver comparison', () => {
 
     expect(originalPostRestCounts[3]).toBeGreaterThanOrEqual(8);
     expect(originalPostRestCounts[0]).toBe(0);
-    expect(silenceDecision?.adjustment).toBe(1);
-    expect(firstPostRestIndex).toBe(20);
-    expect(solvedPostRestCounts[0]).toBeGreaterThanOrEqual(8);
+    expect(silenceDecision?.adjustment).toBe(-1);
+    expect(firstPostRestIndex).toBe(18);
+    expect(solvedPostRestCounts[2]).toBeGreaterThanOrEqual(8);
     expect(result.gridData.originalAudioMapping).toHaveLength(chords.length);
   });
 
@@ -685,5 +685,30 @@ describe('segment alignment solver comparison', () => {
     const decision = result.decisions.find(d => d.source === 'phrase_phase');
     expect(decision).toBeDefined();
     expect(decision?.adjustment).toBe(-1);
+  });
+
+  it('does not allow silent run windows to expand (shrink-only silent runs)', () => {
+    const chords = [
+      ...Array(8).fill('C:maj'),
+      ...Array(4).fill('N/C'),
+      ...Array(8).fill('G:maj'),
+    ];
+    const beats = chords.map((_, index) => index * 0.5);
+    const result = runSegmentAlignmentSolver({
+      chordGridData: makeMappedGrid(chords, beats),
+      chordIntervals: [],
+      beatTimes: beats,
+      timeSignature: 4,
+      beatDuration: 0.5,
+      enabled: true,
+    });
+
+    const silenceDecisions = result.decisions.filter(
+      (decision) => decision.source === 'silence'
+    );
+    
+    silenceDecisions.forEach((decision) => {
+      expect(decision.adjustment).toBeLessThanOrEqual(0);
+    });
   });
 });

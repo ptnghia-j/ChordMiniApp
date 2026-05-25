@@ -26,6 +26,7 @@ This document describes the YouTube integration within the ChordMini application
 - The YouTube search blueprint and its validation utilities
 - The YouTube video info proxy route and its fallback strategies
 - The yt-dlp development endpoints for audio download and video info extraction
+- The production browser extraction handoff through `/api/extract-audio`, `browserYtDlpExtractionService`, and the Cloudflare media proxy/queue contract
 - Request validation patterns for YouTube URLs, video quality preferences, and extraction parameters
 - Error handling for invalid URLs, unavailable videos, and extraction failures
 
@@ -34,14 +35,20 @@ It also clarifies the current state of the backend YouTube blueprint registratio
 ## Project Structure
 The YouTube integration spans both the backend Flask application and the frontend Next.js API routes:
 - Backend: The YouTube blueprint module exists under python_backend/blueprints/youtube, including a validator module. However, the blueprint is not currently registered in the Flask app factory, meaning its routes are not active in the backend.
-- Frontend: Next.js API routes under src/app/api/youtube and src/app/api/ytdlp implement YouTube video info retrieval and yt-dlp-based development features.
+- Frontend: Next.js API routes under src/app/api/youtube and src/app/api/ytdlp implement YouTube video info retrieval and yt-dlp-based development features. Production extraction cache misses are handed back to the browser yt-dlp service, which uses the Cloudflare media proxy and queue endpoints when configured.
 
 ```mermaid
 graph TB
 subgraph "Frontend (Next.js)"
 FE_Info["GET/POST /api/youtube/info"]
+FE_ExtractAudio["POST /api/extract-audio"]
+FE_Browser["browserYtDlpExtractionService"]
 FE_Download["POST /api/ytdlp/download"]
 FE_Extract["POST /api/ytdlp/extract"]
+end
+subgraph "External Proxy"
+CF["Cloudflare media proxy"]
+Q["Queue lease endpoints"]
 end
 subgraph "Backend (Flask)"
 APP["Flask App Factory"]
@@ -49,6 +56,9 @@ YT_BP["YouTube Blueprint (__init__.py)"]
 YT_VAL["Validators (youtube/validators.py)"]
 end
 FE_Info --> |"HTTP Proxy"| APP
+FE_ExtractAudio --> FE_Browser
+FE_Browser --> CF
+FE_Browser --> Q
 APP --> |"Registered Blueprints"| YT_BP
 YT_BP --> |"Routes"| YT_VAL
 ```
@@ -65,6 +75,7 @@ YT_BP --> |"Routes"| YT_VAL
 ## Core Components
 - YouTube search blueprint: Provides YouTube search endpoints using Piped API with fallback strategies. The blueprint module exists but is not registered in the Flask app factory.
 - YouTube info proxy: A Next.js route that validates inputs, attempts extraction via the backend, and falls back to YouTube’s oEmbed API if needed.
+- Browser extraction service: The production cache-miss path that runs Pyodide/yt-dlp and ffmpeg.wasm in the browser, uploads a private Firebase candidate, and uses Cloudflare queue leases when an external proxy is configured.
 - yt-dlp development endpoints: Next.js routes that wrap yt-dlp for audio download and video info extraction during development.
 
 Key validation utilities:
@@ -85,6 +96,7 @@ The YouTube integration follows a hybrid approach:
 - The backend YouTube blueprint module exists but is not registered, so its routes are inactive.
 - The info route prioritizes backend extraction, falling back to YouTube’s oEmbed API when necessary.
 - yt-dlp endpoints are available in development and provide local extraction capabilities.
+- Production audio extraction uses `/api/extract-audio` as the stable API; when browser extraction is required, the client acquires a Cloudflare proxy queue lease before making YouTube media requests.
 
 ```mermaid
 sequenceDiagram
@@ -280,6 +292,7 @@ Common issues and resolutions:
 The YouTube integration leverages a hybrid architecture:
 - Frontend Next.js routes provide robust input validation and resilient fallbacks for video info retrieval.
 - The yt-dlp endpoints enable development-time extraction and metadata discovery.
+- Production audio extraction uses browser yt-dlp plus Cloudflare media proxy/queue coordination rather than the development yt-dlp endpoints.
 - The backend YouTube blueprint module exists but is not currently registered, limiting direct backend-only usage of YouTube routes.
 
-For production-ready YouTube search and extraction, the frontend proxy pattern and oEmbed fallback ensure reliability, while yt-dlp remains a powerful development tool.
+For production-ready YouTube search and extraction, the frontend proxy pattern, browser extraction flow, Cloudflare queue contract, and oEmbed metadata fallback define the active architecture; server yt-dlp remains a development and diagnostic tool.

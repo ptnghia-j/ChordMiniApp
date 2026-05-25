@@ -82,12 +82,35 @@ export class AudioProcessingService {
 
       if (!data.success) {
         if (data.requiresBrowserExtraction) {
-          const { extractAudioWithBrowserYtDlp } = await import('@/services/audio/browserYtDlpExtractionService');
-          const browserResult = await extractAudioWithBrowserYtDlp({
+          const {
+            extractAudioWithBrowserYtDlp,
+            shouldUseNativeYtDlpFallback,
+            extractAudioWithNativeYtDlpFallback,
+          } = await import('@/services/audio/browserYtDlpExtractionService');
+
+          let browserResult;
+          const browserMetadata = {
             videoId,
             title: originalTitle || data.title,
             duration: data.duration,
-          });
+          };
+
+          try {
+            browserResult = await extractAudioWithBrowserYtDlp(browserMetadata);
+          } catch (browserError) {
+            if (shouldUseNativeYtDlpFallback(browserError)) {
+              console.log('🔄 Browser yt-dlp encountered access challenge in service. Falling back to native yt-dlp...');
+              try {
+                browserResult = await extractAudioWithNativeYtDlpFallback(browserMetadata);
+              } catch (fallbackError) {
+                console.error('❌ Native yt-dlp fallback failed in service:', fallbackError);
+                throw fallbackError;
+              }
+            } else {
+              console.error('❌ Browser yt-dlp extraction failed in service:', browserError);
+              throw browserError;
+            }
+          }
 
           return {
             audioUrl: browserResult.audioUrl,

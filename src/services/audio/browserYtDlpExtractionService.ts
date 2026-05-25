@@ -7,6 +7,13 @@ import {
   getBrowserYtDlpFfmpegArgs,
 } from '@/services/audio/browserYtDlpConfig';
 
+export class BrowserExtractionQueueError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BrowserExtractionQueueError';
+  }
+}
+
 export interface BrowserYtDlpMetadata {
   videoId: string;
   title?: string | null;
@@ -201,15 +208,26 @@ function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
   });
 }
 
+function getQueueErrorMessage(data: Record<string, unknown>, fallback: string): string {
+  if (data.error === 'youtube_proxy_rate_limited') {
+    const waitSeconds = Number(data.retryAfterSeconds || 0);
+    return waitSeconds > 0
+      ? `YouTube temporarily rate-limited the extraction proxy. Please retry in about ${Math.ceil(waitSeconds / 60)} minute(s).`
+      : 'YouTube temporarily rate-limited the extraction proxy. Please retry later.';
+  }
+
+  return String(data.message || data.error || fallback);
+}
+
 async function fetchQueueJson(
   proxyUrl: string,
   path: string,
   init: RequestInit,
 ): Promise<BrowserYtDlpQueueState> {
   const response = await fetch(`${proxyUrl}${path}`, init);
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
-    throw new Error(data?.message || data?.error || `YouTube extraction queue request failed (${response.status})`);
+    throw new Error(getQueueErrorMessage(data, `YouTube extraction queue request failed (${response.status})`));
   }
   return normalizeQueueState(data);
 }
@@ -269,7 +287,7 @@ async function acquireProxyLease(
   }
 }
 
-async function releaseProxyLease(proxyUrl: string, leaseId?: string | null): Promise<void> {
+async function releaseProxyLease(proxyUrl: string, leaseId?: string | null, success = false): Promise<void> {
   if (!leaseId || !isExternalProxyUrl(proxyUrl)) {
     return;
   }
@@ -277,7 +295,7 @@ async function releaseProxyLease(proxyUrl: string, leaseId?: string | null): Pro
   await fetch(`${proxyUrl}/queue/release`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ leaseId }),
+    body: JSON.stringify({ leaseId, success }),
     keepalive: true,
   }).catch(() => undefined);
 }
@@ -595,6 +613,9 @@ function isYouTubeAccessChallenge(error: unknown): boolean {
 }
 
 export function shouldUseNativeYtDlpFallback(error: unknown): boolean {
+  if (error instanceof BrowserExtractionQueueError) {
+    return false;
+  }
   return isYouTubeAccessChallenge(error);
 }
 
@@ -672,10 +693,16 @@ export async function extractAudioWithBrowserYtDlp(
   const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
   let leaseId: string | null = null;
   let stopLeaseHeartbeat: () => void = () => undefined;
+  let extractionSucceeded = false;
 
   try {
     options.onProgress?.('initializing', 'Preparing browser audio extraction...');
-    const lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
+    let lease;
+    try {
+      lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
+    } catch (leaseError) {
+      throw new BrowserExtractionQueueError(leaseError instanceof Error ? leaseError.message : String(leaseError));
+    }
     leaseId = lease.leaseId || null;
     stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseId, options);
     options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
@@ -694,7 +721,7 @@ export async function extractAudioWithBrowserYtDlp(
     const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
 
     options.onProgress?.('finalizing', 'Validating audio before caching...');
-    return await finalizeCandidate({
+    const result = await finalizeCandidate({
       metadata: {
         ...metadata,
         title: metadata.title || extracted.title,
@@ -705,9 +732,11 @@ export async function extractAudioWithBrowserYtDlp(
       fileSize: mp3Bytes.byteLength,
       idToken,
     });
+    extractionSucceeded = true;
+    return result;
   } finally {
     stopLeaseHeartbeat();
-    await releaseProxyLease(proxyUrl, leaseId);
+    await releaseProxyLease(proxyUrl, leaseId, extractionSucceeded);
   }
 }
 

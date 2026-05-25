@@ -180,8 +180,40 @@ function solveMeterPath(chords: string[], candidateMeters: CandidateMeter[]): {
     : { measures: [], score: 0 };
 }
 
+function solveMeterPathWithShift(
+  chords: string[],
+  candidateMeters: CandidateMeter[]
+): {
+  measures: MeterMeasure[];
+  score: number;
+} {
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestResult: { measures: MeterMeasure[]; score: number } = { measures: [], score: 0 };
+
+  const maxShift = Math.min(chords.length, Math.max(...candidateMeters));
+
+  for (let shift = 0; shift < maxShift; shift++) {
+    const result = solveMeterPath(chords.slice(shift), candidateMeters);
+    const adjustedMeasures = result.measures.map((m) => ({
+      ...m,
+      startIndex: m.startIndex + shift,
+      endIndex: m.endIndex + shift,
+    }));
+
+    if (result.score > bestScore) {
+      bestScore = result.score;
+      bestResult = {
+        measures: adjustedMeasures,
+        score: result.score,
+      };
+    }
+  }
+
+  return bestResult;
+}
+
 function scoreSingleMeterPath(chords: string[], beatsPerMeasure: CandidateMeter): number {
-  return solveMeterPath(chords, [beatsPerMeasure]).score;
+  return solveMeterPathWithShift(chords, [beatsPerMeasure]).score;
 }
 
 function getBestSingleMeter(chords: string[], candidateMeters: CandidateMeter[]): {
@@ -319,7 +351,7 @@ export function detectLocalMeterSegments(
       }]
     : [];
 
-  const mixedResult = solveMeterPath(chords, candidateMeters);
+  const mixedResult = solveMeterPathWithShift(chords, candidateMeters);
   let segments = normalizeSegments(
     mergeShortSegments(collapseMeasuresToSegments(mixedResult.measures), config.minSegmentBeats),
     chords.length

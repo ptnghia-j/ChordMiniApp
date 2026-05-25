@@ -32,6 +32,8 @@
 ## Introduction
 This document provides comprehensive documentation for the homepage and landing page components. It covers animated text components, hero sections, integrated search containers, and feature displays. It explains responsive design patterns, progressive loading implementations, and performance optimizations. The guide also details component composition for engaging user onboarding experiences, including examples of component usage, animation configurations, and integration with search functionality, along with technical implementation notes for animations, progressive loading, and cross-device compatibility.
 
+Current note: the homepage no longer renders the temporary "YouTube Extraction Pipeline Degradation" warning toast. Extraction status and queue messaging now live on the analysis page where the user is waiting for a specific video.
+
 ## Project Structure
 The homepage entry point renders a dedicated content component that composes multiple specialized homepage components. These components are organized under a dedicated homepage module and leverage shared UI utilities and services.
 
@@ -67,6 +69,7 @@ This section introduces the primary homepage components and their roles in deliv
 - LazyRecentVideos: Suspense-based lazy loader for recent videos.
 - RecentVideos: Data-driven grid of recent transcriptions with filtering, pagination, and intersection observer-based loading.
 - SupportChordMini: Collapsible action panel with animated border and support links.
+- Operational notices: The homepage intentionally avoids the previous production-only degradation toast; user-facing extraction queue feedback is handled by `DownloadingIndicator` on analysis pages.
 
 **Section sources**
 - [src/components/homepage/AnimatedTitle.tsx:1-53](file://src/components/homepage/AnimatedTitle.tsx#L1-L53)

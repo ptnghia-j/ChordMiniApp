@@ -8,7 +8,9 @@
 - [package.json](file://package.json)
 - [tailwind.config.js](file://tailwind.config.js)
 - [page.tsx](file://src/app/page.tsx)
+- [page.tsx](file://src/app/games/page.tsx)
 - [analyze/layout.tsx](file://src/app/analyze/layout.tsx)
+- [MiniGamesContainer.tsx](file://src/components/games/MiniGamesContainer.tsx)
 - [analysisStore.ts](file://src/stores/analysisStore.ts)
 - [playbackStore.ts](file://src/stores/playbackStore.ts)
 - [uiStore.ts](file://src/stores/uiStore.ts)
@@ -35,7 +37,7 @@
 This document describes the ChordMiniApp frontend application built with Next.js App Router. It explains the routing strategy, component architecture, state management with global stores and React hooks, service layer for API integration and caching, UI component library, styling architecture, Firebase integration for authentication and storage, performance optimizations, SEO configuration, and progressive web app features. It also covers responsive design and accessibility considerations, along with practical usage patterns for components and services.
 
 ## Project Structure
-The application follows Next.js App Router conventions with a strict separation of pages, layouts, and shared components. The root layout defines metadata, fonts, critical CSS, and providers for global state and UI. Providers wrap the app with theme, processing, and toast support. The app exposes a homepage and nested analysis routes with dedicated metadata and layout containers.
+The application follows Next.js App Router conventions with a strict separation of pages, layouts, and shared components. The root layout defines metadata, fonts, critical CSS, and providers for global state and UI. Providers wrap the app with theme, processing, and toast support. The app exposes a homepage, a standalone games page, and nested analysis routes with dedicated metadata and layout containers.
 
 ```mermaid
 graph TB
@@ -46,9 +48,11 @@ B --> E["Toast Provider"]
 A --> F["Pages"]
 F --> G["Home Page<br/>src/app/page.tsx"]
 F --> H["Analyze Layout<br/>src/app/analyze/layout.tsx"]
+F --> GM["Games Page<br/>src/app/games/page.tsx"]
 A --> I["Shared Components"]
 I --> J["FirebaseInitializer<br/>src/components/layout/FirebaseInitializer.tsx"]
 I --> K["Performance & Layout Optimizers"]
+I --> MG["MiniGamesContainer<br/>src/components/games/MiniGamesContainer.tsx"]
 ```
 
 **Diagram sources**
@@ -138,6 +142,7 @@ FC --> FS
 - Root layout sets metadata, fonts, icons, and robots directives. It injects critical CSS and performance-related head tags.
 - Pages:
   - Home page renders the new homepage content component.
+  - Games page renders `MiniGamesContainer` in standalone mode with the shared homepage-style background.
   - Analyze layout provides page-specific metadata and a layout wrapper for analysis views.
 - Dynamic routing:
   - The analyze route includes a dynamic segment for video ID, enabling per-video analysis pages under the analyze route group.
@@ -155,6 +160,8 @@ Layout->>Providers : Wrap children
 Providers->>Page : Render page content
 Page-->>Browser : Hydrated UI
 ```
+
+The `/games` route is a client page because it owns browser-session history, Web Audio playback for ear questions, and dynamic theme-aware background rendering. The same `MiniGamesContainer` also appears in the analysis empty/wait state with `layoutMode="embed"`.
 
 **Diagram sources**
 - [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)

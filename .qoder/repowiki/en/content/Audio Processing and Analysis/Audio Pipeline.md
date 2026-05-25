@@ -44,6 +44,7 @@ subgraph "Frontend"
 FE_API["Next.js API route<br/>/api/extract-audio"]
 FE_Service["AudioProcessingService"]
 FE_Extraction["AudioExtractionSimplified"]
+FE_BROWSER["browserYtDlpExtractionService<br/>browser extraction + queue state"]
 end
 subgraph "Backend"
 BE_Utils["Python audio_utils.py"]
@@ -51,11 +52,16 @@ BE_Temp["Python tempfiles.py"]
 BE_Firestore["firebaseStorageSimplified.ts"]
 end
 subgraph "External Services"
-YT_IO["yt-mp3-go service"]
+YT_PROXY["Cloudflare/local YouTube proxy"]
+YT_QUEUE["Cloudflare queue lease"]
+YT_IO["yt-mp3-go rollback"]
 YT_URL["URL Validation Utils"]
 end
 FE_API --> FE_Service
 FE_Service --> FE_Extraction
+FE_Extraction --> FE_BROWSER
+FE_BROWSER --> YT_QUEUE
+FE_BROWSER --> YT_PROXY
 FE_Extraction --> YT_IO
 FE_Extraction --> BE_Firestore
 FE_Extraction --> YT_URL
@@ -125,6 +131,7 @@ participant API as "Next.js API route"
 participant Service as "AudioProcessingService"
 participant Extractor as "AudioExtractionSimplified"
 participant Browser as "Browser yt-dlp"
+participant Queue as "Proxy queue"
 participant Proxy as "Cloudflare or local media proxy"
 participant Finalizer as "Firebase finalizer"
 participant Store as "Firebase Storage"
@@ -132,6 +139,9 @@ Client->>API : POST /api/extract-audio
 API->>Service : extractAudioFromYouTube(videoId,...)
 Service->>Extractor : extractAudio(videoMetadata, forceRedownload)
 Extractor-->>Client : browser extraction required
+Client->>Browser : acquire proxy queue lease
+Browser->>Queue : /queue/acquire, /queue/status, /queue/heartbeat
+Queue-->>Browser : active lease or queue position
 Client->>Browser : Pyodide + yt-dlp extract URL
 Browser->>Proxy : YouTube player/media requests
 Browser->>Browser : ffmpeg.wasm 192k MP3 conversion
@@ -139,6 +149,7 @@ Browser->>Store : Upload private candidate
 Browser->>Finalizer : Validate candidate
 Finalizer->>Store : Promote public MP3
 Store-->>Browser : Permanent URL
+Browser->>Queue : /queue/release
 Extractor-->>Service : {audioUrl, fromCache, isStreamUrl, duration}
 Service-->>API : Response
 API-->>Client : {success, audioUrl, duration,...}
@@ -161,6 +172,10 @@ API-->>Client : {success, audioUrl, duration,...}
   - Local development can continue using server-side yt-dlp.
   - Cloudflare/browser failures surface as extraction errors; production does not silently fall back to Railway/server yt-dlp.
   - `yt-mp3-go` remains deprecated rollback code, not the normal production path.
+- Queue coordination:
+  - When `NEXT_PUBLIC_YOUTUBE_PROXY_URL` points at an external Cloudflare Worker, `browserYtDlpExtractionService` acquires a proxy lease before extraction and heartbeats while active.
+  - Queue state is exposed to the analysis UI so the extraction toast can show queue position and estimated wait on separate lines.
+  - Local `/api/youtube-media-proxy` extraction does not require a queue lease.
 - Caching and storage:
   - Browser extraction uploads to private `audio-candidates/{uid}/{videoId}/{sha}.mp3`
   - Finalizer validates MP3 bytes, auth, path, size, duration, MIME, and hash before promoting to public `audio/`
@@ -175,15 +190,17 @@ flowchart TD
 Start(["Start Extraction"]) --> DetectEnv["Detect Environment Strategy"]
 DetectEnv --> ChooseSvc{"Strategy"}
 ChooseSvc --> |browser-ytdlp| BrowserDlp["Pyodide yt-dlp extract URL"]
+BrowserDlp --> QueueLease["Acquire/heartbeat proxy lease when external Cloudflare proxy is used"]
 ChooseSvc --> |local ytdlp| CallYTDL["Call local server yt-dlp"]
 ChooseSvc --> |deprecated rollback| CallYTM["Call yt-mp3-go"]
-BrowserDlp --> Proxy["Cloudflare/local YouTube proxy"]
+QueueLease --> Proxy["Cloudflare/local YouTube proxy"]
 Proxy --> Convert["ffmpeg.wasm 192k MP3"]
 Convert --> Candidate["Upload candidate MP3"]
 Candidate --> Finalize["Validate and promote"]
+Finalize --> Release["Release queue lease"]
 CallYTDL --> Finalize
 CallYTM --> Finalize
-Finalize --> CacheCheck["Check Firebase & Firestore Cache"]
+Release --> CacheCheck["Check Firebase & Firestore Cache"]
 CacheCheck --> CacheHit{"Cache Hit?"}
 CacheHit --> |Yes| ReturnCache["Return Cached Result"]
 CacheHit --> |No| FinalURL["Final Accessible URL"]
@@ -344,7 +361,7 @@ Valid --> |No| Reject
 - Frontend dependencies:
   - Next.js API route depends on AudioProcessingService
   - AudioProcessingService depends on AudioExtractionSimplified
-  - AudioExtractionSimplified depends on environment detection, local yt-dlp or rollback yt-mp3-go services, and Firebase utilities
+  - AudioExtractionSimplified depends on environment detection, browser yt-dlp production extraction, local yt-dlp development extraction, rollback yt-mp3-go services, and Firebase utilities
 - Backend dependencies:
   - Python audio utilities depend on librosa and soundfile
   - Temporary file management wraps Python’s tempfile and os
@@ -357,9 +374,12 @@ Valid --> |No| Reject
 graph LR
 Route["route.ts"] --> APS["audioProcessingService.ts"]
 APS --> AES["audioExtractionSimplified.ts"]
+AES --> BYT["browserYtDlpExtractionService.ts"]
 AES --> YTMP3["ytMp3GoService.ts"]
+AES --> YTDLP["ytDlpService.ts"]
 AES --> FSS["firebaseStorageSimplified.ts"]
 AES --> UVU["urlValidationUtils.ts"]
+BYT --> CFQ["Cloudflare proxy + queue contract"]
 PYA["audio_utils.py"] --> Librosa["librosa"]
 PYA --> SndFile["soundfile"]
 PYT["tempfiles.py"] --> Tmp["tempfile/os"]

@@ -35,6 +35,7 @@ ChordMiniApp is an open-source music analysis platform that delivers:
 - Beat and chord analysis with grid visualization and segmentation overlays
 - Interactive guitar diagrams with accurate fingering patterns
 - Real-time piano visualizer with falling notes and MIDI export
+- Interactive music theory and practice games in `/games` and inside extraction wait states
 - Experimental melody transcription powered by Sheet Sage
 - Synchronized lyrics with an AI chatbot assistant
 
@@ -70,13 +71,14 @@ FE --> MIDI["MIDI Export Utils<br/>src/utils/midiExport.ts"]
 - Analysis pipeline: beat detection, chord recognition, key/signature detection, lyrics, segmentation
 - Visualization: chord grid, guitar diagrams, piano visualizer with falling notes and sheet music
 - Playback: chord playback, metronome, pitch shift, MIDI export
+- Mini games: theory quiz, ear training, guitar chord reading, and X/O practice with session review
 - Experimental melody transcription: Sheet Sage integration with caching and playback
 - AI assistant: Gemini-powered chatbot with song context
 
 Benefits by user type:
 - Musicians: precise chord grids, interactive guitar diagrams, piano visualizer, MIDI export
 - Educators: synchronized lyrics, Roman numeral overlays, segmentation, chatbot Q&A
-- Enthusiasts: homepage demos, recent analyses, YouTube search, Sheet Sage melody overlays
+- Enthusiasts: homepage demos, recent analyses, YouTube search, mini games while waiting, Sheet Sage melody overlays
 
 **Section sources**
 - [README.md:6-42](file://README.md#L6-L42)
@@ -136,6 +138,18 @@ Technical capabilities:
 **Section sources**
 - [src/components/homepage/NewHomePageContent.tsx:1-343](file://src/components/homepage/NewHomePageContent.tsx#L1-L343)
 - [src/app/page.tsx:1-6](file://src/app/page.tsx#L1-L6)
+
+### Interactive Music Theory & Games
+- Standalone `/games` page with Quiz, Ear, Guitar, and X/O tabs.
+- Embedded wait-state games through `ExtractionWaitPanel` so users can practice while browser extraction, queueing, or inference is in progress.
+- Quiz generation covers scale degrees, chord labels, missing chord tones, Roman numeral degree questions, and secondary dominant recognition.
+- Ear training plays reference tones, progressions, and chord qualities with piano, guitar, violin, flute, or composite timbres; review rows for ear questions include playback.
+- Session history is stored in browser `sessionStorage` and records overall score plus each answered question, selected answers, correct answer, and correctness for later review.
+
+**Section sources**
+- [src/app/games/page.tsx](file://src/app/games/page.tsx)
+- [src/components/games/MiniGamesContainer.tsx](file://src/components/games/MiniGamesContainer.tsx)
+- [src/app/analyze/[videoId]/_components/ExtractionWaitPanel.tsx](file://src/app/analyze/[videoId]/_components/ExtractionWaitPanel.tsx)
 
 ### Beat & Chord Analysis with Grid Visualization
 - Chord progression grid with beat-aligned cells

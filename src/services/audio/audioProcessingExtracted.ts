@@ -504,8 +504,23 @@ export const extractAudioFromYouTube = async (deps: AudioProcessingServiceDepend
         try {
           browserResult = await extractAudioWithBrowserYtDlp(browserMetadata, browserOptions);
         } catch (browserError) {
-          console.info('Browser yt-dlp extraction failed; skipping native yt-dlp fallback in production.');
-          throw browserError;
+          const {
+            shouldUseNativeYtDlpFallback,
+            extractAudioWithNativeYtDlpFallback,
+          } = await import('@/services/audio/browserYtDlpExtractionService');
+
+          if (shouldUseNativeYtDlpFallback(browserError)) {
+            console.log('🔄 Browser yt-dlp encountered access challenge. Falling back to native yt-dlp...');
+            try {
+              browserResult = await extractAudioWithNativeYtDlpFallback(browserMetadata, browserOptions);
+            } catch (fallbackError) {
+              console.error('❌ Native yt-dlp fallback failed:', fallbackError);
+              throw fallbackError;
+            }
+          } else {
+            console.error('❌ Browser yt-dlp extraction failed:', browserError);
+            throw browserError;
+          }
         }
 
         data.success = true;

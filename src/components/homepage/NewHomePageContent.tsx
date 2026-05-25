@@ -17,10 +17,10 @@ import { useSharedSearchState } from '@/hooks/search/useSharedSearchState';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { Chip } from '@heroui/react';
 import { HiSparkles, HiExclamationTriangle, HiXMark } from 'react-icons/hi2';
+import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 // import { WarningBanner } from '@/components/WarningBanner';
 import SupportChordMini from '@/components/homepage/SupportChordMini'
 import FeaturesTabSection from '@/components/homepage/FeaturesTabSection';
-import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 
 // Dynamic import for LightRays WebGL background
 const LightRays = dynamic(() => import('@/components/ui/LightRays'), { ssr: false });
@@ -67,7 +67,7 @@ function NewHomePageContentInner() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    
+
     // Delay the warning toast by 2 seconds after page load/mount
     const timer = setTimeout(() => {
       setShowToast(true);

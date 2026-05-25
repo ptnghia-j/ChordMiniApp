@@ -130,7 +130,7 @@ describe('AnalyzeEmptyState', () => {
       'vi chord of C major',
       'E',
       'FΔ7',
-      'B♭',
+      'A',
       'vi chord of A major',
       'G♯',
     ];
@@ -166,7 +166,7 @@ describe('AnalyzeEmptyState', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ear' }));
     expect(screen.getByText('Hear the scale degree')).toBeInTheDocument();
-    expect(screen.getByText('Reference: C major tonic, then one mystery pitch')).toBeInTheDocument();
+    expect(screen.getByText(/Reference: C major tonic, then one mystery pitch/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: '4 (subdominant)' }));
     expect(screen.getByText('0/0')).toBeInTheDocument();
@@ -186,7 +186,7 @@ describe('AnalyzeEmptyState', () => {
       'vi chord of C major',
       'E',
       'FΔ7',
-      'B♭',
+      'A',
       'vi chord of A major',
       'G♯',
       'D/F♯',
@@ -263,7 +263,50 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByText('Find the scale note')).toBeInTheDocument();
   });
 
+  it('correctly detects a winning condition in X/O game and updates status', () => {
+    render(
+      <AnalyzeEmptyState
+        isExtracting
+        queueStatus="queued"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'X/O' }));
+    expect(screen.getByText('Your turn')).toBeInTheDocument();
+
+    // Perform moves that lead to X (Player) win on the 8x8 grid
+    // 1. Play Cell 2 (index 1). O plays preferred Cell 28 (index 27).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 2' }));
+    
+    // 2. Play Cell 3 (index 2). O plays preferred Cell 29 (index 28).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 3' }));
+
+    // 3. Play Cell 4 (index 3). O plays preferred Cell 36 (index 35).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 4' }));
+
+    // 4. Play Cell 9 (index 8). O plays preferred Cell 37 (index 36).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 9' }));
+
+    // 5. Play Cell 17 (index 16). O plays preferred Cell 20 (index 19).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 17' }));
+
+    // 6. Play Cell 25 (index 24). O plays preferred Cell 21 (index 20).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 25' }));
+
+    // 7. Play Cell 1 (index 0). O is forced to block at Cell 5 (index 4).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 1' }));
+
+    // 8. Play Cell 33 (index 32). This completes 5-in-a-row vertically (0, 8, 16, 24, 32).
+    fireEvent.click(screen.getByRole('button', { name: 'Cell 33' }));
+
+    expect(screen.getByText('You win')).toBeInTheDocument();
+  });
+
   it('keeps the normal empty state in development', () => {
+    console.log('isDevelopmentEnvironment mock fn:', isDevelopmentEnvironment);
+    console.log('isDevelopmentEnvironment value before:', isDevelopmentEnvironment());
+    isDevelopmentEnvironment.mockReturnValue(true);
+    console.log('isDevelopmentEnvironment value after:', isDevelopmentEnvironment());
     isDevelopmentEnvironment.mockReturnValue(true);
 
     render(

@@ -12,6 +12,9 @@
 - [AnalyzePageChrome.tsx](file://src/app/analyze/[videoId]/_components/AnalyzePageChrome.tsx)
 - [DownloadingIndicator.tsx](file://src/components/analysis/DownloadingIndicator.tsx)
 - [ExtractionNotification.tsx](file://src/components/analysis/ExtractionNotification.tsx)
+- [AnalyzeEmptyState.tsx](file://src/app/analyze/[videoId]/_components/AnalyzeEmptyState.tsx)
+- [ExtractionWaitPanel.tsx](file://src/app/analyze/[videoId]/_components/ExtractionWaitPanel.tsx)
+- [MiniGamesContainer.tsx](file://src/components/games/MiniGamesContainer.tsx)
 - [HeroUIBeatModelSelector.tsx](file://src/components/analysis/HeroUIBeatModelSelector.tsx)
 - [HeroUIChordModelSelector.tsx](file://src/components/analysis/HeroUIChordModelSelector.tsx)
 - [useModelState.ts](file://src/hooks/chord-analysis/useModelState.ts)
@@ -55,6 +58,7 @@ The analysis interface is composed of several focused UI components and supporti
 - Visualization: BeatTimeline
 - Model selection: HeroUIBeatModelSelector, HeroUIChordModelSelector
 - Processing feedback: ProcessingBanners, ProcessingStatusBanner, PlaybackPromptToast, DownloadingIndicator, ExtractionNotification
+- Waiting-state practice UI: AnalyzeEmptyState and ExtractionWaitPanel embed MiniGamesContainer during extraction/analysis wait states
 - State management: useModelState hook, analysisStore store
 - Orchestration: useAnalyzePageOrchestrator hook with enhanced cache pipeline
 - Services: audioAnalysisService, chordRecognitionService
@@ -76,6 +80,9 @@ PPT["PlaybackPromptToast"]
 DI["DownloadingIndicator"]
 EN["ExtractionNotification"]
 APC["AnalyzePageChrome"]
+AES["AnalyzeEmptyState"]
+EWP["ExtractionWaitPanel"]
+MGC["MiniGamesContainer"]
 end
 subgraph "State Management"
 UMS["useModelState"]
@@ -103,6 +110,8 @@ PB --> PSB
 APC --> PPT
 PB --> DI
 PB --> EN
+AES --> EWP
+EWP --> MGC
 UMS --> AS
 UAO --> CTI
 CTI --> FSC
@@ -162,6 +171,8 @@ This section examines the primary components that form the analysis interface an
 - AudioPlaybackDock: Offers playback controls with seek, play/pause, and tempo adjustment, integrating with audio duration and BPM display.
 - BeatTimeline: Visualizes beat events and downbeats with automatic scrolling to the current beat and measure markers.
 - ProcessingBanners: Aggregates downloading, extraction, processing status, and error banners for cohesive user feedback with cache-aware notifications.
+- AnalyzeEmptyState and ExtractionWaitPanel: Fill extraction wait time with embedded mini games while queueing, browser extraction, or inference is still in progress.
+- MiniGamesContainer: Shared games surface used by both the embedded wait panel and the standalone `/games` route. It includes Quiz, Ear, Guitar, and X/O modes plus session review data.
 - PlaybackPromptToast: Renderless prompt mounted by AnalyzePageChrome. It waits 5 seconds after analysis is ready, prompts the user to start YouTube playback if needed, and consumes the prompt once per analysis prompt ID so it does not reappear after pauses or song end.
 - Model Selection Interfaces: HeroUIBeatModelSelector and HeroUIChordModelSelector provide environment-aware model selection with dynamic descriptions and availability filtering.
 
@@ -333,7 +344,7 @@ Scroll --> Render["Render Beat Timeline<br/>with Downbeat Markers"]
 
 ### ProcessingBanners
 ProcessingBanners aggregates multiple feedback mechanisms:
-- DownloadingIndicator: Toast banner shown during initial download/extraction.
+- DownloadingIndicator: Toast banner shown during initial download/extraction. For queued Cloudflare/browser extraction it displays queue position and estimated wait as multiline text so long status messages do not collapse into one line.
 - ExtractionNotification: Toast banner upon successful extraction with cache awareness.
 - ProcessingStatusBanner: Real-time progress toasts for beat and chord recognition stages with duration-based timeouts.
 - Error display: User-friendly error messages with retry and alternative video options.
@@ -346,7 +357,7 @@ participant EN as "ExtractionNotification"
 participant PSB as "ProcessingStatusBanner"
 participant Error as "Error Display"
 PB->>DI : isVisible && !fromCache
-DI-->>PB : Show download toast
+DI-->>PB : Show download/queue toast
 PB->>EN : isVisible
 EN-->>PB : Show extraction toast
 PB->>PSB : fromCache, fromFirestoreCache, audioUrl, videoId, beatDetector
@@ -594,6 +605,7 @@ AAS --> CRS["chordRecognitionService"]
 - Memoization and minimal re-renders: BeatTimeline uses useMemo and useEffect to compute indices efficiently.
 - Parallel processing: audioAnalysisService runs beat detection and chord recognition concurrently to reduce total latency.
 - Duration-based toasts: ProcessingStatusBanner computes timeouts based on audio duration to provide realistic progress feedback.
+- Queue-aware extraction toast: DownloadingIndicator consumes `queueStatus`, `queuePosition`, and `estimatedWaitSeconds` from the extraction service. Queued copy is intentionally broken into separate lines inside the HeroUI toast.
 - Environment-aware filtering: modelFiltering hides experimental models in production to prevent unnecessary complexity.
 - **Enhanced**: Parallel cache checking during extraction reduces overall wait times.
 - **Enhanced**: Immediate cached result access prevents redundant processing when results are available.

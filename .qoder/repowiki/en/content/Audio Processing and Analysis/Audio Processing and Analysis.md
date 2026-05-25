@@ -161,6 +161,7 @@ FE-->>User : "Display analysis + playback"
   - yt-dlp service supports development-time extraction and filename generation compatible with backend expectations.
   - yt-mp3-go is deprecated rollback code behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`.
   - AudioProcessingService coordinates extraction, caching, and metadata enrichment.
+  - External Cloudflare proxy extraction now uses a queue lease. The browser client calls `/queue/acquire`, polls `/queue/status` while queued, sends `/queue/heartbeat` during active extraction, and calls `/queue/release` during cleanup.
 - Backend preprocessing:
   - Silence trimming, duration estimation, resampling, and validation utilities ensure robustness and consistent input for ML models.
 
@@ -170,10 +171,12 @@ Start(["Start Extraction"]) --> Choose["Choose extractor<br/>browser-ytdlp, loca
 Choose --> Browser["browser-ytdlp: Pyodide extract + ffmpeg.wasm 192k MP3"]
 Choose --> YTDL["local yt-dlp: development extract + download"]
 Choose --> YTMP3["yt-mp3-go: deprecated rollback"]
-Browser --> Candidate["Firebase candidate validation"]
+Browser --> Queue["External proxy queue lease<br/>acquire/status/heartbeat"]
+Queue --> Candidate["Firebase candidate validation"]
 YTDL --> Candidate
 YTMP3 --> Candidate
-Candidate --> CacheCheck["Check Firestore cache"]
+Candidate --> Release["Release queue lease if present"]
+Release --> CacheCheck["Check Firestore cache"]
 CacheCheck --> |Found| UseCache["Use cached transcription"]
 CacheCheck --> |Not Found| Upload["Upload to storage / offload"]
 Upload --> Analyze["Call backend detection"]

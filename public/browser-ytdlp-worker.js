@@ -189,10 +189,7 @@ class QuietYtDlpLogger:
     def error(self, msg):
         pass
 
-def run_extraction(use_ua_override):
-    return run_extraction_with_options(use_ua_override, ['webpage', 'configs'])
-
-def run_extraction_with_options(use_ua_override, player_skip):
+def run_extraction():
     ydl_opts = {
         'format': 'best/bestaudio',
         'quiet': True,
@@ -200,21 +197,22 @@ def run_extraction_with_options(use_ua_override, player_skip):
         'logger': QuietYtDlpLogger(),
         'noplaylist': True,
         'socket_timeout': 30,
+        'retries': 0,
+        'extractor_retries': 0,
+        'fragment_retries': 0,
         'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
         'extractor_args': {
             'youtube': {
-                'player_client': ['android'],
-                'player_skip': player_skip,
+                'player_client': ['android', 'ios'],
+                'player_skip': ['webpage', 'configs'],
                 'skip': ['dash', 'hls', 'translated_subs'],
             },
         },
     }
-    if use_ua_override:
-        ydl_opts['http_headers']['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
-    
     with YoutubeDL(ydl_opts) as ydl:
         ydl.urlopen = _pyodide_urlopen
         return ydl.extract_info(_url, download=False)
@@ -262,42 +260,19 @@ def choose_media(info):
         return next((fmt for fmt in reversed(info['formats']) if fmt.get('url')), None)
     return None
 
-attempts = [
-    # Fast path. This avoids web player signature work and is the most reliable
-    # path for many lyric videos. Avoid webpage retries by default because a
-    # flagged Cloudflare egress IP receives Google's CAPTCHA/429 page and each
-    # retry increases the soft block.
-    {'use_ua_override': False, 'player_skip': ['webpage', 'configs']},
-    # Desktop UA retry for access challenges seen on official music videos.
-    {'use_ua_override': True, 'player_skip': ['webpage', 'configs']},
-]
-
 info = None
 chosen = None
-last_error = None
-for attempt in attempts:
-    try:
-        candidate_info = run_extraction_with_options(attempt['use_ua_override'], attempt['player_skip'])
-        candidate_media = choose_media(candidate_info)
-        if candidate_media and candidate_media.get('url'):
-            info = candidate_info
-            chosen = candidate_media
-            break
-        last_error = RuntimeError('yt-dlp returned no downloadable media stream for this attempt.')
-    except Exception as attempt_error:
-        last_error = attempt_error
-        if is_rate_limited(attempt_error):
-            raise RuntimeError('YouTube temporarily rate-limited the extraction proxy (HTTP 429/CAPTCHA). Please retry later or use another video.')
-        if not is_access_challenge(attempt_error):
-            raise attempt_error
+try:
+    info = run_extraction()
+    chosen = choose_media(info)
+    if not chosen or not chosen.get('url'):
+        raise RuntimeError('yt-dlp returned no downloadable media stream.')
+except Exception as error:
+    if is_rate_limited(error):
+        raise RuntimeError('YouTube temporarily rate-limited the extraction proxy (HTTP 429/CAPTCHA). Please retry later or use another video.')
+    raise error
 
-if chosen is None:
-    if last_error:
-        raise last_error
-    raise RuntimeError('yt-dlp returned no downloadable media stream.')
 
-if chosen is None or not chosen.get('url'):
-    raise RuntimeError('yt-dlp returned no downloadable media stream.')
 
 stream_url = chosen['url']
 ext = chosen.get('ext') or 'm4a'

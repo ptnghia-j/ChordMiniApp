@@ -35,7 +35,7 @@ export const GRID_ALIGNMENT_CONFIG = {
   },
   silentRun: {
     minLengthFloor: 2,
-    maxExpansionBeats: 3,
+    maxExpansionBeats: 0,
   },
   gap: {
     thresholdBeatsMultiplier: 2.5,

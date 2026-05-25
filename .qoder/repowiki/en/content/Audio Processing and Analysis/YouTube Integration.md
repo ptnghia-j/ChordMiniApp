@@ -21,7 +21,7 @@
 ## Introduction
 ChordMini production YouTube extraction now runs primarily in the user's browser. The browser worker loads Pyodide, installs a pinned yt-dlp wheel, obtains a playable YouTube media URL through yt-dlp, downloads the source bytes through a YouTube media proxy, converts them with ffmpeg.wasm to a fixed 192 kbps MP3, uploads a private candidate to Firebase Storage, and asks the backend finalizer to validate and promote the file.
 
-Production can route the browser worker through a Cloudflare Worker proxy by setting `NEXT_PUBLIC_YOUTUBE_PROXY_URL`. The in-repo `/api/youtube-media-proxy` remains as the local/default proxy implementation and as documentation for the required proxy behavior. Local development still uses the existing server-side yt-dlp path unless explicitly switched to browser extraction for testing. `yt-mp3-go` remains in the codebase as a deprecated rollback path behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`, but it is no longer the normal production strategy or public status dependency.
+Production can route the browser worker through a Cloudflare Worker proxy by setting `NEXT_PUBLIC_YOUTUBE_PROXY_URL`. The external proxy now also owns the extraction queue contract: the browser client acquires a lease before using the proxy, heartbeats while extraction is active, and releases the lease when the attempt finishes or is aborted. The in-repo `/api/youtube-media-proxy` remains as the local/default media proxy contract, while the deployed Cloudflare Worker and queue implementation may be managed outside the tracked repository for security and operational reasons. Local development still uses the existing server-side yt-dlp path unless explicitly switched to browser extraction for testing. `yt-mp3-go` remains in the codebase as a deprecated rollback path behind `NEXT_PUBLIC_AUDIO_STRATEGY=yt-mp3-go`, but it is no longer the normal production strategy or public status dependency.
 
 ## Project Structure
 ```mermaid
@@ -41,6 +41,7 @@ FFMPEG["/api/ffmpeg-worker/[filename]"]
 end
 subgraph "Optional Edge Proxy"
 CF["Cloudflare Worker<br/>NEXT_PUBLIC_YOUTUBE_PROXY_URL"]
+QUEUE["Proxy Queue Lease<br/>/queue/acquire/status/heartbeat/release"]
 end
 subgraph "Storage"
 CANDIDATE["audio-candidates/{uid}/{videoId}/{sha}.mp3"]
@@ -52,6 +53,8 @@ AES --> BYT
 BYT --> WORKER
 WORKER --> PYODIDE
 BYT --> FFMPEG
+BYT --> QUEUE
+QUEUE --> CF
 WORKER --> MEDIA
 WORKER --> CF
 BYT --> CANDIDATE
@@ -69,6 +72,7 @@ participant API as "/api/extract-audio"
 participant Browser as "BrowserYtDlpExtractionService"
 participant Worker as "browser-ytdlp-worker.js"
 participant Proxy as "Cloudflare Worker or /api/youtube-media-proxy"
+participant Queue as "Cloudflare Queue Lease"
 participant FFmpeg as "ffmpeg.wasm"
 participant Candidate as "Firebase candidate"
 participant Finalizer as "Finalize route"
@@ -76,9 +80,17 @@ participant Public as "Public Firebase audio"
 UI->>API : POST {videoId, videoMetadata}
 API-->>UI : 202 browser extraction required
 UI->>Browser : extractAudioWithBrowserYtDlp(video)
+Browser->>Queue : POST /queue/acquire {videoId, clientRequestId}
+alt Queue returns queued
+Browser->>Queue : GET /queue/status?leaseId=...
+Queue-->>Browser : position + estimated wait
+Browser-->>UI : queue status for toast countdown
+end
+Queue-->>Browser : active lease
+Browser->>Queue : POST /queue/heartbeat while active
 Browser->>Worker : extract info for YouTube URL
 Worker->>Worker : Pyodide 0.26.2 + yt-dlp 2026.3.17
-Worker->>Proxy : YouTube metadata/player/media requests
+Worker->>Proxy : YouTube metadata/player/media requests with lease header
 alt Browser yt-dlp access challenge or proxy failure
 Worker-->>Browser : sign-in/bot/403 extraction error
 Browser-->>UI : Extraction error, prompt user to try another video
@@ -93,6 +105,7 @@ Finalizer->>Public : Promote valid MP3
 Finalizer-->>Browser : public Firebase audio URL
 Browser-->>UI : AudioExtractionResult
 end
+Browser->>Queue : POST /queue/release {leaseId}
 ```
 
 ## Browser Worker Configuration
@@ -115,6 +128,10 @@ end
   - `X-Skip-YouTube-Auth: 1` tells the in-repo proxy not to inject server YouTube cookies for browser extraction and media downloads. Googlevideo media URLs commonly reject cookie-bearing requests.
   - The same media proxy is used for the final source download so the URL extracted by yt-dlp and the downloaded bytes follow the same request policy.
   - External proxy URLs are called as `GET ${NEXT_PUBLIC_YOUTUBE_PROXY_URL}?url=${encodeURIComponent(targetUrl)}`. If a Cloudflare Worker returns `400` or `403` when replayed headers are present, the client retries the final media download once with only `X-Skip-YouTube-Auth`.
+- Queue requests:
+  - External proxy URLs receive queue calls at `/queue/acquire`, `/queue/status`, `/queue/heartbeat`, and `/queue/release`.
+  - `browserYtDlpExtractionService` sends `X-YouTube-Proxy-Lease` on proxied YouTube requests after an active lease is granted.
+  - Queue state is propagated to the analysis UI as `queueStatus`, `queuePosition`, and `estimatedWaitSeconds`; `DownloadingIndicator` renders those values as multiline toast content.
 - Audio output:
   - `browserYtDlpConfig.ts` fixes production output to MP3 only.
   - ffmpeg arguments are `-vn -c:a libmp3lame -b:a 192k`.
@@ -156,6 +173,16 @@ This value is public and is loaded at runtime from `/api/config`, so deployment 
 - Do not inject account cookies in the Cloudflare Worker. The working production setup routes browser extraction through Cloudflare without `YOUTUBE_COOKIE`.
 
 The main reason to use Cloudflare instead of Railway for this proxy is request egress reputation and behavior. It is not a guarantee against YouTube blocking, but it has been more reliable than hosted Node server egress for the browser-worker request pattern.
+
+### Queue Lease Contract
+Production proxy deployments should expose these queue endpoints in addition to the media proxy:
+
+- `POST /queue/acquire` with `{ "videoId": string, "clientRequestId": string }` returns a queue state. If `status` is `queued`, the client polls status after `retryAfterSeconds` or a short default wait. If `status` is `active`, the client can start proxying YouTube requests.
+- `GET /queue/status?leaseId=<id>` returns `{ status, leaseId, queuePosition, estimatedWaitSeconds, retryAfterSeconds?, leaseExpiresAt? }`.
+- `POST /queue/heartbeat` with `{ "leaseId": string }` extends an active lease and returns the refreshed queue state.
+- `POST /queue/release` with `{ "leaseId": string }` releases the slot; the browser sends this with `keepalive` during cleanup.
+
+The current documentation intentionally describes the contract rather than depending on tracked Worker source files. If the Cloudflare Worker implementation is kept out of the public repository, keep this section synchronized with the deployed Worker API and with `browserYtDlpExtractionService`.
 
 Reference Worker shape:
 

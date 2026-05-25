@@ -6,6 +6,7 @@ import { mergeToastClassNames } from '@/utils/toastStyles';
 import { useProcessing } from '@/contexts/ProcessingContext';
 
 const EXTRACTION_ESTIMATE_SECONDS = 25;
+const QUEUE_ESTIMATE_IMPROVEMENT_SECONDS = 10;
 
 interface DownloadingIndicatorProps {
   isVisible: boolean;
@@ -41,19 +42,41 @@ const ExtractionCountdownDescription: React.FC<ExtractionCountdownDescriptionPro
   }, [estimateSeconds]);
 
   if (queueStatus === 'queued') {
-    const positionText = queuePosition && queuePosition > 0 ? ` Queue position: ${queuePosition}.` : '';
+    const hasQueuePosition = Boolean(queuePosition && queuePosition > 0);
     if (remainingSeconds === 0) {
-      return <span>{positionText} Waiting for earlier extraction sessions to finish.</span>;
+      return (
+        <span className="block space-y-1 whitespace-normal break-words leading-relaxed">
+          {hasQueuePosition && <span className="block">Queue position: {queuePosition}.</span>}
+          <span className="block">Waiting for earlier extraction sessions to finish.</span>
+        </span>
+      );
     }
 
-    return <span>{positionText} Estimated wait: about {remainingSeconds}s.</span>;
+    return (
+      <span className="block space-y-1 whitespace-normal break-words leading-relaxed">
+        {hasQueuePosition && <span className="block">Queue position: {queuePosition}.</span>}
+        <span className="block">Estimated wait: about {remainingSeconds}s.</span>
+      </span>
+    );
   }
 
   if (remainingSeconds === 0) {
-    return <span>Almost done. Finalizing the extracted audio...</span>;
+    return (
+      <span className="block whitespace-normal break-words leading-relaxed">
+        Almost done.
+        <br />
+        Finalizing the extracted audio...
+      </span>
+    );
   }
 
-  return <span>Estimated time remaining: about {remainingSeconds}s.</span>;
+  return (
+    <span className="block whitespace-normal break-words leading-relaxed">
+      Estimated time remaining:
+      <br />
+      about {remainingSeconds}s.
+    </span>
+  );
 };
 
 function createCountdownProgressBar(durationMs: number, id: string) {
@@ -94,14 +117,21 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
   const toastKeyRef = useRef<string | null>(null);
   const wasVisibleRef = useRef(false);
   const toastSignatureRef = useRef<string>('');
+  const toastEstimateSecondsRef = useRef<number | null>(null);
 
   useEffect(() => {
     const effectiveEstimateSeconds = queueStatus === 'queued'
       ? Math.max(1, Math.ceil(estimatedWaitSeconds || EXTRACTION_ESTIMATE_SECONDS))
       : EXTRACTION_ESTIMATE_SECONDS;
-    const signature = `${stage}:${queueStatus || 'none'}:${queuePosition || 0}:${Math.ceil(effectiveEstimateSeconds / 5)}`;
+    const signature = `${stage}:${queueStatus || 'none'}:${queuePosition || 0}`;
+    const previousEstimateSeconds = toastEstimateSecondsRef.current;
+    const hasMaterialEstimateImprovement = Boolean(
+      queueStatus === 'queued' &&
+      previousEstimateSeconds &&
+      effectiveEstimateSeconds <= previousEstimateSeconds - QUEUE_ESTIMATE_IMPROVEMENT_SECONDS,
+    );
 
-    if (isVisible && (!wasVisibleRef.current || toastSignatureRef.current !== signature)) {
+    if (isVisible && (!wasVisibleRef.current || toastSignatureRef.current !== signature || hasMaterialEstimateImprovement)) {
       if (toastKeyRef.current) {
         closeToast(toastKeyRef.current);
         toastKeyRef.current = null;
@@ -109,6 +139,7 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
       // Show toast when becoming visible
       wasVisibleRef.current = true;
       toastSignatureRef.current = signature;
+      toastEstimateSecondsRef.current = effectiveEstimateSeconds;
       const estimateMs = effectiveEstimateSeconds * 1000;
       const key = addToast({
         title: queueStatus === 'queued'
@@ -126,9 +157,11 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
         hideCloseButton: true,
         endContent: createCountdownProgressBar(estimateMs, 'youtube-extraction'),
         classNames: mergeToastClassNames({
-          base: 'relative overflow-hidden',
+          base: 'relative max-w-[min(92vw,26rem)] overflow-hidden',
           icon: 'text-warning-500',
           title: 'text-warning-600 dark:text-warning-400',
+          description: 'whitespace-normal break-words',
+          content: 'min-w-0',
         }),
       });
       toastKeyRef.current = key;
@@ -136,6 +169,7 @@ const DownloadingIndicator: React.FC<DownloadingIndicatorProps> = ({
       // Close toast when becoming hidden
       wasVisibleRef.current = false;
       toastSignatureRef.current = '';
+      toastEstimateSecondsRef.current = null;
       if (toastKeyRef.current) {
         closeToast(toastKeyRef.current);
         toastKeyRef.current = null;
