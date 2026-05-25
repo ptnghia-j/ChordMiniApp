@@ -37,6 +37,8 @@ interface WorkerExtractedData {
 type ProgressStage = 'initializing' | 'extracting' | 'downloading' | 'converting' | 'uploading' | 'finalizing';
 export type BrowserYtDlpQueueStatus = 'queued' | 'active' | 'released' | 'cancelled' | 'expired';
 
+const PROXY_LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
+
 export interface BrowserYtDlpQueueState {
   status: BrowserYtDlpQueueStatus;
   leaseId: string;
@@ -278,6 +280,66 @@ async function releaseProxyLease(proxyUrl: string, leaseId?: string | null): Pro
     body: JSON.stringify({ leaseId }),
     keepalive: true,
   }).catch(() => undefined);
+}
+
+async function heartbeatProxyLease(proxyUrl: string, leaseId?: string | null): Promise<BrowserYtDlpQueueState | null> {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl)) {
+    return null;
+  }
+
+  return fetchQueueJson(proxyUrl, '/queue/heartbeat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ leaseId }),
+    keepalive: true,
+  });
+}
+
+function startProxyLeaseHeartbeat(
+  proxyUrl: string,
+  leaseId: string | null,
+  options: BrowserYtDlpOptions,
+): () => void {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl) || options.abortSignal?.aborted) {
+    return () => undefined;
+  }
+
+  let stopped = false;
+  let inFlight = false;
+  let intervalId: number | null = null;
+
+  const pulse = () => {
+    if (stopped || inFlight || options.abortSignal?.aborted) {
+      return;
+    }
+
+    inFlight = true;
+    void heartbeatProxyLease(proxyUrl, leaseId)
+      .then((state) => {
+        if (!stopped && state) {
+          options.onQueueState?.(state);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        inFlight = false;
+      });
+  };
+
+  const stop = () => {
+    stopped = true;
+    if (intervalId !== null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+    }
+    options.abortSignal?.removeEventListener('abort', stop);
+  };
+
+  intervalId = window.setInterval(pulse, PROXY_LEASE_HEARTBEAT_INTERVAL_MS);
+  options.abortSignal?.addEventListener('abort', stop, { once: true });
+  pulse();
+
+  return stop;
 }
 
 async function waitForWorkerExtraction(
@@ -609,11 +671,13 @@ export async function extractAudioWithBrowserYtDlp(
   const config = await loadPublicConfig();
   const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
   let leaseId: string | null = null;
+  let stopLeaseHeartbeat: () => void = () => undefined;
 
   try {
     options.onProgress?.('initializing', 'Preparing browser audio extraction...');
     const lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
     leaseId = lease.leaseId || null;
+    stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseId, options);
     options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
     const extracted = await waitForWorkerExtraction(videoUrl, options, leaseId);
 
@@ -642,6 +706,7 @@ export async function extractAudioWithBrowserYtDlp(
       idToken,
     });
   } finally {
+    stopLeaseHeartbeat();
     await releaseProxyLease(proxyUrl, leaseId);
   }
 }

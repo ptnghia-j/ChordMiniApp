@@ -42,6 +42,10 @@ const ExtractionCountdownDescription: React.FC<ExtractionCountdownDescriptionPro
 
   if (queueStatus === 'queued') {
     const positionText = queuePosition && queuePosition > 0 ? ` Queue position: ${queuePosition}.` : '';
+    if (remainingSeconds === 0) {
+      return <span>{positionText} Waiting for earlier extraction sessions to finish.</span>;
+    }
+
     return <span>{positionText} Estimated wait: about {remainingSeconds}s.</span>;
   }
 
