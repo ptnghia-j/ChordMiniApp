@@ -94,7 +94,7 @@ async function probeJsonEndpoint(
       signal: createSafeTimeoutSignal(timeoutMs),
     });
     const latencyMs = Date.now() - startedAt;
-    const status = classify(response.ok, latencyMs, Math.max(10_000, timeoutMs * 0.75));
+    const status = classify(response.ok, latencyMs, Math.max(30_000, timeoutMs * 0.75));
 
     return {
       serviceId,

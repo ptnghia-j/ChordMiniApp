@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { addToast } from '@heroui/react';
+import { addToast, closeToast } from '@heroui/react';
 import { mergeToastClassNames } from '@/utils/toastStyles';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -88,6 +88,9 @@ export function useAnalyzePageViewModel({
   const autoStartRequested = Boolean(routeParams.autoStart);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const durationLimitToastShownRef = useRef(false);
+  const cachePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cachePromptToastKeyRef = useRef<string | null>(null);
+  const cachePromptShownForRef = useRef<string | null>(null);
   const [initialAnalyzeHandoff] = useState(() => consumeAnalyzeSessionHandoff(
     videoId,
     routeParams.beatModel,
@@ -306,6 +309,19 @@ export function useAnalyzePageViewModel({
   const analysisActionDisabledReason = !cacheAvailable ? analysisDurationLimitReason : null;
 
   useEffect(() => {
+    return () => {
+      if (cachePromptTimerRef.current) {
+        clearTimeout(cachePromptTimerRef.current);
+        cachePromptTimerRef.current = null;
+      }
+      if (cachePromptToastKeyRef.current) {
+        closeToast(cachePromptToastKeyRef.current);
+        cachePromptToastKeyRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (analysisActionDisabledReason && !durationLimitToastShownRef.current) {
       durationLimitToastShownRef.current = true;
       addToast({
@@ -326,6 +342,79 @@ export function useAnalyzePageViewModel({
       durationLimitToastShownRef.current = false;
     }
   }, [analysisActionDisabledReason]);
+
+  useEffect(() => {
+    const cachePromptId = `${videoId}:${beatDetector}:${chordDetector}`;
+    const shouldShowCachePrompt =
+      cacheCheckCompleted &&
+      cacheAvailable &&
+      !audioProcessingState.isAnalyzed &&
+      !audioProcessingState.isAnalyzing &&
+      !audioProcessingState.isExtracting &&
+      !audioProcessingState.error;
+
+    if (!shouldShowCachePrompt) {
+      if (cachePromptTimerRef.current) {
+        clearTimeout(cachePromptTimerRef.current);
+        cachePromptTimerRef.current = null;
+      }
+      if (cachePromptToastKeyRef.current) {
+        closeToast(cachePromptToastKeyRef.current);
+        cachePromptToastKeyRef.current = null;
+      }
+      return;
+    }
+
+    if (cachePromptToastKeyRef.current && cachePromptShownForRef.current !== cachePromptId) {
+      closeToast(cachePromptToastKeyRef.current);
+      cachePromptToastKeyRef.current = null;
+    }
+
+    if (cachePromptShownForRef.current === cachePromptId || cachePromptTimerRef.current) {
+      return;
+    }
+
+    cachePromptTimerRef.current = setTimeout(() => {
+      cachePromptTimerRef.current = null;
+      if (cachePromptShownForRef.current === cachePromptId) {
+        return;
+      }
+
+      cachePromptShownForRef.current = cachePromptId;
+      const key = addToast({
+        title: 'Cached Results Ready',
+        description: 'Click "Open cached results" to load the saved beat and chord grid.',
+        color: 'default',
+        timeout: 0,
+        shouldShowTimeoutProgress: false,
+        classNames: mergeToastClassNames({
+          icon: 'text-success-600 dark:text-success-400',
+          title: 'text-success-600 dark:text-success-400',
+        }),
+        onClose: () => {
+          cachePromptToastKeyRef.current = null;
+        },
+      });
+      cachePromptToastKeyRef.current = key;
+    }, 5_000);
+
+    return () => {
+      if (cachePromptTimerRef.current) {
+        clearTimeout(cachePromptTimerRef.current);
+        cachePromptTimerRef.current = null;
+      }
+    };
+  }, [
+    audioProcessingState.error,
+    audioProcessingState.isAnalyzed,
+    audioProcessingState.isAnalyzing,
+    audioProcessingState.isExtracting,
+    beatDetector,
+    cacheAvailable,
+    cacheCheckCompleted,
+    chordDetector,
+    videoId,
+  ]);
 
   const handleStartAnalysis = useCallback(() => {
     if (analysisActionDisabledReason) {
@@ -1230,10 +1319,13 @@ export function useAnalyzePageViewModel({
 
   const resultsPaneProps = {
     analysisResults,
+    isExtracted: audioProcessingState.isExtracted,
     isAnalyzed: audioProcessingState.isAnalyzed,
+    isAnalyzing: audioProcessingState.isAnalyzing,
     isExtracting: audioProcessingState.isExtracting,
     isDownloading: audioProcessingState.isDownloading,
     fromCache: audioProcessingState.fromCache,
+    hasCachedAnalysis: cacheAvailable,
     queueStatus: audioProcessingState.queueStatus,
     queuePosition: audioProcessingState.queuePosition,
     estimatedWaitSeconds: audioProcessingState.estimatedWaitSeconds,

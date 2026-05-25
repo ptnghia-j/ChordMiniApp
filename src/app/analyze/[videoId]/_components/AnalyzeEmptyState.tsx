@@ -4,9 +4,13 @@ import { isDevelopmentEnvironment } from '@/utils/modelFiltering';
 import ExtractionWaitPanel from './ExtractionWaitPanel';
 
 interface AnalyzeEmptyStateProps {
+  isExtracted?: boolean;
   isExtracting?: boolean;
+  isAnalyzing?: boolean;
+  isAnalyzed?: boolean;
   isDownloading?: boolean;
   fromCache?: boolean;
+  hasCachedAnalysis?: boolean;
   queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
   queuePosition?: number | null;
   estimatedWaitSeconds?: number | null;
@@ -14,18 +18,29 @@ interface AnalyzeEmptyStateProps {
 }
 
 export default function AnalyzeEmptyState({
+  isExtracted = false,
   isExtracting = false,
+  isAnalyzing = false,
+  isAnalyzed = false,
   isDownloading = false,
-  fromCache = false,
+  hasCachedAnalysis = false,
   queueStatus,
   queuePosition,
   estimatedWaitSeconds,
   statusMessage,
 }: AnalyzeEmptyStateProps) {
+  const isWaitingForPipelineResult =
+    isExtracting ||
+    isDownloading ||
+    isAnalyzing ||
+    queueStatus === 'queued' ||
+    queueStatus === 'active' ||
+    (hasCachedAnalysis && !isAnalyzed) ||
+    (isExtracted && !isAnalyzed);
+
   const showProductionWaitPanel =
     !isDevelopmentEnvironment() &&
-    !fromCache &&
-    (isExtracting || isDownloading || queueStatus === 'queued' || queueStatus === 'active');
+    isWaitingForPipelineResult;
 
   if (showProductionWaitPanel) {
     return (

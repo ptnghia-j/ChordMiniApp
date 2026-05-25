@@ -654,3 +654,18 @@
 .dark .chord-diagram-container svg path[fill="#555"] {
   fill: rgba(255, 255, 255, 0.3) !important;
 }
+
+/* ======================================================
+   Toast Routing and Placement Rules
+   Hides duplicate toasts based on their intended target area.
+   ====================================================== */
+
+/* Hide mini-game explanation toasts in the top-center (system-wide) region */
+[data-placement="top-center"] .minigame-toast {
+  display: none !important;
+}
+
+/* Hide standard system-wide/other toasts in the bottom-right (mini-game) region */
+[data-placement="bottom-right"] > *:not(.minigame-toast) {
+  display: none !important;
+}

@@ -54,9 +54,13 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
   if (!hasAnalysis) {
     return (
       <AnalyzeEmptyState
+        isExtracted={props.isExtracted}
         isExtracting={props.isExtracting}
+        isAnalyzing={props.isAnalyzing}
+        isAnalyzed={props.isAnalyzed}
         isDownloading={props.isDownloading}
         fromCache={props.fromCache}
+        hasCachedAnalysis={props.hasCachedAnalysis}
         queueStatus={props.queueStatus}
         queuePosition={props.queuePosition}
         estimatedWaitSeconds={props.estimatedWaitSeconds}

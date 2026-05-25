@@ -37,6 +37,7 @@ export function mergeToastClassNames(customClassNames?: ToastClassNames): ToastC
   }
 
   // Preserve other specific properties
+  if (customClassNames.base) merged.base = customClassNames.base;
   if (customClassNames.icon) merged.icon = customClassNames.icon;
   if (customClassNames.content) merged.content = customClassNames.content;
 

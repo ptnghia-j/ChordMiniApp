@@ -40,6 +40,20 @@ const ExtractionNotification: React.FC<ExtractionNotificationProps> = ({
         }),
         onClose: onDismiss,
       });
+
+      if (!fromCache) {
+        addToast({
+          title: 'Ready for Beat and Chord Analysis',
+          description: 'Click "Run analysis" to start beat and chord inference.',
+          color: 'default',
+          timeout: 7000,
+          shouldShowTimeoutProgress: true,
+          classNames: mergeToastClassNames({
+            icon: 'text-primary-600 dark:text-blue-400',
+            title: 'text-primary-600 dark:text-blue-400',
+          }),
+        });
+      }
     }
 
     if (!isVisible) {

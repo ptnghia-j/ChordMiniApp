@@ -36,7 +36,8 @@ export default function ChangelogPage() {
       features: [
         'Homepage background now features Light Rays theme',
         'Pixel Snow theme is used for songs with words: [snow, snowflakes, winter] and by default during the winter time period (December-February)',
-        'Lyrics Panel has been removed and now lyrics is embedded directly into the Beat Chord grid'
+        'Lyrics Panel has been removed and now lyrics is embedded directly into the Beat Chord grid',
+        'Added mini game during audio extraction and analysis for user engagement',
       ],
       technical: [
         'React Bit\'s components are used for homepage and analysis page (for special effects)',

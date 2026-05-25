@@ -69,10 +69,13 @@ export interface AnalyzeControlsPropsGroup {
 
 export interface AnalyzeResultsPaneProps {
   analysisResults: AnalysisResult | null;
+  isExtracted: boolean;
   isAnalyzed: boolean;
+  isAnalyzing: boolean;
   isExtracting: boolean;
   isDownloading: boolean;
   fromCache: boolean;
+  hasCachedAnalysis?: boolean;
   queueStatus?: AudioProcessingState['queueStatus'];
   queuePosition?: number | null;
   estimatedWaitSeconds?: number | null;
