@@ -51,4 +51,16 @@ describe('browserYtDlpExtractionService queue helpers', () => {
     expect(headers.get('X-YouTube-Proxy-Lease')).toBe('lease-1');
     expect(headers.get('X-Skip-YouTube-Auth')).toBe('1');
   });
+
+  describe('proxy routing utilities', () => {
+    it('correctly identifies the Ultima Downloader proxy URL', () => {
+      const { isUltimaProxy, ULTIMA_PROXY_URL } = __browserYtDlpTestUtils as any;
+      expect(ULTIMA_PROXY_URL).toBe('https://ytpultimadownloader.robertpetersonkyle2.workers.dev/');
+      expect(isUltimaProxy('https://ytpultimadownloader.robertpetersonkyle2.workers.dev/')).toBe(true);
+      expect(isUltimaProxy('https://ytpultimadownloader.robertpetersonkyle2.workers.dev/queue/status')).toBe(true);
+      expect(isUltimaProxy('https://www.ultimadownloader.xyz/yt-dlp-worker.js')).toBe(true);
+      expect(isUltimaProxy('https://my-custom-proxy.workers.dev/')).toBe(false);
+      expect(isUltimaProxy('/api/youtube-media-proxy')).toBe(false);
+    });
+  });
 });

@@ -90,6 +90,12 @@ function isExternalProxyUrl(proxyUrl: string): boolean {
   return /^https?:\/\//i.test(proxyUrl);
 }
 
+const ULTIMA_PROXY_URL = 'https://ytpultimadownloader.robertpetersonkyle2.workers.dev/';
+
+function isUltimaProxy(proxyUrl: string): boolean {
+  return proxyUrl.includes('robertpetersonkyle2.workers.dev') || proxyUrl.includes('ultimadownloader.xyz');
+}
+
 function buildProxyUrl(proxyUrl: string, targetUrl: string): string {
   return `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}url=${encodeURIComponent(targetUrl)}`;
 }
@@ -237,7 +243,7 @@ async function acquireProxyLease(
   proxyUrl: string,
   options: BrowserYtDlpOptions,
 ): Promise<BrowserYtDlpQueueState> {
-  if (!isExternalProxyUrl(proxyUrl)) {
+  if (!isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl)) {
     return {
       status: 'active',
       leaseId: '',
@@ -288,7 +294,7 @@ async function acquireProxyLease(
 }
 
 async function releaseProxyLease(proxyUrl: string, leaseId?: string | null, success = false): Promise<void> {
-  if (!leaseId || !isExternalProxyUrl(proxyUrl)) {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl)) {
     return;
   }
 
@@ -301,7 +307,7 @@ async function releaseProxyLease(proxyUrl: string, leaseId?: string | null, succ
 }
 
 async function heartbeatProxyLease(proxyUrl: string, leaseId?: string | null): Promise<BrowserYtDlpQueueState | null> {
-  if (!leaseId || !isExternalProxyUrl(proxyUrl)) {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl)) {
     return null;
   }
 
@@ -318,7 +324,7 @@ function startProxyLeaseHeartbeat(
   leaseId: string | null,
   options: BrowserYtDlpOptions,
 ): () => void {
-  if (!leaseId || !isExternalProxyUrl(proxyUrl) || options.abortSignal?.aborted) {
+  if (!leaseId || !isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl) || options.abortSignal?.aborted) {
     return () => undefined;
   }
 
@@ -364,11 +370,12 @@ async function waitForWorkerExtraction(
   videoUrl: string,
   options: BrowserYtDlpOptions,
   leaseId?: string | null,
+  proxyUrlOverride?: string,
 ): Promise<WorkerExtractedData> {
   assertBrowserRuntime();
 
   const config = await loadPublicConfig();
-  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
+  const proxyUrl = proxyUrlOverride || config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
 
   return new Promise((resolve, reject) => {
     const worker = new Worker(BROWSER_YTDLP_WORKER_PATH);
@@ -423,9 +430,10 @@ async function fetchAudioBytesViaProxy(
   headers: Record<string, string> | undefined,
   abortSignal?: AbortSignal,
   leaseId?: string | null,
+  proxyUrlOverride?: string,
 ): Promise<Uint8Array> {
   const config = await loadPublicConfig();
-  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
+  const proxyUrl = proxyUrlOverride || config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
   const proxyHeaders = buildProxyRequestHeaders(headers, leaseId);
 
   const response = isExternalProxyUrl(proxyUrl)
@@ -690,53 +698,99 @@ export async function extractAudioWithBrowserYtDlp(
 
   const videoUrl = `https://www.youtube.com/watch?v=${metadata.videoId}`;
   const config = await loadPublicConfig();
-  const proxyUrl = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
-  let leaseId: string | null = null;
-  let stopLeaseHeartbeat: () => void = () => undefined;
-  let extractionSucceeded = false;
+  const ourAppProxy = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
+  const ultimaProxy = ULTIMA_PROXY_URL;
+
+  // 70-30 distribution
+  const useOurApp = Math.random() < 0.7;
+  const primaryProxy = useOurApp ? ourAppProxy : ultimaProxy;
+  const secondaryProxy = useOurApp ? ultimaProxy : ourAppProxy;
+
+  const hasDifferentProxies = ourAppProxy !== ultimaProxy;
+
+  async function attemptExtraction(proxyUrl: string): Promise<BrowserYtDlpExtractionResult> {
+    let leaseId: string | null = null;
+    let stopLeaseHeartbeat: () => void = () => undefined;
+    let extractionSucceeded = false;
+
+    try {
+      options.onProgress?.('initializing', `Preparing browser audio extraction (using ${isUltimaProxy(proxyUrl) ? 'Ultima' : 'primary'} proxy)...`);
+      let lease;
+      try {
+        lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
+      } catch (leaseError) {
+        throw new BrowserExtractionQueueError(leaseError instanceof Error ? leaseError.message : String(leaseError));
+      }
+      leaseId = lease.leaseId || null;
+      stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseId, options);
+      options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
+      const extracted = await waitForWorkerExtraction(videoUrl, options, leaseId, proxyUrl);
+
+      options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
+      const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseId, proxyUrl);
+
+      const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
+      if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
+        throw new Error('Extracted MP3 is larger than the 50MB Firebase cache limit.');
+      }
+
+      options.onProgress?.('uploading', 'Uploading extracted audio for validation...');
+      const hash = await sha256Hex(mp3Bytes);
+      const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
+
+      options.onProgress?.('finalizing', 'Validating audio before caching...');
+      const result = await finalizeCandidate({
+        metadata: {
+          ...metadata,
+          title: metadata.title || extracted.title,
+          duration: metadata.duration || extracted.duration,
+        },
+        candidatePath,
+        sha256: hash,
+        fileSize: mp3Bytes.byteLength,
+        idToken,
+      });
+      extractionSucceeded = true;
+      return result;
+    } finally {
+      stopLeaseHeartbeat();
+      if (leaseId !== null) {
+        await releaseProxyLease(proxyUrl, leaseId, extractionSucceeded);
+      }
+    }
+  }
 
   try {
-    options.onProgress?.('initializing', 'Preparing browser audio extraction...');
-    let lease;
+    return await attemptExtraction(primaryProxy);
+  } catch (error) {
+    if (options.abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error;
+    }
+
+    if (!hasDifferentProxies) {
+      throw error;
+    }
+
+    console.warn(
+      `Primary proxy (${primaryProxy}) failed:`,
+      error instanceof Error ? error.message : String(error),
+      `Retrying with fallback proxy (${secondaryProxy})...`
+    );
+
+    options.onProgress?.(
+      'initializing',
+      `Primary proxy failed or blocked. Falling back to alternative proxy...`
+    );
+
     try {
-      lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
-    } catch (leaseError) {
-      throw new BrowserExtractionQueueError(leaseError instanceof Error ? leaseError.message : String(leaseError));
+      return await attemptExtraction(secondaryProxy);
+    } catch (fallbackError) {
+      console.error(
+        `Fallback proxy (${secondaryProxy}) also failed:`,
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+      );
+      throw fallbackError;
     }
-    leaseId = lease.leaseId || null;
-    stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseId, options);
-    options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
-    const extracted = await waitForWorkerExtraction(videoUrl, options, leaseId);
-
-    options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
-    const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseId);
-
-    const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
-    if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
-      throw new Error('Extracted MP3 is larger than the 50MB Firebase cache limit.');
-    }
-
-    options.onProgress?.('uploading', 'Uploading extracted audio for validation...');
-    const hash = await sha256Hex(mp3Bytes);
-    const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
-
-    options.onProgress?.('finalizing', 'Validating audio before caching...');
-    const result = await finalizeCandidate({
-      metadata: {
-        ...metadata,
-        title: metadata.title || extracted.title,
-        duration: metadata.duration || extracted.duration,
-      },
-      candidatePath,
-      sha256: hash,
-      fileSize: mp3Bytes.byteLength,
-      idToken,
-    });
-    extractionSucceeded = true;
-    return result;
-  } finally {
-    stopLeaseHeartbeat();
-    await releaseProxyLease(proxyUrl, leaseId, extractionSucceeded);
   }
 }
 
@@ -744,4 +798,6 @@ export const __browserYtDlpTestUtils = {
   buildProxyRequestHeaders,
   buildMinimalProxyRequestHeaders,
   normalizeQueueState,
+  isUltimaProxy,
+  ULTIMA_PROXY_URL,
 };
