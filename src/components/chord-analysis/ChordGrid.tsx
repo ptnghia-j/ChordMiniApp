@@ -861,9 +861,38 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       });
 
       // Filter tokens belonging to this row range [startIndex, endIndex]
-      const rowTokens = tokensWithBeatIndex.filter(
-        (t) => t.beatIndex >= startIndex && t.beatIndex <= endIndex
-      );
+      // Custom threshold check: do not split short trailing fragments of a lyric line to the next row.
+      const hasPresenceInCurrentRow = tokensWithBeatIndex.some(tok => tok.beatIndex >= startIndex && tok.beatIndex <= endIndex);
+      const hasPresenceInPreviousRows = tokensWithBeatIndex.some(tok => tok.beatIndex < startIndex);
+
+      const rowTokens = tokensWithBeatIndex.filter((t) => {
+        // Exclude tokens before current row
+        if (t.beatIndex < startIndex) return false;
+
+        // For tokens after current row: merge them if they are part of a very short trailing fragment
+        if (t.beatIndex > endIndex) {
+          if (!hasPresenceInCurrentRow) return false;
+
+          const futureTokens = tokensWithBeatIndex.filter(tok => tok.beatIndex > endIndex);
+          const futureNonWhitespace = futureTokens.filter(tok => !tok.isWhitespace);
+          const futureLength = futureNonWhitespace.map(tok => tok.text).join('').length;
+          const isFutureVeryShort = futureNonWhitespace.length <= 1 || futureLength < 8;
+
+          return isFutureVeryShort;
+        }
+
+        // For tokens within current row: exclude them if they were already claimed by the previous row
+        if (hasPresenceInPreviousRows) {
+          const remainingTokens = tokensWithBeatIndex.filter(tok => tok.beatIndex >= startIndex);
+          const remainingNonWhitespace = remainingTokens.filter(tok => !tok.isWhitespace);
+          const remainingLength = remainingNonWhitespace.map(tok => tok.text).join('').length;
+          const isRemainingVeryShort = remainingNonWhitespace.length <= 1 || remainingLength < 8;
+
+          if (isRemainingVeryShort) return false;
+        }
+
+        return true;
+      });
 
       // Find first and last non-whitespace tokens to trim edge whitespace
       let startTokenIdx = 0;

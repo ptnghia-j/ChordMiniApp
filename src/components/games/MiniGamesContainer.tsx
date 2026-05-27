@@ -19,6 +19,7 @@ import {
   TableRow,
   TableCell,
   Chip,
+  ScrollShadow,
 } from '@heroui/react';
 import GuitarChordDiagram from '@/components/chord-playback/GuitarChordDiagram';
 import AppTooltip from '@/components/common/AppTooltip';
@@ -33,8 +34,8 @@ export interface MiniGamesContainerProps {
 type Mark = 'X' | 'O' | null;
 type GameMode = 'quiz' | 'ear' | 'guitar' | 'xo';
 type QuizResult = 'correct' | 'incorrect' | null;
-type ScaleType = 'major' | 'natural minor';
-type EarQuestionType = 'degree' | 'progression' | 'quality';
+type ScaleType = 'major' | 'natural minor' | 'harmonic minor' | 'melodic minor';
+type EarQuestionType = 'degree' | 'progression' | 'quality' | 'scale_degree' | 'tonicization';
 type MiniGameNoticeId = 'intro' | 'modes';
 type DegreeExtensionType = 'triad' | 'seventh';
 
@@ -64,6 +65,8 @@ interface ScaleDegreeQuizQuestion {
   qualityText: string;
   answer: string;
   options: string[];
+  roman?: string;
+  key?: string;
 }
 
 interface ScaleNoteQuizQuestion {
@@ -81,6 +84,37 @@ interface SecondaryDominantQuizQuestion {
   progression: string[];
   answer: string;
   options: string[];
+  targetRoman?: string;
+  hasTonicization?: boolean;
+}
+
+interface KeySignatureMnemonicPart {
+  prompt: string;
+  answer: string;
+  options: string[];
+  explanation: string;
+}
+
+interface KeySignatureMnemonicQuizQuestion {
+  type: 'mnemonic';
+  key: string;
+  context: string;
+  partA: KeySignatureMnemonicPart;
+  partB: KeySignatureMnemonicPart;
+}
+
+interface ModeFormulaQuizQuestion {
+  type: 'mode_formula';
+  prompt: string;
+  answer: string;
+  options: string[];
+}
+
+interface RelativeKeyQuizQuestion {
+  type: 'relative_key';
+  prompt: string;
+  answer: string;
+  options: string[];
 }
 
 type QuizQuestion =
@@ -88,7 +122,10 @@ type QuizQuestion =
   | ChordToneQuizQuestion
   | ScaleDegreeQuizQuestion
   | ScaleNoteQuizQuestion
-  | SecondaryDominantQuizQuestion;
+  | SecondaryDominantQuizQuestion
+  | KeySignatureMnemonicQuizQuestion
+  | ModeFormulaQuizQuestion
+  | RelativeKeyQuizQuestion;
 
 interface EarTrainingQuestion {
   type: EarQuestionType;
@@ -137,6 +174,7 @@ export interface GameQuestionReviewEntry {
   selectedAnswers: string[];
   wasCorrect: boolean;
   playbackQuestion?: EarTrainingQuestion;
+  explanation?: string;
 }
 
 export interface GameHistoryEntry {
@@ -204,22 +242,24 @@ const WIN_LINES = (() => {
 const CHROMATIC_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const CHROMATIC_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const NOTE_INDEX: Record<string, number> = {
-  C: 0, 'B#': 0,
-  'C#': 1, Db: 1,
-  D: 2,
-  'D#': 3, Eb: 3,
-  E: 4, Fb: 4,
-  'E#': 5, F: 5,
-  'F#': 6, Gb: 6,
-  G: 7,
+  C: 0, 'B#': 0, 'Dbb': 0,
+  'C#': 1, Db: 1, 'B##': 1,
+  D: 2, 'C##': 2, 'Ebb': 2,
+  'D#': 3, Eb: 3, 'Fbb': 3,
+  E: 4, Fb: 4, 'D##': 4,
+  'E#': 5, F: 5, 'Gbb': 5,
+  'F#': 6, Gb: 6, 'E##': 6,
+  G: 7, 'F##': 7, 'Abb': 7,
   'G#': 8, Ab: 8,
-  A: 9,
-  'A#': 10, Bb: 10,
-  B: 11, Cb: 11,
+  A: 9, 'G##': 9, 'Bbb': 9,
+  'A#': 10, Bb: 10, 'Cbb': 10,
+  B: 11, Cb: 11, 'A##': 11,
 };
 
 const MAJOR_SCALE_STEPS = [0, 2, 4, 5, 7, 9, 11];
 const NATURAL_MINOR_SCALE_STEPS = [0, 2, 3, 5, 7, 8, 10];
+const HARMONIC_MINOR_SCALE_STEPS = [0, 2, 3, 5, 7, 8, 11];
+const MELODIC_MINOR_SCALE_STEPS = [0, 2, 3, 5, 7, 9, 11];
 const MAJOR_KEY_QUALITIES = ['M', 'm', 'm', 'M', 'M', 'm', 'dim'] as const;
 const NATURAL_MINOR_KEY_QUALITIES = ['m', 'dim', 'M', 'm', 'm', 'M', 'M'] as const;
 const ROMAN_BASES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
@@ -445,7 +485,11 @@ function getAccidentalPreference(root: string): 'flat' | 'sharp' {
 }
 
 function getNote(root: string, semitoneOffset: number, _preference?: 'flat' | 'sharp'): string {
-  const cleanRoot = root.replace(/♯/g, '#').replace(/♭/g, 'b');
+  const cleanRoot = root
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/𝄪/g, '##')
+    .replace(/𝄫/g, 'bb');
   const rootLetter = cleanRoot.charAt(0);
   const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   const rootLetterIdx = LETTERS.indexOf(rootLetter);
@@ -464,11 +508,8 @@ function getNote(root: string, semitoneOffset: number, _preference?: 'flat' | 's
   else if (absOffset === 1 || absOffset === 2) letterSteps = 1;
   else if (absOffset === 3 || absOffset === 4) letterSteps = 2;
   else if (absOffset === 5) letterSteps = 3;
-  else if (absOffset === 6) {
-    letterSteps = 4;
-  }
-  else if (absOffset === 7 || absOffset === 8) letterSteps = 4;
-  else if (absOffset === 9) letterSteps = 5;
+  else if (absOffset === 6 || absOffset === 7) letterSteps = 4;
+  else if (absOffset === 8 || absOffset === 9) letterSteps = 5;
   else if (absOffset === 10 || absOffset === 11) letterSteps = 6;
 
   if (semitoneOffset < 0) {
@@ -492,21 +533,26 @@ function getNote(root: string, semitoneOffset: number, _preference?: 'flat' | 's
   if (diff > 6) diff -= 12;
 
   let accidental = '';
-  if (diff === 1) accidental = '#';
-  else if (diff === 2) accidental = '##';
-  else if (diff === -1) accidental = 'b';
-  else if (diff === -2) accidental = 'bb';
+  if (diff === 1) accidental = '♯';
+  else if (diff === 2) accidental = '𝄪';
+  else if (diff === -1) accidental = '♭';
+  else if (diff === -2) accidental = '𝄫';
 
-  const formattedNote = `${targetLetter}${accidental}`;
-  return formattedNote.replace(/#/g, '♯').replace(/b/g, '♭');
+  return `${targetLetter}${accidental}`;
 }
 
 function getScaleSteps(scaleType: ScaleType): number[] {
-  return scaleType === 'natural minor' ? NATURAL_MINOR_SCALE_STEPS : MAJOR_SCALE_STEPS;
+  if (scaleType === 'natural minor') return NATURAL_MINOR_SCALE_STEPS;
+  if (scaleType === 'harmonic minor') return HARMONIC_MINOR_SCALE_STEPS;
+  if (scaleType === 'melodic minor') return MELODIC_MINOR_SCALE_STEPS;
+  return MAJOR_SCALE_STEPS;
 }
 
 function getScaleDegreeNames(scaleType: ScaleType): string[] {
-  return scaleType === 'natural minor' ? NATURAL_MINOR_DEGREE_NAMES : SCALE_DEGREE_NAMES;
+  if (scaleType === 'natural minor' || scaleType === 'harmonic minor' || scaleType === 'melodic minor') {
+    return NATURAL_MINOR_DEGREE_NAMES;
+  }
+  return SCALE_DEGREE_NAMES;
 }
 
 function getScaleNotes(root: string, scaleType: ScaleType): string[] {
@@ -564,7 +610,11 @@ function rotateOptions(options: string[], seed: number): string[] {
 }
 
 function getNeighborNoteOptions(root: string, answer: string, seed: number): string[] {
-  const normalizedAnswer = answer.replace(/♯/g, '#').replace(/♭/g, 'b');
+  const normalizedAnswer = answer
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/𝄪/g, '##')
+    .replace(/𝄫/g, 'bb');
   const answerIndex = NOTE_INDEX[normalizedAnswer] ?? 0;
   const preference = getAccidentalPreference(root);
   const scale = preference === 'flat' ? CHROMATIC_FLAT : CHROMATIC_SHARP;
@@ -723,6 +773,8 @@ function createRandomDegreeQuestion(): ScaleDegreeQuizQuestion {
     qualityText: `${getFormattedChordText(chord)} in ${key} major`,
     answer,
     options: shuffleArray(allOptions).slice(0, 4),
+    roman,
+    key,
   };
 }
 
@@ -774,6 +826,245 @@ function createRandomSecondaryQuestion(): SecondaryDominantQuizQuestion {
     progression,
     answer,
     options: shuffleArray(allOptions).slice(0, 4),
+    targetRoman,
+    hasTonicization,
+  };
+}
+
+function createRandomModeFormulaQuestion(): ModeFormulaQuizQuestion {
+  const modes = [
+    { name: 'major/ionian', formula: 'W - W - H - W - W - W - H' },
+    { name: 'natural minor/aeolian', formula: 'W - H - W - W - H - W - W' },
+    { name: 'dorian', formula: 'W - H - W - W - W - H - W' },
+    { name: 'phrygian', formula: 'H - W - W - W - H - W - W' },
+    { name: 'lydian', formula: 'W - W - W - H - W - W - H' },
+    { name: 'mixolydian', formula: 'W - W - H - W - W - H - W' },
+    { name: 'locrian', formula: 'H - W - W - H - W - W - W' },
+  ];
+  const mode = modes[Math.floor(Math.random() * modes.length)];
+  const distractors = modes.map((m) => m.formula).filter((f) => f !== mode.formula);
+
+  return {
+    type: 'mode_formula',
+    prompt: `What is the interval formula for ${mode.name} mode, given W is whole step and H is half step?`,
+    answer: mode.formula,
+    options: buildAnswerOptions(mode.formula, distractors),
+  };
+}
+
+function createRandomRelativeKeyQuestion(): RelativeKeyQuizQuestion {
+  const relativePairs = [
+    { major: 'C', minor: 'A' },
+    { major: 'G', minor: 'E' },
+    { major: 'D', minor: 'B' },
+    { major: 'A', minor: 'F#' },
+    { major: 'E', minor: 'C#' },
+    { major: 'B', minor: 'G#' },
+    { major: 'F#', minor: 'D#' },
+    { major: 'Gb', minor: 'Eb' },
+    { major: 'Db', minor: 'Bb' },
+    { major: 'Ab', minor: 'F' },
+    { major: 'Eb', minor: 'C' },
+    { major: 'Bb', minor: 'G' },
+    { major: 'F', minor: 'D' },
+  ];
+  
+  const pair = relativePairs[Math.floor(Math.random() * relativePairs.length)];
+  const isMajorToMinor = Math.random() < 0.5;
+
+  let prompt = '';
+  let answer = '';
+  let distractors: string[] = [];
+
+  if (isMajorToMinor) {
+    const formattedMajor = formatChordWithMusicalSymbols(pair.major).replace(/<[^>]*>/g, '');
+    const formattedMinor = formatChordWithMusicalSymbols(pair.minor).replace(/<[^>]*>/g, '') + ' minor';
+    prompt = `What is the relative minor of ${formattedMajor} major?`;
+    answer = formattedMinor;
+    distractors = relativePairs
+      .filter((p) => p.minor !== pair.minor)
+      .map((p) => formatChordWithMusicalSymbols(p.minor).replace(/<[^>]*>/g, '') + ' minor');
+  } else {
+    const formattedMinor = formatChordWithMusicalSymbols(pair.minor).replace(/<[^>]*>/g, '');
+    const formattedMajor = formatChordWithMusicalSymbols(pair.major).replace(/<[^>]*>/g, '') + ' major';
+    prompt = `What is the relative major of ${formattedMinor} minor?`;
+    answer = formattedMajor;
+    distractors = relativePairs
+      .filter((p) => p.major !== pair.major)
+      .map((p) => formatChordWithMusicalSymbols(p.major).replace(/<[^>]*>/g, '') + ' major');
+  }
+
+  return {
+    type: 'relative_key',
+    prompt,
+    answer,
+    options: buildAnswerOptions(answer, distractors),
+  };
+}
+
+// ── Circle-of-Fifths data for algorithmic mnemonic question generation ──
+
+// Sharp keys: C(0) → G(1) → D(2) → A(3) → E(4) → B(5) → F#(6) → C#(7) → G#(8, extended)
+const SHARP_KEYS: { key: string; count: number }[] = [
+  { key: 'C', count: 0 },
+  { key: 'G', count: 1 },
+  { key: 'D', count: 2 },
+  { key: 'A', count: 3 },
+  { key: 'E', count: 4 },
+  { key: 'B', count: 5 },
+  { key: 'F#', count: 6 },
+  { key: 'C#', count: 7 },
+  { key: 'G#', count: 8 },
+];
+// Flat keys: F(1) → Bb(2) → Eb(3) → Ab(4) → Db(5) → Gb(6) → Cb(7) → Fb(8, extended)
+const FLAT_KEYS: { key: string; count: number }[] = [
+  { key: 'F', count: 1 },
+  { key: 'Bb', count: 2 },
+  { key: 'Eb', count: 3 },
+  { key: 'Ab', count: 4 },
+  { key: 'Db', count: 5 },
+  { key: 'Gb', count: 6 },
+  { key: 'Cb', count: 7 },
+  { key: 'Fb', count: 8 },
+];
+// The sharp mnemonic order:  F  C  G  D  A  E  B  (Father Charles Goes Down And Ends Battle)
+const SHARP_MNEMONIC = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+// The flat mnemonic order:  B  E  A  D  G  C  F  (Battle Ends And Down Goes Charles' Father)
+const FLAT_MNEMONIC = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
+
+// Circle of fifths (clockwise order, 12 pitch classes). Used for Part B interval questions.
+// Preferred display name for each position (avoid enharmonic slash when used as an answer)
+const CIRCLE_DISPLAY: { sharp: string; flat: string }[] = [
+  { sharp: 'C',  flat: 'C'  },
+  { sharp: 'G',  flat: 'G'  },
+  { sharp: 'D',  flat: 'D'  },
+  { sharp: 'A',  flat: 'A'  },
+  { sharp: 'E',  flat: 'E'  },
+  { sharp: 'B',  flat: 'Cb' },
+  { sharp: 'F#', flat: 'Gb' },
+  { sharp: 'C#', flat: 'Db' },
+  { sharp: 'G#', flat: 'Ab' },
+  { sharp: 'D#', flat: 'Eb' },
+  { sharp: 'A#', flat: 'Bb' },
+  { sharp: 'E#', flat: 'F'  },
+];
+
+const MNEMONIC_CONTEXT = `Given the key signature mnemonics:
+- Sharps: 'Father Charles Goes Down And Ends Battle' (F C G D A E B). Moving forward = more sharps. C has 0 sharps, G has 1 sharp, etc.
+- Flats: 'Battle Ends And Down Goes Charles\\' Father' (B E A D G C F). Moving forward = more flats. Bb has 2 flats, Eb has 3 flats, etc.
+Hint: The sequence wraps around.`;
+
+/** Build a Part A question: "How many sharps/flats does X major have?" */
+function buildPartAQuestion(entry: { key: string; count: number }, type: 'sharp' | 'flat'): KeySignatureMnemonicPart {
+  const unit = type === 'sharp' ? 'sharp' : 'flat';
+  const unitPlural = type === 'sharp' ? 'sharps' : 'flats';
+  const answerStr = entry.count === 1 ? `1 ${unit}` : `${entry.count} ${unitPlural}`;
+
+  // Generate 3 distractors from nearby counts (never negative, avoid duplicating the answer)
+  const distractorCounts = [entry.count - 2, entry.count - 1, entry.count + 1, entry.count + 2]
+    .filter((c) => c >= 0 && c !== entry.count);
+  const distractorStrs = distractorCounts
+    .slice(0, 3)
+    .map((c) => (c === 1 ? `1 ${unit}` : `${c} ${unitPlural}`));
+
+  // Build explanation: show the mnemonic traversal
+  const mnemonic = type === 'sharp' ? SHARP_MNEMONIC : FLAT_MNEMONIC;
+  const startNote = type === 'sharp' ? 'C (0 sharps)' : 'Bb (2 flats)';
+  const startCount = type === 'sharp' ? 0 : 2;
+  // Show the traversal steps up to the target count
+  const steps: string[] = [];
+  const stepsNeeded = entry.count - startCount;
+  for (let i = 0; i <= Math.min(Math.abs(stepsNeeded), mnemonic.length); i++) {
+    const mnIdx = type === 'sharp'
+      ? (1 + i) % mnemonic.length   // sharp mnemonic starts at C (index 1), going right
+      : i % mnemonic.length;         // flat mnemonic starts at B (index 0), going right
+    steps.push(`${mnemonic[mnIdx]}(${startCount + i})`);
+    if (startCount + i >= entry.count) break;
+  }
+  const traversal = steps.length > 0 ? ` Starting from ${startNote}: ${steps.join(', ')}.` : '';
+  const explanation = `${entry.key} major has ${answerStr}.${traversal}`;
+
+  return { prompt: `How many ${unitPlural} does ${entry.key} major have?`, answer: answerStr, options: [answerStr, ...distractorStrs], explanation };
+}
+
+/** Build a Part B question: interval relationship on the circle of fifths */
+function buildPartBQuestion(startIdx: number, direction: 'fifth-up' | 'fourth-up'): KeySignatureMnemonicPart {
+  // fifth-up = clockwise (+1), fourth-up = counter-clockwise (-1)
+  const targetIdx = direction === 'fifth-up'
+    ? (startIdx + 1) % 12
+    : (startIdx - 1 + 12) % 12;
+
+  // Determine if we're on the sharp or flat side
+  const isSharpSide = startIdx <= 6;
+  const startName = isSharpSide ? CIRCLE_DISPLAY[startIdx].sharp : CIRCLE_DISPLAY[startIdx].flat;
+
+  // Use enharmonic-consistent naming: if start is flat-side, answer should be flat-side
+  const answer = isSharpSide
+    ? CIRCLE_DISPLAY[targetIdx].sharp
+    : CIRCLE_DISPLAY[targetIdx].flat;
+
+  const prompt = direction === 'fifth-up'
+    ? `What is the fifth up / fourth down from ${startName}?`
+    : `What is the fourth up / fifth down from ${startName}?`;
+
+  // Distractors: grab 3 nearby notes from the circle, same naming convention
+  const distractorIdxs = [
+    (startIdx + 2) % 12,
+    (startIdx - 2 + 12) % 12,
+    direction === 'fifth-up' ? (startIdx - 1 + 12) % 12 : (startIdx + 1) % 12,
+  ];
+  const distractors = distractorIdxs.map((idx) =>
+    isSharpSide ? CIRCLE_DISPLAY[idx].sharp : CIRCLE_DISPLAY[idx].flat
+  ).filter((d) => d !== answer);
+
+  const mnemonicName = direction === 'fifth-up' ? 'sharp (F C G D A E B)' : 'flat (B E A D G C F)';
+  const movementDesc = direction === 'fifth-up'
+    ? `Moving clockwise on the circle of fifths from ${startName} gives ${answer}.`
+    : `Moving counter-clockwise on the circle of fifths from ${startName} gives ${answer}.`;
+  const explanation = `${answer} is the ${direction === 'fifth-up' ? 'fifth up / fourth down' : 'fourth up / fifth down'} from ${startName}. In the ${mnemonicName} mnemonic, ${movementDesc}`;
+
+  return { prompt, answer, options: [answer, ...distractors.slice(0, 3)], explanation };
+}
+
+// Combined pool of all Part A entries (sharp keys + flat keys, excluding C which has 0 sharps/flats)
+const ALL_PART_A_ENTRIES: { entry: { key: string; count: number }; type: 'sharp' | 'flat' }[] = [
+  ...SHARP_KEYS.filter((k) => k.count > 0).map((entry) => ({ entry, type: 'sharp' as const })),
+  ...FLAT_KEYS.map((entry) => ({ entry, type: 'flat' as const })),
+];
+// All Part B starting positions × 2 directions
+const ALL_PART_B_ENTRIES: { startIdx: number; direction: 'fifth-up' | 'fourth-up' }[] = [];
+for (let i = 0; i < 12; i++) {
+  ALL_PART_B_ENTRIES.push({ startIdx: i, direction: 'fifth-up' });
+  ALL_PART_B_ENTRIES.push({ startIdx: i, direction: 'fourth-up' });
+}
+
+function createRandomMnemonicQuestion(): KeySignatureMnemonicQuizQuestion {
+  const partAEntry = ALL_PART_A_ENTRIES[Math.floor(Math.random() * ALL_PART_A_ENTRIES.length)];
+  const partBEntry = ALL_PART_B_ENTRIES[Math.floor(Math.random() * ALL_PART_B_ENTRIES.length)];
+  const partA = buildPartAQuestion(partAEntry.entry, partAEntry.type);
+  const partB = buildPartBQuestion(partBEntry.startIdx, partBEntry.direction);
+
+  return {
+    type: 'mnemonic',
+    key: partAEntry.entry.key,
+    context: MNEMONIC_CONTEXT,
+    partA: { ...partA, options: shuffleArray(partA.options) },
+    partB: { ...partB, options: shuffleArray(partB.options) },
+  };
+}
+
+function createStableMnemonicQuestion(sequenceIndex: number): KeySignatureMnemonicQuizQuestion {
+  const partAEntry = ALL_PART_A_ENTRIES[sequenceIndex % ALL_PART_A_ENTRIES.length];
+  const partBEntry = ALL_PART_B_ENTRIES[sequenceIndex % ALL_PART_B_ENTRIES.length];
+  const partA = buildPartAQuestion(partAEntry.entry, partAEntry.type);
+  const partB = buildPartBQuestion(partBEntry.startIdx, partBEntry.direction);
+
+  return {
+    type: 'mnemonic',
+    key: partAEntry.entry.key,
+    context: MNEMONIC_CONTEXT,
+    partA: { ...partA, options: rotateOptions(partA.options, sequenceIndex) },
+    partB: { ...partB, options: rotateOptions(partB.options, sequenceIndex) },
   };
 }
 
@@ -888,6 +1179,8 @@ function createDegreeQuestion(sequenceIndex: number): ScaleDegreeQuizQuestion {
     qualityText: `${getFormattedChordText(chord)} in ${key} major`,
     answer,
     options: rotateOptions(optionsList, sequenceIndex),
+    roman,
+    key,
   };
 }
 
@@ -939,10 +1232,45 @@ function createSecondaryQuestion(sequenceIndex: number): SecondaryDominantQuizQu
     progression,
     answer,
     options: rotateOptions(optionsList, sequenceIndex),
+    targetRoman,
+    hasTonicization,
   };
 }
 
-function createQuizQuestion(index: number): QuizQuestion {
+export function generateQuizQuestions(): QuizQuestion[] {
+  if (process.env.NODE_ENV === 'test') {
+    return generateStableQuizQuestions();
+  }
+
+  const questions: QuizQuestion[] = [];
+  // Exclude mode_formula from the main types pool to restrict it to at most 1
+  const types: Array<'scale' | 'label' | 'tone' | 'degree' | 'secondary' | 'relative_key'> = [
+    'scale', 'label', 'tone', 'degree', 'secondary', 'relative_key'
+  ];
+
+  for (let i = 0; i < 18; i++) {
+    const type = types[i % types.length];
+    if (type === 'scale') questions.push(createRandomScaleQuestion());
+    else if (type === 'label') questions.push(createRandomLabelQuestion());
+    else if (type === 'tone') questions.push(createRandomToneQuestion());
+    else if (type === 'degree') questions.push(createRandomDegreeQuestion());
+    else if (type === 'secondary') questions.push(createRandomSecondaryQuestion());
+    else questions.push(createRandomRelativeKeyQuestion());
+  }
+
+  // Add exactly 1 scale/mode formula question
+  questions.push(createRandomModeFormulaQuestion());
+
+  const shuffledQuiz = shuffleArray(questions);
+  const mnemonicQuestion = createRandomMnemonicQuestion();
+  // Position mnemonic question in the first 5 questions (index 0 to 4 inclusive)
+  const mnemonicIndex = Math.floor(Math.random() * 5);
+  shuffledQuiz.splice(mnemonicIndex, 0, mnemonicQuestion);
+
+  return shuffledQuiz;
+}
+
+function createStableQuizQuestion(index: number): QuizQuestion {
   if (index < 12) {
     const mode = index % 4;
     const sequenceIndex = Math.floor(index / 4);
@@ -961,32 +1289,14 @@ function createQuizQuestion(index: number): QuizQuestion {
   return createSecondaryQuestion(sequenceIndex);
 }
 
-export function generateQuizQuestions(): QuizQuestion[] {
-  if (process.env.NODE_ENV === 'test') {
-    return generateStableQuizQuestions();
-  }
-
-  const questions: QuizQuestion[] = [];
-  const types: Array<'scale' | 'label' | 'tone' | 'degree' | 'secondary'> = [
-    'scale', 'label', 'tone', 'degree', 'secondary'
-  ];
-
-  for (let i = 0; i < 20; i++) {
-    const type = types[i % types.length];
-    if (type === 'scale') questions.push(createRandomScaleQuestion());
-    else if (type === 'label') questions.push(createRandomLabelQuestion());
-    else if (type === 'tone') questions.push(createRandomToneQuestion());
-    else if (type === 'degree') questions.push(createRandomDegreeQuestion());
-    else questions.push(createRandomSecondaryQuestion());
-  }
-
-  return shuffleArray(questions);
-}
-
 function generateStableQuizQuestions(): QuizQuestion[] {
   const questions: QuizQuestion[] = [];
   for (let i = 0; i < 20; i++) {
-    questions.push(createQuizQuestion(i));
+    if (i === 2) {
+      questions.push(createStableMnemonicQuestion(0));
+    } else {
+      questions.push(createStableQuizQuestion(i));
+    }
   }
   return questions;
 }
@@ -1014,92 +1324,259 @@ function getGuitarChordNotes(frets: number[]): string[] {
   return result;
 }
 
-function createEarQuestion(index: number): EarTrainingQuestion {
-  const mode = index % 3;
-  const sequenceIndex = Math.floor(index / 3);
-  const instruments: Array<'piano' | 'guitar' | 'violin' | 'flute'> = ['piano', 'guitar', 'violin', 'flute'];
-  let instrument: 'piano' | 'guitar' | 'violin' | 'flute' | 'composite' = instruments[index % instruments.length];
+function getTonicizationProgression(
+  tonic: string,
+  targetDegree: number,
+  isHard: boolean,
+  seed: number
+): { chords: string[]; answer: string; options: string[] } {
+  const scaleNotes = getScaleNotes(tonic, 'major');
 
-  if ((mode === 1 || mode === 2) && index % 4 === 3) {
-    instrument = 'composite';
-  }
-
-  const promptInstrumentName = instrument === 'composite' ? 'multiple instruments' : instrument;
-
-  if (mode === 0) {
-    const tonic = EAR_ROOTS[sequenceIndex % EAR_ROOTS.length];
-    const scaleType: ScaleType = sequenceIndex % 4 === 3 ? 'natural minor' : 'major';
-    const degree = EAR_DEGREES[sequenceIndex % EAR_DEGREES.length];
-    const degreeName = getScaleDegreeNames(scaleType)[degree - 1];
-    const targetNote = getScaleNotes(tonic, scaleType)[degree - 1];
-    const answer = `${degree} (${degreeName})`;
-    const wrongDegreeA = (degree % 7) + 1;
-    const wrongDegreeB = ((degree + 2) % 7) + 1;
-
-    return {
-      type: 'degree',
-      prompt: `Reference: ${getScaleDisplayName(tonic, scaleType)} tonic, then one mystery pitch (played on ${promptInstrumentName})`,
-      tonic,
-      scaleType,
-      degree,
-      targetNote,
-      answer,
-      instrument,
-      options: rotateOptions([
-        answer,
-        `${wrongDegreeA} (${getScaleDegreeNames(scaleType)[wrongDegreeA - 1]})`,
-        `${wrongDegreeB} (${getScaleDegreeNames(scaleType)[wrongDegreeB - 1]})`,
-        'Not in the scale',
-      ], sequenceIndex),
-    };
-  }
-
-  if (mode === 1) {
-    const pattern = EAR_PROGRESSIONS[sequenceIndex % EAR_PROGRESSIONS.length];
-    const tonic = EAR_ROOTS[(sequenceIndex + 1) % EAR_ROOTS.length];
-    const scaleType = pattern.scaleType || 'major';
-    const progression = pattern.degrees.map((degree) => getDiatonicTriadLabel(tonic, scaleType, degree));
-    const alternateA = EAR_PROGRESSIONS[(sequenceIndex + 1) % EAR_PROGRESSIONS.length].numerals;
-    const alternateB = EAR_PROGRESSIONS[(sequenceIndex + 2) % EAR_PROGRESSIONS.length].numerals;
-
-    return {
-      type: 'progression',
-      prompt: `Tonic reference chord (${getScaleDisplayName(tonic, scaleType)}) will be played first, then the sequence. Identify the progression (played on ${promptInstrumentName}):`,
-      tonic,
-      scaleType,
-      progression,
-      answer: pattern.numerals,
-      instrument,
-      options: rotateOptions([
-        pattern.numerals,
-        alternateA,
-        alternateB,
-        scaleType === 'major' ? 'I - IV - ii - V' : 'i - v - VI - VII',
-      ], sequenceIndex),
-    };
-  }
-
-  const root = EAR_ROOTS[(sequenceIndex + 2) % EAR_ROOTS.length];
-  const qualityKey = EAR_QUALITY_KEYS[sequenceIndex % EAR_QUALITY_KEYS.length];
-  const quality = CHORD_QUALITIES[qualityKey];
-  const chord = getChordLabel(root, quality);
-
-  return {
-    type: 'quality',
-    prompt: `Listen to the chord quality (played on ${promptInstrumentName})`,
-    chord,
-    qualityKey,
-    answer: quality.qualityText,
-    instrument,
-    options: rotateOptions([
-      quality.qualityText,
-      'major',
-      'minor',
-      'dominant seventh',
-      'major seventh',
-      'diminished',
-    ], sequenceIndex),
+  const getDiatonic = (deg: number, suffix = '') => {
+    const root = scaleNotes[deg - 1];
+    const qualities = MAJOR_KEY_QUALITIES;
+    const q = qualities[deg - 1];
+    const s = suffix || (q === 'm' ? 'm' : q === 'dim' ? 'dim' : '');
+    return `${root}${s}`;
   };
+
+  const getSecondary = (targetDeg: number) => {
+    const targetRoot = scaleNotes[targetDeg - 1];
+    const secRoot = getNote(targetRoot, 7, getAccidentalPreference(targetRoot));
+    return `${secRoot}7`;
+  };
+
+  if (!isHard) {
+    // Level 1: 6 chords
+    if (targetDegree === 2) {
+      return {
+        chords: [getDiatonic(1), getDiatonic(6), getSecondary(2), getDiatonic(2), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - vi - V7/ii - ii - V7 - I',
+        options: rotateOptions([
+          'I - vi - V7/ii - ii - V7 - I',
+          'I - vi - V7/vi - vi - V7 - I',
+          'I - vi - V7/IV - IV - V7 - I',
+          'I - vi - ii - V7 - I',
+        ], seed),
+      };
+    } else if (targetDegree === 5) {
+      return {
+        chords: [getDiatonic(1), getDiatonic(4), getSecondary(5), getDiatonic(5), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - IV - V7/V - V - V7 - I',
+        options: rotateOptions([
+          'I - IV - V7/V - V - V7 - I',
+          'I - IV - V7/ii - ii - V7 - I',
+          'I - IV - V7/vi - vi - V7 - I',
+          'I - IV - V7 - I',
+        ], seed),
+      };
+    } else if (targetDegree === 6) {
+      return {
+        chords: [getDiatonic(1), getDiatonic(3), getSecondary(6), getDiatonic(6), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - iii - V7/vi - vi - V7 - I',
+        options: rotateOptions([
+          'I - iii - V7/vi - vi - V7 - I',
+          'I - iii - V7/ii - ii - V7 - I',
+          'I - iii - V7/IV - IV - V7 - I',
+          'I - iii - vi - V7 - I',
+        ], seed),
+      };
+    } else { // targetDegree === 4
+      return {
+        chords: [getDiatonic(1), getDiatonic(6), getSecondary(4), getDiatonic(4), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - vi - V7/IV - IV - V7 - I',
+        options: rotateOptions([
+          'I - vi - V7/IV - IV - V7 - I',
+          'I - vi - V7/ii - ii - V7 - I',
+          'I - vi - V7/vi - vi - V7 - I',
+          'I - vi - IV - V - I',
+        ], seed),
+      };
+    }
+  } else {
+    // Level 2: 8 chords
+    if (targetDegree === 2) {
+      return {
+        chords: [getDiatonic(1), getDiatonic(6), getSecondary(2), getDiatonic(2), getDiatonic(4), getSecondary(5), getDiatonic(5), getDiatonic(1)],
+        answer: 'I - vi - V7/ii - ii - IV - V7/V - V - I',
+        options: rotateOptions([
+          'I - vi - V7/ii - ii - IV - V7/V - V - I',
+          'I - vi - V7/vi - vi - IV - V7/V - V - I',
+          'I - vi - V7/ii - ii - IV - V7/ii - ii - I',
+          'I - vi - ii - IV - V - I',
+        ], seed),
+      };
+    } else if (targetDegree === 5) {
+      return {
+        chords: [getDiatonic(1), getDiatonic(4), getSecondary(5), getDiatonic(5), getSecondary(6), getDiatonic(6), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - IV - V7/V - V - V7/vi - vi - V7 - I',
+        options: rotateOptions([
+          'I - IV - V7/V - V - V7/vi - vi - V7 - I',
+          'I - IV - V7/ii - ii - V7/vi - vi - V7 - I',
+          'I - IV - V7/V - V - ii - V7 - I',
+          'I - IV - V7 - I',
+        ], seed),
+      };
+    } else if (targetDegree === 6) {
+      return {
+        chords: [getDiatonic(1), getSecondary(6), getDiatonic(6), getDiatonic(4), getSecondary(2), getDiatonic(2), getDiatonic(5, '7'), getDiatonic(1)],
+        answer: 'I - V7/vi - vi - IV - V7/ii - ii - V7 - I',
+        options: rotateOptions([
+          'I - V7/vi - vi - IV - V7/ii - ii - V7 - I',
+          'I - V7/ii - ii - IV - V7/ii - ii - V7 - I',
+          'I - V7/vi - vi - IV - ii - V7 - I',
+          'I - vi - IV - ii - V7 - I',
+        ], seed),
+      };
+    } else { // targetDegree === 4
+      return {
+        chords: [getDiatonic(1), getDiatonic(6), getSecondary(4), getDiatonic(4), getDiatonic(2), getSecondary(5), getDiatonic(5), getDiatonic(1)],
+        answer: 'I - vi - V7/IV - IV - ii - V7/V - V - I',
+        options: rotateOptions([
+          'I - vi - V7/IV - IV - ii - V7/V - V - I',
+          'I - vi - V7/ii - ii - ii - V7/V - V - I',
+          'I - vi - V7/IV - IV - ii - V7 - I',
+          'I - vi - IV - ii - V - I',
+        ], seed),
+      };
+    }
+  }
+}
+
+function generateStableEarQuestions(): EarTrainingQuestion[] {
+  const questions: EarTrainingQuestion[] = [];
+  const types: EarQuestionType[] = [
+    'degree',
+    'scale_degree',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+  ];
+
+  let tonicizationCount = 0;
+  for (let i = 0; i < 20; i++) {
+    const type = types[i];
+    const sequenceIndex = Math.floor(i / 4);
+    const instruments: Array<'piano' | 'guitar' | 'violin' | 'flute'> = ['piano', 'guitar', 'violin', 'flute'];
+    let instrument: 'piano' | 'guitar' | 'violin' | 'flute' | 'composite' = instruments[i % instruments.length];
+    if ((type === 'progression' || type === 'quality' || type === 'scale_degree' || type === 'tonicization') && i % 4 === 3) {
+      instrument = 'composite';
+    }
+    const promptInstrumentName = instrument === 'composite' ? 'multiple instruments' : instrument;
+
+    if (type === 'degree') {
+      const tonic = EAR_ROOTS[sequenceIndex % EAR_ROOTS.length];
+      const scaleType: ScaleType = sequenceIndex % 4 === 3 ? 'natural minor' : 'major';
+      const degree = EAR_DEGREES[sequenceIndex % EAR_DEGREES.length];
+      const degreeName = getScaleDegreeNames(scaleType)[degree - 1];
+      const targetNote = getScaleNotes(tonic, scaleType)[degree - 1];
+      const answer = `${degree} (${degreeName})`;
+      const wrongDegreeA = (degree % 7) + 1;
+      const wrongDegreeB = ((degree + 2) % 7) + 1;
+
+      questions.push({
+        type: 'degree',
+        prompt: `Reference: ${getScaleDisplayName(tonic, scaleType)} tonic, then one mystery pitch (played on ${promptInstrumentName})`,
+        tonic,
+        scaleType,
+        degree,
+        targetNote,
+        answer,
+        instrument,
+        options: rotateOptions([
+          answer,
+          `${wrongDegreeA} (${getScaleDegreeNames(scaleType)[wrongDegreeA - 1]})`,
+          `${wrongDegreeB} (${getScaleDegreeNames(scaleType)[wrongDegreeB - 1]})`,
+          'Not in the scale',
+        ], sequenceIndex),
+      });
+    } else if (type === 'scale_degree') {
+      const tonic = EAR_ROOTS[sequenceIndex % EAR_ROOTS.length];
+      const minorTypes: ScaleType[] = ['natural minor', 'harmonic minor', 'melodic minor'];
+      const scaleType: ScaleType = sequenceIndex % 2 === 1 ? minorTypes[sequenceIndex % minorTypes.length] : 'major';
+      const degree = EAR_DEGREES[sequenceIndex % EAR_DEGREES.length];
+      const degreeNames = ['2nd', '3rd', '4th', '5th', '6th', '7th'];
+      const answer = degreeNames[degree - 2] || '3rd';
+
+      questions.push({
+        type: 'scale_degree',
+        prompt: `Reference scale: ${tonic} ${scaleType} ascending and descending, then a mystery note. Identify the scale degree (played on ${promptInstrumentName})`,
+        tonic,
+        scaleType,
+        degree,
+        answer,
+        instrument,
+        options: rotateOptions([answer, '2nd', '3rd', '4th', '5th', '6th', '7th'].slice(0, 4), sequenceIndex),
+      });
+    } else if (type === 'progression') {
+      const pattern = EAR_PROGRESSIONS[sequenceIndex % EAR_PROGRESSIONS.length];
+      const tonic = EAR_ROOTS[(sequenceIndex + 1) % EAR_ROOTS.length];
+      const scaleType = pattern.scaleType || 'major';
+      const progression = pattern.degrees.map((d) => getDiatonicTriadLabel(tonic, scaleType, d));
+      const alternateA = EAR_PROGRESSIONS[(sequenceIndex + 1) % EAR_PROGRESSIONS.length].numerals;
+      const alternateB = EAR_PROGRESSIONS[(sequenceIndex + 2) % EAR_PROGRESSIONS.length].numerals;
+
+      questions.push({
+        type: 'progression',
+        prompt: `Tonic reference chord (${getScaleDisplayName(tonic, scaleType)}) will be played first, then the sequence. Identify the progression (played on ${promptInstrumentName}):`,
+        tonic,
+        scaleType,
+        progression,
+        answer: pattern.numerals,
+        instrument,
+        options: rotateOptions([
+          pattern.numerals,
+          alternateA,
+          alternateB,
+          scaleType === 'major' ? 'I - IV - ii - V' : 'i - v - VI - VII',
+        ], sequenceIndex),
+      });
+    } else if (type === 'quality') {
+      const root = EAR_ROOTS[(sequenceIndex + 2) % EAR_ROOTS.length];
+      const qualityKey = EAR_QUALITY_KEYS[sequenceIndex % EAR_QUALITY_KEYS.length];
+      const quality = CHORD_QUALITIES[qualityKey];
+      const chord = getChordLabel(root, quality);
+
+      questions.push({
+        type: 'quality',
+        prompt: `Listen to the chord quality (played on ${promptInstrumentName})`,
+        chord,
+        qualityKey,
+        answer: quality.qualityText,
+        instrument,
+        options: rotateOptions([
+          quality.qualityText,
+          'major',
+          'minor',
+          'dominant seventh',
+          'major seventh',
+          'diminished',
+        ], sequenceIndex),
+      });
+    } else if (type === 'tonicization') {
+      const tonic = EAR_ROOTS[sequenceIndex % EAR_ROOTS.length];
+      const targetDegrees = [2, 5, 6, 4];
+      const targetDegree = targetDegrees[sequenceIndex % targetDegrees.length];
+      const isHard = tonicizationCount > 0;
+      const { chords, answer, options } = getTonicizationProgression(tonic, targetDegree, isHard, sequenceIndex);
+      tonicizationCount++;
+
+      questions.push({
+        type: 'tonicization',
+        prompt: `Tonic reference chord (${getScaleDisplayName(tonic, 'major')}) will be played first, then the sequence. Identify the tonicization progression (played on ${promptInstrumentName}):`,
+        tonic,
+        scaleType: 'major',
+        progression: chords,
+        answer,
+        instrument,
+        options,
+      });
+    }
+  }
+  return questions;
 }
 
 export function generateEarQuestions(): EarTrainingQuestion[] {
@@ -1108,13 +1585,23 @@ export function generateEarQuestions(): EarTrainingQuestion[] {
   }
 
   const questions: EarTrainingQuestion[] = [];
-  const types: Array<'degree' | 'progression' | 'quality'> = ['degree', 'progression', 'quality'];
+  const types: EarQuestionType[] = [
+    'degree',
+    'scale_degree',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+    'progression', 'quality', 'tonicization',
+  ];
+
   const baseInstruments: Array<'piano' | 'guitar' | 'violin' | 'flute'> = ['piano', 'guitar', 'violin', 'flute'];
 
   for (let i = 0; i < 20; i++) {
-    const type = types[i % types.length];
+    const type = types[i];
     let instrument: 'piano' | 'guitar' | 'violin' | 'flute' | 'composite' = baseInstruments[Math.floor(Math.random() * baseInstruments.length)];
-    if ((type === 'progression' || type === 'quality') && Math.random() < 0.25) {
+    if ((type === 'progression' || type === 'quality' || type === 'scale_degree' || type === 'tonicization') && Math.random() < 0.25) {
       instrument = 'composite';
     }
 
@@ -1146,6 +1633,24 @@ export function generateEarQuestions(): EarTrainingQuestion[] {
           'Not in the scale',
         ])),
       });
+    } else if (type === 'scale_degree') {
+      const tonic = EAR_ROOTS[Math.floor(Math.random() * EAR_ROOTS.length)];
+      const minorTypes: ScaleType[] = ['natural minor', 'harmonic minor', 'melodic minor'];
+      const scaleType: ScaleType = Math.random() < 0.5 ? minorTypes[Math.floor(Math.random() * minorTypes.length)] : 'major';
+      const degree = EAR_DEGREES[Math.floor(Math.random() * EAR_DEGREES.length)];
+      const degreeNames = ['2nd', '3rd', '4th', '5th', '6th', '7th'];
+      const answer = degreeNames[degree - 2] || '3rd';
+
+      questions.push({
+        type: 'scale_degree',
+        prompt: `Reference scale: ${tonic} ${scaleType} ascending and descending, then a mystery note. Identify the scale degree (played on ${promptInstrumentName})`,
+        tonic,
+        scaleType,
+        degree,
+        answer,
+        instrument,
+        options: shuffleArray(uniqueValues([answer, '2nd', '3rd', '4th', '5th', '6th', '7th'].slice(0, 4))),
+      });
     } else if (type === 'progression') {
       const pattern = EAR_PROGRESSIONS[Math.floor(Math.random() * EAR_PROGRESSIONS.length)];
       const tonic = EAR_ROOTS[Math.floor(Math.random() * EAR_ROOTS.length)];
@@ -1171,7 +1676,7 @@ export function generateEarQuestions(): EarTrainingQuestion[] {
           scaleType === 'major' ? 'I - IV - ii - V' : 'i - v - VI - VII',
         ])),
       });
-    } else {
+    } else if (type === 'quality') {
       const root = EAR_ROOTS[Math.floor(Math.random() * EAR_ROOTS.length)];
       const qualityKey = EAR_QUALITY_KEYS[Math.floor(Math.random() * EAR_QUALITY_KEYS.length)];
       const quality = CHORD_QUALITIES[qualityKey];
@@ -1192,18 +1697,47 @@ export function generateEarQuestions(): EarTrainingQuestion[] {
           'diminished',
         ]),
       });
+    } else if (type === 'tonicization') {
+      questions.push({
+        type: 'tonicization',
+        prompt: '',
+        answer: '',
+        options: [],
+      });
     }
   }
 
-  return shuffleArray(questions);
-}
+  const shuffledQuestions = shuffleArray(questions);
 
-function generateStableEarQuestions(): EarTrainingQuestion[] {
-  const questions: EarTrainingQuestion[] = [];
-  for (let i = 0; i < 20; i++) {
-    questions.push(createEarQuestion(i));
+  let tonicizationCount = 0;
+  for (let i = 0; i < shuffledQuestions.length; i++) {
+    const q = shuffledQuestions[i];
+    if (q.type === 'tonicization') {
+      const tonic = EAR_ROOTS[Math.floor(Math.random() * EAR_ROOTS.length)];
+      const targetDegrees = [2, 5, 6, 4];
+      const targetDegree = targetDegrees[Math.floor(Math.random() * targetDegrees.length)];
+      const isHard = tonicizationCount > 0;
+      const seed = Math.floor(Math.random() * 100);
+      const { chords, answer, options } = getTonicizationProgression(tonic, targetDegree, isHard, seed);
+      tonicizationCount++;
+
+      let instrument: 'piano' | 'guitar' | 'violin' | 'flute' | 'composite' = baseInstruments[Math.floor(Math.random() * baseInstruments.length)];
+      if (Math.random() < 0.25) {
+        instrument = 'composite';
+      }
+      const promptInstrumentName = instrument === 'composite' ? 'multiple instruments' : instrument;
+
+      q.tonic = tonic;
+      q.scaleType = 'major';
+      q.progression = chords;
+      q.answer = answer;
+      q.instrument = instrument;
+      q.options = options;
+      q.prompt = `Tonic reference chord (${getScaleDisplayName(tonic, 'major')}) will be played first, then the sequence. Identify the tonicization progression (played on ${promptInstrumentName}):`;
+    }
   }
-  return questions;
+
+  return shuffledQuestions;
 }
 
 export function generateGuitarQuestions(): GuitarChordQuestion[] {
@@ -1276,7 +1810,11 @@ function generateStableGuitarQuestions(): GuitarChordQuestion[] {
 }
 
 function getNoteMidi(note: string, octave = 4): number {
-  const normalized = note.replace(/♯/g, '#').replace(/♭/g, 'b');
+  const normalized = note
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/𝄪/g, '##')
+    .replace(/𝄫/g, 'bb');
   return (octave + 1) * 12 + (NOTE_INDEX[normalized] ?? 0);
 }
 
@@ -1571,7 +2109,54 @@ async function playEarQuestion(question: EarTrainingQuestion) {
     return;
   }
 
-  if (question.type === 'progression' && question.progression) {
+  if (question.type === 'scale_degree' && question.tonic && question.scaleType && question.degree) {
+    const scaleType = question.scaleType;
+    const tonic = question.tonic;
+    const degree = question.degree; // 1-indexed (e.g. 2 to 7)
+
+    let ascSteps: number[] = [];
+    let descSteps: number[] = [];
+
+    if (scaleType === 'major') {
+      ascSteps = [0, 2, 4, 5, 7, 9, 11, 12];
+      descSteps = [12, 11, 9, 7, 5, 4, 2, 0];
+    } else if (scaleType === 'natural minor') {
+      ascSteps = [0, 2, 3, 5, 7, 8, 10, 12];
+      descSteps = [12, 10, 8, 7, 5, 3, 2, 0];
+    } else if (scaleType === 'harmonic minor') {
+      ascSteps = [0, 2, 3, 5, 7, 8, 11, 12];
+      descSteps = [12, 11, 8, 7, 5, 3, 2, 0];
+    } else if (scaleType === 'melodic minor') {
+      ascSteps = [0, 2, 3, 5, 7, 9, 11, 12];
+      descSteps = [12, 10, 8, 7, 5, 3, 2, 0]; // Descending melodic minor is natural minor
+    }
+
+    const tonicMidi = getNoteMidi(tonic, 4);
+
+    let time = start;
+    const noteDuration = 0.35;
+    const noteGap = 0.4;
+
+    ascSteps.forEach((step) => {
+      void playInstrumentTone(context, tonicMidi + step, time, noteDuration, instrument === 'composite' ? 'piano' : instrument, 0.06);
+      time += noteGap;
+    });
+
+    time += 0.2;
+
+    descSteps.forEach((step) => {
+      void playInstrumentTone(context, tonicMidi + step, time, noteDuration, instrument === 'composite' ? 'piano' : instrument, 0.06);
+      time += noteGap;
+    });
+
+    time += 0.8;
+
+    const targetMidi = tonicMidi + ascSteps[degree - 1];
+    void playInstrumentTone(context, targetMidi, time, 1.2, instrument === 'composite' ? 'piano' : instrument, 0.08);
+    return;
+  }
+
+  if ((question.type === 'progression' || question.type === 'tonicization') && question.progression) {
     const refQuality = question.scaleType === 'natural minor' ? CHORD_QUALITIES.minor : CHORD_QUALITIES.major;
     void playInstrumentChord(context, question.tonic || 'C', refQuality.intervals, start, 1.0, instrument, 0);
 
@@ -1590,10 +2175,10 @@ async function playEarQuestion(question: EarTrainingQuestion) {
   }
 }
 
-function ScorePill({ score }: { score: QuizScore }) {
+function ScorePill({ score, totalPoints }: { score: QuizScore; totalPoints: number }) {
   return (
     <span className="rounded-full bg-default-100 px-3 py-1.5 text-sm font-semibold text-default-600 dark:bg-white/10 dark:text-slate-200 font-outfit">
-      {score.correct}/{score.attempted}
+      {score.correct}/{totalPoints}
     </span>
   );
 }
@@ -1637,7 +2222,9 @@ function getAutomaticMove(board: Mark[]): number | null {
 }
 
 function getQuizAnswer(question: QuizQuestion): string {
-  return question.type === 'tone' ? question.missing : question.answer;
+  if (question.type === 'tone') return question.missing;
+  if (question.type === 'mnemonic') return question.partA.answer;
+  return question.answer;
 }
 
 function getQuizReviewPrompt(question: QuizQuestion): string {
@@ -1657,11 +2244,19 @@ function getQuizReviewPrompt(question: QuizQuestion): string {
     return `In ${question.key} major: ${question.progression.map(getFormattedChordText).join(' - ')}`;
   }
 
+  if (question.type === 'mode_formula' || question.type === 'relative_key') {
+    return question.prompt;
+  }
+
+  if (question.type === 'mnemonic') {
+    return `Key Sig Mnemonic for ${question.key}`;
+  }
+
   return question.qualityText;
 }
 
 function getEarReviewPrompt(question: EarTrainingQuestion): string {
-  if (question.type === 'progression' && question.progression) {
+  if ((question.type === 'progression' || question.type === 'tonicization') && question.progression) {
     return `${question.prompt} ${question.progression.map(getFormattedChordText).join(' - ')}`;
   }
 
@@ -1686,6 +2281,7 @@ function buildQuestionReviewEntry(
   finalAnswer: string,
   wasCorrect: boolean,
   playbackQuestion?: EarTrainingQuestion,
+  explanation?: string,
 ): GameQuestionReviewEntry {
   return {
     questionNumber,
@@ -1694,19 +2290,22 @@ function buildQuestionReviewEntry(
     selectedAnswers: [...wrongAnswers, finalAnswer],
     wasCorrect,
     playbackQuestion,
+    explanation,
   };
 }
 
 function CompletionScreen({
   score,
+  totalPoints,
   onReplay,
   title,
 }: {
   score: QuizScore;
+  totalPoints: number;
   onReplay: () => void;
   title: string;
 }) {
-  const percentage = Math.round((score.correct / 20) * 100);
+  const percentage = Math.round((score.correct / totalPoints) * 100);
   return (
     <div className="flex flex-col items-center justify-center py-7 text-center space-y-6">
       <div className="space-y-2">
@@ -1717,7 +2316,7 @@ function CompletionScreen({
       <div className="relative flex items-center justify-center">
         <div className="flex flex-col items-center justify-center rounded-full bg-default-100 dark:bg-white/[0.08] w-32 h-32 border-4 border-primary">
           <span className="text-4xl font-bold text-foreground">{score.correct}</span>
-          <span className="text-sm text-default-500 dark:text-slate-300">out of 20</span>
+          <span className="text-sm text-default-500 dark:text-slate-300">out of {totalPoints}</span>
         </div>
       </div>
 
@@ -1909,8 +2508,8 @@ function HistoryPanelContent({
                   removeWrapper
                   classNames={{
                     table: 'min-w-full',
-                    th: 'bg-transparent px-0 pb-2 pt-0 text-xs font-bold uppercase tracking-wider text-default-400 dark:text-slate-400',
-                    td: 'border-t border-default-200 px-0 py-3.5 align-top text-sm dark:border-white/10',
+                    th: 'bg-transparent px-2 pb-2 pt-0 text-xs font-bold uppercase tracking-wider text-default-400 dark:text-slate-400',
+                    td: 'border-t border-default-200 px-2 py-3.5 align-top text-sm dark:border-white/10',
                   }}
                 >
                   <TableHeader>
@@ -1930,9 +2529,14 @@ function HistoryPanelContent({
                           </span>
                         </TableCell>
                         <TableCell>
-                          <span className="block max-w-[260px] whitespace-normal text-sm font-semibold leading-relaxed text-foreground">
+                          <span className="block max-w-[260px] whitespace-normal text-sm font-semibold leading-relaxed text-foreground whitespace-pre-line">
                             {question.prompt}
                           </span>
+                          {question.explanation && !question.wasCorrect && (
+                            <div className="mt-3 pt-2 border-t border-blue-200/30 dark:border-blue-500/20 max-w-[260px] whitespace-normal text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-pre-line">
+                              Explanation: {question.explanation}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="block whitespace-normal font-semibold leading-snug text-foreground">
@@ -2027,6 +2631,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
   const [quizResult, setQuizResult] = useState<QuizResult>(null);
   const [earResult, setEarResult] = useState<QuizResult>(null);
   const [guitarResult, setGuitarResult] = useState<QuizResult>(null);
+
   
   const [quizScore, setQuizScore] = useState<QuizScore>({ correct: 0, attempted: 0 });
   const [earScore, setEarScore] = useState<QuizScore>({ correct: 0, attempted: 0 });
@@ -2038,6 +2643,20 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
   const [currentQuestionHasMistake, setCurrentQuestionHasMistake] = useState(false);
   const [wrongSelections, setWrongSelections] = useState<string[]>([]);
   const [xoRecorded, setXoRecorded] = useState(false);
+
+  // States for 2-part mnemonic questions
+  const [activePart, setActivePart] = useState<'A' | 'B'>('A');
+  const [partAMistake, setPartAMistake] = useState(false);
+  const [partBMistake, setPartBMistake] = useState(false);
+  const [partAWrongSelections, setPartAWrongSelections] = useState<string[]>([]);
+  const [partBWrongSelections, setPartBWrongSelections] = useState<string[]>([]);
+
+  const quizTotalPoints = useMemo(() => {
+    return quizQuestions.reduce((sum, q) => sum + (q.type === 'mnemonic' ? 2 : 1), 0);
+  }, [quizQuestions]);
+
+  const earTotalPoints = 20;
+  const guitarTotalPoints = 20;
 
   // Scoring History Session state
   const [history, setHistory] = useState<GameHistoryEntry[]>([]);
@@ -2198,11 +2817,127 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
 
   const answerQuizQuestion = (option: string) => {
     if (quizResult === 'correct') return;
+
+    if (quizQuestion.type === 'mnemonic') {
+      if (activePart === 'A') {
+        const isCorrect = option === quizQuestion.partA.answer;
+        if (isCorrect) {
+          setQuizResult('correct');
+          window.setTimeout(() => {
+            setActivePart('B');
+            setQuizResult(null);
+          }, 450);
+        } else {
+          setPartAMistake(true);
+          setPartAWrongSelections((prev) => [...prev, option]);
+          setQuizResult('incorrect');
+        }
+      } else {
+        // Part B
+        const isCorrect = option === quizQuestion.partB.answer;
+        if (isCorrect) {
+          const partAGotItRight = !partAMistake && partAWrongSelections.length === 0;
+          const partBGotItRight = !partBMistake && partBWrongSelections.length === 0;
+          const pointsEarned = (partAGotItRight ? 1 : 0) + (partBGotItRight ? 1 : 0);
+          
+          const nextCorrect = quizScore.correct + pointsEarned;
+          const nextAttempted = quizScore.attempted + 1;
+          const finalWasCorrect = partAGotItRight && partBGotItRight;
+
+          const promptText = `Key Sig Mnemonic:\nPart A: ${quizQuestion.partA.prompt}\nPart B: ${quizQuestion.partB.prompt}`;
+          const answerText = `Part A: ${quizQuestion.partA.answer}\nPart B: ${quizQuestion.partB.answer}`;
+          const selectedText = [
+            ...partAWrongSelections.map(x => `Part A: ${x}`),
+            `Part A Final: ${quizQuestion.partA.answer}`,
+            ...partBWrongSelections.map(x => `Part B: ${x}`),
+            `Part B Final: ${quizQuestion.partB.answer}`
+          ];
+          const combinedExplanation = `Part A: ${quizQuestion.partA.explanation}\n\nPart B: ${quizQuestion.partB.explanation}`;
+
+          const nextReview = [
+            ...quizReview,
+            buildQuestionReviewEntry(
+              nextAttempted,
+              promptText,
+              answerText,
+              selectedText,
+              option,
+              finalWasCorrect,
+              undefined,
+              combinedExplanation
+            ),
+          ];
+
+          setQuizScore({
+            correct: nextCorrect,
+            attempted: nextAttempted,
+          });
+          setQuizReview(nextReview);
+          setQuizResult('correct');
+
+          if (nextAttempted === 20) {
+            addHistoryEntry({
+              gameMode: 'quiz',
+              score: { correct: nextCorrect, attempted: quizTotalPoints },
+              questions: nextReview,
+            });
+          }
+
+          window.setTimeout(() => {
+            setQuizQuestionIndex((current) => current + 1);
+            setQuizResult(null);
+            setActivePart('A');
+            setPartAMistake(false);
+            setPartBMistake(false);
+            setPartAWrongSelections([]);
+            setPartBWrongSelections([]);
+          }, 450);
+        } else {
+          setPartBMistake(true);
+          setPartBWrongSelections((prev) => [...prev, option]);
+          setQuizResult('incorrect');
+        }
+      }
+      return;
+    }
+
+    // Standard single-part questions
     const isCorrect = option === getQuizAnswer(quizQuestion);
     if (isCorrect) {
       const gotItRight = !currentQuestionHasMistake && wrongSelections.length === 0;
       const nextCorrect = quizScore.correct + (gotItRight ? 1 : 0);
       const nextAttempted = quizScore.attempted + 1;
+      
+      let explanation = undefined;
+      if (quizQuestion.type === 'mode_formula') {
+        explanation = `The interval formula for this mode is ${quizQuestion.answer}. W stands for Whole step (2 semitones), H stands for Half step (1 semitone).`;
+      } else if (quizQuestion.type === 'relative_key') {
+        explanation = `Relative major and minor keys share the exact same key signature. E.g., C major and A minor both have 0 sharps/flats.`;
+      } else if (quizQuestion.type === 'secondary') {
+        if (quizQuestion.answer === 'No tonicization is present') {
+          explanation = `No tonicization is present. The progression uses the diatonic subdominant chord ${quizQuestion.progression[1]} instead of a secondary dominant.`;
+        } else {
+          const targetRoman = quizQuestion.targetRoman || '';
+          explanation = `The secondary dominant chord ${quizQuestion.progression[1]}${targetRoman ? ` (V7/${targetRoman})` : ''} resolves to ${quizQuestion.progression[2]}${targetRoman ? ` (${targetRoman})` : ''}, tonicizing it in the key of ${quizQuestion.key} major.`;
+        }
+      } else if (quizQuestion.type === 'scale') {
+        explanation = `The note ${quizQuestion.answer} is indeed the requested scale note.`;
+      } else if (quizQuestion.type === 'tone') {
+        explanation = `The missing tone in the chord ${quizQuestion.chord} is ${quizQuestion.missing}. Chords are built by stacking thirds.`;
+      } else if (quizQuestion.type === 'label') {
+        explanation = `The notes ${quizQuestion.notes.join(' - ')} make up the ${quizQuestion.answer} chord.`;
+      } else if (quizQuestion.type === 'degree') {
+        const chord = quizQuestion.chord || '';
+        const key = quizQuestion.key || '';
+        const roman = quizQuestion.roman || '';
+        const romanStatement = roman && key ? `${chord} is ${roman} in ${key} major` : '';
+        if (quizQuestion.answer === 'All are wrong') {
+          explanation = romanStatement ? `${romanStatement}. None of the given options are correct.` : `The chord is ${quizQuestion.qualityText}.`;
+        } else {
+          explanation = romanStatement || `The chord is ${quizQuestion.qualityText}.`;
+        }
+      }
+
       const nextReview = [
         ...quizReview,
         buildQuestionReviewEntry(
@@ -2212,6 +2947,8 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
           wrongSelections,
           option,
           gotItRight,
+          undefined,
+          explanation
         ),
       ];
 
@@ -2225,7 +2962,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
       if (nextAttempted === 20) {
         addHistoryEntry({
           gameMode: 'quiz',
-          score: { correct: nextCorrect, attempted: 20 },
+          score: { correct: nextCorrect, attempted: quizTotalPoints },
           questions: nextReview,
         });
       }
@@ -2250,6 +2987,14 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
       const gotItRight = !currentQuestionHasMistake && wrongSelections.length === 0;
       const nextCorrect = earScore.correct + (gotItRight ? 1 : 0);
       const nextAttempted = earScore.attempted + 1;
+      
+      let explanation = undefined;
+      if (earQuestion.type === 'scale_degree') {
+        explanation = `The mystery note was indeed the ${earQuestion.answer} scale degree of ${earQuestion.tonic} ${earQuestion.scaleType}.`;
+      } else if (earQuestion.type === 'tonicization') {
+        explanation = `The progression indeed featured the tonicization: ${earQuestion.answer}.`;
+      }
+
       const nextReview = [
         ...earReview,
         buildQuestionReviewEntry(
@@ -2260,6 +3005,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
           option,
           gotItRight,
           earQuestion,
+          explanation
         ),
       ];
 
@@ -2273,7 +3019,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
       if (nextAttempted === 20) {
         addHistoryEntry({
           gameMode: 'ear',
-          score: { correct: nextCorrect, attempted: 20 },
+          score: { correct: nextCorrect, attempted: earTotalPoints },
           questions: nextReview,
         });
       }
@@ -2320,7 +3066,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
       if (nextAttempted === 20) {
         addHistoryEntry({
           gameMode: 'guitar',
-          score: { correct: nextCorrect, attempted: 20 },
+          score: { correct: nextCorrect, attempted: guitarTotalPoints },
           questions: nextReview,
         });
       }
@@ -2346,6 +3092,11 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
     setQuizResult(null);
     setCurrentQuestionHasMistake(false);
     setWrongSelections([]);
+    setActivePart('A');
+    setPartAMistake(false);
+    setPartBMistake(false);
+    setPartAWrongSelections([]);
+    setPartBWrongSelections([]);
   };
 
   const handleEarReplay = () => {
@@ -2464,7 +3215,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
 
         {gameMode === 'quiz' && (
           quizScore.attempted >= 20 ? (
-            <CompletionScreen score={quizScore} onReplay={handleQuizReplay} title="Theory Quiz" />
+            <CompletionScreen score={quizScore} totalPoints={quizTotalPoints} onReplay={handleQuizReplay} title="Theory Quiz" />
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -2477,9 +3228,15 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                         ? 'Find the scale note'
                         : quizQuestion.type === 'secondary'
                           ? 'Find the tonicization'
-                          : 'Find the scale degree'}
+                          : quizQuestion.type === 'mnemonic'
+                            ? 'Key Signature Mnemonic'
+                            : quizQuestion.type === 'mode_formula'
+                              ? 'Mode Interval Formula'
+                              : quizQuestion.type === 'relative_key'
+                                ? 'Relative Key'
+                                : 'Find the scale degree'}
                 </p>
-                <ScorePill score={quizScore} />
+                <ScorePill score={quizScore} totalPoints={quizTotalPoints} />
               </div>
               <div className={`${isStandalone ? 'px-5 py-4' : 'px-4 py-3'} rounded-md bg-default-100 text-center dark:bg-white/10 border border-default-200/40 dark:border-white/5`}>
                 {quizQuestion.type === 'label' && (
@@ -2497,7 +3254,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                 )}
                 {quizQuestion.type === 'tone' && (
                   <>
-                    <p className={`${helperTextClass} font-semibold text-default-500 font-outfit uppercase tracking-wide dark:text-slate-300`}>
+                    <p className={`${helperTextClass} font-semibold text-default-500 font-outfit tracking-wide dark:text-slate-300`}>
                       <ChordSymbol value={quizQuestion.chord} />
                     </p>
                     <p className={`${isStandalone ? 'text-2xl' : 'text-lg'} mt-2 flex items-center justify-center gap-2 font-bold text-foreground`}>
@@ -2527,7 +3284,9 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                 )}
                 {quizQuestion.type === 'secondary' && (
                   <>
-                    <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>In {quizQuestion.key} major</p>
+                    <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>
+                      In <ChordSymbol value={quizQuestion.key} /> major
+                    </p>
                     <p className={`${isStandalone ? 'text-lg' : 'text-base'} mt-2 flex flex-wrap items-center justify-center gap-2 font-bold text-foreground`}>
                       {quizQuestion.progression.map((chord, index) => (
                         <span key={`${chord}-${index}`} className="inline-flex items-center gap-2">
@@ -2538,19 +3297,68 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                     </p>
                   </>
                 )}
+                {quizQuestion.type === 'mode_formula' && (
+                  <>
+                    <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>Interval Formula</p>
+                    <p className={`${isStandalone ? 'text-lg' : 'text-base'} mt-2 font-bold text-foreground`}>{quizQuestion.prompt}</p>
+                  </>
+                )}
+                {quizQuestion.type === 'relative_key' && (
+                  <>
+                    <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>Relative Key</p>
+                    <p className={`${isStandalone ? 'text-lg' : 'text-base'} mt-2 font-bold text-foreground`}>{quizQuestion.prompt}</p>
+                  </>
+                )}
+                {quizQuestion.type === 'mnemonic' && (
+                  <div className="text-left space-y-3">
+                    <ScrollShadow className="max-h-[145px] text-sm sm:text-base leading-relaxed text-default-600 dark:text-slate-300 whitespace-pre-line font-medium pr-1">
+                      {quizQuestion.context}
+                    </ScrollShadow>
+                    <div className="border-t border-default-200/60 dark:border-white/10 pt-2 text-center">
+                      <p className="text-[11px] font-bold text-primary uppercase tracking-wide">
+                        {activePart === 'A' ? 'Part A (1 Point)' : 'Part B (1 Point)'}
+                      </p>
+                      <p className={`${isStandalone ? 'text-base' : 'text-sm'} mt-1 font-bold text-foreground`}>
+                        {activePart === 'A' ? quizQuestion.partA.prompt : quizQuestion.partB.prompt}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {quizQuestion.options.map((option) => (
+                {(quizQuestion.type === 'mnemonic'
+                  ? (activePart === 'A' ? quizQuestion.partA.options : quizQuestion.partB.options)
+                  : quizQuestion.options
+                ).map((option) => (
                   <Button
                     key={option}
                     variant="flat"
                     radius="sm"
-                    isDisabled={quizResult === 'correct' || wrongSelections.includes(option)}
-                    aria-label={quizQuestion.type === 'degree' || quizQuestion.type === 'secondary' ? option : getFormattedChordText(option)}
+                    isDisabled={
+                      quizResult === 'correct' || 
+                      (quizQuestion.type === 'mnemonic'
+                        ? (activePart === 'A' ? partAWrongSelections : partBWrongSelections).includes(option)
+                        : wrongSelections.includes(option))
+                    }
+                    aria-label={
+                      quizQuestion.type === 'degree' || 
+                      quizQuestion.type === 'secondary' || 
+                      quizQuestion.type === 'mnemonic' || 
+                      quizQuestion.type === 'mode_formula' || 
+                      quizQuestion.type === 'relative_key'
+                        ? option 
+                        : getFormattedChordText(option)
+                    }
                     onPress={() => answerQuizQuestion(option)}
                     className={answerButtonClass}
                   >
-                    {quizQuestion.type === 'degree' || quizQuestion.type === 'secondary' ? option : <ChordSymbol value={option} />}
+                    {quizQuestion.type === 'degree' || 
+                    quizQuestion.type === 'secondary' || 
+                    quizQuestion.type === 'mnemonic' || 
+                    quizQuestion.type === 'mode_formula' || 
+                    quizQuestion.type === 'relative_key'
+                      ? option 
+                      : <ChordSymbol value={option} />}
                   </Button>
                 ))}
               </div>
@@ -2567,7 +3375,13 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                           ? 'Choose the scale degree note'
                           : quizQuestion.type === 'secondary'
                             ? 'Choose the applied-dominant label'
-                            : 'Choose the correct roman numeral statement'}
+                            : quizQuestion.type === 'mnemonic'
+                              ? `Answer Part ${activePart}`
+                              : quizQuestion.type === 'mode_formula'
+                                ? 'Choose the correct interval formula'
+                                : quizQuestion.type === 'relative_key'
+                                  ? 'Choose the relative key'
+                                  : 'Choose the correct roman numeral statement'}
               </p>
             </div>
           )
@@ -2575,7 +3389,7 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
 
         {gameMode === 'ear' && (
           earScore.attempted >= 20 ? (
-            <CompletionScreen score={earScore} onReplay={handleEarReplay} title="Ear Training" />
+            <CompletionScreen score={earScore} totalPoints={earTotalPoints} onReplay={handleEarReplay} title="Ear Training" />
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -2584,9 +3398,13 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                     ? 'Hear the scale degree'
                     : earQuestion.type === 'progression'
                       ? 'Hear the progression'
-                      : 'Hear the chord quality'}
+                      : earQuestion.type === 'scale_degree'
+                        ? 'Hear the scale degree (Full Scale)'
+                        : earQuestion.type === 'tonicization'
+                          ? 'Find the tonicization'
+                          : 'Hear the chord quality'}
                 </p>
-                <ScorePill score={earScore} />
+                <ScorePill score={earScore} totalPoints={earTotalPoints} />
               </div>
               <div className={`${isStandalone ? 'px-5 py-4' : 'px-4 py-3'} rounded-md bg-default-100 text-center dark:bg-white/10 border border-default-200/40 dark:border-white/5`}>
                 <p className={`${isStandalone ? 'text-base' : 'text-sm'} font-semibold text-foreground leading-relaxed`}>{earQuestion.prompt}</p>
@@ -2631,14 +3449,14 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
 
         {gameMode === 'guitar' && (
           guitarScore.attempted >= 20 ? (
-            <CompletionScreen score={guitarScore} onReplay={handleGuitarReplay} title="Guitar Game" />
+            <CompletionScreen score={guitarScore} totalPoints={guitarTotalPoints} onReplay={handleGuitarReplay} title="Guitar Game" />
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <p className={`${sectionTitleClass} font-semibold text-foreground font-outfit`}>
                   {guitarQuestion.type === 'notes' ? 'Identify notes in the chord' : 'Read the diagram'}
                 </p>
-                <ScorePill score={guitarScore} />
+                <ScorePill score={guitarScore} totalPoints={guitarTotalPoints} />
               </div>
               <div className={`${isStandalone ? 'px-5 py-4' : 'px-4 py-3'} flex justify-center rounded-md bg-default-100 dark:bg-white/10 border border-default-200/40 dark:border-white/5`}>
                 <GuitarChordDiagram

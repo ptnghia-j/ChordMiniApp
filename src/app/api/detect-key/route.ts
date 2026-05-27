@@ -10,7 +10,7 @@ export const maxDuration = 240; // 4 minutes for key detection processing
 
 // Define the model name to use
 const MODEL_NAME = GEMINI_MODEL_NAME;
-const KEY_DETECTION_PROMPT_VERSION = 'v4-modulation-markers';
+const KEY_DETECTION_PROMPT_VERSION = 'v5-enharmonic-modulation-consistency';
 
 // Define types for chord data
 interface ChordData {
@@ -407,19 +407,25 @@ ENHARMONIC CORRECTION INSTRUCTIONS:` : ''}
 
 4. **KEY SIGNATURE OPTIMIZATION**: Prefer the enharmonic spelling with fewer accidentals while keeping the section internally consistent.
    - Prefer Db major over C# major.
-   - Prefer B major over Cb major.
+   - Prefer B major over Cb major (except when the local key is Gb major or Eb minor, where the IV chord MUST be spelled as Cb, not B, to maintain diatonic correctness).
 
-	5. **LOCAL KEY / CHORD SPELLING CONSISTENCY**: Keep local key names and corrected chord spellings in the same enharmonic system.
+	5. **ENHARMONIC CONSISTENCY ACROSS MODULATIONS**: When there is modulation, choose local keys and chord spellings that maintain flat/sharp spelling consistency across the entire song.
+	   - If the first section is in a sharp-preferred key (e.g., E major), and a later section modulates to a key with enharmonic alternatives (e.g., F#/Gb), prefer the sharp spelling (F# major) over the flat spelling (Gb major) to preserve consistency.
+	   - **Extreme Key Exception**: Never choose a key spelling with more than 7 accidentals (like D# major with 9 sharps, or G# major with 8 sharps). Always prefer the simpler enharmonic version (e.g., Eb major with 3 flats over D# major, Ab major with 4 flats over G# major).
+	   - **Retroactive Consistency**: If a later section must use flats due to the Extreme Key Exception (e.g., Eb major instead of D# major), retroactively prefer flats for the preceding sections (e.g., prefer Gb major/Eb minor over F# major/D# minor) to keep flat/sharp consistency across the entire song.
+
+	6. **LOCAL KEY / CHORD SPELLING CONSISTENCY**: Keep local key names and corrected chord spellings in the same enharmonic system.
 	   - If a section is flat-based (for example Ab, Db, Eb, Gb), corrected chords in that section should also be flat-based when an equivalent respelling exists.
 	   - If a section is sharp-based (for example G#, C#, D#), corrected chords in that section should also be sharp-based when an equivalent respelling exists.
 	   - Do not mix sharp and flat spellings within the same local section when the same-pitch respelling can be made consistent.
 
-	6. **CONSERVATIVE APPROACH**: When uncertain, preserve the original spelling unless it conflicts with the chosen local key spelling or creates mixed enharmonic notation within the same section.
+	7. **CONSERVATIVE APPROACH**: When uncertain, preserve the original spelling unless it conflicts with the chosen local key spelling or creates mixed enharmonic notation within the same section.
 
 VALID CORRECTION EXAMPLES:
 - "C#m" → "Dbm"
 - "F#7" → "Gb7"
 - "F#:maj/3" → "Gb:maj/3"
+- "B" → "Cb" (when the local key is Gb major or Eb minor)
 
 INVALID CORRECTION EXAMPLES:
 - "G#dim" → "A#dim"

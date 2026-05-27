@@ -4,11 +4,11 @@ import type { ComponentProps } from 'react';
 import dynamic from 'next/dynamic';
 import AnalysisHeader from '@/components/analysis/AnalysisHeader';
 import ResultsTabs from '@/components/homepage/ResultsTabs';
-import BeatTimeline from '@/components/analysis/BeatTimeline';
 import {
   ChordGridSkeleton,
   LyricsSkeleton,
 } from '@/components/common/SkeletonLoaders';
+import type { RomanNumeralData, SequenceCorrectionsData } from '@/services/firebase/firestoreService';
 import type { AnalyzeResultsPaneProps } from '../_types/analyzePageViewModel';
 import AnalyzeEmptyState from './AnalyzeEmptyState';
 
@@ -121,16 +121,12 @@ export default function AnalyzeResultsPane(props: AnalyzeResultsPaneProps) {
               audioDuration={props.duration}
               videoTitle={props.videoTitle}
               usageCount={props.activeTranscriptionUsageCount}
-            >
-              <BeatTimeline
-                beats={props.analysisResults?.beats || []}
-                downbeats={props.analysisResults?.downbeats || []}
-                currentBeatIndex={props.currentBeatIndex}
-                currentDownbeatIndex={props.currentDownbeatIndex}
-                duration={props.duration}
-                embedded
-              />
-            </AnalysisSummary>
+              sequenceCorrections={sequenceCorrections as unknown as SequenceCorrectionsData | undefined}
+              romanNumerals={
+                (analysisResults as unknown as { romanNumerals?: RomanNumeralData | null }).romanNumerals ??
+                (sequenceCorrections as unknown as { romanNumerals?: RomanNumeralData | null } | null)?.romanNumerals
+              }
+            />
           </div>
         )}
 

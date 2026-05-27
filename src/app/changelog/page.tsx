@@ -29,6 +29,23 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5.4',
+      date: 'May 27, 2026',
+      title: 'UI/UX improvements',
+      description: 'Enhanced the summary section, quiz game questions, audio extraction',
+      features: [
+        'Retired bar chart beat animation in the summary section and replaced with a chord summary section',
+        'Added more questions to the quiz game during audio extraction and analysis for user engagement',
+      ],
+      technical: [
+        'Experimenting summary algorithm for chord summarization',
+        'Distributed audio extraction among 2 workers to reduce extraction failure rate'
+      ],
+      breaking: [
+        'Chord summary section replaces the previous bar chart animation in the summary section'
+      ]
+    },
+    {
       version: 'v0.6.5.3',
       date: 'May 24, 2026',
       title: 'UI improvements',

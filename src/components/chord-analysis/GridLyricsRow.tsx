@@ -56,32 +56,85 @@ function ActiveLyricText({ line, mode }: { line: LyricLine; mode: 'word' | 'line
     characterTimings: mode === 'word' ? enhancedLine.characterTimings : undefined,
   });
 
-  let progressPercent = 0;
-  if (line.text.length > 0) {
-    const charProgress = mode === 'word' && enhancedLine.characterTimings?.[colorChangePosition]
+  const charProgress = useMemo(() => {
+    if (line.text.length === 0) return 0;
+    return mode === 'word' && enhancedLine.characterTimings?.[colorChangePosition]
       ? Math.max(0, Math.min(1, (
         (currentTime - enhancedLine.characterTimings[colorChangePosition].startTime)
         / Math.max(0.001, enhancedLine.characterTimings[colorChangePosition].endTime - enhancedLine.characterTimings[colorChangePosition].startTime)
       )))
       : ((lineProgress * line.text.length) % 1);
+  }, [line, mode, enhancedLine, currentTime, colorChangePosition, lineProgress]);
 
-    progressPercent = ((colorChangePosition + charProgress) / line.text.length) * 100;
-  }
+  // Tokenize line.text into words and whitespace
+  const tokens = useMemo(() => {
+    return line.text.match(/\s+|\S+/g) || [];
+  }, [line.text]);
 
-  const gradientStyle: React.CSSProperties = {
-    backgroundImage: `linear-gradient(to right, var(--swept-color) 0%, var(--swept-color) ${progressPercent}%, currentColor ${progressPercent}%, currentColor 100%)`,
-    backgroundSize: '100% 100%',
-    WebkitBackgroundClip: 'text',
-    backgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-  };
+  // Pre-calculate start and end char positions for each token
+  const tokenRanges = useMemo(() => {
+    const ranges: Array<{ text: string; start: number; end: number; isWhitespace: boolean }> = [];
+    let charOffset = 0;
+    tokens.forEach((tokenText) => {
+      ranges.push({
+        text: tokenText,
+        start: charOffset,
+        end: charOffset + tokenText.length - 1,
+        isWhitespace: /^\s+$/.test(tokenText),
+      });
+      charOffset += tokenText.length;
+    });
+    return ranges;
+  }, [tokens]);
 
   return (
-    <span
-      style={gradientStyle}
-      className="font-semibold inline-block"
-    >
-      {line.text}
+    <span className="font-semibold inline">
+      {tokenRanges.map((token, idx) => {
+        if (token.isWhitespace) {
+          return <span key={idx}>{token.text}</span>;
+        }
+
+        const tokenStart = token.start;
+        const tokenEnd = token.end;
+
+        if (tokenEnd < colorChangePosition) {
+          // Completely played
+          return (
+            <span key={idx} style={{ color: 'var(--swept-color)' }}>
+              {token.text}
+            </span>
+          );
+        }
+
+        if (tokenStart > colorChangePosition) {
+          // Completely unplayed
+          return (
+            <span key={idx}>
+              {token.text}
+            </span>
+          );
+        }
+
+        // Active token: contains colorChangePosition
+        const tokenLength = tokenEnd - tokenStart + 1;
+        const progressInToken = (colorChangePosition + charProgress) - tokenStart;
+        const tokenProgressPercent = Math.max(0, Math.min(1, progressInToken / tokenLength)) * 100;
+
+        const gradientStyle: React.CSSProperties = {
+          backgroundImage: `linear-gradient(to right, var(--swept-color) 0%, var(--swept-color) ${tokenProgressPercent}%, currentColor ${tokenProgressPercent}%, currentColor 100%)`,
+          backgroundSize: '100% 100%',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          display: 'inline-block',
+        };
+
+        return (
+          <span key={idx} style={gradientStyle}>
+            {token.text}
+          </span>
+        );
+      })}
     </span>
   );
 }

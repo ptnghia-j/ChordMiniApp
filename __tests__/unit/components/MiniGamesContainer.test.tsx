@@ -37,9 +37,16 @@ describe('MiniGamesContainer', () => {
         const guitarQuestions = generateGuitarQuestions();
 
         quizQuestions.forEach((question) => {
-          const answer = question.type === 'tone' ? question.missing : question.answer;
-          expect(question.options).toContain(answer);
-          expect(question.options.length).toBeLessThanOrEqual(4);
+          if (question.type === 'mnemonic') {
+            expect(question.partA.options).toContain(question.partA.answer);
+            expect(question.partA.options.length).toBeLessThanOrEqual(4);
+            expect(question.partB.options).toContain(question.partB.answer);
+            expect(question.partB.options.length).toBeLessThanOrEqual(4);
+          } else {
+            const answer = question.type === 'tone' ? question.missing : question.answer;
+            expect(question.options).toContain(answer);
+            expect(question.options.length).toBeLessThanOrEqual(4);
+          }
         });
 
         earQuestions.forEach((question) => {
@@ -181,5 +188,44 @@ describe('MiniGamesContainer', () => {
     const saved = sessionStorage.getItem('chordmini_games_history');
     expect(saved).not.toBeNull();
     expect(saved).toContain('"xoResult":"win"');
+  });
+
+  it('correctly calculates the 6th degree (submediant) of B natural minor as G and not F double sharp, using proper unicode accidentals', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'development',
+      configurable: true,
+    });
+
+    // We spy on Math.random to force it to return:
+    // 1. tonic index: B is at index 8 of SCALE_ROOTS (length 10). So we return 0.85.
+    // 2. scaleType: < 0.3 is 'natural minor'. So we return 0.15.
+    // 3. degree: index of 6 in SCALE_DEGREES is 1 (length 10). So we return 0.15.
+    // 4. seed in getNeighborNoteOptions: e.g. 0.5
+    let callCount = 0;
+    const mockRandom = jest.spyOn(Math, 'random').mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return 0.85; // SCALE_ROOTS[8] === 'B'
+      if (callCount === 2) return 0.15; // natural minor (< 0.3)
+      if (callCount === 3) return 0.15; // SCALE_DEGREES[1] === 6
+      return 0.5;
+    });
+
+    try {
+      const questions = generateQuizQuestions();
+      const scaleQuestion = questions.find((q) => q.type === 'scale' && q.tonic === 'B' && q.scaleType === 'natural minor');
+      expect(scaleQuestion).toBeDefined();
+      expect(scaleQuestion?.answer).toBe('G');
+      expect(scaleQuestion?.options).toContain('G');
+      expect(scaleQuestion?.options).not.toContain('F𝄪');
+      expect(scaleQuestion?.options).not.toContain('F##');
+      expect(scaleQuestion?.options).not.toContain('F♯♯');
+    } finally {
+      mockRandom.mockRestore();
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: originalNodeEnv,
+        configurable: true,
+      });
+    }
   });
 });

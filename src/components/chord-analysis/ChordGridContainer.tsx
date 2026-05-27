@@ -228,7 +228,7 @@ export const ChordGridContainer: React.FC<ChordGridContainerProps> = React.memo(
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(230px,28%)]">
       <div className="min-w-0">{grid}</div>
-      <aside className="min-w-0 rounded-xl border border-stone-300 bg-stone-50/95 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] dark:border-gray-600 dark:bg-gray-800/50">
+      <aside className="min-w-0 lg:sticky lg:top-4 self-start rounded-xl border border-stone-300 bg-stone-50/95 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.18)] dark:border-gray-600 dark:bg-gray-800/50">
         <div className="border-b border-stone-200/80 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:text-slate-100">
           Plain Lyrics
         </div>

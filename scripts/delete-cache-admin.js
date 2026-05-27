@@ -19,7 +19,13 @@ const readline = require('readline');
 dotenv.config({ path: '.env.local' });
 
 const FIRESTORE_SCOPE = 'https://www.googleapis.com/auth/datastore';
-const KEY_DETECTION_PROMPT_VERSION = 'v3-enharmonic-key-consistency';
+const KEY_DETECTION_PROMPT_VERSION = 'v5-enharmonic-modulation-consistency';
+const KEY_DETECTION_PROMPT_VERSIONS = [
+  KEY_DETECTION_PROMPT_VERSION,
+  'v4-modulation-markers',
+  'v3-enharmonic-key-consistency',
+];
+const FIRESTORE_COMMIT_BATCH_SIZE = 450;
 const KEY_ENRICHMENT_FIELDS = [
   'keySignature',
   'primaryKey',
@@ -31,12 +37,28 @@ const KEY_ENRICHMENT_FIELDS = [
   'correctedChords',
   'originalChords',
   'romanNumerals',
+  'searchableKeys',
 ];
 
 let projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'chordmini-d29f9';
 let authClientPromise;
 
 const CACHE_COLLECTIONS = {
+  audioCache: {
+    name: 'audioCache',
+    description: 'Legacy audio metadata cache',
+    searchField: 'videoId',
+  },
+  transcriptionCache: {
+    name: 'transcriptionCache',
+    description: 'Legacy raw transcription cache',
+    searchField: 'videoId',
+  },
+  translationCache: {
+    name: 'translationCache',
+    description: 'Legacy translation cache',
+    searchField: 'videoId',
+  },
   translations: {
     name: 'translations',
     description: 'Lyrics translation cache (Gemini API translations)',
@@ -52,10 +74,24 @@ const CACHE_COLLECTIONS = {
     description: 'Beat and chord analysis cache (ML model results)',
     searchField: 'videoId',
   },
+  melody: {
+    name: 'melody',
+    description: 'Sheet Sage melody transcription cache',
+    searchField: 'videoId',
+  },
+  segmentationJobs: {
+    name: 'segmentationJobs',
+    description: 'SongFormer segmentation job cache',
+    searchField: 'videoId',
+  },
 };
 
 function getFirestoreBaseUrl() {
   return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+}
+
+function getFirestoreDocumentResourceName(collectionName, documentId) {
+  return `projects/${projectId}/databases/(default)/documents/${collectionName}/${documentId}`;
 }
 
 async function getAuthClient() {
@@ -156,34 +192,6 @@ function getDocumentData(document) {
   );
 }
 
-function serializeFirestoreValue(value) {
-  if (value === null || value === undefined) {
-    return { nullValue: null };
-  }
-  if (Array.isArray(value)) {
-    return { arrayValue: { values: value.map(serializeFirestoreValue) } };
-  }
-  if (typeof value === 'string') {
-    return { stringValue: value };
-  }
-  if (typeof value === 'boolean') {
-    return { booleanValue: value };
-  }
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
-  }
-  if (typeof value === 'object') {
-    return {
-      mapValue: {
-        fields: Object.fromEntries(
-          Object.entries(value).map(([key, nestedValue]) => [key, serializeFirestoreValue(nestedValue)])
-        ),
-      },
-    };
-  }
-  throw new Error(`Unsupported Firestore serialization type: ${typeof value}`);
-}
-
 async function getDocument(collectionName, documentId) {
   try {
     return await firestoreRequest(`${getFirestoreBaseUrl()}/${collectionName}/${documentId}`);
@@ -218,26 +226,32 @@ async function commitDeleteBatch(documentNames) {
     return;
   }
 
-  await firestoreRequest(`${getFirestoreBaseUrl()}:commit`, {
-    method: 'POST',
-    body: JSON.stringify({
-      writes: documentNames.map((name) => ({ delete: name })),
-    }),
-  });
+  for (let index = 0; index < documentNames.length; index += FIRESTORE_COMMIT_BATCH_SIZE) {
+    const batch = documentNames.slice(index, index + FIRESTORE_COMMIT_BATCH_SIZE);
+    await firestoreRequest(`${getFirestoreBaseUrl()}:commit`, {
+      method: 'POST',
+      body: JSON.stringify({
+        writes: batch.map((name) => ({ delete: name })),
+      }),
+    });
+  }
 }
 
-async function patchDocument(collectionName, documentId, fields) {
-  const params = new URLSearchParams();
-  Object.keys(fields).forEach((fieldPath) => params.append('updateMask.fieldPaths', fieldPath));
+async function deleteDocumentFields(collectionName, documentId, fieldPaths) {
+  if (!fieldPaths.length) {
+    return;
+  }
 
-  const documentName = getDocumentName(collectionName, documentId);
-  await firestoreRequest(`${documentName}?${params.toString()}`, {
+  const params = new URLSearchParams();
+  fieldPaths.forEach((fieldPath) => params.append('updateMask.fieldPaths', fieldPath));
+
+  const documentUrl = getDocumentName(collectionName, documentId);
+  const documentResourceName = getFirestoreDocumentResourceName(collectionName, documentId);
+  await firestoreRequest(`${documentUrl}?${params.toString()}`, {
     method: 'PATCH',
     body: JSON.stringify({
-      name: documentName,
-      fields: Object.fromEntries(
-        Object.entries(fields).map(([key, value]) => [key, serializeFirestoreValue(value)])
-      ),
+      name: documentResourceName,
+      fields: {},
     }),
   });
 }
@@ -246,12 +260,17 @@ function buildTranscriptionDocId(videoId, beatModel, chordModel) {
   return `${videoId}_${beatModel}_${chordModel}`;
 }
 
-function generateKeyDetectionCacheKey(chords, includeEnharmonicCorrection = false, includeRomanNumerals = false) {
+function generateKeyDetectionCacheKey(
+  chords,
+  includeEnharmonicCorrection = false,
+  includeRomanNumerals = false,
+  promptVersion = KEY_DETECTION_PROMPT_VERSION
+) {
   const chordString = chords
     .map((chord) => `${chord.time?.toFixed(3) || 0}:${chord.chord || chord}`)
     .join('|');
 
-  const keyString = `prompt:${KEY_DETECTION_PROMPT_VERSION}_enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
+  const keyString = `prompt:${promptVersion}_enharmonic:${includeEnharmonicCorrection}_roman:${includeRomanNumerals}_${chordString}`;
   return crypto.createHash('sha256').update(keyString).digest('hex').substring(0, 32);
 }
 
@@ -293,21 +312,25 @@ function buildCandidateKeyDetectionCacheKeys(transcription) {
     }
 
     optionCombos.forEach((combo) => {
-      const cacheKey = generateKeyDetectionCacheKey(
-        chordData,
-        combo.includeEnharmonicCorrection,
-        combo.includeRomanNumerals
-      );
+      KEY_DETECTION_PROMPT_VERSIONS.forEach((promptVersion) => {
+        const cacheKey = generateKeyDetectionCacheKey(
+          chordData,
+          combo.includeEnharmonicCorrection,
+          combo.includeRomanNumerals,
+          promptVersion
+        );
 
-      if (seen.has(cacheKey)) {
-        return;
-      }
+        if (seen.has(cacheKey)) {
+          return;
+        }
 
-      seen.add(cacheKey);
-      candidates.push({
-        cacheKey,
-        timeMode,
-        ...combo,
+        seen.add(cacheKey);
+        candidates.push({
+          cacheKey,
+          promptVersion,
+          timeMode,
+          ...combo,
+        });
       });
     });
   });
@@ -316,7 +339,7 @@ function buildCandidateKeyDetectionCacheKeys(transcription) {
 }
 
 function buildKeyDetectionDocumentNames(candidates) {
-  return candidates.map((candidate) => getDocumentName('keyDetections', candidate.cacheKey));
+  return candidates.map((candidate) => getFirestoreDocumentResourceName('keyDetections', candidate.cacheKey));
 }
 
 function parseCliArgs(rawArgs) {
@@ -373,11 +396,14 @@ OPTIONS:
   --beats                     Delete beat detection cache only
   --chords                    Delete chord recognition cache only
   --analysis                  Delete both beat and chord cache
+  --melody                    Delete Sheet Sage melody cache only
+  --audio                     Delete legacy audio metadata cache only
+  --segmentation-jobs         Delete SongFormer segmentation job cache only
   --key-detections            Delete matching keyDetections docs for one transcription and clear key-enrichment fields on that transcription
   --beat-model <name>         Required with --key-detections (e.g., madmom)
   --chord-model <name>        Required with --key-detections (e.g., chord-cnn-lstm)
   --dry-run                   Preview matching documents without writing changes
-  --all                       Delete all legacy video-linked caches for the video
+  --all                       Delete all known video-linked Firestore caches for the video
   --force                     Skip confirmation prompt
   --help                      Show this help message
 
@@ -409,7 +435,18 @@ function validateArguments(cli) {
   }
 
   const cacheFlags = flags.filter((flag) =>
-    ['--translations', '--lyrics', '--beats', '--chords', '--analysis', '--all', '--key-detections'].includes(flag)
+    [
+      '--translations',
+      '--lyrics',
+      '--beats',
+      '--chords',
+      '--analysis',
+      '--melody',
+      '--audio',
+      '--segmentation-jobs',
+      '--all',
+      '--key-detections',
+    ].includes(flag)
   );
 
   if (cacheFlags.length === 0) {
@@ -432,17 +469,28 @@ function getLegacyTargetCollections(flags) {
     return Object.keys(CACHE_COLLECTIONS);
   }
 
+  if (flags.includes('--audio')) {
+    targets.push('audioCache');
+  }
   if (flags.includes('--translations')) {
     targets.push('translations');
+    targets.push('translationCache');
   }
   if (flags.includes('--lyrics')) {
     targets.push('lyrics');
+    targets.push('transcriptionCache');
   }
   if (flags.includes('--beats') || flags.includes('--chords') || flags.includes('--analysis')) {
     targets.push('transcriptions');
   }
+  if (flags.includes('--melody')) {
+    targets.push('melody');
+  }
+  if (flags.includes('--segmentation-jobs')) {
+    targets.push('segmentationJobs');
+  }
 
-  return targets;
+  return Array.from(new Set(targets));
 }
 
 async function deleteCacheFromCollection(collectionName, videoId, { dryRun = false } = {}) {
@@ -516,7 +564,7 @@ async function invalidateKeyDetectionsForTranscription(videoId, beatModel, chord
     if (existingDocument) {
       matchingCandidates.push(candidate);
       console.log(
-        `  ${dryRun ? '🔎 Found' : '📝 Matched'} keyDetections/${candidate.cacheKey} (${candidate.reason}, ${candidate.timeMode} timing)`
+        `  ${dryRun ? '🔎 Found' : '📝 Matched'} keyDetections/${candidate.cacheKey} (${candidate.reason}, ${candidate.timeMode} timing, ${candidate.promptVersion})`
       );
     }
   }
@@ -530,12 +578,11 @@ async function invalidateKeyDetectionsForTranscription(videoId, beatModel, chord
     console.log(`  ✅ Deleted ${matchingCandidates.length} keyDetections document(s)`);
   }
 
-  const keyFieldReset = Object.fromEntries(KEY_ENRICHMENT_FIELDS.map((field) => [field, null]));
   if (dryRun) {
-    console.log(`  🔎 Would reset transcription enrichment fields: ${KEY_ENRICHMENT_FIELDS.join(', ')}`);
+    console.log(`  🔎 Would delete transcription enrichment fields: ${KEY_ENRICHMENT_FIELDS.join(', ')}`);
   } else {
-    await patchDocument('transcriptions', transcriptionDocId, keyFieldReset);
-    console.log('  ✅ Cleared transcription key enrichment to force recomputation on next analyze load');
+    await deleteDocumentFields('transcriptions', transcriptionDocId, KEY_ENRICHMENT_FIELDS);
+    console.log('  ✅ Deleted transcription key enrichment fields to force recomputation on next analyze load');
     console.log('  ℹ️  The base transcriptions cache document still exists. Use --analysis as well if you need a full beat/chord recompute.');
   }
 
@@ -602,7 +649,7 @@ async function main(cli = parseCliArgs(process.argv.slice(2))) {
           cli.options['--chord-model']
         )}`
       );
-      confirmationLines.push(`Reset transcription enrichment fields: ${KEY_ENRICHMENT_FIELDS.join(', ')}`);
+      confirmationLines.push(`Delete transcription enrichment fields: ${KEY_ENRICHMENT_FIELDS.join(', ')}`);
     }
 
     if (cli.flags.includes('--dry-run')) {
@@ -616,18 +663,13 @@ async function main(cli = parseCliArgs(process.argv.slice(2))) {
     }
 
     console.log(`\n🚀 Starting admin cache invalidation for video: ${cli.videoId}`);
+    if (cli.flags.includes('--key-detections') && legacyTargets.length === 0) {
+      console.log('ℹ️  --key-detections only removes key analysis cache for one model-specific transcription. Add --analysis or --all to delete broader song caches.');
+    }
 
     let totalDeleted = 0;
     let totalUpdated = 0;
     let totalErrors = 0;
-
-    for (const collectionName of legacyTargets) {
-      const result = await deleteCacheFromCollection(collectionName, cli.videoId, {
-        dryRun: cli.flags.includes('--dry-run'),
-      });
-      totalDeleted += result.deleted;
-      totalErrors += result.errors;
-    }
 
     if (cli.flags.includes('--key-detections')) {
       const result = await invalidateKeyDetectionsForTranscription(
@@ -638,6 +680,14 @@ async function main(cli = parseCliArgs(process.argv.slice(2))) {
       );
       totalDeleted += result.deleted;
       totalUpdated += result.updated;
+      totalErrors += result.errors;
+    }
+
+    for (const collectionName of legacyTargets) {
+      const result = await deleteCacheFromCollection(collectionName, cli.videoId, {
+        dryRun: cli.flags.includes('--dry-run'),
+      });
+      totalDeleted += result.deleted;
       totalErrors += result.errors;
     }
 
@@ -659,16 +709,6 @@ async function main(cli = parseCliArgs(process.argv.slice(2))) {
     process.exit(1);
   }
 }
-
-module.exports = {
-  KEY_ENRICHMENT_FIELDS,
-  buildCandidateKeyDetectionCacheKeys,
-  buildChordDataFromTranscription,
-  buildKeyDetectionDocumentNames,
-  buildTranscriptionDocId,
-  generateKeyDetectionCacheKey,
-  parseCliArgs,
-};
 
 if (require.main === module) {
   main().catch((error) => {

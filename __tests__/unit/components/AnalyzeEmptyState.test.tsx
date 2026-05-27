@@ -35,7 +35,7 @@ describe('AnalyzeEmptyState', () => {
 
     expect(screen.getByText('Find the scale note')).toBeInTheDocument();
     expect(screen.getByText('Degree 3 (mediant) in C major')).toBeInTheDocument();
-    expect(screen.getByText('0/0')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'X/O' }));
     expect(screen.getByText('Your turn')).toBeInTheDocument();
@@ -59,12 +59,12 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByText('Degree 3 (mediant) in C major')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'F' }));
-    expect(screen.getByText('0/0')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'F' })).toBeDisabled();
     expect(screen.getByText('Try another answer')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'E' }));
-    expect(screen.getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();
 
     act(() => {
@@ -74,27 +74,43 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByText('Notes').parentElement).toHaveTextContent('C·E·G');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cm' }));
-    expect(screen.getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cm' })).toBeDisabled();
     expect(screen.getByText('Try another answer')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'C' }));
-    expect(screen.getByText('0/2')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();
 
     act(() => {
       jest.advanceTimersByTime(500);
     });
-    expect(screen.getByText('Find the missing tone')).toBeInTheDocument();
-    expect(screen.getByText('Find the missing tone').parentElement?.nextElementSibling).toHaveTextContent('Dm');
-    expect(screen.getByText('Find the missing tone').parentElement?.nextElementSibling).toHaveTextContent('D·?·A');
-    fireEvent.click(screen.getByRole('button', { name: 'E' }));
-    expect(screen.getByText('0/2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'E' })).toBeDisabled();
+    expect(screen.getByText('Part A (1 Point)')).toBeInTheDocument();
+    expect(screen.getByText('How many sharps does G major have?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '0 sharps' }));
+    expect(screen.getByText('0/21')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '0 sharps' })).toBeDisabled();
     expect(screen.getByText('Try another answer')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'F' }));
-    expect(screen.getByText('0/3')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1 sharp' }));
+    expect(screen.getByText('0/21')).toBeInTheDocument();
+    expect(screen.getByText('Correct')).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(screen.getByText('Part B (1 Point)')).toBeInTheDocument();
+    expect(screen.getByText('What is the fifth up / fourth down from C?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'D' }));
+    expect(screen.getByText('0/21')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'D' })).toBeDisabled();
+    expect(screen.getByText('Try another answer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'G' }));
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();
 
     act(() => {
@@ -103,10 +119,10 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByText('Find the scale degree')).toBeInTheDocument();
     expect(screen.getByText('D in A major')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'vi chord of A major' }));
-    expect(screen.getByText('0/3')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'vi chord of A major' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'IV chord of A major' }));
-    expect(screen.getByText('0/4')).toBeInTheDocument();
+    expect(screen.getByText('0/21')).toBeInTheDocument();
   });
 
   it('uses beat-grid chord formatting for inversions and major seventh quiz labels', () => {
@@ -122,7 +138,8 @@ describe('AnalyzeEmptyState', () => {
     const correctAnswers = [
       'E',
       'C',
-      'F',
+      '1 sharp',
+      'G',
       'IV chord of A major',
       'E',
       'G7',
@@ -169,16 +186,17 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByText(/Reference: C major tonic, then one mystery pitch/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: '4 (subdominant)' }));
-    expect(screen.getByText('0/0')).toBeInTheDocument();
+    expect(screen.getByText('0/20')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '4 (subdominant)' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '3 (mediant)' }));
-    expect(screen.getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByText('0/20')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Quiz' }));
     const answersToTonicization = [
       'E',
       'C',
-      'F',
+      '1 sharp',
+      'G',
       'IV chord of A major',
       'E',
       'G7',
@@ -202,8 +220,9 @@ describe('AnalyzeEmptyState', () => {
     }
 
     expect(screen.getByText('Find the tonicization')).toBeInTheDocument();
-    expect(screen.getByText('In A major')).toBeInTheDocument();
-    expect(screen.getByText('In A major').parentElement).toHaveTextContent('A-G♯7-C♯m-E7-A');
+    const tonicizationText = screen.getByText((content, element) => element?.textContent === 'In A major');
+    expect(tonicizationText).toBeInTheDocument();
+    expect(tonicizationText.parentElement).toHaveTextContent(/A.*G♯7.*C♯m.*E7.*A/);
     expect(screen.getByRole('button', { name: 'V7/iii tonicizing iii' })).toBeInTheDocument();
   });
 
@@ -220,12 +239,12 @@ describe('AnalyzeEmptyState', () => {
     expect(screen.getByTestId('mock-guitar-chord-diagram')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'G' }));
-    expect(screen.getByText('0/0')).toBeInTheDocument();
+    expect(screen.getByText('0/20')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'G' })).toBeDisabled();
     expect(screen.getByText('Try another chord')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'C' }));
-    expect(screen.getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByText('0/20')).toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();
   });
 

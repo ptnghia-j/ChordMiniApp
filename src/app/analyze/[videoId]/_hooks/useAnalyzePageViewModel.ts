@@ -51,7 +51,7 @@ import { useLyricsState } from '@/hooks/lyrics/useLyricsState';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useIsLoopEnabled, useLoopEndBeat, useLoopStartBeat, useIsPitchShiftEnabled, useIsPitchShiftReady } from '@/stores/uiStore';
-import { usePlaybackStore } from '@/stores/playbackStore';
+import { usePlaybackStore, useIsVideoMinimized } from '@/stores/playbackStore';
 import { getPitchShiftService } from '@/services/audio/pitchShiftServiceInstance';
 import { setYouTubePlayerMuted } from '@/utils/youtubePlayerAudio';
 import { useSheetSageBackendAvailability } from '@/hooks/sheetsage/useSheetSageBackendAvailability';
@@ -541,7 +541,12 @@ export function useAnalyzePageViewModel({
       : memoizedSequenceCorrections;
   }, [simplifyChords, memoizedSequenceCorrections]);
 
-  const [isVideoMinimized, setIsVideoMinimized] = useState(false);
+  const isVideoMinimized = useIsVideoMinimized();
+  const setIsVideoMinimized = useCallback((updater: boolean | ((prev: boolean) => boolean)) => {
+    const store = usePlaybackStore.getState();
+    const nextVal = typeof updater === 'function' ? updater(store.isVideoMinimized) : updater;
+    store.setIsVideoMinimized(nextVal);
+  }, []);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
   const {
     handleTryAnotherVideo,
@@ -632,7 +637,7 @@ export function useAnalyzePageViewModel({
       || activeTab === 'guitarChords'
       || activeTab === 'pianoVisualizer';
     setIsVideoMinimized(shouldMinimize);
-  }, [isChatbotOpen, activeTab]);
+  }, [isChatbotOpen, activeTab, setIsVideoMinimized]);
 
   const hasSheetSageNotes = (sheetSageResult?.noteEvents?.length ?? 0) > 0;
   const hasSheetSageAudioSource = Boolean(audioProcessingState.audioUrl);

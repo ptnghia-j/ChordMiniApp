@@ -79,10 +79,11 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
 
   const videoWidthPx = useMemo(() => {
     if (!isMdUp) return Math.max(containerWidth, 0);
-    const minW = isVideoMinimized ? 200 : 280;
-    const maxW = isVideoMinimized ? 360 : 560;
+    const minW = isVideoMinimized ? 160 : 280;
+    const maxW = isVideoMinimized ? 240 : 560;
     if (!containerWidth) return minW;
-    return Math.round(Math.max(minW, Math.min(containerWidth * (isVideoMinimized ? 0.22 : 0.3), maxW)));
+    const multiplier = isVideoMinimized ? 0.15 : 0.3;
+    return Math.round(Math.max(minW, Math.min(containerWidth * multiplier, maxW)));
   }, [containerWidth, isMdUp, isVideoMinimized]);
 
   const utilityBarWidth = useMemo(() => {
@@ -147,8 +148,8 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
           className="pointer-events-auto relative z-[1] flex-shrink-0 transition-all duration-300 md:order-2"
           style={{
             width: isMdUp ? `${videoWidthPx}px` : '100%',
-            minWidth: isMdUp ? (isVideoMinimized ? '200px' : '260px') : '0',
-            maxWidth: isMdUp ? (isVideoMinimized ? '360px' : '560px') : '100%',
+            minWidth: isMdUp ? (isVideoMinimized ? '160px' : '260px') : '0',
+            maxWidth: isMdUp ? (isVideoMinimized ? '240px' : '560px') : '100%',
           }}
         >
           {videoPlayer}
