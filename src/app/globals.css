@@ -669,3 +669,46 @@
 [data-placement="bottom-right"] > *:not(.minigame-toast) {
   display: none !important;
 }
+
+/* ======================================================
+   macOS-style Floating Dock overrides
+   ====================================================== */
+
+/* Force all buttons inside dock items to occupy 100% width and height */
+.dock-item button {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+
+/* Ensure intermediate containers of buttons occupy 100% space */
+.dock-item > div > div,
+.dock-item > div > .relative {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Scale the SVG icons inside dock item buttons dynamically */
+.dock-item button svg,
+.dock-item [role="button"] svg {
+  width: 44% !important;
+  height: 44% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  transition: width 0.1s ease, height 0.1s ease !important;
+}
+
+/* Adjust absolute beta badges or indicator tags inside dock items */
+.dock-item .absolute {
+  transform: scale(1) !important;
+  transform-origin: center !important;
+  top: -6px !important;
+  right: -6px !important;
+  z-index: 10 !important;
+}
+

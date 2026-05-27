@@ -137,7 +137,7 @@ export const ResponsiveVideoUtilityLayout: React.FC<ResponsiveVideoUtilityLayout
             minWidth: '280px',
           }}
         >
-          <div className={isMdUp ? 'overflow-x-auto hide-scrollbar' : 'overflow-visible'}>
+          <div className="overflow-visible">
             <div className={isMdUp ? 'inline-flex w-max min-w-full' : 'w-full'}>{utilityBar}</div>
           </div>
         </div>

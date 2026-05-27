@@ -20,6 +20,7 @@ import { useShowRomanNumerals, useToggleRomanNumerals, useSimplifyChords, useTog
 import { metronomeService } from '@/services/chord-playback/metronomeService';
 import type { LyricsServiceResponse } from '@/services/lyrics/lyricsService';
 import type { LRCLibCandidate } from '@/services/lyrics/lrclibService';
+import { FloatingDock } from '@/components/ui/FloatingDock';
 
 interface UtilityBarProps {
   // States
@@ -251,7 +252,7 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
   segmentation,
   metronome,
   totalBeats = 0,
-  maxWidth = '1200px',
+  maxWidth: _maxWidth = '1200px',
   className = '',
   isUploadPage = false
 }) => {
@@ -265,207 +266,206 @@ const UtilityBar: React.FC<UtilityBarProps> = ({
 
   return (
     <div className={`w-full ${className}`}>
-      <div
-        className="mx-auto rounded-full border border-white/35 bg-default-200 px-3 py-1 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-md sm:px-4 sm:py-1.5 dark:border-white/20 dark:bg-gray-800/60"
-        style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          {/* Left group */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Auto-scroll */}
-            <Tooltip
-              content={isFollowModeEnabled ? 'Disable auto-scroll' : 'Enable auto-scroll'}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+        {/* Playback & Transcription Controls (Left Dock) */}
+        <FloatingDock>
+          {/* Auto-scroll */}
+          <Tooltip
+            content={isFollowModeEnabled ? 'Disable auto-scroll' : 'Enable auto-scroll'}
+            placement="top"
+            classNames={{
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
+          >
+            <button
+              onClick={toggleFollowMode}
+              className={`${utilityCircleButtonClass} ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+              aria-label="Toggle auto-scroll"
+            >
+              {isFollowModeEnabled ? <HiChevronDoubleDown className="h-4 w-4"/> : <HiOutlineChevronDoubleDown className="h-4 w-4"/>}
+            </button>
+          </Tooltip>
+
+          {/* Roman numerals */}
+          <RomanNumeralToggle
+            isEnabled={showRomanNumerals}
+            onClick={toggleRomanNumerals}
+          />
+
+          {/* Chord playback with mixer */}
+          <ChordPlaybackToggle
+            isEnabled={chordPlayback.isEnabled}
+            onClick={chordPlayback.togglePlayback}
+            pianoVolume={chordPlayback.pianoVolume}
+            guitarVolume={chordPlayback.guitarVolume}
+            violinVolume={chordPlayback.violinVolume}
+            fluteVolume={chordPlayback.fluteVolume}
+            onPianoVolumeChange={chordPlayback.setPianoVolume}
+            onGuitarVolumeChange={chordPlayback.setGuitarVolume}
+            onViolinVolumeChange={chordPlayback.setViolinVolume}
+            onFluteVolumeChange={chordPlayback.setFluteVolume}
+            youtubePlayer={youtubePlayer || null}
+          />
+
+          {melodicTranscriptionPlayback && (
+            <MelodicTranscriptionToggle
+              isEnabled={melodicTranscriptionPlayback.isEnabled}
+              hasTranscription={melodicTranscriptionPlayback.hasTranscription}
+              isLoading={melodicTranscriptionPlayback.isLoading}
+              disabled={melodicTranscriptionPlayback.disabled}
+              disabledReason={melodicTranscriptionPlayback.disabledReason}
+              errorMessage={melodicTranscriptionPlayback.errorMessage}
+              canAdjustVolume={melodicTranscriptionPlayback.canAdjustVolume}
+              onClick={melodicTranscriptionPlayback.togglePlayback}
+            />
+          )}
+
+          {/* Simplify */}
+          <ChordSimplificationToggle
+            isEnabled={simplifyChords}
+            onClick={toggleSimplifyChords}
+          />
+
+          {/* Pitch Shift */}
+          <PitchShiftPopover
+            playbackRate={playbackRate}
+            setPlaybackRate={setPlaybackRate}
+          />
+
+          {/* Loop Playback */}
+          <LoopPlaybackToggle
+            totalBeats={totalBeats}
+          />
+
+          {/* Metronome */}
+          {metronome && (
+            <UtilityBarMetronomeControl onToggleWithSync={metronome.toggleMetronomeWithSync} />
+          )}
+
+          {/* Countdown */}
+          <Tooltip
+            content={isCountdownEnabled ? 'Disable 1-measure countdown' : 'Enable 1-measure countdown'}
+            placement="top"
+            classNames={{
+              content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+            }}
+          >
+            <button
+              onClick={toggleCountdown}
+              className={`${utilityCircleButtonClass} ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+              aria-label="Toggle countdown"
+            >
+              {/* Simple timer glyph */}
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 2h4"/>
+                <path d="M12 14V8"/>
+                <circle cx="12" cy="14" r="7"/>
+              </svg>
+            </button>
+          </Tooltip>
+
+          {/* Countdown readout when active */}
+          {isCountingDown && (
+            <div className="flex h-full items-center justify-center px-2 rounded-full bg-orange-600 text-white text-xs font-bold shadow-md min-w-[2.5rem] tracking-wider select-none animate-pulse">
+              {countdownDisplay || ''}
+            </div>
+          )}
+        </FloatingDock>
+
+        {/* Side Panel & Structure Controls (Right Dock) */}
+        <FloatingDock>
+          {/* Segmentation */}
+          <SegmentationToggleButton
+            isEnabled={segmentation.isVisible}
+            onClick={segmentation.onToggle}
+            hasSegmentationData={segmentation.hasData}
+            isLoading={segmentation.isLoading}
+            disabled={segmentation.disabled}
+            disabledReason={segmentation.disabledReason}
+            errorMessage={segmentation.errorMessage}
+          />
+
+          {/* Lyrics Popover (Unwrapped Fragment) */}
+          {!isUploadPage && (
+            <Popover
               placement="top"
+              offset={10}
+              isOpen={lyricsSearchPopover?.isOpen ?? false}
+              onOpenChange={(open) => {
+                if (!open) {
+                  lyricsSearchPopover?.onClose();
+                }
+              }}
               classNames={{
-                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                content: 'p-0 border-none bg-transparent shadow-none'
               }}
             >
-              <button
-                onClick={toggleFollowMode}
-                className={`${utilityCircleButtonClass} ${isFollowModeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                aria-label="Toggle auto-scroll"
-              >
-                {isFollowModeEnabled ? <HiChevronDoubleDown className="h-4 w-4"/> : <HiOutlineChevronDoubleDown className="h-4 w-4"/>}
-              </button>
-            </Tooltip>
-
-            {/* Roman numerals */}
-            <RomanNumeralToggle
-              isEnabled={showRomanNumerals}
-              onClick={toggleRomanNumerals}
-            />
-
-            {/* Chord playback with mixer */}
-            <ChordPlaybackToggle
-              isEnabled={chordPlayback.isEnabled}
-              onClick={chordPlayback.togglePlayback}
-              pianoVolume={chordPlayback.pianoVolume}
-              guitarVolume={chordPlayback.guitarVolume}
-              violinVolume={chordPlayback.violinVolume}
-              fluteVolume={chordPlayback.fluteVolume}
-              onPianoVolumeChange={chordPlayback.setPianoVolume}
-              onGuitarVolumeChange={chordPlayback.setGuitarVolume}
-              onViolinVolumeChange={chordPlayback.setViolinVolume}
-              onFluteVolumeChange={chordPlayback.setFluteVolume}
-              youtubePlayer={youtubePlayer || null}
-            />
-
-            {melodicTranscriptionPlayback && (
-              <MelodicTranscriptionToggle
-                isEnabled={melodicTranscriptionPlayback.isEnabled}
-                hasTranscription={melodicTranscriptionPlayback.hasTranscription}
-                isLoading={melodicTranscriptionPlayback.isLoading}
-                disabled={melodicTranscriptionPlayback.disabled}
-                disabledReason={melodicTranscriptionPlayback.disabledReason}
-                errorMessage={melodicTranscriptionPlayback.errorMessage}
-                canAdjustVolume={melodicTranscriptionPlayback.canAdjustVolume}
-                onClick={melodicTranscriptionPlayback.togglePlayback}
-              />
-            )}
-
-            {/* Simplify */}
-            <ChordSimplificationToggle
-              isEnabled={simplifyChords}
-              onClick={toggleSimplifyChords}
-            />
-
-            {/* Pitch Shift */}
-            <PitchShiftPopover
-              playbackRate={playbackRate}
-              setPlaybackRate={setPlaybackRate}
-            />
-
-            {/* Loop Playback */}
-            <LoopPlaybackToggle
-              totalBeats={totalBeats}
-            />
-
-            {/* Metronome */}
-            {metronome && (
-              <UtilityBarMetronomeControl onToggleWithSync={metronome.toggleMetronomeWithSync} />
-            )}
-
-            {/* Countdown */}
-            <Tooltip
-              content={isCountdownEnabled ? 'Disable 1-measure countdown' : 'Enable 1-measure countdown'}
-              placement="top"
-              classNames={{
-                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-              }}
-            >
-              <button
-                onClick={toggleCountdown}
-                className={`${utilityCircleButtonClass} ${isCountdownEnabled ? 'bg-green-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                aria-label="Toggle countdown"
-              >
-                {/* Simple timer glyph */}
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 2h4"/>
-                  <path d="M12 14V8"/>
-                  <circle cx="12" cy="14" r="7"/>
-                </svg>
-              </button>
-            </Tooltip>
-
-            {/* Countdown readout when active */}
-            {isCountingDown && (
-              <div className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-200 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">
-                {countdownDisplay || ''}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <SegmentationToggleButton
-              isEnabled={segmentation.isVisible}
-              onClick={segmentation.onToggle}
-              hasSegmentationData={segmentation.hasData}
-              isLoading={segmentation.isLoading}
-              disabled={segmentation.disabled}
-              disabledReason={segmentation.disabledReason}
-              errorMessage={segmentation.errorMessage}
-            />
-
-            {!isUploadPage && (
-              <>
-                <Popover
-                  placement="top"
-                  offset={10}
-                  isOpen={lyricsSearchPopover?.isOpen ?? false}
-                  onOpenChange={(open) => {
-                    if (!open) {
-                      lyricsSearchPopover?.onClose();
-                    }
-                  }}
-                  classNames={{
-                    content: 'p-0 border-none bg-transparent shadow-none'
-                  }}
-                >
-                  <PopoverTrigger>
-                    <div className="relative inline-block">
-                      <Tooltip
-                        content={isLyricsPanelOpen ? 'Hide lyrics in grid' : 'Show lyrics in grid'}
-                        placement="top"
-                        classNames={{
-                          content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-                        }}
-                      >
-                        <button
-                          onClick={toggleLyricsPanel}
-                          className={`${utilityCircleButtonClass} ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                          aria-label="Toggle beat grid lyrics"
-                        >
-                          {isLyricsPanelOpen ? (
-                            <GiMicrophone className="h-4 w-4" />
-                          ) : (
-                            <GiMicrophone className="h-4 w-4 opacity-70" />
-                          )}
-                        </button>
-                      </Tooltip>
-                    </div>
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <UtilityPopoverPanel bodyClassName="p-0">
-                      {lyricsSearchPopover && (
-                        <LyricsSearchDialog
-                          isOpen={lyricsSearchPopover.isOpen}
-                          query={lyricsSearchPopover.query}
-                          isLoading={lyricsSearchPopover.isLoading}
-                          error={lyricsSearchPopover.error}
-                          result={lyricsSearchPopover.result}
-                          onQueryChange={lyricsSearchPopover.onQueryChange}
-                          onClose={lyricsSearchPopover.onClose}
-                          onSearch={lyricsSearchPopover.onSearch}
-                          onApplyCandidate={lyricsSearchPopover.onApplyCandidate}
-                        />
-                      )}
-                    </UtilityPopoverPanel>
-                  </PopoverContent>
-                </Popover>
-
-                <Tooltip
-                  content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
-                  placement="top"
-                  classNames={{
-                    content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
-                  }}
-                >
-                  <button
-                    onClick={toggleChatbot}
-                    className={`${utilityCircleButtonClass} ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
-                    aria-label="Toggle AI chat"
+              <PopoverTrigger>
+                <div className="relative inline-block">
+                  <Tooltip
+                    content={isLyricsPanelOpen ? 'Hide lyrics in grid' : 'Show lyrics in grid'}
+                    placement="top"
+                    classNames={{
+                      content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+                    }}
                   >
-                    {isChatbotOpen ? (
-                      <VscRobot className="h-4 w-4" />
-                    ) : (
-                      <VscRobot className="h-4 w-4 opacity-70" />
-                    )}
-                  </button>
-                </Tooltip>
-              </>
-            )}
-          </div>
-        </div>
+                    <button
+                      onClick={toggleLyricsPanel}
+                      className={`${utilityCircleButtonClass} ${isLyricsPanelOpen ? 'bg-emerald-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                      aria-label="Toggle beat grid lyrics"
+                    >
+                      {isLyricsPanelOpen ? (
+                        <GiMicrophone className="h-4 w-4" />
+                      ) : (
+                        <GiMicrophone className="h-4 w-4 opacity-70" />
+                      )}
+                    </button>
+                  </Tooltip>
+                </div>
+              </PopoverTrigger>
+              <PopoverContent>
+                <UtilityPopoverPanel bodyClassName="p-0">
+                  {lyricsSearchPopover && (
+                    <LyricsSearchDialog
+                      isOpen={lyricsSearchPopover.isOpen}
+                      query={lyricsSearchPopover.query}
+                      isLoading={lyricsSearchPopover.isLoading}
+                      error={lyricsSearchPopover.error}
+                      result={lyricsSearchPopover.result}
+                      onQueryChange={lyricsSearchPopover.onQueryChange}
+                      onClose={lyricsSearchPopover.onClose}
+                      onSearch={lyricsSearchPopover.onSearch}
+                      onApplyCandidate={lyricsSearchPopover.onApplyCandidate}
+                    />
+                  )}
+                </UtilityPopoverPanel>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {/* Chatbot Tooltip (Unwrapped Fragment) */}
+          {!isUploadPage && (
+            <Tooltip
+              content={isChatbotOpen ? 'Hide AI chat' : 'Show AI chat'}
+              placement="top"
+              classNames={{
+                content: 'bg-white text-gray-900 dark:bg-content-bg dark:text-gray-100 border border-gray-300 dark:border-gray-600 shadow-lg'
+              }}
+            >
+              <button
+                onClick={toggleChatbot}
+                className={`${utilityCircleButtonClass} ${isChatbotOpen ? 'bg-purple-600 text-white' : 'bg-gray-200/60 dark:bg-gray-600/60 text-gray-800 dark:text-gray-100'}`}
+                aria-label="Toggle AI chat"
+              >
+                {isChatbotOpen ? (
+                  <VscRobot className="h-4 w-4" />
+                ) : (
+                  <VscRobot className="h-4 w-4 opacity-70" />
+                )}
+              </button>
+            </Tooltip>
+          )}
+        </FloatingDock>
       </div>
     </div>
   );
