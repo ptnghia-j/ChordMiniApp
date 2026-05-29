@@ -30,7 +30,7 @@ export interface BrowserYtDlpExtractionResult {
   fileSize: number;
   fromCache: false;
   isStreamUrl: false;
-  method: 'browser-ytdlp' | 'native-ytdlp-fallback';
+  method: 'browser-ytdlp' | 'native-ytdlp-fallback' | 'dltkk-temporary-fallback';
 }
 
 interface WorkerExtractedData {
@@ -91,9 +91,14 @@ function isExternalProxyUrl(proxyUrl: string): boolean {
 }
 
 const ULTIMA_PROXY_URL = 'https://ytpultimadownloader.robertpetersonkyle2.workers.dev/';
+const DLTKK_DOWNLOAD_URL = 'https://dltkk.to/api/download';
 
 function isUltimaProxy(proxyUrl: string): boolean {
   return proxyUrl.includes('robertpetersonkyle2.workers.dev') || proxyUrl.includes('ultimadownloader.xyz');
+}
+
+function isDltkkTemporaryFallbackEnabled(config: Awaited<ReturnType<typeof loadPublicConfig>>): boolean {
+  return String(config.NEXT_PUBLIC_ENABLE_DLTKK_TEMP_FALLBACK ?? '1') !== '0';
 }
 
 function buildProxyUrl(proxyUrl: string, targetUrl: string): string {
@@ -615,6 +620,62 @@ async function finalizeCandidate(params: {
   };
 }
 
+async function extractAudioWithDltkkTemporaryFallback(
+  metadata: BrowserYtDlpMetadata,
+  options: BrowserYtDlpOptions,
+): Promise<BrowserYtDlpExtractionResult> {
+  options.onProgress?.('downloading', 'Trying temporary audio download fallback...', 35);
+
+  const response = await fetch(DLTKK_DOWNLOAD_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: `https://www.youtube.com/watch?v=${metadata.videoId}`,
+      format: BROWSER_YTDLP_OUTPUT_FORMAT,
+      platform: 'youtube',
+      quality: '480',
+    }),
+    signal: options.abortSignal,
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !/audio|mpeg|octet-stream/i.test(contentType)) {
+    const detail = contentType.includes('application/json')
+      ? ((await response.json().catch(() => null)) as { error?: string } | null)?.error
+      : await response.text().catch(() => '');
+    throw new Error(detail || `Temporary audio fallback failed (${response.status})`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  const mp3Bytes = new Uint8Array(buffer);
+  if (mp3Bytes.byteLength <= 0) {
+    throw new Error('Temporary audio fallback returned an empty audio file.');
+  }
+  if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
+    throw new Error('Temporary audio fallback returned audio larger than the 50MB Firebase cache limit.');
+  }
+
+  options.onProgress?.('uploading', 'Uploading fallback audio for validation...', 75);
+  const hash = await sha256Hex(mp3Bytes);
+  const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
+
+  options.onProgress?.('finalizing', 'Validating fallback audio before caching...', 92);
+  const result = await finalizeCandidate({
+    metadata,
+    candidatePath,
+    sha256: hash,
+    fileSize: mp3Bytes.byteLength,
+    idToken,
+  });
+
+  return {
+    ...result,
+    method: 'dltkk-temporary-fallback',
+  };
+}
+
 function isYouTubeAccessChallenge(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
   return /sign in to confirm|not a bot|failed to extract any player response|login_required|forbidden|too many requests|rate-limited|rate limited|captcha|youtube audio stream \((403|429)\)/i.test(message);
@@ -701,11 +762,8 @@ export async function extractAudioWithBrowserYtDlp(
   const ourAppProxy = config.NEXT_PUBLIC_YOUTUBE_PROXY_URL || '/api/youtube-media-proxy';
   const ultimaProxy = ULTIMA_PROXY_URL;
 
-  // 70-30 distribution
-  const useOurApp = Math.random() < 0.7;
-  const primaryProxy = useOurApp ? ourAppProxy : ultimaProxy;
-  const secondaryProxy = useOurApp ? ultimaProxy : ourAppProxy;
-
+  const primaryProxy = ourAppProxy;
+  const secondaryProxy = ultimaProxy;
   const hasDifferentProxies = ourAppProxy !== ultimaProxy;
 
   async function attemptExtraction(proxyUrl: string): Promise<BrowserYtDlpExtractionResult> {
@@ -782,15 +840,30 @@ export async function extractAudioWithBrowserYtDlp(
       `Primary proxy failed or blocked. Falling back to alternative proxy...`
     );
 
+    let fallbackError: unknown;
     try {
       return await attemptExtraction(secondaryProxy);
-    } catch (fallbackError) {
+    } catch (errorFromSecondaryProxy) {
+      fallbackError = errorFromSecondaryProxy;
       console.error(
         `Fallback proxy (${secondaryProxy}) also failed:`,
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       );
-      throw fallbackError;
     }
+
+    if (isDltkkTemporaryFallbackEnabled(config)) {
+      try {
+        return await extractAudioWithDltkkTemporaryFallback(metadata, options);
+      } catch (dltkkError) {
+        console.error(
+          'Temporary dltkk audio fallback failed:',
+          dltkkError instanceof Error ? dltkkError.message : String(dltkkError)
+        );
+        throw dltkkError;
+      }
+    }
+
+    throw fallbackError;
   }
 }
 
@@ -800,4 +873,5 @@ export const __browserYtDlpTestUtils = {
   normalizeQueueState,
   isUltimaProxy,
   ULTIMA_PROXY_URL,
+  DLTKK_DOWNLOAD_URL,
 };
