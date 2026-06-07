@@ -304,6 +304,109 @@ function normalizeSegments(segments: MetricSegment[], totalBeats: number): Metri
     }));
 }
 
+function getChordRunStats(chords: string[], segment: MetricSegment): {
+  runCount: number;
+  startDensity: number;
+  stableRunShare: number;
+} {
+  let runCount = 0;
+  let stableRunCount = 0;
+  let index = segment.startIndex;
+
+  while (index < segment.endIndex) {
+    const chord = chords[index];
+    let runEnd = index + 1;
+    while (runEnd < segment.endIndex && chords[runEnd] === chord) {
+      runEnd += 1;
+    }
+
+    if (!isSilentChord(chord)) {
+      runCount += 1;
+      if (runEnd - index >= segment.beatsPerMeasure) {
+        stableRunCount += 1;
+      }
+    }
+
+    index = runEnd;
+  }
+
+  const segmentLength = Math.max(1, segment.endIndex - segment.startIndex);
+
+  return {
+    runCount,
+    startDensity: runCount / segmentLength,
+    stableRunShare: stableRunCount / Math.max(1, runCount),
+  };
+}
+
+function collapseAdjacentSegments(segments: MetricSegment[]): MetricSegment[] {
+  return segments.reduce<MetricSegment[]>((collapsed, segment) => {
+    const previous = collapsed[collapsed.length - 1];
+    if (previous && previous.beatsPerMeasure === segment.beatsPerMeasure) {
+      previous.endIndex = segment.endIndex;
+      previous.score = (previous.score ?? 0) + (segment.score ?? 0);
+      return collapsed;
+    }
+
+    collapsed.push({ ...segment });
+    return collapsed;
+  }, []);
+}
+
+function hasReliableNonGlobalMeterEvidence(
+  chords: string[],
+  segment: MetricSegment,
+  globalTimeSignature: CandidateMeter
+): boolean {
+  if (!isCandidateMeter(segment.beatsPerMeasure)) {
+    return false;
+  }
+
+  const config = GRID_ALIGNMENT_CONFIG.localMeterDetection;
+  const segmentChords = chords.slice(segment.startIndex, segment.endIndex);
+  const segmentMeterScore = scoreSingleMeterPath(segmentChords, segment.beatsPerMeasure);
+  const globalMeterScore = scoreSingleMeterPath(segmentChords, globalTimeSignature);
+  const requiredAdvantage =
+    segment.beatsPerMeasure === 5 || segment.beatsPerMeasure === 7
+      ? config.minLocalOddMeterScoreAdvantage
+      : config.minLocalMeterScoreAdvantage;
+
+  if (segmentMeterScore < globalMeterScore + requiredAdvantage) {
+    return false;
+  }
+
+  const runStats = getChordRunStats(chords, segment);
+  return (
+    runStats.startDensity <= config.maxNoisyNonGlobalStartDensity ||
+    runStats.stableRunShare >= config.minStableNonGlobalRunShare
+  );
+}
+
+function stabilizeNonGlobalSegments(
+  chords: string[],
+  segments: MetricSegment[],
+  globalTimeSignature: number
+): MetricSegment[] {
+  if (!isCandidateMeter(globalTimeSignature) || segments.length < 2) {
+    return segments;
+  }
+
+  return collapseAdjacentSegments(segments.map((segment) => {
+    if (segment.beatsPerMeasure === globalTimeSignature) {
+      return segment;
+    }
+
+    if (hasReliableNonGlobalMeterEvidence(chords, segment, globalTimeSignature)) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      beatsPerMeasure: globalTimeSignature,
+    };
+  }));
+}
+
 export function detectLocalMeterSegments(
   chords: string[],
   globalTimeSignature: number
@@ -373,6 +476,17 @@ export function detectLocalMeterSegments(
       : config.minMixedMeterImprovement;
 
   if (mixedResult.score < bestSingleMeter.score + mixedMeterImprovementThreshold) {
+    return singleMeterSegment;
+  }
+
+  segments = stabilizeNonGlobalSegments(chords, segments, globalTimeSignature);
+
+  if (segments.length < 2) {
+    return singleMeterSegment;
+  }
+
+  const stabilizedUsedMeters = new Set(segments.map((segment) => segment.beatsPerMeasure));
+  if (stabilizedUsedMeters.size < 2) {
     return singleMeterSegment;
   }
 

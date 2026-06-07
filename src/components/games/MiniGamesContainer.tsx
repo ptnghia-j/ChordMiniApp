@@ -108,6 +108,15 @@ interface ModeFormulaQuizQuestion {
   prompt: string;
   answer: string;
   options: string[];
+  explanation?: string;
+}
+
+interface ModeNoteQuizQuestion {
+  type: 'mode_note';
+  prompt: string;
+  answer: string;
+  options: string[];
+  explanation: string;
 }
 
 interface RelativeKeyQuizQuestion {
@@ -125,7 +134,8 @@ type QuizQuestion =
   | SecondaryDominantQuizQuestion
   | KeySignatureMnemonicQuizQuestion
   | ModeFormulaQuizQuestion
-  | RelativeKeyQuizQuestion;
+  | RelativeKeyQuizQuestion
+  | ModeNoteQuizQuestion;
 
 interface EarTrainingQuestion {
   type: EarQuestionType;
@@ -831,6 +841,99 @@ function createRandomSecondaryQuestion(): SecondaryDominantQuizQuestion {
   };
 }
 
+function getModeFormulaDetails(modeName: string): { prompt: string; explanation: string } {
+  const cleanName = modeName.toLowerCase();
+  const prompt = `What is the interval formula for ${modeName} mode, given W is whole step and H is half step? (Hint: The Ionian mode formula is W - W - H - W - W - W - H. Think about rotating the sequence to the left and wrapping around.)`;
+  
+  let shift = 0;
+  let displayName = '';
+  if (cleanName.includes('dorian')) {
+    shift = 1;
+    displayName = 'Dorian';
+  } else if (cleanName.includes('phrygian')) {
+    shift = 2;
+    displayName = 'Phrygian';
+  } else if (cleanName.includes('lydian')) {
+    shift = 3;
+    displayName = 'Lydian';
+  } else if (cleanName.includes('mixolydian')) {
+    shift = 4;
+    displayName = 'Mixolydian';
+  } else if (cleanName.includes('aeolian') || cleanName.includes('minor')) {
+    shift = 5;
+    displayName = 'Aeolian (natural minor)';
+  } else if (cleanName.includes('locrian')) {
+    shift = 6;
+    displayName = 'Locrian';
+  } else {
+    shift = 0;
+    displayName = 'Ionian (major)';
+  }
+
+  const stepsList = [
+    { name: 'Ionian (major)', formula: 'W - W - H - W - W - W - H' },
+    { name: 'Dorian', formula: 'W - H - W - W - W - H - W' },
+    { name: 'Phrygian', formula: 'H - W - W - W - H - W - W' },
+    { name: 'Lydian', formula: 'W - W - W - H - W - W - H' },
+    { name: 'Mixolydian', formula: 'W - W - H - W - W - H - W' },
+    { name: 'Aeolian (natural minor)', formula: 'W - H - W - W - H - W - W' },
+    { name: 'Locrian', formula: 'H - W - W - H - W - W - W' },
+  ];
+
+  let explanation = '';
+  if (shift === 0) {
+    explanation = `The Ionian mode (major scale) is the 1st mode, so its formula remains the default: W - W - H - W - W - W - H.`;
+  } else {
+    explanation = `The ${displayName} mode is the ${shift + 1}${shift + 1 === 2 ? 'nd' : shift + 1 === 3 ? 'rd' : 'th'} mode of the major scale. To find its formula, we rotate the Ionian formula (W - W - H - W - W - W - H) to the left by ${shift} step${shift > 1 ? 's' : ''} and wrap around:\n`;
+    for (let i = 0; i <= shift; i++) {
+      explanation += `• ${stepsList[i].name}: ${stepsList[i].formula}\n`;
+    }
+  }
+
+  return { prompt, explanation };
+}
+
+function getModeSteps(modeName: string): number[] {
+  const ionianIntervals = [2, 2, 1, 2, 2, 2, 1];
+  let shift = 0;
+  const clean = modeName.toLowerCase();
+  if (clean.includes('dorian')) shift = 1;
+  else if (clean.includes('phrygian')) shift = 2;
+  else if (clean.includes('lydian')) shift = 3;
+  else if (clean.includes('mixolydian')) shift = 4;
+  else if (clean.includes('aeolian') || clean.includes('natural minor') || clean.includes('minor')) shift = 5;
+  else if (clean.includes('locrian')) shift = 6;
+
+  const rotatedIntervals = [...ionianIntervals.slice(shift), ...ionianIntervals.slice(0, shift)];
+  
+  const steps = [0];
+  for (let i = 0; i < 6; i++) {
+    steps.push(steps[i] + rotatedIntervals[i]);
+  }
+  return steps;
+}
+
+function getModeNotes(root: string, modeName: string): string[] {
+  return getModeSteps(modeName).map((step) => getNote(root, step, getAccidentalPreference(root)));
+}
+
+function getOrdinal(n: number): string {
+  if (n === 1) return '1st';
+  if (n === 2) return '2nd';
+  if (n === 3) return '3rd';
+  return `${n}th`;
+}
+
+const MODE_DEFS = [
+  { name: 'Ionian', displayName: 'Ionian (major)' },
+  { name: 'Dorian', displayName: 'Dorian' },
+  { name: 'Phrygian', displayName: 'Phrygian' },
+  { name: 'Lydian', displayName: 'Lydian' },
+  { name: 'Mixolydian', displayName: 'Mixolydian' },
+  { name: 'Aeolian', displayName: 'Aeolian (natural minor)' },
+  { name: 'Locrian', displayName: 'Locrian' },
+];
+
 function createRandomModeFormulaQuestion(): ModeFormulaQuizQuestion {
   const modes = [
     { name: 'major/ionian', formula: 'W - W - H - W - W - W - H' },
@@ -843,12 +946,84 @@ function createRandomModeFormulaQuestion(): ModeFormulaQuizQuestion {
   ];
   const mode = modes[Math.floor(Math.random() * modes.length)];
   const distractors = modes.map((m) => m.formula).filter((f) => f !== mode.formula);
+  const { prompt, explanation } = getModeFormulaDetails(mode.name);
 
   return {
     type: 'mode_formula',
-    prompt: `What is the interval formula for ${mode.name} mode, given W is whole step and H is half step?`,
+    prompt,
     answer: mode.formula,
     options: buildAnswerOptions(mode.formula, distractors),
+    explanation,
+  };
+}
+
+function createStableModeFormulaQuestion(sequenceIndex: number): ModeFormulaQuizQuestion {
+  const modes = [
+    { name: 'major/ionian', formula: 'W - W - H - W - W - W - H' },
+    { name: 'natural minor/aeolian', formula: 'W - H - W - W - H - W - W' },
+    { name: 'dorian', formula: 'W - H - W - W - W - H - W' },
+    { name: 'phrygian', formula: 'H - W - W - W - H - W - W' },
+    { name: 'lydian', formula: 'W - W - W - H - W - W - H' },
+    { name: 'mixolydian', formula: 'W - W - H - W - W - H - W' },
+    { name: 'locrian', formula: 'H - W - W - H - W - W - W' },
+  ];
+  const mode = modes[sequenceIndex % modes.length];
+  const distractors = modes.map((m) => m.formula).filter((f) => f !== mode.formula);
+  const { prompt, explanation } = getModeFormulaDetails(mode.name);
+
+  return {
+    type: 'mode_formula',
+    prompt,
+    answer: mode.formula,
+    options: rotateOptions([
+      mode.formula,
+      ...distractors.filter((option) => option !== mode.formula),
+    ], sequenceIndex),
+    explanation,
+  };
+}
+
+function createRandomModeNoteQuestion(): ModeNoteQuizQuestion {
+  const tonic = SCALE_ROOTS[Math.floor(Math.random() * SCALE_ROOTS.length)];
+  const mode = MODE_DEFS[Math.floor(Math.random() * MODE_DEFS.length)];
+  const degree = 1 + Math.floor(Math.random() * 7);
+  
+  const modeNotes = getModeNotes(tonic, mode.name.toLowerCase());
+  const answer = modeNotes[degree - 1];
+  const chromaticOptions = getNeighborNoteOptions(tonic, answer, Math.floor(Math.random() * 12));
+  
+  const ordinal = getOrdinal(degree);
+  const explanation = `The notes in ${tonic} ${mode.displayName} are ${modeNotes.join(', ')}. The ${ordinal} note is ${answer}.`;
+
+  return {
+    type: 'mode_note',
+    prompt: `What is the ${ordinal} note in ${tonic} ${mode.displayName} mode?`,
+    answer,
+    options: buildAnswerOptions(answer, chromaticOptions),
+    explanation,
+  };
+}
+
+function createStableModeNoteQuestion(sequenceIndex: number): ModeNoteQuizQuestion {
+  const tonic = SCALE_ROOTS[sequenceIndex % SCALE_ROOTS.length];
+  const mode = MODE_DEFS[sequenceIndex % MODE_DEFS.length];
+  const degree = 1 + ((sequenceIndex + 2) % 7);
+  
+  const modeNotes = getModeNotes(tonic, mode.name.toLowerCase());
+  const answer = modeNotes[degree - 1];
+  const chromaticOptions = getNeighborNoteOptions(tonic, answer, sequenceIndex + 4);
+  const ordinal = getOrdinal(degree);
+  const explanation = `The notes in ${tonic} ${mode.displayName} are ${modeNotes.join(', ')}. The ${ordinal} note is ${answer}.`;
+
+  return {
+    type: 'mode_note',
+    prompt: `What is the ${ordinal} note in ${tonic} ${mode.displayName} mode?`,
+    answer,
+    options: rotateOptions([
+      answer,
+      ...chromaticOptions.filter((option) => option !== answer),
+    ], sequenceIndex),
+    explanation,
   };
 }
 
@@ -1243,12 +1418,11 @@ export function generateQuizQuestions(): QuizQuestion[] {
   }
 
   const questions: QuizQuestion[] = [];
-  // Exclude mode_formula from the main types pool to restrict it to at most 1
   const types: Array<'scale' | 'label' | 'tone' | 'degree' | 'secondary' | 'relative_key'> = [
     'scale', 'label', 'tone', 'degree', 'secondary', 'relative_key'
   ];
 
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 17; i++) {
     const type = types[i % types.length];
     if (type === 'scale') questions.push(createRandomScaleQuestion());
     else if (type === 'label') questions.push(createRandomLabelQuestion());
@@ -1258,12 +1432,11 @@ export function generateQuizQuestions(): QuizQuestion[] {
     else questions.push(createRandomRelativeKeyQuestion());
   }
 
-  // Add exactly 1 scale/mode formula question
   questions.push(createRandomModeFormulaQuestion());
+  questions.push(createRandomModeNoteQuestion());
 
   const shuffledQuiz = shuffleArray(questions);
   const mnemonicQuestion = createRandomMnemonicQuestion();
-  // Position mnemonic question in the first 5 questions (index 0 to 4 inclusive)
   const mnemonicIndex = Math.floor(Math.random() * 5);
   shuffledQuiz.splice(mnemonicIndex, 0, mnemonicQuestion);
 
@@ -1294,6 +1467,10 @@ function generateStableQuizQuestions(): QuizQuestion[] {
   for (let i = 0; i < 20; i++) {
     if (i === 2) {
       questions.push(createStableMnemonicQuestion(0));
+    } else if (i === 18) {
+      questions.push(createStableModeFormulaQuestion(0));
+    } else if (i === 19) {
+      questions.push(createStableModeNoteQuestion(0));
     } else {
       questions.push(createStableQuizQuestion(i));
     }
@@ -2244,7 +2421,7 @@ function getQuizReviewPrompt(question: QuizQuestion): string {
     return `In ${question.key} major: ${question.progression.map(getFormattedChordText).join(' - ')}`;
   }
 
-  if (question.type === 'mode_formula' || question.type === 'relative_key') {
+  if (question.type === 'mode_formula' || question.type === 'relative_key' || question.type === 'mode_note') {
     return question.prompt;
   }
 
@@ -2910,7 +3087,9 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
       
       let explanation = undefined;
       if (quizQuestion.type === 'mode_formula') {
-        explanation = `The interval formula for this mode is ${quizQuestion.answer}. W stands for Whole step (2 semitones), H stands for Half step (1 semitone).`;
+        explanation = quizQuestion.explanation || `The interval formula for this mode is ${quizQuestion.answer}. W stands for Whole step (2 semitones), H stands for Half step (1 semitone).`;
+      } else if (quizQuestion.type === 'mode_note') {
+        explanation = quizQuestion.explanation;
       } else if (quizQuestion.type === 'relative_key') {
         explanation = `Relative major and minor keys share the exact same key signature. E.g., C major and A minor both have 0 sharps/flats.`;
       } else if (quizQuestion.type === 'secondary') {
@@ -3234,7 +3413,9 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                               ? 'Mode Interval Formula'
                               : quizQuestion.type === 'relative_key'
                                 ? 'Relative Key'
-                                : 'Find the scale degree'}
+                                : quizQuestion.type === 'mode_note'
+                                  ? 'Mode Note'
+                                  : 'Find the scale degree'}
                 </p>
                 <ScorePill score={quizScore} totalPoints={quizTotalPoints} />
               </div>
@@ -3306,6 +3487,12 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                 {quizQuestion.type === 'relative_key' && (
                   <>
                     <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>Relative Key</p>
+                    <p className={`${isStandalone ? 'text-lg' : 'text-base'} mt-2 font-bold text-foreground`}>{quizQuestion.prompt}</p>
+                  </>
+                )}
+                {quizQuestion.type === 'mode_note' && (
+                  <>
+                    <p className={`${helperTextClass} font-semibold uppercase text-default-500 tracking-wide font-outfit dark:text-slate-300`}>Mode Note</p>
                     <p className={`${isStandalone ? 'text-lg' : 'text-base'} mt-2 font-bold text-foreground`}>{quizQuestion.prompt}</p>
                   </>
                 )}
@@ -3381,7 +3568,9 @@ export default function MiniGamesContainer({ layoutMode = 'embed' }: MiniGamesCo
                                 ? 'Choose the correct interval formula'
                                 : quizQuestion.type === 'relative_key'
                                   ? 'Choose the relative key'
-                                  : 'Choose the correct roman numeral statement'}
+                                  : quizQuestion.type === 'mode_note'
+                                    ? 'Choose the correct note'
+                                    : 'Choose the correct roman numeral statement'}
               </p>
             </div>
           )

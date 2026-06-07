@@ -228,4 +228,44 @@ describe('MiniGamesContainer', () => {
       });
     }
   });
+
+  it('includes a hint and detailed shifting explanation in mode formula questions, and generates a mode note question for each quiz', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'development',
+      configurable: true,
+    });
+
+    try {
+      const questions = generateQuizQuestions();
+      
+      const formulaQuestion = questions.find((q) => q.type === 'mode_formula');
+      expect(formulaQuestion).toBeDefined();
+      expect(formulaQuestion?.prompt).toContain('Hint: The Ionian mode formula is W - W - H - W - W - W - H');
+      expect(formulaQuestion?.prompt).toContain('Think about rotating the sequence to the left and wrapping around');
+      expect(formulaQuestion?.explanation).toBeDefined();
+      
+      if (formulaQuestion?.prompt.includes('mixolydian')) {
+        expect(formulaQuestion.explanation).toContain('Mixolydian: W - W - H - W - W - H - W');
+        expect(formulaQuestion.explanation).toContain('Dorian: W - H - W - W - W - H - W');
+        expect(formulaQuestion.explanation).toContain('Phrygian: H - W - W - W - H - W - W');
+        expect(formulaQuestion.explanation).toContain('Lydian: W - W - W - H - W - W - H');
+      }
+
+      const modeNoteQuestion = questions.find((q) => q.type === 'mode_note');
+      expect(modeNoteQuestion).toBeDefined();
+      expect(modeNoteQuestion?.prompt).toMatch(/What is the \d(st|nd|rd|th) note in [A-G][b#♯♭]*\s[a-zA-Z\s\(\)]+ mode\?/);
+      expect(modeNoteQuestion?.explanation).toBeDefined();
+      expect(modeNoteQuestion?.explanation).toContain('The notes in');
+      expect(modeNoteQuestion?.options).toContain(modeNoteQuestion?.answer);
+      expect(modeNoteQuestion?.options.length).toBeLessThanOrEqual(4);
+
+      expect(questions.length).toBe(20);
+    } finally {
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: originalNodeEnv,
+        configurable: true,
+      });
+    }
+  });
 });
