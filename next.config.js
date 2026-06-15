@@ -33,6 +33,7 @@ const connectSrcValues = Array.from(new Set([
   'https://unpkg.com',
   'https://*.vocalremover.org',
   'https://*.workers.dev',
+  'https://dltkk.to',
 ]));
 
 const contentSecurityPolicy = [
