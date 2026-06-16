@@ -97,6 +97,45 @@ function isUltimaProxy(proxyUrl: string): boolean {
   return proxyUrl.includes('robertpetersonkyle2.workers.dev') || proxyUrl.includes('ultimadownloader.xyz');
 }
 
+function redactProxyUrl(message: string, primaryProxy?: string, secondaryProxy?: string): string {
+  let redacted = message;
+  const urlsToRedact = new Set<string>();
+
+  if (primaryProxy && isExternalProxyUrl(primaryProxy)) {
+    urlsToRedact.add(primaryProxy);
+    try {
+      const parsed = new URL(primaryProxy);
+      urlsToRedact.add(parsed.host);
+      urlsToRedact.add(parsed.hostname);
+    } catch {}
+  }
+  if (secondaryProxy && isExternalProxyUrl(secondaryProxy)) {
+    urlsToRedact.add(secondaryProxy);
+    try {
+      const parsed = new URL(secondaryProxy);
+      urlsToRedact.add(parsed.host);
+      urlsToRedact.add(parsed.hostname);
+    } catch {}
+  }
+
+  // Common/known workers URL domains
+  urlsToRedact.add('chord-mini-youtube-proxy.phantrongnghia510.workers.dev');
+  urlsToRedact.add('ytpultimadownloader.robertpetersonkyle2.workers.dev');
+  urlsToRedact.add('ultimadownloader.xyz');
+
+  for (const url of urlsToRedact) {
+    if (!url) continue;
+    const escaped = url.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    redacted = redacted.replace(regex, '[REDACTED_PROXY]');
+  }
+
+  // Replace any generic workers.dev domains
+  redacted = redacted.replace(/[a-zA-Z0-9.-]+\.workers\.dev/gi, '[REDACTED_PROXY]');
+
+  return redacted;
+}
+
 function isDltkkTemporaryFallbackEnabled(config: Awaited<ReturnType<typeof loadPublicConfig>>): boolean {
   return String(config.NEXT_PUBLIC_ENABLE_DLTKK_TEMP_FALLBACK ?? '1') !== '0';
 }
@@ -810,11 +849,29 @@ export async function extractAudioWithBrowserYtDlp(
       });
       extractionSucceeded = true;
       return result;
+    } catch (rawError) {
+      const msg = rawError instanceof Error ? rawError.message : String(rawError);
+      const redactedMsg = redactProxyUrl(msg, primaryProxy, secondaryProxy);
+      if (rawError instanceof BrowserExtractionQueueError) {
+        throw new BrowserExtractionQueueError(redactedMsg);
+      }
+      throw new Error(redactedMsg);
     } finally {
       stopLeaseHeartbeat();
       if (leaseId !== null) {
         await releaseProxyLease(proxyUrl, leaseId, extractionSucceeded);
       }
+    }
+  }
+
+  if (isDltkkTemporaryFallbackEnabled(config)) {
+    try {
+      return await extractAudioWithDltkkTemporaryFallback(metadata, options);
+    } catch (dltkkError) {
+      console.warn(
+        'Temporary dltkk audio fallback failed. Trying worker proxy extraction:',
+        dltkkError instanceof Error ? dltkkError.message : String(dltkkError)
+      );
     }
   }
 
@@ -830,40 +887,25 @@ export async function extractAudioWithBrowserYtDlp(
     }
 
     console.warn(
-      `Primary proxy (${primaryProxy}) failed:`,
+      'Primary proxy failed:',
       error instanceof Error ? error.message : String(error),
-      `Retrying with fallback proxy (${secondaryProxy})...`
+      'Retrying with fallback proxy...'
     );
 
     options.onProgress?.(
       'initializing',
-      `Primary proxy failed or blocked. Falling back to alternative proxy...`
+      'Primary proxy failed or blocked. Falling back to alternative proxy...'
     );
 
-    let fallbackError: unknown;
     try {
       return await attemptExtraction(secondaryProxy);
     } catch (errorFromSecondaryProxy) {
-      fallbackError = errorFromSecondaryProxy;
       console.error(
-        `Fallback proxy (${secondaryProxy}) also failed:`,
-        fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        'Fallback proxy also failed:',
+        errorFromSecondaryProxy instanceof Error ? errorFromSecondaryProxy.message : String(errorFromSecondaryProxy)
       );
+      throw errorFromSecondaryProxy;
     }
-
-    if (isDltkkTemporaryFallbackEnabled(config)) {
-      try {
-        return await extractAudioWithDltkkTemporaryFallback(metadata, options);
-      } catch (dltkkError) {
-        console.error(
-          'Temporary dltkk audio fallback failed:',
-          dltkkError instanceof Error ? dltkkError.message : String(dltkkError)
-        );
-        throw dltkkError;
-      }
-    }
-
-    throw fallbackError;
   }
 }
 
@@ -872,6 +914,7 @@ export const __browserYtDlpTestUtils = {
   buildMinimalProxyRequestHeaders,
   normalizeQueueState,
   isUltimaProxy,
+  redactProxyUrl,
   ULTIMA_PROXY_URL,
   DLTKK_DOWNLOAD_URL,
 };

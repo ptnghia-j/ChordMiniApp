@@ -62,5 +62,20 @@ describe('browserYtDlpExtractionService queue helpers', () => {
       expect(isUltimaProxy('https://my-custom-proxy.workers.dev/')).toBe(false);
       expect(isUltimaProxy('/api/youtube-media-proxy')).toBe(false);
     });
+
+    it('redacts proxy endpoints from error messages', () => {
+      const { redactProxyUrl } = __browserYtDlpTestUtils as any;
+      const primary = 'https://chord-mini-youtube-proxy.phantrongnghia510.workers.dev/';
+      const secondary = 'https://ytpultimadownloader.robertpetersonkyle2.workers.dev/';
+
+      const msg1 = 'Failed to load resource from https://chord-mini-youtube-proxy.phantrongnghia510.workers.dev/api';
+      expect(redactProxyUrl(msg1, primary, secondary)).toBe('Failed to load resource from [REDACTED_PROXY]api');
+
+      const msg2 = 'Failed on ytpultimadownloader.robertpetersonkyle2.workers.dev: status of 403';
+      expect(redactProxyUrl(msg2, primary, secondary)).toBe('Failed on [REDACTED_PROXY]: status of 403');
+
+      const msg3 = 'Error connecting to someother-user.workers.dev/endpoint';
+      expect(redactProxyUrl(msg3)).toBe('Error connecting to [REDACTED_PROXY]/endpoint');
+    });
   });
 });
