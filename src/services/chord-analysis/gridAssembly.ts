@@ -332,7 +332,10 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   const singleDetectedMeter = preliminaryMetricSegments.length === 1
     ? preliminaryMetricSegments[0].beatsPerMeasure
     : null;
-  const alignmentTimeSignature = singleDetectedMeter ?? timeSignature;
+  const firstSegmentMeter = preliminaryMetricSegments.length > 0
+    ? preliminaryMetricSegments[0].beatsPerMeasure
+    : null;
+  const alignmentTimeSignature = firstSegmentMeter ?? timeSignature;
 
   const { paddingCount, shiftCount } = calculatePaddingAndShift(
     firstDetectedBeat,

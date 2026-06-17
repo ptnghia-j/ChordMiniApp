@@ -314,6 +314,34 @@ describe('getChordGridData — edge cases', () => {
     ]);
   });
 
+  it('uses first detected local meter segment for alignment when mixed meters are present', () => {
+    // Song starts with 3/4 (8 measures = 24 beats) then goes to 4/4 (8 measures = 32 beats)
+    const chords: string[] = [];
+    ['A', 'Bm', 'C#', 'F#m', 'D', 'E', 'A', 'D'].forEach((chord) => {
+      chords.push(...Array(3).fill(chord));
+    });
+    ['D', 'E', 'F#m', 'A', 'Bm', 'E', 'A', 'F#m'].forEach((chord) => {
+      chords.push(...Array(4).fill(chord));
+    });
+
+    const result = getChordGridData(
+      makeAnalysisResult({
+        beatDetectionResult: { time_signature: 4, bpm: 120 }, // Global is 4/4
+        beats: chords.map((_, index) => index * 0.5),
+        synchronizedChords: chords.map((chord, beatIndex) => ({ chord, beatIndex })),
+      })
+    );
+
+    // It should detect segments [3, 4]
+    expect(result.metricSegments?.map((segment) => segment.beatsPerMeasure)).toEqual([3, 4]);
+
+    // Since the first segment is 3/4, the alignmentTimeSignature should be 3,
+    // and we should evaluate shifting based on 3.
+    // Given the chords start directly with A (3 beats) and Bm (3 beats), a shift of 0
+    // matches the downbeats perfectly.
+    expect(result.shiftCount).toBe(0);
+  });
+
   it('local compaction is enabled only for madmom beat model', () => {
     const withMadmom = getChordGridData(
       makeAnalysisResult({ beatModel: 'madmom' })

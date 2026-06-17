@@ -853,12 +853,12 @@ function getModeFormulaDetails(modeName: string): { prompt: string; explanation:
   } else if (cleanName.includes('phrygian')) {
     shift = 2;
     displayName = 'Phrygian';
-  } else if (cleanName.includes('lydian')) {
-    shift = 3;
-    displayName = 'Lydian';
   } else if (cleanName.includes('mixolydian')) {
     shift = 4;
     displayName = 'Mixolydian';
+  } else if (cleanName.includes('lydian')) {
+    shift = 3;
+    displayName = 'Lydian';
   } else if (cleanName.includes('aeolian') || cleanName.includes('minor')) {
     shift = 5;
     displayName = 'Aeolian (natural minor)';
@@ -899,8 +899,8 @@ function getModeSteps(modeName: string): number[] {
   const clean = modeName.toLowerCase();
   if (clean.includes('dorian')) shift = 1;
   else if (clean.includes('phrygian')) shift = 2;
-  else if (clean.includes('lydian')) shift = 3;
   else if (clean.includes('mixolydian')) shift = 4;
+  else if (clean.includes('lydian')) shift = 3;
   else if (clean.includes('aeolian') || clean.includes('natural minor') || clean.includes('minor')) shift = 5;
   else if (clean.includes('locrian')) shift = 6;
 

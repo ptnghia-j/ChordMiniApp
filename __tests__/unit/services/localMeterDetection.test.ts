@@ -125,4 +125,33 @@ describe('local meter detection', () => {
 
     expect(detectLocalMeterSegments(chords, 4)).toEqual([]);
   });
+
+  it('retains a 3/4 segment with slightly elevated start density on the aligned grid', () => {
+    const chords: string[] = [];
+
+    // First segment: 12 measures of 4/4 (48 beats)
+    for (let i = 0; i < 12; i++) {
+      appendHeldChord(chords, `C${i}`, 4);
+    }
+
+    // Second segment: 18 measures of 3/4 (54 beats)
+    // Structured to have exactly 20 chord runs: 9 stable runs (len 3) and 11 unstable runs (len 2)
+    // plus 5 beats of silence.
+    // This gives a start density of 20/54 = 0.37037, and a stable run share of 9/20 = 0.45.
+    for (let i = 0; i < 9; i++) {
+      appendHeldChord(chords, `D${i}`, 3);
+    }
+    for (let i = 0; i < 11; i++) {
+      appendHeldChord(chords, `E${i}`, 2);
+    }
+    appendHeldChord(chords, '', 5);
+
+    const segments = detectLocalMeterSegments(chords, 4);
+
+    expect(segments.map((segment) => segment.beatsPerMeasure)).toEqual([4, 3, 4]);
+    expect(segments[0]).toEqual(expect.objectContaining({ startIndex: 0, endIndex: 48 }));
+    expect(segments[1]).toEqual(expect.objectContaining({ startIndex: 48, endIndex: 75 }));
+    expect(segments[2]).toEqual(expect.objectContaining({ startIndex: 75, endIndex: chords.length }));
+  });
 });
+

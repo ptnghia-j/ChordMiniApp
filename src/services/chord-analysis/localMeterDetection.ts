@@ -146,11 +146,10 @@ function solveMeterPath(chords: string[], candidateMeters: CandidateMeter[]): {
           beatsPerMeasure: meter,
         });
         const didSwitch = state.runMeasures > 0 && state.meter !== meter;
-        const transitionPenalty = didSwitch
-          ? config.switchPenalty + (
-              state.runMeasures < config.minRunMeasuresBeforeSwitch ? config.earlySwitchPenalty : 0
-            )
-          : 0;
+        if (didSwitch && state.runMeasures < config.minRunMeasuresBeforeSwitch) {
+          return;
+        }
+        const transitionPenalty = didSwitch ? config.switchPenalty : 0;
         const nextScore = state.score + measureScore - transitionPenalty;
         const nextState: SolverState = {
           score: nextScore,
