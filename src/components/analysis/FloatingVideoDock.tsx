@@ -81,6 +81,10 @@ interface FloatingVideoDockProps {
   // URLs
   youtubeEmbedUrl?: string;
   videoUrl?: string;
+  audioUrl?: string | null;
+  videoTitle?: string;
+  channelName?: string;
+  thumbnailUrl?: string;
 
   // YouTube player for volume control
   youtubePlayer?: {
@@ -153,6 +157,10 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
   onPlaybackRateChange,
   youtubeEmbedUrl,
   videoUrl,
+  audioUrl,
+  videoTitle,
+  channelName,
+  thumbnailUrl,
   youtubePlayer,
   showTopToggles = true,
   melodicTranscriptionPlayback,
@@ -364,6 +372,10 @@ const FloatingVideoDock: React.FC<FloatingVideoDockProps> = ({
 
             <CollapsibleVideoPlayer
               videoId={videoId}
+              audioUrl={audioUrl}
+              videoTitle={videoTitle}
+              channelName={channelName}
+              thumbnailUrl={thumbnailUrl}
               isPlaying={isPlaying}
               playbackRate={playbackRate}
               currentTime={currentTime}

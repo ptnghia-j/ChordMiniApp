@@ -166,6 +166,10 @@ export interface AnalyzeFloatingDockSectionProps {
     youtubeEmbedUrl?: string;
     videoUrl?: string;
     youtubePlayer: YouTubePlayer | null;
+    audioUrl?: string | null;
+    videoTitle?: string;
+    channelName?: string;
+    thumbnailUrl?: string;
     melodicTranscriptionPlayback?: {
       isEnabled: boolean;
       hasTranscription: boolean;

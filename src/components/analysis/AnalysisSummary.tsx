@@ -8,12 +8,21 @@ import {
   SongMetadata,
   fetchSongMetadata,
 } from '@/services/musicbrainz/musicbrainzService';
-import { buildBeatToChordSequenceMap } from '@/utils/chordFormatting';
 import { getLightweightChordPlaybackService } from '@/services/chord-playback/lightweightChordPlaybackService';
 import type { RomanNumeralData, SequenceCorrectionsData } from '@/services/firebase/firestoreService';
-import { computeAccidentalPreference, getEnharmonicEquivalent } from '@/utils/chordUtils';
+import {
+  computeAccidentalPreference,
+  getEnharmonicEquivalent,
+  getAccidentalPreferenceFromKey,
+} from '@/utils/chordUtils';
+import {
+  buildChordOccurrenceMap,
+  buildChordOccurrenceCorrectionMap,
+  buildChordSequenceIndexMap,
+  getDisplayChord,
+} from '@/utils/chordProcessing';
 import { usePlaybackStore } from '@/stores/playbackStore';
-import { useShowCorrectedChords } from '@/stores/analysisStore';
+import { useShowCorrectedChords, useKeySignature } from '@/stores/analysisStore';
 
 // Helper to determine if a chord is minor or diminished
 const getIsMinorOrDim = (chordName: string): boolean => {
@@ -77,6 +86,7 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [songMetadata, setSongMetadata] = useState<SongMetadata | null>(null);
   const showCorrectedChords = useShowCorrectedChords();
+  const keySignature = useKeySignature();
 
   const [playingProgressionIndex, setPlayingProgressionIndex] = useState<number | null>(null);
   const [playingChordIndex, setPlayingChordIndex] = useState<number | null>(null);
@@ -289,18 +299,11 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
     const rawTimeSig = analysisResults.beatDetectionResult?.time_signature || 4;
     const timeSigValue = typeof rawTimeSig === 'number' ? rawTimeSig : 4;
 
-    // Build mapping for Roman numerals
-    const chordsForMapping = sequenceCorrections?.originalSequence || analysisResults.chords?.map(c => c.chord) || [];
     const shiftedChords = syncChords.map(c => c.chord);
-    const romanMap = buildBeatToChordSequenceMap(
-      chordsForMapping.length,
-      shiftedChords,
-      romanNumerals || null,
-      sequenceCorrections || null
-    );
 
-    // Determine spelling preference
-    const accidentalPref = computeAccidentalPreference(shiftedChords);
+    // Determine spelling preference using keySignature if available
+    const keyPref = getAccidentalPreferenceFromKey(keySignature);
+    const accidentalPref = keyPref || computeAccidentalPreference(shiftedChords);
     let preferSharps = accidentalPref === 'sharp';
     if (accidentalPref === null) {
       const normalizedCommon = normalizeChord(mostCommonChord);
@@ -343,17 +346,25 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
     }
 
     // 1. Project into spelling-corrected normalized chord stream beat-by-beat
+    const chordGroupOccurrenceMap = buildChordOccurrenceMap(shiftedChords);
+    const chordOccurrenceCorrectionMap = buildChordOccurrenceCorrectionMap(sequenceCorrections || null);
+    const chordSequenceIndexMap = buildChordSequenceIndexMap(
+      shiftedChords,
+      sequenceCorrections?.originalSequence
+    );
+
     const beatChords = syncChords.map((sc, beatIndex) => {
-      let chord = sc.chord;
-      let wasCorrected = false;
-      if (showCorrectedChords && sequenceCorrections?.correctedSequence && romanMap) {
-        const seqIdx = romanMap[beatIndex];
-        if (seqIdx !== undefined && sequenceCorrections.correctedSequence[seqIdx]) {
-          chord = sequenceCorrections.correctedSequence[seqIdx];
-          wasCorrected = true;
-        }
-      }
-      const norm = normalizeChord(chord);
+      const originalChord = sc.chord;
+      const { chord: displayChord, wasCorrected } = getDisplayChord(
+        originalChord,
+        beatIndex,
+        showCorrectedChords,
+        sequenceCorrections || null,
+        chordGroupOccurrenceMap,
+        chordOccurrenceCorrectionMap,
+        chordSequenceIndexMap
+      );
+      const norm = normalizeChord(displayChord);
       return wasCorrected ? norm : adjustSpelling(norm, preferSharps);
     });
 
@@ -526,7 +537,8 @@ const AnalysisSummary: React.FC<AnalysisSummaryProps> = ({
     getSequenceDistance,
     isCyclicRotation,
     getPhraseAlignmentScore,
-    mostCommonChord
+    mostCommonChord,
+    keySignature
   ]);
 
   /* ---------- Audio Playback Logic ---------- */

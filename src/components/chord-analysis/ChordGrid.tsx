@@ -23,7 +23,7 @@ import GridLyricsRow, { type BeatGridTimedLyrics, groupPlacementsIntoRows } from
 import { enhanceLyricsWithCharacterTiming, type EnhancedLyricLine } from '@/utils/lyricsTimingUtils';
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
-import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar } from '@/utils/chordGridSegmentationLayout';
+import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar, SegmentedBeatCell } from '@/utils/chordGridSegmentationLayout';
 import AppTooltip from '@/components/common/AppTooltip';
 import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 
@@ -705,8 +705,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
           showChordLabel: boolean;
         }> = [];
 
-        const activeSlots = row.slots.filter((slot) => slot.cells.some((cell) => cell !== null));
-        activeSlots.forEach((slot, measureIdx) => {
+        row.slots.forEach((slot, measureIdx) => {
           slot.cells.forEach((cell) => {
             rowEntries.push(cell
               ? {
@@ -957,11 +956,34 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     return getLyricsForIndexRange(startIndex, endIndex);
   }, [actualBeatsPerMeasure, getLyricsForIndexRange]);
 
-  const getLyricsForSegmentedRow = useCallback((row: SegmentedSectionRow): GridLyricRowPlacement => {
-    const indexes = row.slots.flatMap((slot) => slot.cells.map((cell) => cell?.globalIndex).filter((index): index is number => typeof index === 'number'));
-    if (!indexes.length) return { placements: [], columnCount: 1 };
-    return getLyricsForIndexRange(Math.min(...indexes), Math.max(...indexes));
-  }, [getLyricsForIndexRange]);
+  const getLyricsForSegmentedRow = useCallback((row: SegmentedSectionRow, widthMeasuresPerRow: number): GridLyricRowPlacement => {
+    let firstCell: SegmentedBeatCell | null = null;
+    let firstCellRowIndex = -1;
+
+    for (let slotIdx = 0; slotIdx < row.slots.length; slotIdx++) {
+      const slot = row.slots[slotIdx];
+      for (let cellIdx = 0; cellIdx < slot.cells.length; cellIdx++) {
+        const cell = slot.cells[cellIdx];
+        if (cell) {
+          firstCell = cell;
+          firstCellRowIndex = slotIdx * slot.cells.length + cellIdx;
+          break;
+        }
+      }
+      if (firstCell) break;
+    }
+
+    if (!firstCell) {
+      return { placements: [], columnCount: 1 };
+    }
+
+    const beatsPerMeasure = row.slots[0]?.cells.length || actualBeatsPerMeasure;
+    const blockRowWidth = widthMeasuresPerRow * beatsPerMeasure;
+    const rowStartGlobalIndex = firstCell.globalIndex - firstCellRowIndex;
+    const rowEndGlobalIndex = rowStartGlobalIndex + blockRowWidth - 1;
+
+    return getLyricsForIndexRange(rowStartGlobalIndex, rowEndGlobalIndex);
+  }, [actualBeatsPerMeasure, getLyricsForIndexRange]);
 
   const renderLyricsRow = useCallback((lines: ReturnType<typeof getLyricsForGroupedRow>, key: string) => {
     if (!gridLyrics || lines.placements.length === 0) return null;
@@ -1130,21 +1152,15 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   }, [getLyricsForGroupedRow, renderChordGridCell, renderLyricsRow, shiftedChords.length]);
 
   const renderSegmentedRow = useCallback((row: SegmentedSectionRow, rowKey: string, widthMeasuresPerRow: number) => {
-    const lyricLines = getLyricsForSegmentedRow(row);
-
-    const activeSlots = row.slots.filter((slot) => slot.cells.some((cell) => cell !== null));
-    const activeCount = activeSlots.length;
-    const normalizedMeasuresPerRow = Math.max(1, widthMeasuresPerRow);
-    const rowWidthPercent = Math.min(100, (activeCount / normalizedMeasuresPerRow) * 100);
+    const lyricLines = getLyricsForSegmentedRow(row, widthMeasuresPerRow);
 
     return (
       <div 
         key={rowKey} 
         className="measure-row min-w-0"
-        style={{ width: `${rowWidthPercent}%` }}
       >
-        <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(activeCount)}`}>
-          {activeSlots.map((slot, measureIdx) => {
+        <div className={`grid gap-1 sm:gap-1 w-full ${getMeasuresPerRowGridClass(widthMeasuresPerRow)}`}>
+          {row.slots.map((slot, measureIdx) => {
             const visibleCells = getVisibleCellsForSegmentedSlot(slot.cells);
             const showMeasureBar = shouldRenderSegmentedSlotMeasureBar(slot.cells);
 
@@ -1264,7 +1280,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
               <div className="space-y-3">
                 {sectionBlocks.map((section, sectionIdx) => {
                   const rowsHeight = section.rows.reduce((sum, row) => {
-                    const lyricLines = getLyricsForSegmentedRow(row);
+                    const lyricLines = getLyricsForSegmentedRow(row, section.measuresPerRow);
                     const visualRows = groupPlacementsIntoRows(lyricLines.placements);
                     const lineCount = visualRows.length;
                     return sum + segmentationRowHeightPx + getLyricsBlockHeight(lineCount);

@@ -281,11 +281,10 @@ cloudbuild.yaml
 
 yt-dlp-server/
 
-scripts/node_modules/
-scripts/package.json
-scripts/package-lock.json
-scripts/testing
-scripts/utilities
+scripts/*
+!scripts/pre-deployment-checklist.sh
+!scripts/publish-repowiki-to-github-wiki.sh
+!scripts/post-deployment-verification.sh
 
 __tests__/
 __tests__/*

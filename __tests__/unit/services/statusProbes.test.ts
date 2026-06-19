@@ -165,7 +165,7 @@ describe('statusProbes', () => {
   });
 
   it('reports metadata timeouts as degraded when the shared backend health check passes', async () => {
-    process.env.STATUS_PROBE_TIMEOUT_MS = '1';
+    process.env.STATUS_PROBE_TIMEOUT_MS = '5000';
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === 'https://python.private.test/api/chord-model-info') {

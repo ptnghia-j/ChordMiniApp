@@ -1,6 +1,7 @@
 'use client';
 
 import Navigation from '@/components/common/Navigation';
+import { TracingBeam } from '@/components/ui/tracing-beam';
 
 // Helper function to parse and style change items with badges
 const renderChangeItem = (item: string, colorClass: string) => {
@@ -29,20 +30,36 @@ const renderChangeItem = (item: string, colorClass: string) => {
 export default function ChangelogPage() {
   const releases = [
     {
+      version: 'v0.6.5.5',
+      date: 'June 18, 2026',
+      title: 'UI/UX improvements',
+      description: 'Updated temporary audio extraction, added fallback audio playback and youtube embedded video unavailable, improved beat alignment algorithm',
+      features: [
+        'IMPROVED: Added fallback audio playback for when primary youtube embedded video playback is unavailable'
+      ],
+      technical: [
+        'FIX: Updated dependencies package',
+        'IMPROVED: Improved beat alignment algorithm to better handle time signature changes',
+        'IMPROVED: Updated to use temporary audio extraction service for production to mitigate youtube extraction issues'
+      ],
+      breaking: [
+      ]
+    },
+    {
       version: 'v0.6.5.4',
       date: 'May 27, 2026',
       title: 'UI/UX improvements',
       description: 'Enhanced the summary section, quiz game questions, audio extraction',
       features: [
-        'Retired bar chart beat animation in the summary section and replaced with a chord summary section',
-        'Added more questions to the quiz game during audio extraction and analysis for user engagement',
+        'IMPROVED: Retired bar chart beat animation in the summary section and replaced with a chord summary section',
+        'IMPROVED: Added more questions to the quiz game during audio extraction and analysis for user engagement',
       ],
       technical: [
-        'Experimenting summary algorithm for chord summarization',
-        'Distributed audio extraction among 2 workers to reduce extraction failure rate'
+        'NEW: Experimenting summary algorithm for chord summarization',
+        'IMPROVED: Distributed audio extraction among 2 workers to reduce extraction failure rate'
       ],
       breaking: [
-        'Chord summary section replaces the previous bar chart animation in the summary section'
+        'IMPROVED: Chord summary section replaces the previous bar chart animation in the summary section'
       ]
     },
     {
@@ -51,17 +68,17 @@ export default function ChangelogPage() {
       title: 'UI improvements',
       description: 'UI improvements across the app: homepage, analysis page, guitar and piano tabs',
       features: [
-        'Homepage background now features Light Rays theme',
-        'Pixel Snow theme is used for songs with words: [snow, snowflakes, winter] and by default during the winter time period (December-February)',
-        'Lyrics Panel has been removed and now lyrics is embedded directly into the Beat Chord grid',
-        'Added mini game during audio extraction and analysis for user engagement',
+        'IMPROVED: Homepage background now features Light Rays theme',
+        'IMPROVED: Pixel Snow theme is used for songs with words: [snow, snowflakes, winter] and by default during the winter time period (December-February)',
+        'IMPROVED: Lyrics Panel has been removed and now lyrics is embedded directly into the Beat Chord grid',
+        'IMPROVED: Added mini game during audio extraction and analysis for user engagement',
       ],
       technical: [
-        'React Bit\'s components are used for homepage and analysis page (for special effects)',
+        'IMPROVED: React Bit\'s components are used for homepage and analysis page (for special effects)',
         'Embedded lyrics now used as context to AI chatbot'
       ],
       breaking: [
-        'Embedded lyrics inside beat chord grid'
+        'IMPROVED: Embedded lyrics inside beat chord grid'
       ]
     },
     {
@@ -969,10 +986,8 @@ export default function ChangelogPage() {
 
         {/* Timeline Container */}
         <div className="relative max-w-6xl mx-auto">
-          {/* The vertical line in the middle of the timeline */}
-          <div className="absolute left-6 top-2 h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></div>
-
-          <div className="relative space-y-12">
+          <TracingBeam>
+            <div className="relative space-y-12">
             {releases.map((release, index) => (
               <div key={index} className="relative">
                 {/* The dot on the timeline */}
@@ -1041,7 +1056,8 @@ export default function ChangelogPage() {
               </div>
             ))}
           </div>
-        </div>
+        </TracingBeam>
+      </div>
       </div>
     </div>
   );
