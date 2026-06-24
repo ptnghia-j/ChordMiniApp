@@ -3,7 +3,7 @@ import { runSegmentAlignmentSolver } from './alignmentSolver';
 import { getBeatTime } from './gridShared';
 import { calculatePaddingAndShift } from './gridShifting';
 import { detectLocalMeterSegments } from './localMeterDetection';
-import { AudioMappingItem, ChordGridData, GridAnalysisResult } from './gridTypes';
+import { AudioMappingItem, ChordGridData, GridAnalysisResult, MetricSegment } from './gridTypes';
 
 type GridAssemblyAdapter = {
   paddingChord: string;
@@ -437,7 +437,7 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
   }
 
   const finalGridData = trimLeadingEmptyMeasures(compactedGridData, alignmentTimeSignature);
-  const metricSegments = singleDetectedMeter
+  let metricSegments = singleDetectedMeter
     ? [{
         startIndex: 0,
         endIndex: finalGridData.chords.length,
@@ -445,8 +445,109 @@ export function getChordGridData(analysisResults: GridAnalysisResult | null): Ch
       }]
     : detectLocalMeterSegments(finalGridData.chords, timeSignature);
 
+  if (!singleDetectedMeter && metricSegments.length < 2 && preliminaryMetricSegments.length >= 2) {
+    metricSegments = mapPreliminarySegments(
+      preliminaryMetricSegments,
+      finalGridData.originalAudioMapping,
+      finalGridData.chords.length
+    );
+  }
+
   return {
     ...finalGridData,
     metricSegments,
   };
+}
+
+function mapPreliminarySegments(
+  preliminarySegments: MetricSegment[],
+  originalAudioMapping: AudioMappingItem[] | undefined,
+  totalLength: number
+): MetricSegment[] {
+  if (!originalAudioMapping || originalAudioMapping.length === 0) {
+    return [];
+  }
+
+  const audioToVisual = new Map<number, number>();
+  originalAudioMapping.forEach((item) => {
+    audioToVisual.set(item.audioIndex, item.visualIndex);
+  });
+
+  const segments = preliminarySegments.map((segment) => {
+    let visualStartIndex = -1;
+    for (let a = segment.startIndex; a < segment.endIndex; a++) {
+      if (audioToVisual.has(a)) {
+        visualStartIndex = audioToVisual.get(a)!;
+        break;
+      }
+    }
+    if (visualStartIndex === -1) {
+      for (let a = segment.startIndex - 1; a >= 0; a--) {
+        if (audioToVisual.has(a)) {
+          visualStartIndex = audioToVisual.get(a)!;
+          break;
+        }
+      }
+    }
+    if (visualStartIndex === -1) {
+      visualStartIndex = 0;
+    }
+
+    let visualEndIndex = -1;
+    for (let a = segment.endIndex; a < totalLength; a++) {
+      if (audioToVisual.has(a)) {
+        visualEndIndex = audioToVisual.get(a)!;
+        break;
+      }
+    }
+    if (visualEndIndex === -1) {
+      for (let a = segment.endIndex - 1; a >= 0; a--) {
+        if (audioToVisual.has(a)) {
+          visualEndIndex = audioToVisual.get(a)!;
+          break;
+        }
+      }
+    }
+    if (visualEndIndex === -1) {
+      visualEndIndex = totalLength;
+    }
+
+    return {
+      startIndex: visualStartIndex,
+      endIndex: visualEndIndex,
+      beatsPerMeasure: segment.beatsPerMeasure,
+      score: segment.score,
+    };
+  });
+
+  const results: MetricSegment[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const prev = results[i - 1];
+
+    let startIndex = seg.startIndex;
+    if (prev) {
+      startIndex = prev.endIndex;
+    } else {
+      startIndex = 0;
+    }
+
+    let endIndex = seg.endIndex;
+    if (i === segments.length - 1) {
+      endIndex = totalLength;
+    }
+
+    if (endIndex > startIndex) {
+      results.push({
+        startIndex,
+        endIndex,
+        beatsPerMeasure: seg.beatsPerMeasure,
+        score: seg.score,
+      });
+    } else if (prev) {
+      prev.endIndex = endIndex;
+    }
+  }
+
+  return results;
 }

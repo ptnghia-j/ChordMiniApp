@@ -88,19 +88,26 @@ function getOptimalShiftResults(
     }];
   }
 
-  let leadingSilentRunLength = 0;
-  while (leadingSilentRunLength < chords.length && isSilentChord(chords[leadingSilentRunLength])) {
-    leadingSilentRunLength += 1;
+  let leadingIntroRunLength = 0;
+  if (chords.length > 0) {
+    const firstChord = chords[0];
+    const isSilent = isSilentChord(firstChord);
+    while (
+      leadingIntroRunLength < chords.length &&
+      (isSilent ? isSilentChord(chords[leadingIntroRunLength]) : chords[leadingIntroRunLength] === firstChord)
+    ) {
+      leadingIntroRunLength += 1;
+    }
   }
 
   const shouldPreserveShortIntroAlignment =
-    leadingSilentRunLength > 0 &&
-    leadingSilentRunLength < timeSignature &&
-    leadingSilentRunLength < chords.length &&
-    ((paddingCount + leadingSilentRunLength) % timeSignature) === 0;
+    leadingIntroRunLength > 0 &&
+    leadingIntroRunLength < timeSignature &&
+    leadingIntroRunLength < chords.length &&
+    ((paddingCount + leadingIntroRunLength) % timeSignature) === 0;
   const shouldPreserveLongIntroAlignment =
-    leadingSilentRunLength >= timeSignature &&
-    leadingSilentRunLength < chords.length;
+    leadingIntroRunLength >= timeSignature &&
+    leadingIntroRunLength < chords.length;
   const chordStartIndices: number[] = [];
 
   for (let index = 0; index < chords.length; index += 1) {
@@ -128,7 +135,7 @@ function getOptimalShiftResults(
     const chordLabels: string[] = [];
     const totalPadding = paddingCount + shift;
     const firstMusicalChordOnDownbeat = shouldPreserveShortIntroAlignment || shouldPreserveLongIntroAlignment
-      ? ((totalPadding + leadingSilentRunLength) % timeSignature) === 0
+      ? ((totalPadding + leadingIntroRunLength) % timeSignature) === 0
       : false;
     const earlyDownbeatStarts = earlyChordStartIndices.filter((chordStartIndex) => (
       (totalPadding + chordStartIndex) % timeSignature
