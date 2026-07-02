@@ -74,7 +74,7 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 - **Node.js 20.9+** and **npm 10+**
 - **Python 3.10.x** (3.10.16 recommended for the backend)
 - **Docker** (recommended for the standalone Sheet Sage melody service)
-- **Git LFS** (for SongFormer checkpoints)
+- **Git LFS** (for SongFormer checkpoints — if LFS bandwidth is exceeded, see [Alternative: script download](#alternative-download-model-checkpoints) below)
 - **Firebase account** (free tier)
 - **Gemini API** (free tier)
 
@@ -100,12 +100,29 @@ Synchronized lyrics transcription with AI chatbot for contextual music analysis 
 > [!NOTE]
 > `git lfs pull` downloads the large SongFormer model files referenced by this repo, including the checkpoint binaries stored as Git LFS objects.
 
+> [!TIP]
+> **Git LFS bandwidth exceeded?** See [Alternative download](#alternative-download-model-checkpoints) below.
+
 #### Verify that submodules are populated
 ```bash
 ls -la python_backend/models/Beat-Transformer/
 ls -la python_backend/models/Chord-CNN-LSTM/
 ls -la python_backend/models/ChordMini/
 ```
+
+#### Alternative: Download model checkpoints without Git LFS
+
+If you hit the Git LFS bandwidth limit (free accounts get 1 GB/month), or prefer not to use LFS:
+
+```bash
+git clone --recursive https://github.com/ptnghia-j/ChordMiniApp.git
+cd ChordMiniApp
+GIT_LFS_SKIP_SMUDGE=1 git lfs pull  # downloads LFS pointer files, not binaries
+chmod +x scripts/download_model_checkpoints.sh
+./scripts/download_model_checkpoints.sh
+```
+
+This downloads the same checkpoint files from the [GitHub Releases](https://github.com/ptnghia-j/ChordMiniApp/releases/tag/model-checkpoints-v1) instead of Git LFS. Place them at the expected paths. See `scripts/download_model_checkpoints.sh` for the full file list.
 
 > [!NOTE]
 > If chord recognition encounters an issue with FluidSynth, install it for MIDI synthesis.
