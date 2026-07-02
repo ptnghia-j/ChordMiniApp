@@ -40,6 +40,26 @@ describe('browserYtDlpExtractionService queue helpers', () => {
     });
   });
 
+  it('maps queue payloads with cooling_down status and leaseToken', () => {
+    expect(__browserYtDlpTestUtils.normalizeQueueState({
+      status: 'cooling_down',
+      leaseId: 'lease-1',
+      leaseToken: 'lease-1.12345.media.sig',
+      queuePosition: 0,
+      estimatedWaitSeconds: 300,
+      retryAfterSeconds: 300,
+      leaseExpiresAt: null,
+    })).toEqual({
+      status: 'cooling_down',
+      leaseId: 'lease-1',
+      leaseToken: 'lease-1.12345.media.sig',
+      queuePosition: 0,
+      estimatedWaitSeconds: 300,
+      retryAfterSeconds: 300,
+      leaseExpiresAt: null,
+    });
+  });
+
   it('adds the queue lease to proxied yt-dlp and media stream requests', () => {
     const headers = __browserYtDlpTestUtils.buildProxyRequestHeaders({
       Referer: 'https://www.youtube.com/watch?v=abcdefghijk',

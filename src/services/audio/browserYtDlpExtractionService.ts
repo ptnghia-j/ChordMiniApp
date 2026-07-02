@@ -42,13 +42,14 @@ interface WorkerExtractedData {
 }
 
 type ProgressStage = 'initializing' | 'extracting' | 'downloading' | 'converting' | 'uploading' | 'finalizing';
-export type BrowserYtDlpQueueStatus = 'queued' | 'active' | 'released' | 'cancelled' | 'expired';
+export type BrowserYtDlpQueueStatus = 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | 'cooling_down';
 
 const PROXY_LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 
 export interface BrowserYtDlpQueueState {
   status: BrowserYtDlpQueueStatus;
   leaseId: string;
+  leaseToken?: string;
   queuePosition: number;
   estimatedWaitSeconds: number;
   retryAfterSeconds?: number;
@@ -231,6 +232,7 @@ function normalizeQueueState(data: unknown): BrowserYtDlpQueueState {
   return {
     status: typeof record.status === 'string' ? record.status as BrowserYtDlpQueueStatus : 'expired',
     leaseId: String(record.leaseId || ''),
+    leaseToken: record.leaseToken ? String(record.leaseToken) : undefined,
     queuePosition: Number(record.queuePosition || 0),
     estimatedWaitSeconds: Number(record.estimatedWaitSeconds || 0),
     retryAfterSeconds: record.retryAfterSeconds ? Number(record.retryAfterSeconds) : undefined,
@@ -310,13 +312,15 @@ async function acquireProxyLease(
     });
     options.onQueueState?.(state);
 
-    while (state.status === 'queued') {
+    while (state.status === 'queued' || state.status === 'cooling_down') {
       const waitSeconds = Math.min(10, Math.max(1, state.retryAfterSeconds || state.estimatedWaitSeconds || 3));
       options.onProgress?.(
         'initializing',
-        state.queuePosition > 0
-          ? `Waiting for extraction queue slot ${state.queuePosition}. Estimated wait: ${Math.ceil((state.estimatedWaitSeconds || waitSeconds) / 60)} minute(s).`
-          : 'Waiting for the extraction queue...',
+        state.status === 'cooling_down'
+          ? `Queue is cooling down. Estimated wait: ${Math.ceil((state.estimatedWaitSeconds || waitSeconds) / 60)} minute(s).`
+          : state.queuePosition > 0
+            ? `Waiting for extraction queue slot ${state.queuePosition}. Estimated wait: ${Math.ceil((state.estimatedWaitSeconds || waitSeconds) / 60)} minute(s).`
+            : 'Waiting for the extraction queue...',
       );
       await delay(waitSeconds * 1000, options.abortSignal);
       state = await fetchQueueJson(proxyUrl, `/queue/status?leaseId=${encodeURIComponent(state.leaseId)}`, {
@@ -365,9 +369,10 @@ async function heartbeatProxyLease(proxyUrl: string, leaseId?: string | null): P
 
 function startProxyLeaseHeartbeat(
   proxyUrl: string,
-  leaseId: string | null,
+  leaseRef: { id: string | null; token: string | null },
   options: BrowserYtDlpOptions,
 ): () => void {
+  const leaseId = leaseRef.id;
   if (!leaseId || !isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl) || options.abortSignal?.aborted) {
     return () => undefined;
   }
@@ -385,6 +390,9 @@ function startProxyLeaseHeartbeat(
     void heartbeatProxyLease(proxyUrl, leaseId)
       .then((state) => {
         if (!stopped && state) {
+          if (state.leaseToken) {
+            leaseRef.token = state.leaseToken;
+          }
           options.onQueueState?.(state);
         }
       })
@@ -806,7 +814,7 @@ export async function extractAudioWithBrowserYtDlp(
   const hasDifferentProxies = ourAppProxy !== ultimaProxy;
 
   async function attemptExtraction(proxyUrl: string): Promise<BrowserYtDlpExtractionResult> {
-    let leaseId: string | null = null;
+    const leaseRef: { id: string | null; token: string | null } = { id: null, token: null };
     let stopLeaseHeartbeat: () => void = () => undefined;
     let extractionSucceeded = false;
 
@@ -818,13 +826,31 @@ export async function extractAudioWithBrowserYtDlp(
       } catch (leaseError) {
         throw new BrowserExtractionQueueError(leaseError instanceof Error ? leaseError.message : String(leaseError));
       }
-      leaseId = lease.leaseId || null;
-      stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseId, options);
+      leaseRef.id = lease.leaseId || null;
+      leaseRef.token = lease.leaseToken || leaseRef.id;
+      stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseRef, options);
       options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
-      const extracted = await waitForWorkerExtraction(videoUrl, options, leaseId, proxyUrl);
+      const extracted = await waitForWorkerExtraction(videoUrl, options, leaseRef.token, proxyUrl);
+
+      if (leaseRef.id && !isUltimaProxy(proxyUrl)) {
+        try {
+          options.onProgress?.('downloading', 'Releasing exclusive extraction queue lock...');
+          const downgradeResult = await fetchQueueJson(proxyUrl, '/queue/downgrade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leaseId: leaseRef.id }),
+            signal: options.abortSignal,
+          });
+          if (downgradeResult.leaseToken) {
+            leaseRef.token = downgradeResult.leaseToken;
+          }
+        } catch (err) {
+          console.warn('Failed to downgrade queue lease:', err);
+        }
+      }
 
       options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
-      const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseId, proxyUrl);
+      const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseRef.token, proxyUrl);
 
       const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
       if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
@@ -858,8 +884,8 @@ export async function extractAudioWithBrowserYtDlp(
       throw new Error(redactedMsg);
     } finally {
       stopLeaseHeartbeat();
-      if (leaseId !== null) {
-        await releaseProxyLease(proxyUrl, leaseId, extractionSucceeded);
+      if (leaseRef.id !== null) {
+        await releaseProxyLease(proxyUrl, leaseRef.id, extractionSucceeded);
       }
     }
   }

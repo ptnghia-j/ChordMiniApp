@@ -207,7 +207,7 @@ def run_extraction():
         },
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios'],
+                'player_client': ['android', 'ios', 'tvhtml5'],
                 'player_skip': ['webpage', 'configs'],
                 'skip': ['dash', 'hls', 'translated_subs'],
             },

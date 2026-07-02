@@ -2,7 +2,7 @@ import { AnalyzeAudioFileOptions } from '@/services/audio/audioProcessingService
 import { getTranscription, TranscriptionData } from '@/services/firebase/firestoreService';
 import { apiPost } from '@/config/api';
 import { LyricsData } from '@/types/musicAiTypes';
-import type { BrowserYtDlpQueueState } from '@/services/audio/browserYtDlpExtractionService';
+import type { BrowserYtDlpQueueState, BrowserYtDlpQueueStatus } from '@/services/audio/browserYtDlpExtractionService';
 
 // Types for the service
 interface ErrorWithSuggestion extends Error {
@@ -41,7 +41,7 @@ interface AudioProcessingState {
   fromFirestoreCache: boolean;
   error: string | null;
   suggestion?: string | null;
-  queueStatus?: 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | null;
+  queueStatus?: BrowserYtDlpQueueStatus | null;
   queuePosition?: number | null;
   estimatedWaitSeconds?: number | null;
   leaseId?: string | null;
