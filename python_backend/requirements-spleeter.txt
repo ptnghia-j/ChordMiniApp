@@ -1,0 +1,10 @@
+# ============================================================================
+# Spleeter requirements — separate because spleeter pins librosa<0.9.0 and
+# httpx<0.20.0, which conflicts with the main requirements.txt.
+#
+# Install only if you need Beat-Transformer source separation:
+#   pip install -r requirements-spleeter.txt
+# ============================================================================
+spleeter==2.3.2
+norbert==0.2.1
+ffmpeg-python==0.2.0
