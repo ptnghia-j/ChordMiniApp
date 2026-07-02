@@ -285,6 +285,7 @@ scripts/*
 !scripts/pre-deployment-checklist.sh
 !scripts/publish-repowiki-to-github-wiki.sh
 !scripts/post-deployment-verification.sh
+!scripts/download_model_checkpoints.sh
 
 __tests__/
 __tests__/*
