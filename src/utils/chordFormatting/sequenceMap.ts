@@ -16,6 +16,45 @@ export const buildBeatToChordSequenceMap = (
   // Use corrected sequence if available, otherwise use original chord sequence for mapping
   const referenceSequence = sequenceCorrections?.correctedSequence || shiftedChords;
   let sequenceIndex = 0;
+
+  // Helper to identify No Chord / silence representation
+  const isNoChord = (label: string): boolean => {
+    if (!label) return true;
+    const upper = label.trim().toUpperCase();
+    return upper === 'N' || upper === 'N.C.' || upper === 'N/C' || upper === 'NC' || upper === 'NO CHORD' || upper === '' || upper === '-';
+  };
+
+  // Find the first non-empty chord in shiftedChords to initialize sequenceIndex properly.
+  // This handles situations where a short leading N.C. is skipped in shiftedChords.
+  let firstChordIndex = -1;
+  for (let i = 0; i < shiftedChords.length; i++) {
+    if (shiftedChords[i] && shiftedChords[i] !== '') {
+      firstChordIndex = i;
+      break;
+    }
+  }
+
+  if (firstChordIndex !== -1) {
+    const firstNormalized = getChordComparisonKey(shiftedChords[firstChordIndex]);
+    if (sequenceCorrections?.correctedSequence) {
+      // Find the first matching chord in the corrected sequence
+      for (let i = 0; i < referenceSequence.length; i++) {
+        if (getChordComparisonKey(referenceSequence[i]) === firstNormalized) {
+          sequenceIndex = i;
+          break;
+        }
+      }
+    } else if (!isNoChord(shiftedChords[firstChordIndex])) {
+      // Fallback: search for first non-No-Chord Roman numeral in the original analysis sequence
+      for (let i = 0; i < romanNumeralData.analysis.length; i++) {
+        if (!isNoChord(romanNumeralData.analysis[i])) {
+          sequenceIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
   let lastNormalizedChord = '';
 
   for (let beatIndex = 0; beatIndex < shiftedChords.length; beatIndex++) {
