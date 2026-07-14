@@ -105,6 +105,14 @@ export interface TranscriptionData {
   displayPriority?: number | null;
   searchableKeys?: string[];
   usageCount?: number;
+  beatDetectionResult?: {
+    time_signature?: number;
+    bpm?: number;
+    beatShift?: number;
+    beat_time_range_start?: number;
+    paddingCount?: number;
+    shiftCount?: number;
+  };
 }
 
 export interface MelodyTranscriptionData extends SheetSageResult {
@@ -161,13 +169,8 @@ function rebuildSynchronizedChordsIfNeeded(
   data: TranscriptionData
 ): { chord: string; beatIndex: number; beatNum?: number }[] {
   const hasUsableInputs = Array.isArray(data.chords) && data.chords.length > 0 && Array.isArray(data.beats) && data.beats.length > 0;
-  const hasUsableSync = Array.isArray(data.synchronizedChords) && data.synchronizedChords.length === data.beats?.length;
 
   if (!hasUsableInputs) {
-    return sanitizeSynchronizedChords(data.synchronizedChords);
-  }
-
-  if (hasUsableSync) {
     return sanitizeSynchronizedChords(data.synchronizedChords);
   }
 
@@ -250,6 +253,16 @@ export function normalizeTranscriptionData(data: TranscriptionData): Transcripti
       typeof data.usageCount === 'number' && Number.isFinite(data.usageCount) && data.usageCount >= 0
         ? data.usageCount
         : 0,
+    beatDetectionResult: data.beatDetectionResult ?? (
+      (data.timeSignature !== undefined && data.timeSignature !== null) ||
+      (data.bpm !== undefined && data.bpm !== null)
+        ? {
+            time_signature: data.timeSignature ?? undefined,
+            bpm: data.bpm ?? undefined,
+            beatShift: data.beatShift ?? undefined,
+          }
+        : undefined
+    ),
   };
 }
 

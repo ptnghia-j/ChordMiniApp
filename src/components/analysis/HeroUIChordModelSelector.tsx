@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { Select, SelectItem, Chip } from '@heroui/react';
+import { IoMusicalNotes } from 'react-icons/io5';
+import { FaMusic } from 'react-icons/fa';
 import { useModelInfoQuery } from '@/hooks/query/useModelInfoQuery';
 import {
   ChordDetectorType,
@@ -129,18 +131,10 @@ const HeroUIChordModelSelector: React.FC<HeroUIChordModelSelectorProps> = ({
   const getModelIcon = (modelId: ChordDetectorType) => {
     switch (modelId) {
       case 'chord-cnn-lstm':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-          </svg>
-        );
+        return <IoMusicalNotes className="h-4 w-4" />;
       case 'btc-sl':
       case 'btc-pl':
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
+        return <FaMusic className="h-4 w-4" />;
       default:
         return null;
     }
