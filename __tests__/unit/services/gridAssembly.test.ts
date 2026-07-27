@@ -377,4 +377,27 @@ describe('getChordGridData — edge cases', () => {
     expect(result.chords.length).toBeGreaterThan(0);
     expect(result.originalAudioMapping).toBeDefined();
   });
+
+  it('filters out tiny non-global intro meter artifacts when main body is 4/4', () => {
+    const chords: string[] = [];
+    // 29 beats intro
+    ['E', 'E', 'E', 'E', 'E', 'B/4', 'B/4', 'B/4', 'E', 'E', 'E', 'E', 'E', 'E', 'B/4', 'B/4', 'E', 'E(9)', 'E(9)', 'E(9)', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E'].forEach(c => chords.push(c));
+    // 400 beats main body (4/4)
+    for (let i = 0; i < 100; i++) {
+      chords.push(...Array(4).fill(i % 2 === 0 ? 'E' : 'A'));
+    }
+
+    const result = getChordGridData(
+      makeAnalysisResult({
+        beats: chords.map((_, i) => i * 0.5),
+        synchronizedChords: chords.map((chord, beatIndex) => ({ chord, beatIndex })),
+        beatDetectionResult: { bpm: 120, time_signature: 4 },
+        beatModel: 'madmom',
+      })
+    );
+
+    // Should not produce spurious 3/4 metric segment
+    const hasSpurious34 = result.metricSegments?.some((s) => s.beatsPerMeasure === 3);
+    expect(hasSpurious34).toBe(false);
+  });
 });

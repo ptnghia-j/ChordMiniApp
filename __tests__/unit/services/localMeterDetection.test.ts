@@ -153,5 +153,21 @@ describe('local meter detection', () => {
     expect(segments[1]).toEqual(expect.objectContaining({ startIndex: 48, endIndex: 75 }));
     expect(segments[2]).toEqual(expect.objectContaining({ startIndex: 75, endIndex: chords.length }));
   });
+
+  it('reverts a small spurious non-global intro segment when global meter is 4/4 and nearly whole song is 4/4', () => {
+    const chords: string[] = [];
+
+    // Small 29-beat noisy intro (mimicking iOhULWGSHEk)
+    appendChordRuns(chords, [
+      ['E', 5], ['B/4', 3], ['E', 6], ['B/4', 2], ['E', 1], ['E(9)', 3], ['E', 9],
+    ]);
+
+    // Remaining 800+ beats in 4/4
+    for (let i = 0; i < 200; i++) {
+      appendHeldChord(chords, i % 2 === 0 ? 'E' : 'A', 4);
+    }
+
+    expect(detectLocalMeterSegments(chords, 4)).toEqual([]);
+  });
 });
 

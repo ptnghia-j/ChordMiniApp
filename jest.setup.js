@@ -70,11 +70,21 @@ global.AudioContext = jest.fn().mockImplementation(() => ({
     connect: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
-    frequency: { value: 440 }
+    frequency: {
+      value: 440,
+      setValueAtTime: jest.fn(),
+      exponentialRampToValueAtTime: jest.fn(),
+      linearRampToValueAtTime: jest.fn(),
+    }
   })),
   createGain: jest.fn(() => ({
     connect: jest.fn(),
-    gain: { value: 1 }
+    gain: {
+      value: 1,
+      setValueAtTime: jest.fn(),
+      exponentialRampToValueAtTime: jest.fn(),
+      linearRampToValueAtTime: jest.fn(),
+    }
   })),
   destination: {},
   sampleRate: 44100,
@@ -220,6 +230,33 @@ jest.mock('firebase/firestore', () => ({
   limit: jest.fn(),
   getDocs: jest.fn(),
 }))
+
+// Mock HeroUI Toast & Ripple to avoid dynamic imports in test environment
+jest.mock('@heroui/toast', () => ({
+  addToast: jest.fn(),
+  toast: jest.fn(),
+  ToastProvider: ({ children }) => children,
+  HeroUIToastProvider: ({ children }) => children,
+}));
+
+jest.mock('@heroui/ripple', () => ({
+  Ripple: () => null,
+  useRipple: () => ({
+    ripples: [],
+    onClear: jest.fn(),
+    onPress: jest.fn(),
+    onClick: jest.fn(),
+    getRippleProps: jest.fn(() => ({})),
+  }),
+}));
+
+jest.mock('smplr', () => ({
+  Soundfont: jest.fn().mockImplementation(() => ({
+    load: jest.fn().mockResolvedValue(undefined),
+    start: jest.fn(),
+    stop: jest.fn(),
+  })),
+}));
 
 // Mock dynamic imports
 jest.mock('next/dynamic', () => (func) => {

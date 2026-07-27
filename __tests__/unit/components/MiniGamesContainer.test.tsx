@@ -1,15 +1,16 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import MiniGamesContainer, {
-  generateEarQuestions,
-  generateGuitarQuestions,
-  generateQuizQuestions,
-} from '@/components/games/MiniGamesContainer';
 
 jest.mock('@tombatossals/react-chords/lib/Chord', () => ({
   __esModule: true,
   default: () => <div data-testid="mock-guitar-chord-diagram" />,
 }));
+
+import MiniGamesContainer, {
+  generateEarQuestions,
+  generateGuitarQuestions,
+  generateQuizQuestions,
+} from '@/components/games/MiniGamesContainer';
 
 describe('MiniGamesContainer', () => {
   beforeEach(() => {

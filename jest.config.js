@@ -11,6 +11,10 @@ const customJestConfig = {
   testEnvironment: 'jsdom',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^yaml$': '<rootDir>/node_modules/yaml/dist/index.js',
+    '^smplr$': '<rootDir>/node_modules/smplr/dist/index.js',
+    '^framer-motion/domAnimation$': '<rootDir>/node_modules/framer-motion/dist/cjs/dom-mini.js',
+    '^framer-motion/domMax$': '<rootDir>/node_modules/framer-motion/dist/cjs/dom.js',
   },
   testMatch: [
     '<rootDir>/__tests__/unit/**/*.test.{ts,tsx}',

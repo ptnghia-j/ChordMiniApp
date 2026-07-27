@@ -13,9 +13,17 @@
 - [beat_detection_service.py](file://python_backend/services/audio/beat_detection_service.py)
 - [chord_recognition_service.py](file://python_backend/services/audio/chord_recognition_service.py)
 - [serverBackend.ts](file://src/config/serverBackend.ts)
-- [apiService.ts](file://src/services/api/apiService.ts)
-- [firebase.ts](file://src/config/firebase.ts)
-- [docker-compose.yml](file://docker/docker-compose.yml)
+- [useAnalyzePageOrchestrator.ts](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts)
+- [extract-audio route.ts](file://src/app/api/extract-audio/route.ts)
+- [detect-beats route.ts](file://src/app/api/detect-beats/route.ts)
+- [recognize-chords route.ts](file://src/app/api/recognize-chords/route.ts)
+- [segmentation jobs route.ts](file://src/app/api/segmentation/jobs/route.ts)
+- [cloudTasksService.ts](file://src/services/google/cloudTasksService.ts)
+- [segmentationJobService.ts](file://src/services/firebase/segmentationJobService.ts)
+- [transcribe-sheetsage route.ts](file://src/app/api/transcribe-sheetsage/route.ts)
+- [SongFormer app.py](file://SongFormer/app.py)
+- [SheetSage app.py](file://sheetsage/app.py)
+- [docker-compose.prod.yml](file://docker-compose.prod.yml)
 - [docker-compose.dev.yml](file://docker/docker-compose.dev.yml)
 - [beat_transformer.py](file://python_backend/models/beat_transformer.py)
 </cite>
@@ -33,135 +41,109 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the ChordMiniApp system architecture, focusing on the separation between the Next.js frontend and the Python Flask backend, the microservices-style organization of machine learning capabilities, and the technology stack. It explains how the frontend communicates with backend services, how the backend orchestrates ML model inference, and how infrastructure and deployment topologies are organized. Cross-cutting concerns such as security, monitoring, and performance optimization are addressed, along with practical troubleshooting guidance.
+This document describes the current ChordMiniApp system architecture: a browser-based Next.js workspace, a Next.js route layer that coordinates cache and service calls, a Flask service for synchronous ML inference, and Firebase-backed persistence. It also covers the deliberately asynchronous SongFormer job flow and the separate SheetSage melody service. The explicit route and job boundaries matter: the browser does not directly invoke every ML service.
 
 ## Project Structure
-ChordMiniApp follows a clear separation of concerns:
-- Frontend: Next.js application under src/, responsible for UI, user interactions, and API orchestration.
-- Backend: Python Flask application under python_backend/, exposing REST endpoints and orchestrating ML services.
-- Infrastructure: Docker Compose configurations for local and development environments; Redis for rate limiting; Firebase for identity and storage.
+ChordMiniApp separates runtime responsibilities as follows:
+- Browser UI: the App Router workspace, audio playback, visualizations, and a browser-side `yt-dlp` worker for the production extraction strategy.
+- Next.js application layer: analysis orchestration, cache access, protected API routes, Firebase-offload endpoints, and optional-service adapters.
+- Flask ML layer: application factory, blueprints, service container, detector selection, and beat/chord inference.
+- Firebase and queues: Storage holds audio, Firestore holds cached analysis and job state, and Cloud Tasks invokes asynchronous segmentation work.
+- Optional compute: SongFormer completes callback-based segmentation jobs; SheetSage provides independent melody transcription.
 
 ```mermaid
-graph TB
-subgraph "Frontend (Next.js)"
-FE_API["apiService.ts<br/>Client API layer"]
-FE_FB["firebase.ts<br/>Firebase client"]
-FE_CFG["serverBackend.ts<br/>Runtime backend URLs"]
-end
-subgraph "Backend (Flask)"
-APP["app.py<br/>Application entry"]
-FACT["app_factory.py<br/>Application factory"]
-EXT["extensions.py<br/>CORS/Limiter"]
-CFG["config.py<br/>Config classes"]
-BP_BEATS["blueprints/beats/routes.py"]
-BP_CHORDS["blueprints/chords/routes.py"]
-BP_LYRICS["blueprints/lyrics/routes.py"]
-SVC_BEAT["services/audio/beat_detection_service.py"]
-SVC_CHORD["services/audio/chord_recognition_service.py"]
-end
-subgraph "Infrastructure"
-DC["docker-compose.yml"]
-DCDEV["docker-compose.dev.yml"]
-REDIS["Redis (rate limiting)"]
-FIRE["Firebase (Auth/Storage/Firestore)"]
-end
-FE_API --> APP
-FE_CFG --> FE_API
-FE_FB --> FIRE
-APP --> EXT
-APP --> CFG
-APP --> FACT
-FACT --> BP_BEATS
-FACT --> BP_CHORDS
-FACT --> BP_LYRICS
-BP_BEATS --> SVC_BEAT
-BP_CHORDS --> SVC_CHORD
-SVC_BEAT --> REDIS
-SVC_CHORD --> REDIS
-DCDEV --> APP
-DC --> APP
+architecture-beta
+    group browser(internet)[Browser]
+    service ui(internet)[Next.js workspace] in browser
+    service worker(server)[Browser extraction worker] in browser
+
+    group application(server)[Next.js application]
+    service routes(server)[Route handlers] in application
+
+    group backend(server)[Backend services]
+    service flask(server)[Flask ML API] in backend
+    service songformer(server)[SongFormer] in backend
+    service sheetsage(server)[SheetSage] in backend
+
+    group platform(cloud)[Platform]
+    service storage(disk)[Firebase Storage] in platform
+    service firestore(database)[Firestore] in platform
+    service tasks(cloud)[Cloud Tasks] in platform
+
+    ui:R --> L:routes
+    ui:B --> T:worker
+    worker:R --> L:storage
+    routes:R --> L:flask
+    routes:B --> T:storage
+    routes:B --> T:firestore
+    routes:R --> L:tasks
+    tasks:R --> L:songformer
+    songformer:B --> T:firestore
+    routes:R --> L:sheetsage
+    sheetsage:B --> T:firestore
 ```
 
 **Diagram sources**
-- [app.py:180-186](file://python_backend/app.py#L180-L186)
-- [app_factory.py:27-65](file://python_backend/app_factory.py#L27-L65)
-- [extensions.py:81-93](file://python_backend/extensions.py#L81-L93)
-- [config.py:195-215](file://python_backend/config.py#L195-L215)
-- [routes.py (beats):40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py (chords):43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
-- [routes.py (lyrics):22-72](file://python_backend/blueprints/lyrics/routes.py#L22-L72)
-- [beat_detection_service.py:20-100](file://python_backend/services/audio/beat_detection_service.py#L20-L100)
-- [chord_recognition_service.py:25-106](file://python_backend/services/audio/chord_recognition_service.py#L25-L106)
-- [docker-compose.yml:10-115](file://docker/docker-compose.yml#L10-L115)
-- [docker-compose.dev.yml:6-116](file://docker/docker-compose.dev.yml#L6-L116)
+- [useAnalyzePageOrchestrator.ts:369-790](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L369-L790)
+- [extract-audio route.ts:23-150](file://src/app/api/extract-audio/route.ts#L23-L150)
+- [app_factory.py:27-162](file://python_backend/app_factory.py#L27-L162)
+- [segmentation jobs route.ts:101-187](file://src/app/api/segmentation/jobs/route.ts#L101-L187)
+- [cloudTasksService.ts:86-135](file://src/services/google/cloudTasksService.ts#L86-L135)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
+- [transcribe-sheetsage route.ts:175-328](file://src/app/api/transcribe-sheetsage/route.ts#L175-L328)
 
 **Section sources**
-- [docker-compose.yml:10-115](file://docker/docker-compose.yml#L10-L115)
+- [serverBackend.ts:23-46](file://src/config/serverBackend.ts#L23-L46)
+- [docker-compose.prod.yml:12-108](file://docker-compose.prod.yml#L12-L108)
 - [docker-compose.dev.yml:6-116](file://docker/docker-compose.dev.yml#L6-L116)
 
 ## Core Components
-- Frontend API Layer: The Next.js frontend uses a typed API service to communicate with backend endpoints, applying client-side rate limiting and robust error handling. It also integrates Firebase for authentication and App Check tokens for request attestation.
-- Backend Application Factory: The Flask application is bootstrapped via an application factory that initializes extensions, registers blueprints, and constructs a simple service container for ML services.
-- Microservices-style Blueprints: The backend organizes endpoints into focused blueprints (beats, chords, lyrics, docs, health, debug), each encapsulating domain-specific routes and validators.
-- ML Services: Dedicated services orchestrate model selection, file size policies, and inference across multiple ML models (Beat-Transformer, Madmom, Librosa, Chord-CNN-LSTM, BTC variants).
-- Infrastructure: Docker Compose defines multi-container environments for local development and production-like setups, with optional Redis for rate limiting.
+- Analysis orchestration: the view model and orchestrator load cached state, coordinate extraction and inference, and expose state to the analysis workspace.
+- Route boundary: Next.js endpoints verify incoming requests and proxy direct or Firebase-offload analysis work to the primary Flask backend.
+- Flask application factory: configuration, extensions, blueprints, and an injected service container initialize together; blueprints delegate beat and chord processing to detector services.
+- Async segmentation: job creation, Firestore state, Cloud Tasks, SongFormer callback, and browser polling are separate from synchronous inference.
+- Firebase and deployment: Firebase Storage and Firestore back the runtime cache; Compose defines frontend/backend containers and optional local Redis support.
 
 **Section sources**
-- [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
-- [firebase.ts:400-464](file://src/config/firebase.ts#L400-L464)
+- [useAnalyzePageOrchestrator.ts:499-790](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L499-L790)
+- [detect-beats route.ts:17-95](file://src/app/api/detect-beats/route.ts#L17-L95)
+- [recognize-chords route.ts:17-107](file://src/app/api/recognize-chords/route.ts#L17-L107)
 - [app_factory.py:27-65](file://python_backend/app_factory.py#L27-L65)
-- [extensions.py:81-93](file://python_backend/extensions.py#L81-L93)
-- [routes.py (beats):40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py (chords):43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
-- [routes.py (lyrics):22-72](file://python_backend/blueprints/lyrics/routes.py#L22-L72)
-- [beat_detection_service.py:20-100](file://python_backend/services/audio/beat_detection_service.py#L20-L100)
-- [chord_recognition_service.py:25-106](file://python_backend/services/audio/chord_recognition_service.py#L25-L106)
+- [segmentationJobService.ts:131-249](file://src/services/firebase/segmentationJobService.ts#L131-L249)
+- [docker-compose.prod.yml:12-108](file://docker-compose.prod.yml#L12-L108)
 
 ## Architecture Overview
-The system follows a client-server architecture:
-- The Next.js frontend renders the UI and manages user interactions. It delegates ML-heavy tasks to backend services via REST endpoints.
-- The Flask backend exposes domain-specific endpoints behind blueprints, applies rate limiting, and coordinates ML inference through dedicated services.
-- Firebase provides identity, storage, and Firestore access for the frontend, while App Check tokens are attached to backend-to-backend requests for attestation.
+The operational path is cache-first. If a cached analysis is unavailable, the Next.js layer coordinates audio extraction and routes beat/chord work to Flask. Returned results are persisted for later requests. Segmentation follows the separate job topology: it is queued through Cloud Tasks and completed through the SongFormer callback rather than through a long-lived browser request.
 
 ```mermaid
-graph TB
-Browser["Browser (Next.js App)"]
-API["apiService.ts"]
-FB["firebase.ts"]
-BFF["Flask App (app.py)"]
-EXT["Extensions (CORS/Limiter)"]
-CFG["Config (config.py)"]
-FAC["App Factory (app_factory.py)"]
-BP_BEAT["Beats Blueprint"]
-BP_CHORD["Chords Blueprint"]
-BP_LYRIC["Lyrics Blueprint"]
-SVC_BEAT["Beat Detection Service"]
-SVC_CHORD["Chord Recognition Service"]
-Browser --> API
-API --> BFF
-Browser --> FB
-BFF --> EXT
-BFF --> CFG
-BFF --> FAC
-FAC --> BP_BEAT
-FAC --> BP_CHORD
-FAC --> BP_LYRIC
-BP_BEAT --> SVC_BEAT
-BP_CHORD --> SVC_CHORD
+---
+config:
+  layout: elk
+---
+flowchart LR
+    UI[Analyze workspace] --> CACHE{Cached analysis and audio?}
+    CACHE -->|yes| VIEW[Render persisted result]
+    CACHE -->|no| NEXT[Next extraction and analysis routes]
+    NEXT --> FLASK[Flask app factory and blueprints]
+    FLASK --> BEAT[Beat detector service]
+    FLASK --> CHORD[Chord detector service]
+    BEAT --> FIRESTORE[(Firestore)]
+    CHORD --> FIRESTORE
+    FIRESTORE --> VIEW
+    NEXT --> STORAGE[(Firebase Storage)]
+    UI --> JOBS[Segmentation job route]
+    JOBS --> TASKS[Cloud Tasks]
+    TASKS --> SONGFORMER[SongFormer]
+    SONGFORMER --> FIRESTORE
 ```
 
 **Diagram sources**
-- [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
-- [firebase.ts:400-464](file://src/config/firebase.ts#L400-L464)
-- [app.py:180-186](file://python_backend/app.py#L180-L186)
-- [extensions.py:81-93](file://python_backend/extensions.py#L81-L93)
-- [config.py:195-215](file://python_backend/config.py#L195-L215)
-- [app_factory.py:27-65](file://python_backend/app_factory.py#L27-L65)
-- [routes.py (beats):40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py (chords):43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
-- [routes.py (lyrics):22-72](file://python_backend/blueprints/lyrics/routes.py#L22-L72)
-- [beat_detection_service.py:20-100](file://python_backend/services/audio/beat_detection_service.py#L20-L100)
-- [chord_recognition_service.py:25-106](file://python_backend/services/audio/chord_recognition_service.py#L25-L106)
+- [useAnalyzePageOrchestrator.ts:499-790](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L499-L790)
+- [detect-beats-offload route.ts:37-110](file://src/app/api/detect-beats-offload/route.ts#L37-L110)
+- [recognize-chords-offload route.ts:22-78](file://src/app/api/recognize-chords-offload/route.ts#L22-L78)
+- [app_factory.py:68-162](file://python_backend/app_factory.py#L68-L162)
+- [segmentation jobs route.ts:101-187](file://src/app/api/segmentation/jobs/route.ts#L101-L187)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
 
 ## Detailed Component Analysis
 

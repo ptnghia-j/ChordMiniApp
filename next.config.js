@@ -77,16 +77,6 @@ const broadFilesystemTraceRoutes = [
 
 const nextConfig = {
   // Enable standalone output for Docker deployments
-  output: 'standalone',
-
-  outputFileTracingExcludes: Object.fromEntries(
-    broadFilesystemTraceRoutes.map((route) => [route, broadFilesystemTraceExcludes])
-  ),
-
-  // Server external packages - packages that should not be bundled
-  // @music.ai/sdk has a broken import for ../build.json that fails with Turbopack
-  serverExternalPackages: ['@music.ai/sdk'],
-
   // Transpile ES modules that need to be converted to CommonJS
   transpilePackages: [],
 
@@ -103,31 +93,15 @@ const nextConfig = {
     } : false,
   },
 
-  // Turbopack configuration (Next.js 16+ default bundler)
-  // Empty config silences the webpack migration warning
-  turbopack: {
-    // Turbopack rules for audio files
-    rules: {
-      '*.mp3': {
-        loaders: ['file-loader'],
-        as: '*.js',
-      },
-      '*.wav': {
-        loaders: ['file-loader'],
-        as: '*.js',
-      },
-      '*.ogg': {
-        loaders: ['file-loader'],
-        as: '*.js',
-      },
-      '*.flac': {
-        loaders: ['file-loader'],
-        as: '*.js',
-      },
-    },
-  },
+  // Server-only packages that should not be bundled (stabilized in Next.js 16)
+  serverExternalPackages: ['@music.ai/sdk'],
 
-  // Target modern browsers to reduce bundle size
+  // Output file tracing excludes (stabilized in Next.js 16)
+  outputFileTracingExcludes: Object.fromEntries(
+    broadFilesystemTraceRoutes.map((route) => [route, broadFilesystemTraceExcludes])
+  ),
+
+  // Experimental features
   experimental: {
     optimizePackageImports: ['firebase', '@firebase/app', '@firebase/firestore', '@firebase/auth'],
     nextScriptWorkers: false,
@@ -374,6 +348,21 @@ const nextConfig = {
       }
     }
 
+    if (!isServer) {
+      // Use resolve.alias (not fallback) to completely prevent webpack from
+      // tracing into firebase-admin's dependency tree on the client side.
+      // firebase-admin is server-only; dynamic imports in firebaseAdmin.ts
+      // are guarded by typeof window checks at runtime.
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'firebase-admin': false,
+        'firebase-admin/app': false,
+        'firebase-admin/auth': false,
+        'firebase-admin/storage': false,
+        'firebase-admin/firestore': false,
+      };
+    }
+
     // Handle ES modules properly
     config.resolve.extensionAlias = {
       '.js': ['.js', '.ts'],
@@ -383,8 +372,9 @@ const nextConfig = {
     return config;
   },
 
-  // Output configuration for Vercel deployment
-  // output: 'standalone', // Commented out for standard Vercel deployment
+  // Create the self-contained server bundle copied by the production Dockerfile.
+  // Vercel ignores this setting, so it remains compatible with Vercel deployments.
+  output: 'standalone',
 
   // Disable x-powered-by header
   poweredByHeader: false,

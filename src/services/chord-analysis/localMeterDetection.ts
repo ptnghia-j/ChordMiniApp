@@ -496,7 +496,11 @@ export function detectLocalMeterSegments(
         : count + (segment.endIndex - segment.startIndex)
     ), 0);
 
-    if (nonGlobalBeats < config.minSegmentBeats) {
+    const minNonGlobalRatio = 0.08;
+    if (
+      nonGlobalBeats < config.minSegmentBeats ||
+      (nonGlobalBeats < 32 && nonGlobalBeats / chords.length < minNonGlobalRatio)
+    ) {
       return [];
     }
   }

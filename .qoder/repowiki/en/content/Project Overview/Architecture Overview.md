@@ -3,20 +3,29 @@
 <cite>
 **Referenced Files in This Document**
 - [README.md](file://README.md)
+- [layout.tsx](file://src/app/layout.tsx)
+- [page.tsx](file://src/app/analyze/[videoId]/page.tsx)
+- [useAnalyzePageViewModel.ts](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts)
+- [useAnalyzePageOrchestrator.ts](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts)
+- [serverBackend.ts](file://src/config/serverBackend.ts)
+- [extract-audio route.ts](file://src/app/api/extract-audio/route.ts)
+- [browserYtDlpExtractionService.ts](file://src/services/audio/browserYtDlpExtractionService.ts)
+- [browser-ytdlp-worker.js](file://public/browser-ytdlp-worker.js)
+- [finalize-browser-extraction route.ts](file://src/app/api/audio/finalize-browser-extraction/route.ts)
+- [detect-beats route.ts](file://src/app/api/detect-beats/route.ts)
+- [recognize-chords route.ts](file://src/app/api/recognize-chords/route.ts)
 - [app.py](file://python_backend/app.py)
 - [app_factory.py](file://python_backend/app_factory.py)
-- [routes.py](file://python_backend/blueprints/beats/routes.py)
-- [routes.py](file://python_backend/blueprints/chords/routes.py)
-- [layout.tsx](file://src/app/layout.tsx)
-- [api.ts](file://src/config/api.ts)
-- [serverBackend.ts](file://src/config/serverBackend.ts)
-- [apiService.ts](file://src/services/api/apiService.ts)
+- [routes.py (beats)](file://python_backend/blueprints/beats/routes.py)
+- [routes.py (chords)](file://python_backend/blueprints/chords/routes.py)
 - [chord_recognition_service.py](file://python_backend/services/audio/chord_recognition_service.py)
 - [beat_detection_service.py](file://python_backend/services/audio/beat_detection_service.py)
-- [firebase.json](file://firebase/firebase.json)
-- [docker-compose.yml](file://docker/docker-compose.yml)
-- [app.py](file://SongFormer/app.py)
-- [app.py](file://sheetsage/app.py)
+- [segmentation jobs route.ts](file://src/app/api/segmentation/jobs/route.ts)
+- [cloudTasksService.ts](file://src/services/google/cloudTasksService.ts)
+- [SongFormer app.py](file://SongFormer/app.py)
+- [transcribe-sheetsage route.ts](file://src/app/api/transcribe-sheetsage/route.ts)
+- [SheetSage app.py](file://sheetsage/app.py)
+- [docker-compose.prod.yml](file://docker-compose.prod.yml)
 </cite>
 
 ## Table of Contents
@@ -31,162 +40,163 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document presents the architecture of ChordMiniApp, an open-source music analysis platform that combines a Next.js frontend, a Python Flask backend, and specialized machine learning services. The system supports beat detection, chord recognition, optional melody transcription, and synchronized lyrics. It integrates Firebase for storage and authentication, and provides optional standalone services for advanced segmentation and melody transcription.
+ChordMiniApp is a music-analysis web application built around a Next.js client and route layer, a Flask machine-learning service, and Firebase-backed caching. The browser owns the interactive analysis workspace and the production browser-side audio extraction path; Next.js route handlers enforce the application boundary before work reaches Flask or optional services. SongFormer segmentation is an asynchronous job flow, while SheetSage melody transcription remains an independent optional service.
 
 ## Project Structure
 The repository is organized into:
-- Frontend: Next.js application under src/, with pages, components, services, and configuration
-- Python backend: Flask application under python_backend/ exposing ML endpoints
-- Optional ML services: SongFormer (structural segmentation) and Sheetsage (melody transcription) under SongFormer/ and sheetsage/
-- Infrastructure: Docker Compose for local and production deployments, Firebase configuration
+- Browser and application shell: the Next.js App Router under `src/app/`, shared components, hooks, services, and workers under `src/` and `public/`.
+- Orchestration boundary: analysis view-model and Next.js API routes coordinate cache lookup, browser extraction, Firebase offload, and calls to ML services.
+- Primary compute service: the Flask application under `python_backend/` hosts beat and chord endpoints backed by detector services.
+- Platform services: Firebase Storage stores audio, Firestore stores cached analyses and job state, and Cloud Tasks drives asynchronous segmentation work.
+- Optional services: SongFormer performs structural segmentation through a callback job contract; SheetSage supplies experimental melody transcription.
+- Deployment: Docker and Compose definitions package the frontend, Flask backend, and optional services for local and production-like environments.
 
 ```mermaid
-graph TB
-subgraph "Frontend (Next.js)"
-FE_App["Next.js App<br/>Pages, Components, Services"]
-FE_Config["Frontend Config<br/>API Routing, Env"]
-end
-subgraph "Backend (Flask)"
-BE_Flask["Flask App Factory<br/>Blueprints, Services"]
-BE_Beat["Beat Routes"]
-BE_Chord["Chord Routes"]
-end
-subgraph "Optional ML Services"
-SF["SongFormer Service"]
-SS["Sheetsage Service"]
-end
-subgraph "Infrastructure"
-FB["Firebase<br/>Storage, Auth, Rules"]
-DC["Docker Compose"]
-end
-FE_App --> FE_Config
-FE_Config --> BE_Flask
-FE_Config --> SF
-FE_Config --> SS
-BE_Flask --> BE_Beat
-BE_Flask --> BE_Chord
-BE_Flask --> FB
-SF --> FB
-SS --> FB
-DC --> FE_App
-DC --> BE_Flask
-DC --> SF
-DC --> SS
+architecture-beta
+    group browser(internet)[Browser]
+    service ui(internet)[Next.js UI] in browser
+    service worker(server)[yt-dlp worker] in browser
+
+    group application(server)[Next.js application]
+    service api(server)[API routes] in application
+
+    group compute(server)[Compute services]
+    service flask(server)[Flask ML API] in compute
+    service songformer(server)[SongFormer] in compute
+    service sheetsage(server)[SheetSage] in compute
+
+    group platform(cloud)[Platform]
+    service storage(disk)[Firebase Storage] in platform
+    service firestore(database)[Firestore] in platform
+    service tasks(cloud)[Cloud Tasks] in platform
+
+    ui:R --> L:api
+    ui:B --> T:worker
+    worker:R --> L:storage
+    api:R --> L:flask
+    api:B --> T:storage
+    api:B --> T:firestore
+    api:R --> L:tasks
+    tasks:R --> L:songformer
+    songformer:B --> T:firestore
+    api:R --> L:sheetsage
+    sheetsage:B --> T:firestore
 ```
 
 **Diagram sources**
-- [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [app.py:87-186](file://python_backend/app.py#L87-L186)
-- [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py:43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
-- [docker-compose.yml:10-115](file://docker/docker-compose.yml#L10-L115)
+- [layout.tsx:219-234](file://src/app/layout.tsx#L219-L234)
+- [page.tsx:27-123](file://src/app/analyze/[videoId]/page.tsx#L27-L123)
+- [browserYtDlpExtractionService.ts:420-585](file://src/services/audio/browserYtDlpExtractionService.ts#L420-L585)
+- [app_factory.py:27-65](file://python_backend/app_factory.py#L27-L65)
+- [segmentation jobs route.ts:101-187](file://src/app/api/segmentation/jobs/route.ts#L101-L187)
+- [cloudTasksService.ts:86-135](file://src/services/google/cloudTasksService.ts#L86-L135)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
+- [SheetSage app.py:41-281](file://sheetsage/app.py#L41-L281)
 
 **Section sources**
-- [README.md:1-556](file://README.md#L1-L556)
-- [docker-compose.yml:10-115](file://docker/docker-compose.yml#L10-L115)
+- [README.md:1-521](file://README.md#L1-L521)
+- [serverBackend.ts:23-46](file://src/config/serverBackend.ts#L23-L46)
+- [docker-compose.prod.yml:12-108](file://docker-compose.prod.yml#L12-L108)
 
 ## Core Components
-- Next.js frontend: Renders UI, orchestrates API calls, manages Firebase integration, and handles user interactions for audio analysis and visualization.
-- Flask backend: Exposes REST endpoints for beat detection, chord recognition, and related utilities; delegates to internal services and detectors.
-- Beat detection service: Orchestrates multiple detectors (Beat-Transformer, madmom, librosa) with size-aware selection and fallback strategies.
-- Chord recognition service: Orchestrates Chord-CNN-LSTM and BTC variants (SL/PL), with chord dictionary validation and optional Spleeter separation.
-- Optional services:
-  - SongFormer: Structural segmentation (functional sections) using PyTorch models.
-  - Sheetsage: Experimental melody transcription using PyTorch models.
-- Firebase: Storage for audio, Firestore for metadata and caches, and authentication.
+- Analysis workspace: the `/analyze/[videoId]` page composes playback, controls, result panels, and optional views. Its view model and orchestrator coordinate state, cache lookup, extraction, analysis, and result rendering.
+- Audio acquisition and cache: the browser-side `yt-dlp` worker is the production extraction strategy. It uploads a temporary candidate to Firebase Storage, then a protected finalizer promotes it to the reusable audio path.
+- Next.js API boundary: direct beat/chord routes verify App Check and proxy multipart work to Flask; Firebase-offload variants send storage URLs for larger files.
+- Flask ML service: its application factory registers blueprints and injected services. Beat detection chooses among Beat-Transformer, Madmom, and Librosa; chord recognition selects Chord-CNN-LSTM or BTC variants.
+- Firebase and jobs: Storage is the audio source of truth and Firestore stores analysis, enrichment, melody, and segmentation-job records. Cloud Tasks invokes SongFormer after the Next job route creates and deduplicates a job.
+- Optional services: SongFormer reports progress and completion through the job callback. SheetSage accepts file or Firebase URL input and caches normalized melody data in Firestore.
 
 **Section sources**
-- [layout.tsx:143-228](file://src/app/layout.tsx#L143-L228)
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [app.py:87-186](file://python_backend/app.py#L87-L186)
+- [useAnalyzePageViewModel.ts:76-138](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts#L76-L138)
+- [useAnalyzePageOrchestrator.ts:369-419](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L369-L419)
+- [browser-ytdlp-worker.js:37-295](file://public/browser-ytdlp-worker.js#L37-L295)
+- [finalize-browser-extraction route.ts:32-138](file://src/app/api/audio/finalize-browser-extraction/route.ts#L32-L138)
+- [detect-beats route.ts:17-95](file://src/app/api/detect-beats/route.ts#L17-L95)
+- [recognize-chords route.ts:17-107](file://src/app/api/recognize-chords/route.ts#L17-L107)
 - [beat_detection_service.py:20-348](file://python_backend/services/audio/beat_detection_service.py#L20-L348)
 - [chord_recognition_service.py:25-322](file://python_backend/services/audio/chord_recognition_service.py#L25-L322)
-- [app.py:549-698](file://SongFormer/app.py#L549-L698)
-- [app.py:21-175](file://sheetsage/app.py#L21-L175)
-- [firebase.json:1-10](file://firebase/firebase.json#L1-L10)
+- [segmentationJobService.ts:131-249](file://src/services/firebase/segmentationJobService.ts#L131-L249)
+- [transcribe-sheetsage route.ts:175-328](file://src/app/api/transcribe-sheetsage/route.ts#L175-L328)
 
 ## Architecture Overview
-The system follows a microservices-style backend with a Flask application hosting multiple ML endpoints, while the frontend remains stateless and communicates via HTTP. Optional ML services are provided as separate Flask applications for segmentation and melody transcription.
+The normal analysis path is cache-first. The analysis orchestrator checks Firestore and Firebase Storage before requesting extraction, then the Next.js route layer passes direct or offloaded beat/chord work to Flask. The UI renders a persisted result after the detector services return. Segmentation is intentionally separate: the browser creates a job, Cloud Tasks invokes SongFormer, and the service calls back to update the Firestore job that the browser polls.
 
 ```mermaid
-graph TB
-Client["Browser (Next.js SPA)"]
-FE["Frontend API Layer<br/>src/config/api.ts<br/>src/services/api/apiService.ts"]
-BE["Flask Backend<br/>python_backend/app.py<br/>blueprints"]
-SVC_Beat["Beat Detection Service"]
-SVC_Chord["Chord Recognition Service"]
-Det_BT["Beat-Transformer Detector"]
-Det_Madmom["Madmom Detector"]
-Det_Librosa["Librosa Detector"]
-Det_CNNLSTM["Chord-CNN-LSTM Detector"]
-Det_BTC["BTC SL/PL Detectors"]
-SF["SongFormer Service"]
-SS["Sheetsage Service"]
-FB["Firebase"]
-Client --> FE
-FE --> BE
-BE --> SVC_Beat
-BE --> SVC_Chord
-SVC_Beat --> Det_BT
-SVC_Beat --> Det_Madmom
-SVC_Beat --> Det_Librosa
-SVC_Chord --> Det_CNNLSTM
-SVC_Chord --> Det_BTC
-FE --> SF
-FE --> SS
-BE --> FB
-SF --> FB
-SS --> FB
+---
+config:
+  layout: elk
+---
+flowchart LR
+    UI[Analyze view] --> CACHE{Firestore and Storage cache}
+    CACHE -->|hit| DISPLAY[Render cached analysis]
+    CACHE -->|miss| EXTRACT[Next extract-audio route]
+    EXTRACT -->|production strategy| WORKER[Browser yt-dlp worker]
+    WORKER --> FINALIZE[Finalize Firebase candidate]
+    FINALIZE --> STORAGE[(Firebase Storage)]
+    EXTRACT --> ANALYZE[Next beat and chord routes]
+    STORAGE --> ANALYZE
+    ANALYZE --> FLASK[Flask blueprints]
+    FLASK --> BEATS[Beat detectors]
+    FLASK --> CHORDS[Chord detectors]
+    BEATS --> PERSIST[(Firestore)]
+    CHORDS --> PERSIST
+    PERSIST --> DISPLAY
+    UI --> JOB[Segmentation job route]
+    JOB --> TASKS[Cloud Tasks]
+    TASKS --> SONGFORMER[SongFormer callback job]
+    SONGFORMER --> PERSIST
 ```
 
 **Diagram sources**
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
-- [app.py:87-186](file://python_backend/app.py#L87-L186)
-- [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py:43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
-- [beat_detection_service.py:20-348](file://python_backend/services/audio/beat_detection_service.py#L20-L348)
-- [chord_recognition_service.py:25-322](file://python_backend/services/audio/chord_recognition_service.py#L25-L322)
-- [app.py:549-698](file://SongFormer/app.py#L549-L698)
-- [app.py:21-175](file://sheetsage/app.py#L21-L175)
+- [useAnalyzePageOrchestrator.ts:499-790](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L499-L790)
+- [extract-audio route.ts:23-150](file://src/app/api/extract-audio/route.ts#L23-L150)
+- [browserYtDlpExtractionService.ts:594-935](file://src/services/audio/browserYtDlpExtractionService.ts#L594-L935)
+- [detect-beats-offload route.ts:37-110](file://src/app/api/detect-beats-offload/route.ts#L37-L110)
+- [recognize-chords-offload route.ts:22-78](file://src/app/api/recognize-chords-offload/route.ts#L22-L78)
+- [routes.py (beats):40-155](file://python_backend/blueprints/beats/routes.py#L40-L155)
+- [routes.py (chords):43-211](file://python_backend/blueprints/chords/routes.py#L43-L211)
+- [segmentationAsyncService.ts:112-183](file://src/services/api/segmentationAsyncService.ts#L112-L183)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
 
 ## Detailed Component Analysis
 
 ### Frontend API and Routing
-- API routing is centralized to distinguish between Vercel-hosted endpoints and the Python backend. ML endpoints are proxied to the Flask backend.
-- The frontend constructs URLs using environment-driven base URLs and selects endpoints for beat/chord recognition, lyrics, and model info.
-- The API service adds timeouts, retries, and client-side rate limiting, and attaches Firebase App Check tokens when available.
+- The analysis page delegates state and side effects to its view model and orchestrator, which check cached transcription and audio records before starting work.
+- Next.js route handlers are the boundary for extraction and model calls: the direct beat/chord routes verify App Check before proxying multipart requests to Flask, while offload routes pass Firebase Storage URLs for larger files.
+- Backend URLs are resolved separately for the primary Flask, SongFormer, and SheetSage services, so optional services do not share an implicit direct client contract.
 
 ```mermaid
 sequenceDiagram
-participant UI as "Next.js UI"
-participant API as "apiService.ts"
-participant CFG as "api.ts"
-participant SRV as "Flask Backend"
-participant BEAT as "Beat Routes"
-participant CHORD as "Chord Routes"
-UI->>CFG : Resolve endpoint and base URL
-CFG-->>API : API_ROUTES + BACKEND_URLS
-UI->>API : apiService.postFormData(endpoint, formData, options)
-API->>SRV : HTTP POST to /api/detect-beats or /api/recognize-chords
-SRV->>BEAT : Route handler
-SRV->>CHORD : Route handler
-BEAT-->>API : JSON result
-CHORD-->>API : JSON result
-API-->>UI : ApiResponse
+participant UI as "Analyze view"
+participant VM as "Analysis view model"
+participant ORCH as "Analysis orchestrator"
+participant CACHE as "Firestore and Storage"
+participant NEXT as "Next API routes"
+participant FLASK as "Flask ML API"
+UI->>VM : Start or restore analysis
+VM->>ORCH : Coordinate audio and result state
+ORCH->>CACHE : Check cached analysis and audio
+alt Cache hit
+    CACHE-->>ORCH : Cached transcription
+    ORCH-->>UI : Render result
+else Cache miss
+    ORCH->>NEXT : Extract audio or submit analysis
+    NEXT->>FLASK : Proxy verified beat and chord requests
+    FLASK-->>NEXT : Detection results
+    NEXT->>CACHE : Persist reusable result
+    CACHE-->>UI : Analysis payload
+end
 ```
 
 **Diagram sources**
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
-- [routes.py:40-120](file://python_backend/blueprints/beats/routes.py#L40-L120)
-- [routes.py:43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
+- [useAnalyzePageViewModel.ts:189-292](file://src/app/analyze/[videoId]/_hooks/useAnalyzePageViewModel.ts#L189-L292)
+- [useAnalyzePageOrchestrator.ts:499-790](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L499-L790)
+- [detect-beats route.ts:17-95](file://src/app/api/detect-beats/route.ts#L17-L95)
+- [recognize-chords route.ts:17-107](file://src/app/api/recognize-chords/route.ts#L17-L107)
 
 **Section sources**
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [apiService.ts:29-407](file://src/services/api/apiService.ts#L29-L407)
-- [serverBackend.ts:23-56](file://src/config/serverBackend.ts#L23-L56)
+- [extract-audio route.ts:7-150](file://src/app/api/extract-audio/route.ts#L7-L150)
+- [serverBackend.ts:23-46](file://src/config/serverBackend.ts#L23-L46)
 
 ### Flask Backend Orchestration
 - The Flask app is created via an application factory, registering blueprints for health, docs, beats, chords, lyrics, and optional debug endpoints.
@@ -195,7 +205,7 @@ API-->>UI : ApiResponse
 
 ```mermaid
 sequenceDiagram
-participant Client as "Frontend"
+participant Client as "Next API routes"
 participant Flask as "Flask App Factory"
 participant BP_Beat as "Beats Blueprint"
 participant BP_Chord as "Chords Blueprint"
@@ -282,66 +292,72 @@ Meta --> End(["Return result"])
 - [routes.py:43-143](file://python_backend/blueprints/chords/routes.py#L43-L143)
 
 ### Optional ML Services
-- SongFormer: Standalone Flask service for structural segmentation using PyTorch models. Supports local or remote audio sources, caching, and async callbacks.
-- Sheetsage: Standalone Flask service for experimental melody transcription with runtime checks and asset availability.
+- SongFormer is invoked through an asynchronous job contract. The Next.js job route creates or deduplicates a Firestore record and queues Cloud Tasks; SongFormer reports completion through a token-checked callback while the browser polls the job.
+- SheetSage is a separate Flask service. Its Next.js adapter can forward uploaded audio or a Firebase URL, then caches normalized melody events in Firestore for later visualization.
 
 ```mermaid
-graph TB
-subgraph "SongFormer"
-SF_API["/api/songformer/segment"]
-SF_Init["Model Initialization"]
-SF_Cache["Result Cache"]
-end
-subgraph "Sheetsage"
-SS_API["/transcribe"]
-SS_Init["Runtime Init"]
-end
-FE["Frontend"] --> SF_API
-FE --> SS_API
-SF_API --> SF_Init
-SF_API --> SF_Cache
-SS_API --> SS_Init
+sequenceDiagram
+participant UI as "Browser"
+participant JOB as "Next segmentation job route"
+participant DB as "Firestore"
+participant TASK as "Cloud Tasks"
+participant SF as "SongFormer"
+participant SS as "SheetSage route"
+UI->>JOB : Create segmentation job
+JOB->>DB : Create or reuse job record
+JOB->>TASK : Enqueue async payload
+TASK->>SF : POST audio URL and callback data
+SF->>JOB : PATCH progress or completion
+JOB->>DB : Persist normalized result
+UI->>SS : Transcribe file or Firebase URL
+SS->>DB : Cache melody data
 ```
 
 **Diagram sources**
-- [app.py:549-698](file://SongFormer/app.py#L549-L698)
-- [app.py:21-175](file://sheetsage/app.py#L21-L175)
+- [segmentation jobs route.ts:101-187](file://src/app/api/segmentation/jobs/route.ts#L101-L187)
+- [cloudTasksService.ts:86-135](file://src/services/google/cloudTasksService.ts#L86-L135)
+- [segmentationAsyncService.ts:112-183](file://src/services/api/segmentationAsyncService.ts#L112-L183)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
+- [transcribe-sheetsage route.ts:175-328](file://src/app/api/transcribe-sheetsage/route.ts#L175-L328)
 
 **Section sources**
-- [app.py:549-698](file://SongFormer/app.py#L549-L698)
-- [app.py:21-175](file://sheetsage/app.py#L21-L175)
+- [SheetSage app.py:41-281](file://sheetsage/app.py#L41-L281)
+- [sheetSageTranscriptionClient.ts:116-145](file://src/services/sheetsage/sheetSageTranscriptionClient.ts#L116-L145)
 
 ## Dependency Analysis
-- Frontend-to-backend: API routing distinguishes between Vercel-hosted endpoints and the Flask backend. ML endpoints are proxied to the backend.
-- Backend-to-services: Flask app initializes services and injects them into the app context for route handlers.
-- Optional services: SongFormer and Sheetsage are separate Flask apps that can be run independently or co-located with the main backend.
+- Browser-to-application: the analysis view delegates cache and request coordination to the view model, orchestrator, and Next.js route handlers.
+- Application-to-compute: the Next.js boundary proxies primary beat/chord inference to Flask, whose factory wires routes to injected detector services.
+- Application-to-platform: Firebase holds cached audio and analysis records. Long-running segmentation runs through Firestore and Cloud Tasks rather than a direct browser-to-SongFormer request.
+- Optional compute: SheetSage is independently addressable through its adapter and may receive a Firebase URL directly in production.
 
 ```mermaid
-graph LR
-FE["Frontend"] --> API_CFG["API Config"]
-API_CFG --> BE["Flask Backend"]
-BE --> SVC_B["Beat Service"]
-BE --> SVC_C["Chord Service"]
-SVC_B --> DET_B["Detectors"]
-SVC_C --> DET_C["Detectors"]
-FE --> SF["SongFormer"]
-FE --> SS["Sheetsage"]
-BE --> FB["Firebase"]
-SF --> FB
-SS --> FB
+flowchart LR
+    UI[Analyze view] --> ORCH[View model and orchestrator]
+    ORCH --> ROUTES[Next API routes]
+    ORCH <--> FIREBASE[(Firebase Storage and Firestore)]
+    ROUTES --> FLASK[Flask app factory and blueprints]
+    FLASK --> BEATS[Beat detection service]
+    FLASK --> CHORDS[Chord recognition service]
+    ROUTES --> JOBS[Segmentation job route]
+    JOBS --> TASKS[Cloud Tasks]
+    TASKS --> SONGFORMER[SongFormer]
+    SONGFORMER --> FIREBASE
+    ROUTES --> SHEETSAGE[SheetSage adapter]
+    SHEETSAGE --> FIREBASE
 ```
 
 **Diagram sources**
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [app.py:87-186](file://python_backend/app.py#L87-L186)
+- [useAnalyzePageOrchestrator.ts:369-419](file://src/hooks/analyze/useAnalyzePageOrchestrator.ts#L369-L419)
+- [app_factory.py:68-162](file://python_backend/app_factory.py#L68-L162)
 - [beat_detection_service.py:20-348](file://python_backend/services/audio/beat_detection_service.py#L20-L348)
 - [chord_recognition_service.py:25-322](file://python_backend/services/audio/chord_recognition_service.py#L25-L322)
-- [app.py:549-698](file://SongFormer/app.py#L549-L698)
-- [app.py:21-175](file://sheetsage/app.py#L21-L175)
+- [segmentationJobService.ts:201-249](file://src/services/firebase/segmentationJobService.ts#L201-L249)
+- [SongFormer app.py:565-707](file://SongFormer/app.py#L565-L707)
+- [sheetSageTranscriptionClient.ts:116-145](file://src/services/sheetsage/sheetSageTranscriptionClient.ts#L116-L145)
 
 **Section sources**
-- [api.ts:13-51](file://src/config/api.ts#L13-L51)
-- [app.py:87-186](file://python_backend/app.py#L87-L186)
+- [serverBackend.ts:23-46](file://src/config/serverBackend.ts#L23-L46)
+- [docker-compose.prod.yml:12-108](file://docker-compose.prod.yml#L12-L108)
 
 ## Performance Considerations
 - Timeouts and retries: The frontend sets generous timeouts for ML operations and disables retries for heavy operations to avoid double-processing.
@@ -365,4 +381,4 @@ SS --> FB
 - [firebase.json:1-10](file://firebase/firebase.json#L1-L10)
 
 ## Conclusion
-ChordMiniApp employs a clean separation of concerns: a responsive Next.js frontend, a modular Flask backend delegating to specialized services, and optional standalone ML services for advanced tasks. The architecture balances flexibility, scalability, and maintainability, leveraging Firebase for storage and authentication and Docker Compose for repeatable deployments.
+ChordMiniApp separates interactive browser work, application orchestration, ML inference, and long-running optional services without treating them as a single direct-call graph. Next.js and Firebase form the coordination boundary, Flask remains the primary synchronous inference service, and SongFormer is deliberately job-driven. This distinction makes the storage lifecycle, failure handling, and service deployment model clearer than the earlier frontend-to-service diagrams.
