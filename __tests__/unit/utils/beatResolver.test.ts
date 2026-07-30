@@ -98,12 +98,12 @@ describe('resolveBeatAtTime: empty grid guard', () => {
 // resolveBeatAtTime — PHASE 1 (pre-model context)
 // ----------------------------------------------------------------------------
 
-describe('resolveBeatAtTime: PHASE 1 padding cells', () => {
-  it('emits the best-matching padding cell for a time before the model range', () => {
+describe('resolveBeatAtTime: PHASE 1 pre-beat phase', () => {
+  it('emits beatIndex -1 for a time before the first detected beat to avoid highlighting starting greyed-out cells', () => {
     // animationRangeStart = 2.0 (first detected beat)
     // time=0.6 < 2.0 - PHASE_SWITCH_BUFFER ⇒ PHASE 1
-    // paddingCount=2, shiftCount=0, padding timestamps at 0.0 and 0.5
-    // Expect: bestPaddingIndex = 1 → finalBeatIndex = 0 + 1 = 1
+    // paddingCount=2, shiftCount=0
+    // Expect: beatIndex = -1 (starting padding cells must not be highlighted)
     const result = resolveBeatAtTime({
       time: 0.6,
       chordGridData: {
@@ -122,16 +122,14 @@ describe('resolveBeatAtTime: PHASE 1 padding cells', () => {
     });
 
     expect(result.shouldSkipEmit).toBe(false);
-    expect(result.beatIndex).toBe(1);
-    expect(result.nextHysteresisState.lastEmittedBeat).toBe(1);
-    expect(result.nextHysteresisState.lastEmitTime).toBe(0.6);
+    expect(result.beatIndex).toBe(-1);
+    expect(result.nextHysteresisState.lastEmittedBeat).toBe(-1);
   });
 
-  it('falls back to a BPM-based virtual beat when no padding cells exist', () => {
+  it('emits beatIndex -1 when in pre-beat phase even with virtual BPM estimation', () => {
     // animationRangeStart = 2.0, bpm=120 → beatDuration=0.5
     // time=0.3 < 2.0-0.03 ⇒ PHASE 1
-    // paddingCount=0 so virtualBeatIndex = floor(0.3/0.5)+shiftCount = 0+2 = 2
-    // chords[2] = 'C' (non-empty) ⇒ emit index 2
+    // Expect: beatIndex = -1 (no starting greyed-out cell highlighted)
     const result = resolveBeatAtTime({
       time: 0.3,
       chordGridData: {
@@ -140,7 +138,7 @@ describe('resolveBeatAtTime: PHASE 1 padding cells', () => {
         hasPadding: false,
         paddingCount: 0,
         shiftCount: 2,
-        totalPaddingCount: 0,
+        totalPaddingCount: 2,
       },
       analysisResults: makeAnalysisResults({
         beats: [{ time: 2.0, strength: 1 }],
@@ -150,7 +148,7 @@ describe('resolveBeatAtTime: PHASE 1 padding cells', () => {
     });
 
     expect(result.shouldSkipEmit).toBe(false);
-    expect(result.beatIndex).toBe(2);
+    expect(result.beatIndex).toBe(-1);
   });
 
   it('does not emit inside the PHASE_SWITCH_BUFFER window', () => {
@@ -212,6 +210,35 @@ describe('resolveBeatAtTime: PHASE 2 via originalAudioMapping', () => {
 
     expect(result.shouldSkipEmit).toBe(false);
     expect(result.beatIndex).toBe(1);
+  });
+
+  it('emits beatIndex for the first functioning model rest (N.C.) cell in originalAudioMapping even when totalPaddingCount spans leading indices', () => {
+    // animationRangeStart = 0.5, time = 1.0
+    // totalPaddingCount = 3 (shift/padding cells visually span 0..2)
+    // originalAudioMapping starts at visualIndex 2 (the first functioning model N.C. cell)
+    const result = resolveBeatAtTime({
+      time: 1.0,
+      chordGridData: {
+        chords: ['', '', 'N.C.', 'C'],
+        beats: [0.0, 0.5, 1.0, 1.5],
+        hasPadding: true,
+        paddingCount: 2,
+        shiftCount: 1,
+        totalPaddingCount: 3,
+        originalAudioMapping: [
+          { timestamp: 1.0, chord: 'N.C.', visualIndex: 2 },
+          { timestamp: 1.5, chord: 'C', visualIndex: 3 },
+        ],
+      },
+      analysisResults: makeAnalysisResults({
+        beats: [{ time: 0.5, strength: 1 }],
+      }),
+      hysteresisState: makeHysteresis(),
+      globalSpeedAdjustment: null,
+    });
+
+    expect(result.shouldSkipEmit).toBe(false);
+    expect(result.beatIndex).toBe(2);
   });
 
   it('filters empty-cell matches back to -1 once past the pre-beat phase', () => {

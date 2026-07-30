@@ -73,6 +73,18 @@ describe('errorMessageUtils', () => {
         false,
         true,
       ],
+      [
+        'Your extraction queue lease expired. Please try again.',
+        'Extraction Session Expired',
+        true,
+        true,
+      ],
+      [
+        'Audio converter worker is unavailable (500). Please try again.',
+        'Audio Converter Unavailable',
+        false,
+        true,
+      ],
     ])(
       'maps "%s" to the expected user-facing category',
       (error, title, showTryAnotherButton, extractionError) => {

@@ -148,10 +148,12 @@ describe('useScrollAndAnimation (master clock driven)', () => {
     expect(deps.setCurrentTime).toHaveBeenCalledWith(10.1);
   });
 
-  it('animates through padding beats before the first detected beat timestamp', () => {
+  it('does not highlight starting padding beats before the first detected beat timestamp', () => {
     mockMaster.getLivePosition.mockReturnValue(0.6);
     const deps = {
       ...createDeps(),
+      currentBeatIndex: 2,
+      currentBeatIndexRef: { current: 2 },
       analysisResults: {
         beats: [{ time: 1 }],
         downbeats: [],
@@ -169,6 +171,7 @@ describe('useScrollAndAnimation (master clock driven)', () => {
 
     flushAnimationFrames(3);
 
-    expect(deps.setCurrentBeatIndex).toHaveBeenCalledWith(1);
+    // Starting padding cells must not be highlighted during pre-beat phase
+    expect(deps.setCurrentBeatIndex).toHaveBeenCalledWith(-1);
   });
 });

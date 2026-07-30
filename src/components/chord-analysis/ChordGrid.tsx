@@ -24,6 +24,7 @@ import { enhanceLyricsWithCharacterTiming, type EnhancedLyricLine } from '@/util
 import { getDisplayAccidentalPreference } from '@/utils/chordUtils';
 import { getSegmentationColor } from '@/utils/segmentationColors';
 import { buildSegmentedSectionBlocks, getVisibleCellsForSegmentedSlot, SegmentedSectionRow, shouldRenderSegmentedSlotMeasureBar, SegmentedBeatCell } from '@/utils/chordGridSegmentationLayout';
+import { buildChordCellStates } from '@/utils/chordCellState';
 import AppTooltip from '@/components/common/AppTooltip';
 import type { MetricSegment } from '@/services/chord-analysis/gridTypes';
 
@@ -290,6 +291,14 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     ? Array.from(new Set(metricSegments.map((segment) => `${segment.beatsPerMeasure}/4`))).join(' + ')
     : undefined;
 
+  // Derive disabled cells once. A real mapped N.C. beat remains functional even
+  // if alignment metadata would otherwise classify its visual index as padding.
+  const { disabledCellIndices } = useMemo(() => buildChordCellStates(
+    chords.length,
+    originalAudioMapping,
+    paddingCount + shiftCount,
+  ), [chords.length, originalAudioMapping, paddingCount, shiftCount]);
+
   // Use custom hook for chord data processing
   const {
     shiftedChords,
@@ -302,7 +311,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     shiftCount,
     showCorrectedChords,
     sequenceCorrections,
-    originalAudioMapping
+    originalAudioMapping,
+    disabledCellIndices
   );
 
   // Compute a global accidental preference for consistent rendering.
@@ -330,7 +340,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const { handleBeatClick, isClickable } = useChordInteractions(
     onBeatClick || null,
     beats,
-    originalAudioMapping
+    originalAudioMapping,
+    disabledCellIndices
   );
 
   // Use custom hook for loop beat selection
@@ -410,7 +421,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   );
 
   // Use utility function for chord styling
-  const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true) => {
+  const getChordStyleLocal = useCallback((chord: string, beatIndex: number, isClickable: boolean = true, isDisabled: boolean = false) => {
     return getChordStyle(
       chord,
       beatIndex,
@@ -418,9 +429,9 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
       hasPickupBeats,
       timeSignature,
       pickupBeatsCount,
-      paddingCount + shiftCount,
+      isDisabled,
     );
-  }, [hasPickupBeats, timeSignature, pickupBeatsCount, paddingCount, shiftCount]);
+  }, [hasPickupBeats, timeSignature, pickupBeatsCount]);
 
   // Memoized measure grouping with proper pickup beat handling using shifted chords
   const groupedByMeasure = useMemo<GroupedMeasure[]>(() => {
@@ -1014,7 +1025,8 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
   const renderChordGridCell = useCallback((chord: string, globalIndex: number, cellKey: string) => {
     const showChordLabel = shouldShowChordLabelLocal(globalIndex);
     const isEmpty = chord === '';
-    const isClickableCell = isClickable(globalIndex, chord);
+    const isDisabled = disabledCellIndices.has(globalIndex);
+    const isClickableCell = isClickable(globalIndex, chord, showChordLabel);
     const { chord: displayChord, wasCorrected } = getDisplayChordLocal(chord, globalIndex);
     const chordSequenceIndex = beatToChordSequenceMap[globalIndex];
     const rawRomanNumeral = showRomanNumerals && showChordLabel && romanNumeralData?.analysis && chordSequenceIndex !== undefined
@@ -1037,6 +1049,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
         isEmpty={isEmpty}
         displayChord={displayChord}
         wasCorrected={wasCorrected}
+        isDisabled={isDisabled}
         onBeatClick={handleBeatClick}
         getChordStyle={getChordStyleLocal}
         getDynamicFontSize={getDynamicFontSize}
@@ -1059,6 +1072,7 @@ const ChordGrid: React.FC<ChordGridProps> = React.memo(({
     accidentalPreference,
     beatToChordSequenceMap,
     cellSize,
+    disabledCellIndices,
     editedChords,
     formatRomanNumeralMemo,
     getChordStyleLocal,

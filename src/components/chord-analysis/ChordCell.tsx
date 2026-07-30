@@ -16,9 +16,10 @@ export interface ChordCellProps {
   isEmpty: boolean;
   displayChord: string;
   wasCorrected: boolean;
+  isDisabled: boolean;
   segmentationClassName?: string;
   onBeatClick: (globalIndex: number) => void;
-  getChordStyle: (chord: string, globalIndex: number, isClickable: boolean) => string;
+  getChordStyle: (chord: string, globalIndex: number, isClickable: boolean, isDisabled?: boolean) => string;
   getDynamicFontSize: (cellSize: number, chordLength: number) => string;
   isEditMode?: boolean;
   editedChord?: string;
@@ -86,6 +87,7 @@ const areChordCellPropsEqual = (
   // Edit mode state
   if (prevProps.isEditMode !== nextProps.isEditMode) return false;
   if (prevProps.isClickable !== nextProps.isClickable) return false;
+  if (prevProps.isDisabled !== nextProps.isDisabled) return false;
 
   // Loop playback state
   if (prevProps.isLoopEnabled !== nextProps.isLoopEnabled) return false;
@@ -119,6 +121,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
   isEmpty,
   displayChord,
   wasCorrected,
+  isDisabled,
   segmentationClassName,
   onBeatClick,
   getChordStyle,
@@ -150,6 +153,9 @@ export const ChordCell = React.memo<ChordCellProps>(({
 
   // Memoize click handler to prevent recreation on every render
   const handleClick = useCallback(() => {
+    if (isDisabled) {
+      return;
+    }
     if (isEditMode && !isEmpty) {
       setIsEditing(true);
     } else if (isLoopEnabled && onLoopBeatClick) {
@@ -158,7 +164,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
     } else if (isClickable) {
       onBeatClick(globalIndex);
     }
-  }, [isEditMode, isEmpty, isLoopEnabled, onLoopBeatClick, isClickable, onBeatClick, globalIndex]);
+  }, [isDisabled, isEditMode, isEmpty, isLoopEnabled, onLoopBeatClick, isClickable, onBeatClick, globalIndex]);
 
   // Handle edit save
   const handleEditSave = useCallback(() => {
@@ -260,7 +266,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
     <div
       ref={cellRef}
       id={`chord-${globalIndex}`}
-      className={`${getChordStyle(chord, globalIndex, isClickable)} w-full h-full ${
+      className={`${getChordStyle(chord, globalIndex, isClickable, isDisabled)} w-full h-full ${
         compact
           ? '' // No min-height in compact mode (strip cells)
           : showRomanNumerals
@@ -269,6 +275,7 @@ export const ChordCell = React.memo<ChordCellProps>(({
       } ${stateClassName} chord-cell`}
       data-beat-index={globalIndex}
       data-is-empty={isEmpty ? "true" : "false"}
+      data-is-disabled={isDisabled ? "true" : "false"}
       style={{
         overflow: canOverflowLabel ? 'visible' : undefined,
         zIndex: canOverflowLabel ? 2 : undefined,

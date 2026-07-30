@@ -63,7 +63,7 @@ const BeatHighlighter: React.FC<BeatHighlighterProps> = ({ cellRefsMap }) => {
 
       // Highlight the current cell via direct ref lookup
       const currentCell = cellRefsMap.current?.get(currentBeatIndex);
-      if (currentCell) {
+      if (currentCell && currentCell.dataset.isDisabled !== "true") {
         clearReleaseTimer(currentCell);
         currentCell.classList.remove("beat-highlight-releasing");
         currentCell.classList.add("current-beat-highlight");

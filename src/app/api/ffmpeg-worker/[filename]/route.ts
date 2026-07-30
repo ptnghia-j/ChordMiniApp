@@ -1,5 +1,3 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -11,37 +9,16 @@ const ALLOWED_FFMPEG_WORKER_FILES = new Set([
 ]);
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ filename: string }> }
 ) {
-  try {
-    const { filename } = await params;
-    if (!ALLOWED_FFMPEG_WORKER_FILES.has(filename)) {
-      return NextResponse.json({ error: 'Unknown ffmpeg worker file.' }, { status: 404 });
-    }
-
-    const filePath = path.join(
-      process.cwd(),
-      'node_modules',
-      '@ffmpeg',
-      'ffmpeg',
-      'dist',
-      'esm',
-      filename
-    );
-    const source = await fs.readFile(filePath, 'utf8');
-
-    return new Response(source, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/javascript; charset=utf-8',
-        'Cache-Control': 'public, max-age=86400',
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load ffmpeg worker file.' },
-      { status: 500 }
-    );
+  const { filename } = await params;
+  if (!ALLOWED_FFMPEG_WORKER_FILES.has(filename)) {
+    return NextResponse.json({ error: 'Unknown ffmpeg worker file.' }, { status: 404 });
   }
+
+  // These modules are generated into public/ before dev and production builds.
+  // Redirecting preserves the old API URL for clients with a cached bundle while
+  // avoiding a runtime dependency on node_modules in Next standalone deployments.
+  return NextResponse.redirect(new URL(`/ffmpeg-worker/${filename}`, request.url), 307);
 }

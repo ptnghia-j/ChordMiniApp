@@ -9,7 +9,9 @@
     "./src/app/globals.css"
   ],
   "scripts": {
+    "predev": "node scripts/prepare-ffmpeg-worker.mjs",
     "dev": "next dev --webpack -p 3000",
+    "prebuild": "node scripts/prepare-ffmpeg-worker.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint src --ext .ts,.tsx,.js,.jsx",

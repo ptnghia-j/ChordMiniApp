@@ -1,6 +1,7 @@
 import { getAppCheckTokenForApi, getCurrentAuthUser, ensureAuthReady, getStorageInstance } from '@/config/firebase';
 import { loadPublicConfig } from '@/config/publicConfig';
 import {
+  BROWSER_YTDLP_FFMPEG_WORKER_PATH,
   BROWSER_YTDLP_MAX_FINAL_BYTES,
   BROWSER_YTDLP_OUTPUT_FORMAT,
   BROWSER_YTDLP_WORKER_PATH,
@@ -8,9 +9,12 @@ import {
 } from '@/services/audio/browserYtDlpConfig';
 
 export class BrowserExtractionQueueError extends Error {
-  constructor(message: string) {
+  readonly terminalLease: boolean;
+
+  constructor(message: string, options: { terminalLease?: boolean } = {}) {
     super(message);
     this.name = 'BrowserExtractionQueueError';
+    this.terminalLease = options.terminalLease === true;
   }
 }
 
@@ -45,6 +49,9 @@ type ProgressStage = 'initializing' | 'extracting' | 'downloading' | 'converting
 export type BrowserYtDlpQueueStatus = 'queued' | 'active' | 'released' | 'cancelled' | 'expired' | 'cooling_down';
 
 const PROXY_LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
+const FFMPEG_WORKER_CHECK_TIMEOUT_MS = 10_000;
+const FFMPEG_LOAD_TIMEOUT_MS = 45_000;
+const FFMPEG_CONVERSION_TIMEOUT_MS = 5 * 60_000;
 
 export interface BrowserYtDlpQueueState {
   status: BrowserYtDlpQueueStatus;
@@ -138,11 +145,126 @@ function redactProxyUrl(message: string, primaryProxy?: string, secondaryProxy?:
 }
 
 function isDltkkTemporaryFallbackEnabled(config: Awaited<ReturnType<typeof loadPublicConfig>>): boolean {
-  return String(config.NEXT_PUBLIC_ENABLE_DLTKK_TEMP_FALLBACK ?? '1') !== '0';
+  // This third-party fallback is intentionally opt-in. Its failure is noisy in
+  // browser DevTools and should not delay the maintained proxy pipeline.
+  return String(config.NEXT_PUBLIC_ENABLE_DLTKK_TEMP_FALLBACK ?? '0') === '1';
 }
 
 function buildProxyUrl(proxyUrl: string, targetUrl: string): string {
   return `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}url=${encodeURIComponent(targetUrl)}`;
+}
+
+function buildProxyEndpoint(proxyUrl: string, path: string): string {
+  return `${proxyUrl.replace(/\/+$/, '')}${path}`;
+}
+
+function hasTerminalQueueStatus(data: Record<string, unknown>): boolean {
+  return data.status === 'expired' || data.status === 'cancelled' || data.status === 'released';
+}
+
+function createTerminalLeaseError(): BrowserExtractionQueueError {
+  return new BrowserExtractionQueueError(
+    'Your extraction queue lease expired. Please try again.',
+    { terminalLease: true },
+  );
+}
+
+function createAbortError(): DOMException {
+  return new DOMException('Browser extraction aborted', 'AbortError');
+}
+
+function throwIfAborted(abortSignal?: AbortSignal): void {
+  if (!abortSignal?.aborted) {
+    return;
+  }
+
+  if (abortSignal.reason instanceof Error) {
+    throw abortSignal.reason;
+  }
+
+  throw createAbortError();
+}
+
+function createLinkedAbortController(parentSignal?: AbortSignal): {
+  controller: AbortController;
+  disconnect: () => void;
+} {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+
+  if (parentSignal?.aborted) {
+    abortFromParent();
+  } else {
+    parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+  }
+
+  return {
+    controller,
+    disconnect: () => parentSignal?.removeEventListener('abort', abortFromParent),
+  };
+}
+
+function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+  abortSignal?: AbortSignal,
+): Promise<T> {
+  if (abortSignal?.aborted) {
+    try {
+      throwIfAborted(abortSignal);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let timerId: number | null = null;
+
+    const cleanup = () => {
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+        timerId = null;
+      }
+      abortSignal?.removeEventListener('abort', onAbort);
+    };
+
+    const settle = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const resolveOnce = (value: T) => {
+      settle(() => resolve(value));
+    };
+
+    const rejectOnce = (reason: unknown) => {
+      settle(() => reject(reason));
+    };
+
+    const onAbort = () => {
+      try {
+        throwIfAborted(abortSignal);
+      } catch (error) {
+        rejectOnce(error instanceof Error ? error : createAbortError());
+      }
+    };
+
+    timerId = window.setTimeout(() => {
+      rejectOnce(new Error(timeoutMessage));
+    }, timeoutMs);
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+    operation.then(
+      resolveOnce,
+      (error) => rejectOnce(error instanceof Error ? error : new Error(String(error))),
+    );
+  });
 }
 
 function buildProxyRequestHeaders(headers: Record<string, string> | undefined, leaseId?: string | null): HeadersInit {
@@ -276,8 +398,15 @@ async function fetchQueueJson(
   path: string,
   init: RequestInit,
 ): Promise<BrowserYtDlpQueueState> {
-  const response = await fetch(`${proxyUrl}${path}`, init);
+  const response = await fetch(buildProxyEndpoint(proxyUrl, path), init);
   const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (
+    response.status === 410
+    || data.error === 'youtube_proxy_lease_expired'
+    || hasTerminalQueueStatus(data)
+  ) {
+    throw createTerminalLeaseError();
+  }
   if (!response.ok) {
     throw new Error(getQueueErrorMessage(data, `YouTube extraction queue request failed (${response.status})`));
   }
@@ -346,7 +475,7 @@ async function releaseProxyLease(proxyUrl: string, leaseId?: string | null, succ
     return;
   }
 
-  await fetch(`${proxyUrl}/queue/release`, {
+  await fetch(buildProxyEndpoint(proxyUrl, '/queue/release'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ leaseId, success }),
@@ -371,6 +500,7 @@ function startProxyLeaseHeartbeat(
   proxyUrl: string,
   leaseRef: { id: string | null; token: string | null },
   options: BrowserYtDlpOptions,
+  onTerminalLeaseError?: (error: BrowserExtractionQueueError) => void,
 ): () => void {
   const leaseId = leaseRef.id;
   if (!leaseId || !isExternalProxyUrl(proxyUrl) || isUltimaProxy(proxyUrl) || options.abortSignal?.aborted) {
@@ -380,6 +510,23 @@ function startProxyLeaseHeartbeat(
   let stopped = false;
   let inFlight = false;
   let intervalId: number | null = null;
+
+  const stop = () => {
+    stopped = true;
+    if (intervalId !== null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+    }
+    options.abortSignal?.removeEventListener('abort', stop);
+  };
+
+  const failTerminalLease = (error: BrowserExtractionQueueError) => {
+    if (stopped) {
+      return;
+    }
+    stop();
+    onTerminalLeaseError?.(error);
+  };
 
   const pulse = () => {
     if (stopped || inFlight || options.abortSignal?.aborted) {
@@ -393,22 +540,21 @@ function startProxyLeaseHeartbeat(
           if (state.leaseToken) {
             leaseRef.token = state.leaseToken;
           }
+          if (state.status === 'expired' || state.status === 'cancelled' || state.status === 'released') {
+            failTerminalLease(createTerminalLeaseError());
+            return;
+          }
           options.onQueueState?.(state);
         }
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        if (error instanceof BrowserExtractionQueueError && error.terminalLease) {
+          failTerminalLease(error);
+        }
+      })
       .finally(() => {
         inFlight = false;
       });
-  };
-
-  const stop = () => {
-    stopped = true;
-    if (intervalId !== null) {
-      window.clearInterval(intervalId);
-      intervalId = null;
-    }
-    options.abortSignal?.removeEventListener('abort', stop);
   };
 
   intervalId = window.setInterval(pulse, PROXY_LEASE_HEARTBEAT_INTERVAL_MS);
@@ -525,12 +671,15 @@ async function fetchAudioBytesViaProxy(
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function getFfmpegInstance(onProgress?: BrowserYtDlpOptions['onProgress']) {
+async function getFfmpegInstance(
+  onProgress?: BrowserYtDlpOptions['onProgress'],
+  abortSignal?: AbortSignal,
+) {
   if (ffmpegInstancePromise) {
     return ffmpegInstancePromise;
   }
 
-  ffmpegInstancePromise = (async () => {
+  const initialize = async () => {
     const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
       import('@ffmpeg/ffmpeg'),
       import('@ffmpeg/util'),
@@ -543,16 +692,58 @@ async function getFfmpegInstance(onProgress?: BrowserYtDlpOptions['onProgress'])
       onProgress?.('converting', 'Converting audio to medium-quality MP3...', Math.round((progress || 0) * 100));
     });
 
-    await ffmpeg.load({
-      classWorkerURL: `${window.location.origin}/api/ffmpeg-worker/worker.js`,
-      coreURL: await toBlobURL(`${baseUrl}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseUrl}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+    const classWorkerURL = new URL(BROWSER_YTDLP_FFMPEG_WORKER_PATH, window.location.origin).toString();
 
-    return ffmpeg;
-  })();
+    try {
+      const workerResponse = await withTimeout(
+        fetch(classWorkerURL, { cache: 'no-store', signal: abortSignal }),
+        FFMPEG_WORKER_CHECK_TIMEOUT_MS,
+        'Audio converter worker check timed out. Please try again.',
+        abortSignal,
+      );
+      if (!workerResponse.ok) {
+        throw new Error(`Audio converter worker is unavailable (${workerResponse.status}). Please try again.`);
+      }
 
-  return ffmpegInstancePromise;
+      const contentType = workerResponse.headers.get('content-type') || '';
+      if (contentType && !/javascript|ecmascript/i.test(contentType)) {
+        throw new Error('Audio converter worker returned an invalid script response. Please try again.');
+      }
+
+      const [coreURL, wasmURL] = await withTimeout(
+        Promise.all([
+          toBlobURL(`${baseUrl}/ffmpeg-core.js`, 'text/javascript'),
+          toBlobURL(`${baseUrl}/ffmpeg-core.wasm`, 'application/wasm'),
+        ]),
+        FFMPEG_LOAD_TIMEOUT_MS,
+        'Audio converter assets timed out while loading. Please try again.',
+        abortSignal,
+      );
+
+      await withTimeout(
+        ffmpeg.load({ classWorkerURL, coreURL, wasmURL }, { signal: abortSignal }),
+        FFMPEG_LOAD_TIMEOUT_MS,
+        'Audio converter failed to start in time. Please try again.',
+        abortSignal,
+      );
+      return ffmpeg;
+    } catch (error) {
+      ffmpeg.terminate();
+      throw error;
+    }
+  };
+
+  const instancePromise = initialize();
+  ffmpegInstancePromise = instancePromise;
+
+  try {
+    return await instancePromise;
+  } catch (error) {
+    if (ffmpegInstancePromise === instancePromise) {
+      ffmpegInstancePromise = null;
+    }
+    throw error;
+  }
 }
 
 async function convertToMediumMp3(
@@ -562,17 +753,21 @@ async function convertToMediumMp3(
 ): Promise<Uint8Array<ArrayBuffer>> {
   options.onProgress?.('converting', 'Converting audio to medium-quality MP3...');
 
-  const ffmpeg = await getFfmpegInstance(options.onProgress);
+  const ffmpeg = await getFfmpegInstance(options.onProgress, options.abortSignal);
   const inputName = `input.${sanitizeInputExtension(inputExt)}`;
   const outputName = `output-${Date.now()}.${BROWSER_YTDLP_OUTPUT_FORMAT}`;
 
-  await ffmpeg.writeFile(inputName, inputBytes);
-  const exitCode = await ffmpeg.exec(getBrowserYtDlpFfmpegArgs(inputName, outputName));
+  await ffmpeg.writeFile(inputName, inputBytes, { signal: options.abortSignal });
+  const exitCode = await ffmpeg.exec(
+    getBrowserYtDlpFfmpegArgs(inputName, outputName),
+    FFMPEG_CONVERSION_TIMEOUT_MS,
+    { signal: options.abortSignal },
+  );
   if (exitCode !== 0) {
     throw new Error(`ffmpeg conversion failed with exit code ${exitCode}`);
   }
 
-  const output = await ffmpeg.readFile(outputName);
+  const output = await ffmpeg.readFile(outputName, 'binary', { signal: options.abortSignal });
   await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
 
   if (typeof output === 'string') {
@@ -591,7 +786,13 @@ async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
     .join('');
 }
 
-async function uploadCandidate(videoId: string, mp3Bytes: Uint8Array<ArrayBuffer>, hash: string): Promise<{ candidatePath: string; idToken: string }> {
+async function uploadCandidate(
+  videoId: string,
+  mp3Bytes: Uint8Array<ArrayBuffer>,
+  hash: string,
+  abortSignal?: AbortSignal,
+): Promise<{ candidatePath: string; idToken: string }> {
+  throwIfAborted(abortSignal);
   const { ref, uploadBytesResumable } = await import('firebase/storage');
 
   const authReady = await ensureAuthReady(15000);
@@ -617,7 +818,38 @@ async function uploadCandidate(videoId: string, mp3Bytes: Uint8Array<ArrayBuffer
   });
 
   await new Promise<void>((resolve, reject) => {
-    uploadTask.on('state_changed', undefined, reject, () => resolve());
+    let settled = false;
+
+    const cleanup = () => {
+      abortSignal?.removeEventListener('abort', onAbort);
+      unsubscribe?.();
+    };
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const onAbort = () => {
+      uploadTask.cancel();
+      finish(() => reject(createAbortError()));
+    };
+
+    const unsubscribe = uploadTask.on(
+      'state_changed',
+      undefined,
+      (error) => finish(() => reject(error)),
+      () => finish(resolve),
+    );
+    if (abortSignal?.aborted) {
+      onAbort();
+    } else {
+      abortSignal?.addEventListener('abort', onAbort, { once: true });
+    }
   });
 
   return { candidatePath, idToken };
@@ -629,6 +861,7 @@ async function finalizeCandidate(params: {
   sha256: string;
   fileSize: number;
   idToken: string;
+  abortSignal?: AbortSignal;
 }): Promise<BrowserYtDlpExtractionResult> {
   const appCheckToken = await getAppCheckTokenForApi();
   const response = await fetch('/api/audio/finalize-browser-extraction', {
@@ -648,6 +881,7 @@ async function finalizeCandidate(params: {
       sha256: params.sha256,
       fileSize: params.fileSize,
     }),
+    signal: params.abortSignal,
   });
 
   const data = await response.json().catch(() => ({}));
@@ -706,7 +940,7 @@ async function extractAudioWithDltkkTemporaryFallback(
 
   options.onProgress?.('uploading', 'Uploading fallback audio for validation...', 75);
   const hash = await sha256Hex(mp3Bytes);
-  const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
+  const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash, options.abortSignal);
 
   options.onProgress?.('finalizing', 'Validating fallback audio before caching...', 92);
   const result = await finalizeCandidate({
@@ -715,6 +949,7 @@ async function extractAudioWithDltkkTemporaryFallback(
     sha256: hash,
     fileSize: mp3Bytes.byteLength,
     idToken,
+    abortSignal: options.abortSignal,
   });
 
   return {
@@ -815,22 +1050,37 @@ export async function extractAudioWithBrowserYtDlp(
 
   async function attemptExtraction(proxyUrl: string): Promise<BrowserYtDlpExtractionResult> {
     const leaseRef: { id: string | null; token: string | null } = { id: null, token: null };
+    const { controller: attemptAbortController, disconnect: disconnectParentAbort } = createLinkedAbortController(options.abortSignal);
+    const attemptOptions: BrowserYtDlpOptions = {
+      ...options,
+      abortSignal: attemptAbortController.signal,
+    };
     let stopLeaseHeartbeat: () => void = () => undefined;
+    let terminalLeaseError: BrowserExtractionQueueError | null = null;
     let extractionSucceeded = false;
 
     try {
       options.onProgress?.('initializing', `Preparing browser audio extraction (using ${isUltimaProxy(proxyUrl) ? 'Ultima' : 'primary'} proxy)...`);
       let lease;
       try {
-        lease = await acquireProxyLease(metadata.videoId, proxyUrl, options);
+        lease = await acquireProxyLease(metadata.videoId, proxyUrl, attemptOptions);
       } catch (leaseError) {
+        if (leaseError instanceof BrowserExtractionQueueError) {
+          throw leaseError;
+        }
         throw new BrowserExtractionQueueError(leaseError instanceof Error ? leaseError.message : String(leaseError));
       }
       leaseRef.id = lease.leaseId || null;
       leaseRef.token = lease.leaseToken || leaseRef.id;
-      stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseRef, options);
+      stopLeaseHeartbeat = startProxyLeaseHeartbeat(proxyUrl, leaseRef, attemptOptions, (error) => {
+        terminalLeaseError = error;
+        attemptAbortController.abort();
+      });
       options.onProgress?.('initializing', 'Extraction queue slot ready. Starting browser audio extraction...');
-      const extracted = await waitForWorkerExtraction(videoUrl, options, leaseRef.token, proxyUrl);
+      // Use the raw lease ID in the long-running Pyodide worker. Signed lease
+      // tokens expire quickly and cannot be refreshed while Pyodide is busy.
+      const extracted = await waitForWorkerExtraction(videoUrl, attemptOptions, leaseRef.id || leaseRef.token, proxyUrl);
+      throwIfAborted(attemptOptions.abortSignal);
 
       if (leaseRef.id && !isUltimaProxy(proxyUrl)) {
         try {
@@ -839,27 +1089,45 @@ export async function extractAudioWithBrowserYtDlp(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ leaseId: leaseRef.id }),
-            signal: options.abortSignal,
+            signal: attemptOptions.abortSignal,
           });
           if (downgradeResult.leaseToken) {
             leaseRef.token = downgradeResult.leaseToken;
           }
         } catch (err) {
+          if (err instanceof BrowserExtractionQueueError && err.terminalLease) {
+            throw err;
+          }
           console.warn('Failed to downgrade queue lease:', err);
         }
       }
+      throwIfAborted(attemptOptions.abortSignal);
 
       options.onProgress?.('downloading', 'Downloading YouTube audio stream...');
-      const sourceBytes = await fetchAudioBytesViaProxy(extracted.streamUrl, extracted.streamHeaders, options.abortSignal, leaseRef.token, proxyUrl);
+      const sourceBytes = await fetchAudioBytesViaProxy(
+        extracted.streamUrl,
+        extracted.streamHeaders,
+        attemptOptions.abortSignal,
+        leaseRef.id || leaseRef.token,
+        proxyUrl,
+      );
+      throwIfAborted(attemptOptions.abortSignal);
 
-      const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', options);
+      const mp3Bytes = await convertToMediumMp3(sourceBytes, extracted.ext || 'm4a', attemptOptions);
+      throwIfAborted(attemptOptions.abortSignal);
       if (mp3Bytes.byteLength > BROWSER_YTDLP_MAX_FINAL_BYTES) {
         throw new Error('Extracted MP3 is larger than the 50MB Firebase cache limit.');
       }
 
       options.onProgress?.('uploading', 'Uploading extracted audio for validation...');
       const hash = await sha256Hex(mp3Bytes);
-      const { candidatePath, idToken } = await uploadCandidate(metadata.videoId, mp3Bytes, hash);
+      const { candidatePath, idToken } = await uploadCandidate(
+        metadata.videoId,
+        mp3Bytes,
+        hash,
+        attemptOptions.abortSignal,
+      );
+      throwIfAborted(attemptOptions.abortSignal);
 
       options.onProgress?.('finalizing', 'Validating audio before caching...');
       const result = await finalizeCandidate({
@@ -872,18 +1140,21 @@ export async function extractAudioWithBrowserYtDlp(
         sha256: hash,
         fileSize: mp3Bytes.byteLength,
         idToken,
+        abortSignal: attemptOptions.abortSignal,
       });
       extractionSucceeded = true;
       return result;
     } catch (rawError) {
-      const msg = rawError instanceof Error ? rawError.message : String(rawError);
+      const error = terminalLeaseError || rawError;
+      const msg = error instanceof Error ? error.message : String(error);
       const redactedMsg = redactProxyUrl(msg, primaryProxy, secondaryProxy);
-      if (rawError instanceof BrowserExtractionQueueError) {
-        throw new BrowserExtractionQueueError(redactedMsg);
+      if (error instanceof BrowserExtractionQueueError) {
+        throw new BrowserExtractionQueueError(redactedMsg, { terminalLease: error.terminalLease });
       }
       throw new Error(redactedMsg);
     } finally {
       stopLeaseHeartbeat();
+      disconnectParentAbort();
       if (leaseRef.id !== null) {
         await releaseProxyLease(proxyUrl, leaseRef.id, extractionSucceeded);
       }
@@ -905,6 +1176,10 @@ export async function extractAudioWithBrowserYtDlp(
     return await attemptExtraction(primaryProxy);
   } catch (error) {
     if (options.abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error;
+    }
+
+    if (error instanceof BrowserExtractionQueueError && error.terminalLease) {
       throw error;
     }
 
@@ -938,7 +1213,11 @@ export async function extractAudioWithBrowserYtDlp(
 export const __browserYtDlpTestUtils = {
   buildProxyRequestHeaders,
   buildMinimalProxyRequestHeaders,
+  buildProxyEndpoint,
+  fetchQueueJson,
   normalizeQueueState,
+  startProxyLeaseHeartbeat,
+  isDltkkTemporaryFallbackEnabled,
   isUltimaProxy,
   redactProxyUrl,
   ULTIMA_PROXY_URL,

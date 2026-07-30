@@ -63,9 +63,9 @@ const ExtractionCountdownDescription: React.FC<ExtractionCountdownDescriptionPro
   if (remainingSeconds === 0) {
     return (
       <span className="block whitespace-normal break-words leading-relaxed">
-        Almost done.
+        Extraction is still in progress.
         <br />
-        Finalizing the extracted audio...
+        Some videos take a little longer to prepare.
       </span>
     );
   }

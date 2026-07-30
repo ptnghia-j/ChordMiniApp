@@ -719,4 +719,29 @@ describe('grid compaction edge behavior', () => {
     expect(result.shiftCount).toBe(1);
     expect(result.totalPaddingCount).toBe(2);
   });
+
+  it('strips a complete leading N.C. padding measure when it has no audio mapping', () => {
+    const grid = makeGridData({
+      chords: ['N.C.', 'N.C.', 'N.C.', 'N.C.', 'Eb:maj', 'Eb:maj'],
+      beats: [0, 0.16, 0.32, 0.48, 0.66, 1.45],
+      paddingCount: 4,
+      totalPaddingCount: 4,
+      originalAudioMapping: [
+        { chord: 'Eb:maj', timestamp: 0.66, visualIndex: 4, audioIndex: 0 },
+        { chord: 'Eb:maj', timestamp: 1.45, visualIndex: 5, audioIndex: 1 },
+      ],
+    });
+
+    const result = trimLeadingEmptyMeasures(grid, 4);
+
+    expect(result.chords).toEqual(['Eb:maj', 'Eb:maj']);
+    expect(result.beats).toEqual([0.66, 1.45]);
+    expect(result.paddingCount).toBe(0);
+    expect(result.shiftCount).toBe(0);
+    expect(result.totalPaddingCount).toBe(0);
+    expect(result.originalAudioMapping).toEqual([
+      { chord: 'Eb:maj', timestamp: 0.66, visualIndex: 0, audioIndex: 0 },
+      { chord: 'Eb:maj', timestamp: 1.45, visualIndex: 1, audioIndex: 1 },
+    ]);
+  });
 });

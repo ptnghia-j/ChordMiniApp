@@ -29,7 +29,8 @@ export const useChordDataProcessing = (
   shiftCount: number,
   showCorrectedChords: boolean,
   sequenceCorrections: SequenceCorrections | null,
-  originalAudioMapping?: AudioMappingItem[]
+  originalAudioMapping?: AudioMappingItem[],
+  disabledCellIndices: ReadonlySet<number> = new Set()
 ): ChordDataProcessing => {
   
   // Create shifted chord array with optimal alignment
@@ -73,9 +74,9 @@ export const useChordDataProcessing = (
   // Chord label display logic
   const shouldShowChordLabelLocal = useMemo(() => {
     return (index: number) => {
-      return shouldShowChordLabel(index, shiftedChords);
+      return shouldShowChordLabel(index, shiftedChords, disabledCellIndices);
     };
-  }, [shiftedChords]);
+  }, [shiftedChords, disabledCellIndices]);
 
   return {
     shiftedChords,

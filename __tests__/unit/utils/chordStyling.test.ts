@@ -27,7 +27,10 @@ describe('chordStyling', () => {
   });
 
   it('styles alignment padding, empty cells, pickup beats, and standard clickable cells distinctly', () => {
-    expect(getChordStyle('', 0, true, false, 4, 0, 1)).toContain('alignment-padding-cell');
+    expect(getChordStyle('', 0, false, false, 4, 0, true)).toContain('disabled-chord-cell');
+    expect(getChordStyle('N.C.', 0, false, false, 4, 0, true)).toContain('disabled-chord-cell');
+    expect(getChordStyle('N.C.', 3, true, false, 4, 0, false)).not.toContain('disabled-chord-cell');
+    expect(getChordStyle('N.C.', 3, true, false, 4, 0, false)).toContain('bg-white');
     expect(getChordStyle('', 2, false, false, 4, 0)).toContain('bg-gray-100');
     expect(getChordStyle('C', 3, true, true, 4, 1)).toContain('bg-blue-50');
     expect(getChordStyle('C', 1, true, false, 4, 0)).toContain('cursor-pointer');

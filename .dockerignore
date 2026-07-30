@@ -83,7 +83,8 @@ demo_*.png
 !public/chordMiniLogo*.webp
 
 # Development scripts
-scripts/
+scripts/*
+!scripts/prepare-ffmpeg-worker.mjs
 bin/
 
 # Docker files (avoid recursion)

@@ -19,7 +19,10 @@ jest.mock('@/config/firebase', () => ({
   getStorageInstance: jest.fn(),
 }));
 
-import { __browserYtDlpTestUtils } from '@/services/audio/browserYtDlpExtractionService';
+import {
+  BrowserExtractionQueueError,
+  __browserYtDlpTestUtils,
+} from '@/services/audio/browserYtDlpExtractionService';
 
 describe('browserYtDlpExtractionService queue helpers', () => {
   it('maps queue payloads into a stable browser state shape', () => {
@@ -70,6 +73,110 @@ describe('browserYtDlpExtractionService queue helpers', () => {
     expect(headers.get('X-Override-Range')).toBe('bytes=0-');
     expect(headers.get('X-YouTube-Proxy-Lease')).toBe('lease-1');
     expect(headers.get('X-Skip-YouTube-Auth')).toBe('1');
+  });
+
+  it('normalizes an external proxy URL before adding queue routes', () => {
+    expect(__browserYtDlpTestUtils.buildProxyEndpoint(
+      'https://example.workers.dev/',
+      '/queue/heartbeat',
+    )).toBe('https://example.workers.dev/queue/heartbeat');
+  });
+
+  it('keeps the temporary dltkk fallback opt-in', () => {
+    const { isDltkkTemporaryFallbackEnabled } = __browserYtDlpTestUtils as any;
+    expect(isDltkkTemporaryFallbackEnabled({})).toBe(false);
+    expect(isDltkkTemporaryFallbackEnabled({ NEXT_PUBLIC_ENABLE_DLTKK_TEMP_FALLBACK: '1' })).toBe(true);
+  });
+
+  describe('terminal queue leases', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      jest.useRealTimers();
+    });
+
+    it('turns an expired lease response into a terminal queue error', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 410,
+        json: jest.fn().mockResolvedValue({
+          error: 'youtube_proxy_lease_expired',
+          status: 'expired',
+        }),
+      });
+
+      await expect(__browserYtDlpTestUtils.fetchQueueJson(
+        'https://example.workers.dev/',
+        '/queue/heartbeat',
+        { method: 'POST' },
+      )).rejects.toMatchObject({
+        name: 'BrowserExtractionQueueError',
+        terminalLease: true,
+      });
+    });
+
+    it('keeps transient queue failures retryable', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: jest.fn().mockResolvedValue({ error: 'queue_unavailable' }),
+      });
+
+      try {
+        await __browserYtDlpTestUtils.fetchQueueJson(
+          'https://example.workers.dev/',
+          '/queue/heartbeat',
+          { method: 'POST' },
+        );
+        throw new Error('Expected queue request to reject');
+      } catch (error) {
+        expect(error).not.toBeInstanceOf(BrowserExtractionQueueError);
+        expect(error).toHaveProperty('message', 'queue_unavailable');
+      }
+    });
+
+    it('stops heartbeats after a terminal lease error instead of retrying 410s forever', async () => {
+      jest.useFakeTimers();
+      const terminalError = jest.fn();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue({
+            status: 'active',
+            leaseId: 'lease-1',
+            queuePosition: 0,
+            estimatedWaitSeconds: 0,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 410,
+          json: jest.fn().mockResolvedValue({
+            error: 'youtube_proxy_lease_expired',
+            status: 'expired',
+          }),
+        });
+
+      const stop = __browserYtDlpTestUtils.startProxyLeaseHeartbeat(
+        'https://example.workers.dev/',
+        { id: 'lease-1', token: null },
+        {},
+        terminalError,
+      );
+
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(10_000);
+
+      expect(terminalError).toHaveBeenCalledTimes(1);
+      expect(terminalError.mock.calls[0][0]).toMatchObject({ terminalLease: true });
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      stop();
+    });
   });
 
   describe('proxy routing utilities', () => {

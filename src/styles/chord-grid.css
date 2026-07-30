@@ -23,7 +23,7 @@
  */
 
 /* Current beat highlighting - Light mode */
-.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-disabled="true"]):not([data-is-empty="true"]) {
   border-color: transparent !important;
   border-radius: 8px;
   box-shadow: none !important;
@@ -33,7 +33,7 @@
 }
 
 /* Current beat highlighting - Dark mode */
-.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-empty="true"]) {
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight:not([data-is-disabled="true"]):not([data-is-empty="true"]) {
   background-color: rgb(27, 38, 51) !important;
   border-color: transparent !important;
   border-radius: 8px;
@@ -42,7 +42,7 @@
 }
 
 /* Current beat highlighting for empty cells - Light mode */
-.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
+.chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"]:not([data-is-disabled="true"]) {
   border-color: transparent !important;
   border-radius: 8px;
   box-shadow: none !important;
@@ -52,7 +52,7 @@
 }
 
 /* Current beat highlighting for empty cells - Dark mode */
-.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"] {
+.dark .chord-grid-container .chord-cell[data-beat-index].current-beat-highlight[data-is-empty="true"]:not([data-is-disabled="true"]) {
   background-color: rgb(27, 38, 51) !important;
   border-color: transparent !important;
   border-radius: 8px;
@@ -185,8 +185,12 @@
   box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.98);
 }
 
-.chord-cell.alignment-padding-cell {
-  box-shadow: none;
+.chord-cell.disabled-chord-cell,
+.dark .chord-cell.disabled-chord-cell {
+  box-shadow: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  pointer-events: none;
 }
 
 /* 

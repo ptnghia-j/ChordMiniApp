@@ -110,13 +110,33 @@ export function trimLeadingEmptyMeasures(
   }
 
   let trimCount = 0;
+  const mappedVisualIndices = new Set(
+    chordGridData.originalAudioMapping
+      ?.map((item) => item.visualIndex)
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < chordGridData.chords.length)
+      ?? [],
+  );
+  const hasAudioMapping = mappedVisualIndices.size > 0;
+
   while (
-    trimCount + timeSignature <= chordGridData.chords.length &&
-    chordGridData.chords
-      .slice(trimCount, trimCount + timeSignature)
-      .every((chord) => chord === '')
+    trimCount + timeSignature <= chordGridData.chords.length
   ) {
-    trimCount += timeSignature;
+    const measureEnd = trimCount + timeSignature;
+    const hasMappedAudioBeat = Array.from(mappedVisualIndices).some((index) => (
+      index >= trimCount && index < measureEnd
+    ));
+    const containsOnlyEmptyCells = chordGridData.chords
+      .slice(trimCount, measureEnd)
+      .every((chord) => chord === '');
+
+    // A mapped N.C. is a real rest and must remain. An unmapped full measure,
+    // including N.C. layout padding, is presentation-only and should vanish.
+    if ((hasAudioMapping && !hasMappedAudioBeat) || (!hasAudioMapping && containsOnlyEmptyCells)) {
+      trimCount += timeSignature;
+      continue;
+    }
+
+    break;
   }
 
   if (trimCount === 0) {

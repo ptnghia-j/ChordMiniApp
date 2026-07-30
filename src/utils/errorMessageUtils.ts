@@ -34,6 +34,29 @@ export function createUserFriendlyError(error: string): UserFriendlyError {
     };
   }
 
+  if (errorLower.includes('youtube_proxy_lease_expired') ||
+      errorLower.includes('queue lease expired')) {
+    return {
+      title: 'Extraction Session Expired',
+      message: 'The audio extraction session expired before it could finish.',
+      suggestion: 'Please try again to start a new extraction session.',
+      showTryAnotherButton: true,
+      isVideoExtractionError: true
+    };
+  }
+
+  if (errorLower.includes('audio converter worker') ||
+      errorLower.includes('audio converter failed') ||
+      errorLower.includes('audio converter assets')) {
+    return {
+      title: 'Audio Converter Unavailable',
+      message: 'The browser audio converter could not start.',
+      suggestion: 'Please try again in a moment. If it continues, refresh the page and retry.',
+      showTryAnotherButton: false,
+      isVideoExtractionError: true
+    };
+  }
+
   if (errorLower.includes('youtube_proxy_lease_required') ||
       errorLower.includes('youtube_proxy_lease_not_ready') ||
       errorLower.includes('youtube_proxy_gate_unavailable') ||

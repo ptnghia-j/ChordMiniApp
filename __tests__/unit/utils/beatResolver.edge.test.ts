@@ -123,7 +123,7 @@ describe('beatResolver edge behavior', () => {
     expect(released.beatIndex).toBe(-1);
   });
 
-  it('falls back to grid beat search when mapping exists but no entry has started yet', () => {
+  it('does not highlight an unmapped grid fallback before the first mapped audio beat starts', () => {
     const result = resolveBeatAtTime({
       time: 0.8,
       chordGridData: makeGrid({
@@ -140,7 +140,9 @@ describe('beatResolver edge behavior', () => {
       globalSpeedAdjustment: null,
     });
 
-    expect(result.beatIndex).toBeGreaterThanOrEqual(0);
+    // The fallback search sees visual index 0, but that index is not mapped to
+    // audio. It is a disabled layout cell and must not receive an animation.
+    expect(result.beatIndex).toBe(-1);
     expect(result.nextHysteresisState.beatStabilityCounter).toBeGreaterThan(0);
   });
 });

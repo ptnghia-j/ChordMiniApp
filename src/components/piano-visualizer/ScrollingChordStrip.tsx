@@ -566,6 +566,7 @@ export const ScrollingChordStrip = React.memo<ScrollingChordStripProps>(({
                   displayChord={box.chordName}
                   isEmpty={isEmpty}
                   wasCorrected={wasCorrected}
+                  isDisabled={false}
                   cellSize={height - 2}
                   showChordLabel={box.showLabel && box.width > 20}
                   isClickable={false}

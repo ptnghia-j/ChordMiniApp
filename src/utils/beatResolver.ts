@@ -231,7 +231,16 @@ export function resolveBeatAtTime(input: ResolveBeatInput): ResolveBeatResult {
       }
     }
   }
-  const animationRangeStart = firstDetectedBeat;
+
+  let animationRangeStart = firstDetectedBeat;
+  if (hasOriginalAudioMapping(chordGridData) && chordGridData.originalAudioMapping.length > 0) {
+    const firstMappedTime = chordGridData.originalAudioMapping[0].timestamp;
+    if (typeof firstMappedTime === 'number' && firstMappedTime >= 0) {
+      animationRangeStart = firstDetectedBeat > 0
+        ? Math.min(firstDetectedBeat, firstMappedTime)
+        : firstMappedTime;
+    }
+  }
 
   let currentBeat = -1;
   let nextGlobalSpeedAdjustment: number | null = globalSpeedAdjustment;
@@ -239,96 +248,16 @@ export function resolveBeatAtTime(input: ResolveBeatInput): ResolveBeatResult {
 
   // --- PHASE 1: Pre-model context ------------------------------------------
   if (time < animationRangeStart - PHASE_SWITCH_BUFFER) {
-    const paddingCount = chordGridData.paddingCount || 0;
-    const shiftCount = chordGridData.shiftCount || 0;
-
-    if (paddingCount > 0) {
-      let bestPaddingIndex = -1;
-      let bestTimeDifference = Infinity;
-
-      for (let i = 0; i < paddingCount; i++) {
-        const rawBeatIndex = shiftCount + i;
-        if (rawBeatIndex < chordGridData.beats.length && chordGridData.beats[rawBeatIndex] !== null) {
-          const cellTimestamp = chordGridData.beats[rawBeatIndex] as number;
-
-          if (time >= cellTimestamp) {
-            bestPaddingIndex = i;
-          }
-
-          const nextRawBeat = shiftCount + i + 1;
-          let nextCellTime = cellTimestamp + (animationRangeStart / paddingCount);
-          if (nextRawBeat < chordGridData.beats.length && chordGridData.beats[nextRawBeat] !== null) {
-            nextCellTime = chordGridData.beats[nextRawBeat] as number;
-          }
-
-          if (time >= cellTimestamp && time < nextCellTime) {
-            const timeDifference = Math.abs(time - cellTimestamp);
-            if (timeDifference < bestTimeDifference) {
-              bestPaddingIndex = i;
-              bestTimeDifference = timeDifference;
-            }
-          }
-        }
-      }
-
-      if (bestPaddingIndex !== -1) {
-        const finalBeatIndex = shiftCount + bestPaddingIndex;
-        return {
-          beatIndex: finalBeatIndex,
-          downbeatIndex: -1,
-          nextHysteresisState: {
-            ...nextHysteresis,
-            lastEmittedBeat: finalBeatIndex,
-            lastEmitTime: time,
-          },
-          nextGlobalSpeedAdjustment,
-          shouldSkipEmit: false,
-        };
-      }
-
-      // No padding cell matched — nothing to emit this frame.
-      return {
-        beatIndex: -1,
-        downbeatIndex: -1,
-        nextHysteresisState: nextHysteresis,
-        nextGlobalSpeedAdjustment,
-        shouldSkipEmit: true,
-      };
-    }
-
-    // No padding cells: virtual BPM-based estimate
-    const estimatedBPM = analysisResults.beatDetectionResult?.bpm || 120;
-    const estimatedBeatDuration = 60 / estimatedBPM;
-    const rawVirtualBeatIndex = Math.floor(time / estimatedBeatDuration);
-    const virtualBeatIndex = rawVirtualBeatIndex + shiftCount;
-
-    if (virtualBeatIndex >= 0 && virtualBeatIndex < chordGridData.chords.length) {
-      const chord = chordGridData.chords[virtualBeatIndex] || '';
-      const isShiftCell = virtualBeatIndex < shiftCount;
-      const isPaddingCell = virtualBeatIndex >= shiftCount && virtualBeatIndex < (shiftCount + paddingCount);
-      const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
-
-      if (isShiftCell || isPaddingCell || !isEmptyCell) {
-        return {
-          beatIndex: virtualBeatIndex,
-          downbeatIndex: -1,
-          nextHysteresisState: {
-            ...nextHysteresis,
-            lastEmittedBeat: virtualBeatIndex,
-            lastEmitTime: time,
-          },
-          nextGlobalSpeedAdjustment,
-          shouldSkipEmit: false,
-        };
-      }
-    }
-
     return {
       beatIndex: -1,
       downbeatIndex: -1,
-      nextHysteresisState: nextHysteresis,
+      nextHysteresisState: {
+        ...nextHysteresis,
+        lastEmittedBeat: -1,
+        lastEmitTime: time,
+      },
       nextGlobalSpeedAdjustment,
-      shouldSkipEmit: true,
+      shouldSkipEmit: false,
     };
   }
 
@@ -396,20 +325,20 @@ export function resolveBeatAtTime(input: ResolveBeatInput): ResolveBeatResult {
     }
     // When originalAudioMapping is missing we fall through with currentBeat === -1.
 
-    // Empty-cell filtering
+    // Only mapped audio beats may drive the visual highlighter.
     let finalBeatIndex = currentBeat;
     let currentDownbeat = -1;
 
     if (currentBeat !== -1) {
-      const shiftCount = chordGridData.shiftCount || 0;
-      const paddingCount = chordGridData.paddingCount || 0;
-      const isPreBeatPhase = time < animationRangeStart;
       const chord = chordGridData.chords[currentBeat] || '';
-      const isEmptyCell = chord === '' || chord === 'undefined' || !chord;
-      const isShiftCell = currentBeat < shiftCount;
-      const isPaddingCell = currentBeat >= shiftCount && currentBeat < (shiftCount + paddingCount);
+      const isEmptyCell = chord === '' || chord === 'undefined';
+      const isMappedAudioBeat = hasOriginalAudioMapping(chordGridData) &&
+        chordGridData.originalAudioMapping.some(item => item.visualIndex === currentBeat);
 
-      if (isEmptyCell && !isPreBeatPhase && !isShiftCell && !isPaddingCell) {
+      // The audio mapping is authoritative. In particular, a mapped N.C. cell
+      // is a real beat even when it occupies a nominal padding position. Empty
+      // cells remain layout-only even if an incomplete mapping references them.
+      if (!isMappedAudioBeat || isEmptyCell) {
         finalBeatIndex = -1;
       }
     } else {

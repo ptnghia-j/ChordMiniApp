@@ -321,37 +321,51 @@ export const getDisplayChord = (
 /**
  * Determines if a beat should show a chord label (avoids duplicate labels)
  */
-export const shouldShowChordLabel = (index: number, shiftedChords: string[]): boolean => {
-  // Always show the first non-empty chord
-  if (index === 0) {
-    return shiftedChords[index] !== '';
+export const shouldShowChordLabel = (
+  index: number,
+  shiftedChords: string[],
+  disabledCellIndices: ReadonlySet<number> = new Set()
+): boolean => {
+  // Disabled cells are visual layout spacers, never musical/rest labels.
+  if (disabledCellIndices.has(index)) {
+    return false;
   }
 
-  // For shifted array, check against the previous non-empty chord
-  if (index < shiftedChords.length && index - 1 >= 0) {
+  // Check against the previous non-empty, functional musical beat.
+  if (index < shiftedChords.length) {
     const currentChord = shiftedChords[index];
-    const previousChord = shiftedChords[index - 1];
 
     // Don't show label for empty cells
     if (currentChord === '') {
       return false;
     }
 
-    // Special handling for N.C. (No Chord) to prevent duplicate rest symbols
-    if (currentChord === 'N.C.' || currentChord === 'N/C' || currentChord === 'N') {
-      // Look back to find the last non-empty chord
-      for (let i = index - 1; i >= 0; i--) {
-        const prevChord = shiftedChords[i];
-        if (prevChord !== '') {
-          // Show N.C. label only if the previous non-empty chord was not also N.C.
-          return prevChord !== 'N.C.' && prevChord !== 'N/C' && prevChord !== 'N';
-        }
+    // Look back to find the last non-empty functional musical chord.
+    let lastChord: string | null = null;
+    for (let i = index - 1; i >= 0; i--) {
+      if (disabledCellIndices.has(i)) {
+        continue;
       }
+      const prevChord = shiftedChords[i];
+      if (prevChord !== '') {
+        lastChord = prevChord;
+        break;
+      }
+    }
+
+    if (lastChord === null) {
       return true;
     }
 
-    // Show label only if chord changed from previous beat
-    return currentChord !== previousChord;
+    // Special handling for N.C. (No Chord) to prevent duplicate rest symbols
+    const isCurrentRest = currentChord === 'N.C.' || currentChord === 'N/C' || currentChord === 'N';
+    if (isCurrentRest) {
+      const isLastRest = lastChord === 'N.C.' || lastChord === 'N/C' || lastChord === 'N';
+      return !isLastRest;
+    }
+
+    // Show label only if chord changed from previous musical beat
+    return currentChord !== lastChord;
   }
 
   return shiftedChords[index] !== '';

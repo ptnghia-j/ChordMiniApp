@@ -171,6 +171,9 @@ cache/
 # Cached audio files
 /public/audio/
 
+# Generated from @ffmpeg/ffmpeg before development and production builds.
+/public/ffmpeg-worker/
+
 # Python virtual environments
 .venv/
 python_backend/venv/
@@ -285,6 +288,7 @@ scripts/*
 !scripts/pre-deployment-checklist.sh
 !scripts/publish-repowiki-to-github-wiki.sh
 !scripts/post-deployment-verification.sh
+!scripts/prepare-ffmpeg-worker.mjs
 
 __tests__/
 __tests__/*
